@@ -337,6 +337,7 @@ type testService struct {
 	accepted atomic.Int32 // member connections accepted
 	cfg      func(*Config)
 	env      []string // cfg's settings for the Rust service, when it has them
+	port     int      // the member port it listens on, 0 for any
 	rust     bool     // the Rust service (CBB_TEST_RUST_SERVICE)
 
 	mu         sync.Mutex
@@ -374,15 +375,21 @@ func (s *testService) addr() string {
 	if addr != "" {
 		return addr
 	}
-	// A child service (the Rust one) says where it listens.
-	s.logMu.Lock()
-	defer s.logMu.Unlock()
-	for _, l := range s.lines {
-		if _, p, ok := strings.Cut(l, "listening on port "); ok {
-			return "127.0.0.1:" + strings.TrimSpace(p)
+	// A child service (the Rust one) says where it listens, a moment
+	// after it is in a group.
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		s.logMu.Lock()
+		for _, l := range s.lines {
+			if _, p, ok := strings.Cut(l, "listening on port "); ok {
+				s.logMu.Unlock()
+				return "127.0.0.1:" + strings.TrimSpace(p)
+			}
+		}
+		s.logMu.Unlock()
+		if !s.rust || time.Now().After(deadline) {
+			return ""
 		}
 	}
-	return ""
 }
 
 func startService(t *testing.T, h *hub, name string) *testService {
@@ -430,7 +437,17 @@ func startEnv(t *testing.T, h *hub, name string, cfg func(*Config), env ...strin
 // restartService starts a stopped service again with its state.
 func restartService(t *testing.T, h *hub, old *testService) *testService {
 	t.Helper()
-	return startIn(t, h, &testService{name: old.name, dir: old.dir, os: old.os, cfg: old.cfg, env: old.env})
+	return startIn(t, h, &testService{name: old.name, dir: old.dir, os: old.os, cfg: old.cfg, env: old.env, port: old.port})
+}
+
+// portOf is the port of the address addr.
+func portOf(t *testing.T, addr string) int {
+	t.Helper()
+	ap, err := netip.ParseAddrPort(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return int(ap.Port())
 }
 
 // countingListener counts the connections it accepts.
@@ -473,7 +490,7 @@ func startIn(t *testing.T, h *hub, s *testService) *testService {
 		StateDir: s.dir, Socket: s.socket, Role: node.Full, OS: s.os, Name: name, Discover: h.discover,
 		Logf: func(f string, a ...any) { s.logf(t, f, a...) },
 		listen: func() (net.Listener, error) {
-			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", s.port))
 			if err != nil {
 				return nil, err
 			}
@@ -495,7 +512,7 @@ func startIn(t *testing.T, h *hub, s *testService) *testService {
 		cfg.Discover, cfg.joinListen, cfg.joinAddrs = h.discoverReal, nil, nil
 		cfg.browseFor = 5 * time.Second
 		cfg.listen = func() (net.Listener, error) {
-			ln, err := net.Listen("tcp", ":0")
+			ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 			if err != nil {
 				return nil, err
 			}
@@ -2098,8 +2115,8 @@ func TestPairingAcrossARenewal(t *testing.T) {
 func startRust(t *testing.T, bin string, s *testService) *testService {
 	t.Helper()
 	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir(), fmt.Sprintf("CBB_TEST_RENEW_EVERY=%d", renewEvery.Milliseconds()), fmt.Sprintf("CBB_HUB_KEY_AHEAD=%d", int64(hubKeyAhead.Seconds()))}, s.env...)
-	r := startLiteEnv(t, bin, s.dir, env, "-full", "-port", "0", "-name", s.name)
-	r.name, r.os, r.rust, r.cfg, r.env = s.name, s.os, true, s.cfg, s.env
+	r := startLiteEnv(t, bin, s.dir, env, "-full", "-port", strconv.Itoa(s.port), "-name", s.name)
+	r.name, r.os, r.rust, r.cfg, r.env, r.port = s.name, s.os, true, s.cfg, s.env, s.port
 	// It ends with an error after cbb leave or an admin's restart, for
 	// systemd to start it again, where Go's Run returns ErrLeft or
 	// ErrRestart.

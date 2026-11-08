@@ -360,19 +360,17 @@ func TestFFIJoiner(t *testing.T) {
 	// Eighteen months later the service renews the phone's certificate,
 	// and the app gets it to keep in its own file: the core has no
 	// identity file for a key outside it.
-	piAddr := pi.addr()
+	pi.port = portOf(t, pi.addr())
 	pi.stop()
-	pi.cfg = func(c *Config) {
-		c.now = func() time.Time { return time.Now().AddDate(1, 6, 0) }
-		c.listen = func() (net.Listener, error) { return net.Listen("tcp", piAddr) }
-	}
+	clock := newTestClock(t, 548*24*time.Hour)
+	pi.cfg, pi.env = func(c *Config) { c.now = clock.now }, []string{clock.env()}
 	pi = restartService(t, &h, pi)
 	der, err := base64.StdEncoding.DecodeString(next("IDENTITY "))
 	if err != nil {
 		t.Fatal(err)
 	}
 	renewed, err := x509.ParseCertificate(der)
-	if err != nil || renewed.NotAfter.Before(time.Now().AddDate(1, 6, 0)) {
+	if err != nil || renewed.NotAfter.Before(clock.now()) {
 		t.Fatalf("the phone kept no renewed certificate: %v", err)
 	}
 }

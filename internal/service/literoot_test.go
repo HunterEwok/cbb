@@ -773,19 +773,7 @@ func TestLiteHubs(t *testing.T) {
 
 	// The desk comes back where the Rust member dials it: the Rust hub
 	// gives way, and the laptop moves back.
-	back := &testService{name: desk.name, dir: desk.dir, os: desk.os}
-	back.cfg = func(c *Config) {
-		c.listen = func() (net.Listener, error) {
-			ln, err := net.Listen("tcp", deskAddr)
-			if err == nil {
-				back.mu.Lock()
-				back.memberAddr = ln.Addr().String()
-				back.mu.Unlock()
-			}
-			return ln, err
-		}
-	}
-	desk = startIn(t, &h, back)
+	desk = startIn(t, &h, &testService{name: desk.name, dir: desk.dir, os: desk.os, port: portOf(t, deskAddr)})
 	waitUpTo(t, 60*time.Second, "the Rust hub gives way to the desk", func() bool {
 		a := rust.status(t).Away
 		return a != nil && a.Standby
