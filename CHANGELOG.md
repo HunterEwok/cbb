@@ -1455,6 +1455,9 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The bench's fleet checks whom the members dial by D-89: one that publishes `r=listen` at
+  once, though its device ID is the lowest, and one with the lowest that dials only after the
+  fallback, in place of the old check that no one dials a member with `r=lite` (D3).
 - The roles `full` and `lite` are one role, `member`, with capabilities (D-89; docs/protocol.md
   section 4, "Capabilities"): `admin` (it can hold an admin key), `dials` (it dials other
   members) and `hub` (it may be chosen as the hub), in its hello (`caps`), its device record
