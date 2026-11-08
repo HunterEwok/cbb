@@ -96,6 +96,52 @@
         }
       }
     },
+    "NSPhotoLibraryAddUsageDescription": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB добавляет в «Фото» изображение или видео, которое прислал ваш компьютер."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB añade a Fotos una imagen o un vídeo que te envió tu ordenador."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB 将你的电脑发送的图片或视频添加到“照片”。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يضيف CBB إلى الصور صورة أو فيديو أرسله حاسوبك."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB מוסיף לתמונות תמונה או סרטון שהמחשב שלכם שלח."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB आपके कंप्यूटर से भेजी गई छवि या वीडियो को फ़ोटो में जोड़ता है।"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB huongeza kwenye Picha picha au video ambayo kompyuta yako ilituma."
+          }
+        }
+      }
+    },
     "NSLocalNetworkUsageDescription": {
       "localizations": {
         "ar": {

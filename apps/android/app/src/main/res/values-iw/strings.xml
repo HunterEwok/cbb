@@ -560,4 +560,5 @@
     <string name="sync">סנכרון</string>
     <string name="badge_hub">רכזת</string>
     <string name="device_id">מזהה מכשיר</string>
+    <string name="saved_to_gallery">נשמר בגלריה, באלבום CBB.</string>
 </resources>

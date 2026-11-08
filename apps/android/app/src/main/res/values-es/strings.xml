@@ -560,4 +560,5 @@
     <string name="sync">Sincronizar</string>
     <string name="badge_hub">hub</string>
     <string name="device_id">ID del dispositivo</string>
+    <string name="saved_to_gallery">Guardado en la galería, en el álbum CBB.</string>
 </resources>

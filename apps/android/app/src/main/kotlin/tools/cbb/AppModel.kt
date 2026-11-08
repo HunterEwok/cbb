@@ -373,7 +373,7 @@ class AppModel(private val app: Context) {
                 null -> {}
             }
             sendFailed = false
-            message = if (fetched is LiveGroup.Got.Files) Note(R.string.files_saved) else Note(
+            message = if (fetched is LiveGroup.Got.Files) Note(if (fetched.gallery) R.string.saved_to_gallery else R.string.files_saved) else Note(
                 when (result) {
                     LiveGroup.SyncResult.SENT -> R.string.sent
                     LiveGroup.SyncResult.FETCHED -> R.string.fetched

@@ -560,4 +560,5 @@
     <string name="sync">Sawazisha</string>
     <string name="badge_hub">kitovu</string>
     <string name="device_id">Kitambulisho cha kifaa</string>
+    <string name="saved_to_gallery">Imehifadhiwa kwenye matunzio, katika albamu CBB.</string>
 </resources>

@@ -93,7 +93,11 @@ they look, so both apps are built to the same plan.
    through the app's FileProvider and on the iPhone while the app runs, to this phone only.
    Received files wait until the app opens, which saves them, with their folders, in Downloads,
    folder "CBB", on Android and in Files, On My iPhone, CBB,
-   Received, on the iPhone; it saves a copy once. Android's Share sends a single image as an
+   Received, on the iPhone; it saves a copy once. One image or video, and an image the button
+   fetches, goes where the gallery shows it, as Telegram and WhatsApp put what they receive
+   and as the Aurora app does: the album "CBB" (Pictures/CBB or Movies/CBB through MediaStore)
+   on Android, Photos on the iPhone (Recents: with access only to add photos,
+   `NSPhotoLibraryAddUsageDescription`, iOS lets no app make an album). Android's Share sends a single image as an
    image and anything else as files, up to 100 MiB together. A copy over 100 MiB stays on
    the computers.
 3. **Add a device**: the camera with a frame on the QR code the new device shows ("Join a

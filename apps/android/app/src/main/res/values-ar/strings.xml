@@ -560,4 +560,5 @@
     <string name="sync">مزامنة</string>
     <string name="badge_hub">محور</string>
     <string name="device_id">معرّف الجهاز</string>
+    <string name="saved_to_gallery">حُفظ في المعرض، في الألبوم CBB.</string>
 </resources>

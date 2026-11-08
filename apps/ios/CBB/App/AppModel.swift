@@ -318,8 +318,9 @@ final class AppModel: ObservableObject {
         /// the start of a text.
         case fetched(from: String?, preview: String?)
         case nothingNew
-        /// Files a computer copied, saved in the app's folder in Files.
-        case savedFiles
+        /// Files a computer copied, saved in the app's folder in Files, or
+        /// one image or video in Photos.
+        case savedFiles(photos: Bool)
     }
 
     enum ScanResult: Equatable {
@@ -664,6 +665,8 @@ final class AppModel: ObservableObject {
             return String(localized: "Ready to paste.", bundle: .app)
         case .nothingNew:
             return String(localized: "Nothing new to send or fetch.", bundle: .app)
+        case .savedFiles(photos: true):
+            return String(localized: "Saved in Photos.", bundle: .app)
         case .savedFiles:
             return String(localized: "Saved in Files, On My iPhone, CBB.", bundle: .app)
         }

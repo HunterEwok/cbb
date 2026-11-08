@@ -560,4 +560,5 @@
     <string name="sync">सिंक</string>
     <string name="badge_hub">हब</string>
     <string name="device_id">डिवाइस ID</string>
+    <string name="saved_to_gallery">गैलरी में, CBB एल्बम में सहेजा गया।</string>
 </resources>

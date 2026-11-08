@@ -117,6 +117,7 @@
     <string name="share_confirm_title">Send this text to your computers?</string>
     <string name="share_confirm_body">%1$s handed CBB a text of %2$d characters. It goes to every computer of the group.</string>
     <string name="files_saved">Saved in Downloads, in the folder CBB.</string>
+    <string name="saved_to_gallery">Saved in the gallery, in the album CBB.</string>
     <string name="files_sent">Sent to the computers, which fetch it from this phone now.</string>
     <string name="share_files_title">Send to your computers?</string>
     <string name="share_files_body">%1$s handed CBB %2$d items. They go to every computer of the group.</string>
