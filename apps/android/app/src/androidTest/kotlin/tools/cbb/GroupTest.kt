@@ -272,9 +272,10 @@ class GroupTest {
         throw AssertionError("not within 15s: the app starts admitting\n${appState()}")
     }
 
-    /** Admits a member in no group from Home's add button, by its QR code's text. */
+    /** Admits a member in no group from Home's + menu, by its QR code's text. */
     private fun admit(dev: String) {
         compose.onNodeWithContentDescription(str(R.string.add_device)).performClick()
+        compose.onNodeWithText(str(R.string.scan_code)).performClick()
         val (code, pairing) = Bench.pairCode(dev)
         typeAndAdd(code)
         val out = try {
