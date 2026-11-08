@@ -939,11 +939,11 @@ queue, so large content cannot simply go inside it.
 
 | Device | Images | Files and folders | HTML |
 |---|---|---|---|
-| Linux, Wayland (data-control) | `image/png`, `image/jpeg` | `text/uri-list`, `x-special/gnome-copied-files`, KDE's types | `text/html` |
+| Linux, Wayland (data-control) | `image/gif`, `image/png`, `image/jpeg`; a GIF also as a PNG of its first frame | `text/uri-list`, `x-special/gnome-copied-files`, KDE's types | `text/html` |
 | Linux, X11 and GNOME through XWayland | the same targets, large ones in INCR pieces | the same | the same |
 | Linux without a desktop | `cbb copy FILE...`, `cbb paste -o DIR` | the same | no |
-| Windows | `CF_DIBV5` and the registered `PNG` format | `CF_HDROP` with the paths of the received copies; virtual files (Outlook attachments, ZIP contents) later | `HTML Format` |
-| Mac | `public.png`, `public.jpeg`, `public.tiff` (sent as PNG) | `public.file-url` items | `public.html` |
+| Windows | `CF_DIBV5` and the registered `PNG` and `GIF` formats | `CF_HDROP` with the paths of the received copies; virtual files (Outlook attachments, ZIP contents) later | `HTML Format` |
+| Mac | `com.compuserve.gif`, `public.png`, `public.jpeg`, `public.tiff` (sent as PNG) | `public.file-url` items | `public.html` |
 | iPhone app | on the button and while the app runs, written to this phone only; HEIC is sent as JPEG (PNG with transparency) | Share sends images and files (up to 50 MB, the share extension's memory); the button saves received files in the app's folder in Files | later |
 | Android app | reads a `content://` image with the clipboard, writes one through its FileProvider; other formats are sent as PNG | Android file managers have no system copy, so files come through the share sheet; the button saves received files in Downloads, in a folder "CBB" | later |
 | The lite member, ESP32, ZX Next | no | no | no |
@@ -2068,6 +2068,19 @@ pasted newline before the user sees it. The `enter` flag presses Enter afterward
 | the lite member on Linux | the console helper or tmux, as on Linux | as Linux |
 | Nano ESP32 | not yet: the firmware takes no commands; its USB keyboard (`esp32/`, `usb.rs`) types only what its console's `type` gives it, in a `console-type` build | only the characters of the layout set on the board, which must match the host's |
 | ZX Spectrum Next | none: `.cbb` runs only when started | |
+
+**Images and files.** A remote paste carries a copy of images or files too, so that a
+photo sent from the phone lands in the chat or document that has the focus on a computer.
+The sender makes an ordinary copy of them in the group (it reaches every device's clipboard,
+as any copy does) and signs a `paste` command of kind `media` that names that copy. The
+receiver fetches the copy as it fetches any, writes it into its clipboard in the forms the
+system knows (an image, formatted text, or files as a file manager copies them, so that a
+program takes files and not their paths), and presses only the paste keys of the table above:
+Shift+Insert on Linux, Ctrl+V on Windows, Cmd+V in the Mac app. Typing them is not possible,
+and tmux, a text console, a Bluetooth keyboard and a TV refuse them with that reason. The
+receiver takes only a copy that is sealed to the sender's device too, so a paste never puts
+in a copy its sender could not read. Senders: `cbb paste -on DEVICE FILE...` (`-image` for one
+PNG or JPEG as an image, `-copy` for the group's current copy).
 
 **The lock check.** Synthetic input does not stop at a lock screen: XTEST events pass a
 locker's keyboard grab, and a uinput device is a real keyboard to the compositor, the

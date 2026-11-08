@@ -295,7 +295,13 @@ public enum Commands {
             let limit = b.mode == "paste" ? maxPasteText : b.mode == "type" ? maxTypeText : 0
             guard limit > 0 else { throw refuse("a paste command's way is not paste or type") }
             guard b.hub == nil else { throw refuse("a paste command carries a hub order") }
-            guard b.kind == "text" || b.kind == "secret" else { throw refuse("a paste command's kind is not text or secret") }
+            if b.kind == "media" {
+                // Its text is the event ID of the group's copy of images or files it pastes.
+                guard b.mode == "paste" else { throw refuse("a paste command of images or files is not typed") }
+                guard hex32(b.text ?? "") else { throw refuse("a paste command of images or files names no copy") }
+            } else {
+                guard b.kind == "text" || b.kind == "secret" else { throw refuse("a paste command's kind is not text, secret or media") }
+            }
             let n = b.text?.utf8.count ?? 0
             guard n > 0 else { throw refuse("a paste command has no text") }
             guard n <= limit else { throw refuse("a paste command's text is longer than \(limit) bytes") }

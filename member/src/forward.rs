@@ -655,7 +655,8 @@ pub fn hello(mask: &[u8; 32], key: &[u8; 32], id: u64, counter: u64) -> Vec<u8> 
         let mac = m.finalize().into_bytes();
         h[20..].copy_from_slice(&mac[..16]);
     }
-    let mut c = ChaCha20::new(mask.into(), (&*nonce).into());
+    let nonce: &[u8; NONCE] = (&*nonce).try_into().expect("NONCE bytes");
+    let mut c = ChaCha20::new(mask.into(), nonce.into());
     c.apply_keystream(h);
     p.to_vec()
 }
@@ -710,7 +711,8 @@ mod tests {
         assert!(a.len() >= NONCE + HELLO && a.len() < NONCE + HELLO + HELLO_TAIL);
         assert_ne!(a, b);
         let mut h = a[NONCE..NONCE + HELLO].to_vec();
-        ChaCha20::new((&mask).into(), a[..NONCE].into()).apply_keystream(&mut h);
+        let nonce: &[u8; NONCE] = a[..NONCE].try_into().unwrap();
+        ChaCha20::new((&mask).into(), nonce.into()).apply_keystream(&mut h);
         assert_eq!(h[..4], [MSG_HELLO, 0, 0, 0]);
         assert_eq!(u64::from_be_bytes(h[4..12].try_into().unwrap()), 7);
         assert_eq!(u64::from_be_bytes(h[12..20].try_into().unwrap()), 9);

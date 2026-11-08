@@ -1,6 +1,66 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Paste a picture…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставить картинку…"
+          }
+        }
+      }
+    },
+    "Paste files…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставить файлы…"
+          }
+        }
+      }
+    },
+    "A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Cmd+V or Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Картинка или файлы уходят в группу копией, и компьютер вставляет их туда, где фокус, как Cmd+V или Ctrl+V: в чат, документ или папку. Enter, если включён, отправляет их в чате."
+          }
+        }
+      }
+    },
+    "The picture could not be read, or is larger than 100 MB.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Картинку не удалось прочитать, или она больше 100 МБ."
+          }
+        }
+      }
+    },
+    "%@ could not be read.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось прочитать %@."
+          }
+        }
+      }
+    },
+    "The files are larger than 100 MB together.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Файлы вместе больше 100 МБ."
+          }
+        }
+      }
+    },
     "Mute a device": {
       "localizations": {
         "ru": {

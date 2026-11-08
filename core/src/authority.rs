@@ -1060,14 +1060,12 @@ impl Evaluation {
             if r.chain.len() != 1 {
                 continue;
             }
-            if let Ok(b) = Body::parse(&r.body) {
-                if b.kind == TYPE_CLAIM {
-                    if let Ok(c) = Cert::parse(&b.root) {
-                        if certs::check_root(&c).is_ok() {
-                            roots.insert(key_hash_of(&c), c);
-                        }
-                    }
-                }
+            if let Ok(b) = Body::parse(&r.body)
+                && b.kind == TYPE_CLAIM
+                && let Ok(c) = Cert::parse(&b.root)
+                && certs::check_root(&c).is_ok()
+            {
+                roots.insert(key_hash_of(&c), c);
             }
         }
         let mut e = Evaluation {
@@ -1563,10 +1561,10 @@ impl<'a> Epoch<'a> {
                 }
             }
         }
-        if let Some(i) = self.recovery {
-            if let Some(a) = self.r(i).b().admin {
-                self.admins.entry(a).or_insert(i);
-            }
+        if let Some(i) = self.recovery
+            && let Some(a) = self.r(i).b().admin
+        {
+            self.admins.entry(a).or_insert(i);
         }
     }
 
@@ -2073,10 +2071,10 @@ impl<'a> Epoch<'a> {
     /// Builds the state of the last epoch.
     fn state(&self) -> State {
         let mut s = State { roots: self.path.clone(), stop: STOP_NONE.into(), ..State::default() };
-        if let Some(d) = self.root_device() {
-            if !self.r(d).b().key.is_some_and(|k| self.revoked.contains(&k)) {
-                s.root_device = self.r(d).b().device.clone();
-            }
+        if let Some(d) = self.root_device()
+            && !self.r(d).b().key.is_some_and(|k| self.revoked.contains(&k))
+        {
+            s.root_device = self.r(d).b().device.clone();
         }
         let forked_admin = self.forked.keys().any(|k| !self.on_path.contains_key(k));
         for (id, rs) in &self.e.devices {
@@ -2090,10 +2088,10 @@ impl<'a> Epoch<'a> {
             if alone {
                 s.nothing_to.push(id.clone());
             }
-            if let Some(p) = self.pending {
-                if rs.iter().any(|&i| self.r(i).b().admin == Some(p) && self.root_record(i)) {
-                    s.no_secrets_to.push(id.clone());
-                }
+            if let Some(p) = self.pending
+                && rs.iter().any(|&i| self.r(i).b().admin == Some(p) && self.root_record(i))
+            {
+                s.no_secrets_to.push(id.clone());
             }
         }
         s.devices.sort_by(|a, b| a.device.cmp(&b.device));
@@ -2114,12 +2112,13 @@ impl<'a> Epoch<'a> {
         if let Some(i) = self.settings() {
             s.key_level = self.r(i).b().key_level.clone();
         }
-        if let Some(i) = self.recovery {
-            if let Some(a) = self.r(i).b().admin {
-                if self.admins.get(&a) == Some(&i) && !self.revoked.contains(&a) && !self.frozen.contains(&a) {
-                    s.recovery = Some(a);
-                }
-            }
+        if let Some(i) = self.recovery
+            && let Some(a) = self.r(i).b().admin
+            && self.admins.get(&a) == Some(&i)
+            && !self.revoked.contains(&a)
+            && !self.frozen.contains(&a)
+        {
+            s.recovery = Some(a);
         }
         if self.stop_full {
             s.stop = STOP_FULL.into();
@@ -2224,13 +2223,15 @@ impl<'a> Epoch<'a> {
             ..Device::default()
         };
         d.keys.sort();
-        if let Some(a) = n.admin {
-            if !self.r(top).admin() && !self.revoked.contains(&a) && self.admins.get(&a) == Some(&top) {
-                d.admin = Some(a);
-                d.powers = n.powers.clone();
-                d.commands = n.commands.clone();
-                d.frozen = self.frozen.contains(&a);
-            }
+        if let Some(a) = n.admin
+            && !self.r(top).admin()
+            && !self.revoked.contains(&a)
+            && self.admins.get(&a) == Some(&top)
+        {
+            d.admin = Some(a);
+            d.powers = n.powers.clone();
+            d.commands = n.commands.clone();
+            d.frozen = self.frozen.contains(&a);
         }
         Some(d)
     }

@@ -40,10 +40,11 @@ const Supported = true
 // Formatted text, the "HTML Format" that browsers and Office write, is read
 // next to the text, never with a secret, and written with it.
 //
-// An image is read when the clipboard holds no text: the "PNG" format that
-// browsers and Office put there, else the bitmap as a PNG. One is written
-// as a PNG and as a bitmap with alpha, CF_DIBV5, from which Windows makes
-// the older bitmap formats. A copy of files in Explorer, CF_HDROP, is read
+// An image is read when the clipboard holds no text: the "GIF" format that
+// browsers put there for an animation, the "PNG" format of browsers and
+// Office, else the bitmap as a PNG. One is written as a PNG and as a bitmap
+// with alpha, CF_DIBV5, from which Windows makes the older bitmap formats;
+// a GIF also as itself, with its first frame in the others. A copy of files in Explorer, CF_HDROP, is read
 // as their paths before anything else; files are written the same way,
 // with the drop effect that tells Explorer to copy them, never move them.
 
@@ -85,6 +86,7 @@ var (
 	formatsOnce                                   sync.Once
 	cfExclude, cfViewerIgnore, cfHistory, cfCloud uintptr
 	cfPNG                                         uintptr // an image as a PNG file
+	cfGIF                                         uintptr // an image as a GIF file, perhaps animated
 	cfHTML                                        uintptr // formatted text, "HTML Format"
 	cfDropEffect                                  uintptr // whether pasted files are copied or moved
 )
@@ -92,6 +94,7 @@ var (
 func registerFormats() {
 	formatsOnce.Do(func() {
 		cfPNG = register("PNG")
+		cfGIF = register("GIF")
 		cfHTML = register("HTML Format")
 		cfDropEffect = register("Preferred DropEffect")
 		cfExclude = register("ExcludeClipboardContentFromMonitorProcessing")
@@ -361,6 +364,8 @@ func readImage(it *Item) (bool, error) {
 	registerFormats()
 	format := uintptr(0)
 	switch {
+	case available(cfGIF):
+		format = cfGIF
 	case available(cfPNG):
 		format = cfPNG
 	case available(cfDIBV5):
@@ -378,12 +383,17 @@ func readImage(it *Item) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if format != cfPNG {
+	typ := clip.TypePNG
+	switch format {
+	case cfGIF:
+		typ = clip.TypeGIF
+	case cfPNG:
+	default:
 		if data, err = dibToPNG(data); err != nil {
 			return false, err
 		}
 	}
-	it.ImageType, it.Image = clip.TypePNG, data
+	it.ImageType, it.Image = typ, data
 	return true, nil
 }
 
@@ -409,6 +419,10 @@ func (b *Board) WriteImage(typ string, data []byte, text string) (int64, error) 
 		return 0, err
 	}
 	dib := imageDIBV5(img)
+	var gif []byte
+	if typ == clip.TypeGIF {
+		gif = data
+	}
 	if typ != clip.TypePNG {
 		// The PNG is made from the DIB, so the decoded pixels can go first
 		// (imageBytes). They do only once the collector has run: left to
@@ -431,7 +445,11 @@ func (b *Board) WriteImage(typ string, data []byte, text string) (int64, error) 
 		if r, _, err := procEmptyClipboard.Call(); r == 0 {
 			return fmt.Errorf("pasteboard: emptying the clipboard: %w", err)
 		}
-		errs := []error{set(cfPNG, data), set(cfDIBV5, dib)}
+		var errs []error
+		if gif != nil {
+			errs = append(errs, set(cfGIF, gif))
+		}
+		errs = append(errs, set(cfPNG, data), set(cfDIBV5, dib))
 		if text != "" {
 			errs = append(errs, set(cfUnicodeText, utf16Bytes(text)))
 		}

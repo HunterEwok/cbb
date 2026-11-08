@@ -4,7 +4,7 @@
   "license": "AGPL-3.0-only",
   "devDependencies": {
     "html-validate": "11.17.0",
-    "lighthouse": "13.5.0",
+    "lighthouse": "13.6.0",
     "roughjs": "4.6.6"
   },
   "scripts": {

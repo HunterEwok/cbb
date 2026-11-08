@@ -206,8 +206,8 @@ Rules for workflows:
     app, listed by `packaging/sbom.init.gradle.kts`, an init script that leaves the apps' build
     files as they are.
 
-  The Docker image carries its own as a GitHub attestation in the registry
-  (`actions/attest-sbom`), not as buildx's, which would add a platform "unknown" to the index.
+  The Docker image carries its own as a GitHub attestation in the registry (`actions/attest`
+  with `sbom-path`), not as buildx's, which would add a platform "unknown" to the index.
   The same input makes the same file (no time; a serial number derived from the content).
   CI's `packaging` and `Android app` jobs make them on every change, as the release does.
 - After the draft, the `docker` job builds the image of `packaging/docker` from the

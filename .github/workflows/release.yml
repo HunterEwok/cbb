@@ -460,7 +460,7 @@ jobs:
         run: |
           rustup toolchain install nightly-2026-10-26 --profile minimal --component rust-src
           python3 -m venv "$RUNNER_TEMP/zig"
-          "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.15.2 cargo-zigbuild==0.24.0
+          "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
           echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
       - name: build (static, soft float, without sync away from home; see member/packaging/mips.sh)
         run: CBB_VERSION="${GITHUB_REF_NAME#v}" CBB_SOURCE="$GITHUB_SHA" sh member/packaging/mips.sh ${{ matrix.arch }}
@@ -704,7 +704,7 @@ jobs:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3.0.0
+      - uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.push.outputs.digest }}

@@ -88,6 +88,25 @@ func (t *Target) Inject(ctx context.Context, text, method string, enter, secret 
 	return err
 }
 
+// InjectMedia pastes images or files into the window with the focus
+// (connector.MediaTarget): write puts them into the clipboard, then
+// Ctrl+V.
+func (t *Target) InjectMedia(ctx context.Context, write func() error, enter bool) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if why := blocked(); why != "" {
+		return &connector.Refusal{Reason: why}
+	}
+	if err := write(); err != nil {
+		return err
+	}
+	err := send(ctx, pasteKeys())
+	if err == nil && enter {
+		err = send(ctx, enterKeys())
+	}
+	return err
+}
+
 // blocked says why keys cannot go to the window with the focus now, or "".
 func blocked() string {
 	if name, err := inputDesktop(); err != nil || !strings.EqualFold(name, "Default") {

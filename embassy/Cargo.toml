@@ -5,7 +5,7 @@
 name = "cbb-embassy"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.87"
+rust-version = "1.95"
 license = "AGPL-3.0-only"
 description = "The lite member's network code on embassy-net, for the ESP32 and for a Linux test over TAP"
 publish = false

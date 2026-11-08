@@ -48,7 +48,7 @@ func TestCollect(t *testing.T) {
 	if _, _, err := Collect([]string{single, single}); err == nil {
 		t.Error("the same file twice was taken")
 	}
-	for _, p := range []control.Part{{Path: "../x"}, {Path: "/etc/x"}, {Type: "image/gif"}} {
+	for _, p := range []control.Part{{Path: "../x"}, {Path: "/etc/x"}, {Type: "image/webp"}} {
 		if _, err := SavedName(p); err == nil {
 			t.Errorf("SavedName(%+v) succeeded", p)
 		}
