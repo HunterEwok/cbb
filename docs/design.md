@@ -196,7 +196,10 @@ ends, the Go service described below is still the computers' member.
   key on a YubiKey, found by its certificate's key hash, after its PIN. `seal` and `unseal`
   seal a secret with the TPM or the Secure Enclave as Go's `group.Sealer` does: `cbb` keeps
   the key for sealed messages (`seal.json`) and the tunnel's keys (`tunnel.json`, with the
-  hub's fields Go writes) sealed in the same fields as the Go member.
+  hub's fields Go writes) sealed in the same fields as the Go member. On a Mac, which has no
+  TPM, `cbb` does all of this with the Secure Enclave itself (`member/src/sekey.rs`, through
+  Security.framework, the same blobs and the same sealed format as Go's `internal/sekey`,
+  checked against `testdata/interop/go-sekey-seal.json`), so there the helper holds no key.
 - **The keyboard and the TVs.** `keyboard`, `remote`, `peripheral-status`,
   `peripheral-paste`, `peripheral-stop` and `keyboard-layout` run Go's `internal/peripheral`,
   the code the Go service runs too, with the state folder and the device's name in each

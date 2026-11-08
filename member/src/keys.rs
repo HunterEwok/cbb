@@ -2,9 +2,10 @@
 // Copyright (C) 2026 HunterEwok
 
 //! Device keys that the machine's hardware holds, the TPM or a Mac's Secure
-//! Enclave, through cbb-helper (docs/design.md, "The service and its
-//! helper"): the helper makes them, loads them by the blob the identity
-//! file keeps, and signs with them; the key never leaves the hardware.
+//! Enclave: the key never leaves the hardware, and the identity file keeps
+//! the blob that loads it. A Mac's enclave cbb uses itself (sekey.rs); the
+//! TPM through cbb-helper (docs/design.md, "The service and its helper"),
+//! which makes the keys, loads them and signs with them.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -85,6 +86,18 @@ impl Sealed {
 /// group.Sealer; None where secrets stay in files: no helper beside cbb,
 /// or no TPM or Secure Enclave that seals.
 pub fn seal(secret: &[u8]) -> Result<Option<Sealed>> {
+    #[cfg(target_os = "macos")]
+    {
+        // As Go's group.Sealer: CBB_TPM=off keeps secrets in files, and an
+        // enclave that cannot seal does too.
+        if tpm_off() || !crate::sekey::available() {
+            return Ok(None);
+        }
+        return Ok(crate::sekey::seal(secret)
+            .ok()
+            .map(|b| Sealed { se: Some(serde_json::Value::String(b64_std(&b))), ..Sealed::default() }));
+    }
+    #[allow(unreachable_code)]
     let Some(helper) = crate::helper::shared() else { return Ok(None) };
     let req = Sealed { secret: secret.to_vec(), ..Sealed::default() };
     let payload = serde_json::to_vec(&req).context("cannot encode a sealing request")?;
@@ -95,6 +108,19 @@ pub fn seal(secret: &[u8]) -> Result<Option<Sealed>> {
 
 /// Opens what seal sealed, through cbb-helper.
 pub fn unseal(b: &Sealed) -> Result<Vec<u8>> {
+    if let Some(se) = &b.se {
+        let raw = se
+            .as_str()
+            .and_then(base64_decode)
+            .ok_or_else(|| Error::msg("the secret the Secure Enclave sealed is not understood"))?;
+        #[cfg(target_os = "macos")]
+        return crate::sekey::unseal(&raw);
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = raw;
+            return Err(Error::msg("the secret is sealed by a Mac's Secure Enclave; was the state copied from a Mac?"));
+        }
+    }
     let helper = crate::helper::shared().ok_or_else(|| {
         Error::msg("the key is sealed by the TPM or the Secure Enclave, which cbb opens only through cbb-helper, and there is no cbb-helper beside cbb")
     })?;
@@ -195,9 +221,61 @@ impl ExternalKey for HardwareKey {
     }
 }
 
-/// Opens the key the identity file keeps as held, through this process's
-/// helper.
+/// A key in this Mac's Secure Enclave, which cbb signs with itself.
+#[cfg(target_os = "macos")]
+struct EnclaveKey(crate::sekey::Key);
+
+#[cfg(target_os = "macos")]
+impl ExternalKey for EnclaveKey {
+    fn public(&self) -> Vec<u8> {
+        self.0.public()
+    }
+
+    fn sign_digest(&self, digest: &[u8; 32]) -> Result<Vec<u8>> {
+        self.0.sign_digest(digest)
+    }
+
+    fn held(&self) -> Option<HeldKey> {
+        Some(HeldKey::SecureEnclave(self.0.blob()))
+    }
+}
+
+/// Whether CBB_TPM=off keeps new keys and secrets out of the hardware, as
+/// Go's group.TPMEnv.
+#[cfg(target_os = "macos")]
+fn tpm_off() -> bool {
+    std::env::var("CBB_TPM").is_ok_and(|v| v == "off")
+}
+
+#[cfg(target_os = "macos")]
+fn b64_std(b: &[u8]) -> String {
+    #[derive(Serialize)]
+    struct W<'a>(#[serde(with = "b64")] &'a [u8]);
+    serde_json::to_value(W(b)).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
+}
+
+fn base64_decode(s: &str) -> Option<Vec<u8>> {
+    #[derive(Deserialize)]
+    struct W(#[serde(with = "b64")] Vec<u8>);
+    serde_json::from_value::<W>(serde_json::Value::String(s.to_string())).ok().map(|w| w.0)
+}
+
+/// Opens the key the identity file keeps as held: a Mac's enclave key
+/// itself, a TPM key through this process's helper.
 pub fn open(held: &HeldKey) -> Result<Arc<dyn ExternalKey>> {
+    if let HeldKey::SecureEnclave(blob) = held {
+        #[cfg(target_os = "macos")]
+        return Ok(Arc::new(EnclaveKey(
+            crate::sekey::Key::load(blob).map_err(|e| e.context("cannot open this device's key"))?,
+        )));
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = blob;
+            return Err(Error::msg(
+                "this device's key is in a Mac's Secure Enclave; was the identity copied from a Mac?",
+            ));
+        }
+    }
     let helper = crate::helper::shared().ok_or_else(|| {
         Error::msg("this device's key is in the TPM or the Secure Enclave, which only cbb-helper opens, and there is no cbb-helper beside cbb")
     })?;
@@ -210,6 +288,21 @@ pub fn open(held: &HeldKey) -> Result<Arc<dyn ExternalKey>> {
 /// machine has a TPM or a Secure Enclave it may use; None otherwise, with
 /// why when something failed, and the key then goes into the identity file.
 pub fn new_device_key() -> (Option<Arc<dyn ExternalKey>>, String) {
+    // A Mac has no TPM: its enclave, if it has one, takes the key.
+    #[cfg(target_os = "macos")]
+    {
+        if tpm_off() {
+            return (None, "CBB_TPM is off".into());
+        }
+        if !crate::sekey::available() {
+            return (None, String::new());
+        }
+        return match crate::sekey::Key::new() {
+            Ok(k) => (Some(Arc::new(EnclaveKey(k))), String::new()),
+            Err(e) => (None, e.for_log()),
+        };
+    }
+    #[allow(unreachable_code)]
     let Some(helper) = crate::helper::shared() else { return (None, String::new()) };
     match call(&helper, "key-new", &Wire::default()) {
         Ok(ans) => {
