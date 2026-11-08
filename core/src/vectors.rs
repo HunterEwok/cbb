@@ -956,6 +956,15 @@ fn media_names() {
         if valid {
             assert_eq!(crate::media::save_name(name), c["save"].as_str().unwrap(), "{name:?}");
         }
+        assert_eq!(crate::media::clean_name(name), c["clean"].as_str().unwrap(), "{name:?}");
+    }
+    // The same as Go's TestCleanName and the kits' tests.
+    for (given, want) in [
+        ("x".repeat(300), "x".repeat(255)),
+        (format!("CON.{}.x", "a".repeat(249)), format!("CON_.{}", "a".repeat(249))),
+        (format!("{}.", "a".repeat(254)), "a".repeat(254)),
+    ] {
+        assert_eq!(crate::media::clean_name(&given), want, "{given:?}");
     }
 }
 

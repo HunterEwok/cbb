@@ -6,7 +6,9 @@ package service
 import (
 	"bufio"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -107,6 +109,22 @@ func TestRustCommandLine(t *testing.T) {
 	want("desk is muted", "mute", "-on", "desk", "-for", "1h")
 	want("desk is no longer muted", "unmute", "-on", "desk")
 	misuse("mute", "-on", "desk", "-for", "a while")
+	// Files go to the group with cbb copy and come out with cbb paste -o.
+	files := t.TempDir()
+	report := filepath.Join(files, "report.txt")
+	if err := os.WriteFile(report, []byte("the quarter's numbers"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want("Copied report.txt (21 bytes) to the group.", "copy", report)
+	misuse("copy", "-secret", report)
+	out := t.TempDir()
+	waitFor(t, "desk saves the file", func() bool {
+		got, err := exec.Command(bin, "-state", deck.dir, "-socket", deck.socket, "paste", "-o", out).CombinedOutput()
+		return err == nil && strings.TrimSpace(string(got)) == filepath.Join(out, "report.txt")
+	})
+	if b, err := os.ReadFile(filepath.Join(out, "report.txt")); err != nil || string(b) != "the quarter's numbers" {
+		t.Fatalf("the saved file: %q, %v", b, err)
+	}
 	want("Removed desk from the group", "remove", "desk")
 	misuse("remove")
 }

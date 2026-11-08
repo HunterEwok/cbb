@@ -15,6 +15,9 @@ All notable changes to cbb are documented in this file. The format follows
   service tells when this device's certificate ends.
   In a group, its `cbb pair` opens a pairing window or, with `-qr`, admits the device that
   shows a code, and `cbb invite` writes a remote invitation and asks before it admits.
+  `cbb copy FILE...` sends files and folders (or with `-type` one image or HTML), `cbb paste -o
+  DIR` saves the clipboard's images or files, and `cbb paste -on DEVICE` pastes text, files or
+  the group's current copy on another device, as the Go cbb's do.
   `cbb mute` and `cbb unmute` go through the administrator's socket, as in the Go service, and
   a command that does not reach a device names why.
 - The Go service's tests run on the Rust service (`CBB_TEST_RUST_SERVICE` names its

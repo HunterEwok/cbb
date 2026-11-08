@@ -42,6 +42,7 @@ mod interfaces;
 mod keys;
 mod leave;
 mod logfile;
+mod media_cli;
 mod mute;
 pub mod networks;
 mod next;
@@ -727,11 +728,30 @@ impl std::fmt::Display for Detail {
 impl std::error::Error for Detail {}
 
 fn cmd_copy(g: &Global, args: &[String]) -> Result<()> {
-    let secret = match args {
-        [] => false,
-        [a] if flag(a) == Some("secret") => true,
-        _ => return Err(Error::msg("usage: cbb copy [-secret] < text")),
-    };
+    const USE: &str = "cbb copy [-secret] < text\n       cbb copy [-text TEXT] [-type png|jpeg|gif|html] FILE...";
+    let (mut secret, mut typ, mut alt, mut files) = (false, String::new(), String::new(), Vec::new());
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match flag(a) {
+            Some("secret") => secret = true,
+            Some("type") => typ = it.next().cloned().ok_or_else(|| cli::usage(USE))?,
+            Some("text") => alt = it.next().cloned().ok_or_else(|| cli::usage(USE))?,
+            Some(_) => return Err(cli::usage(USE)),
+            None => {
+                files.push(a.clone());
+                files.extend(it.by_ref().cloned());
+            }
+        }
+    }
+    if !files.is_empty() {
+        if secret {
+            return Err(cli::usage("-secret is for a text, not for files"));
+        }
+        return media_cli::copy(g, &files, &typ, &alt);
+    }
+    if !typ.is_empty() || !alt.is_empty() {
+        return Err(cli::usage("-type and -text go with FILE"));
+    }
     let mut text = Vec::new();
     std::io::stdin().take(clip::MAX_TEXT as u64 + 1).read_to_end(&mut text).context("cannot read standard input")?;
     let h = control::Header {
@@ -744,17 +764,28 @@ fn cmd_copy(g: &Global, args: &[String]) -> Result<()> {
 }
 
 fn cmd_paste(g: &Global, args: &[String]) -> Result<()> {
-    let (mut terminal, mut lines, mut secret) = (false, false, false);
-    for a in args {
+    if args.iter().any(|a| flag(a) == Some("on")) {
+        return media_cli::paste_on(g, args);
+    }
+    let (mut terminal, mut lines, mut secret, mut out) = (false, false, false, None);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
         match flag(a) {
             Some("terminal") => terminal = true,
             Some("lines") => lines = true,
             Some("secret") => secret = true,
-            _ => return Err(Error::msg("usage: cbb paste [-terminal [-lines] [-secret]]")),
+            Some("o") => out = Some(it.next().cloned().ok_or_else(|| cli::usage("-o takes a folder"))?),
+            _ => return Err(cli::usage("cbb paste [-terminal [-lines] [-secret]] | -o DIR | -on DEVICE ...")),
         }
     }
+    if let Some(dir) = out {
+        if terminal || lines || secret {
+            return Err(cli::usage("-o saves images or files; -terminal, -lines and -secret are for a text"));
+        }
+        return media_cli::paste_to(g, &dir);
+    }
     if (lines || secret) && !terminal {
-        return Err(Error::msg("-lines and -secret go with -terminal"));
+        return Err(cli::usage("-lines and -secret go with -terminal"));
     }
     let m =
         request(g, &control::Message::new(control::Header { op: "paste".into(), ..Default::default() }, Vec::new()))?;
