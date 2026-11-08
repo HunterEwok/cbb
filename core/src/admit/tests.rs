@@ -430,8 +430,9 @@ fn a_joiner_dials_the_window() {
 
 /// A random invitation secret, as the hub makes one.
 fn random_secret() -> [u8; pair::MIN_SECRET] {
-    let (a, b) = (getrandom::u64().unwrap(), getrandom::u64().unwrap());
-    (u128::from(a) << 64 | u128::from(b)).to_le_bytes()
+    // Each byte from the system's randomness, with no constant mixed in,
+    // which CodeQL would take for a hard-coded secret.
+    core::array::from_fn(|_| getrandom::u32().unwrap().to_le_bytes()[0])
 }
 
 /// A remote invitation's window, as Go's TestInvitation: the joiner proves
