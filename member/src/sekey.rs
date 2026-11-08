@@ -55,11 +55,12 @@ fn aead(shared: &[u8], eph: &[u8], public: &[u8]) -> Result<Aes256Gcm> {
         return Err(Error::msg("the agreed secret has the wrong length"));
     }
     let salt = [eph, public].concat();
-    let mut key = [0u8; 32];
+    // HKDF writes the whole key into the buffer it is given.
+    let mut key = aes_gcm::Key::<Aes256Gcm>::default();
     hkdf::Hkdf::<sha2::Sha256>::new(Some(&salt), shared)
         .expand(SEAL_INFO, &mut key)
         .map_err(|_| Error::msg("cannot derive the sealing key"))?;
-    Aes256Gcm::new_from_slice(&key).map_err(|_| Error::msg("cannot make the sealing key"))
+    Ok(Aes256Gcm::new(&key))
 }
 
 /// Seals secret to key with the ephemeral secret eph and nonce: what
@@ -548,10 +549,24 @@ mod tests {
     /// Go sealed opens in Rust and the other way round.
     const GO_SEALED: &str = include_str!("../../testdata/interop/go-sekey-seal.json");
 
+    /// The nonce Go sealed the vector with: the box's first 12 bytes.
+    fn go_nonce() -> [u8; 12] {
+        let go: Wire = serde_json::from_str(GO_SEALED).unwrap();
+        go.sealed[..12].try_into().unwrap()
+    }
+
+    /// A random nonce, as seal draws one.
+    fn random_nonce() -> [u8; 12] {
+        let (a, b) = (getrandom::u64().unwrap(), getrandom::u32().unwrap());
+        let mut n = a.to_le_bytes().to_vec();
+        n.extend(b.to_le_bytes());
+        n.try_into().unwrap()
+    }
+
     #[test]
     fn seals_as_go_does() {
         let key = Soft(scalar(7));
-        let b = seal_to(&key, &scalar(9), [1; 12], b"the wireguard key").unwrap();
+        let b = seal_to(&key, &scalar(9), go_nonce(), b"the wireguard key").unwrap();
         assert_eq!(unseal_with(&b, &load).unwrap(), b"the wireguard key");
         let ours: serde_json::Value = serde_json::from_slice(&b).unwrap();
         let go: serde_json::Value = serde_json::from_str(GO_SEALED).unwrap();
@@ -584,12 +599,12 @@ mod tests {
     #[test]
     fn refuses_what_does_not_open() {
         let key = Soft(scalar(7));
-        let b = seal_to(&key, &scalar(9), [1; 12], b"secret").unwrap();
+        let b = seal_to(&key, &scalar(9), random_nonce(), b"secret").unwrap();
         let mut w: Wire = serde_json::from_slice(&b).unwrap();
         let last = w.sealed.len() - 1;
         w.sealed[last] ^= 1;
         assert!(unseal_with(&serde_json::to_vec(&w).unwrap(), &load).is_err());
-        let other = seal_to(&Soft(scalar(8)), &scalar(9), [1; 12], b"secret").unwrap();
+        let other = seal_to(&Soft(scalar(8)), &scalar(9), random_nonce(), b"secret").unwrap();
         let mut w2: Wire = serde_json::from_slice(&other).unwrap();
         w2.key = key.blob();
         assert!(unseal_with(&serde_json::to_vec(&w2).unwrap(), &load).is_err(), "another key's box");
