@@ -74,8 +74,13 @@ func newRecoveryKey(t *testing.T, root *testService) *recoverySheet {
 // qr is the text of the sheet's QR code (docs/protocol.md, section 10,
 // "The recovery sheet"; testdata/interop/recovery-sheet.json), which the
 // Rust service reads with the core.
-func (s *recoverySheet) qr() string {
-	k := base64.RawURLEncoding.EncodeToString(s.Key.D.FillBytes(make([]byte, 32)))
+func (s *recoverySheet) qr(t *testing.T) string {
+	t.Helper()
+	scalar, err := s.Key.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := base64.RawURLEncoding.EncodeToString(scalar)
 	return "cbb://recover?g=" + s.Group + "&k=" + k + "&c=" + base64.RawURLEncoding.EncodeToString(s.Cert)
 }
 
@@ -97,8 +102,9 @@ func TestRecovery(t *testing.T) {
 		}
 	}
 	sheetText := func(s *recoverySheet) string {
-		sheets.Store(s.qr(), s)
-		return s.qr()
+		qr := s.qr(t)
+		sheets.Store(qr, s)
+		return qr
 	}
 	pi := startEnv(t, &h, "pi", read)
 	a := startService(t, &h, "a")
