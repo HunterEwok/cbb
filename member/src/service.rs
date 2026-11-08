@@ -121,7 +121,7 @@ impl Watcher {
         if m.files() {
             return self.files;
         }
-        self.images && (has("image/png") || has("image/jpeg")) || self.html && has("text/html")
+        self.images && (has("image/png") || has("image/jpeg") || has("image/gif")) || self.html && has("text/html")
     }
 }
 

@@ -653,7 +653,7 @@ Part:
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `type` | string or absent | clipboard data: `image/png`, `image/jpeg` or `text/html`, each at most once, so three parts at most today; an unknown type is refused, and the limit for types added later is 8 |
+| `type` | string or absent | clipboard data: `image/png`, `image/jpeg`, `image/gif` or `text/html`, each at most once, so four parts at most today; an unknown type is refused, and the limit for types added later is 8 |
 | `path` | string or absent | a copy of files: the file's or folder's path, names joined by `/`, each path once, compared byte for byte (case matters) |
 | `dir` | bool or absent | with `path`: `true` for a folder, which has no `size` or `sha256`: the field is absent, never null or an empty string |
 | `size` | integer or absent | the part's bytes; absent means 0 |
@@ -3867,7 +3867,7 @@ frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 | Device form | `laptop`, `desktop`, `phone`, `tablet`, `tv`, `board`, `server`, `router`, `console`, `watch`, `retro`, `other` | 4 |
 | Event `kind` | `text`, `secret`, `media` | 4 |
 | Event `via` | `copy`, `phone`, `universal-clipboard` | 4 |
-| Media part `type` | `image/png`, `image/jpeg`, `text/html` | 4 |
+| Media part `type` | `image/png`, `image/jpeg`, `image/gif`, `text/html` | 4 |
 | Sync mode | `own`, `shared`, `receive`, `send` | 4, 15 |
 | Key store | `file`, `hardware`, `rootless`, `proven` (records only); proof kinds `android-tee`, `android-strongbox`, `tpm` | 17 |
 | mDNS TXT keys | `v`, `g`, `p`, `r` (`lite`, `phone`) | 3 |

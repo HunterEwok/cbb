@@ -871,11 +871,11 @@ queue, so large content cannot simply go inside it.
 
 | Device | Images | Files and folders | HTML |
 |---|---|---|---|
-| Linux, Wayland (data-control) | `image/png`, `image/jpeg` | `text/uri-list`, `x-special/gnome-copied-files`, KDE's types | `text/html` |
+| Linux, Wayland (data-control) | `image/gif`, `image/png`, `image/jpeg`; a GIF also as a PNG of its first frame | `text/uri-list`, `x-special/gnome-copied-files`, KDE's types | `text/html` |
 | Linux, X11 and GNOME through XWayland | the same targets, large ones in INCR pieces | the same | the same |
 | Linux without a desktop | `cbb copy FILE...`, `cbb paste -o DIR` | the same | no |
-| Windows | `CF_DIBV5` and the registered `PNG` format | `CF_HDROP` with the paths of the received copies; virtual files (Outlook attachments, ZIP contents) later | `HTML Format` |
-| Mac | `public.png`, `public.jpeg`, `public.tiff` (sent as PNG) | `public.file-url` items | `public.html` |
+| Windows | `CF_DIBV5` and the registered `PNG` and `GIF` formats | `CF_HDROP` with the paths of the received copies; virtual files (Outlook attachments, ZIP contents) later | `HTML Format` |
+| Mac | `com.compuserve.gif`, `public.png`, `public.jpeg`, `public.tiff` (sent as PNG) | `public.file-url` items | `public.html` |
 | iPhone app | on the button and while the app runs, written to this phone only; HEIC is sent as JPEG (PNG with transparency) | Share sends images and files (up to 50 MB, the share extension's memory); the button saves received files in the app's folder in Files | later |
 | Android app | reads a `content://` image with the clipboard, writes one through its FileProvider; other formats are sent as PNG | Android file managers have no system copy, so files come through the share sheet; the button saves received files in Downloads, in a folder "CBB" | later |
 | The lite member, ESP32, ZX Next | no | no | no |

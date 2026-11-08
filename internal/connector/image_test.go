@@ -8,6 +8,10 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"image"
+	"image/color"
+	"image/gif"
+	"image/png"
 	"testing"
 	"time"
 
@@ -131,5 +135,32 @@ func TestInjectedMedia(t *testing.T) {
 	tgt := &mediaTarget{}
 	if ans := injectedMedia(t.Context(), socket, b, tgt, nil, m, nop); ans.Error == "" || ans.Refused || tgt.keys != 0 {
 		t.Errorf("a copy that is not the group's: %+v, %d presses", ans.Header, tgt.keys)
+	}
+}
+
+// A GIF goes on the clipboard as itself and as a PNG of its first frame.
+func TestImageForms(t *testing.T) {
+	frame := image.NewPaletted(image.Rect(0, 0, 3, 2), color.Palette{color.Black, color.White})
+	frame.SetColorIndex(1, 1, 1)
+	var b bytes.Buffer
+	if err := gif.EncodeAll(&b, &gif.GIF{Image: []*image.Paletted{frame, frame}, Delay: []int{10, 10}}); err != nil {
+		t.Fatal(err)
+	}
+	forms, order := ImageForms(Image{Type: clip.TypeGIF, Data: b.Bytes()})
+	if len(order) != 2 || order[0] != clip.TypeGIF || order[1] != clip.TypePNG || !bytes.Equal(forms[clip.TypeGIF], b.Bytes()) {
+		t.Fatalf("the forms of a GIF are %v", order)
+	}
+	img, err := png.Decode(bytes.NewReader(forms[clip.TypePNG]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, _, _, _ := img.At(1, 1).RGBA(); img.Bounds() != frame.Bounds() || r != 0xffff {
+		t.Errorf("the PNG is %v, with %v at 1,1", img.Bounds(), img.At(1, 1))
+	}
+	if _, order := ImageForms(Image{Type: clip.TypePNG, Data: []byte("png")}); len(order) != 1 {
+		t.Errorf("the forms of a PNG are %v", order)
+	}
+	if _, order := ImageForms(Image{Type: clip.TypeGIF, Data: []byte("GIF89a")}); len(order) != 1 {
+		t.Errorf("the forms of a broken GIF are %v", order)
 	}
 }

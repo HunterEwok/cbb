@@ -10,6 +10,7 @@ import (
 	"hash/crc32"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"os"
@@ -162,8 +163,20 @@ func TestDecodeImage(t *testing.T) {
 	if _, err := decodeImage(clip.TypeJPEG, b.Bytes()); err == nil {
 		t.Error("a PNG decoded as a JPEG")
 	}
-	if _, err := decodeImage("image/gif", b.Bytes()); err == nil {
-		t.Error("a GIF decoded")
+	if _, err := decodeImage(clip.TypeGIF, b.Bytes()); err == nil {
+		t.Error("a PNG decoded as a GIF")
+	}
+	if _, err := decodeImage("image/webp", b.Bytes()); err == nil {
+		t.Error("a WebP decoded")
+	}
+	b.Reset()
+	if err := gif.Encode(&b, testImage(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if img, err = decodeImage(clip.TypeGIF, b.Bytes()); err != nil {
+		t.Fatal(err)
+	} else if img.Bounds() != testImage().Bounds() {
+		t.Errorf("the GIF's frame is %v", img.Bounds())
 	}
 }
 

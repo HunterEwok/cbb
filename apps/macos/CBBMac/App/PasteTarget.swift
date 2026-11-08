@@ -192,6 +192,10 @@ extension Injector {
                     // Few apps read JPEG from the pasteboard; TIFF they all do.
                     if let tiff = NSImage(data: data)?.tiffRepresentation { item.setData(tiff, forType: .tiff) }
                     item.setData(data, forType: NSPasteboard.PasteboardType("public.jpeg"))
+                case "image/gif":
+                    // An animation where apps take GIF, its first frame elsewhere.
+                    item.setData(data, forType: NSPasteboard.PasteboardType("com.compuserve.gif"))
+                    if let tiff = NSImage(data: data)?.tiffRepresentation { item.setData(tiff, forType: .tiff) }
                 case "text/html": item.setData(data, forType: .html)
                 default: continue
                 }
