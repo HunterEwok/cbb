@@ -109,8 +109,9 @@ long cb_write(const char *name, const char *text, long len, int secret) {
 	}
 }
 
-// cb_read_image reads the pasteboard's image: its PNG, else its JPEG, else
-// its TIFF as a PNG. It returns 1 with the bytes in *data, which the caller
+// cb_read_image reads the pasteboard's image: its GIF, which a browser puts
+// there for an animation, else its PNG, else its JPEG, else its TIFF as a
+// PNG. It returns 1 with the bytes in *data, which the caller
 // frees, 0 for no image, -1 out of memory and -2 for an image over max.
 int cb_read_image(const char *name, void **data, long *len, int *type, long *change, long max) {
 	@autoreleasepool {
@@ -123,7 +124,12 @@ int cb_read_image(const char *name, void **data, long *len, int *type, long *cha
 		if (types == nil || [types containsObject:NSPasteboardTypeFileURL]) {
 			return 0; // files, whose icons are no copy of an image
 		}
-		NSData *d = [pb dataForType:NSPasteboardTypePNG];
+		NSData *d = [pb dataForType:@"com.compuserve.gif"];
+		if (d != nil) {
+			*type = CB_GIF;
+		} else {
+			d = [pb dataForType:NSPasteboardTypePNG];
+		}
 		if (d == nil) {
 			d = [pb dataForType:@"public.jpeg"];
 			if (d != nil) {
@@ -162,8 +168,21 @@ long cb_write_image(const char *name, const void *data, long len, int type, cons
 			return -1; // not an image
 		}
 		[pb clearContents];
-		if (![pb setData:d forType:(type == CB_JPEG ? @"public.jpeg" : NSPasteboardTypePNG)]) {
+		NSPasteboardType t = NSPasteboardTypePNG;
+		if (type == CB_JPEG) {
+			t = @"public.jpeg";
+		} else if (type == CB_GIF) {
+			t = @"com.compuserve.gif";
+		}
+		if (![pb setData:d forType:t]) {
 			return -1;
+		}
+		if (type == CB_GIF) {
+			// Its first frame for the apps that take no GIF.
+			NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+			if (png != nil) {
+				[pb setData:png forType:NSPasteboardTypePNG];
+			}
 		}
 		NSData *tiff = [rep TIFFRepresentation];
 		if (tiff != nil) {

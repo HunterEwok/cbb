@@ -323,6 +323,7 @@ type Node struct {
 	conns     map[group.DeviceID]*conn
 	waiting   map[string]waiter  // the commands sent, by ID, until their result
 	passed    map[string]passing // the commands passed on for other members, by ID
+	pastes    chan struct{}      // the paste commands being carried out (maxPastes)
 	closed    bool
 	rejoining chan struct{} // closed when a Rejoin in progress is done; nil if none
 	wg        sync.WaitGroup
@@ -348,7 +349,7 @@ func New(cfg Config) *Node {
 	if cfg.OnWrite == nil {
 		cfg.OnWrite = func(Write) {}
 	}
-	n := &Node{cfg: cfg, conns: make(map[group.DeviceID]*conn), waiting: make(map[string]waiter), passed: make(map[string]passing)}
+	n := &Node{cfg: cfg, conns: make(map[group.DeviceID]*conn), waiting: make(map[string]waiter), passed: make(map[string]passing), pastes: make(chan struct{}, maxPastes)}
 	n.id.Store(cfg.Identity)
 	n.SetTunnelKey(cfg.TunnelKey, cfg.TunnelPSK)
 	return n
@@ -1076,10 +1077,14 @@ func (c *conn) pass(cmd *group.Record, id string, to group.DeviceID, expires tim
 	return true
 }
 
+// maxPastes bounds the paste commands carried out at a time.
+const maxPastes = 4
+
 // command answers a command a peer sent, or passes on one for another
 // member.
 func (c *conn) command(cmd *group.Record) {
 	var b struct {
+		Type      string         `json:"type"`
 		ID        string         `json:"id"`
 		To        group.DeviceID `json:"to"`
 		ExpiresMS int64          `json:"expires_ms"`
@@ -1091,17 +1096,39 @@ func (c *conn) command(cmd *group.Record) {
 		}
 		return
 	}
-	res := Result{Status: ResultRefused, Reason: "this device takes no commands"}
-	if c.n.cfg.OnCommand != nil {
-		res = c.n.cfg.OnCommand(c.id, *cmd)
+	answer := func() {
+		res := Result{Status: ResultRefused, Reason: "this device takes no commands"}
+		if c.n.cfg.OnCommand != nil {
+			res = c.n.cfg.OnCommand(c.id, *cmd)
+		}
+		if res.ID == "" {
+			res.ID = b.ID
+		}
+		if self := c.n.identity(); self != nil {
+			res.By = self.ID
+		}
+		c.enqueue(outgoing{result: &res})
 	}
-	if res.ID == "" {
-		res.ID = b.ID
+	if b.Type != group.CommandPaste {
+		answer()
+		return
 	}
-	if self := c.n.identity(); self != nil {
-		res.By = self.ID
+	// A paste may wait for a copy of images or files whose bytes come on
+	// this very connection, so it does not hold up its reading; a few at
+	// a time, as the limits per sender let few through anyway.
+	select {
+	case c.n.pastes <- struct{}{}:
+		go func() {
+			defer func() { <-c.n.pastes }()
+			answer()
+		}()
+	default:
+		res := Result{ID: b.ID, Status: ResultRefused, Reason: "this device is busy with other pastes; try again"}
+		if self := c.n.identity(); self != nil {
+			res.By = self.ID
+		}
+		c.enqueue(outgoing{result: &res})
 	}
-	c.enqueue(outgoing{result: &res})
 }
 
 // waiter is a command sent, waiting for its result from one of the

@@ -4,9 +4,12 @@
 package connector
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"image/gif"
+	"image/png"
 	"os"
 	"path/filepath"
 	"sync"
@@ -37,12 +40,38 @@ const MaxHTML = 8 << 20
 // copy replaced it, for a paste that is still reading it.
 var KeepCopies = 10 * time.Minute
 
-// An Image is clipboard data of an image type: clip.TypePNG or
-// clip.TypeJPEG (and, as the service sends it, clip.TypeHTML).
+// An Image is clipboard data of an image type: clip.TypePNG,
+// clip.TypeJPEG or clip.TypeGIF (and, as the service sends it, clip.TypeHTML).
 type Image struct {
 	Type string
 	Data []byte
 }
+
+// ImageForms returns the forms a board offers img in, the best first: an
+// animated GIF also as a PNG of its first frame, for the programs that take
+// no GIF, unless its frame is larger than maxFrame pixels.
+func ImageForms(img Image) (map[string][]byte, []string) {
+	forms := map[string][]byte{img.Type: img.Data}
+	order := []string{img.Type}
+	if img.Type == clip.TypeGIF {
+		cfg, err := gif.DecodeConfig(bytes.NewReader(img.Data))
+		if err != nil || int64(cfg.Width)*int64(cfg.Height) > maxFrame {
+			return forms, order
+		}
+		if g, err := gif.Decode(bytes.NewReader(img.Data)); err == nil {
+			var b bytes.Buffer
+			if png.Encode(&b, g) == nil {
+				forms[clip.TypePNG] = b.Bytes()
+				order = append(order, clip.TypePNG)
+			}
+		}
+	}
+	return forms, order
+}
+
+// maxFrame is the most pixels of a GIF's frame that ImageForms turns into
+// a PNG: 8K by 4K.
+const maxFrame = 7680 * 4320
 
 // An ImageBoard is a clipboard that takes images. Its Current and Next
 // return an Item with Image set when the clipboard holds an image and no
@@ -149,10 +178,11 @@ type media struct {
 	text  string
 }
 
-// fetchMedia asks the service for the clipboard's copy: of an image, the
-// PNG if it has one, else the JPEG, and its formatted text, if any; files
-// are saved in a new folder of copies, if any.
-func fetchMedia(ctx context.Context, socket string, copies *copies) (media, error) {
+// fetchMedia asks the service for the clipboard's copy, or with copyID
+// for the group's copy of a remote paste: of an image, the PNG if it has
+// one, else the JPEG, and its formatted text, if any; files are saved in a
+// new folder of copies, if any.
+func fetchMedia(ctx context.Context, socket string, copies *copies, copyID string) (media, error) {
 	c, err := control.Dial(socket)
 	if err != nil {
 		return media{}, err
@@ -160,7 +190,7 @@ func fetchMedia(ctx context.Context, socket string, copies *copies) (media, erro
 	defer c.Close()
 	stop := context.AfterFunc(ctx, func() { c.Close() })
 	defer stop()
-	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPasteMedia}})
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPasteMedia, Value: copyID}})
 	if err != nil {
 		return media{}, err
 	}
@@ -188,7 +218,7 @@ func fetchMedia(ctx context.Context, socket string, copies *copies) (media, erro
 	if err != nil {
 		return media{}, err
 	}
-	for _, typ := range []string{clip.TypePNG, clip.TypeJPEG} {
+	for _, typ := range []string{clip.TypeGIF, clip.TypePNG, clip.TypeJPEG} {
 		for _, p := range parts {
 			if p.Type == typ && got.image == nil {
 				got.image = &p
@@ -204,6 +234,22 @@ func fetchMedia(ctx context.Context, socket string, copies *copies) (media, erro
 		return media{}, errors.New("the copy holds no image or formatted text")
 	}
 	return got, nil
+}
+
+// writeMedia writes a fetched copy into b in the first form b takes.
+func writeMedia(b Board, got media) error {
+	ib, images := b.(ImageBoard)
+	fb, files := b.(FileBoard)
+	hb, html := b.(HTMLBoard)
+	switch {
+	case got.image != nil && images:
+		return ib.WriteImage(*got.image, got.text)
+	case got.html != "" && html:
+		return hb.WriteHTML(got.html, got.text)
+	case got.files != nil && files:
+		return fb.WriteFiles(got.files)
+	}
+	return errors.New("this clipboard does not take the copy")
 }
 
 // receiveData collects the parts of clipboard data that follow

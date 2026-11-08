@@ -442,7 +442,12 @@ object Commands {
                     else -> throw Refused("a paste command's way is not paste or type")
                 }
                 if (o.opt("hub") != null) throw Refused("a paste command carries a hub order")
-                if (b.kind != "text" && b.kind != "secret") throw Refused("a paste command's kind is not text or secret")
+                if (b.kind == "media") {
+                    // Its text is the event ID of the group's copy of images or files it pastes.
+                    if (b.mode != "paste") throw Refused("a paste command of images or files is not typed")
+                    val t = b.text ?: ""
+                    if (t.length != 32 || t.any { it !in "0123456789abcdef" }) throw Refused("a paste command of images or files names no copy")
+                } else if (b.kind != "text" && b.kind != "secret") throw Refused("a paste command's kind is not text, secret or media")
                 val n = b.text?.toByteArray()?.size ?: 0
                 if (n == 0) throw Refused("a paste command has no text")
                 if (n > limit) throw Refused("a paste command's text is longer than $limit bytes")

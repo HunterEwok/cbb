@@ -65,6 +65,11 @@ pub(crate) const NEXT: &str = "next";
 /// How long a watcher may take to put a paste in; typing takes TYPE_WAIT
 /// more for each byte, as on a full member.
 const INJECT_WAIT: Duration = Duration::from_secs(5);
+/// A paste of images or files: how long its copy has to arrive and be
+/// fetched, and how long a watcher has to write it and press the keys,
+/// within a command's lifetime, as on a full member.
+const COPY_WAIT: Duration = Duration::from_secs(20);
+const COPY_PASTE_WAIT: Duration = Duration::from_secs(8);
 const TYPE_WAIT: Duration = Duration::from_millis(5);
 
 /// What the service sends a watcher: a write for its clipboard, or a paste
@@ -115,7 +120,7 @@ impl Watcher {
         if m.files() {
             return self.files;
         }
-        self.images && (has("image/png") || has("image/jpeg")) || self.html && has("text/html")
+        self.images && (has("image/png") || has("image/jpeg") || has("image/gif")) || self.html && has("text/html")
     }
 }
 
@@ -1110,9 +1115,12 @@ impl Service {
             Ok(_) if !self.pastes.lock().unwrap().allow(&from.key, uptime::wall_ms()) => {
                 res.reason = "too many pastes: at most one a second and 30 a minute from one device".into();
             }
+            Ok(set) if body.paste_kind == "media" => res = self.paste_copy(node, &body, set, &from.name),
             Ok(set) => res = self.inject(&body, &remotepaste::clean(&body.text), set, &from.name),
         }
-        if res.status == "done" {
+        if res.status == "done" && body.paste_kind == "media" {
+            (self.log)(&format!("cbb: {} pasted the group's copy {} here", from.who(&body), body.text));
+        } else if res.status == "done" {
             (self.log)(&format!("cbb: {} pasted {} bytes here", from.who(&body), body.text.len()));
         } else {
             (self.log)(&format!("cbb: a paste from {}: {}: {}", from.who(&body), res.status, res.reason));
@@ -1244,6 +1252,119 @@ impl Service {
                     reason
                 }
                 Err(RecvTimeoutError::Timeout) => format!("the {target} target did not answer"),
+                Err(RecvTimeoutError::Disconnected) => {
+                    res.status = "failed".into();
+                    "the connection to the paste target closed".into()
+                }
+            };
+            if reasons.last() != Some(&reason) {
+                reasons.push(reason);
+            }
+        }
+        if reasons.is_empty() {
+            reasons.push("the paste targets here are busy; try again".into());
+        }
+        res.reason = reasons.join("; ");
+        res
+    }
+
+    /// Carries out a paste of the group's copy of images or files that body
+    /// names, as a full member does (internal/service/pastemedia.go): it
+    /// waits for the copy, which must be sealed to the sender too, fetches
+    /// it, and hands the paste to a desktop watcher whose clipboard takes
+    /// it, which fetches it with paste-media and presses the paste keys.
+    fn paste_copy(
+        &self,
+        node: &Node,
+        body: &crate::records::Command,
+        set: remotepaste::Settings,
+        name: &str,
+    ) -> wire::CommandResult {
+        let mut res = wire::CommandResult {
+            id: body.id.clone(),
+            by: String::new(),
+            status: "refused".into(),
+            reason: String::new(),
+            tunnel: None,
+        };
+        let until = std::time::Instant::now() + COPY_WAIT;
+        let ev = loop {
+            if let Some(ev) = node.engine.current().filter(|ev| ev.id == body.text) {
+                break ev;
+            }
+            if std::time::Instant::now() >= until {
+                res.reason = "the copy to paste did not arrive here, or a newer copy replaced it".into();
+                return res;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        let sealed_to_sender = ev.sealed.as_ref().is_some_and(|s| s.wraps.iter().any(|w| w.to == body.by));
+        let Some(m) = ev.media.clone().filter(|_| !ev.unread && sealed_to_sender) else {
+            res.reason = if ev.unread {
+                "this device cannot read the copy to paste"
+            } else if ev.media.is_none() {
+                "the copy to paste holds no images or files"
+            } else {
+                "the copy to paste was not sealed to the device that sent the paste"
+            }
+            .into();
+            return res;
+        };
+        let (targets, text_only) = {
+            let ws = self.watchers.lock().unwrap();
+            let targets: Vec<(String, Option<u32>, SyncSender<ToWatcher>)> = ws
+                .iter()
+                .filter(|w| w.target == DESKTOP && w.takes(&m))
+                .map(|w| (w.target.clone(), w.uid, w.tx.clone()))
+                .collect();
+            (targets, ws.iter().any(|w| !w.target.is_empty()))
+        };
+        let targets: Vec<SyncSender<ToWatcher>> = targets
+            .into_iter()
+            .filter(|(t, uid, _)| !matches!(peer::may_take(*uid, t, peer::at_screen), peer::Verdict::Refused))
+            .map(|(_, _, tx)| tx)
+            .collect();
+        if targets.is_empty() {
+            res.reason = if text_only {
+                "the paste targets here take only text: tmux, a text console, the ZX Spectrum Next, or a desktop whose clipboard takes no images or files, or whose user is not at the screen"
+            } else {
+                "nothing on this device can paste images or files: no desktop session of CBB runs here"
+            }
+            .into();
+            return res;
+        }
+        let ev = Arc::new(ev);
+        if let Err(e) = node.fetch(&ev, self.limits.lock().unwrap().home as u64) {
+            res.status = "failed".into();
+            res.reason = format!("the copy's images or files did not arrive here: {}", e.for_log());
+            return res;
+        }
+        *self.media.lock().unwrap() = Some(ev);
+        let mut reasons: Vec<String> = Vec::new();
+        for tx in targets {
+            let (done, answer) = mpsc::sync_channel(1);
+            let i = Inject {
+                text: body.text.clone(),
+                method: body.mode.clone(),
+                enter: body.enter,
+                no_lock_check: set.no_lock_check,
+                kind: body.paste_kind.clone(),
+                name: name.to_string(),
+                done,
+            };
+            if tx.try_send(ToWatcher::Inject(i)).is_err() {
+                continue;
+            }
+            let reason = match answer.recv_timeout(COPY_PASTE_WAIT) {
+                Ok((status, _)) if status == "done" => {
+                    res.status = status;
+                    return res;
+                }
+                Ok((status, reason)) => {
+                    res.status = status;
+                    reason
+                }
+                Err(RecvTimeoutError::Timeout) => "the desktop target did not answer".into(),
                 Err(RecvTimeoutError::Disconnected) => {
                     res.status = "failed".into();
                     "the connection to the paste target closed".into()
@@ -1423,7 +1544,7 @@ impl Service {
             return;
         }
         if m.header.op == "paste-media" {
-            if let Err(e) = self.paste_media(&mut out) {
+            if let Err(e) = self.paste_media(&mut out, &m.header.value) {
                 let _ = control::write(&mut out, &control::failure(&e));
             }
             return;
@@ -1462,10 +1583,16 @@ impl Service {
     /// the member's own clipboard, or of the group's copy in a mode that
     /// keeps its clipboard to itself, once fetched; the plain-text
     /// alternative, then each part and its bytes.
-    fn paste_media(&self, out: &mut UnixStream) -> Result<()> {
+    ///
+    /// With `copy`, the group's copy of a remote paste that paste_copy
+    /// fetched, while it is the current one.
+    fn paste_media(&self, out: &mut UnixStream, copy: &str) -> Result<()> {
         let node = self.node()?;
         let engine = &node.engine;
-        let ev = if engine.mode().receives() {
+        let ev = if !copy.is_empty() {
+            let ev = engine.current().filter(|ev| ev.id == copy && ev.media.is_some() && !ev.unread);
+            Arc::new(ev.ok_or_else(|| Error::msg("the copy to paste is no longer the group's current copy"))?)
+        } else if engine.mode().receives() {
             let (m, _, _) = engine.local_media().ok_or_else(|| Error::msg("the clipboard holds no images or files"))?;
             let ev = self.media.lock().unwrap().clone();
             ev.filter(|ev| ev.media.as_ref().is_some_and(|e| e.key() == m.key()))

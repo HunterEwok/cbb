@@ -93,6 +93,8 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
         val media: Media.Manifest?,
         val unread: Boolean,
         val key: String,
+        /** The devices the copy is sealed to. */
+        val readers: List<String> = emptyList(),
     ) {
         /** Whether it carries files or folders, which the phone saves rather than putting in its clipboard. */
         val isFiles: Boolean get() = media?.isFiles == true
@@ -108,6 +110,7 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
                 o.optObject("media")?.let { runCatching { Media.Manifest.fromJson(it) }.getOrNull() },
                 o.optBool("unread") ?: false,
                 o.optString("key") ?: "",
+                o.optArray("readers").orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
             )
         }
     }

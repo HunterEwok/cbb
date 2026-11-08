@@ -593,6 +593,26 @@
 				"time": "1.0",
 				"age_ms": 0,
 				"kind": "media",
+				"media": {
+					"size": 3,
+					"parts": [
+						{
+							"type": "image/gif",
+							"size": 3,
+							"sha256": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+						}
+					]
+				}
+			},
+			"valid": true
+		},
+		{
+			"json": {
+				"id": "fedcba9876543210fedcba9876543210",
+				"origin": "0123456789abcdef0123456789abcdef",
+				"time": "1.0",
+				"age_ms": 0,
+				"kind": "media",
 				"text": "alt"
 			},
 			"valid": false
@@ -663,7 +683,7 @@
 					"size": 3,
 					"parts": [
 						{
-							"type": "image/gif",
+							"type": "image/webp",
 							"size": 3,
 							"sha256": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
 						}
