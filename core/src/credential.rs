@@ -503,11 +503,18 @@ pub fn pad_to(n: usize) -> usize {
 fn pad(ks: &[KeyHash]) -> Result<Vec<KeyHash>> {
     let mut out = ks.to_vec();
     while out.len() < pad_to(ks.len()) {
-        let mut k = [0u8; 32];
-        getrandom::fill(&mut k).map_err(|_| Error::msg("the system has no randomness"))?;
-        out.push(k);
+        out.push(random32()?);
     }
     Ok(out)
+}
+
+/// 32 random bytes, drawn as returned values.
+fn random32() -> Result<[u8; 32]> {
+    let word = || getrandom::u64().map(u128::from).map_err(|_| Error::msg("the system has no randomness"));
+    let (a, b) = ((word()? << 64 | word()?).to_le_bytes(), (word()? << 64 | word()?).to_le_bytes());
+    let mut k = a.to_vec();
+    k.extend_from_slice(&b);
+    k.try_into().map_err(|_| Error::msg("the system has no randomness"))
 }
 
 /// The version of a credential after prev: one above it, or the time in
@@ -519,8 +526,7 @@ pub fn next_version(prev: u64, now_ms: i64) -> u64 {
 
 /// A fresh tag for the servers: 8 random bytes in hex.
 pub fn new_period_tag() -> Result<String> {
-    let mut b = [0u8; 8];
-    getrandom::fill(&mut b).map_err(|_| Error::msg("the system has no randomness"))?;
+    let b = getrandom::u64().map_err(|_| Error::msg("the system has no randomness"))?.to_le_bytes();
     Ok(b.iter().map(|x| format!("{x:02x}")).collect())
 }
 

@@ -284,10 +284,15 @@ impl Networks {
     }
 }
 
+/// A random 32-byte key, or none when the system has no randomness, so
+/// that the next ID tries again rather than keeping a key that is not
+/// random.
 fn random_key() -> Vec<u8> {
-    let mut k = vec![0u8; 32];
-    let _ = getrandom::fill(&mut k);
-    k
+    (0..4)
+        .map(|_| getrandom::u64().map(u64::to_le_bytes))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|w| w.concat())
+        .unwrap_or_default()
 }
 
 fn unmapped(a: IpAddr) -> IpAddr {

@@ -68,6 +68,8 @@ const TYPING_CHECK: Duration = Duration::from_millis(500);
 
 /// How long a watcher may take to put a paste in; typing takes TYPE_WAIT
 /// more for each byte, as on a full member.
+/// How long a request waits for a device in a group to start.
+const START_WAIT: Duration = Duration::from_secs(10);
 const INJECT_WAIT: Duration = Duration::from_secs(5);
 const TYPE_WAIT: Duration = Duration::from_millis(5);
 
