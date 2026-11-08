@@ -77,14 +77,6 @@ func main() {
 		}
 		return
 	}
-	if name, ok := strings.CutPrefix(flag.Arg(0), "site:"); ok {
-		// forge -addr :443 site:NAME serves as the well-known site NAME.
-		if err := runSite(*addr, name); err != nil {
-			fmt.Fprintln(os.Stderr, "forge:", err)
-			os.Exit(1)
-		}
-		return
-	}
 	if kind, ok := strings.CutPrefix(flag.Arg(0), "tv:"); ok {
 		// forge -addr DIR tv:KIND plays a TV, writing what it saw in DIR.
 		if err := runTV(kind, *addr); err != nil {

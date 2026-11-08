@@ -75,7 +75,7 @@ Vifaa hujaribu anwani ya kitovu chenyewe kwanza na kisambazaji mwisho.
 Baadhi ya mitandao (hoteli, ofisi, nchi fulani) huzuia trafiki ya VPN. Kitovu kinaweza kuficha handaki la kikundi:
 
 - **Ufichaji** (`-obfuscate`): handaki huzungumza AmneziaWG, ambayo haifanani na WireGuard kwenye waya. Kompyuta na programu zote mbili za simu zinaiunga mkono.
-- **VLESS na REALITY** (`-vless`, kupitia kisambazaji): vifaa hufikia kisambazaji ndani ya kinachoonekana kama muunganisho wa kawaida wa HTTPS kwenye tovuti maarufu. Kwa mitandao inayozuia yote mawili hapo juu. Kompyuta na programu zote mbili za simu zinaiunga mkono.
+- **VLESS** (`-vless`, kupitia kisambazaji): vifaa hufikia kisambazaji ndani ya kinachoonekana kama muunganisho wa kawaida wa HTTPS kwenye tovuti ya kisambazaji. Kwa mitandao inayozuia yote mawili hapo juu. Kompyuta na programu zote mbili za simu zinaiunga mkono.
 
 Mwanachama mwepesi huzungumza WireGuard ya kawaida tu, kwa hiyo kwa mojawapo ya hizi husawazisha nyumbani tu.
 

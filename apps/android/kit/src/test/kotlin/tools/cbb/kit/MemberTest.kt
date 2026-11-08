@@ -84,7 +84,7 @@ class MemberTest {
         assertTrue(tunneled.isValid)
         assertNull(offer.vless)
         assertNull(hidden.vless)
-        assertTrue(tunneled.vless!!.contains("\"short_id\":\"0123456789abcdef\""))
+        assertTrue(tunneled.vless!!.contains("\"path\":\"/banMEJvnYJJap8S/AbCdEfGhIjKlMnOpQr\""))
     }
 
     @Test

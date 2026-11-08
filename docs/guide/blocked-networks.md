@@ -51,18 +51,16 @@ VLESS runs between your devices and the forwarder, inside what looks to the netw
 ordinary HTTPS connection to a website.
 
 1. **The forwarder.** The project's forwarder at cbb.tools has VLESS on: to the network,
-   your devices visit `cbb.tools`. A forwarder of your own runs it one of two ways:
+   your devices visit `cbb.tools`. A forwarder of your own runs it behind the web server of
+   a site of yours:
 
    ```sh
-   cbb forward -vless-xhttp vpn.example.org   # behind your site's web server
-   cbb forward -vless-site www.example.com    # REALITY, on a server without a site
+   cbb forward -vless-xhttp vpn.example.org
    ```
 
-   Behind a web server that has your site's certificate, the web server passes the path the
-   forwarder prints to it. REALITY borrows a large site's TLS, and anyone who connects
-   without the group's keys, a censor probing it for example, gets that site's own pages:
-   pick a site that is not blocked where you travel and supports TLS 1.3, and open TCP 443
-   in the server's firewall, beside UDP and TCP 8764. Setting up the server is in
+   The web server, which has your site's certificate, passes the path the forwarder prints
+   to it; anyone else gets your site's own pages. Open TCP 443 in the server's firewall,
+   beside UDP and TCP 8764. Setting up the server is in
    [running your own servers](../admin/self-hosting.md#vless-on-the-forwarder).
 
 2. **On the hub**: switch VLESS on in the app (the hub's tunnel: VLESS), or:
@@ -72,7 +70,7 @@ ordinary HTTPS connection to a website.
    ```
 
    (`-forwarder 198.51.100.9:8764 -forwarder-key <key>` for your own.) The forwarder tells
-   the hub which way it runs. VLESS switches AmneziaWG on as well: inside VLESS it hides
+   the hub its site and path. VLESS switches AmneziaWG on as well: inside VLESS it hides
    the sizes of WireGuard's packets, which would otherwise show through the HTTPS.
 
 3. **On the devices**: meet the hub at home once, as after any change. From then on they
@@ -86,8 +84,6 @@ ordinary HTTPS connection to a website.
   only on the home network.
 - Choose a forwarder outside the filtering country, at a hosting provider that is not
   blocked there.
-- For VLESS with REALITY, choose a site that people in that country use every day, so
-  blocking it would hurt; and one served from a different provider than your forwarder.
 - The forwarder's site shows in every connection's first packet: a network that blocks the
   site blocks the way too. A forwarder of your own, on another site, is the answer then.
 - A phone's own VPN keeps working: the app's tunnel is ordinary traffic of the app and does

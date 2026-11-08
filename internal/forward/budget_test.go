@@ -110,12 +110,12 @@ func rawClaim(t *testing.T, f *Forwarder, pin string, cert tls.Certificate, key 
 // its records; once the refused connection is closed, the sources hold
 // what they held before.
 func TestRefusedRegistrationLeavesForwarder(t *testing.T) {
-	vk, err := tunnel.NewPrivateKey()
+	path, err := tunnel.NewVLESSPath()
 	if err != nil {
 		t.Fatal(err)
 	}
 	f, pin := startForwarderWith(t, Config{Limits: Limits{Groups: 3, Connections: 64},
-		VLESS: &VLESSConfig{Listen: "127.0.0.1:0", Site: "example.com", Dest: "127.0.0.1:1", Key: vk}})
+		VLESS: &VLESSConfig{Listen: "127.0.0.1:0", XHTTP: &XHTTPConfig{Host: "example.com", Port: 443, Path: path}}})
 	now := time.Now()
 	var open []*tls.Conn
 	defer func() {

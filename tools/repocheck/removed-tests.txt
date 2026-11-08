@@ -183,3 +183,8 @@ core/src/admit/tests.rs the_root_admits_a_lite_member D-89: the role lite is gon
 internal/pair/pair_test.go TestPairLite D-89: the role lite is gone; TestPairCaps checks the caps a joiner offers
 internal/service/lite_test.go TestLiteNotDialed D-89: members without dials are dialed now; TestListenDialed checks it
 member/src/discovery.rs lite_role D-89: TXT r=lite is gone; txt_roles checks r=listen and r=phone
+internal/forward/forward_test.go TestThroughVLESS D-91: REALITY is gone; TestThroughXHTTP runs its cases, with and without obfuscation, over XHTTP
+internal/tunnel/vless_test.go TestVLESSIsChecked D-91: REALITY's links are gone; TestXHTTPIsChecked checks the rest of its cases and refuses an empty transport
+internal/vless/onlycbb_test.go TestOnlyCBBThroughREALITY D-91: REALITY is gone; TestOnlyCBBThroughXHTTP runs the same checks over XHTTP
+internal/vless/vless_test.go TestProbe D-91: REALITY's borrowed site is gone; the bench's W34 checks that a visitor gets the web server's site
+internal/vless/vless_test.go TestThroughVLESS D-91: REALITY is gone; TestThroughXHTTP checks another group's ID and a removed user over XHTTP

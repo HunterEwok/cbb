@@ -290,12 +290,12 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       group without being removed by hand.
 - **46.** **XHTTP in 0.6 for `cbb`, the phones and the lite member.** Sync away from home through networks that block VPNs, on
     every member, the lite member included. There are two ways, equal options that the user
-    or the server's operator picks, and more may join them: VLESS and AmneziaWG. VLESS comes
-    in two kinds: with the site's real certificate, behind the server's own web server
-    (XHTTP, which the site's nginx passes to the forwarder; the project's forwarder at
-    cbb.tools runs it), or with REALITY, for forwarders without a web server. Every client
-    speaks each of them; the lite member on Linux speaks AmneziaWG and VLESS over XHTTP in
-    0.6 (the owner, 2026-11-07), not REALITY; the ESP32 and the blind relay come later
+    or the server's operator picks, and more may join them: VLESS and AmneziaWG. VLESS runs
+    with the site's real certificate, behind the server's own web server (XHTTP, which the
+    site's nginx passes to the forwarder; the project's forwarder at cbb.tools runs it);
+    REALITY, its other kind until then, was removed (the owner, 2026-11-08, D-91). Every
+    client speaks both ways; the lite member on Linux speaks AmneziaWG and VLESS over XHTTP
+    in 0.6 (the owner, 2026-11-07); the ESP32 and the blind relay come later
     ([below](#vless-behind-a-web-server)).
 - **47.** **After TestFlight.** Back Tap on the iPhone in two taps: iOS lets no app make a
     shortcut or set Back Tap, so the app carries a signed shortcut file (`shortcuts sign
@@ -521,15 +521,14 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     - Removing the app removes its token and key: a reinstalled app finds its slot
       uninitialized again, initializes it through QCA and joins as a new device.
 - **61.** **Planned for 0.6, before rc.1 (the owner, 2026-11-06).** Make sure the ways out
-    carry only cbb and never lead to the internet: the forwarder, VLESS (REALITY and XHTTP)
-    with the mirror, the relay and the hub's tunnel, on every member and both phones. This
+    carry only cbb and never lead to the internet: the forwarder, VLESS with the mirror, the relay and the hub's tunnel, on every member and both phones. This
     rests on the code (the forwarder only passes WireGuard packets between a group's hub
     and its clients, VLESS's one outbound goes to the forwarder, its registrations or the
     mirror whatever the client asked for, the hub's in-process stack opens only the member
     port and forwards nothing), with no route, NAT or firewall rule needed on the server.
     Done: tests in which a client that is not ours asks for other addresses, TCP and UDP,
     IPv4, IPv6 and names, the server's own loopback services among them, and reaches
-    nothing: VLESS over REALITY and XHTTP (`internal/vless/onlycbb_test.go`: packets reach
+    nothing: VLESS over XHTTP (`internal/vless/onlycbb_test.go`: packets reach
     only the forwarder's port, streams only the mirror, the registrations' ID neither), the
     hub's tunnel (`internal/tunnel/onlycbb_test.go`), the phones' hub
     (`internal/tunnel/rustonly_test.go`, the Rust hub through `tunnel-on-linux`), the relay (`internal/relay/onlycbb_test.go`) and the
@@ -864,6 +863,11 @@ a web server; neither replaces the other. VLESS and AmneziaWG stay two equal way
 user or the server's operator picks the one their network lets through; more ways may
 join them later. REALITY suits forwarders that people run on servers of their own without
 a site.
+
+REALITY removed (the owner, 2026-11-08, D-91): nobody used it once cbb.tools ran XHTTP, and
+writing it in Rust would need a browser's ClientHello that rustls does not make. VLESS has
+one transport now, XHTTP; the history above is kept as it was decided. Should a network
+single out the Rust client's own ClientHello, a browser-like one for XHTTP comes first.
 
 - **The transport.** VLESS over XHTTP over TLS, as cbb.tools' nginx already passes VLESS
   for other uses. The web server (nginx) ends the TLS with the site's own certificate and
