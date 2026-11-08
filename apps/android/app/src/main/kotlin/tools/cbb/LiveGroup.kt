@@ -2567,7 +2567,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
                 val saved = Files.save(context, n, w, files)
                 n.took(w.id)
-                return SyncResult.FETCHED to Got.Files(saved)
+                return SyncResult.FETCHED to Got.Files(saved.count, saved.gallery)
             }
             val image = Images.part(w.media)
             if (image == null) {
@@ -2577,6 +2577,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
             val f = fetchImage(n, w, image, quiet = false) ?: throw Failure(Failure.Kind.NO_COMPUTERS)
             n.took(w.id)
+            // The image the button fetched goes to the gallery's album too, as the Aurora app keeps it.
+            val type = image.type ?: "image/png"
+            runCatching { Files.toGallery(context, f, "CBB ${w.id.take(12)}.${f.extension}", type) }
+                .onFailure { Log.w(TAG, "putting the image in the gallery", it) }
             return SyncResult.FETCHED to Got.Image(f, w.text)
         }
         val b = board()
@@ -2640,8 +2644,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
         data class Image(val file: File, val alt: String) : Got()
 
-        /** Files saved in Downloads/CBB. */
-        data class Files(val count: Int) : Got()
+        /** Files saved in Downloads/CBB, or one image or video in the gallery's album "CBB" (gallery). */
+        data class Files(val count: Int, val gallery: Boolean = false) : Got()
     }
 
     /** Sends what the user shared with the app: an image, or files, which the computers fetch from this phone. */
