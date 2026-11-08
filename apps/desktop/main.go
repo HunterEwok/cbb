@@ -70,6 +70,9 @@ func main() {
 	desk.tray = tray
 	desk.updateTray()
 	go desk.watch()
+	// The start window, after the install and while this computer is in
+	// no group.
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) { go desk.openIfNoGroup() })
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

@@ -19,8 +19,8 @@ struct WatchState: Codable, Equatable {
         var actions: [String]?
         /// The name of the phone's collection it is in; nil in none.
         var collection: String?
-        /// The watch's own phone, which the phone lists first as every app
-        /// lists the device it runs on; nil for the others.
+        /// The watch's own phone, first until the user moves it, as every
+        /// app lists the device it runs on; nil for the others.
         var phone: Bool?
     }
 

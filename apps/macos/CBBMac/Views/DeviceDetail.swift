@@ -161,7 +161,7 @@ struct DeviceDetail: View {
             }
             if let mode = d.mode.flatMap(SyncMode.init(rawValue:)) {
                 line
-                row(Text("Sync mode"), Text(mode.title))
+                row(Text("Sync"), Text(mode.title))
             }
             if !d.online, d.lastSeenMS > 0 {
                 line
@@ -284,7 +284,8 @@ struct DeviceDetail: View {
                 }
                 line
                 hubLine(d)
-                // The phones and lite members have no modes yet and refuse.
+                // An admin turns sync on or off on a computer; the phones and
+                // lite members refuse.
                 if !d.isSelf, d.online, d.role == "full" {
                     line
                     Menu {
@@ -292,7 +293,7 @@ struct DeviceDetail: View {
                             Button { Task { await model.setMode(mode, on: d.id) } } label: { Text(mode.title) }
                         }
                     } label: {
-                        Label { Text("Sync mode") } icon: { Image(systemName: "arrow.left.arrow.right") }
+                        Label { Text("Sync") } icon: { Image(systemName: "arrow.left.arrow.right") }
                             .foregroundStyle(palette.accent)
                     }
                     .menuStyle(.borderlessButton)

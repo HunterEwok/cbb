@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// The tray app's window: the group's devices as tiles, a list or orbits
-// around this computer, a device's details beside them, send and fetch
-// (docs/apps.md, "The tray app"). It asks the Go side (desk.go) for the
+// The tray app's window: the two switches (sync and sync away from home),
+// the group's devices as tiles, a list or orbits around this computer, a
+// device's card beside them (docs/apps.md, "The tray app"). It asks the Go side (desk.go) for the
 // state every few seconds; every action goes through the Go side too.
 
 import { Call } from "/wails/runtime.js";
@@ -12,10 +12,10 @@ const $ = (id) => document.getElementById(id);
 
 let state = null;
 let selected = null;
-// Arrange mode, the collection whose page is open, the tile being dragged
-// (docs/apps.md, "Collections and the order of the tiles"), and Home's
-// search and filter once there are many devices.
-let arranging = false;
+// The collection whose page is open, the tile being dragged (docs/apps.md,
+// "Collections and the order of the tiles"), and Home's search and filter
+// once there are many devices. Tiles move by a drag at any time; holding
+// one without moving, or its context menu, opens its menu.
 let opened = null;
 let dragging = null;
 let query = "";
@@ -143,6 +143,12 @@ const icons = {
   back: '<path d="M14.5 5.5L8 12l6.5 6.5"/>',
   close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
   more: ['6', '12', '18'].map((y) => `<circle cx="12" cy="${y}" r="1.2" fill="currentColor"/>`).join(""),
+  // The two switches: sync (a house) and sync away from home (a globe).
+  house: '<path d="M3.5 11L12 4l8.5 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5.5h4V20"/>',
+  globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.4 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.4-3.6-8.5s1.1-5.9 3.6-8.5z"/>',
+  auto: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/>',
+  moon: '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
 };
 
 const icon = (name, size = 18) => `<svg class="icon-svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" ` +
@@ -157,12 +163,10 @@ function glyph(d, size = 44) {
     `stroke-width="1.8" stroke-linecap="round">${shapes[kindOf(d)]}</svg></span>`;
 }
 
-// The sync modes (docs/design.md, "Sync modes"), in the order they show.
-const modes = ["own", "shared", "receive", "send"];
-const modeName = (m) => ({ own: t("Own clipboard"), shared: t("Shared"), receive: t("Receive only"), send: t("Send only") })[m] ?? m;
+// Sync on (mode shared) or off (mode own; docs/design.md, "Sync on and
+// off").
+const modeName = (m) => ({ shared: t("On"), own: t("Off") })[m] ?? m;
 
-// modeButtons is a row of the four modes; id names the device, "" this
-// computer.
 // How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
 const tunnels = ["plain", "obfuscate", "vless"];
 const tunnelName = (m) => ({ plain: "WireGuard", obfuscate: "AmneziaWG", vless: "VLESS" })[m];
@@ -213,11 +217,6 @@ function hubCard(d) {
     `<button data-action="terms">${esc(t("Terms of the project's servers"))}</button></div></div>`;
 }
 
-function modeButtons(current, id) {
-  return modes.map((m) => `<button type="button" data-mode="${m}" data-mode-for="${esc(id)}" aria-checked="${m === current}" ` +
-    `${state.busy ? "disabled" : ""}>${esc(modeName(m))}</button>`).join("");
-}
-
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const dot = (on) => `<span class="dot${on ? " on" : ""}"></span>`;
 
@@ -229,24 +228,14 @@ function render() {
   // This computer counts too, online as it is the one in front of the user.
   const online = s.devices.filter((d) => d.online || d.self).length;
   $("headline").textContent = s.problem ? t("The service does not answer")
-    : !inGroup ? t("This computer is in no group yet") : t("%d of %d online", online, s.devices.length);
+    : !inGroup ? t("Copy Beyond Borders") : t("%d of %d online", online, s.devices.length);
   $("tag").textContent = inGroup ? s.status.group : "";
-  renderAway(inGroup ? s.status.away : undefined, inGroup);
+  renderSwitches(inGroup);
   renderAlerts(inGroup ? s.status : undefined);
   for (const b of document.querySelectorAll("[data-layout]")) b.setAttribute("aria-checked", String(b.dataset.layout === s.settings.layout));
-  $("bar").hidden = !inGroup;
-  $("send").disabled = $("fetch").disabled = $("update").disabled = $("listen").disabled = s.busy;
-  // The quick switch: one tap pauses receiving or takes copies again,
-  // holding it picks a time (docs/design.md, "Muting a device").
-  const paused = !!s.status?.paused;
-  $("listen").setAttribute("aria-pressed", String(!paused));
-  $("listen").textContent = paused
-    ? (s.status.paused_until_ms ? t("Not taking copies until %s", clock(s.status.paused_until_ms)) : t("Not taking copies"))
-    : t("Taking copies");
-  // The newest release the group passed around, when this computer runs an older one.
-  $("update").hidden = !s.status?.update;
-  $("update").textContent = s.status?.update ? t("Update to %s", s.status.update) : "";
+  $("layouts").hidden = $("add").hidden = !inGroup;
   $("message").textContent = s.message ?? "";
+  $("message").hidden = !s.message || !inGroup;
 
   // The details first: the orbits fit the room they leave.
   renderDetail();
@@ -261,21 +250,53 @@ function render() {
       `<p><button class="accent" id="leave" ${state.busy ? "disabled" : ""}>${esc(t("Leave the group"))}</button></p>` +
       (state.message ? `<p class="dim">${esc(state.message)}</p>` : "") + `</div>`;
   } else if (!inGroup) {
-    box.innerHTML = `<div class="notice"><div class="big">⧉</div><h2>${esc(t("This computer is in no group yet"))}</h2>` +
-      `<p class="dim">${esc(t("Show a QR code here and scan it with the phone app, or make a group of computers with cbb new."))}</p>` +
-      `<p><button class="accent" id="join" ${state.busy || joining ? "disabled" : ""}>${esc(t("Join a phone's group"))}</button></p>` +
-      // Out of a group the bar with the message is hidden: a join that failed says why here.
+    // The start window: a group made here, one joined, or a lost group
+    // claimed with its recovery key.
+    const busy = state.busy || joining ? "disabled" : "";
+    box.innerHTML = `<div class="notice start"><span class="logo" aria-hidden="true"></span><h2>${esc(t("Copy Beyond Borders"))}</h2>` +
+      `<div class="start-buttons"><button class="accent" id="create" ${busy}>${esc(t("Create a group"))}</button>` +
+      `<button class="glass" id="join" ${busy}>${esc(t("Join a group"))}</button></div>` +
+      `<p><button class="link small" id="recovery">${esc(t("Recovery key"))}</button></p>` +
+      // Out of a group the toast is hidden: what failed says why here.
       (state.message ? `<p class="dim" id="join-message">${esc(state.message)}</p>` : "") + `</div>`;
   } else if (others.length === 0) {
     box.innerHTML = `<div class="notice"><div class="big">＋</div><h2>${esc(t("No other devices yet"))}</h2><p class="dim">${esc(t("Add one with the + button."))}</p></div>`;
-  } else if (s.settings.layout === "orbit" && !arranging && !searching() && !opened) {
+  } else if (s.settings.layout === "orbit" && !searching() && !opened) {
     // The orbit keeps the group's order.
     renderOrbit(box, others);
   } else {
     renderArranged(box, others);
   }
-  $("arrange").setAttribute("aria-pressed", String(arranging));
-  $("arrange").hidden = !inGroup || others.length === 0;
+}
+
+// renderSwitches draws the two switches in the header: the house for sync
+// on this computer, the globe for sync away from home, which waits while
+// sync is off (docs/design.md, "Sync on and off").
+function renderSwitches(inGroup) {
+  $("switches").hidden = !inGroup;
+  if (!inGroup) return;
+  const st = state.status;
+  const on = st.mode !== "own";
+  const sync = $("sync");
+  sync.setAttribute("aria-pressed", String(on));
+  sync.disabled = state.busy;
+  const syncText = on ? t("Sync is on") : st.sync_until_ms ? t("Sync off until %s", clock(st.sync_until_ms)) : t("Sync off");
+  sync.title = syncText;
+  sync.setAttribute("aria-label", syncText);
+  const away = st.away;
+  const globe = $("away");
+  globe.setAttribute("aria-pressed", String(!!away));
+  globe.disabled = state.busy || (!on && !away);
+  const awayText = away ? t("Everywhere is on") : on ? t("Everywhere is off") : t("Everywhere waits while sync is off");
+  globe.title = awayText;
+  globe.setAttribute("aria-label", awayText);
+  const badge = $("away-badge");
+  badge.hidden = !away;
+  if (!away) return;
+  const bad = !away.hub && away.error;
+  badge.textContent = away.hub ? t("hub") : away.through ? t("through the tunnel") : bad ? t("hub unreachable") : t("at home");
+  badge.classList.toggle("bad", !!bad);
+  badge.title = away.error ?? "";
 }
 
 // The devices as tiles or a list: in the user's order with the
@@ -287,9 +308,24 @@ function render() {
 function renderAlerts(st) {
   const box = $("alerts");
   const lines = st ? alertLines(st) : [];
-  box.hidden = lines.length === 0;
+  box.hidden = lines.length === 0 && !st?.update;
   const root = state.devices.find((x) => x.self)?.root;
   box.innerHTML = "";
+  // The newest release the group passed around, when this computer runs
+  // an older one, as a card on top.
+  if (st?.update) {
+    const card = document.createElement("div");
+    card.className = "update";
+    const p = document.createElement("p");
+    p.textContent = t("CBB %s is out.", st.update);
+    const b = document.createElement("button");
+    b.className = "accent";
+    b.id = "update";
+    b.textContent = t("Update to %s", st.update);
+    b.disabled = state.busy;
+    card.append(p, b);
+    box.append(card);
+  }
   for (const l of lines) {
     const p = document.createElement("p");
     p.className = l.newer ? "alert newer" : "alert";
@@ -407,18 +443,14 @@ function alertLines(st) {
 
 function renderArranged(box, others) {
   const list = state.settings.layout === "list";
-  const byId = new Map(others.map((d) => [d.id, d]));
+  // This computer is a tile as the others are: first until it is moved.
+  const byId = new Map(state.devices.map((d) => [d.id, d]));
   let head = "";
   if (others.length > 12) {
     head += `<div class="search"><input class="field" id="search" type="search" placeholder="${esc(t("Search devices"))}" ` +
       `aria-label="${esc(t("Search devices"))}" value="${esc(query)}">` +
       [["online", t("Online")], ["attention", t("Needs attention")]].map(([f, label]) =>
         `<button class="chip" data-filter="${f}" aria-pressed="${filter === f}">${esc(label)}</button>`).join("") + `</div>`;
-  }
-  if (arranging) {
-    head += `<div class="card arrange-bar"><span class="dim small">${esc(t("Drag to arrange. Drop a device on a collection to put it in. Alt and the arrow keys move the focused tile."))}</span>` +
-      (state.custom && !opened ? `<button class="glass" id="arrange-reset">${esc(t("Back to the group's order"))}</button>` : "") +
-      `<button class="accent" id="arrange-done">${esc(t("Done"))}</button></div>`;
   }
   let body;
   if (searching()) {
@@ -444,16 +476,14 @@ function renderArranged(box, others) {
         : `<div class="tiles">${ds.map((d) => deviceTile(d, level)).join("")}</div>`;
   } else {
     const items = (state.arranged ?? []).filter((it) => it.collection || byId.has(it.device));
-    // This computer first, as on the phones; it stays out of the arrangement.
-    const me = state.devices.find((d) => d.self);
     if (list) {
-      body = `<div class="list">${me ? deviceRow(me) : ""}${items.map((it) => {
+      body = `<div class="list">${items.map((it) => {
         if (!it.collection) return deviceRow(byId.get(it.device), "top");
         const c = it.collection, ds = c.devices.map((id) => byId.get(id)).filter(Boolean);
         return collectionRow(c, ds) + ds.map((d) => deviceRow(d, "c:" + c.id, true)).join("");
       }).join("")}</div>`;
     } else {
-      body = `<div class="tiles">${me ? deviceTile(me) : ""}${items.map((it) => it.collection
+      body = `<div class="tiles">${items.map((it) => it.collection
         ? collectionTile(it.collection, it.collection.devices.map((id) => byId.get(id)).filter(Boolean))
         : deviceTile(byId.get(it.device), "top")).join("")}</div>`;
     }
@@ -471,21 +501,19 @@ function renderArranged(box, others) {
 const searching = () => state.devices.filter((d) => !d.self).length > 12 && (query.trim() !== "" || filter !== null);
 const collectionOf = (id) => (state.arranged ?? []).find((it) => it.collection?.id === id)?.collection;
 
-// cell wraps a tile or a row: in Arrange mode it can be dragged and has a
-// button for its menu; level is the order it moves in ("top", or "c:" and
-// a collection's ID), absent where nothing moves.
+// cell wraps a tile or a row that can be dragged, and held or opened with
+// the context menu for its menu; level is the order it moves in ("top", or
+// "c:" and a collection's ID), absent where nothing moves.
 function cell(ref, level, name, inner) {
   if (!level) return inner;
-  const more = arranging ? `<button class="more" data-menu="${esc(ref)}" data-level="${esc(level)}" ` +
-    `title="${esc(t("Menu: %s", name))}" aria-label="${esc(t("Menu: %s", name))}">${icon("more", 16)}</button>` : "";
-  return `<div class="cell${arranging ? " arranging" : ""}" data-ref="${esc(ref)}" data-level="${esc(level)}"` +
-    `${arranging ? ' draggable="true"' : ""}>${inner}${more}</div>`;
+  return `<div class="cell" data-ref="${esc(ref)}" data-level="${esc(level)}" data-name="${esc(name)}" draggable="true">${inner}</div>`;
 }
 
 function deviceTile(d, level) {
   return cell("d:" + d.id, level, d.name, `<button class="tile${d.id === selected ? " selected" : ""}" data-id="${esc(d.id)}">` +
     `<span class="top">${glyph(d)}${dot(d.online || d.self)}</span><span class="name">${esc(d.name)}</span>` +
-    `<span class="dim small">${esc([systems[d.os], d.self && t("This computer"), d.muted && t("muted")].filter(Boolean).join(" · "))}</span></button>`);
+    `<span class="dim small">${esc([systems[d.os], d.muted && t("muted")].filter(Boolean).join(" · "))}</span>` +
+    (d.self ? `<span class="dim small">${esc(t("This computer"))}</span>` : "") + `</button>`);
 }
 
 function deviceRow(d, level, inside) {
@@ -546,7 +574,6 @@ function moveBy(ref, level, steps) {
 function openMenu(ref, level) {
   const refs = levelRefs(level), i = refs.indexOf(ref);
   const items = [];
-  if (!arranging) items.push(["arrange", t("Arrange")]);
   if (ref.startsWith("d:")) {
     const id = ref.slice(2);
     for (const it of state.arranged ?? []) {
@@ -560,6 +587,7 @@ function openMenu(ref, level) {
   }
   if (i > 0) items.push(["start", t("Move to start")], ["earlier", t("Move earlier")]);
   if (i >= 0 && i + 1 < refs.length) items.push(["later", t("Move later")], ["end", t("Move to end")]);
+  if (state.custom && level === "top") items.push([JSON.stringify({ op: "reset" }), t("Back to the group's order")]);
   const dlg = $("tile-menu");
   $("tile-menu-items").innerHTML = items.map(([v, label]) => `<button value="${esc(v)}" class="glass">${esc(label)}</button>`).join("");
   dlg.returnValue = "";
@@ -570,7 +598,6 @@ function openMenu(ref, level) {
 async function menuChoice(v, ref, level) {
   switch (v) {
     case "": case "cancel": return;
-    case "arrange": arranging = true; return render();
     case "start": return moveBy(ref, level, -Infinity);
     case "earlier": return moveBy(ref, level, -1);
     case "later": return moveBy(ref, level, 1);
@@ -628,24 +655,25 @@ document.addEventListener("contextmenu", (e) => {
   const c = e.target.closest?.(".cell");
   if (!c) return;
   e.preventDefault();
-  openMenu(c.dataset.ref, c.dataset.level);
+  clearTimeout(tileHold);
+  if (!tileHeld) openMenu(c.dataset.ref, c.dataset.level);
 });
-
-function renderAway(away, inGroup) {
-  $("away-switch").hidden = !inGroup;
-  $("away").checked = !!away;
-  $("away").disabled = state.busy;
-  const badge = $("away-badge");
-  badge.hidden = !away;
-  if (!away) return;
-  const bad = !away.hub && away.error;
-  badge.textContent = away.hub ? t("hub") : away.through ? t("through the tunnel") : bad ? t("hub unreachable") : t("at home");
-  badge.classList.toggle("bad", !!bad);
-  badge.title = away.error ?? "";
-}
+// Holding a tile without moving opens its menu; moving first is a drag.
+let tileHold = null, tileHeld = false, holdAt = null;
+document.addEventListener("pointerdown", (e) => {
+  const c = e.target.closest?.(".cell");
+  tileHeld = false;
+  if (!c || e.button !== 0) return;
+  holdAt = [e.clientX, e.clientY];
+  tileHold = setTimeout(() => { tileHeld = true; openMenu(c.dataset.ref, c.dataset.level); }, 600);
+});
+document.addEventListener("pointermove", (e) => {
+  if (holdAt && Math.hypot(e.clientX - holdAt[0], e.clientY - holdAt[1]) > 6) clearTimeout(tileHold);
+});
+for (const ev of ["pointerup", "pointercancel", "dragstart"]) document.addEventListener(ev, () => { clearTimeout(tileHold); holdAt = null; });
 
 // The orbits: up to six devices on the inner one, the rest on the outer,
-// this computer at the centre with the send button.
+// this computer at the centre.
 export function spots(count, radii, cx, cy) {
   if (count === 0) return [];
   const rings = radii.length === 1 ? [[radii[0], count, 0]] : [[radii[0], 6, 0], [radii[1], count - 6, 0.5]];
@@ -660,6 +688,7 @@ export function spots(count, radii, cx, cy) {
 }
 
 function renderOrbit(box, others) {
+  const me = state.devices.find((d) => d.self);
   const w = box.clientWidth, h = box.clientHeight;
   const side = Math.min(w, h), cx = w / 2, cy = h / 2;
   const radii = others.length > 6 ? [side * 0.28, side * 0.43] : [side * 0.36];
@@ -668,7 +697,7 @@ function renderOrbit(box, others) {
   const lines = others.map((d, i) => d.online
     ? `<line x1="${cx}" y1="${cy}" x2="${at[i][0]}" y2="${at[i][1]}" stroke="var(--accent)" stroke-opacity=".35" stroke-width="1.5" stroke-dasharray="4 6"/>` : "").join("");
   box.innerHTML = `<div class="orbit"><svg class="rings">${rings}${lines}</svg>` +
-    `<button class="hub" id="orbit-send" style="left:${cx}px;top:${cy}px" ${state.busy ? "disabled" : ""}>${icon("arrange", 22)}<span>${esc(t("Send"))}</span></button>` +
+    (me ? `<button class="hub" data-id="${esc(me.id)}" style="left:${cx}px;top:${cy}px">${glyph(me, 40)}<span>${esc(t("This computer"))}</span></button>` : "") +
     others.map((d, i) => `<button class="node${d.id === selected ? " selected" : ""}" data-id="${esc(d.id)}" style="left:${at[i][0]}px;top:${at[i][1]}px">` +
       `${glyph(d, 48)}<span class="name">${esc(d.name)}</span></button>`).join("") + `</div>`;
 }
@@ -685,51 +714,63 @@ function renderDetail() {
   }
   pane.hidden = false;
   const kind = kindOf(d);
+  // One line in sight; the rest under More.
+  const summary = [systemWithVersion(d), d.version && "CBB " + d.version].filter(Boolean).join(" · ");
   const lines = [[t("Type"), t(kinds[kind])]];
-  const sys = systemWithVersion(d);
-  if (sys) lines.push([t("Operating system"), sys]);
-  if (d.version) lines.push(["CBB", d.version, true]);
   if (d.mac) lines.push([t("MAC address"), d.mac, true]);
   else if (kind === "phone" || kind === "tablet") lines.push([t("MAC address"), t("hidden by the system")]);
   lines.push([t("Role"), t({ phone: "Phone app", lite: "Lite member" }[d.role] ?? "Full member")]);
-  const standing = d.self ? (d.admin ? t("This computer · admin") : t("This computer"))
-    : d.frozen ? t("frozen") : d.root ? t("root") : d.admin ? t("admin") : "";
-  if (standing) lines.push([t("In the group"), standing]);
   if (d.forward_only) lines.push([t("Copies"), t("Passes them on, reads none")]);
   if (d.hub) lines.push([t("Away from home"), state.status?.away?.hub_device === d.id ? t("The group's hub, in use now") : t("The group's hub")]);
-  if (d.mode) lines.push([t("Sync mode"), modeName(d.mode)]);
   if (d.muted) lines.push([t("Copies"), muteUntil(d.muted_until_ms)]);
   if (!d.online && d.last_seen_ms) lines.push([t("Last seen"), new Date(d.last_seen_ms).toLocaleString(lang)]);
   lines.push([t("Device ID"), d.id, true]);
+  const badges = [d.self && t("This computer"), d.root && t("root"), d.admin && !d.root && t("admin"), d.hub && t("hub"), d.frozen && t("frozen")].filter(Boolean);
 
   const me = state.devices.find((x) => x.self);
+  const busy = state.busy ? "disabled" : "";
+  // The house: this computer's own sync, or, on an admin, another
+  // computer's that is online; the phones and lite members refuse.
+  const syncOn = d.self ? state.status?.mode !== "own" : d.mode !== "own";
+  const mayTurn = d.self || (me?.admin && d.online && d.role === "full");
+  const house = (d.self || d.mode) ? `<label class="switch row-switch"><span>${icon("house", 18)} ${esc(t("Sync"))}</span>` +
+    `<input type="checkbox" data-sync-for="${esc(d.self ? "" : d.id)}" ${syncOn ? "checked" : ""} ${mayTurn && !state.busy ? "" : "disabled"}></label>` : "";
+  // The row of icons: mute.
+  const row = [];
+  if (me?.admin) {
+    if (d.muted) row.push(["unmute", t("Unmute")]);
+    else if (d.online || d.self) row.push(["mute", t("Mute")]);
+  }
+  // The menu: rename, make it an admin, freeze, unfreeze, remove, leave.
   const actions = [];
   if (me?.admin) {
     actions.push(["rename", t("Rename")]);
     if (d.frozen && me.root) actions.push(["unfreeze", t("Unfreeze")]);
     if (!d.self && d.admin && !d.root && !d.frozen && d.role === "full") actions.push(["freeze", t("Freeze"), true]);
     if (me.root && !d.admin && !d.frozen && d.role === "full") actions.push(["admin", t("Make it an admin")]);
-    // Any admin mutes any device, this one and the root too; the last word counts.
-    if (d.muted) actions.push(["unmute", t("Unmute")]);
-    else if (d.online || d.self) actions.push(["mute", t("Mute")]);
     if (!d.self) actions.push(["remove", t("Remove"), true]);
   }
   // Any computer leaves by itself; the root only when it is alone, which the service checks.
   if (d.self) actions.push(["leave", t("Leave the group"), true]);
-  pane.innerHTML = `<div class="detail-head">${glyph(d, 56)}<div><div class="name">${esc(d.name)}</div>` +
-    `<div>${dot(d.online)} <span class="${d.online ? "" : "dim"}">${esc(d.online ? t("online") : t("offline"))}</span></div></div>` +
+  pane.innerHTML = `<div class="detail-head">${glyph(d, 56)}<div><div class="name">${esc(d.name)} ${dot(d.online || d.self)}</div>` +
+    `<div class="badges">${badges.map((b) => `<span class="badge">${esc(b)}</span>`).join("")}</div>` +
+    `<div class="dim small">${esc(summary)}</div></div>` +
     `<button class="icon close" id="close" title="${esc(t("Close"))}" aria-label="${esc(t("Close"))}">${icon("close")}</button></div>` +
-    `<div class="card">${lines.map(([k, v, mono]) => `<div class="line"><span class="dim">${esc(k)}</span><span class="value${mono ? " mono" : ""}">${esc(v)}</span></div>`).join("")}</div>` +
-    // An admin sets the mode of a computer that is online; the phones and
-    // lite members have no modes yet and refuse.
-    (me?.admin && !d.self && d.online && d.role === "full"
-      ? `<div class="card"><div class="dim small">${esc(t("Sync mode"))}</div><div class="segmented">${modeButtons(d.mode, d.id)}</div></div>` : "") +
+    (house ? `<div class="card">${house}</div>` : "") +
+    (row.length ? `<div class="icon-actions">${row.map(([a, label]) => `<button class="glass" data-action="${a}" ${busy}>${esc(label)}</button>`).join("")}</div>` : "") +
+    `<details class="card more-lines"><summary>${esc(t("More"))}</summary>` +
+    lines.map(([k, v, mono]) => `<div class="line"><span class="dim">${esc(k)}</span><span class="value${mono ? " mono" : ""}">${esc(v)}</span></div>`).join("") + `</details>` +
     hubLine(d, me) +
     hubCard(d) +
     (actions.length
-      ? `<div class="card actions">${actions.map(([a, label, danger]) => `<button data-action="${a}"${danger ? ' class="danger"' : ""} ${state.busy ? "disabled" : ""}>${esc(label)}</button>`).join("")}</div>` : "") +
+      ? `<div class="card actions">${actions.map(([a, label, danger]) => `<button data-action="${a}"${danger ? ' class="danger"' : ""} ${busy}>${esc(label)}</button>`).join("")}</div>` : "") +
     (me?.admin ? "" : `<p class="dim small">${esc(t("This computer is no admin of the group: the phone or an admin computer adds and removes devices."))}</p>`);
+  // The More section stays open across the redraws while it is open.
+  const more = pane.querySelector(".more-lines");
+  more.open = moreOpen;
+  more.addEventListener("toggle", () => { moreOpen = more.open; });
 }
+let moreOpen = false;
 
 // ask shows the confirmation dialog; it resolves to the typed text for a
 // field, true for a plain yes, or null.
@@ -855,6 +896,16 @@ function saveSettings(change) {
   return saving;
 }
 
+// A language by its own name, as the system knows it.
+function languageName(l) {
+  try {
+    const n = new Intl.DisplayNames([l], { type: "language" }).of(l);
+    return n ? n[0].toLocaleUpperCase(l) + n.slice(1) : l;
+  } catch {
+    return l;
+  }
+}
+
 function renderSettings() {
   const s = state.settings;
   $("swatches").innerHTML = colors.map((c) => {
@@ -863,24 +914,39 @@ function renderSettings() {
       `title="${esc(t(c.name[0].toUpperCase() + c.name.slice(1)))}"></button>`;
   }).join("");
   for (const b of document.querySelectorAll("[data-appearance]")) b.setAttribute("aria-checked", String(b.dataset.appearance === s.appearance));
+  $("language").innerHTML = `<option value="">${esc(t("System language"))}</option>` +
+    (state.languages ?? ["en"]).map((l) => `<option value="${l}" ${l === s.lang ? "selected" : ""}>${esc(languageName(l))}</option>`).join("");
+  $("at-login").checked = state.at_login;
+  $("advanced").checked = advanced;
+  $("advanced-box").hidden = !advanced;
+  $("advanced-recovery").hidden = !state.status?.group;
   $("details").checked = s.details ?? state.show_details;
-  const mode = state.status?.group && !state.status.removed ? state.status.mode : "";
-  $("mode-settings").hidden = !mode;
-  $("modes").innerHTML = mode ? modeButtons(mode, "") : "";
+  // Seven taps on the version show the switch, as on the phones; it stays
+  // in sight once it is on.
+  $("details-row").hidden = versionTaps < 7 && !s.details;
   $("version").textContent = state.version;
 }
+let advanced = false, versionTaps = 0;
 
-// The add dialog; on the root or an admin it admits a device that shows a
-// QR code and waits (cbb pair -qr), from the code's text or a picture.
+function openSettings() {
+  renderSettings();
+  $("settings-dialog").showModal();
+}
+
+// The add dialog: on the root or an admin it admits the new device that
+// shows a code and waits (cbb pair -qr), by its six digits typed here, its
+// QR code's text or a picture of it.
 function openAdd() {
   const me = state.devices.find((x) => x.self);
   $("admit-box").hidden = !me?.admin;
+  $("admit-none").hidden = !!me?.admin;
   // Only the group's root makes admins.
   $("admit-admin-row").hidden = !me?.root;
   $("admit-admin").checked = false;
-  $("admit-text").value = "";
+  $("admit-code").value = "";
   admitError("");
   $("add-dialog").showModal();
+  if (me?.admin) $("admit-code").focus();
 }
 
 function admitError(text) {
@@ -895,7 +961,7 @@ $("admit-file").addEventListener("change", () => {
   const reader = new FileReader();
   reader.onload = async () => {
     try {
-      $("admit-text").value = await call("ReadQR", String(reader.result).replace(/^data:[^,]*,/, ""));
+      $("admit-code").value = await call("ReadQR", String(reader.result).replace(/^data:[^,]*,/, ""));
       admitError("");
     } catch (e) {
       admitError(String(e?.message ?? e));
@@ -904,20 +970,38 @@ $("admit-file").addEventListener("change", () => {
   reader.readAsDataURL(file);
 });
 
-async function admitByQR() {
-  const text = $("admit-text").value.trim();
-  if (!text.startsWith("cbb://join?")) return admitError(t("This QR code is not of a device that waits to join."));
+async function admit() {
+  const text = $("admit-code").value.trim();
+  if (!/^\d{3}[ -]?\d{3}$/.test(text) && !text.startsWith("cbb://join?")) return admitError(t("Type the six digits the new device shows."));
   const admin = !$("admit-admin-row").hidden && $("admit-admin").checked;
   $("add-dialog").close();
-  await act("AdmitByQR", text, admin);
+  await act("Admit", text, admin);
 }
 
-// Joining a phone's group: JoinPhone runs until the join ends, while the
-// dialog asks JoinState for the QR code cbb writes once it runs as the
-// administrator (join.go). Closing the dialog cancels.
+// An invitation is made on the group's hub, which reaches a device far
+// away; cbb invite does it there for now.
+async function invite() {
+  $("add-dialog").close();
+  await ask(t("Send an invitation"), t("On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file."), t("OK"));
+}
+
+// The recovery key claims a group whose every phone is lost; this computer
+// must be in the group.
+async function recovery() {
+  if (!state.status?.group) {
+    await ask(t("Recovery key"), t("The recovery key claims a group whose phones are all lost. Join that group first, then claim it in Settings."), t("OK"));
+    return;
+  }
+  const key = await ask(t("Claim the group with its recovery key?"), t("Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does."), t("Claim"), "");
+  if (key && key.trim()) await act("Recover", key.trim());
+}
+
+// Joining a group: JoinGroup runs until the join ends, while the dialog
+// asks JoinState for the QR code and the digits cbb writes once it runs as
+// the administrator (join.go). Closing the dialog cancels.
 let joining = false;
 
-async function joinPhone() {
+async function joinGroup() {
   if (joining) return;
   joining = true;
   render();
@@ -925,7 +1009,7 @@ async function joinPhone() {
   $("join-wait").hidden = false;
   $("join-code").hidden = true;
   let running = true;
-  const ended = call("JoinPhone").catch((e) => console.error("JoinPhone", e)).finally(() => {
+  const ended = call("JoinGroup").catch((e) => console.error("JoinGroup", e)).finally(() => {
     running = false;
     if (dlg.open) dlg.close("done");
   });
@@ -946,6 +1030,7 @@ async function joinPhone() {
       $("join-code").hidden = false;
       $("join-qr").src = j.image;
       $("join-text").textContent = j.text;
+      $("join-digits").textContent = j.code ?? "";
       const min = Math.max(0, Math.ceil((j.ends - Date.now()) / 60000));
       $("join-ends").textContent = t("The code is valid for %d more min.", min);
       $("join-port").textContent = t("If the phone cannot connect, the firewall must let it reach TCP port %d here.", j.port);
@@ -967,6 +1052,15 @@ async function refresh() {
   await loadLanguage(state.lang);
   applyTheme();
   render();
+  // What the tray asked for: the settings, or sync away from home.
+  let asked = "";
+  try {
+    asked = await call("TakeAsk");
+  } catch (e) {
+    console.error("TakeAsk", e);
+  }
+  if (asked === "settings" && !document.querySelector("dialog[open]")) openSettings();
+  if (asked === "away") await turnAway();
 }
 
 document.addEventListener("click", async (e) => {
@@ -979,18 +1073,21 @@ document.addEventListener("click", async (e) => {
   if (el.dataset.menu) return openMenu(el.dataset.menu, el.dataset.level);
   if (el.dataset.filter) {
     filter = filter === el.dataset.filter ? null : el.dataset.filter;
-    if (searching()) arranging = false;
     return render();
   }
-  // In Arrange mode a tap does not open a tile.
-  if (arranging && el.closest(".cell")) return;
+  // A tap that held the tile opened its menu, and opens nothing more.
+  if (tileHeld && el.closest(".cell")) {
+    tileHeld = false;
+    return;
+  }
   if (el.dataset.open) {
     opened = el.dataset.open;
     return render();
   }
-  if (el.dataset.mode) {
-    await act("SetMode", el.dataset.modeFor, el.dataset.mode);
-    return renderSettings();
+  if (el.dataset.syncFor !== undefined) {
+    e.preventDefault();
+    const on = !(el.dataset.syncFor ? state.devices.find((d) => d.id === el.dataset.syncFor)?.mode !== "own" : state.status?.mode !== "own");
+    return act("SetSync", el.dataset.syncFor, on, 0);
   }
   if (el.dataset.tunnel) {
     if (el.dataset.tunnel === hubTunnel(state.status?.away)) return;
@@ -1006,58 +1103,96 @@ document.addEventListener("click", async (e) => {
   }
   switch (el.id) {
     case "close": selected = null; return render();
-    case "arrange": arranging = !arranging; return render();
-    case "arrange-done": arranging = false; return render();
-    case "arrange-reset": return arrange({ op: "reset" });
-    case "collection-back": opened = null; arranging = false; return render();
-    case "send": case "orbit-send": return act("Send");
-    case "fetch": return act("Fetch");
+    case "collection-back": opened = null; return render();
     case "update": return act("Update");
     case "add": return openAdd();
     case "admit-picture": return $("admit-file").click();
-    case "admit": return admitByQR();
-    case "join": return joinPhone();
+    case "admit": return admit();
+    case "invite": return invite();
+    case "create": return act("CreateGroup");
+    case "join": return joinGroup();
+    case "recovery": case "advanced-recovery": $("settings-dialog").close(); return recovery();
+    case "advanced-away": {
+      // The hub and its tunnel are on this computer's card.
+      $("settings-dialog").close();
+      selected = state.devices.find((d) => d.self)?.id ?? null;
+      return render();
+    }
+    case "version":
+      versionTaps++;
+      return renderSettings();
     case "leave": return leave();
-    case "settings": renderSettings(); return $("settings-dialog").showModal();
+    case "settings": return openSettings();
   }
 });
 
-$("away").addEventListener("change", async (e) => {
-  e.preventDefault();
-  const on = e.target.checked;
-  e.target.checked = !on;
-  if (on && !(await ask(t("Turn sync away from home on?"),
+// turnAway asks first, as cbb does, then turns sync away from home on.
+async function turnAway() {
+  if (state.status?.away || state.status?.mode === "own") return;
+  if (!(await ask(t("Turn Everywhere on?"),
     t("This computer then reaches the group's hub from the internet through the group's own WireGuard tunnel, the clipboard encrypted end to end. Its keys are files: encrypt the disk, keep the service's folder out of unencrypted backups, and remove the computer at once if it is lost."),
     t("Turn on")))) return;
-  await act("SetAway", on);
+  await act("SetAway", true);
+}
+
+$("away").addEventListener("click", async (e) => {
+  e.stopPropagation();
+  if (state.status?.away) return act("SetAway", false);
+  await turnAway();
 });
 
 $("details").addEventListener("change", (e) => saveSettings({ details: e.target.checked }));
+$("language").addEventListener("change", (e) => saveSettings({ lang: e.target.value }).then(refresh));
+$("at-login").addEventListener("change", async (e) => {
+  try {
+    await call("SetAtLogin", e.target.checked);
+  } catch (err) {
+    console.error("SetAtLogin", err);
+  }
+  await refresh();
+  renderSettings();
+});
+$("advanced").addEventListener("change", (e) => {
+  advanced = e.target.checked;
+  renderSettings();
+});
+$("admit-code").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    admit();
+  }
+});
 
-// The quick switch: a tap turns receiving off until turned on again, or
-// on; holding it (or its context menu) picks a time first.
+// The house: a tap turns sync off until turned on again, or on; holding it
+// (or its context menu) picks a time first.
 let holdTimer = null, held = false;
 async function pauseFor() {
-  const ms = await pickTime(t("Take no copies from the group?"), t("This computer's own copies still go out."), t("Until I turn it on"));
-  if (ms !== null) await act("PauseReceiving", true, ms);
+  const ms = await pickTime(t("Turn sync off?"), t("The clipboard is then this computer's own."), t("Until I turn it on"));
+  if (ms !== null) await act("SetSync", "", false, ms);
 }
-$("listen").addEventListener("pointerdown", () => {
+$("sync").addEventListener("pointerdown", () => {
   held = false;
   holdTimer = setTimeout(() => { held = true; pauseFor(); }, 600);
 });
-for (const ev of ["pointerup", "pointerleave", "pointercancel"]) $("listen").addEventListener(ev, () => clearTimeout(holdTimer));
-$("listen").addEventListener("contextmenu", (e) => { e.preventDefault(); clearTimeout(holdTimer); held = true; pauseFor(); });
-$("listen").addEventListener("click", (e) => {
+for (const ev of ["pointerup", "pointerleave", "pointercancel"]) $("sync").addEventListener(ev, () => clearTimeout(holdTimer));
+// The context menu brings no click after it; a touch's hold may bring
+// both, and the time is asked for once.
+$("sync").addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  clearTimeout(holdTimer);
+  if (!held) pauseFor();
+});
+$("sync").addEventListener("click", (e) => {
   e.stopPropagation();
   if (held) { held = false; return; }
-  act("PauseReceiving", !state.status?.paused, 0);
+  act("SetSync", "", state.status?.mode === "own", 0);
 });
 document.addEventListener("keydown", (e) => {
   if (document.querySelector("dialog[open]")) return;
   // Alt and the arrow keys move the focused tile in Arrange mode; Home and
   // End with Alt to the start and the end.
   const c = document.activeElement?.closest?.(".cell");
-  if (arranging && c && e.altKey) {
+  if (c && e.altKey) {
     const steps = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1, Home: -Infinity, End: Infinity }[e.key];
     if (steps !== undefined) {
       e.preventDefault();
@@ -1066,10 +1201,7 @@ document.addEventListener("keydown", (e) => {
       return;
     }
   }
-  if (e.key === "Escape" && arranging) {
-    arranging = false;
-    render();
-  } else if (e.key === "Escape" && selected) {
+  if (e.key === "Escape" && selected) {
     selected = null;
     render();
   } else if (e.key === "Escape" && opened) {
@@ -1080,7 +1212,6 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("input", (e) => {
   if (e.target.id !== "search") return;
   query = e.target.value;
-  if (searching()) arranging = false;
   render();
 });
 addEventListener("resize", () => state && state.settings.layout === "orbit" && render());

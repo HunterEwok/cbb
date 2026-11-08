@@ -9,14 +9,14 @@ import android.net.nsd.NsdServiceInfo
 import tools.cbb.kit.Discovery
 
 /**
- * Publishes the phone that is the group's hub on the home network while
- * its app is open (docs/protocol.md, section 3): the service
- * <device ID>._cbb._tcp with the member port and the TXT
- * v=1, g=<tag>, r=phone, so that the other phones and the Android TVs,
- * which only dial, find it. The computers and the lite members note it but
- * do not dial it: it dials them.
+ * Publishes the service <device ID>._cbb._tcp with port and the TXT record
+ * txt on the home network (docs/protocol.md, section 3). The phone that is
+ * the group's hub publishes itself with hub() while its app is open, so that
+ * the other phones and the Android TVs, which only dial, find it; a phone
+ * that waits to join publishes Discovery.joinerTXT, so that a computer of
+ * the group finds it by the code typed there.
  */
-class NsdPublisher(context: Context, private val device: String, private val tag: String, private val memberPort: Int) {
+class NsdPublisher(context: Context, private val device: String, private val port: Int, private val txt: Map<String, String>) {
     private val nsd = context.getSystemService(NsdManager::class.java)
     private val lock = Any()
     private var published = false
@@ -37,10 +37,8 @@ class NsdPublisher(context: Context, private val device: String, private val tag
         val info = NsdServiceInfo().apply {
             serviceName = device
             serviceType = Discovery.SERVICE_TYPE
-            port = memberPort
-            setAttribute("v", "1")
-            setAttribute("g", tag)
-            setAttribute("r", "phone")
+            port = this@NsdPublisher.port
+            for ((k, v) in txt) setAttribute(k, v)
         }
         runCatching { nsd.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener) }.onFailure { published = false }
         Unit
@@ -52,5 +50,14 @@ class NsdPublisher(context: Context, private val device: String, private val tag
         published = false
         runCatching { nsd.unregisterService(listener) }
         Unit
+    }
+
+    companion object {
+        /**
+         * The hub phone: the TXT v=1, g=<tag>, r=phone. The computers and
+         * the lite members note it but do not dial it: it dials them.
+         */
+        fun hub(context: Context, device: String, tag: String, memberPort: Int) =
+            NsdPublisher(context, device, memberPort, mapOf("v" to "1", "g" to tag, "r" to "phone"))
     }
 }

@@ -15,7 +15,7 @@ import (
 // Windows PCs of the inventory, in a group with a Linux member: a written
 // text never sent back and a clipboard history's offer of it making no
 // event (Y24, Y25), password managers' marks kept from the group (Y31), a
-// received secret's marks and expiry (Y32), cbb copy in every sync mode
+// received secret's marks and expiry (Y32), cbb copy with sync on and off
 // (M2), the Linux member's agent and tmux (H2, H3), a fetch's progress
 // (O13), remote paste on
 // Windows (T3, T5, T11, T12), and the logs (I21).
@@ -215,12 +215,12 @@ func linuxAgent(ctx context.Context, r *Report, l, other *Device, run string, ti
 	})
 }
 
-// deliberate (M2): cbb copy on d sends in every sync mode, also in the
-// modes that keep d's own copies from the group; d ends in shared.
+// deliberate (M2): cbb copy on d sends with sync on and with sync off,
+// which keeps d's own copies from the group; d ends with sync on.
 func deliberate(ctx context.Context, r *Report, l, d *Device, run string, timeout time.Duration) {
 	p := "desktop/M2-every-mode/" + d.Name + "/"
 	defer setMode(context.WithoutCancel(ctx), d, "shared")
-	for _, mode := range []string{"own", "receive", "send", "shared"} {
+	for _, mode := range []string{"own", "shared"} {
 		r.Do(p+mode, func() error {
 			if err := setMode(ctx, d, mode); err != nil {
 				return err

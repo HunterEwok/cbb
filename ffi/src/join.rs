@@ -82,6 +82,9 @@ pub struct Join {
     code: String,
     clock: Clock,
     attempt: Option<Attempt>,
+    /// The mDNS announcement while the app listens (`announce`).
+    #[cfg(feature = "member")]
+    announced: Option<cbb_lite::discovery::Announcement>,
 }
 
 #[derive(Deserialize)]
@@ -199,12 +202,32 @@ impl Join {
                 qr,
                 modules,
             };
-            Ok((Join { joiner, code, clock: clock(), attempt: None }, ans))
+            Ok((
+                Join {
+                    joiner,
+                    code,
+                    clock: clock(),
+                    attempt: None,
+                    #[cfg(feature = "member")]
+                    announced: None,
+                },
+                ans,
+            ))
         })();
         match made {
             Ok((j, ans)) => (Some(j), answer(Ok(ans))),
             Err(e) => (None, answer::<()>(Err(e))),
         }
+    }
+
+    /// Announces the joiner by mDNS while the app listens on port, so that
+    /// a computer of the group finds it by the code typed there
+    /// (docs/protocol.md, section 6); false when mDNS is not at hand. The
+    /// announcement ends when the joiner is freed.
+    #[cfg(feature = "member")]
+    pub fn announce(&mut self, port: u16) -> bool {
+        self.announced = cbb_lite::discovery::announce_joiner(&self.joiner.id, port, &self.joiner.fingerprint());
+        self.announced.is_some()
     }
 
     /// Starts an attempt for a connection the app accepted, ending the one

@@ -220,36 +220,35 @@ struct MainView: View {
         }
     }
 
-    /// The quick switch for taking copies from the group: a click turns it
-    /// off or on again, its menu turns it off for a time. This Mac's own
-    /// copies still go out (docs/design.md, "Muting a device").
+    /// The quick switch for sync: a click turns it off or on again, its menu
+    /// turns it off for a time (docs/design.md, "Sync on and off").
     private var listen: some View {
         Menu {
             ForEach(PauseTime.allCases) { t in
-                Button { Task { await model.pauseReceiving(true, forMS: t.ms) } } label: { Text(t.title) }
+                Button { Task { await model.turnSync(false, forMS: t.ms) } } label: { Text(t.title) }
             }
         } label: {
-            if model.paused {
-                Label(Self.pausedTitle(until: model.pausedUntil), systemImage: "speaker.slash")
+            if model.syncOff {
+                Label(Self.syncOffTitle(until: model.syncOffUntil), systemImage: "speaker.slash")
             } else {
-                Label("Taking copies", systemImage: "speaker.wave.2")
+                Label("Sync on", systemImage: "speaker.wave.2")
             }
         } primaryAction: {
-            Task { await model.pauseReceiving(!model.paused) }
+            Task { await model.turnSync(model.syncOff) }
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .foregroundStyle(model.paused ? palette.danger : palette.text)
-        .help(Text("Click to take no copies from the group, or again; open the menu for a time"))
+        .foregroundStyle(model.syncOff ? palette.danger : palette.text)
+        .help(Text("Click to turn sync off or on; open the menu for a time"))
     }
 
-    static func pausedTitle(until: Date?) -> String {
-        guard let until else { return String(localized: "Not taking copies") }
-        return String(localized: "Not taking copies until \(until.formatted(date: .omitted, time: .shortened))")
+    static func syncOffTitle(until: Date?) -> String {
+        guard let until else { return String(localized: "Sync off") }
+        return String(localized: "Sync off until \(until.formatted(date: .omitted, time: .shortened))")
     }
 }
 
-/// How long the quick switch keeps the group's copies out.
+/// How long the quick switch keeps sync off.
 enum PauseTime: Int64, CaseIterable, Identifiable {
     case quarter = 900_000
     case hour = 3_600_000
@@ -286,6 +285,9 @@ struct DeviceTile: View {
                 Label("muted", systemImage: "speaker.slash").font(.caption).foregroundStyle(palette.danger)
             } else {
                 Text(verbatim: device.system ?? "").font(.caption).foregroundStyle(palette.textDim)
+            }
+            if device.isSelf {
+                Text("This Mac").font(.caption).foregroundStyle(palette.textDim)
             }
         }
         .padding(Tokens.spacingMedium)

@@ -55,8 +55,12 @@ enum Control {
         var os: String?
         var away: Away?
         var version: String
-        /// The sync mode: own, shared, receive or send; nil when in no group.
+        /// The sync mode: shared (sync on) or own (sync off); nil when in no
+        /// group. While sync is off, syncUntilMS is when it turns on again,
+        /// nil or 0 for until it is turned on (docs/design.md, "Sync on and
+        /// off").
         var mode: String?
+        var syncUntilMS: Int64?
         /// How far the group's records stop the exchange: "secrets" or
         /// "full"; nil when nothing stops. Claims and conflicts say why.
         var stop: String?
@@ -65,18 +69,15 @@ enum Control {
         /// How many records of a later version the service keeps.
         var newer: Int?
         /// An admin muted this Mac: its copies do not reach the group until
-        /// mutedUntilMS, nil or 0 for until an admin unmutes it. Its user
-        /// paused receiving until pausedUntilMS, nil or 0 for until it is
-        /// turned on again (docs/design.md, "Muting a device").
+        /// mutedUntilMS, nil or 0 for until an admin unmutes it
+        /// (docs/design.md, "Muting a device").
         var muted: Bool?
         var mutedUntilMS: Int64?
-        var paused: Bool?
-        var pausedUntilMS: Int64?
 
         enum CodingKeys: String, CodingKey {
-            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted, paused
+            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted
+            case syncUntilMS = "sync_until_ms"
             case mutedUntilMS = "muted_until_ms"
-            case pausedUntilMS = "paused_until_ms"
         }
     }
 

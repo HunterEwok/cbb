@@ -107,13 +107,13 @@ func TestNames(t *testing.T) {
 	}
 }
 
-// TestNeedsAdmin: this device's own pause of receiving is on either
-// socket, a mute of a device only on the admin socket.
+// TestNeedsAdmin: this device's own sync is on either socket; another
+// device's sync and a mute only on the admin socket.
 func TestNeedsAdmin(t *testing.T) {
-	if NeedsAdmin(Header{Op: OpMute}) || NeedsAdmin(Header{Op: OpUnmute}) {
-		t.Error("pausing receiving here needs the admin socket")
+	if NeedsAdmin(Header{Op: OpSync, Name: "off"}) {
+		t.Error("turning this device's sync off needs the admin socket")
 	}
-	if !NeedsAdmin(Header{Op: OpMute, Device: "beta"}) || !NeedsAdmin(Header{Op: OpUnmute, Device: "beta"}) || !NeedsAdmin(Header{Op: OpMode}) {
-		t.Error("muting a device does not need the admin socket")
+	if !NeedsAdmin(Header{Op: OpSync, Name: "off", Device: "beta"}) || !NeedsAdmin(Header{Op: OpMute, Device: "beta"}) || !NeedsAdmin(Header{Op: OpUnmute, Device: "beta"}) {
+		t.Error("another device's sync or mute does not need the admin socket")
 	}
 }

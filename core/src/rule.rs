@@ -3,7 +3,7 @@
 
 //! The rule of incoming copies (docs/protocol.md, section 5, "Writing to
 //! the clipboard"): whether the group's current copy goes into a member's
-//! clipboard, and whether a mute or a pause holds. The lite member's engine
+//! clipboard, and whether a mute or sync turned off holds. The lite member's engine
 //! (crate::clip) asks it, and the Go service asks it through the core's
 //! `copy_verdict`, so that every member keeps one rule; the cases of
 //! testdata/interop/copy-verdicts.json pin it, and Go's own copy of it,
@@ -19,9 +19,6 @@ use crate::clip::Kind;
 pub struct Incoming {
     /// The member's mode lets the group's copies in.
     pub receives: bool,
-    /// Its user paused receiving, and the pause holds.
-    #[serde(default)]
-    pub paused: bool,
     pub kind: Kind,
     /// Only the mark of a secret came, without its payload.
     #[serde(default)]
@@ -56,8 +53,6 @@ pub enum Verdict {
     Write,
     /// The mode keeps the group's copies out.
     Mode,
-    /// The user paused receiving.
-    Paused,
     /// Only a mark, or a copy this member does not read.
     Unread,
     /// A secret past its time.
@@ -74,8 +69,6 @@ pub enum Verdict {
 pub fn incoming(i: &Incoming) -> Verdict {
     if !i.receives {
         Verdict::Mode
-    } else if i.paused {
-        Verdict::Paused
     } else if i.mark || i.unread {
         Verdict::Unread
     } else if i.kind == Kind::Secret && i.age_ms >= i.secret_ttl_ms {
@@ -91,7 +84,7 @@ pub fn incoming(i: &Incoming) -> Verdict {
     }
 }
 
-/// Whether a mute or a pause set until `until_ms` on the wall clock (0 for
+/// Whether a mute or sync turned off until `until_ms` on the wall clock (0 for
 /// until it is lifted, None for none) holds at `now_ms`.
 pub fn holds(until_ms: Option<i64>, now_ms: i64) -> bool {
     match until_ms {

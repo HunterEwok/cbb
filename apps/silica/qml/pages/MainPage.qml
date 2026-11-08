@@ -187,9 +187,11 @@ Page {
                 visible: !app.deviceList
                 x: Theme.horizontalPageMargin - Theme.paddingSmall
                 width: parent.width - 2 * x
-                property int perRow: Math.max(3, Math.floor(width / (Theme.itemSizeExtraLarge * 1.4)))
+                // Tiles at least as wide as on the other phones, two in a
+                // row on a phone held upright, so their words fit.
+                property int perRow: Math.max(2, Math.floor(width / (Theme.itemSizeExtraLarge * 2.2)))
                 Repeater {
-                    model: tiles.visible ? app.member.devices : []
+                    model: tiles.visible ? Devices.selfFirst(app.member.devices) : []
                     DeviceTile {
                         width: tiles.width / tiles.perRow
                         device: modelData
@@ -197,7 +199,7 @@ Page {
                 }
             }
             Repeater {
-                model: app.deviceList ? app.member.devices : []
+                model: app.deviceList ? Devices.selfFirst(app.member.devices) : []
                 ListItem {
                     contentHeight: Theme.itemSizeMedium
                     onClicked: pageStack.push(Qt.resolvedUrl("DevicePage.qml"), { device: modelData })
