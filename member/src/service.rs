@@ -90,6 +90,9 @@ struct Act {
 /// The quick actions in peer::may_take, as Go's targetAct.
 const ACT: &str = "act";
 
+/// How long a request waits for a device in a group to start.
+const START_WAIT: Duration = Duration::from_secs(10);
+
 /// A remote paste for a watcher, with where its answer goes: the status,
 /// done, refused or failed, and the reason.
 struct Inject {
@@ -699,11 +702,29 @@ fn via_name(v: Via) -> &'static str {
 
 impl Service {
     fn node(&self) -> Result<Arc<Node>> {
-        self.node.read().unwrap().clone().ok_or_else(|| Error::msg("this device is in no group; run cbb pair"))
+        self.started(|| self.node.read().unwrap().clone())
     }
 
     fn away(&self) -> Result<Arc<Away>> {
-        self.away.read().unwrap().clone().ok_or_else(|| Error::msg("this device is in no group; run cbb pair"))
+        self.started(|| self.away.read().unwrap().clone())
+    }
+
+    /// What get returns once the service has started in its group: a
+    /// request that comes while a device in a group is still starting, its
+    /// sockets open first, waits for it rather than hearing that the device
+    /// is in no group.
+    fn started<T>(&self, get: impl Fn() -> Option<T>) -> Result<T> {
+        let deadline = std::time::Instant::now() + START_WAIT;
+        loop {
+            if let Some(v) = get() {
+                return Ok(v);
+            }
+            let in_group = matches!(Identity::load(&self.state_dir), Ok(Some(_)));
+            if !in_group || std::time::Instant::now() >= deadline || STOP.load(Ordering::SeqCst) {
+                return Err(Error::msg("this device is in no group; run cbb pair"));
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 
     /// cbb global: shows sync away from home, or turns it on or off. The
@@ -1911,6 +1932,12 @@ impl Service {
                     paste: self.paste_status(),
                     keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
                     tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
+                    release: node.releases().version(uptime::wall_ms()).unwrap_or_default(),
+                    update: node
+                        .releases()
+                        .version(uptime::wall_ms())
+                        .filter(|v| crate::releases::offered(v))
+                        .unwrap_or_default(),
                     actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
                     stop: node.stop(),
                     removed: node.removed(),
@@ -2005,6 +2032,29 @@ impl Service {
             "hubs" => {
                 self.admin(|a| a.set_hubs(&h.hubs))?;
                 Ok(control::reply(Header::default(), Vec::new()))
+            }
+            "release" => {
+                let set: serde_json::Value =
+                    serde_json::from_slice(&m.payload).map_err(|e| Error::with("the request carries no release", e))?;
+                self.node()?.put_release(&set)?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
+            "release-held" => {
+                let set = self
+                    .node()?
+                    .releases()
+                    .current(uptime::wall_ms())
+                    .ok_or_else(|| Error::msg("this device holds no signed release"))?;
+                let data = serde_json::to_vec(&set).context("cannot encode the release")?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, data))
+            }
+            "update-way" => {
+                let node = self.node()?;
+                let data = match self.away()?.update_way(&node) {
+                    Some(v) => serde_json::to_vec(&v).context("cannot encode the way")?,
+                    None => Vec::new(),
+                };
+                Ok(control::reply(Header { done: true, ..Default::default() }, data))
             }
             "paste-receive" => self.set_receive(h),
             "keyboard" | "remote" => {

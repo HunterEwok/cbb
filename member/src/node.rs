@@ -33,6 +33,7 @@ use crate::identity::Stored as _;
 use crate::pair::home_address;
 use crate::records::Stored as _;
 use crate::records::{Record, Records, Refusal};
+use crate::releases::{self, Releases};
 use crate::tls;
 use crate::uptime;
 use crate::wire::{self, Message};
@@ -194,6 +195,8 @@ pub struct Node {
     home: Mutex<HashMap<DeviceId, Duration>>,
     /// The signed entry points this member holds and passes on.
     entries: Arc<Entries>,
+    /// The newest signed release the group passed around (section 16).
+    releases: Arc<Releases>,
     /// Keeps the identity when it changes (a renewed certificate, a new
     /// root), where identity.json cannot: a phone's app whose key is
     /// outside the core keeps its own file.
@@ -363,6 +366,7 @@ impl Node {
         log: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Node {
         let entries = Arc::new(Entries::open(&state_dir, crate::update::release_roots(), uptime::wall_ms(), &*log));
+        let releases = Arc::new(Releases::open(&state_dir, crate::update::release_roots(), uptime::wall_ms(), &*log));
         engine.set_live_window(live_window(&records));
         Node {
             ident: RwLock::new(Arc::new(ident)),
@@ -389,6 +393,7 @@ impl Node {
             actions: RwLock::new(Vec::new()),
             home: Mutex::new(HashMap::new()),
             entries,
+            releases,
             keep_identity: None,
             paused: AtomicBool::new(false),
             kick: (Mutex::new(0), Condvar::new()),
@@ -502,6 +507,10 @@ impl Node {
     /// The project's signed entry points this member holds.
     pub fn entries(&self) -> &Entries {
         &self.entries
+    }
+
+    pub fn releases(&self) -> &Releases {
+        &self.releases
     }
 
     /// The group's records.
@@ -1434,8 +1443,11 @@ impl Node {
             let key = self.tunnel_key.clone();
             let log = self.log.clone();
             let entries = self.entries.clone();
+            let releases = self.releases.clone();
             let content = self.content.clone();
-            std::thread::spawn(move || writer(&c, rx, &records, &who, &key, &entries, content.as_deref(), &*log))
+            std::thread::spawn(move || {
+                writer(&c, rx, &records, &who, &key, (&entries, &releases), content.as_deref(), &*log)
+            })
         };
         let res = self.reader(&c);
         c.close(false);
@@ -1526,6 +1538,16 @@ impl Node {
                 {
                     self.enqueue(c, Out::Entries(set));
                 }
+                // A computer that holds an older release, or none, gets ours;
+                // phones update from their stores (section 16, "In the
+                // group").
+                if !c.records_only
+                    && (m.role == "full" || m.role == "lite")
+                    && releases::newer(self.releases.order(now), (body.release_keys_seq, body.release_seq))
+                    && let Some(set) = self.releases.current(now)
+                {
+                    self.enqueue(c, Out::Message(wire::release(&set)));
+                }
                 continue;
             }
             if c.records_only {
@@ -1558,6 +1580,9 @@ impl Node {
                 }
                 "records" if !m.records.is_empty() => self.add_records(&m.records, &c.id),
                 "entries" if m.entries.is_some() => self.add_entries(m.entries.as_ref().unwrap(), &c.id),
+                "release" if m.release.is_some() && self.presence.role != "phone" => {
+                    self.add_release(m.release.as_ref().unwrap(), &c.id)
+                }
                 // Only the group's root, an admin or a device that only
                 // passes copies on can be its hub, by the records and the key
                 // it proved, not by the role its hello claims
@@ -1668,6 +1693,49 @@ impl Node {
             }
             Ok(false) => {}
             Err(e) => self.logf(&format!("cbb: dropped the entry points {from} sent: {}", e.for_log())),
+        }
+    }
+
+    /// Takes the release a peer sent when it checks out and is newer than
+    /// the one held, and passes it on to the other computers.
+    fn add_release(&self, set: &serde_json::Value, from: &DeviceId) {
+        match self.releases.take(set, uptime::wall_ms()) {
+            Ok(true) => {
+                self.release_taken();
+                self.send_release(set, Some(from));
+            }
+            Ok(false) => {}
+            Err(e) => self.logf(&format!("cbb: dropped the release {from} sent: {}", e.for_log())),
+        }
+    }
+
+    /// Takes a release cbb update fetched, as Go's putRelease: kept when it
+    /// checks out and is newer than the one held, and passed on to the
+    /// peers.
+    pub fn put_release(&self, set: &serde_json::Value) -> Result<()> {
+        if self.releases.take(set, uptime::wall_ms()).map_err(|e| e.context("the release does not check out"))? {
+            self.release_taken();
+            self.send_release(set, None);
+        }
+        Ok(())
+    }
+
+    fn release_taken(&self) {
+        if let Some(v) = self.releases.version(uptime::wall_ms())
+            && releases::offered(&v)
+        {
+            self.logf(&format!("cbb: CBB {v} is available; cbb update installs it"));
+        }
+    }
+
+    /// Sends the release to the computers connected, but from.
+    fn send_release(&self, set: &serde_json::Value, from: Option<&DeviceId>) {
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+        for c in conns.iter().filter(|c| Some(&c.id) != from && !c.records_only) {
+            let computer = c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "full" || p.role == "lite");
+            if computer {
+                self.enqueue(c, Out::Message(wire::release(set)));
+            }
         }
     }
 
@@ -1900,7 +1968,7 @@ fn writer(
     records: &Mutex<Records>,
     who: &Presence,
     key: &RwLock<TunnelKeys>,
-    entries: &Entries,
+    (entries, releases): (&Entries, &Releases),
     content: Option<&Store>,
     log: &(dyn Fn(&str) + Send + Sync),
 ) {
@@ -1926,7 +1994,8 @@ fn writer(
                     if c.records_only { (0, 0) } else { entries.order(uptime::wall_ms()) },
                     who.admin_key.read().unwrap().as_deref(),
                 );
-                Some(wire::with_features(m, if content.is_some() && !c.records_only { &["media"] } else { &[] }))
+                let m = wire::with_features(m, if content.is_some() && !c.records_only { &["media"] } else { &[] });
+                Some(wire::with_release(m, if c.records_only { (0, 0) } else { releases.order(uptime::wall_ms()) }))
             }
             Out::Event(ev, queued) => {
                 let mut s = ev.sealed?;

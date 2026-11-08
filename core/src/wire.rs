@@ -55,6 +55,10 @@ pub struct Message {
     /// (section 16, "Entry points"), decoded on their own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entries: Option<Value>,
+    /// In a release message, the signed release `{keys, channel, release}`
+    /// (section 16, "In the group"), decoded on their own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release: Option<Value>,
     /// In a reach message, the members a computer is connected to (section
     /// 4, "Reach"), kept as it came: the lite member shows no devices.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -122,6 +126,18 @@ pub fn with_features(mut m: Message, features: &[&str]) -> Message {
         && let Some(Value::Object(h)) = m.hello.as_mut()
     {
         h.insert("features".into(), to_value(features));
+    }
+    m
+}
+
+/// m, a hello, naming the release the sender holds by its keys.json and
+/// channel seqs (section 16, "In the group"); (0, 0) for none.
+pub fn with_release(mut m: Message, order: (u64, u64)) -> Message {
+    if order.1 != 0
+        && let Some(Value::Object(h)) = m.hello.as_mut()
+    {
+        h.insert("release_seq".into(), order.1.into());
+        h.insert("release_keys_seq".into(), order.0.into());
     }
     m
 }
@@ -205,6 +221,12 @@ pub struct HelloBody {
     pub entries_seq: u64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub entries_keys_seq: u64,
+    /// The channel and keys.json seqs of the signed release the sender
+    /// holds (section 16, "In the group"); 0 for none.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub release_seq: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub release_keys_seq: u64,
     /// What the sender supports beyond its protocol version: `media` from
     /// one that serves the content of media events.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -363,6 +385,8 @@ pub fn hello(
         seal: seal.map(<[u8]>::to_vec),
         entries_seq: entries.1,
         entries_keys_seq: if entries.1 == 0 { 0 } else { entries.0 },
+        release_seq: 0,
+        release_keys_seq: 0,
         features: Vec::new(),
     };
     Message { kind: "hello".into(), role: role.into(), hello: Some(to_value(&body)), ..Default::default() }
@@ -389,6 +413,11 @@ pub fn event(s: &Sealed) -> Message {
 /// An entries message, which passes the signed entry points on.
 pub fn entries(set: &Value) -> Message {
     Message { kind: "entries".into(), entries: Some(set.clone()), ..Default::default() }
+}
+
+/// A release message, which passes the signed release on.
+pub fn release(set: &Value) -> Message {
+    Message { kind: "release".into(), release: Some(set.clone()), ..Default::default() }
 }
 
 /// A command message: a command an admin signed for its receiver

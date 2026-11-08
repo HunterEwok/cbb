@@ -251,6 +251,12 @@ pub struct Status {
     /// gives; None where it was never turned on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keyboard: Option<serde_json::Value>,
+    /// The newest signed release the group passed around, and that
+    /// version again in update when this device runs an older one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub release: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub update: String,
     /// The TVs this device is the remote of, as Go's control.TV.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tvs: Vec<serde_json::Value>,
@@ -523,6 +529,13 @@ pub fn is_admin(op: &str) -> bool {
             | "injected"
             | "act"
             | "acted"
+            // The signed release cbb update fetched, for the group, and the
+            // one held.
+            | "release"
+            | "release-get"
+            | "release-held"
+            | "entries"
+            | "entries-get"
             // The uinput helper, as root, through the socket's group; the
             // service checks that it is root.
             | "keys"

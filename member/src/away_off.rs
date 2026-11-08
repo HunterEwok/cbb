@@ -56,6 +56,10 @@ impl Away {
         None
     }
 
+    pub fn update_way(&self, _node: &Node) -> Option<serde_json::Value> {
+        None
+    }
+
     pub fn make_hub(&self, _h: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
         self.turn_on()
     }

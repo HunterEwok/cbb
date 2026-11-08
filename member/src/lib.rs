@@ -51,6 +51,7 @@ pub mod phone;
 pub mod records;
 #[cfg(feature = "tunnel")]
 pub mod relay;
+pub mod releases;
 mod remotepaste;
 mod rootless;
 pub mod sealkey;
