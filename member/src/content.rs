@@ -230,6 +230,11 @@ impl Store {
         key: &[u8; KEY_SIZE],
         out: &Path,
     ) -> Result<Vec<(Part, PathBuf)>> {
+        // The folder it goes in, such as a phone's Downloads/CBB, may not
+        // be there yet; out itself must be new.
+        if let Some(parent) = out.parent() {
+            fs::create_dir_all(parent).context(format!("make {}", parent.display()))?;
+        }
         fs::create_dir(out).context(format!("make {}", out.display()))?;
         let res = self.open_parts(sum, manifest, key, out);
         if res.is_err() {
@@ -498,7 +503,8 @@ mod tests {
         assert_eq!(m.size, 200_005);
         assert_eq!(blob.size as u64, cbb_core::copy::blob_size(200_005));
         assert_eq!(store.held(&blob.sha256), Some(blob.size as u64));
-        let out = dir.join("out");
+        // The folder it goes in is made too, as a phone's Downloads/CBB.
+        let out = dir.join("Downloads/CBB/out");
         let placed = store.open_into(Some(&blob.sha256), &m, &key, &out).unwrap();
         assert_eq!(placed.len(), 3);
         assert_eq!(std::fs::read(out.join("trip/big.bin")).unwrap(), big);

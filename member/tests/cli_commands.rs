@@ -2439,19 +2439,16 @@ fn paste_files() {
 #[test]
 fn media_lines() {
     let dir = tempdir("media-lines");
-    for (media, line) in [(
-        json!({"max_copy": 1, "max_copy_away": 1, "failed": "it is larger than 1 MiB"}),
-        "The last copy of images or files was not fetched: it is larger than 1 MiB.",
-    )] {
-        let r = run_in(
-            &dir,
-            &["status"],
-            "",
-            status(json!({"os": "linux", "device": "d1", "group": "g1", "media": media})),
-            b"",
-        );
-        assert!(r.stdout.contains(line), "no {line:?} in {:?}", r.stdout);
-    }
+    let media = json!({"max_copy": 1, "max_copy_away": 1, "failed": "it is larger than 1 MiB"});
+    let r = run_in(
+        &dir,
+        &["status"],
+        "",
+        status(json!({"os": "linux", "device": "d1", "group": "g1", "media": media})),
+        b"",
+    );
+    let line = "The last copy of images or files was not fetched: it is larger than 1 MiB.";
+    assert!(r.stdout.contains(line), "no {line:?} in {:?}", r.stdout);
     let r = run_in(
         &dir,
         &["status"],

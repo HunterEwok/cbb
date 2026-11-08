@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>ألغى جذر المجموعة الطلب؛ يبقى الهاتف مشرفًا.</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>أصبح طلب تولّي المجموعة باطلًا؛ يبقى الهاتف مشرفًا.</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>صِل الهاتف بشبكة Wi-Fi المنزلية للانضمام إلى مجموعة.</translation>
     </message>
@@ -176,6 +184,22 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>اكتب محتوى الحافظة على %1</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>جهاز لوحة المفاتيح</translation>
+    </message>
+    <message>
+        <source>Back to the group's order</source>
+        <translation>العودة إلى ترتيب المجموعة</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>تجميعة جديدة…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>افحص المفتاح مجددًا</translation>
     </message>
@@ -311,6 +335,30 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Take the group over</source>
+        <translation>تولَّ المجموعة</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>جارٍ تولّي المجموعة من %1</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>تولّي المجموعة</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>في الانتظار، بقي %1 ساعة</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>في انتظار وصول الطلب إلى المجموعة</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>متنازع عليه: ردّ جذر المجموعة على الطلب</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>إزالة</translation>
     </message>
@@ -393,6 +441,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>لوحة مفاتيح بلوتوث</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>العمل كلوحة مفاتيح بلوتوث</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>متوقف</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>متصل</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>لا يعمل</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>يعمل</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>الإعدادات</translation>
@@ -806,6 +878,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>مقطع فيديو</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>صورة</translation>
     </message>
@@ -833,6 +909,10 @@
 <context>
     <name>Notifier</name>
     <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>%1 من المجموعة في المعرض</translation>
+    </message>
+    <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>حُفظ %1 من المجموعة في التنزيلات</translation>
     </message>
@@ -843,6 +923,275 @@
     <message>
         <source>%1 files</source>
         <translation>ملفات: %1</translation>
+    </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>تم اللصق من %1</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>ترتيب</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>نقل إلى البداية</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>نقل إلى الأمام</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>نقل إلى الخلف</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>نقل إلى النهاية</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>نقل إلى %1</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>تجميعة جديدة…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>إخراج من التجميعة</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>إعادة تسمية التجميعة…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>فك التجميعة</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>إنشاء</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>إعادة تسمية</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>تجميعة جديدة</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>إعادة تسمية التجميعة</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>الاسم</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>المكتب، المنزل، أجهزة التلفاز…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 من %2 متصل</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 من %2 متصل</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>فك التجميعة</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>إعادة تسمية التجميعة…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 من %2 متصل</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>لا توجد أجهزة في هذه التجميعة بعد. اضغط مطولًا على مربع جهاز في الصفحة الرئيسية لنقله إلى هنا.</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>لم يستجب بلوتوث الهاتف. ربما لا يُسمح لـ CBB باستخدامه.</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>لا يستطيع بلوتوث هذا الهاتف العمل كلوحة مفاتيح.</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>البلوتوث متوقف. شغّله من إعدادات الهاتف، ثم شغّل لوحة المفاتيح مرة أخرى.</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>تعذّر على الهاتف أن يعمل كلوحة مفاتيح.</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>لم يقبل بلوتوث الهاتف لوحة المفاتيح.</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>تعذّر على الهاتف الإعلان عن لوحة المفاتيح.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>لا يوجد جهاز متصل. اتصل بهذا الهاتف من الجهاز، من إعدادات البلوتوث فيه.</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>لا توجد نصوص في الحافظة.</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>يحتوي النص على أكثر من %1 حرف، وهذا أكثر مما تكتبه لوحة المفاتيح.</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>لا يحتوي تخطيط الجهاز على مفتاح لـ: %1. اختر تخطيطه في الأعلى.</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>انقطع الجهاز؛ لم يُكتب النص كاملًا.</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>لوحة مفاتيح بلوتوث</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>العمل كلوحة مفاتيح بلوتوث</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>يكتب هذا الهاتف في تلفاز أو جهاز لوحي أو جهاز ألعاب أو حاسوب مقترن به، دون تثبيت أي شيء عليه: محتوى الحافظة، بلمسة منك.</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>جارٍ التحضير…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>متصل بـ %1.</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>يوجد جهاز متصل.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>لا يوجد جهاز متصل. اتصل بهذا الهاتف من الجهاز، من إعدادات البلوتوث فيه.</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>مرئي لمدة %1 ث</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>اجعل هذا الهاتف مرئيًا</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>أثناء ظهوره، يجد الجهاز الجديد هذا الهاتف باسم “CBB keyboard” في إعدادات البلوتوث.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>حاول مرة أخرى</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>تخطيط لوحة مفاتيح الجهاز</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>الإنجليزية (الولايات المتحدة)</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>الروسية</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>السرعة</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>%1 حرفًا في الثانية</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>جارٍ الكتابة…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>اكتب محتوى الحافظة</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>اللصق عن بُعد</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>السماح لمشرفي المجموعة باللصق هناك</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>عندها يكتب مشرف المجموعة نصًا عبر هذا الهاتف على الجهاز المتصل به، من تطبيقه أو باستخدام cbb paste. يعرض هذا الهاتف من قام باللصق، ويحتفظ بسجل لآخر عمليات اللصق دون نصها.</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>السماح للصق بالضغط على Enter</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>يحتاجه أيضًا النص الذي فيه سطر جديد: تكتب لوحة المفاتيح السطر الجديد على أنه Enter.</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>آخر عمليات اللصق</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>(غير موثّق)</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>%1 بايت</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>مرفوض</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>فشل</translation>
     </message>
 </context>
 <context>

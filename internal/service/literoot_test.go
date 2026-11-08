@@ -186,6 +186,26 @@ func TestLiteRoot(t *testing.T) {
 	waitFor(t, "the laptop muted", func() bool { return laptop.status(t).Muted })
 	must("", "unmute", "-on", "desk")
 	waitFor(t, "the laptop unmuted", func() bool { return !laptop.status(t).Muted })
+	// The freeze below reaches only a laptop whose connection is up too:
+	// both connections again are due within restartAfter of the unmute's
+	// result, which cbb unmute waited for, and a slow machine (MIPS under
+	// qemu) may still be redialing when the freeze is signed.
+	time.Sleep(restartAfter + 200*time.Millisecond)
+	laptopID := laptop.status(t).Device
+	waitFor(t, "the laptop connected again", func() bool {
+		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
+		if err != nil || st.Status == nil || len(st.Status.Peers) != 1 {
+			return false
+		}
+		root.logMu.Lock()
+		defer root.logMu.Unlock()
+		for i := len(root.lines) - 1; i >= 0; i-- {
+			if strings.Contains(root.lines[i], laptopID) {
+				return strings.Contains(root.lines[i], "connected to "+laptopID)
+			}
+		}
+		return false
+	})
 
 	if out, err := cbb("", "admin", "desk"); err == nil || !strings.Contains(out, "allow-file-key") {
 		t.Errorf("cbb admin of a computer whose keys are in a file: %v\n%s", err, out)

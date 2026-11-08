@@ -22,6 +22,7 @@ use cbb_core::certs::DeviceId;
 use cbb_core::clip::{Engine, Event, Kind, Via};
 use cbb_core::identity::Identity;
 use cbb_core::manage::{self, Change, Order, Signer};
+use cbb_core::takeover::{self, ClaimState, How};
 use cbb_core::wire::{self, CommandResult, DeviceInfo};
 
 use crate::away::Away;
@@ -118,6 +119,8 @@ pub struct Member {
     /// always gets them.
     tunnels: Arc<RwLock<Option<OnTunnel>>>,
     away: Arc<Away>,
+    /// The admins given a new admin CA, by device, with the root it is from.
+    admin_cas: Mutex<std::collections::BTreeMap<String, [u8; 32]>>,
 }
 
 /// What a member port a phone opens is for.
@@ -236,6 +239,7 @@ impl Member {
             others,
             tunnels,
             away,
+            admin_cas: Mutex::new(std::collections::BTreeMap::new()),
         })
     }
 
@@ -349,6 +353,26 @@ impl Member {
     /// The device IDs of the group's devices the records list.
     pub fn devices(&self) -> Vec<crate::records::Device> {
         self.node.devices()
+    }
+
+    /// A command the node passed to the app (its `others`), checked again
+    /// with the records and opened when sealed, as the core's
+    /// `group_command` answers it, with a paste's text as it may go in
+    /// (`clean`, as the computers clean it): the app takes its orders from
+    /// here.
+    pub fn check_command(&self, c: &Record) -> Result<serde_json::Value> {
+        let me = self.node.identity().id.to_string();
+        let mut v = {
+            let records = self.node.records();
+            let records = records.lock().unwrap();
+            let secret = crate::sealkey::secret().unwrap_or_default();
+            cbb_core::api::checked_command(&records, c, &me, uptime::wall_ms(), secret)?
+        };
+        let text = v.pointer("/command/text").and_then(serde_json::Value::as_str).map(crate::remotepaste::clean);
+        if let (Some(t), Some(o)) = (text, v.as_object_mut()) {
+            o.insert("clean".into(), t.into());
+        }
+        Ok(v)
     }
 
     /// The group's records, to show and to sign new ones over.
@@ -650,6 +674,27 @@ impl Member {
         Ok(())
     }
 
+    /// Claims the group for new_root (DER), a root CA for a new key of the
+    /// phone that the app keeps before it calls this (src/takeover.rs).
+    pub fn claim(&self, s: &Signer, how: How, new_root: &[u8]) -> Result<()> {
+        crate::takeover::claim(&self.node, s, how, new_root)
+    }
+
+    /// Where the claim to new_root stands; None when the records hold none.
+    pub fn claim_state(&self, new_root: &[u8]) -> Option<ClaimState> {
+        takeover::claim_state(&self.node.records().lock().unwrap(), new_root)
+    }
+
+    /// Makes the phone the group's root once its claim took effect: s is
+    /// the new root, which signs the phone's member certificate from it and
+    /// the records a new root starts with. The identity event gives the
+    /// app the new certificate. It returns the certificate.
+    pub fn finish_takeover(&self, s: &Signer, own: &takeover::Own) -> Result<Vec<u8>> {
+        let f = crate::takeover::finished(&self.node, s, own)?;
+        crate::takeover::become_root(&self.node, &f)?;
+        Ok(f.cert)
+    }
+
     /// Signs a command for a device of the group as change does, sends it
     /// and waits up to timeout for its result.
     pub fn order(&self, s: &Signer, device: &str, o: &Order, timeout: Duration) -> Result<CommandResult> {
@@ -690,10 +735,19 @@ impl Member {
     }
 
     /// Renews the member certificates that are due, as an admin: each
-    /// connected member's, sent to it, and this phone's own, kept. It
-    /// returns how many it renewed.
+    /// connected member's, sent to it, and this phone's own, kept; as the
+    /// current root also each connected admin's CA from an earlier root,
+    /// as after a takeover. It returns how many it renewed.
     pub fn renew(&self, s: &Signer) -> Result<usize> {
-        self.node.renew_due(s)
+        let mut n = self.node.renew_due(s)?;
+        let mut roots = self.node.records().lock().unwrap().roots();
+        if roots.is_empty() {
+            roots.push(self.node.identity().root().clone());
+        }
+        if roots.last() == Some(s.ca) {
+            n += crate::takeover::renew_admin_cas(&self.node, s, &self.admin_cas);
+        }
+        Ok(n)
     }
 
     /// Stops the member and closes its connections.

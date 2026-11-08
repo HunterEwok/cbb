@@ -108,6 +108,7 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `muted` | none | `{"sync_off", "sync_off_ms", "muted", "muted_ms"}`: how long sync stays off and an admin's mute lasts, 0 for until lifted |
 | `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features, chain}]`, as their hellos and reach messages present them, `chain` the certificates the handshake checked, leaf first |
 | `answer` | `token` (a `command` event's), `status` (`done`, `refused` or `failed`), `reason` | `{}`: the result the command's sender gets |
+| `check_command` | `command` (a `command` event's record) | what `group_command` answers for it against the node's records, opened with the phone's key for sealed messages, and for a paste `clean`: its text as it may go in (newlines and tabs, no other control characters or terminal escapes); a command refused is an error. The app keeps the replay cache and its own switches |
 | `tunnel_key` | `key`, `psk` (32 bytes each, base64), or neither while sync away from home is off | `{}`: what the hellos offer the group's hubs; the phone connects to the full members again |
 | `evidence` | `evidence`: the attestations of the phone's keys | `{}`: every peer gets them after its hello (protocol.md, section 17) |
 | `disconnect` | `device` | `{}`: the connection to it ends with a goodbye; it is dialed again later |
@@ -160,8 +161,19 @@ to the device's key when its record names one, which the member sends and whose 
 answers. As the root it makes a connected computer an admin (`make_admin`: an admin CA for the
 admin key its hello offers, its device record again, and the admin message), and as any admin it
 renews (`renew`) every member certificate that is due, each connected member's, sent to it, and the
-phone's own, as the phone kits do when a peer connects. `TestFFIPhoneRoot` renames and removes a
-computer through it.
+phone's own, as the phone kits do when a peer connects; as the current root, also each connected
+admin's CA from an earlier root, as after a takeover. It takes the group over as the computers'
+service does (`cbb_core::takeover`): `root_ca` makes a root CA for a new key of the phone (on
+Aurora its admin key), which the app keeps before the claim; `take_over` (from the lost root
+`device`), `take_handed_over` (the root handed the group to this admin) or `recover` (signed with
+the recovery key under its admin CA) signs the claim to it, which the member adds and sends; and
+`finish_takeover`, called again while the claim waits, answers `{"state","left_ms"}` (`none`,
+`pending`, `cancelled`, `void`, `competing` or `disputed`) and signs nothing until the claim took
+effect, then signs with the new root the phone's member certificate from it and the records a new
+root starts with (its own device holding the root, the admins it keeps, a removal of a lost root's
+device, the old root's settings), answers `{"state":"effective","cert"}`, and the identity event
+gives the app the new certificate. `TestFFIPhoneRoot` renames and removes a computer through it,
+and `TestFFIPhoneTakeover` takes a computer's group over.
 
 Built with the feature `tunnel` (the iPhone and Android libraries), the library is also the
 phones' tunnel (`ffi/src/tunnel.rs`, whose comment lists the requests): `cbb_tunnel` takes
@@ -221,6 +233,8 @@ over `internal/core/cbb_core.wasm`, so no build output lands in the source tree.
 | `parse_body` | `kind` (`command`, `credential`, `keys`, `release`, `channel`, `attest-status`, `entries`, `zxnext` or `manifest`), `body` (base64) | `{"kind", "value"}`: the body's fields as an object, once it checks; see "Signed bodies" |
 | `new_device_key` | none | `{"pkcs8", "public"}`: a new P-256 device key (base64 PKCS #8 and SEC1 uncompressed) for a phone that keeps its key in a file (level 3) |
 | `sign_digest` | `pkcs8`, `digest` (base64, 32 bytes) | `{"sig"}`: ECDSA P-256 over the SHA-256 digest with that key, DER, base64: what the phone's signing callback gives for a key in a file |
+| `arrange` | `group`, `self`, `devices` (the app's order), `stored` (as kept, or null), `prune`, `op` (optional: `{"op":"move","item","before"}`, `into`, `out`, `new`, `rename`, `ungroup` or `reset`, as `testdata/arrangement/vectors.json` names them) | `{"stored","view"}`: the arrangement of the device tiles (`cbb_core::arrange`, docs/apps.md "Collections and the order of the tiles") to keep in the app's settings, and the items to show after this device; a change that does not fit is refused whole |
+| `keyboard` | `layout` (`us` or `ru`, the host's), `text` | `{"reports", "untypeable", "map"}`: the HID boot keyboard's reports that type `text` (each 8 bytes, base64; a key down, then all keys up), the characters the layout has no key for (no reports then), and the report map (base64), for a phone that is a Bluetooth LE keyboard (`cbb_core::keyboard`); an unknown layout is code 1 |
 | `seal_public` | `secret` (base64, 32 random bytes the device keeps) | `{"key"}`: its public key for sealed messages (base64, 1216 bytes), the `seal` its pairing and device record carry |
 | `seal_command` | `body` (base64, a command in the open), `key` (base64, the receiver's `seal` key) | `{"body"}`: the same command with its orders sealed to the key (`v` `2`, `sealed`), canonical, for the sender to sign; see "Signed bodies" |
 | `group_body` | the set's arguments, `body` (a record body as `canonical_body` takes it, with `signer` set) | `{"body"}`: the canonical bytes of the signer's next record, to sign: the group, seq and prev set from the set, and for a removal, a freeze or a claim `seen` from the set, the signer's own previous seq among them |

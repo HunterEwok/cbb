@@ -50,6 +50,16 @@ Page {
                 onClicked: app.errorDetails = !app.errorDetails
             }
 
+            SectionHeader { text: qsTr("Bluetooth keyboard") }
+            ValueButton {
+                label: qsTr("Act as a Bluetooth keyboard")
+                value: !app.keyboard.on ? qsTr("Off")
+                     : app.keyboard.state === "connected" ? qsTr("Connected")
+                     : app.keyboard.state === "failed" ? qsTr("Not working")
+                     : qsTr("On")
+                onClicked: pageStack.push(Qt.resolvedUrl("KeyboardPage.qml"))
+            }
+
             SectionHeader { text: qsTr("Notifications") }
 
             // One switch for each kind of the group's events (src/events.h),

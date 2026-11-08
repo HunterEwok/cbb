@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * them off its main thread. The other calls answer at once. Every call
  * throws [Core.Refusal] when the node refuses it.
  */
-class CoreMember private constructor(private val handle: Pointer, private val callbacks: Callbacks) : Closeable {
+class CoreMember private constructor(internal val handle: Pointer, private val callbacks: Callbacks) : Closeable {
     /** What the member starts from: the app's data directory and the phone's identity in the group. */
     class Start(
         /** The node's own files (its records, the clock's mark, the entry points, the cached copies). */
@@ -412,6 +412,100 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
         call("disconnect", Wire.obj("device" to Wire.str(device)))
     }
 
+    /** The callbacks of the manage calls under way. */
+    private val signing = mutableListOf<SignFn>()
+
+    /** Where a claim to take the group over stands, as finish_takeover answers. */
+    class Takeover(
+        /** none, pending, cancelled, void, competing, disputed or effective. */
+        val state: String,
+        /** How long the claim still waits, while pending. */
+        val leftMS: Long,
+        /** The phone's member certificate from the new root, once effective. */
+        val cert: ByteArray?,
+    )
+
+    /** Who claims the group (docs/protocol.md, section 10, "Handing the group over"). */
+    enum class Claim(internal val action: String) {
+        /** An admin phone, from the lost root's device. */
+        TAKE_OVER("take_over"),
+
+        /** The admin phone the root handed the group to. */
+        TAKE_HANDED_OVER("take_handed_over"),
+
+        /** The group's recovery key, under its admin CA. */
+        RECOVER("recover"),
+    }
+
+    /**
+     * A root CA for a new key of this phone, before a claim (cbb_member_manage's
+     * root_ca): public is the new key, which sign signs with. The app keeps the
+     * CA and the key until the claim takes effect or ends.
+     */
+    fun rootCA(public: ByteArray, sign: (ByteArray) -> ByteArray): ByteArray =
+        manage(Wire.obj("action" to Wire.str("root_ca"), "public" to Wire.bytes(point(public))), sign).optBytes("root_ca")
+            ?: throw Core.Mismatch("the member's root CA is missing")
+
+    /**
+     * Claims the group for rootCA, signed with the key public under its CA
+     * (the admin key and admin CA, or the recovery key and its CA); the
+     * member adds the claim to its records and sends it. lost is the lost
+     * root's device for [Claim.TAKE_OVER].
+     */
+    fun claim(kind: Claim, rootCA: ByteArray, public: ByteArray, ca: ByteArray, sign: (ByteArray) -> ByteArray, lost: String? = null) {
+        manage(
+            Wire.obj(
+                "action" to Wire.str(kind.action),
+                "device" to Wire.str(lost),
+                "root_ca" to Wire.bytes(rootCA),
+                "public" to Wire.bytes(point(public)),
+                "admin_ca" to Wire.bytes(ca),
+            ),
+            sign,
+        )
+    }
+
+    /**
+     * Finishes this phone's claim for rootCA once it took effect: the member
+     * signs, with the new root key public through sign, the phone's member
+     * certificate from the new root and the records a new root starts with,
+     * adds and sends them. While the claim waits, or after it ended, it signs
+     * nothing and only says where the claim stands, so the app may ask again.
+     */
+    fun finishTakeover(rootCA: ByteArray, public: ByteArray, name: String, os: String, store: String, seal: ByteArray?, sign: (ByteArray) -> ByteArray): Takeover {
+        val a = manage(
+            Wire.obj(
+                "action" to Wire.str("finish_takeover"),
+                "root_ca" to Wire.bytes(rootCA),
+                "public" to Wire.bytes(point(public)),
+                "name" to Wire.str(name),
+                "os" to Wire.str(os),
+                "store" to Wire.str(store),
+                "seal" to Wire.bytes(seal),
+            ),
+            sign,
+        )
+        val state = a.optString("state") ?: throw Core.Mismatch("the member's takeover has no state")
+        return Takeover(state, a.optLong("left_ms") ?: 0, a.optBytes("cert"))
+    }
+
+    /** Asks the member for an admin's change or a step of a takeover (cbb_member_manage), signed through sign during this call. */
+    fun manage(request: JsonObject, sign: (ByteArray) -> ByteArray): JsonObject {
+        if (closed.get()) throw IllegalStateException("the member is stopped")
+        val bytes = Wire.encode(request)
+        val signFn = signFn(sign)
+        val count = Memory(Native.SIZE_T_SIZE.toLong()).apply { clear() }
+        // Held where the garbage collector sees it until the call is over: the core calls it during the call.
+        synchronized(signing) { signing += signFn }
+        try {
+            val answer = lib.cbb_member_manage(handle, bytes, Core.SizeT(bytes.size.toLong()), signFn, null, count)
+                ?: throw Core.Mismatch("the member gave no answer to manage")
+            return okOf("manage", take(answer, count))
+        } finally {
+            synchronized(signing) { signing -= signFn }
+        }
+    }
+
     /** Stops the member and closes its connections; calls after it fail. */
     override fun close() {
         if (closed.getAndSet(true)) return
@@ -438,6 +532,8 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
 
         fun cbb_member_stop(m: Pointer)
 
+        fun cbb_member_manage(m: Pointer, request: ByteArray, len: Core.SizeT, sign: SignFn, ctx: Pointer?, answerLen: Pointer): Pointer?
+
         fun cbb_free(answer: Pointer?, len: Core.SizeT)
     }
 
@@ -453,7 +549,7 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
 
     companion object {
         /** The longest DER signature of P-256, the room the node gives. */
-        private const val MAX_SIG = 72
+        internal const val MAX_SIG = 72
 
         private val lib: Lib by lazy { Native.load("cbb_ffi", Lib::class.java) }
 
@@ -466,17 +562,7 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
          * app's thread of choice (the main thread in the app), in order.
          */
         fun start(start: Start, sign: (ByteArray) -> ByteArray, post: (Runnable) -> Unit = { it.run() }, events: (Event) -> Unit): CoreMember {
-            val signFn = SignFn { _, digest, sig, sigLen ->
-                try {
-                    val s = sign(digest.getByteArray(0, 32))
-                    if (s.isEmpty() || s.size > MAX_SIG) return@SignFn 1
-                    sig.write(0, s, 0, s.size)
-                    if (Native.SIZE_T_SIZE == 8) sigLen.setLong(0, s.size.toLong()) else sigLen.setInt(0, s.size)
-                    0
-                } catch (e: Exception) {
-                    1
-                }
-            }
+            val signFn = signFn(sign)
             val eventFn = EventFn { _, event, len ->
                 val e = runCatching { decode(event.getByteArray(0, len.toInt())) }.getOrNull()
                 if (e != null) post { events(e) }
@@ -492,11 +578,24 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
             return CoreMember(m ?: throw Core.Mismatch("the member did not start"), cbs)
         }
 
+        /** A cbb_sign_fn over sign, which signs a SHA-256 digest (ECDSA P-256, DER); a failure answers 1. */
+        internal fun signFn(sign: (ByteArray) -> ByteArray): SignFn = SignFn { _, digest, sig, sigLen ->
+            try {
+                val s = sign(digest.getByteArray(0, 32))
+                if (s.isEmpty() || s.size > MAX_SIG) return@SignFn 1
+                sig.write(0, s, 0, s.size)
+                if (Native.SIZE_T_SIZE == 8) sigLen.setLong(0, s.size.toLong()) else sigLen.setInt(0, s.size)
+                0
+            } catch (e: Exception) {
+                1
+            }
+        }
+
         /** The uncompressed point of a P-256 public key given as a SubjectPublicKeyInfo or as the point itself. */
         internal fun point(key: ByteArray): ByteArray =
             if (key.size == 65 && key[0] == 4.toByte()) key else key.copyOfRange(maxOf(0, key.size - 65), key.size)
 
-        private fun take(answer: Pointer, count: Memory): ByteArray {
+        internal fun take(answer: Pointer, count: Memory): ByteArray {
             val n = if (Native.SIZE_T_SIZE == 8) count.getLong(0) else count.getInt(0).toLong() and 0xffffffffL
             try {
                 if (n > Int.MAX_VALUE) throw Core.Mismatch("the member's answer is $n bytes long")
@@ -506,7 +605,7 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
             }
         }
 
-        private fun okOf(op: String, bytes: ByteArray): JsonObject {
+        internal fun okOf(op: String, bytes: ByteArray): JsonObject {
             val a = runCatching { Json.parseToJsonElement(bytes.decodeToString()) as JsonObject }.getOrNull()
                 ?: throw Core.Mismatch("the member's answer to $op does not read")
             (a["error"] as? JsonObject)?.let { e ->

@@ -821,9 +821,11 @@ impl Service {
             }
             let in_group = matches!(Identity::load(&self.state_dir), Ok(Some(_)));
             if !in_group || std::time::Instant::now() >= deadline || STOP.load(Ordering::SeqCst) {
-                return Err(Error::msg(
-                    "this device is in no group; run cbb new here to start one, or cbb pair to join one",
-                ));
+                return Err(Error::msg(if in_group {
+                    "this device is still starting; try again in a moment"
+                } else {
+                    "this device is in no group; run cbb new here to start one, or cbb pair to join one"
+                }));
             }
             std::thread::sleep(Duration::from_millis(20));
         }

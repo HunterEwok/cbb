@@ -792,6 +792,87 @@ func TestFFIJoinerAdmin(t *testing.T) {
 	})
 }
 
+// TestFFIPhoneTakeover: the Aurora app as an admin takes the group the
+// computer root handed to it (cbb handover), through the core's takeover
+// (cbb_member_manage): a root CA for its own admin key, the claim, and once
+// it took effect the records and certificate of the new root, which the
+// computer then lists as the group's root.
+func TestFFIPhoneTakeover(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	var h hub
+	pi := startService(t, &h, "pi")
+	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+		t.Fatal(err)
+	}
+	next, in := phoneOnLinux(t, bin, "-name", "admin phone", "-admin", "-dir", t.TempDir(), "-peer", pi.addr())
+	jc, ok := phone.ParseJoinQR(next("QR: "))
+	if !ok {
+		t.Fatal("not a join QR code")
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint, Admins: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	next("Admin CA ")
+	waitFor(t, "the admin phone connected", func() bool {
+		fmt.Fprintln(in, "PEERS")
+		return next("PEERS ") == "1"
+	})
+	manage := func(req string) map[string]any {
+		fmt.Fprintln(in, "MANAGE "+req)
+		var a map[string]any
+		got := next("MANAGED ")
+		if err := json.Unmarshal([]byte(got), &a); err != nil {
+			t.Fatalf("the answer %q: %v", got, err)
+		}
+		return a
+	}
+	ok2 := func(a map[string]any) map[string]any {
+		t.Helper()
+		o, ok := a["ok"].(map[string]any)
+		if !ok {
+			t.Fatalf("refused: %v", a)
+		}
+		return o
+	}
+
+	root, _ := ok2(manage(`{"action":"root_ca"}`))["root_ca"].(string)
+	if root == "" {
+		t.Fatal("no root CA")
+	}
+	if a := manage(`{"action":"take_handed_over","root_ca":"` + root + `"}`); a["error"] == nil {
+		t.Fatalf("the phone claimed a group nobody handed to it: %v", a)
+	}
+	if st := ok2(manage(`{"action":"finish_takeover","root_ca":"` + root + `"}`))["state"]; st != "none" {
+		t.Fatalf("a claim before claiming: %v", st)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpHandover, Name: "admin phone"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the phone holds the handover", func() bool {
+		return manage(`{"action":"take_handed_over","root_ca":"` + root + `"}`)["error"] == nil
+	})
+	done := ok2(manage(`{"action":"finish_takeover","root_ca":"` + root + `","name":"admin phone","os":"aurora"}`))
+	if done["state"] != "effective" || done["cert"] == nil {
+		t.Fatalf("finishing the takeover: %v", done)
+	}
+	waitFor(t, "the computer lists the phone as the root", func() bool {
+		for _, d := range pi.devices(t) {
+			if d.Name == "admin phone" {
+				return d.Root && d.Role == group.RolePhone
+			}
+		}
+		return false
+	})
+	for _, d := range pi.devices(t) {
+		if d.Self && d.Root {
+			t.Errorf("the computer still holds the root: %+v", d)
+		}
+	}
+}
+
 // TestFFIPhoneRoot: the Aurora app makes a group of its own, its root key
 // outside the core (cbb_group_new), and as the group's root admits a
 // computer that listens, as the app does when it scans the computer's QR
