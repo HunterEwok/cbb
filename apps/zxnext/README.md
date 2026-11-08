@@ -86,7 +86,11 @@ CD "C:/DOT"
 ```
 
 `.http` fetches `.cbb` itself into `C:/DOT`, where NextZXOS finds dot commands, so `.cbb`
-runs from any folder. `install` writes everything else in `/cbb`: it fetches the rest from
+runs from any folder. Over an earlier installation, `.cbb update` is the way (below); if
+`.http` fetches anyway, `.cbb net off` comes first. The running network holds the ESP, so
+`.http` waits for it until a reset, and the `CBB` it left half written is what
+`AUTOEXEC.BAS` then runs at power-on: the Next stops with garbage on the screen until a
+whole `CBB` is copied to `C:/DOT` on the card. `install` writes everything else in `/cbb`: it fetches the rest from
 cbb.tools (`CBB.OVL`, `CBB.DRV` and the lite member for the Pi), then copies the Pi's `cbb` over the
 UART to `/NextPi/nextpi`, where it writes a start script `cbb` that keeps the member's state
 in `/NextPi/nextpi/cbb-state` (NextPi's root is read-only). Nothing else on the card or the Pi
@@ -138,8 +142,8 @@ that fail, it says the `ERASE` and `RENAME` to type after it. The network, if it
 leaves off and asks for `.cbb net on` or a restart: starting it is the new `CBB`'s job, since the new
 driver and the Pi's new `cbb` may want what the old one does not know.
 
-Over an earlier installation: `.cbb install` asks for `.cbb net off` first while the network
-runs, and replaces only the files that differ. It installs `CBB.DRV` itself, and a driver
+Over an earlier installation: `.cbb install` stops the network while it runs, starts it
+again after, and replaces only the files that differ. It installs `CBB.DRV` itself, and a driver
 already installed, which runs from memory, it uninstalls and installs again when the file is
 new. On the Pi it stops the old `cbb service`, so the next `.cbb net on` starts the new
 one, and an old `cbb` that is the program itself, not the start script, is kept as
