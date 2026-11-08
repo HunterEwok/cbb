@@ -67,8 +67,8 @@ mobile/cbbtun/onlycbb_test.go TestPhoneHubReachesOnlyTheMemberListener D-87: the
 mobile/cbbtun/relay_test.go TestPhoneAtRelay D-87: the Go relay link is gone; TestRustPhoneRelay runs the Rust one against the Go relay
 mobile/cbbtun/relay_test.go TestPhoneAtRelayWithCredentials D-87: the Go relay link is gone; TestRustPhoneRelayCredentials runs the Rust one with the server credentials
 mobile/cbbtun/relay_test.go TestRelayBadArguments D-87: the Go relay link is gone; ffi's bad_arguments checks the Rust one
-apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt liteMember D-88: the role lite is gone; memberWithoutAdmin checks a member admitted with its caps
-core/src/admit/tests.rs the_root_admits_a_lite_member D-88: the role lite is gone; the_root_admits_a_member_with_its_caps checks a member's caps
-internal/pair/pair_test.go TestPairLite D-88: the role lite is gone; TestPairCaps checks the caps a joiner offers
-internal/service/lite_test.go TestLiteNotDialed D-88: members without dials are dialed now; TestListenDialed checks it
-member/src/discovery.rs lite_role D-88: TXT r=lite is gone; txt_roles checks r=listen and r=phone
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt liteMember D-89: the role lite is gone; memberWithoutAdmin checks a member admitted with its caps
+core/src/admit/tests.rs the_root_admits_a_lite_member D-89: the role lite is gone; the_root_admits_a_member_with_its_caps checks a member's caps
+internal/pair/pair_test.go TestPairLite D-89: the role lite is gone; TestPairCaps checks the caps a joiner offers
+internal/service/lite_test.go TestLiteNotDialed D-89: members without dials are dialed now; TestListenDialed checks it
+member/src/discovery.rs lite_role D-89: TXT r=lite is gone; txt_roles checks r=listen and r=phone

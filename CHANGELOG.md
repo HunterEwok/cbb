@@ -1305,7 +1305,7 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
-- The roles `full` and `lite` are one role, `member`, with capabilities (D-88; docs/protocol.md
+- The roles `full` and `lite` are one role, `member`, with capabilities (D-89; docs/protocol.md
   section 4, "Capabilities"): `admin` (it can hold an admin key), `dials` (it dials other
   members) and `hub` (it may be chosen as the hub), in its hello (`caps`), its device record
   and its pairing Info. Of two members that dial, the lower device ID dials and the other

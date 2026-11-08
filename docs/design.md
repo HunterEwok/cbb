@@ -1818,7 +1818,7 @@ CAs, the Devices screen, making an admin, and the root record.
 ### Members, capabilities, admins and the operating system
 
 Decided on 2026-10-24 (D-50 to D-53); the roles `full` and `lite` became one role `member`
-with capabilities on 2026-11-08 (D-88).
+with capabilities on 2026-11-08 (D-89).
 
 **The operating system is not the role.** Each device states its operating system in `os`,
 in the pairing Info, in its hello and in its device record: `linux`, `windows`, `macos`, `ios`,
