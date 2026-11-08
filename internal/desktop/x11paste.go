@@ -113,6 +113,43 @@ func (b *X11) Inject(ctx context.Context, text, method string, enter, secret boo
 	return err
 }
 
+// InjectMedia pastes images or files (connector.MediaTarget): write puts
+// them into the clipboard, then Shift+Insert through XTEST.
+func (b *X11) InjectMedia(ctx context.Context, write func() error, enter bool) error {
+	b.inj.mu.Lock()
+	defer b.inj.mu.Unlock()
+	if os.Getenv("WAYLAND_DISPLAY") != "" {
+		if b.kb == nil {
+			return &connector.Refusal{Reason: "this Wayland desktop offers no way to press keys for a paste"}
+		}
+		return keysInjectMedia(ctx, b.kb, write, enter)
+	}
+	b.inj.once.Do(func() {
+		if err := initExt(b.x, "XTEST", xtest.Init); err != nil {
+			b.inj.err = fmt.Errorf("the X server has no XTEST: %w", err)
+		}
+	})
+	if b.inj.err != nil {
+		return &connector.Refusal{Reason: "this desktop cannot press keys for a paste: " + b.inj.err.Error()}
+	}
+	if why := b.locked(connector.NoLockCheck(ctx)); why != "" {
+		return &connector.Refusal{Reason: why}
+	}
+	if err := write(); err != nil {
+		return err
+	}
+	keys, err := b.keyboard()
+	if err != nil {
+		return err
+	}
+	defer keys.release(b)
+	err = keys.press(b, ksInsert, true)
+	if err == nil && enter {
+		err = keys.press(b, ksReturn, false)
+	}
+	return err
+}
+
 // locked says why the session cannot take a paste now, or "" if it can:
 // it is locked, or the screen saver is on; noLockCheck lets it paste where
 // nothing tells whether the session is locked.

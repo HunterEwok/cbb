@@ -93,6 +93,14 @@ type Target interface {
 	Inject(ctx context.Context, text, method string, enter, secret bool) error
 }
 
+// A MediaTarget is a Target that pastes images and files too: it checks
+// that the session is not locked, lets write put them into the clipboard,
+// presses the paste keys, then Enter if enter is set. The clipboard keeps
+// them, as the group's copy they are.
+type MediaTarget interface {
+	InjectMedia(ctx context.Context, write func() error, enter bool) error
+}
+
 type keysGrant struct{}
 
 // WithKeysGrant returns ctx carrying grant, the service's grant of an
@@ -409,6 +417,15 @@ func apply(ctx context.Context, socket string, b Board, tgt Target, act Actor, c
 			}
 			return err
 		}
+		if m.Op == control.OpInject && m.Kind == control.KindMedia {
+			mu.Lock()
+			ans := injectedMedia(ctx, socket, b, tgt, cp, m, logf)
+			mu.Unlock()
+			if err := send(ans); err != nil {
+				return err
+			}
+			continue
+		}
 		if m.Op == control.OpInject {
 			if err := send(injected(ctx, tgt, m, logf)); err != nil {
 				return err
@@ -431,26 +448,16 @@ func apply(ctx context.Context, socket string, b Board, tgt Target, act Actor, c
 			stopMedia = cancel
 			text := string(m.Payload)
 			go func() {
-				got, err := fetchMedia(mctx, socket, cp)
+				got, err := fetchMedia(mctx, socket, cp, "")
 				mu.Lock()
 				defer mu.Unlock()
 				if mctx.Err() != nil {
 					return // a newer write came
 				}
-				ib, images := b.(ImageBoard)
-				fb, files := b.(FileBoard)
-				hb, html := b.(HTMLBoard)
-				switch {
-				case err != nil:
+				if err != nil {
 					err = fmt.Errorf("fetching it: %w", err)
-				case got.image != nil && images:
-					err = ib.WriteImage(*got.image, got.text)
-				case got.html != "" && html:
-					err = hb.WriteHTML(got.html, got.text)
-				case got.files != nil && files:
-					err = fb.WriteFiles(got.files)
-				default:
-					err = errors.New("this clipboard does not take the copy")
+				} else {
+					err = writeMedia(b, got)
 				}
 				if err != nil {
 					logf("cbb: the group's copy of images, files or formatted text: %v", err)
@@ -500,6 +507,37 @@ func injected(ctx context.Context, tgt Target, m *control.Message, logf func(str
 	default:
 		ans.Error, ans.Detail = "the "+tgt.Target()+" target could not paste", err.Error()
 		logf("cbb: a remote paste failed: %v", err)
+	}
+	return ans
+}
+
+// injectedMedia carries out a remote paste of the group's copy of images
+// or files that m names: it fetches the copy, and the target writes it
+// into the clipboard and presses the paste keys.
+func injectedMedia(ctx context.Context, socket string, b Board, tgt Target, cp *copies, m *control.Message, logf func(string, ...any)) *control.Message {
+	ans := &control.Message{Header: control.Header{Op: control.OpInjected, Seq: m.Seq}}
+	mt, ok := tgt.(MediaTarget)
+	if !ok || b == nil {
+		ans.Error, ans.Refused = "this paste target pastes only text, not images or files", true
+		return ans
+	}
+	ctx = WithoutLockCheck(WithKeysGrant(ctx, m.Keys), m.NoLockCheck)
+	var got media
+	err := mt.InjectMedia(ctx, func() error {
+		var err error
+		if got, err = fetchMedia(ctx, socket, cp, string(m.Payload)); err != nil {
+			return fmt.Errorf("fetching the copy: %w", err)
+		}
+		return writeMedia(b, got)
+	}, m.Enter)
+	var r *Refusal
+	switch {
+	case err == nil:
+	case errors.As(err, &r):
+		ans.Error, ans.Refused = r.Reason, true
+	default:
+		ans.Error, ans.Detail = "the "+tgt.Target()+" target could not paste the images or files", err.Error()
+		logf("cbb: a remote paste of images or files failed: %v", err)
 	}
 	return ans
 }

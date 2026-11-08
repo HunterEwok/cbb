@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"math/bits"
@@ -263,8 +264,12 @@ func decodeImage(typ string, data []byte) (image.Image, error) {
 	if cfg.Width <= 0 || cfg.Height <= 0 || n > maxImageBytes {
 		return nil, fmt.Errorf("pasteboard: an image of %d by %d pixels", cfg.Width, cfg.Height)
 	}
-	if typ == clip.TypeJPEG {
+	switch typ {
+	case clip.TypeJPEG:
 		return jpeg.Decode(bytes.NewReader(data))
+	case clip.TypeGIF:
+		// Its first frame only: image/gif stops there.
+		return gif.Decode(bytes.NewReader(data))
 	}
 	return png.Decode(bytes.NewReader(data))
 }
@@ -450,6 +455,8 @@ func decodeConfig(typ string, data []byte) (image.Config, error) {
 		return png.DecodeConfig(bytes.NewReader(data))
 	case clip.TypeJPEG:
 		return jpeg.DecodeConfig(bytes.NewReader(data))
+	case clip.TypeGIF:
+		return gif.DecodeConfig(bytes.NewReader(data))
 	}
 	return image.Config{}, fmt.Errorf("pasteboard: no image of type %s", typ)
 }

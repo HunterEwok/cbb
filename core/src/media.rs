@@ -32,7 +32,7 @@ pub const MAX_NAME: usize = 255;
 /// The largest plain-text alternative of a media event.
 pub const MAX_ALT_TEXT: usize = 256 << 10;
 
-const TYPES: [&str; 3] = ["image/png", "image/jpeg", "text/html"];
+const TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "text/html"];
 
 /// What a media event's content is.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]

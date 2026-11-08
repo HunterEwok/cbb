@@ -477,12 +477,13 @@ func manifestKinds() []genKind {
 		return pt(genMember{"type", typ}, genMember{"size", size}, genMember{"sha256", h})
 	}
 	dataParts := []genValue{
-		ok("of the three types", list(png, typed(`"image/jpeg"`, "0"), typed(`"text/html"`, "0"))),
+		ok("of the four types", list(png, typed(`"image/jpeg"`, "0"), typed(`"text/html"`, "0"), typed(`"image/gif"`, "0"))),
+		ok("of a GIF", list(typed(`"image/gif"`, "3"))),
 		bad("with an unknown member", partOf(genMember{"size", "3"}, genMember{"sha256", h}, genMember{"later", `{"a":1}`})),
 		bad("with its members out of order", list(`{"type":"image/png","size":3,"sha256":`+h+`}`)),
 		bad("with spaces", list(`{"sha256": `+h+`, "size": 3, "type": "image/png"}`)),
 		bad("empty", `[]`),
-		bad("of an unknown type", list(typed(`"image/gif"`, "3"))),
+		bad("of an unknown type", list(typed(`"image/webp"`, "3"))),
 		bad("of a type twice", list(png, typed(`"image/png"`, "0"))),
 		bad("of a part without a hash", partOf(genMember{"size", "3"})),
 		bad("of a hash of 31 bytes", partOf(genMember{"size", "3"}, genMember{"sha256", genB64(31, 7)})),
@@ -713,6 +714,17 @@ func makeGenVectors() genVectors {
 	v.Commands = append(v.Commands,
 		paste("paste", 1<<20, true), paste("paste", 1<<20+1, false),
 		paste("type", 4<<10, true), paste("type", 4<<10+1, false))
+	// A paste of a copy of images or files names the copy's event ID in
+	// its text and goes only through the paste keys.
+	media := func(name, mode, text string, valid bool) genVector {
+		return genVector{Name: "paste: media " + name, Rule: "commands/paste/kind", Valid: valid,
+			Body: []byte(`{"v":1,"type":"paste","group":` + genGroup + `,"by":` + genOther + `,"to":` + genDev + `,"id":` + genID +
+				`,"time_ms":1000,"expires_ms":20000,"mode":"` + mode + `","kind":"media","text":` + text + `}`)}
+	}
+	v.Commands = append(v.Commands,
+		media("of a copy", "paste", genID, true),
+		media("typed", "type", genID, false), media("of a text", "paste", `"hello"`, false),
+		media("of an ID in upper case", "paste", strings.ToUpper(genID), false), media("of no copy", "paste", `""`, false))
 	for _, k := range manifestKinds() {
 		v.Manifests = append(v.Manifests, genKindVectors(k)...)
 	}
