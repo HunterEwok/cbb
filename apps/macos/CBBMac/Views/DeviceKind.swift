@@ -48,7 +48,7 @@ extension Control.Device {
         if let form, let k = DeviceKind(rawValue: form) { return k }
         return switch (role, os) {
         case ("phone", _): .phone
-        case ("lite", _): .board
+        case (_, "none"): .board
         case ("watch", _): .watch
         case (_, "macos"): .laptop
         case (_, "ios"), (_, "android"), (_, "aurora"), (_, "sailfish"): .phone
@@ -92,9 +92,8 @@ extension Control.Device {
     var roleTitle: LocalizedStringKey {
         switch role {
         case "phone": "Phone app"
-        case "lite": "Lite member"
         case "watch": "Watch"
-        default: "Full member"
+        default: "Member"
         }
     }
 }

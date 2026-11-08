@@ -113,7 +113,7 @@ public final class CoreMember: @unchecked Sendable {
         public var mutedForMS: Int64
         public var actions: [String]
         public var info: Member.DeviceInfo?
-        /// The admin key a full member that is no admin yet offers, DER.
+        /// The admin key a member that is no admin yet offers, DER.
         public var adminKey: Data?
         /// The tunnel key and preshared key it offers the group's hubs.
         public var tunnelKey: Data?
@@ -131,7 +131,7 @@ public final class CoreMember: @unchecked Sendable {
             case adminKey = "admin_key", tunnelKey = "tunnel_key", tunnelPSK = "tunnel_psk", reach, recordsOnly = "records_only", features, chain
         }
 
-        public init(device: String, name: String = "", role: String = "full", os: String = "", keyStore: String = "", mode: String = "",
+        public init(device: String, name: String = "", role: String = "member", os: String = "", keyStore: String = "", mode: String = "",
                     muted: Bool = false, mutedForMS: Int64 = 0, actions: [String] = [], info: Member.DeviceInfo? = nil, adminKey: Data? = nil,
                     tunnelKey: Data? = nil, tunnelPSK: Data? = nil, reach: [String] = [], recordsOnly: Bool = false, features: [String] = [],
                     chain: [Data] = []) {
@@ -588,7 +588,7 @@ public final class CoreMember: @unchecked Sendable {
         return try run("send_cert", A(to: to, cert: cert, issuer: issuer), as: Sent.self).sent
     }
 
-    /// Sends a full member the admin CA for the admin key its hello offers.
+    /// Sends a member the admin CA for the admin key its hello offers.
     @discardableResult
     public func sendAdminCA(to: String, ca: Data) throws -> Bool {
         struct A: Encodable { var to: String, ca: Data }

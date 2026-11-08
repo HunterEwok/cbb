@@ -208,7 +208,7 @@ object CorePairing {
         }
     }
 
-    /** A device the core admitted: its ID, name, system, role ("full", "lite" or "phone"), whether it became an admin, and whether it said it stored its identity. */
+    /** A device the core admitted: its ID, name, system, role ("member" or "phone"), whether it became an admin, and whether it said it stored its identity. */
     data class Admitted(val device: String, val name: String, val os: String, val role: String, val admin: Boolean, val confirmed: Boolean)
 
     /**
@@ -288,7 +288,7 @@ object CorePairing {
                 d.optString("device") ?: "",
                 d.optString("name") ?: "",
                 d.optString("os") ?: "",
-                d.optString("role") ?: "full",
+                d.optString("role") ?: "member",
                 d.optBool("admin") ?: false,
                 confirmed,
             )

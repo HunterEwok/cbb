@@ -116,7 +116,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val name: String,
         /** Connected to this phone, or to a computer that is (throughHub). */
         val online: Boolean,
-        val role: String = "full",
+        val role: String = "member",
+        /** What a member can do: "admin", "dials" and "hub". */
+        val caps: List<String> = emptyList(),
         /** Its system: linux, windows, macos, ios, android or none; null if unknown. */
         val os: String? = null,
         val isSelf: Boolean = false,
@@ -157,7 +159,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val muted: Hold? = null,
         /** This phone takes no copies from the group for now; only on its own entry. */
         val syncOff: Hold? = null,
-    )
+    ) {
+        /** Whether it is a member with the capability c. */
+        fun can(c: String): Boolean = role == "member" && c in caps
+    }
 
     /** A mute or a pause that holds: until when in Unix milliseconds, null for until it is lifted. */
     data class Hold(val until: Long?) {
@@ -398,9 +403,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             val selfHub = phoneHub?.isOn == true
             return g.devices.map {
                 Device(
-                    id = it.id, name = it.name, online = it.id == g.device || it.id in online || it.id in reached, role = it.role, os = it.os, isSelf = it.id == g.device,
+                    id = it.id, name = it.name, online = it.id == g.device || it.id in online || it.id in reached, role = it.role, caps = it.caps, os = it.os, isSelf = it.id == g.device,
                     admin = it.admin || it.id == root, isRoot = it.id == root,
-                    canMakeAdmin = g.isRoot && !it.admin && !it.frozen && it.role == "full" && offers[it.id] != null,
+                    canMakeAdmin = g.isRoot && !it.admin && !it.frozen && it.can("admin") && offers[it.id] != null,
                     keysInFile = KitRecords.storeOf(stores[it.id] ?: it.store, it.role) == KitRecords.FILE,
                     rootless = KitRecords.storeOf(stores[it.id] ?: it.store, it.role) == KitRecords.ROOTLESS,
                     frozen = it.frozen,
@@ -1766,7 +1771,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     val suggestedHub: Device?
         get() {
             if (phoneHub?.isOn != true) return null
-            return computers.firstOrNull { it.online && !it.throughHub && it.role == "full" && it.device?.form in ALWAYS_ON && (it.admin || it.canMakeAdmin) }
+            return computers.firstOrNull { it.online && !it.throughHub && it.can("hub") && it.device?.form in ALWAYS_ON && (it.admin || it.canMakeAdmin) }
         }
 
     /**
@@ -1781,14 +1786,14 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val peer = n?.let { runCatching { it.peers() }.getOrNull() }?.firstOrNull { it.device == id }
         val key = peer?.adminKey ?: throw Failure(Failure.Kind.NOT_ADMIN)
         val store = peer.keyStore.ifEmpty { null }
-        if (KitRecords.storeOf(store, "full") == KitRecords.ROOTLESS) throw PhoneGroup.Rootless()
-        if (KitRecords.storeOf(store, "full") == KitRecords.FILE && !allowFileKey) throw PhoneGroup.FileKey()
+        if (KitRecords.storeOf(store, "member") == KitRecords.ROOTLESS) throw PhoneGroup.Rootless()
+        if (KitRecords.storeOf(store, "member") == KitRecords.FILE && !allowFileKey) throw PhoneGroup.FileKey()
         val root = caSigner(R.string.reason_make_admin)
         val g = copyOfState() ?: return
         val rs = withContext(Dispatchers.IO) {
             // The user's consent to a key in a file, after the dialog's
             // warning, lets the group take keys in files too.
-            val level = if (KitRecords.storeOf(store, "full") == KitRecords.FILE && allowFileKey && g.keyLevel != KitRecords.LEVEL_FILES) {
+            val level = if (KitRecords.storeOf(store, "member") == KitRecords.FILE && allowFileKey && g.keyLevel != KitRecords.LEVEL_FILES) {
                 listOf(g.setKeyLevel(KitRecords.LEVEL_FILES, root, Instant.now()))
             } else {
                 emptyList()

@@ -32,7 +32,7 @@ class RecordsTest {
 
         init {
             g.computers.add(PhoneGroup.Computer(pc, "pi", "linux", cert, now))
-            g.record(pc, "pi", "full", Records.keyHashOfCert(cert), ca, now)
+            g.record(pc, "pi", "member", Records.keyHashOfCert(cert), ca, now, caps = Records.CAPS)
         }
     }
 
@@ -66,7 +66,7 @@ class RecordsTest {
         val x = Group(now)
         val g = x.g
         val second = GroupCertificates.member(x.pc, SoftwareSigner().publicKeyDER, g.groupCA, x.ca, now.plusSeconds(1))
-        g.record(x.pc, "pi", "full", Records.keyHashOfCert(second), x.ca, now.plusSeconds(1))
+        g.record(x.pc, "pi", "member", Records.keyHashOfCert(second), x.ca, now.plusSeconds(1), caps = Records.CAPS)
         assertTrue(g.records.knows(x.pc))
         assertEquals(2, g.devices.first { it.id == x.pc }.keys.size)
         g.revoke(x.pc, x.ca, now.plusSeconds(2))

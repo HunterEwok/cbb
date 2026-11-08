@@ -10,7 +10,7 @@
 #   sh tools/e2e/upgrade.sh path/to/old/cbb path/to/new/cbb [path/to/cli]
 #
 # With path/to/cli, the new version is the Rust service (member/), run as a
-# computer's (-full) with cbb-helper when it is beside it, and every command
+# computer's with cbb-helper when it is beside it, and every command
 # runs path/to/cli, the Go cbb, against the service's socket: the move of
 # the computers from the Go service to the Rust one, on the same state.
 #
@@ -72,17 +72,16 @@ eventually() {
 # start runs a member on a version, with its state in its own volume.
 # The commands run the member's own binary, or path/to/cli when it is given.
 start() { # member, binary
-	flags='' mounts="-v $2:/cb/cbb:ro -v ${cli:-$2}:/cb/cli:ro"
+	mounts="-v $2:/cb/cbb:ro -v ${cli:-$2}:/cb/cli:ro"
 	if [ -n "$cli" ] && [ "$2" = "$new" ]; then
-		flags=-full
 		if [ -f "$(dirname "$new")/cbb-helper" ]; then
 			mounts="$mounts -v $(dirname "$new")/cbb-helper:/cb/cbb-helper:ro"
 		fi
 	fi
-	# shellcheck disable=SC2086 # several flags
+	# shellcheck disable=SC2086 # several mounts
 	docker run -d --name "$run-$1" --hostname "host-$1" --network "$net" \
 		-e CBB_SOCKET=/s/c.sock -v "$run-$1:/s" $mounts "$image" \
-		/cb/cbb service $flags -state /s -socket /s/c.sock >/dev/null
+		/cb/cbb service -state /s -socket /s/c.sock >/dev/null
 	eventually "$1 starts" cb "$1" status
 }
 

@@ -43,7 +43,7 @@ enum class DeviceKind(val form: String, @StringRes val title: Int) {
 val LiveGroup.Device.kind: DeviceKind
     get() = DeviceKind.of(device?.form) ?: when {
         role == "phone" -> DeviceKind.PHONE
-        role == "lite" -> DeviceKind.BOARD
+        os == "none" -> DeviceKind.BOARD
         role == "watch" -> DeviceKind.WATCH
         os == "macos" -> DeviceKind.LAPTOP
         Pairing.Info.isPhone(os ?: "") -> DeviceKind.PHONE

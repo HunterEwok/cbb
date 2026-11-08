@@ -126,7 +126,8 @@ func (w *world) admin(name, root string) {
 }
 
 // device signs a device record for device name by signer; with powers it
-// makes name an admin (the admin key made by admin()).
+// makes name an admin (the admin key made by admin()). The role "member"
+// is a member with every cap, "board" one that only dials.
 func (w *world) device(signer, name, role string, powers, commands []string, holdsRoot bool) authority.Record {
 	if _, ok := w.members[name]; !ok {
 		w.members[name] = hashOf(w.t, &newKey(w.t).PublicKey)
@@ -136,6 +137,12 @@ func (w *world) device(signer, name, role string, powers, commands []string, hol
 	}
 	k := w.members[name]
 	b := authority.Body{Type: authority.TypeDevice, Device: w.ids[name], Name: name, Role: role, Key: &k, HoldsRoot: holdsRoot}
+	switch role {
+	case authority.RoleMember:
+		b.Caps = authority.Caps
+	case "board":
+		b.Role, b.Caps = authority.RoleMember, []string{authority.CapDials}
+	}
 	if powers != nil {
 		a := hashOf(w.t, &w.keys[name].PublicKey)
 		b.Admin, b.Powers, b.Commands = &a, powers, commands
@@ -202,8 +209,8 @@ func revoke(keys ...authority.Hash) authority.Body {
 func TestEvaluateBasic(t *testing.T) {
 	w := newWorld(t)
 	w.makeAdmin("A", "phone", phonePowers)
-	w.makeAdmin("C", "full", computerPowers)
-	w.device("C", "laptop", "full", nil, nil, false)
+	w.makeAdmin("C", "member", computerPowers)
+	w.device("C", "laptop", "member", nil, nil, false)
 	s := w.evalAll(nil)
 	if s.Stop != "none" || s.RootDevice != w.ids["rootphone"] || len(s.Roots) != 1 {
 		t.Fatalf("state %+v", s)
@@ -218,10 +225,10 @@ func TestEvaluateBasic(t *testing.T) {
 
 func TestRootRemovalCutsAdmin(t *testing.T) {
 	w := newWorld(t)
-	w.makeAdmin("C", "full", computerPowers)
-	w.device("C", "before", "full", nil, nil, false)
+	w.makeAdmin("C", "member", computerPowers)
+	w.device("C", "before", "member", nil, nil, false)
 	w.sign("remove C", "root", revoke(w.adminKey("C"), w.members["C"]), nil)
-	w.device("C", "after", "full", nil, nil, false)
+	w.device("C", "after", "member", nil, nil, false)
 	s := w.evalAll(nil)
 	if findDevice(s, w.ids["before"]) == nil {
 		t.Error("the device C admitted before its removal is gone")
@@ -651,7 +658,7 @@ func TestDeviceSeal(t *testing.T) {
 	w.members["L"], w.ids["L"] = k, string(group.NewDeviceID())
 	first, second := sealKey(t), sealKey(t)
 	body := func(s []byte) authority.Body {
-		return authority.Body{Type: authority.TypeDevice, Device: w.ids["L"], Name: "L", Role: "full", Key: &k, Seal: s}
+		return authority.Body{Type: authority.TypeDevice, Device: w.ids["L"], Name: "L", Role: "member", Caps: authority.Caps, Key: &k, Seal: s}
 	}
 	w.sign("device L with a seal", "A", body(first), nil)
 	if got := sealOf(w.evalAll(nil), "L"); !bytes.Equal(got, first) {
@@ -671,11 +678,12 @@ func TestDeviceSeal(t *testing.T) {
 // record with forward_only, which only the root or an admin with both admit
 // and hub may sign, and the state keeps the flag of the record that counts
 // (a root's beats an admin's);
-// another role, an admin or the root's own device cannot have it.
+// a phone, a member without the cap hub, an admin or the root's own device
+// cannot have it.
 func TestForwardOnly(t *testing.T) {
 	w := newWorld(t)
-	w.makeAdmin("A", "full", computerPowers)
-	w.makeAdmin("D", "full", []string{authority.PowerAdmit})
+	w.makeAdmin("A", "member", computerPowers)
+	w.makeAdmin("D", "member", []string{authority.PowerAdmit})
 	flagOf := func(s *authority.State, name string) bool {
 		for _, d := range s.Devices {
 			if d.Device == w.ids[name] {
@@ -690,38 +698,45 @@ func TestForwardOnly(t *testing.T) {
 			w.members[name], w.ids[name] = hashOf(t, &newKey(t).PublicKey), string(group.NewDeviceID())
 		}
 		k := w.members[name]
-		return authority.Body{Type: authority.TypeDevice, Device: w.ids[name], Name: name, Role: role, Key: &k, ForwardOnly: forwardOnly}
+		b := authority.Body{Type: authority.TypeDevice, Device: w.ids[name], Name: name, Role: role, Key: &k, ForwardOnly: forwardOnly}
+		switch role {
+		case authority.RoleMember:
+			b.Caps = authority.Caps
+		case "board":
+			b.Role, b.Caps = authority.RoleMember, []string{authority.CapDials}
+		}
+		return b
 	}
-	first := body("pi", "full", true)
+	first := body("pi", "member", true)
 	first.TimeMS = 10
 	w.sign("pi passes copies on, by A", "A", first, nil)
 	if !flagOf(w.evalAll(nil), "pi") {
 		t.Fatal("the state does not keep forward_only")
 	}
-	byD := w.sign("vps passes copies on, by D", "D", body("vps", "full", true), nil)
+	byD := w.sign("vps passes copies on, by D", "D", body("vps", "member", true), nil)
 	s := w.evalAll(nil)
 	if why := ignoredWhy(s, byD.ID()); why != authority.WhyPower {
 		t.Fatalf("an admin without hub marked a device forward_only, ignored for %q", why)
 	}
-	plain := body("pi", "full", false)
+	plain := body("pi", "member", false)
 	plain.TimeMS = 20
 	again := w.sign("pi reads copies again, by root", "root", plain, nil)
 	if s := w.evalAll(nil); flagOf(s, "pi") {
 		t.Fatalf("the newest record's flag does not count (%q)", ignoredWhy(s, again.ID()))
 	}
-	last := body("pi", "full", true)
+	last := body("pi", "member", true)
 	last.TimeMS = 30
 	w.sign("pi passes copies on again, by root", "root", last, nil)
 	if !flagOf(w.evalAll(nil), "pi") {
 		t.Fatal("the root's record does not count")
 	}
-	for _, b := range []authority.Body{body("lite", "lite", true), body("phone", "phone", true)} {
+	for _, b := range []authority.Body{body("board", "board", true), body("phone", "phone", true)} {
 		b.Group, b.Signer, b.Seq = tag, w.adminKey("A"), 1
 		if _, err := b.Encode(); err == nil {
-			t.Errorf("forward_only with role %s checks", b.Role)
+			t.Errorf("forward_only with role %s and caps %q checks", b.Role, b.Caps)
 		}
 	}
-	admin := body("A", "full", true)
+	admin := body("A", "member", true)
 	a := w.adminKey("A")
 	admin.Admin, admin.Powers = &a, computerPowers
 	if _, err := admin.Encode(); err == nil {
@@ -826,8 +841,8 @@ func TestCheckpointEdges(t *testing.T) {
 	c := w.claim("B", "R2", nil)
 	first := map[authority.Hash]int64{c.ID(): 0}
 	w.now = authority.DefaultDelay
-	w.device("R2", "D9", "full", nil, nil, false)
-	w.device("R2", "D8", "full", nil, nil, false) // the new root's head
+	w.device("R2", "D9", "member", nil, nil, false)
+	w.device("R2", "D8", "member", nil, nil, false) // the new root's head
 	if s := w.evalAll(first); len(s.Roots) != 2 {
 		t.Fatalf("the claim should take effect: %s", mustEncode(t, s))
 	}
@@ -863,7 +878,7 @@ func TestCheckpointEdges(t *testing.T) {
 	// The root voids its own checkpoint: it no longer counts, and what it
 	// dropped is back.
 	v := newWorld(t)
-	v.device("root", "D9", "full", nil, nil, false)
+	v.device("root", "D9", "member", nil, nil, false)
 	vcp := v.checkpoint("root", v.byName["device rootphone by root"])
 	v.sign("void", "root", authority.Body{Type: authority.TypeResolve, Records: []authority.Hash{vcp.ID()}}, nil)
 	if s := v.evalAll(nil); findDevice(s, v.ids["D9"]) == nil || s.Checkpoint != nil {
@@ -873,7 +888,7 @@ func TestCheckpointEdges(t *testing.T) {
 	// Two checkpoints of one seq are two histories of the root: neither
 	// counts, in any order of the set.
 	f := newWorld(t)
-	f.device("root", "D9", "full", nil, nil, false)
+	f.device("root", "D9", "member", nil, nil, false)
 	g := f.fork()
 	f.checkpoint("root", f.byName["device rootphone by root"])
 	g.checkpoint("root", g.byName["device rootphone by root"], g.byName["device D9 by root"])
@@ -890,8 +905,8 @@ func TestCheckpoint(t *testing.T) {
 	w := newWorld(t)
 	w.makeAdmin("A", "phone", phonePowers)
 	w.makeAdmin("B", "phone", phonePowers)
-	w.device("A", "D1", "full", nil, nil, false)
-	d1 := w.device("A", "D1", "full", nil, nil, false)
+	w.device("A", "D1", "member", nil, nil, false)
+	d1 := w.device("A", "D1", "member", nil, nil, false)
 	w.sign("settings", "root", authority.Body{Type: authority.TypeSettings, TakeoverDelayMS: ptr(int64(1000))}, nil)
 	settings := w.sign("settings 2", "root", authority.Body{Type: authority.TypeSettings, TakeoverDelayMS: ptr(int64(2000))}, nil)
 	c := w.claim("B", "R2", nil)
@@ -1013,10 +1028,10 @@ func TestChainOfClaims(t *testing.T) {
 // removal: the device does not count, the ones it admitted before do.
 func TestRemovedAdminDevice(t *testing.T) {
 	w := newWorld(t)
-	w.makeAdmin("C", "full", computerPowers)
-	w.device("C", "before", "full", nil, nil, false)
+	w.makeAdmin("C", "member", computerPowers)
+	w.device("C", "before", "member", nil, nil, false)
 	w.sign("remove C", "root", revoke(w.adminKey("C")), nil)
-	w.device("C", "after", "full", nil, nil, false)
+	w.device("C", "after", "member", nil, nil, false)
 	s := w.evalAll(nil)
 	if findDevice(s, w.ids["before"]) == nil || findDevice(s, w.ids["after"]) != nil || !revoked(s, w.adminKey("C")) {
 		t.Fatalf("wrong devices after the removal: %s", mustEncode(t, s))
@@ -1027,8 +1042,8 @@ func TestRemovedAdminDevice(t *testing.T) {
 // the order of the copies does not matter.
 func TestSameRecordTwoCAs(t *testing.T) {
 	w := newWorld(t)
-	w.makeAdmin("C", "full", computerPowers)
-	r := w.device("C", "laptop", "full", nil, nil, false)
+	w.makeAdmin("C", "member", computerPowers)
+	r := w.device("C", "laptop", "member", nil, nil, false)
 	w.admin("C", "root")
 	again := r
 	again.Chain = [][]byte{w.cas["C"].Raw}
@@ -1040,13 +1055,13 @@ func TestSameRecordTwoCAs(t *testing.T) {
 
 func TestTwoHistories(t *testing.T) {
 	w := newWorld(t)
-	w.makeAdmin("C", "full", computerPowers)
-	w.device("C", "early", "full", nil, nil, false)
+	w.makeAdmin("C", "member", computerPowers)
+	w.device("C", "early", "member", nil, nil, false)
 	h := w.adminKey("C")
 	seq, last := w.seq[h], w.last[h]
-	w.device("C", "left", "full", nil, nil, false)
+	w.device("C", "left", "member", nil, nil, false)
 	w.seq[h], w.last[h] = seq, last
-	w.device("C", "right", "full", nil, nil, false)
+	w.device("C", "right", "member", nil, nil, false)
 	s := w.evalAll(nil)
 	if s.Stop != "secrets" {
 		t.Fatalf("two histories of an admin should stop secrets: %s", mustEncode(t, s))
@@ -1068,9 +1083,9 @@ func TestRootTwoHistories(t *testing.T) {
 	w := newWorld(t)
 	h := w.signerHash("root")
 	seq, last := w.seq[h], w.last[h]
-	w.device("root", "left", "full", nil, nil, false)
+	w.device("root", "left", "member", nil, nil, false)
 	w.seq[h], w.last[h] = seq, last
-	w.device("root", "right", "full", nil, nil, false)
+	w.device("root", "right", "member", nil, nil, false)
 	if s := w.evalAll(nil); s.Stop != "full" {
 		t.Fatalf("two histories of the root should stop the group: %s", mustEncode(t, s))
 	}
@@ -1083,10 +1098,10 @@ func TestRootTwoHistories(t *testing.T) {
 func TestFreezeAndThaw(t *testing.T) {
 	w := newWorld(t)
 	w.makeAdmin("A", "phone", phonePowers)
-	w.makeAdmin("C", "full", computerPowers)
-	w.makeAdmin("D", "full", computerPowers)
+	w.makeAdmin("C", "member", computerPowers)
+	w.makeAdmin("D", "member", computerPowers)
 	w.sign("C freezes D", "C", authority.Body{Type: authority.TypeFreeze, Keys: []authority.Hash{w.adminKey("D")}}, nil)
-	w.device("D", "late", "full", nil, nil, false)
+	w.device("D", "late", "member", nil, nil, false)
 	s := w.evalAll(nil)
 	if d := findDevice(s, w.ids["D"]); d == nil || !d.Frozen || findDevice(s, w.ids["late"]) != nil {
 		t.Fatalf("D should be frozen and its later record not count: %s", mustEncode(t, s))
@@ -1100,8 +1115,8 @@ func TestFreezeAndThaw(t *testing.T) {
 
 func TestFreezesCross(t *testing.T) {
 	w := newWorld(t)
-	w.makeAdmin("C", "full", computerPowers)
-	w.makeAdmin("D", "full", computerPowers)
+	w.makeAdmin("C", "member", computerPowers)
+	w.makeAdmin("D", "member", computerPowers)
 	before := w.snapshot()
 	w.sign("C freezes D", "C", authority.Body{Type: authority.TypeFreeze, Keys: []authority.Hash{w.adminKey("D")}}, before)
 	w.sign("D freezes C", "D", authority.Body{Type: authority.TypeFreeze, Keys: []authority.Hash{w.adminKey("C")}}, before)
@@ -1113,7 +1128,7 @@ func TestFreezesCross(t *testing.T) {
 func TestPowers(t *testing.T) {
 	w := newWorld(t)
 	w.makeAdmin("A", "phone", phonePowers)
-	w.makeAdmin("C", "full", computerPowers)
+	w.makeAdmin("C", "member", computerPowers)
 	w.sign("C removes A", "C", revoke(w.adminKey("A")), nil)
 	w.sign("C freezes A", "C", authority.Body{Type: authority.TypeFreeze, Keys: []authority.Hash{w.adminKey("A")}}, nil)
 	w.sign("C removes the root's device", "C", revoke(w.members["rootphone"]), nil)
@@ -1149,7 +1164,7 @@ func TestRandomOrder(t *testing.T) {
 			if i < 2 {
 				w.makeAdmin(n, "phone", phonePowers)
 			} else {
-				w.makeAdmin(n, "full", computerPowers)
+				w.makeAdmin(n, "member", computerPowers)
 			}
 		}
 		for step := 0; step < 6; step++ {
@@ -1165,7 +1180,7 @@ func TestRandomOrder(t *testing.T) {
 			case 1:
 				w.sign(fmt.Sprint("f", trial, step), by, authority.Body{Type: authority.TypeFreeze, Keys: []authority.Hash{w.adminKey(target)}}, seen)
 			case 2:
-				w.device(by, fmt.Sprint("d", trial, step), "full", nil, nil, false)
+				w.device(by, fmt.Sprint("d", trial, step), "member", nil, nil, false)
 			case 3:
 				w.claim(by, fmt.Sprint("q", trial, step), seen)
 			}

@@ -244,7 +244,7 @@ func deviceRecords(t *testing.T, ca *group.CA, n int) []group.Record {
 		d := newDevice(t, ca)
 		kh := group.KeyHashOf(d.cert.Leaf)
 		rec := grouptest.Sign(t, group.RecordBody{Type: group.RecordDevice, Group: tag, TimeMS: time.Now().UnixMilli(),
-			Device: d.id, Name: "device", Role: group.RoleFull, Key: &kh}, ca.Key)
+			Device: d.id, Name: "device", Role: group.RoleMember, Caps: group.AllCaps, Key: &kh}, ca.Key)
 		listedDevices.Lock()
 		listedDevices.dev[rec.ID()] = d
 		listedDevices.Unlock()

@@ -61,7 +61,7 @@ func TestPairInvite(t *testing.T) {
 					answer(c, control.Message{Header: control.Header{Fingerprint: "abcd"}})
 					answer(c, control.Message{Header: control.Header{Done: true}})
 				case control.OpStatus:
-					st := &control.Status{Role: "full", Group: in.Group, Away: &control.Away{HubDevice: in.Hub, Allow: tc.allow}}
+					st := &control.Status{Role: "member", Group: in.Group, Away: &control.Away{HubDevice: in.Hub, Allow: tc.allow}}
 					answer(c, control.Message{Header: control.Header{Status: st, Done: true}})
 				}
 			})
@@ -93,7 +93,7 @@ func TestPairInvite(t *testing.T) {
 // the hub only at home.
 func TestGlobalOffAway(t *testing.T) {
 	got := fakeHandler(t, func(m *control.Message, _ *control.Reader, c net.Conn) {
-		st := &control.Status{Role: "full", Group: "0f1e2d3c4b5a6978", Away: &control.Away{HubDevice: "deck", Through: true}}
+		st := &control.Status{Role: "member", Group: "0f1e2d3c4b5a6978", Away: &control.Away{HubDevice: "deck", Through: true}}
 		answer(c, control.Message{Header: control.Header{Status: st, Done: true}})
 	})
 	var stdout, stderr bytes.Buffer

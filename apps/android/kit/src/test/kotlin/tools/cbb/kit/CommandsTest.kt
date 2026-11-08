@@ -137,9 +137,9 @@ class CommandsTest {
             val e = Member.encode(m)
             assertEquals(m, Member.decode(e.copyOfRange(4, e.size)))
         }
-        val h = Member.decode("""{"t":"hello","role":"full","hello":{"wall_ms":1,"mode":"receive"}}""".toByteArray()) as Member.Message.Hello
+        val h = Member.decode("""{"t":"hello","role":"member","hello":{"wall_ms":1,"mode":"receive"}}""".toByteArray()) as Member.Message.Hello
         assertEquals("receive", h.hello.mode)
-        val odd = Member.decode("""{"t":"hello","role":"full","hello":{"wall_ms":1,"mode":"everything"}}""".toByteArray()) as Member.Message.Hello
+        val odd = Member.decode("""{"t":"hello","role":"member","hello":{"wall_ms":1,"mode":"everything"}}""".toByteArray()) as Member.Message.Hello
         assertNull(odd.hello.mode)
     }
 
@@ -360,7 +360,7 @@ class CommandsTest {
         assertEquals(Member.Message.Hello(Member.Role.PHONE, hello), back)
         val none = String(Member.encode(Member.Message.Hello(Member.Role.PHONE, Member.Hello(wallMS = 1))).let { it.copyOfRange(4, it.size) })
         assertTrue("muted" !in none)
-        val long = Member.decode("""{"t":"hello","role":"full","hello":{"wall_ms":1,"muted":true,"muted_for_ms":99999999999}}""".toByteArray())
+        val long = Member.decode("""{"t":"hello","role":"member","hello":{"wall_ms":1,"muted":true,"muted_for_ms":99999999999}}""".toByteArray())
         val got = (long as Member.Message.Hello).hello
         assertTrue(got.muted)
         assertEquals(Commands.MAX_MUTE_MS, got.mutedForMS)

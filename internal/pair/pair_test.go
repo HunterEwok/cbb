@@ -19,6 +19,7 @@ import (
 	"math/big"
 	"net"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -197,25 +198,32 @@ func TestPairMac(t *testing.T) {
 	}
 }
 
-// A lite member is a Linux device that never gets the CA keys, even from an
-// admin of a group a computer created.
-func TestPairLite(t *testing.T) {
+// A member that offers only some caps never gets the CA keys either, and
+// its caps come out of the window as it offered them.
+func TestPairCaps(t *testing.T) {
 	f := newFixture(t)
 	j := newJoiner(t, "linux")
-	j.Info.Role = RoleLite
+	j.Info.Caps = []string{group.CapDials}
 	out := f.attempt(t, j, f.code, nil)
 	if out.joinErr != nil || out.serveErr != nil {
 		t.Fatalf("join: %v; serve: %v", out.joinErr, out.serveErr)
 	}
 	if id := out.id; id.IsRoot() || id.GroupCA.Key != nil {
-		t.Error("a lite member got CA keys")
+		t.Error("a member got CA keys")
 	}
 	res, err := f.window.Result()
-	if err != nil || res.Info.Role != RoleLite {
+	if err != nil || !slices.Equal(res.Info.Caps, []string{group.CapDials}) {
 		t.Errorf("Result = %+v, %v", res, err)
 	}
-	if err := (Info{Name: "x", OS: "linux", Role: "router"}).check(); err == nil {
-		t.Error("an unknown role passed the check")
+	for _, bad := range []Info{
+		{Name: "x", OS: "linux", Caps: []string{"router"}},
+		{Name: "x", OS: "linux", Caps: []string{group.CapHub, group.CapDials}},
+		{Name: "x", OS: "linux", Caps: []string{group.CapDials, group.CapDials}},
+		{Name: "x", OS: "ios", Caps: []string{group.CapDials}},
+	} {
+		if err := bad.check(); err == nil {
+			t.Errorf("caps %q from %s passed the check", bad.Caps, bad.OS)
+		}
 	}
 }
 
@@ -893,7 +901,7 @@ func TestCodes(t *testing.T) {
 }
 
 func TestInfo(t *testing.T) {
-	for _, bad := range []Info{{Name: "", OS: "linux"}, {Name: "x", OS: "darwin"}, {Name: "x", OS: "none"}, {Name: strings.Repeat("x", 65), OS: "linux"},
+	for _, bad := range []Info{{Name: "", OS: "linux"}, {Name: "x", OS: "darwin"}, {Name: "x", OS: "none", Caps: []string{"hub", "dials"}}, {Name: strings.Repeat("x", 65), OS: "linux"},
 		{Name: "a\nb", OS: "linux"}, {Name: "\xff", OS: "macos"}, {Name: "x", OS: "linux", Seal: []byte{1, 2, 3}}} {
 		if _, err := NewJoiner(bad); err == nil {
 			t.Errorf("NewJoiner(%+v) succeeded", bad)

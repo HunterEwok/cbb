@@ -154,11 +154,14 @@ impl Away {
         if d.id == self.me.as_str() {
             return Err(Error::msg("-on names this device; cbb global hub makes it a hub here"));
         }
-        if d.role != "full" {
+        if d.role == "phone" {
             return Err(Error::msg(format!(
-                "{} is no computer: a phone is the hub while its app is open (This phone as the hub there), and a lite member or a watch is never one",
+                "{} is a phone: a phone is the hub while its app is open (This phone as the hub there)",
                 d.name
             )));
+        }
+        if !d.can(cbb_core::authority::CAP_HUB) {
+            return Err(Error::msg(format!("{} cannot be a hub: only a member with the cap hub can", d.name)));
         }
         if forward_only && d.admin {
             return Err(Error::msg(format!(

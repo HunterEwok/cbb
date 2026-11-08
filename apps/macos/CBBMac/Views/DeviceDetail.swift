@@ -150,11 +150,11 @@ struct DeviceDetail: View {
     }
 
     /// The house: this Mac's own sync, or, on an admin, another computer's
-    /// that is online; the phones and lite members refuse.
+    /// that is online; the phones refuse.
     @ViewBuilder private func syncCard(_ d: Control.Device) -> some View {
         if d.isSelf || d.mode != nil {
             let on = d.isSelf ? !model.syncOff : d.mode != "own"
-            let mayTurn = d.isSelf || (model.isAdmin && d.online && d.role == "full")
+            let mayTurn = d.isSelf || (model.isAdmin && d.online && d.role == "member")
             Toggle(isOn: Binding(get: { on }, set: { new in Task { await model.setSync(new, on: d.isSelf ? nil : d.id) } })) {
                 Label { Text("Sync") } icon: { Image(systemName: on ? "house.fill" : "house") }
             }
@@ -277,9 +277,9 @@ struct DeviceDetail: View {
     }
 
     /// Whether this Mac, an admin, can make d a hub that only passes the
-    /// copies on: another computer that is no admin and not rootless.
+    /// copies on: another member that may be a hub, is no admin and not rootless.
     private func mayPassOn(_ d: Control.Device) -> Bool {
-        !d.isSelf && !d.admin && !d.root && !d.frozen && d.role == "full" && d.store != "rootless"
+        !d.isSelf && !d.admin && !d.root && !d.frozen && d.can("hub") && d.store != "rootless"
     }
 
     private func row(_ label: Text, _ value: Text) -> some View {
@@ -317,11 +317,11 @@ struct DeviceDetail: View {
                     line
                     action("snowflake", "Unfreeze") { thawing = true }
                 }
-                if !d.isSelf, d.admin, !d.root, !d.frozen, d.role == "full" {
+                if !d.isSelf, d.admin, !d.root, !d.frozen, d.role == "member" {
                     line
                     action("snowflake", "Freeze", danger: true) { freezing = true }
                 }
-                if model.isRoot, !d.admin, !d.frozen, d.role == "full" {
+                if model.isRoot, !d.admin, !d.frozen, d.can("admin") {
                     line
                     action("star", "Make it an admin") { promoting = true }
                 }
@@ -393,16 +393,16 @@ struct DeviceDetail: View {
     }
 
     /// Why d cannot be a hub, nil when it can: a phone only from its own
-    /// app, never a lite member, a watch or a computer without root, and a
+    /// app, never a member without the cap hub, a watch or a computer without root, and a
     /// computer only as the root or an admin with the hub power. Another
     /// computer turns sync away from home on itself, and is told so.
     private func noHub(_ d: Control.Device) -> LocalizedStringKey? {
         switch d.role {
         case "phone": return "A phone is a hub only from its own app's Settings, while the app is open."
-        case "lite": return "A lite member is never a hub."
         case "watch": return "A watch is never a hub."
         default: break
         }
+        if !d.can("hub") { return "This device is never a hub." }
         if d.store == "rootless" { return "It runs without administrator rights, so it is never a hub." }
         if d.frozen { return "It is frozen: the root unfreezes it first." }
         // A hub that reads the copies is the root or an admin; an admin

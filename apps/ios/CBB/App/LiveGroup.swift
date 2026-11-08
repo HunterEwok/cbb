@@ -343,10 +343,10 @@ final class LiveGroup: GroupController {
         let root = g.records.rootDevice
         return g.devices.map {
             .init(id: $0.id, name: $0.name, online: $0.id == g.device || online.contains($0.id) || reached.contains($0.id),
-                  throughHub: $0.id != g.device && !online.contains($0.id) && reached.contains($0.id), role: $0.role, os: $0.os,
+                  throughHub: $0.id != g.device && !online.contains($0.id) && reached.contains($0.id), role: $0.role, caps: $0.caps, os: $0.os,
                   isSelf: $0.id == g.device,
                   admin: $0.admin || $0.id == root, isRoot: $0.id == root,
-                  canMakeAdmin: g.isRoot && !$0.admin && !$0.frozen && $0.role == "full" && offers[$0.id] != nil,
+                  canMakeAdmin: g.isRoot && !$0.admin && !$0.frozen && $0.can("admin") && offers[$0.id] != nil,
                   keysInFile: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.file,
                   rootless: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.rootless, frozen: $0.frozen,
                   device: $0.id == g.device ? Self.ownDevice : infos[$0.id], mode: $0.id == g.device ? modeBox.mode : modes[$0.id],
@@ -1265,14 +1265,14 @@ final class LiveGroup: GroupController {
     private func makeAdmin(_ id: String, allowFileKey: Bool) async throws {
         guard state?.isRoot == true, let key = offers[id] else { throw Failure.notAdmin }
         let store = keyStores[id]
-        guard Records.store(store, role: "full") != Records.rootless else { throw PhoneGroup.Failure.rootless }
-        guard Records.store(store, role: "full") == Records.hardware || allowFileKey else { throw PhoneGroup.Failure.fileKey }
+        guard Records.store(store, role: "member") != Records.rootless else { throw PhoneGroup.Failure.rootless }
+        guard Records.store(store, role: "member") == Records.hardware || allowFileKey else { throw PhoneGroup.Failure.fileKey }
         let root = try await caSigner(reason: String(localized: "Make a computer an admin", bundle: .app))
         guard var g = state else { return }
         var rs: [Member.Record] = []
         // The user's consent to a key in a file, after the dialog's
         // warning, lets the group take keys in files too.
-        if Records.store(store, role: "full") == Records.file, allowFileKey, g.keyLevel != Records.levelFiles {
+        if Records.store(store, role: "member") == Records.file, allowFileKey, g.keyLevel != Records.levelFiles {
             rs.append(try g.setKeyLevel(Records.levelFiles, rootSigner: root, now: Date()))
         }
         let (ca, r) = try g.makeAdmin(device: id, adminKey: key, rootSigner: root, now: Date(), keyStore: store, allowFileKey: allowFileKey)
@@ -1820,7 +1820,7 @@ final class LiveGroup: GroupController {
         // The computers show without a forwarder too, so that the user sees
         // where the hub can go; Settings asks for the forwarder first.
         if hub.isOn {
-            let movable = computers.filter { $0.online && !$0.throughHub && $0.role == "full" && ($0.admin || $0.canMakeAdmin) }
+            let movable = computers.filter { $0.online && !$0.throughHub && $0.can("hub") && ($0.admin || $0.canMakeAdmin) }
             h.computers = movable.map { .init(id: $0.id, name: $0.name) }
             if !UserDefaults.standard.bool(forKey: Self.keepsPhoneHubKey),
                let s = movable.first(where: { Self.alwaysOn.contains($0.device?.form ?? "") }) {

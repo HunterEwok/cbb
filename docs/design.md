@@ -98,7 +98,7 @@ The system context (C4 level 1): the group is the system; everything around it i
 | Arduino Nano ESP32      | the lite member's firmware        | a USB keyboard on its console only (`console-type` build); takes no remote paste yet |
 | ZX Spectrum Next        | `.cbb`, through its Pi's lite member | sends and receives on demand                               |
 
-Linux machines, Windows PCs, Macs and lite members are equal **members** of a **group**, and
+Linux machines, Windows PCs, Macs, boards and routers are equal **members** of a **group**, and
 so is a phone with the app. There is no central server, and any member may be switched off
 at any time. In a group made by a phone app, the phones are its admins (see "The phone
 apps" below).
@@ -235,9 +235,10 @@ ends, the Go service described below is still the computers' member.
   (`TestLiteClients`).
 - **The group's root and its admins.** `cbb new` makes a group with the Rust service as its
   root: the root CA's key stays in `identity.json` as `group_ca_key`, as the Go member keeps
-  it, and the member key goes into the hardware through the helper where it can. A member
-  whose own device record says `full` presents itself as a full member: its hello says so,
-  it publishes itself without `r=lite` and dials the full members with a higher device ID.
+  it, and the member key goes into the hardware through the helper where it can. Its hello
+  carries the capabilities its own device record names (or, before it has one, its `-caps`
+  flag, all three by default and `admin` and `dials` for the ZX Next's Pi); with `dials` it
+  dials the members with a higher device ID, without it it publishes `r=listen` and waits.
   On the root or an admin it takes `revoke`, `rename`, `freeze`, `thaw`, `resolve`, `admin`,
   `key-level`, `takeover-delay`, `incoming`, `handover`, `mute` and `unmute` of another
   device (a command from the core's `manage::order`), and `pair` with a QR code's addresses (`cbb pair -qr`, the core's admission),
@@ -354,7 +355,7 @@ and lifetimes. The installer enables what the device needs.
   a desktop.
 - Network, group, discovery, the shared address, sync and the current text. It keeps the
   identity and the clock mark in its state directory (`/var/lib/cbb`) and listens on
-  a member port chosen at start. Of two full members, the one with the lower device ID
+  a member port chosen at start. Of two members that dial, the one with the lower device ID
   dials the other, so they make one connection; a member keeps dialing a member it finds,
   waiting up to 30 seconds between attempts, at the addresses and port that discovery last
   saw. It notices that the machine slept when the clock that counts sleep moves further than
@@ -733,11 +734,11 @@ sync away from home, the admins, and remote paste.
 
 ### Discovery
 
-- Full members advertise `<device ID>._cbb._tcp.local` with SRV, TXT (the protocol
+- Members advertise `<device ID>._cbb._tcp.local` with SRV, TXT (the protocol
   version `v=1`; the group tag `g=`, a short fingerprint of the group CA, so the members of
   another group, or of a replaced CA, are ignored; and `p=1` while a pairing window is open)
   and A/AAAA records under their own host label `cb-<device ID>.local`, never the system
-  host name. Lite members publish with `r=lite`, phones that are the hub with `r=phone`.
+  host name. Members that do not dial publish with `r=listen`, phones that are the hub with `r=phone`.
 - Full members run CBB's own small mDNS responder, which shares UDP port 5353 with
   avahi-daemon or systemd-resolved; a CI job checks that avahi browses and resolves it. On
   FreeBSD a socket shares a port only with the sockets of its own user unless root opened
@@ -766,13 +767,13 @@ sync away from home, the admins, and remote paste.
   binding is needed.
 - Members connect to the addresses from discovery, never by resolving a `.local` name: a
   static Linux binary cannot resolve `.local` itself. Peers are authenticated by the group
-  CA, not by name. A home group is small: of two full members (Linux, Windows or Mac) the
+  CA, not by name. A home group is small: of two members with the capability `dials` the
   one with the lower device ID dials, and the other dials as well when no connection has
   come up within 30 seconds, so a firewall that keeps the first out does not keep them
-  apart; full members dial the lite members, and phones dial every member. With any one
-  computer or lite member on, the phones sync with it.
+  apart; a member without `dials` (an ESP32 board) is dialed by every member, and phones
+  dial every member. With any one member on, the phones sync with it.
 - Only private IPv4, unique-local and link-local IPv6 addresses are published.
-- **Known networks** (D-63). A full member publishes itself, and takes connections on the
+- **Known networks** (D-63). A member publishes itself, and takes connections on the
   member port, only on networks where it met its group: where it created or joined the
   group (not by a remote invitation), opened a pairing window, or had a member connection
   come up. Elsewhere, in a café or a hotel, it only browses, so that its host label and the
@@ -818,7 +819,7 @@ sync away from home, the admins, and remote paste.
   Universal Clipboard item. A Mac that receives the group's own text through Universal
   Clipboard does not turn it into a new event.
 - **Member connections** carry frames of a 4-byte length and a JSON message. Each side first
-  sends a hello with its role (`full`, `lite` or `phone`) and its current event; events follow. A
+  sends a hello with its role (`member` or `phone`), a member's capabilities and its current event; events follow. A
   side that has sent nothing for 5 seconds sends a ping, and a connection that stays silent
   for 15 seconds is closed; a large frame gets more time, as if the link carried at least
   16 KiB a second. A member that stops sends what is queued and a goodbye, so the others
@@ -1895,9 +1896,10 @@ exchange in the member protocol, refusing revoked keys, the devices list and `cb
 and members that verify certificates through an admin CA. Then the apps: the root and admin
 CAs, the Devices screen, making an admin, and the root record.
 
-### Full members, admins and the operating system
+### Members, capabilities, admins and the operating system
 
-Decided on 2026-10-24 (D-50 to D-53).
+Decided on 2026-10-24 (D-50 to D-53); the roles `full` and `lite` became one role `member`
+with capabilities on 2026-11-08 (D-89).
 
 **The operating system is not the role.** Each device states its operating system in `os`,
 in the pairing Info, in its hello and in its device record: `linux`, `windows`, `macos`, `ios`,
@@ -1905,11 +1907,24 @@ in the pairing Info, in its hello and in its device record: `linux`, `windows`, 
 
 | Role     | Devices                                     | What it does                                                    |
 |----------|---------------------------------------------|-----------------------------------------------------------------|
-| `full`   | a computer with the service: Linux, Windows, macOS | listens on the member port, dials the other full members and the lite members, may create a group and be an admin |
-| `lite`   | the lite member (`member/`)                 | dials the full members, listens for phones; never holds keys     |
+| `member` | a computer, Raspberry Pi, router or board with the service or the firmware | listens on the member port; what more it does its capabilities say |
 | `phone`  | a phone with the app                        | dials every member, never listens for members                   |
+| `watch`  | a watch, through its phone                  | signs the commands that turn things off                         |
 
-The Mac is a full member like the others. A phone with the app, an iPhone or an Android phone, has its own
+A member's **capabilities** (protocol.md, section 4, "Capabilities") say what it can do
+beyond syncing: `admin` (it can hold an admin key; only the root's admin CA makes it an
+admin), `dials` (it dials the other members; of two that dial, the lower device ID does)
+and `hub` (it may be chosen as the group's hub). Its device record names them, and its
+hello and its pairing Info say them.
+
+| Device                                      | `admin` | `dials` | `hub` |
+|---------------------------------------------|---------|---------|-------|
+| Linux, Windows, Mac, Raspberry Pi, router, Pi Zero W | yes | yes | yes |
+| the Pi inside a ZX Spectrum Next (only through the Next's UART, on only while the Next is) | yes | yes | no |
+| an ESP32 board                              | no      | no      | no    |
+
+Publishing on every network is a local setting of the device, not a capability. The Mac is
+a member like the others. A phone with the app, an iPhone or an Android phone, has its own
 key and member certificate and the role `phone`. `cbb status` and the Devices screens of the
 apps show each device's system (Linux, Windows, macOS, iOS, Android, or "device" for
 firmware) and mark the root and the admins. A device's record takes its `os` from the

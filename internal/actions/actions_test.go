@@ -15,8 +15,8 @@ import (
 func TestCheck(t *testing.T) {
 	phone := Signer{Role: group.RolePhone, Store: group.StoreHardware}
 	rootPhone := Signer{Root: true, Role: group.RolePhone, Store: group.StoreHardware}
-	fileComputer := Signer{Role: group.RoleFull, Store: group.StoreFile}
-	tpmComputer := Signer{Role: group.RoleFull, Store: group.StoreProven}
+	fileComputer := Signer{Role: group.RoleMember, Store: group.StoreFile}
+	tpmComputer := Signer{Role: group.RoleMember, Store: group.StoreProven}
 	watch := Signer{Role: group.RoleWatch, Store: group.StoreHardware}
 	unknown := Signer{}
 	for _, tt := range []struct {

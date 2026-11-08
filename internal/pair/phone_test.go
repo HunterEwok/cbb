@@ -151,7 +151,7 @@ func TestPhoneInfo(t *testing.T) {
 	for _, bad := range []Info{
 		{Name: "x", OS: group.OSLinux, AdminKey: info.AdminKey},
 		{Name: "x", OS: group.OSiOS, AdminKey: []byte{1, 2, 3}},
-		{Name: "x", OS: group.OSiOS, Role: RoleLite},
+		{Name: "x", OS: group.OSiOS, Caps: []string{group.CapDials}},
 		{Name: "x", OS: group.OSiOS, AdminKey: info.AdminKey},
 		{Name: "x", OS: group.OSiOS, AdminProof: []byte{1}},
 	} {

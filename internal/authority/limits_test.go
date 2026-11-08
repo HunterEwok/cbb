@@ -25,14 +25,14 @@ func ignoredWhy(s *authority.State, id authority.Hash) string {
 // nothing; the admin's first devices, in its own order, are the ones kept.
 func TestDeviceLimit(t *testing.T) {
 	w := newWorld(t)
-	w.makeAdmin("C", "full", computerPowers)
+	w.makeAdmin("C", "member", computerPowers)
 	var byC []authority.Record
 	for i := range 10 {
-		byC = append(byC, w.device("C", fmt.Sprintf("c%d", i), "full", nil, nil, false))
+		byC = append(byC, w.device("C", fmt.Sprintf("c%d", i), "member", nil, nil, false))
 	}
 	// rootphone, C and these: 252 devices of the root.
 	for i := range authority.MaxDevices - 6 {
-		w.device("root", fmt.Sprintf("r%d", i), "full", nil, nil, false)
+		w.device("root", fmt.Sprintf("r%d", i), "member", nil, nil, false)
 	}
 	s := w.evalAll(nil)
 	if len(s.Devices) != authority.MaxDevices || s.Stop != "none" {
@@ -54,7 +54,7 @@ func TestDeviceLimit(t *testing.T) {
 func TestAdminLimit(t *testing.T) {
 	w := newWorld(t)
 	for i := range authority.MaxAdmins + 1 {
-		w.makeAdmin(fmt.Sprintf("A%d", i), "full", computerPowers)
+		w.makeAdmin(fmt.Sprintf("A%d", i), "member", computerPowers)
 	}
 	last := fmt.Sprintf("A%d", authority.MaxAdmins)
 	s := w.evalAll(nil)
@@ -71,7 +71,7 @@ func TestAdminLimit(t *testing.T) {
 		t.Errorf("the last admin's device record ignored for %q", why)
 	}
 	// It admits nothing: its key is no admin.
-	r := w.device(last, "late", "full", nil, nil, false)
+	r := w.device(last, "late", "member", nil, nil, false)
 	s = w.eval(w.recs, nil)
 	if findDevice(s, w.ids["late"]) != nil || ignoredWhy(s, r.ID()) != authority.WhyPower {
 		t.Fatalf("the device the last admin admitted counts: %s", mustEncode(t, s))
@@ -121,12 +121,12 @@ func TestPathLimit(t *testing.T) {
 // the limit, though the checkpoint itself is past it in the full set.
 func TestRecordLimit(t *testing.T) {
 	w := newWorld(t)
-	w.makeAdmin("C", "full", computerPowers)
+	w.makeAdmin("C", "member", computerPowers)
 	// rootphone, C and these: the root's last 8 records are past the limit.
 	for i := 1; i <= authority.MaxRecords+6; i++ {
 		w.sign(fmt.Sprintf("settings %d", i), "root", authority.Body{Type: authority.TypeSettings, TakeoverDelayMS: ptr(int64(i))}, nil)
 	}
-	laptop := w.device("C", "laptop", "full", nil, nil, false)
+	laptop := w.device("C", "laptop", "member", nil, nil, false)
 	s := w.evalAll(nil)
 	if s.Stop != "none" || findDevice(s, w.ids["laptop"]) != nil || findDevice(s, w.ids["C"]) == nil {
 		t.Fatalf("the admin's record past the limit counts: %s", mustEncode(t, s))
@@ -150,7 +150,7 @@ func TestRecordLimit(t *testing.T) {
 // megabyte.)
 func TestSetBytesLimit(t *testing.T) {
 	w := newWorld(t)
-	w.makeAdmin("C", "full", computerPowers)
+	w.makeAdmin("C", "member", computerPowers)
 	// Resolve records naming records nobody has, about 7.5 KB each.
 	n := 0
 	for size := 0; size <= authority.MaxSetBytes; n++ {
@@ -166,7 +166,7 @@ func TestSetBytesLimit(t *testing.T) {
 	if n >= authority.MaxRecords {
 		t.Fatalf("%d records, the bytes should run out first", n)
 	}
-	laptop := w.device("C", "laptop", "full", nil, nil, false)
+	laptop := w.device("C", "laptop", "member", nil, nil, false)
 	s := w.eval(w.recs, nil)
 	if findDevice(s, w.ids["laptop"]) != nil || findDevice(s, w.ids["C"]) == nil {
 		t.Fatalf("the admin's record past the limit counts: %s", mustEncode(t, s))

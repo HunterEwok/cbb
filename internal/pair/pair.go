@@ -47,6 +47,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -192,10 +193,11 @@ func NormalizeCode(s string) (string, error) {
 // Info describes the device that joins.
 type Info struct {
 	Name string `json:"name"` // shown in cbb status
-	OS   string `json:"os"`   // group.OSLinux, OSWindows or OSMacOS; a lite member also OSNone
-	// Role is RoleLite for a lite member, which never holds CA keys;
-	// empty for a full computer.
-	Role string `json:"role,omitempty"`
+	OS   string `json:"os"`   // group.OSLinux, OSWindows, OSMacOS or OSNone for a member, or a phone's system
+	// Caps is what a member can do, sorted (group.CapAdmin, CapDials,
+	// CapHub), which the admitting device puts in its record; none from
+	// a phone.
+	Caps []string `json:"caps,omitempty"`
 	// Seal is the joiner's public key for sealed messages (internal/seal),
 	// as its hello offers it, so that a phone that admits it puts it in
 	// the device record without waiting for a hello; empty from a phone and
@@ -232,13 +234,10 @@ func (i Info) provesAdminKey(sid []byte) bool {
 	return ecdsa.VerifyASN1(pub, h[:], i.AdminProof)
 }
 
-// RoleLite is the Info role of a lite member.
-const RoleLite = "lite"
-
 // Phone reports whether the joiner is a phone with the app, which joins a
 // computer's group only through its root (docs/protocol.md, section 6, "A
 // phone joins a computer's group").
-func (i Info) Phone() bool { return i.Role == "" && group.PhoneOS(i.OS) }
+func (i Info) Phone() bool { return group.PhoneOS(i.OS) }
 
 // parseAdminKey reads a phone's admin key, a P-256 SubjectPublicKeyInfo.
 func parseAdminKey(spki []byte) (*ecdsa.PublicKey, error) {
@@ -255,14 +254,18 @@ func parseAdminKey(spki []byte) (*ecdsa.PublicKey, error) {
 
 func (i Info) check() error {
 	switch {
-	case i.OS == group.OSLinux || i.OS == group.OSWindows || i.OS == group.OSMacOS:
-	case i.OS == group.OSNone && i.Role == RoleLite:
+	case i.OS == group.OSLinux || i.OS == group.OSWindows || i.OS == group.OSMacOS || i.OS == group.OSNone:
 	case i.Phone():
 	default:
 		return fmt.Errorf("pair: unknown operating system %q", i.OS)
 	}
-	if i.Role != "" && i.Role != RoleLite {
-		return fmt.Errorf("pair: unknown device role %q", i.Role)
+	if i.Phone() && len(i.Caps) > 0 {
+		return errors.New("pair: a phone offers no member caps")
+	}
+	for n, c := range i.Caps {
+		if !slices.Contains(group.AllCaps, c) || n > 0 && i.Caps[n-1] >= c {
+			return fmt.Errorf("pair: the caps are not known names, sorted, each once: %q", i.Caps)
+		}
 	}
 	if i.AdminKey != nil {
 		if !i.Phone() {

@@ -731,7 +731,7 @@ func cmdService(args []string, stderr io.Writer) int {
 	dev := sysinfo.Device(strings.TrimPrefix(version.Version, "v"))
 	dev.Archive = selfArchive()
 	return runService(stderr, func(ctx context.Context, logf func(string, ...any)) error {
-		return service.Run(ctx, service.Config{StateDir: *stateDir, Socket: *socket, Role: node.Full, OS: hostOS(),
+		return service.Run(ctx, service.Config{StateDir: *stateDir, Socket: *socket, Role: node.Member, OS: hostOS(),
 			Device: dev, Logf: logf, ReleaseRoots: roots,
 			Container: service.InContainer(), KeysInFile: service.KeysInFileAllowed(), Rootless: rootless.Is()})
 	})

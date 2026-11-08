@@ -13,7 +13,7 @@ final class HubKindTests: XCTestCase {
         let sa = Data((0..<32).map { _ in UInt8.random(in: 0...255) }), sb = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
         var g = try PhoneGroup.create(caSigner: ca, memberKey: ka.publicKeyDER, seal: try Core.sealPublic(sa), now: now)
         let pc = Member.newID()
-        _ = try g.record(device: pc, name: "pi", role: "full", os: "linux", key: Records.keyHash(spki: kb.publicKeyDER),
+        _ = try g.record(device: pc, name: "pi", role: "member", caps: Records.caps, os: "linux", key: Records.keyHash(spki: kb.publicKeyDER),
                          store: Records.file, seal: try Core.sealPublic(sb), caSigner: ca, now: now)
         XCTAssertFalse(g.records.mayHost(pc))
         let set = { g.records }

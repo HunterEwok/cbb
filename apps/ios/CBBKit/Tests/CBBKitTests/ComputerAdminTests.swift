@@ -18,7 +18,7 @@ final class ComputerAdminTests: XCTestCase {
         let pi = Member.newID()
         let cert = try GroupCertificates.member(device: pi, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: root, now: t0)
         let key = try Records.keyHash(cert: cert)
-        _ = try g.record(device: pi, name: "pi", role: "full", key: key, caSigner: root, now: t0)
+        _ = try g.record(device: pi, name: "pi", role: "member", caps: Records.caps, key: key, caSigner: root, now: t0)
         // Its computers keep their keys in files, which the level files lets in.
         _ = try g.setKeyLevel(Records.levelFiles, rootSigner: root, now: t0)
         return (g, root, pi, key)
@@ -32,7 +32,7 @@ final class ComputerAdminTests: XCTestCase {
         XCTAssertEqual(g.keyLevel, Records.hardware)
         let pi = Member.newID()
         let cert = try GroupCertificates.member(device: pi, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: root, now: t0)
-        _ = try g.record(device: pi, name: "pi", role: "full", key: try Records.keyHash(cert: cert), caSigner: root, now: t0)
+        _ = try g.record(device: pi, name: "pi", role: "member", caps: Records.caps, key: try Records.keyHash(cert: cert), caSigner: root, now: t0)
         let adminKey = SoftwareSigner().publicKeyDER
         // At the level hardware a key in a file is no admin, even with the consent.
         XCTAssertThrowsError(try g.makeAdmin(device: pi, adminKey: adminKey, rootSigner: root, now: t1, keyStore: Records.file, allowFileKey: true)) {
@@ -63,7 +63,7 @@ final class ComputerAdminTests: XCTestCase {
 
     func testWire() throws {
         let key = SoftwareSigner().publicKeyDER
-        let hello = Member.Message.hello(.full, Member.Hello(wallMS: 1, name: "pi", adminKey: key))
+        let hello = Member.Message.hello(.member, Member.Hello(wallMS: 1, name: "pi", adminKey: key))
         let body = Data(try Member.encode(hello).dropFirst(4))
         XCTAssertTrue(String(decoding: body, as: UTF8.self).contains("\"admin_key\""))
         XCTAssertEqual(try Member.decode(body: body), hello)
@@ -71,7 +71,7 @@ final class ComputerAdminTests: XCTestCase {
         let adminBody = Data(try Member.encode(admin).dropFirst(4))
         XCTAssertEqual(String(decoding: adminBody, as: UTF8.self), #"{"admin_ca":"AQID","t":"admin"}"#)
         XCTAssertEqual(try Member.decode(body: adminBody), admin)
-        guard case let .hello(_, h) = try Member.decode(body: Data(#"{"t":"hello","role":"full","hello":{"wall_ms":0}}"#.utf8)) else {
+        guard case let .hello(_, h) = try Member.decode(body: Data(#"{"t":"hello","role":"member","hello":{"wall_ms":0}}"#.utf8)) else {
             return XCTFail("not a hello")
         }
         XCTAssertNil(h.adminKey)
@@ -88,7 +88,7 @@ final class ComputerAdminTests: XCTestCase {
         XCTAssertTrue(d.admin)
         XCTAssertEqual(d.adminKey, try Records.keyHash(cert: ca))
         XCTAssertEqual(d.key, t.piKey)
-        XCTAssertEqual(d.role, "full")
+        XCTAssertEqual(d.role, "member")
         XCTAssertThrowsError(try g.rename(device: t.pi, to: " ", caSigner: t.root, now: t1)) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .invalidName)
         }
@@ -117,7 +117,7 @@ final class ComputerAdminTests: XCTestCase {
                                              keyStore: Records.rootless, allowFileKey: true)) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .rootless)
         }
-        XCTAssertEqual(Records.store(Records.rootless, role: "full"), Records.rootless)
+        XCTAssertEqual(Records.store(Records.rootless, role: "member"), Records.rootless)
         let (ca, r) = try g.makeAdmin(device: pi, adminKey: adminKey.publicKeyDER, rootSigner: root, now: t1, allowFileKey: true)
         XCTAssertEqual(try CertificateInfo(der: ca).publicKey, adminKey.publicKeyDER)
         let d = try XCTUnwrap(g.devices.first { $0.id == pi })
@@ -150,7 +150,7 @@ final class ComputerAdminTests: XCTestCase {
         // The admin computer admits the deck; removing the computer keeps it.
         let deck = Member.newID()
         let deckCert = try GroupCertificates.member(device: deck, publicKey: SoftwareSigner().publicKeyDER, ca: ca, caSigner: adminKey, now: t0)
-        g.add([try g.records.sign(.device(deck, name: "deck", role: "full", key: Records.keyHash(cert: deckCert), signer: adminKey, now: t0),
+        g.add([try g.records.sign(.device(deck, name: "deck", role: "member", key: Records.keyHash(cert: deckCert), signer: adminKey, now: t0),
                                   with: adminKey, adminCA: ca)])
         XCTAssertTrue(g.devices.contains { $0.id == deck })
         _ = try g.revoke(device: pi, caSigner: root, now: t0)
@@ -193,7 +193,7 @@ final class ComputerAdminTests: XCTestCase {
         // A device record the watch signs admits nobody.
         let deck = Member.newID()
         let deckCert = try GroupCertificates.member(device: deck, publicKey: SoftwareSigner().publicKeyDER, ca: ca, caSigner: watchKey, now: t0)
-        g.add([try g.records.sign(.device(deck, name: "deck", role: "full", key: Records.keyHash(cert: deckCert), signer: watchKey, now: t1),
+        g.add([try g.records.sign(.device(deck, name: "deck", role: "member", key: Records.keyHash(cert: deckCert), signer: watchKey, now: t1),
                                   with: watchKey, adminCA: ca)])
         XCTAssertFalse(g.devices.contains { $0.id == deck })
         XCTAssertNotNil(g.records.refused(chain: [deckCert, ca]))
@@ -212,7 +212,7 @@ final class ComputerAdminTests: XCTestCase {
         _ = try g.makeAdmin(device: t.pi, adminKey: SoftwareSigner().publicKeyDER, rootSigner: t.root, now: t1, allowFileKey: true)
         let deck = Member.newID()
         let deckCert = try GroupCertificates.member(device: deck, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: t.root, now: t0)
-        _ = try g.record(device: deck, name: "deck", role: "full", key: Records.keyHash(cert: deckCert), caSigner: t.root, now: t0)
+        _ = try g.record(device: deck, name: "deck", role: "member", caps: Records.caps, key: Records.keyHash(cert: deckCert), caSigner: t.root, now: t0)
         let watchKey = SoftwareSigner(), watch = Member.newID()
         let (ca, _) = try g.addWatch(device: watch, name: "Watch", os: "watchos", adminKey: watchKey.publicKeyDER, rootSigner: t.root, now: t1)
 

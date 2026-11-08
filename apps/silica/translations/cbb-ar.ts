@@ -573,10 +573,6 @@
 <context>
     <name>devices</name>
     <message>
-        <source>lite member</source>
-        <translation>عضو خفيف</translation>
-    </message>
-    <message>
         <source>device</source>
         <translation>جهاز</translation>
     </message>
@@ -591,10 +587,6 @@
     <message>
         <source>Board</source>
         <translation>لوحة</translation>
-    </message>
-    <message>
-        <source>Lite member</source>
-        <translation>عضو خفيف</translation>
     </message>
     <message>
         <source>Computer</source>

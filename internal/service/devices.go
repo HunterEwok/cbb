@@ -468,7 +468,7 @@ func (s *Service) publish(nd *node.Node, rs ...group.Record) {
 // recordDeviceAdmin records a device this member admitted, if it is an
 // admin; adminCA is the device's admin CA when it is an admin too, as a
 // phone the root admitted, and nil for none.
-func (s *Service) recordDeviceAdmin(dev group.DeviceID, name, role, os string, key group.KeyHash, sealKey []byte, adminCA *x509.Certificate) {
+func (s *Service) recordDeviceAdmin(dev group.DeviceID, name, role string, caps []string, os string, key group.KeyHash, sealKey []byte, adminCA *x509.Certificate) {
 	s.mu.Lock()
 	id, nd := s.id, s.nd
 	s.mu.Unlock()
@@ -485,7 +485,7 @@ func (s *Service) recordDeviceAdmin(dev group.DeviceID, name, role, os string, k
 	if seal.CheckPublicKey(sealKey) != nil {
 		sealKey = nil
 	}
-	body := group.RecordBody{Type: group.RecordDevice, Device: string(dev), Name: name, Role: role, OS: os, Key: &key, Seal: sealKey}
+	body := group.RecordBody{Type: group.RecordDevice, Device: string(dev), Name: name, Role: role, Caps: caps, OS: os, Key: &key, Seal: sealKey}
 	if adminCA != nil {
 		a := group.KeyHashOf(adminCA)
 		body.Admin = &a
@@ -498,17 +498,14 @@ func (s *Service) recordDeviceAdmin(dev group.DeviceID, name, role, os string, k
 	s.publish(nd, r)
 }
 
-// recordAdmitted records a computer, a lite member or a phone that a
-// pairing window admitted.
+// recordAdmitted records a member or a phone that a pairing window
+// admitted, a member with the capabilities it offered.
 func (s *Service) recordAdmitted(res *pair.Result) {
-	role := group.RoleFull
-	switch {
-	case res.Info.Role == pair.RoleLite:
-		role = group.RoleLite
-	case res.Info.Phone():
-		role = group.RolePhone
+	role, caps := group.RoleMember, res.Info.Caps
+	if res.Info.Phone() {
+		role, caps = group.RolePhone, nil
 	}
-	s.recordDeviceAdmin(res.Device, res.Info.Name, role, res.Info.OS, group.KeyHashOf(res.Cert), res.Info.Seal, res.AdminCA)
+	s.recordDeviceAdmin(res.Device, res.Info.Name, role, caps, res.Info.OS, group.KeyHashOf(res.Cert), res.Info.Seal, res.AdminCA)
 }
 
 // defaultName names a device that has no valid name: its role and the start
@@ -519,13 +516,19 @@ func defaultName(role string, dev group.DeviceID) string {
 
 // roleOf maps a member role to the role in a device record.
 func roleOf(r node.Role) string {
-	switch r {
-	case node.Full:
-		return group.RoleFull
-	case node.Phone:
+	if r == node.Phone {
 		return group.RolePhone
 	}
-	return group.RoleLite
+	return group.RoleMember
+}
+
+// capsOf returns the capabilities a record names for a peer of the role
+// whose hello says caps: none for a phone.
+func capsOf(r node.Role, caps []string) []string {
+	if r == node.Phone {
+		return nil
+	}
+	return caps
 }
 
 // ensureListed records this member, and the connected peers, in the devices
@@ -547,11 +550,11 @@ func (s *Service) ensureListed() {
 	}
 	s.recMu.Unlock()
 	var rs []group.Record
-	add := func(dev group.DeviceID, name, role, os string, key group.KeyHash, store string, sealKey []byte) {
+	add := func(dev group.DeviceID, name, role string, caps []string, os string, key group.KeyHash, store string, sealKey []byte) {
 		if seal.CheckPublicKey(sealKey) != nil {
 			sealKey = nil
 		}
-		body := group.RecordBody{Type: group.RecordDevice, Device: string(dev), Name: name, Role: role, OS: os, Key: &key, Store: store, Seal: sealKey}
+		body := group.RecordBody{Type: group.RecordDevice, Device: string(dev), Name: name, Role: role, Caps: caps, OS: os, Key: &key, Store: store, Seal: sealKey}
 		if d, ok := listed[key]; ok {
 			// A computer whose record names no system or another one, as a
 			// Windows PC that joined as a Linux member, or that its record
@@ -563,16 +566,16 @@ func (s *Service) ensureListed() {
 			newOS := os != "" && d.OS != os
 			rootless := store == group.StoreRootless && d.Store != group.StoreRootless
 			newStore := d.Store == group.StoreFile && store == group.StoreHardware || rootless
-			// A lite member's record changes only to say rootless. A
-			// computer's or a lite member's record takes the key for
-			// sealed messages its hello offers (docs/protocol.md,
-			// section 15).
-			changed := d.Role == group.RoleFull && (newOS || newStore) || d.Role == group.RoleLite && rootless
-			newSeal := sealKey != nil && !bytes.Equal(d.Seal, sealKey) && (d.Role == group.RoleFull || d.Role == group.RoleLite)
+			// A member's record takes the key for sealed messages its
+			// hello offers (docs/protocol.md, section 15). Its
+			// capabilities stay those it was admitted with.
+			member := d.Role == group.RoleMember
+			changed := member && (newOS || newStore)
+			newSeal := sealKey != nil && !bytes.Equal(d.Seal, sealKey) && member
 			if !changed && !newSeal {
 				return
 			}
-			body.Name, body.Admin, body.Kind, body.Proof = d.Name, d.AdminKey, d.Kind, d.Proof
+			body.Name, body.Caps, body.Admin, body.Kind, body.Proof = d.Name, d.Caps, d.AdminKey, d.Kind, d.Proof
 			body.Powers, body.Commands = d.Powers, d.Commands
 			if !newSeal {
 				body.Seal = d.Seal
@@ -597,9 +600,9 @@ func (s *Service) ensureListed() {
 		}
 		rs = append(rs, r)
 	}
-	add(id.ID, s.cfg.Name, roleOf(s.cfg.Role), s.cfg.OS, group.KeyHashOf(id.Cert), s.keyStore(id), s.sealPublic)
+	add(id.ID, s.cfg.Name, roleOf(s.cfg.Role), capsOf(s.cfg.Role, group.AllCaps), s.cfg.OS, group.KeyHashOf(id.Cert), s.keyStore(id), s.sealPublic)
 	for _, p := range nd.Peers() {
-		add(p.ID, p.Name, roleOf(p.Role), p.OS, p.Key, p.KeyStore, p.Seal)
+		add(p.ID, p.Name, roleOf(p.Role), capsOf(p.Role, p.Caps), p.OS, p.Key, p.KeyStore, p.Seal)
 	}
 	if len(rs) > 0 {
 		s.publish(nd, rs...)
@@ -671,8 +674,8 @@ func (s *Service) devices() ([]control.Device, error) {
 	now := s.cfg.now()
 	var out []control.Device
 	shown := map[group.DeviceID]bool{}
-	entry := func(dev group.DeviceID, name, role, os, store string, admin, listed bool) {
-		d := control.Device{ID: string(dev), Name: name, Role: role, OS: os, Store: store, Listed: listed, Self: dev == id.ID, Root: dev == root, Frozen: frozen[dev], MayHub: mayHub[dev], ForwardOnly: forwardOnly[dev], Hub: hubs[dev]}
+	entry := func(dev group.DeviceID, name, role string, caps []string, os, store string, admin, listed bool) {
+		d := control.Device{ID: string(dev), Name: name, Role: role, Caps: caps, OS: os, Store: store, Listed: listed, Self: dev == id.ID, Root: dev == root, Frozen: frozen[dev], MayHub: mayHub[dev], ForwardOnly: forwardOnly[dev], Hub: hubs[dev]}
 		d.Admin = admin
 		if _, ok := peers[dev]; ok || d.Self {
 			d.Online, d.LastSeenMS = true, now.UnixMilli()
@@ -704,14 +707,14 @@ func (s *Service) devices() ([]control.Device, error) {
 		if p, ok := peers[d.ID]; ok && p.OS != "" {
 			os = p.OS
 		}
-		entry(d.ID, d.Name, d.Role, os, d.Store, d.Admin, true)
+		entry(d.ID, d.Name, d.Role, d.Caps, os, d.Store, d.Admin, true)
 	}
 	if !shown[id.ID] {
-		entry(id.ID, s.cfg.Name, roleOf(s.cfg.Role), s.cfg.OS, s.keyStore(id), false, false)
+		entry(id.ID, s.cfg.Name, roleOf(s.cfg.Role), capsOf(s.cfg.Role, group.AllCaps), s.cfg.OS, s.keyStore(id), false, false)
 	}
 	for _, p := range nd.Peers() {
 		if !shown[p.ID] {
-			entry(p.ID, p.Name, roleOf(p.Role), p.OS, group.StoreOf(p.KeyStore, roleOf(p.Role)), false, false)
+			entry(p.ID, p.Name, roleOf(p.Role), capsOf(p.Role, p.Caps), p.OS, group.StoreOf(p.KeyStore, roleOf(p.Role)), false, false)
 		}
 	}
 	return out, nil
@@ -809,7 +812,7 @@ func (s *Service) rename(target, name string) (string, error) {
 		return "", fmt.Errorf("only the group's root renames %s: it is an admin or a watch, or the root's own device", rec.Name)
 	}
 	s.awaitRecords(id)
-	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(rec.ID), Name: name, Role: rec.Role,
+	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(rec.ID), Name: name, Role: rec.Role, Caps: rec.Caps,
 		OS: rec.OS, Key: &rec.Key, Admin: rec.AdminKey, Powers: rec.Powers, Commands: rec.Commands, Store: rec.Store, Kind: rec.Kind, Proof: rec.Proof, Seal: rec.Seal, ForwardOnly: rec.ForwardOnly})
 	if err != nil {
 		return "", err
