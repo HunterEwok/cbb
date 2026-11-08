@@ -179,6 +179,14 @@ func TestLiteRoot(t *testing.T) {
 	must("", "rename", "laptop", "desk")
 	waitFor(t, "the laptop renamed", listed("desk", false))
 
+	// A mute and its end: each makes the laptop connect again half a second
+	// later (restartAfter), so they come long before the removal at the end,
+	// which reaches only a laptop whose connection is up when it is sent.
+	must("", "mute", "-on", "desk")
+	waitFor(t, "the laptop muted", func() bool { return laptop.status(t).Muted })
+	must("", "unmute", "-on", "desk")
+	waitFor(t, "the laptop unmuted", func() bool { return !laptop.status(t).Muted })
+
 	if out, err := cbb("", "admin", "desk"); err == nil || !strings.Contains(out, "allow-file-key") {
 		t.Errorf("cbb admin of a computer whose keys are in a file: %v\n%s", err, out)
 	}
@@ -218,7 +226,7 @@ func TestLiteRoot(t *testing.T) {
 	if out, err := cbb("", "remove", "nobody"); err == nil || !strings.Contains(out, `no device "nobody"`) {
 		t.Errorf("cbb remove of an unknown device: %v\n%s", err, out)
 	}
-	// The group's settings, a mute and a handover.
+	// The group's settings and a handover.
 	must("", "incoming", "2m")
 	waitFor(t, "the laptop takes the incoming time", func() bool { return laptop.status(t).IncomingMS == 120000 })
 	if out := must("", "takeover", "-delay", "0s"); !strings.Contains(out, "now waits 0s") {
@@ -227,10 +235,6 @@ func TestLiteRoot(t *testing.T) {
 	if out, err := cbb("", "takeover", "-delay", "200h"); err == nil || !strings.Contains(out, "from 0s to 168h") {
 		t.Errorf("a takeover delay too long: %v\n%s", err, out)
 	}
-	must("", "mute", "-on", "desk")
-	waitFor(t, "the laptop muted", func() bool { return laptop.status(t).Muted })
-	must("", "unmute", "-on", "desk")
-	waitFor(t, "the laptop unmuted", func() bool { return !laptop.status(t).Muted })
 	if out := must("", "handover", "desk"); !strings.Contains(out, "Handed the group over to desk") {
 		t.Errorf("cbb handover:\n%s", out)
 	}
