@@ -52,6 +52,7 @@ func TestCheck(t *testing.T) {
 			want: []string{"strings.xml:1: Cyrillic letter"},
 		},
 		{name: "an Aurora app translation", file: "apps/silica/translations/cbb-ru.ts", content: "<translation>" + cyrillicWord + "</translation>\n"},
+		{name: "a command line translation", file: "member/l10n/ru.json", content: `{"online": "` + cyrillicWord + `"}` + "\n"},
 		{name: "a tray app translation", file: "apps/desktop/frontend/l10n/ru.json", content: `{"Fetch":"` + cyrillicWord + `"}`},
 		{name: "a website translation", file: "site/l10n/ru.json", content: `{"Download":"` + cyrillicWord + `"}`},
 		{name: "a translated guide page", file: "site/docs/ru/guide/keys.md", content: cyrillicWord + "\n"},

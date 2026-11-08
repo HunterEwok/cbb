@@ -8,7 +8,8 @@
 //     translations of the apps (String Catalogs, *.xcstrings, Android's
 //     res/values-<language>/strings.xml, the tray app's
 //     frontend/l10n/<language>.json, the Aurora app's
-//     translations/cbb-<language>.ts, the website's site/l10n/<language>.json
+//     translations/cbb-<language>.ts, the command line's
+//     member/l10n/<language>.json, the website's site/l10n/<language>.json
 //     and the Android app's store texts, fastlane/metadata/android/<locale>/
 //     for a language other than English);
 //   - every Go and Rust file, except generated Go code, starts with the
@@ -192,6 +193,10 @@ var docTranslation = regexp.MustCompile(`^(site/docs/[a-z]{2,3}/.+\.md|docs/imag
 // the app for Aurora OS and Sailfish OS (Qt's .ts files).
 var silicaTranslation = regexp.MustCompile(`^apps/silica/translations/cbb-[a-z]{2,3}\.ts$`)
 
+// cliTranslation matches the texts of a language other than English of the
+// command line, the Rust cbb (member/src/l10n.rs).
+var cliTranslation = regexp.MustCompile(`^member/l10n/[a-z]{2,3}\.json$`)
+
 // storeTranslation matches the store texts of a locale in an Android
 // project (F-Droid's fastlane layout); the first group is its language.
 var storeTranslation = regexp.MustCompile(`(^|/)fastlane/metadata/android/([a-z]{2,3})(-[A-Za-z0-9]+)?/`)
@@ -202,7 +207,7 @@ func isTranslation(name string) bool {
 	if m := storeTranslation.FindStringSubmatch(name); m != nil && m[2] != "en" {
 		return true
 	}
-	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name)
+	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name) || cliTranslation.MatchString(name)
 }
 
 // check returns the rule violations in one file; listed holds the paths of

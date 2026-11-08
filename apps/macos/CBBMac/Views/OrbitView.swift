@@ -3,14 +3,13 @@
 import SwiftUI
 
 /// The devices around this Mac, on one or two orbits, as the iPhone app
-/// draws them on big screens: this Mac is the centre and its button sends
-/// the clipboard; a device opens its details.
+/// draws them on big screens: this Mac is the centre; a device, this Mac
+/// too, opens its details.
 struct OrbitView: View {
     let devices: [Control.Device]
+    let me: Control.Device?
     let selected: String?
-    let busy: Bool
     let select: (String) -> Void
-    let sync: () -> Void
     @Environment(\.palette) private var palette
 
     /// How many devices the inner orbit holds before the outer one starts.
@@ -43,21 +42,23 @@ struct OrbitView: View {
         }
     }
 
-    /// This Mac: the button that sends the clipboard.
-    private var centre: some View {
-        Button(action: sync) {
-            VStack(spacing: 6) {
-                Image(systemName: "arrow.up.arrow.down").font(.title.weight(.semibold))
-                Text("Send").font(.footnote.weight(.semibold))
+    /// This Mac, which opens its own details.
+    @ViewBuilder private var centre: some View {
+        if let me {
+            Button { select(me.id) } label: {
+                VStack(spacing: 6) {
+                    DeviceIcon(device: me, size: 40)
+                    Text("This Mac").font(.footnote.weight(.semibold))
+                }
+                .foregroundStyle(palette.onAccent)
+                .frame(width: 112, height: 112)
+                .background(palette.accent, in: Circle())
+                .overlay(Circle().stroke(me.id == selected ? palette.text : palette.soft, lineWidth: me.id == selected ? 3 : 12).padding(-6))
             }
-            .foregroundStyle(palette.onAccent)
-            .frame(width: 112, height: 112)
-            .background(palette.accent, in: Circle())
-            .overlay(Circle().stroke(palette.soft, lineWidth: 12).padding(-6))
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(verbatim: me.name))
+            .accessibilityValue(Text("This Mac"))
         }
-        .buttonStyle(.plain)
-        .disabled(busy)
-        .opacity(busy ? 0.6 : 1)
     }
 
     /// Where count devices sit: evenly on the inner orbit from the top, the

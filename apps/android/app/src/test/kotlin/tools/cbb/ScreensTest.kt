@@ -8,8 +8,6 @@ import android.content.res.Configuration
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -59,13 +57,16 @@ class ScreensTest {
 
     private fun str(id: Int) = context.getString(id)
 
-    /** A14: what the app does and both ways in. */
+    /** A14: what the app does, both ways in and the way back with the recovery key; the language and Settings at the top. */
     @Test
     fun startScreen() {
         show()
         compose.onNodeWithText(str(R.string.tagline)).assertExists()
-        compose.onNodeWithText(str(R.string.connect_device)).assertExists()
-        compose.onNodeWithText(str(R.string.join_other)).assertExists()
+        compose.onNodeWithText(str(R.string.create_group)).assertExists()
+        compose.onNodeWithText(str(R.string.join_group)).assertExists()
+        compose.onNodeWithText(str(R.string.restore_link)).assertExists()
+        compose.onNodeWithContentDescription(str(R.string.language)).assertExists()
+        compose.onNodeWithContentDescription(str(R.string.settings)).assertExists()
     }
 
     /** A15, A14: Settings before a group; each colour and theme chosen is the one kept. */
@@ -74,10 +75,11 @@ class ScreensTest {
         show()
         compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
         for (a in Appearance.entries) {
-            // The theme comes first; the language list has its own "System".
-            compose.onAllNodesWithText(str(a.title)).onFirst().performScrollTo().performClick()
+            // The themes are icons, named for the screen reader.
+            compose.onNodeWithContentDescription(str(a.title)).performScrollTo().performClick()
             compose.waitForIdle()
             assertEquals(a, model.settings.appearance)
+            compose.onNodeWithContentDescription(str(a.title)).assertIsSelected()
         }
         val names = ColorChoice.offered
         assertTrue("Settings offers ${names.size} colours", names.size >= 10)
@@ -112,11 +114,11 @@ class ScreensTest {
     @Config(qualifiers = "ru")
     fun russian() {
         val english = context.createConfigurationContext(Configuration(context.resources.configuration).apply { setLocale(Locale.ENGLISH) })
-        for (id in listOf(R.string.tagline, R.string.connect_device, R.string.join_other, R.string.settings)) {
+        for (id in listOf(R.string.tagline, R.string.create_group, R.string.join_group, R.string.restore_link, R.string.settings)) {
             assertNotEquals("no Russian for ${english.getString(id)}", english.getString(id), str(id))
         }
         show()
-        compose.onNodeWithText(str(R.string.connect_device)).assertExists()
-        compose.onNodeWithText(str(R.string.join_other)).assertExists()
+        compose.onNodeWithText(str(R.string.create_group)).assertExists()
+        compose.onNodeWithText(str(R.string.join_group)).assertExists()
     }
 }

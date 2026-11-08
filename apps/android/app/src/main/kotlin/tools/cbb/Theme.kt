@@ -77,10 +77,10 @@ object ColorChoice {
 }
 
 /** Light or dark, or as the system has it. */
-enum class Appearance(val key: String, @StringRes val title: Int) {
-    SYSTEM("system", R.string.theme_system),
-    DARK("dark", R.string.theme_dark),
-    LIGHT("light", R.string.theme_light),
+enum class Appearance(val key: String, @StringRes val title: Int, val symbol: String) {
+    SYSTEM("system", R.string.theme_system, "◐"),
+    DARK("dark", R.string.theme_dark, "☾"),
+    LIGHT("light", R.string.theme_light, "☀"),
     ;
 
     companion object {

@@ -180,86 +180,6 @@
         <translation>Comprobar la clave de nuevo</translation>
     </message>
     <message>
-        <source>Join a group</source>
-        <translation>Unirse a un grupo</translation>
-    </message>
-    <message>
-        <source>Last copy</source>
-        <translation>Última copia</translation>
-    </message>
-    <message>
-        <source>Leave the group</source>
-        <translation>Salir del grupo</translation>
-    </message>
-    <message>
-        <source>Leaving the group</source>
-        <translation>Saliendo del grupo</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>Unirse a un grupo como administrador</translation>
-    </message>
-    <message>
-        <source>For 15 minutes</source>
-        <translation>Durante 15 minutos</translation>
-    </message>
-    <message>
-        <source>For an hour</source>
-        <translation>Durante una hora</translation>
-    </message>
-    <message>
-        <source>For 8 hours</source>
-        <translation>Durante 8 horas</translation>
-    </message>
-    <message>
-        <source>Until I turn it on</source>
-        <translation>Hasta que lo active</translation>
-    </message>
-    <message>
-        <source>Taking copies</source>
-        <translation>Recibiendo copias</translation>
-    </message>
-    <message>
-        <source>Not taking copies until %1</source>
-        <translation>Sin recibir copias hasta las %1</translation>
-    </message>
-    <message>
-        <source>Not taking copies</source>
-        <translation>Sin recibir copias</translation>
-    </message>
-    <message>
-        <source>Tap to take no copies from the group, or again; hold it for a time</source>
-        <translation>Toca para no recibir copias del grupo, o para volver a recibirlas; mantén pulsado para elegir un tiempo</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
-        <translation>Un administrador silenció este teléfono hasta las %1: sus copias no llegan al grupo.</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
-        <translation>Un administrador silenció este teléfono: sus copias no llegan al grupo hasta que un administrador lo reactive.</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>En el grupo</translation>
-    </message>
-    <message>
-        <source>Admin</source>
-        <translation>Administrador</translation>
-    </message>
-    <message>
-        <source>Member</source>
-        <translation>Miembro</translation>
-    </message>
-    <message>
-        <source>The phone has no key yet. Pull down to check it again.</source>
-        <translation>El teléfono aún no tiene clave. Desliza hacia abajo para comprobarlo de nuevo.</translation>
-    </message>
-    <message>
-        <source>Devices</source>
-        <translation>Dispositivos</translation>
-    </message>
-    <message>
         <source>Settings</source>
         <translation>Ajustes</translation>
     </message>
@@ -272,60 +192,124 @@
         <translation>Mostrar los dispositivos en lista</translation>
     </message>
     <message>
-        <source>Add a device</source>
-        <translation>Añadir un dispositivo</translation>
+        <source>Scan a code</source>
+        <translation>Escanear un código</translation>
     </message>
     <message>
-        <source>Make a group</source>
+        <source>Create a group</source>
         <translation>Crear un grupo</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>Saliendo del grupo y borrando su clave raíz</translation>
+        <source>Join a group</source>
+        <translation>Unirse a un grupo</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one or make one.</source>
-        <translation>El teléfono aún no está en ningún grupo. Desliza hacia abajo para unirte a uno o crear uno.</translation>
+        <source>Join a group as an admin</source>
+        <translation>Unirse a un grupo como administrador</translation>
     </message>
     <message>
-        <source>Root</source>
-        <translation>Raíz</translation>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>El teléfono aún no tiene clave. Desliza hacia abajo para comprobarlo de nuevo.</translation>
     </message>
     <message>
-        <source>Sync the clipboard</source>
-        <translation>Sincronizar el portapapeles</translation>
+        <source>%1 of %2 online</source>
+        <translation>%1 de %2 en línea</translation>
     </message>
     <message>
-        <source>Sync</source>
-        <translation>Sincronizar</translation>
+        <source>Sync is on</source>
+        <translation>La sincronización está activada</translation>
     </message>
     <message>
-        <source>Fetching…</source>
-        <translation>Obteniendo…</translation>
+        <source>Sync is off until %1</source>
+        <translation>La sincronización está desactivada hasta las %1</translation>
+    </message>
+    <message>
+        <source>Sync is off</source>
+        <translation>La sincronización está desactivada</translation>
+    </message>
+    <message>
+        <source>Everywhere is off</source>
+        <translation>En todas partes está desactivado</translation>
+    </message>
+    <message>
+        <source>Everywhere waits while sync is off</source>
+        <translation>En todas partes espera mientras la sincronización está desactivada</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>En casa: sincroniza directamente.</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>Conectando con el hub por el túnel…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>Conectado al hub %1 por el túnel.</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>Conectado al hub por el túnel.</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>Esperando al hub: abre la app una vez en casa, cerca de un ordenador del grupo.</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>Desactivar la sincronización</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>Activar la sincronización</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere off</source>
+        <translation>Desactivar En todas partes</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere on</source>
+        <translation>Activar En todas partes</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>Un administrador silenció este teléfono hasta las %1: sus copias no llegan al grupo.</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>Un administrador silenció este teléfono: sus copias no llegan al grupo hasta que un administrador lo reactive.</translation>
+    </message>
+    <message>
+        <source>Lost phone?</source>
+        <translation>¿Perdiste el teléfono?</translation>
+    </message>
+    <message>
+        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
+        <translation>Haz administrador a un segundo teléfono: en él, toca Unirse a un grupo como administrador y escanea su código aquí con Escanear un código. Toca para cerrar.</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>Dispositivos</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>Desactivar 15 minutos</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>Desactivar una hora</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>Desactivar 8 horas</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>Desactivar hasta que la active</translation>
     </message>
 </context>
 <context>
     <name>DevicePage</name>
-    <message>
-        <source>System</source>
-        <translation>Sistema</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>En el grupo</translation>
-    </message>
-    <message>
-        <source>Type</source>
-        <translation>Tipo</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>Estado</translation>
-    </message>
-    <message>
-        <source>Device ID</source>
-        <translation>ID del dispositivo</translation>
-    </message>
     <message>
         <source>Remove</source>
         <translation>Quitar</translation>
@@ -333,6 +317,14 @@
     <message>
         <source>Removing %1</source>
         <translation>Quitando %1</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>Hacer admin</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>Haciendo admin a %1</translation>
     </message>
     <message>
         <source>Unfreeze</source>
@@ -351,24 +343,52 @@
         <translation>Silenciar hasta reactivar</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>Silenciar una hora</translation>
-    </message>
-    <message>
         <source>Muting %1</source>
         <translation>Silenciando %1</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Silenciar una hora</translation>
     </message>
     <message>
         <source>Rename</source>
         <translation>Renombrar</translation>
     </message>
     <message>
-        <source>Make an admin</source>
-        <translation>Hacer admin</translation>
+        <source>Sync</source>
+        <translation>Sincronización</translation>
     </message>
     <message>
-        <source>Making %1 an admin</source>
-        <translation>Haciendo admin a %1</translation>
+        <source>Sync is off</source>
+        <translation>La sincronización está desactivada</translation>
+    </message>
+    <message>
+        <source>Sync is on</source>
+        <translation>La sincronización está activada</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>Más</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>Tipo</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>En el grupo</translation>
+    </message>
+    <message>
+        <source>System version</source>
+        <translation>Versión del sistema</translation>
+    </message>
+    <message>
+        <source>MAC address</source>
+        <translation>Dirección MAC</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>ID del dispositivo</translation>
     </message>
 </context>
 <context>
@@ -396,6 +416,42 @@
     <message>
         <source>Puts the error itself under each error message</source>
         <translation>Muestra el propio error bajo cada mensaje de error</translation>
+    </message>
+    <message>
+        <source>Notifications</source>
+        <translation>Notificaciones</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>Dispositivos que se unen o salen</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>Un dispositivo pasa a ser admin</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>Un dispositivo se congela o descongela</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>Otro teléfono toma el control del grupo</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Grupo</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>Salir del grupo</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>Saliendo del grupo y borrando su clave raíz</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>Saliendo del grupo</translation>
     </message>
     <message>
         <source>About</source>
@@ -438,64 +494,8 @@
         <translation>Huella de la clave</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>Grupo</translation>
-    </message>
-    <message>
         <source>Device</source>
         <translation>Dispositivo</translation>
-    </message>
-    <message>
-        <source>Notifications</source>
-        <translation>Notificaciones</translation>
-    </message>
-    <message>
-        <source>Devices join or leave</source>
-        <translation>Dispositivos que se unen o salen</translation>
-    </message>
-    <message>
-        <source>A device becomes an admin</source>
-        <translation>Un dispositivo pasa a ser admin</translation>
-    </message>
-    <message>
-        <source>A device is frozen or unfrozen</source>
-        <translation>Un dispositivo se congela o descongela</translation>
-    </message>
-    <message>
-        <source>Another phone takes the group over</source>
-        <translation>Otro teléfono toma el control del grupo</translation>
-    </message>
-    <message>
-        <source>Away from home</source>
-        <translation>Fuera de casa</translation>
-    </message>
-    <message>
-        <source>Sync away from home</source>
-        <translation>Sincronizar fuera de casa</translation>
-    </message>
-    <message>
-        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
-        <translation>Cuando el teléfono no está en la red de casa, se sincroniza por el túnel WireGuard de tu propio hub, un ordenador del grupo configurado con cbb global hub; su puerto es accesible desde internet, pero solo por WireGuard con las claves del grupo. El hub responde a este teléfono la próxima vez que se conecte en casa. Nada va a ningún otro sitio y, sin el túnel, no hay conexión. Al desactivarlo, este teléfono olvida su clave del túnel.</translation>
-    </message>
-    <message>
-        <source>At home: syncing directly.</source>
-        <translation>En casa: sincroniza directamente.</translation>
-    </message>
-    <message>
-        <source>Connecting to the hub through the tunnel…</source>
-        <translation>Conectando con el hub por el túnel…</translation>
-    </message>
-    <message>
-        <source>Connected to the hub %1 through the tunnel.</source>
-        <translation>Conectado al hub %1 por el túnel.</translation>
-    </message>
-    <message>
-        <source>Connected to the hub through the tunnel.</source>
-        <translation>Conectado al hub por el túnel.</translation>
-    </message>
-    <message>
-        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
-        <translation>Esperando al hub: abre la app una vez en casa, cerca de un ordenador del grupo.</translation>
     </message>
 </context>
 <context>
@@ -558,7 +558,7 @@
     </message>
     <message>
         <source>Admin</source>
-        <translation>Admin</translation>
+        <translation>Administrador</translation>
     </message>
     <message>
         <source>Not in the records yet</source>
@@ -674,8 +674,8 @@
         <translation>Silenciado</translation>
     </message>
     <message>
-        <source>Paused</source>
-        <translation>En pausa</translation>
+        <source>Sync is off</source>
+        <translation>La sincronización está desactivada</translation>
     </message>
     <message>
         <source>Looking for devices</source>
@@ -843,6 +843,21 @@
     <message>
         <source>%1 files</source>
         <translation>%1 archivos</translation>
+    </message>
+</context>
+<context>
+    <name>AwayDialog</name>
+    <message>
+        <source>Turn Everywhere on?</source>
+        <translation>¿Activar En todas partes?</translation>
+    </message>
+    <message>
+        <source>Turn on</source>
+        <translation>Activar</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>Cuando el teléfono no está en la red de casa, se sincroniza por el túnel WireGuard de tu propio hub, un ordenador del grupo configurado con cbb global hub; su puerto es accesible desde internet, pero solo por WireGuard con las claves del grupo. El hub responde a este teléfono la próxima vez que se conecte en casa. Nada va a ningún otro sitio y, sin el túnel, no hay conexión. Al desactivarlo, este teléfono olvida su clave del túnel.</translation>
     </message>
 </context>
 </TS>

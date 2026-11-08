@@ -44,16 +44,15 @@ import kotlin.math.sin
 private const val INNER = 6
 
 /**
- * The devices on orbits around this phone, the sync button at the centre,
- * a dashed line to each one online; a device opens its details beside them.
+ * The devices on orbits around this phone, which stands at the centre, a
+ * dashed line to each one online; a device, this phone too, opens its
+ * details beside them.
  */
 @Composable
 internal fun Orbit(
     devices: List<LiveGroup.Device>,
     selected: String?,
-    busy: Boolean,
     select: (String) -> Unit,
-    sync: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalPalette.current
@@ -76,17 +75,20 @@ internal fun Orbit(
                 if (d.online) drawLine(palette.accent.copy(alpha = 0.5f), center, spots[i], dash.width, pathEffect = dash.pathEffect)
             }
         }
-        // The centre: this phone, and the sync button.
-        val hub = 96.dp
-        val hubPx = with(density) { hub.toPx() }
-        val syncLabel = stringResource(R.string.send_or_fetch)
-        Box(
-            Modifier.offset { IntOffset((center.x - hubPx / 2).roundToInt(), (center.y - hubPx / 2).roundToInt()) }
-                .size(hub).clip(CircleShape).background(palette.accent.copy(alpha = if (busy) 0.5f else 1f))
-                .focusRing().clickable(enabled = !busy, role = Role.Button, onClick = sync).semantics { contentDescription = syncLabel },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("⇅", style = MaterialTheme.typography.headlineMedium, color = palette.onAccent)
+        // The centre: this phone, which opens its own details.
+        devices.firstOrNull { it.isSelf }?.let { me ->
+            val hub = 96.dp
+            val hubPx = with(density) { hub.toPx() }
+            val label = stringResource(R.string.this_phone)
+            Box(
+                Modifier.offset { IntOffset((center.x - hubPx / 2).roundToInt(), (center.y - hubPx / 2).roundToInt()) }
+                    .size(hub).clip(CircleShape).background(palette.accent)
+                    .then(if (me.id == selected) Modifier.border(3.dp, palette.text, CircleShape) else Modifier)
+                    .focusRing().clickable(role = Role.Button) { select(me.id) }.semantics { contentDescription = label },
+                contentAlignment = Alignment.Center,
+            ) {
+                DeviceGlyph(me.kind, palette.onAccent, 48.dp)
+            }
         }
         val nodeW = 104.dp
         val nodeWPx = with(density) { nodeW.toPx() }

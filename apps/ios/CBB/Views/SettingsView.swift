@@ -2,10 +2,15 @@
 
 import CBBKit
 import SwiftUI
+import TipKit
 import UIKit
 
-/// Colour and appearance, language, sync away from home, notifications,
-/// about.
+/// The basic settings first: the look (theme, colour, language) as icons
+/// without a heading, notifications, the watch, the recovery key on the
+/// root, the switch for the advanced ones, leaving the group, about. The
+/// advanced ones: away from home (the hub, moving it to a computer, the
+/// relay) and, for admins, the group (copy lifetime, security level). No
+/// long texts under the items: a hard one has a tip, shown until closed.
 struct SettingsView: View {
     @AppStorage(AccentChoice.key) private var color = Tokens.colors[0].name
     @AppStorage(Appearance.key) private var appearance = Appearance.system
@@ -26,6 +31,7 @@ struct SettingsView: View {
     @State private var versionTaps = 0
     @AppStorage("ShowErrorDetails") private var errorDetails = AppModel.showsErrorDetails
     @AppStorage("ShowErrorDetailsSwitch") private var detailsSwitch = UserDefaults.standard.bool(forKey: "ShowErrorDetailsSwitch")
+    @AppStorage("AdvancedSettings") private var advanced = false
 
     private var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
@@ -34,60 +40,62 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker(selection: $appearance) {
-                    ForEach(Appearance.allCases) { Text($0.title).tag($0) }
-                } label: {
-                    Text("Theme")
+                HStack(spacing: Tokens.spacingMedium) {
+                    Picker(selection: $appearance) {
+                        ForEach(Appearance.allCases) { a in
+                            Image(systemName: a.symbol).accessibilityLabel(Text(a.title)).tag(a)
+                        }
+                    } label: {
+                        Text("Theme")
+                    }
+                    .pickerStyle(.segmented)
+                    Menu {
+                        Picker(selection: $language) {
+                            ForEach(LanguageChoice.allCases) { Text(verbatim: $0.title).tag($0) }
+                        } label: { Text("Language") }
+                    } label: {
+                        Image(systemName: "globe").font(.title3)
+                    }
+                    .accessibilityLabel(Text("Language"))
+                    .accessibilityValue(Text(verbatim: language.title))
                 }
-                .pickerStyle(.segmented)
                 ColorSwatches(selection: $color)
-            } header: {
-                Text("Colour")
             }
             .listRowBackground(palette.surface)
-            Picker(selection: $language) {
-                ForEach(LanguageChoice.allCases) { Text(verbatim: $0.title).tag($0) }
-            } label: {
-                Text("Language")
-            }
-            .listRowBackground(palette.surface)
-            if let hub = model.hub {
-                hubSection(hub)
-                if hub.on, hub.status == .registered {
-                    inviteSection
-                }
-                if !hub.computers.isEmpty {
-                    moveHubSection(hub)
-                }
-            }
-            if let away = model.away, model.hub?.on != true {
-                awaySection(away)
-            }
-            if let relay = model.blindRelay {
-                relaySection(relay)
-            }
+            NotificationSettings()
             if model.devices.contains(where: { $0.isSelf && $0.isRoot }), WatchLink.shared.watchApp {
                 watchSection
             }
             if model.isRoot {
                 RecoverySection()
             }
-            if let level = model.keyLevel {
-                keyLevelSection(level)
+            Section {
+                Toggle(isOn: $advanced) { Text("Advanced settings") }
             }
-            if model.isAdmin, model.phase == .home {
-                incomingSection
+            .listRowBackground(palette.surface)
+            if advanced {
+                if let hub = model.hub {
+                    hubSection(hub)
+                    if !hub.computers.isEmpty {
+                        moveHubSection(hub)
+                    }
+                }
+                if let away = model.away, model.hub?.on != true {
+                    awaySection(away)
+                }
+                if let relay = model.blindRelay {
+                    relaySection(relay)
+                }
+                if model.isAdmin, model.phase == .home {
+                    incomingSection
+                }
+                if let level = model.keyLevel {
+                    keyLevelSection(level)
+                }
             }
-            NotificationSettings()
             if model.phase == .home {
                 Section {
                     LeaveButton()
-                } footer: {
-                    if model.isRoot {
-                        Text("This phone holds the group's root: it leaves only once the group has no other devices.")
-                    } else {
-                        Text("Deletes this phone's keys and the group's data here; the settings stay.")
-                    }
                 }
                 .listRowBackground(palette.surface)
             }
@@ -114,10 +122,6 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("About")
-            } footer: {
-                if detailsSwitch {
-                    Text("Error messages show the error underneath them, to find out what failed. Tap the version seven times to see this switch.")
-                }
             }
             .listRowBackground(palette.surface)
         }
@@ -142,12 +146,14 @@ struct SettingsView: View {
                 Text("Keys in hardware").tag(Records.hardware)
                 Text("Keys in files too").tag(Records.levelFiles)
             } label: {
-                Text("Admin keys")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Security level")
+                    Text("Root, admins, hubs").font(.caption).foregroundStyle(palette.textDim)
+                }
             }
+            TipView(SettingTip.securityLevel)
         } header: {
-            Text("Admin keys")
-        } footer: {
-            Text("Which devices may be the group's admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them.")
+            Text("Group")
         }
         .listRowBackground(palette.surface)
     }
@@ -161,12 +167,11 @@ struct SettingsView: View {
                     Text(Duration.milliseconds(ms).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))).tag(ms)
                 }
             } label: {
-                Text("A copy from another device")
+                Text("Copy lifetime")
             }
+            TipView(SettingTip.copyLifetime)
         } header: {
-            Text("Incoming copies")
-        } footer: {
-            Text("How long a copy from another device goes into the clipboard after it arrives. After that each device keeps what it copied itself, however old.")
+            Text("Group")
         }
         .listRowBackground(palette.surface)
     }
@@ -198,8 +203,6 @@ struct SettingsView: View {
             }
         } header: {
             Text("Move the hub to a computer")
-        } footer: {
-            Text("A computer that is always on keeps sync away from home working while this app is closed. The devices that reach this phone from afar move with it.")
         }
         .listRowBackground(palette.surface)
         .alert(Text("Make \(moving?.name ?? "") the hub?"), isPresented: Binding(
@@ -217,40 +220,6 @@ struct SettingsView: View {
         }
     }
 
-    /// A remote invitation for a device far away (docs/protocol.md,
-    /// section 12): the button that opens it, then its file to share, and
-    /// the question about the device that used it, with the fingerprint to
-    /// compare.
-    private var inviteSection: some View {
-        Section {
-            if let invite = model.invite {
-                Text("The invitation is open until \(invite.expires.formatted(date: .omitted, time: .shortened)). Share its file only with the person who joins: anyone who has it can ask to join.")
-                    .font(.footnote)
-                    .foregroundStyle(palette.textDim)
-                ShareLink(item: invite.file) { Text("Share the invitation") }
-                Button(role: .destructive) { model.cancelInvite() } label: { Text("Cancel the invitation") }
-            } else {
-                Button { Task { await model.openInvite() } } label: { Text("Make an invitation") }
-            }
-            if let note = model.inviteNote {
-                Text(verbatim: note).font(.caption).foregroundStyle(palette.textDim)
-            }
-        } header: {
-            Text("Invite a device from afar")
-        } footer: {
-            Text("For a device that is not on your network, such as a parent's computer: share the invitation file with its owner, who joins with cbb pair -invite. It works once, for an hour, while this app is open.")
-        }
-        .listRowBackground(palette.surface)
-        .alert(Text("Admit \(model.invite?.request?.info.name ?? "")?"), isPresented: Binding(
-            get: { model.invite?.request != nil }, set: { if !$0 { model.answer(false) } }
-        )) {
-            Button { model.answer(true) } label: { Text("Admit") }
-            Button(role: .cancel) { model.answer(false) } label: { Text("Not this one") }
-        } message: {
-            Text("A device (\(model.invite?.request?.info.os ?? "")) used the invitation. Admit it only if the device shows the same fingerprint:\n\n\(model.invite?.request?.fingerprint ?? "")")
-        }
-    }
-
     /// The phone as the group's hub: the switch, where it stands, the
     /// forwarder and the home networks.
     private func hubSection(_ hub: AppModel.Hub) -> some View {
@@ -265,6 +234,7 @@ struct SettingsView: View {
                 Text("This phone is the group's hub")
             }
             .disabled(switching)
+            TipView(SettingTip.hub)
             hubStatus(hub)
                 .foregroundStyle(hub.status == .registered ? palette.accent : palette.textDim)
             // The registration's error underneath, when details are on.
@@ -316,20 +286,16 @@ struct SettingsView: View {
                 Picker(selection: Binding(get: { hub.disguise }, set: { if $0 != hub.disguise { disguiseTo = $0 } })) {
                     ForEach(HubOnPhone.Disguise.allCases, id: \.self) { Text(verbatim: Self.disguiseName($0)).tag($0) }
                 } label: {
-                    Text("How the hub's tunnel hides")
+                    Text("Tunnel disguise")
                 }
                 .disabled(switching)
-                Text("For networks that block WireGuard. VLESS needs a forwarder that takes it.")
-                    .font(.footnote)
-                    .foregroundStyle(palette.textDim)
+                TipView(SettingTip.disguise)
             }
             if let note = model.hubNote {
                 Text(verbatim: note).font(.caption).foregroundStyle(palette.danger)
             }
         } header: {
-            Text("This phone as the hub")
-        } footer: {
-            Text("While the app is open, this phone is the hub of a group without a computer: the other phones, TVs and lite members on the home network connect to it, and with a forwarder they reach it from afar too. The forwarder only passes encrypted packets; it learns the group's tag, this phone's tunnel key and the addresses, never what is copied. A computer that is always on is the better hub; until then this phone does it.")
+            Text("Away from home: hub")
         }
         .listRowBackground(palette.surface)
         .onAppear {
@@ -381,16 +347,6 @@ struct SettingsView: View {
     /// Sync away from home: the switch, where it stands, and what it does.
     private func awaySection(_ away: AppModel.Away) -> some View {
         Section {
-            Toggle(isOn: Binding(get: { away.on }, set: { on in
-                switching = true
-                Task {
-                    await model.setAway(on)
-                    switching = false
-                }
-            })) {
-                Text("Sync away from home")
-            }
-            .disabled(switching)
             awayStatus(away)
                 .foregroundStyle(away.on && away.status == .connected ? palette.accent : palette.textDim)
             if let error = away.error {
@@ -401,14 +357,12 @@ struct SettingsView: View {
             }
         } header: {
             Text("Away from home")
-        } footer: {
-            Text("When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.")
         }
         .listRowBackground(palette.surface)
     }
 
     private func awayStatus(_ away: AppModel.Away) -> Text {
-        guard away.on else { return Text("Off") }
+        guard away.on else { return Text("Off: the globe on Home turns it on.") }
         switch away.status {
         case .atHome: return Text("At home: syncing directly.")
         case .connecting: return Text("Connecting to the hub through the tunnel…")
@@ -428,6 +382,7 @@ extension SettingsView {
     /// user reads and accepts before the phone meets the group there.
     func relaySection(_ relay: AppModel.BlindRelay) -> some View {
         Section {
+            TipView(SettingTip.relay)
             relayStatus(relay)
                 .foregroundStyle(relay.status == .connected ? palette.accent : palette.textDim)
             // The relay's error underneath, when details are on.
@@ -458,8 +413,6 @@ extension SettingsView {
             }
         } header: {
             Text("Blind relay")
-        } footer: {
-            Text("For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while this app is open. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.")
         }
         .listRowBackground(palette.surface)
         .onAppear {
@@ -551,14 +504,9 @@ extension SettingsView {
                 }
                 .disabled(switching)
             }
+            if watches.isEmpty { TipView(SettingTip.watch) }
         } header: {
             Text("Apple Watch")
-        } footer: {
-            if watches.isEmpty {
-                Text("With a key of its own, the watch can freeze an admin computer, remove a device that is no admin, and turn remote paste, quick actions and sync away from home off. It needs a passcode and wrist detection. Open CBB on the watch first.")
-            } else {
-                Text("To give a new watch the key, remove this one from the devices first.")
-            }
         }
         .listRowBackground(palette.surface)
     }
@@ -573,13 +521,6 @@ struct NotificationSettings: View {
             ForEach(GroupEvent.Kind.allCases) { NotifyToggle(kind: $0) }
         } header: {
             Text("Notifications")
-        } footer: {
-            // An iPad pairs with no watch.
-            if UIDevice.current.userInterfaceIdiom == .pad {
-                Text("The app notifies of these while it runs. It hears of an event when it next syncs with the group.")
-            } else {
-                Text("The app notifies of these while it runs, and a paired Apple Watch shows them too. It hears of an event when it next syncs with the group.")
-            }
         }
         .listRowBackground(palette.surface)
     }
@@ -607,4 +548,36 @@ private struct NotifyToggle: View {
         case .hub: Text("The hub does not answer away from home")
         }
     }
+}
+
+extension Appearance {
+    /// The theme as an icon in Settings.
+    var symbol: String {
+        switch self {
+        case .system: "circle.lefthalf.filled"
+        case .dark: "moon"
+        case .light: "sun.max"
+        }
+    }
+}
+
+/// A tip at a hard setting, a couple of sentences, shown from the first
+/// launch until the user closes it, then never again (TipKit).
+struct SettingTip: Tip {
+    let id: String
+    let title: Text
+    let message: Text?
+
+    static let hub = SettingTip(id: "hub", title: Text("The phone as the hub"),
+        message: Text("While the app is open, the other devices at home connect to this phone, and with a forwarder from afar too. The forwarder passes only encrypted packets."))
+    static let disguise = SettingTip(id: "disguise", title: Text("Tunnel disguise"),
+        message: Text("For networks that block WireGuard. VLESS needs a forwarder that takes it."))
+    static let relay = SettingTip(id: "relay", title: Text("Blind relay"),
+        message: Text("For a group without a hub: the devices meet at a relay. It cannot read the clipboard, but it sees which devices are online and talk to each other."))
+    static let copyLifetime = SettingTip(id: "copyLifetime", title: Text("Copy lifetime"),
+        message: Text("How long a copy from another device goes into the clipboard after it arrives."))
+    static let securityLevel = SettingTip(id: "securityLevel", title: Text("Security level"),
+        message: Text("Which devices may be admins and hubs. Keys in hardware never leave the device; a key in a file can be copied."))
+    static let watch = SettingTip(id: "watch", title: Text("The watch as an admin"),
+        message: Text("It can freeze an admin computer and turn remote paste and quick actions off. Open CBB on the watch first."))
 }

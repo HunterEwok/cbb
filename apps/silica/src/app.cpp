@@ -502,6 +502,16 @@ void App::setDeviceList(bool on)
     emit settingsChanged();
 }
 
+bool App::tipClosed(const QString &name) const
+{
+    return QSettings().value(QStringLiteral("tips/") + name).toBool();
+}
+
+void App::closeTip(const QString &name)
+{
+    QSettings().setValue(QStringLiteral("tips/") + name, true);
+}
+
 QString App::languageName(const QString &code) const
 {
     const QString name = QLocale(code).nativeLanguageName();
