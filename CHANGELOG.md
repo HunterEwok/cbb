@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The Docker e2e (tools/e2e/e2e.sh) runs the Rust service too, with cbb-helper beside it
+  and the Go cbb's commands against its socket, in CI's e2e job: the Rust service
+  answers status in no group, and joins with a code (`join`: the member whose pairing
+  window is announced by mDNS, or the address given, or it listens, announced, for a
+  computer that types the code it shows).
 - The release archives carry `cbb-helper` beside `cbb`, and the installers (Linux, rootless,
   macOS, FreeBSD, Windows, Homebrew) install it there, owned by root where `cbb` is, and
   remove it again; CI checks that each archive and installer has it. OpenWrt and the
@@ -1771,6 +1776,12 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The Rust service no longer renames itself in mDNS ("ID (2)") when its pairing window
+  opens or closes, which kept the other members from finding it: the registration is
+  updated in place rather than taken back and made again.
+- A pairing window opened by an admin moments after it became one no longer fails as a
+  wrong code: each attempt binds the pairing to the certificate its handshake presented,
+  not to the one from when the window opened.
 - On a big-endian router (MIPS) a known network is told by its gateway again: the gateway's
   address in `/proc/net/route` was read with its bytes reversed, in Go and in Rust, so it never
   matched the ARP table.

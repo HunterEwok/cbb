@@ -655,9 +655,10 @@ jobs:
   e2e:
     name: e2e
     needs: changes
-    if: needs.changes.outputs.core == 'true'
+    # The Rust service (member/) runs it too.
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lite == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -672,6 +673,16 @@ jobs:
         run: go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
       - name: three members and a resolver in containers
         run: sh tools/e2e/e2e.sh "$RUNNER_TEMP/cbb"
+      - name: the Rust service and cbb-helper beside it
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          cargo build --locked --release -p cbb-lite
+          mkdir -p "$RUNNER_TEMP/rust"
+          cp target/release/cbb "$RUNNER_TEMP/rust/cbb"
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/rust/cbb-helper" ./cmd/cbb-helper
+      - name: the same, with the Rust service and the Go cbb's commands
+        run: sh tools/e2e/e2e.sh "$RUNNER_TEMP/rust/cbb" "$RUNNER_TEMP/cbb"
 
   desktop:
     name: desktop clipboards

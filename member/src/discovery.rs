@@ -53,6 +53,65 @@ impl Drop for Announcement {
     }
 }
 
+/// How long a joiner browses for a member with an open pairing window, as
+/// Go's service does, and how long it waits after the first for others.
+pub const PAIRING_BROWSE: Duration = Duration::from_secs(5);
+const PAIRING_SETTLE: Duration = Duration::from_millis(700);
+
+/// The addresses of the members that announce an open pairing window (TXT
+/// `p=1`), for a device that joins with a code alone: browsed for up to
+/// wait, then a moment more for the others; an error when none is found.
+/// More than one window is refused, as in Go: the code fits only one.
+pub fn find_pairing(wait: Duration) -> crate::error::Result<Vec<SocketAddr>> {
+    use crate::error::Error;
+    let none = || {
+        Error::msg(
+            "no member with an open pairing window found; run cbb pair on the group's root or an admin, or give its address",
+        )
+    };
+    let daemon = mdns_sd::ServiceDaemon::new().map_err(|e| Error::with("cannot browse with mDNS", e))?;
+    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
+    let only = interfaces::only();
+    if !only.is_empty() {
+        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
+        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
+    }
+    let rx = daemon.browse(SERVICE).map_err(|e| Error::with("cannot browse with mDNS", e))?;
+    let mut open: std::collections::BTreeMap<String, Vec<SocketAddr>> = Default::default();
+    let mut deadline = std::time::Instant::now() + wait;
+    let mut settled = false;
+    while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
+        let Ok(ev) = rx.recv_timeout(left) else { break };
+        let mdns_sd::ServiceEvent::ServiceResolved(info) = ev else { continue };
+        if info.get_property_val_str("p") != Some("1") {
+            continue;
+        }
+        let addrs = order(info.get_addresses().iter().map(|ip| match ip {
+            mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
+                SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, v6.scope_id().index))
+            }
+            other => SocketAddr::new(other.to_ip_addr(), info.port),
+        }));
+        if addrs.is_empty() {
+            continue;
+        }
+        open.insert(info.fullname.clone(), addrs);
+        if !settled {
+            settled = true;
+            deadline = std::time::Instant::now() + PAIRING_SETTLE;
+        }
+    }
+    let _ = daemon.shutdown();
+    match open.len() {
+        0 => Err(none()),
+        1 => Ok(open.into_values().next().unwrap_or_default()),
+        n => Err(Error::msg(format!(
+            "{n} devices announce a pairing window ({}); give the address that cbb pair showed",
+            open.keys().map(|k| k.split('.').next().unwrap_or(k)).collect::<Vec<_>>().join(", ")
+        ))),
+    }
+}
+
 const MAX_WAIT: Duration = Duration::from_secs(30);
 /// At most this many connections may be in their TLS handshake at once.
 const MAX_HANDSHAKES: usize = 16;
@@ -370,12 +429,17 @@ fn browse(
     let mut registered: Option<String> = None;
     let mut publish = |window: bool, at: &Option<Vec<IpAddr>>| -> Result<(), mdns_sd::Error> {
         let Some(port) = port else { return Ok(()) };
-        if let Some(name) = registered.take() {
-            let _ = daemon.unregister(&name);
-        }
         if at.as_ref().is_some_and(Vec::is_empty) {
-            return Ok(()); // on no known network: browse only
+            // On no known network: browse only.
+            if let Some(name) = registered.take() {
+                let _ = daemon.unregister(&name);
+            }
+            return Ok(());
         }
+        // A registration of the same name is updated in place below: taking
+        // it back first would have the new one probe against the old one's
+        // records, which mdns-sd takes for another device's and renames this
+        // one ("ID (2)"), which nobody finds by its ID.
         let mut txt = vec![("v", "1"), ("g", tag)];
         if !full {
             txt.push(("r", "lite"));

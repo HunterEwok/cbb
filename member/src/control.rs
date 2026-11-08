@@ -119,6 +119,10 @@ pub struct Header {
     pub expires: i64,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub address: String,
+    /// In join: wait for a member to dial this device, rather than dial
+    /// the member whose code it was given.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub listen: bool,
     /// In away hub: the UDP port (0 for the member port), the forwarder and
     /// its key, AmneziaWG, VLESS, and to keep the hub's settings where the
     /// message gives none; in away hub-off, to stop the group's only hub.

@@ -283,7 +283,7 @@ fn host_name() -> String {
     if records::valid_name(&name) { name } else { "lite".into() }
 }
 
-fn resolve(s: &str) -> Result<SocketAddr> {
+pub(crate) fn resolve(s: &str) -> Result<SocketAddr> {
     s.to_socket_addrs()
         .context(format!("{s:?} is not host:port"))?
         .next()
@@ -331,7 +331,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         Some(path) => Some(invite_consent(&path)?),
         None => None,
     };
-    let (mut joiner, save) = joiner(g, &name)?;
+    let (mut joiner, save) = joiner(&g.state, &name)?;
     if full {
         joiner = joiner.as_computer(admin::os_name());
     }
@@ -435,18 +435,18 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
 
 /// The joiner of a device in no group yet, and how it saves the group it
 /// joins.
-fn joiner(g: &Global, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
-    if identity::Identity::load(&g.state)?.is_some() {
+pub(crate) fn joiner(state: &std::path::Path, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
+    if identity::Identity::load(state)?.is_some() {
         return Err(Error::msg(format!(
             "this device is already in a group, and a lite member admits no devices (use the phone app or \
              a full member); to join another group, stop the service and remove {}",
-            g.state.join(identity::FILE_NAME).display()
+            state.join(identity::FILE_NAME).display()
         )));
     }
-    std::fs::create_dir_all(&g.state).context(format!(
+    std::fs::create_dir_all(state).context(format!(
         "cannot create {0}; make it for the service's user first: \
          sudo install -d -o cbb -g cbb -m 0700 {0}",
-        g.state.display()
+        state.display()
     ))?;
     let mut joiner = pair::Joiner::new(name)?;
     // The device key goes into the TPM or the Secure Enclave where cbb-helper
@@ -459,13 +459,13 @@ fn joiner(g: &Global, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
     }
     // The key for sealed messages the service will offer in its hello goes
     // with the info, so that a phone records it as it admits this member.
-    match sealkey::load(&g.state)
+    match sealkey::load(state)
         .and_then(|s| cbb_core::seal::public_key(&s).map_err(|e| e.context("the key for sealed messages")))
     {
         Ok(public) => joiner.seal = public,
         Err(e) => eprintln!("cbb: the key for sealed commands: {e}; commands will come unsealed"),
     }
-    let state = g.state.clone();
+    let state = state.to_path_buf();
     let save = move |id: &identity::Identity, rs: &[records::Record], ts: &[records::ClaimTime]| {
         let mut set = records::new(&id.group_ca);
         let _ = set.add_all(rs);
@@ -480,7 +480,7 @@ fn joiner(g: &Global, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
 /// connection to it: the Next's link joins this way through the ESP.
 #[cfg(unix)]
 pub(crate) fn join_with_code(g: &Global, sock: TcpStream, code: &str) -> Result<identity::Identity> {
-    let (joiner, save) = joiner(g, &host_name())?;
+    let (joiner, save) = joiner(&g.state, &host_name())?;
     let code = pair::normalize_code(code)?;
     pair::join(&joiner, sock, &code, &*save)
 }

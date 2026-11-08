@@ -237,9 +237,15 @@ impl Window {
             return Err(Error::with("the pairing failed", why));
         }
         let view = admit::GroupView::of(&node.records().lock().unwrap());
+        // The identity the handshake just presented: a certificate renewed
+        // since the window opened (an admin's, made one moments before)
+        // would otherwise bind the pairing to the old one, and the joiner's
+        // check would fail as a wrong code.
+        let mut admitter = self.admitter.clone();
+        admitter.identity = (*node.identity()).clone();
         let res = match &self.secret {
-            Some((secret, _)) => Admission::accept_secret(self.admitter.clone(), view, secret, session, exporter),
-            None => Admission::accept(self.admitter.clone(), view, &self.code, session, exporter),
+            Some((secret, _)) => Admission::accept_secret(admitter, view, secret, session, exporter),
+            None => Admission::accept(admitter, view, &self.code, session, exporter),
         };
         let mut adm = match res {
             Ok(a) => a,

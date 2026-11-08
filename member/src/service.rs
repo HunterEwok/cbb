@@ -214,6 +214,9 @@ struct Service {
     helper: Option<Arc<crate::helper::Helper>>,
     /// This device's name, for the group it makes with cbb new.
     name: String,
+    /// Whether it is a computer's service (Config::full), for the role a
+    /// join asks for.
+    full: bool,
     /// One cbb new at a time, so two requests cannot make two groups.
     creating: Mutex<()>,
     /// The pairing running here: a window for a code, or an admission by
@@ -307,6 +310,7 @@ pub fn run(cfg: Config) -> Result<()> {
         log: log.clone(),
         helper: crate::helper::shared(),
         name: cfg.name.clone(),
+        full: cfg.full,
         creating: Mutex::new(()),
         pairing: Mutex::new(None),
         port: Mutex::new(None),
@@ -1745,6 +1749,13 @@ impl Service {
             let _ = control::write(&mut out, &answer);
             return;
         }
+        if m.header.op == "join" {
+            if let Err(e) = self.join(&m, r, &mut out) {
+                (self.log)(&format!("cbb: join: {}", e.for_log()));
+                let _ = control::write(&mut out, &control::failure(&e));
+            }
+            return;
+        }
         if m.header.op == "invite" {
             let res = self
                 .admin(|a| a.admitter(false))
@@ -1999,8 +2010,23 @@ impl Service {
                 Vec::new(),
             )),
             "status" => {
-                let node = self.node()?;
                 let peripherals = self.peripherals.status();
+                // A device in no group still answers, with what needs no
+                // group: its version, a TV's remote and the keyboard.
+                let node = match self.node() {
+                    Ok(node) => node,
+                    Err(_) if !matches!(Identity::load(&self.state_dir), Ok(Some(_))) => {
+                        let status = Status {
+                            version: VERSION.into(),
+                            os: crate::admin::os_name().into(),
+                            keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
+                            tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
+                            ..Default::default()
+                        };
+                        return Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()));
+                    }
+                    Err(e) => return Err(e),
+                };
                 let id = node.identity();
                 let skews = node.engine.skews();
                 let peers = node
@@ -2259,7 +2285,6 @@ impl Service {
                 let name = self.admin(|a| a.admit_by_qr(&h.code, &h.addrs, &h.fingerprint, h.admins))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "join" => Err(Error::msg("run cbb pair on this device, with the service stopped or running")),
             "leave" => {
                 // The node stops first, so nothing writes the group's files
                 // again; the service then restarts in no group.
@@ -2304,6 +2329,87 @@ impl Service {
     /// Opens a pairing window for cbb pair: the answer gives its code, and
     /// a second one the device it admitted, once it closes. A client that
     /// hangs up closes the window.
+    /// cbb pair -code, and cbb pair waiting for a computer to type the code
+    /// this device shows (Go's join): dials the member whose window takes
+    /// the code, found by mDNS or at the address given, or listens for it,
+    /// announced so that a computer finds it by the code alone. The service
+    /// takes the group it saves as it would after cbb pair, and the answer
+    /// comes once it runs in it. A remote invitation joins through cbb
+    /// pair -invite itself.
+    fn join(&self, m: &Message, r: control::Reader<UnixStream>, out: &mut UnixStream) -> Result<()> {
+        let h = &m.header;
+        if !h.invite.is_empty() {
+            return Err(Error::msg("join with an invitation through cbb pair -invite on this device"));
+        }
+        if matches!(Identity::load(&self.state_dir), Ok(Some(_))) {
+            return Err(Error::msg("this device is already in a group"));
+        }
+        let code = cbb_core::pair::normalize_code(&h.code).map_err(|r| Error::msg(r.message()))?;
+        let _one = self.creating.try_lock().map_err(|_| Error::msg("a join or a pairing is already running here"))?;
+        let (mut joiner, save) = crate::joiner(&self.state_dir, &self.name)?;
+        if self.full {
+            joiner = joiner.as_computer(crate::admin::os_name());
+        }
+        let log = self.log.clone();
+        let id = if h.listen {
+            let mut r = r;
+            let ln = std::net::TcpListener::bind(("::", 0))
+                .or_else(|_| std::net::TcpListener::bind(("0.0.0.0", 0)))
+                .context("cannot listen for the member that adds this device")?;
+            let port = ln.local_addr().context("cannot listen")?.port();
+            let fp = joiner.fingerprint();
+            let _announced = crate::discovery::announce_joiner(&joiner.id, port, &fp);
+            let addrs = crate::pair::qr_addresses(port);
+            control::write(
+                out,
+                &control::reply(Header { addrs: addrs.clone(), fingerprint: fp, ..Default::default() }, Vec::new()),
+            )?;
+            let wait = match h.expires {
+                n if n > 0 => crate::pair::LIFETIME.min(Duration::from_secs(n as u64)),
+                _ => crate::pair::LIFETIME,
+            };
+            // The client may hang up; the window still ends at wait.
+            std::thread::spawn(move || while r.read().is_ok() {});
+            crate::pair::listen(&joiner, ln, Some(addrs), &code, wait, &|_| {}, &*save, &|s| log(s))?
+        } else {
+            let addrs = if h.address.is_empty() {
+                crate::discovery::find_pairing(crate::discovery::PAIRING_BROWSE)?
+            } else {
+                vec![crate::resolve(&h.address)?]
+            };
+            let mut last = Error::msg("no address to dial");
+            let mut joined = None;
+            for a in addrs.iter().take(crate::pair::MAX_FAILURES as usize) {
+                let sock = match std::net::TcpStream::connect_timeout(a, Duration::from_secs(10)) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        last = Error::with(format!("cannot connect to {a}"), e);
+                        continue;
+                    }
+                };
+                match crate::pair::join(&joiner, sock, &code, &*save) {
+                    Ok(id) => {
+                        joined = Some(id);
+                        break;
+                    }
+                    // The other side checked the code: one guess only.
+                    Err(e) => {
+                        last = e;
+                        break;
+                    }
+                }
+            }
+            joined.ok_or(last)?
+        };
+        (self.log)(&format!("cbb: joined the group {} as {}", id.tag(), id.id));
+        // The group starts from the saved identity; the answer waits for it.
+        // Joined at home: the networks it is on are the home's, as Go's.
+        if let Some(n) = self.node()?.networks() {
+            n.learn_all();
+        }
+        control::write(out, &control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+    }
+
     fn pair_window(&self, m: &Message, mut r: control::Reader<UnixStream>, out: &mut UnixStream) -> Result<()> {
         let mut win = None;
         let _slot = self.take_pairing(|| {
