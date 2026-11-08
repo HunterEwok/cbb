@@ -10,6 +10,7 @@
 //! address it came from.
 
 use std::net::{SocketAddr, TcpListener};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -55,9 +56,6 @@ impl Away {
     /// awayLocked: sync away from home goes on first with consent. Returns
     /// whether the hellos must go again with the keys, which it returns.
     pub fn make_hub(&self, h: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
-        if h.vless {
-            return Err(Error::msg("VLESS for a hub's clients is not on the Rust service yet; leave -vless out"));
-        }
         let mut fw = forwarder_of(&h.forwarder, &h.forwarder_key)?;
         if !(0..=65535).contains(&h.port) {
             return Err(Error::msg(format!("a bad port {}", h.port)));
@@ -92,9 +90,16 @@ impl Away {
         if endpoints.is_empty() && fw.is_none() {
             return Err(Error::msg("the hub needs an address away from home or a forwarder"));
         }
-        // Kept as they are when the hub is set again, so its clients'
-        // offers stay good.
-        let obfuscation = match (h.obfuscate, st.obfuscation.take()) {
+        if let Some(f) = fw.as_mut() {
+            vless_for(f, h.vless, st.forwarder.as_ref());
+        } else if h.vless {
+            return Err(Error::msg("VLESS goes to a forwarder; give one with -forwarder and -forwarder-key"));
+        }
+        // VLESS comes with AmneziaWG: the clients try it over UDP first,
+        // and inside VLESS it hides WireGuard's sizes (docs/protocol.md,
+        // section 11, "VLESS"). Kept as they are when the hub is set again,
+        // so its clients' offers stay good.
+        let obfuscation = match (h.obfuscate || h.vless, st.obfuscation.take()) {
             (false, _) => None,
             (true, Some(o)) => Some(o),
             (true, None) => Some(crate::awg::Obfuscation::random()?.to_value()),
@@ -118,6 +123,18 @@ impl Away {
         *self.error.lock().unwrap() = None;
         (self.log)("cbb: this device is one of the group's hubs for sync away from home");
         Ok(keys)
+    }
+
+    /// Serves at once when this device is a hub with no hub above it in the
+    /// group's order, as after cbb global hub, rather than when the loop
+    /// next looks; a hub with hubs above tries them first.
+    pub fn serve_if_first(&self, node: &Arc<Node>) {
+        let st = self.st.lock().unwrap().clone();
+        if let Some(st) = st.filter(|s| s.is_hub && s.relay.is_none())
+            && st.hubs_above(&node.hub_order(), self.me.as_str()).is_empty()
+        {
+            self.serve(node, &st);
+        }
     }
 
     /// Makes this device, a hub, stop being one, as Go's stopHub: without
@@ -191,7 +208,8 @@ impl Away {
         let share = || self.share_for(node, from).into_iter().collect();
         let Some((key, psk)) = peer.tunnel_key.as_ref() else { return share() };
         let mut cur = self.st.lock().unwrap();
-        let Some(st) = cur.as_mut().filter(|s| s.is_hub) else {
+        let moving = self.moving.load(Ordering::SeqCst);
+        let Some(st) = cur.as_mut().filter(|s| s.is_hub && !moving) else {
             drop(cur);
             return share();
         };
@@ -213,6 +231,7 @@ impl Away {
         }
         *st = next;
         let offers = offers(st, from.as_str(), &m.psk, &node.hub_order());
+        self.guest_offered(from);
         if changed {
             self.set_peers(st);
         }
@@ -230,7 +249,11 @@ impl Away {
     /// Gives the running hub the clients st admits.
     pub(super) fn set_peers(&self, st: &State) {
         let Some(s) = self.serving.lock().unwrap().as_ref().map(|s| s.hub.clone()) else { return };
-        if let Err(e) = st.peers().and_then(|p| s.set_peers(p, self.me.as_str())) {
+        let peers = st.peers().map(|mut p| {
+            p.extend(self.guest_peers());
+            p
+        });
+        if let Err(e) = peers.and_then(|p| s.set_peers(p, self.me.as_str())) {
             self.fail(&e.context("the hub could not take its clients"));
         }
     }
@@ -239,6 +262,9 @@ impl Away {
     /// other hubs once it starts; on an error it fails closed, and status
     /// says why.
     pub(super) fn serve(&self, node: &Arc<Node>, st: &State) {
+        // One start at a time: the loop and cbb global hub both start it.
+        static STARTING: Mutex<()> = Mutex::new(());
+        let _one = STARTING.lock().unwrap_or_else(|e| e.into_inner());
         if self.serving.lock().unwrap().is_some() {
             return;
         }
@@ -256,14 +282,18 @@ impl Away {
         let port = if st.listen_port == 0 { MEMBER_PORT } else { st.listen_port };
         let ln = TcpListener::bind("127.0.0.1:0").context("cannot open the hub's local port")?;
         let local = ln.local_addr().context("cannot open the hub's local port")?.port();
-        let target: hub::Target = Arc::new(move |a| if hub::is_guest(&a) { None } else { Some(local) });
+        let guests = TcpListener::bind("127.0.0.1:0").context("cannot open the hub's local port")?;
+        let guest_port = guests.local_addr().context("cannot open the hub's local port")?.port();
+        let target: hub::Target = Arc::new(move |a| Some(if hub::is_guest(&a) { guest_port } else { local }));
+        let mut peers = st.peers()?;
+        peers.extend(self.guest_peers());
         // Both IPv6 and IPv4 where the system has IPv6, else IPv4 alone.
         let start = |ip: std::net::IpAddr| -> Result<Hub> {
             Hub::start(
-                &st.serving_key(),
+                &st.serving_key()?,
                 self.me.as_str(),
                 st.obfuscation.as_ref(),
-                st.peers()?,
+                peers.clone(),
                 SocketAddr::from((ip, port)),
                 target.clone(),
                 self.log.clone(),
@@ -273,6 +303,7 @@ impl Away {
             .or_else(|_| start(std::net::Ipv4Addr::UNSPECIFIED.into()))
             .map_err(|e| e.context(format!("the hub could not listen on UDP port {port}")))?;
         let hub = Arc::new(hub);
+        super::invite::serve_guests(guests, Arc::downgrade(&hub), Arc::downgrade(node), self.guests.clone());
         // The members' connections through the tunnel: each checked
         // against the address it came from.
         let (weak, n) = (Arc::downgrade(&hub), Arc::downgrade(node));
@@ -305,24 +336,9 @@ impl Away {
     /// registerForwarderLocked: with its member certificate, the roots and
     /// the group's records, which show the forwarder it is the root or an
     /// admin, and hellos from its WireGuard port.
-    fn register(&self, node: &Node, st: &State, f: &Forwarder, hub: &Hub) -> Result<Forwarding> {
-        let ident = node.identity();
-        let key: Arc<dyn cbb_core::identity::ExternalKey> = match &ident.external {
-            Some(k) => k.clone(),
-            None => Arc::new(cbb_core::identity::FileKey::new(&ident.key)?),
-        };
-        let (roots, records) = {
-            let rs = node.records();
-            let rs = rs.lock().unwrap();
-            (rs.roots(), rs.all())
-        };
-        let mut chain = ident.chain();
-        for c in std::iter::once(ident.group_ca.clone()).chain(roots) {
-            if !chain.contains(&c.der) {
-                chain.push(c.der);
-            }
-        }
-        let records = records.iter().filter_map(|r| serde_json::to_value(r).ok()).collect();
+    fn register(&self, node: &Arc<Node>, st: &State, f: &Forwarder, hub: &Hub) -> Result<Forwarding> {
+        let super::meet::Shown { key, chain } = super::meet::shown(node)?;
+        let records = super::meet::node_records(node);
         let pins =
             if f.project { PROJECT_PINS.iter().map(|p| pin_bytes(p)).collect() } else { vec![pin_bytes(&f.pin)] };
         let cfg = forward::Config {
@@ -330,17 +346,91 @@ impl Away {
             pins: pins.into_iter().collect::<Result<_>>()?,
             chain,
             key,
-            wg_key: st.serving_key(),
+            wg_key: st.serving_key()?,
             obfuscation: st.obfuscation.clone(),
-            vless_id: None,
+            vless_id: Some(f.vless_id.clone()).filter(|id| !id.is_empty()),
             records: Arc::new(Mutex::new(records)),
             send: hub.sender(),
+            credential: self.credentials.lock().unwrap().clone().map(|c| {
+                let n = Arc::downgrade(node);
+                let f: forward::CredentialFn = Arc::new(move || c.hub(&*n.upgrade()?));
+                f
+            }),
             ways: Default::default(),
             learned: Default::default(),
         };
         let report = Arc::new(Mutex::new(Report::default()));
         let registration = Registration::start(cfg, report.clone(), self.log.clone());
         Ok(Forwarding { _registration: registration, report, endpoint: f.endpoint })
+    }
+
+    /// Keeps the forwarder's VLESS settings the hub learned as it
+    /// registered, as Go's vlessLearnedLocked, and has the members connect
+    /// again, so that each gets the offer with them.
+    pub(super) fn vless_learned(&self, node: &Node) {
+        let got = {
+            let serving = self.serving.lock().unwrap();
+            serving.as_ref().and_then(|s| s.forwarding.as_ref()).and_then(|f| f.report.lock().unwrap().vless.clone())
+        };
+        let Some(v) = got else { return };
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return };
+        if st.forwarder.as_ref().is_none_or(|f| f.vless_id.is_empty() || f.vless.as_ref() == Some(&v)) {
+            return;
+        }
+        let mut next = st.clone();
+        if let Some(f) = next.forwarder.as_mut() {
+            f.vless = Some(v.clone());
+        }
+        if let Err(e) = next.save(&self.dir) {
+            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
+            return;
+        }
+        *st = next;
+        drop(cur);
+        let at = v.get("endpoint").and_then(|e| e.as_str()).unwrap_or_default();
+        (self.log)(&format!("cbb: sync away from home: the hub's clients come over VLESS to the forwarder at {at}"));
+        node.reconnect();
+    }
+
+    /// Gives the hub a new WireGuard key for its clients in each period of
+    /// the group's server credentials (docs/protocol.md, section 11, "The
+    /// hub's key"), as Go's rotateHubKey: when a period starts, the next
+    /// key, which its offers carry from then on, and hub_key_ahead later
+    /// that key in place of the old one, with which the hub starts again
+    /// and registers again on its forwarder.
+    pub(super) fn rotate_hub_key(&self, node: &Node) {
+        let creds = self.credentials.lock().unwrap().clone();
+        let period = creds.and_then(|c| c.period_tag(node)).unwrap_or_default();
+        let ahead = i64::try_from(hub_key_ahead().as_millis()).unwrap_or(i64::MAX);
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return };
+        let mut next = st.clone();
+        let (changed, switched) = match next.rotate(&period, crate::uptime::wall_ms(), ahead) {
+            Ok(r) => r,
+            Err(e) => {
+                (self.log)(&format!("cbb: {}", e.for_log()));
+                return;
+            }
+        };
+        if !changed {
+            return;
+        }
+        // The hub starts again with the new key before the state says so, so
+        // a state on disk never names a key the hub does not serve with yet;
+        // a hub that stops in between switches again at its next check.
+        if switched && self.serving.lock().unwrap().is_some() {
+            (self.log)("cbb: the hub serves with its key for the new period from now on");
+            self.stop_serving();
+        }
+        if let Err(e) = next.save(&self.dir) {
+            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
+            return;
+        }
+        *st = next;
+        drop(cur);
+        // The clients take the new offer as they connect again.
+        node.reconnect();
     }
 
     /// Stops the hub, with every connection through it.
@@ -379,7 +469,7 @@ impl Away {
 
 /// The tunnel address the connection from the loopback port from_port came
 /// from: the hub notes it just after it connects, so a moment is given.
-fn tunnel_addr_of(hub: &Hub, from_port: u16) -> Option<std::net::Ipv6Addr> {
+pub(super) fn tunnel_addr_of(hub: &Hub, from_port: u16) -> Option<std::net::Ipv6Addr> {
     let until = Instant::now() + Duration::from_secs(1);
     loop {
         if let Some(a) = hub.tunnel_addr(from_port) {
@@ -439,7 +529,7 @@ pub(super) fn own_offer(st: &State, psk: &[u8]) -> Option<TunnelOffer> {
         return None;
     }
     Some(TunnelOffer {
-        hub_key: crate::tunnel::public_key_of(&st.serving_key()),
+        hub_key: crate::tunnel::public_key_of(&st.serving_key().ok()?),
         psk: psk.to_vec(),
         endpoints: st.hub_endpoints().iter().map(ToString::to_string).collect(),
         obfuscation: st.obfuscation.clone(),
@@ -508,6 +598,25 @@ pub(super) fn forwarder_of(fwd: &str, key: &str) -> Result<Option<Forwarder>> {
     Ok(Some(Forwarder { endpoint, pin, vless_id: String::new(), vless: None, project }))
 }
 
+/// Gives the forwarder f the group's VLESS user ID when the hub's clients
+/// come over VLESS, as Go's awayLocked: the one old had, with old's
+/// settings while the forwarder stays the same, else a new one.
+fn vless_for(f: &mut Forwarder, vless: bool, old: Option<&Forwarder>) {
+    (f.vless_id, f.vless) = (String::new(), None);
+    if !vless {
+        return;
+    }
+    match old.filter(|o| !o.vless_id.is_empty()) {
+        Some(o) => {
+            f.vless_id.clone_from(&o.vless_id);
+            if o.endpoint == f.endpoint && o.pin == f.pin {
+                f.vless.clone_from(&o.vless);
+            }
+        }
+        None => f.vless_id = crate::vless::random_uuid(),
+    }
+}
+
 /// A forwarder's pin: SHA-256 of its key, 44 characters of base64.
 fn pin_bytes(pin: &str) -> Result<[u8; 32]> {
     use base64::Engine as _;
@@ -518,7 +627,7 @@ fn pin_bytes(pin: &str) -> Result<[u8; 32]> {
 }
 
 /// An IPv4 address mapped into IPv6 is the IPv4 address.
-fn unmapped(ep: SocketAddr) -> SocketAddr {
+pub(super) fn unmapped(ep: SocketAddr) -> SocketAddr {
     match ep {
         SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
             Some(v4) => SocketAddr::from((v4, v6.port())),
@@ -540,4 +649,15 @@ fn forwarder_problem(detail: &str) -> String {
     } else {
         "the registration with the forwarder failed".to_string()
     }
+}
+
+/// How long before the hub serves with its key for a new period its offers
+/// give its clients that key, as Go's hubKeyAhead: three days, or
+/// CBB_HUB_KEY_AHEAD seconds, which tests set shorter.
+fn hub_key_ahead() -> Duration {
+    static AHEAD: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
+    *AHEAD.get_or_init(|| {
+        let s = std::env::var("CBB_HUB_KEY_AHEAD").ok().and_then(|v| v.parse().ok()).unwrap_or(3 * 24 * 3600);
+        Duration::from_secs(s)
+    })
 }

@@ -54,7 +54,7 @@ if [ "$(id -u)" -ne 0 ] && [ -n "${HOME:-}" ] && [ -e "$HOME/.local/bin/cbb" ]; 
 	done
 	rm -f "$config/systemd/user/cbb.service" "$config/systemd/user/cbb-agent.service" \
 		"$config/systemd/user/cbb-update.service" "$config/systemd/user/cbb-update.timer" \
-		"$config/autostart/cbb-desktop.desktop" "$HOME/.local/bin/cbb"
+		"$config/autostart/cbb-desktop.desktop" "$HOME/.local/bin/cbb" "$HOME/.local/bin/cbb-helper"
 	systemctl --user daemon-reload >/dev/null 2>&1 || true
 	rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/cbb" "$config/cbb" "$state/cbb-update"
 	if [ "$purge" = yes ]; then
@@ -109,7 +109,7 @@ rm -f /etc/systemd/system/cbb.service /etc/systemd/system/cbb-console.service \
 	/etc/systemd/system/cbb-uinput.service /etc/modules-load.d/cbb-uinput.conf \
 	/etc/systemd/system/cbb-update.service /etc/systemd/system/cbb-update.timer \
 	/etc/xdg/autostart/cbb-desktop.desktop /etc/xdg/autostart/cbb-tray.desktop \
-	/usr/local/share/applications/cbb.desktop /usr/local/bin/cbb-desktop \
+	/usr/local/share/applications/cbb.desktop /usr/local/bin/cbb-desktop /usr/local/bin/cbb-helper \
 	/etc/systemd/user/cbb-agent.service \
 	/etc/profile.d/cbb-console.sh /usr/lib/sysusers.d/cbb.conf /usr/local/bin/cbb \
 	/etc/profile.d/cbb-path.sh /etc/sysusers.d/cbb.conf /etc/atomic-update.conf.d/cbb.conf \

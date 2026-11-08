@@ -38,8 +38,10 @@ func gateways() (map[int]string, error) {
 		if err != nil || len(b) != 4 {
 			continue
 		}
+		// The kernel prints the address's four bytes as a number in the
+		// host's byte order, so on a big-endian router they read as written.
 		var ip [4]byte
-		binary.BigEndian.PutUint32(ip[:], binary.LittleEndian.Uint32(b))
+		binary.NativeEndian.PutUint32(ip[:], binary.BigEndian.Uint32(b))
 		if _, ok := gw[f[0]]; !ok {
 			gw[f[0]] = netip.AddrFrom4(ip)
 		}

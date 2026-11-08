@@ -174,7 +174,7 @@ program in `~/.local/bin`, the keys in `~/.local/state/cbb` and the control sock
 in `$XDG_RUNTIME_DIR/cbb`, and its hello and device record say `rootless`. Since
 every program you run can read its keys, the system install stays the advice: a rootless
 lite member has no firewall rules, no text console target (`paste-receive on -console`
-refuses) and no `reboot` or `cancel-shutdown` action (they need a polkit rule; `restart`
+refuses) and no preset of the system (`lock`, `sleep`, `reboot`, `shutdown`, `cancel-shutdown`: they need a polkit rule; `restart`
 stays), and it starts at boot only when an administrator once runs
 `sudo loginctl enable-linger YOUR-USER`. The commands above that take `sudo` take none here.
 For copy and paste in tmux, add the line the installer prints to `~/.tmux.conf`. To remove
@@ -243,20 +243,24 @@ text, are in `/var/lib/cbb/pastes.json`.
 sudo cbb action enable reboot      # admins with keys in hardware may reboot it
 sudo cbb action enable cancel-shutdown
 sudo cbb action enable restart     # and restart the service
+sudo cbb action add backup -- /usr/local/bin/backup --quick
 cbb action                         # how each stands
 sudo cbb action disable reboot
 sudo cbb action off                # all of them
 ```
 
 An admin phone's "Quick actions", or `cbb action -on DEVICE NAME` on an admin computer, runs
-one of them here, as on a full Linux member. The lite member has three presets: `reboot`, a
-minute after the admin asks, which `cancel-shutdown` stops, and `restart`, which restarts the
-service. Each is off until the device's own user turns it on; `-by root,phone,computer,watch`
-limits it to those kinds of admins, and a reboot takes only admins whose keys are in hardware
-unless `-any-key`. Turning `reboot` on writes a polkit rule that lets the service's user ask
-logind for a reboot and nothing else (`/etc/polkit-1/rules.d/60-cbb.rules`), so
-the device needs polkit (`polkitd`); `shutdown -r +1` runs it. Any admin turns the actions
-off from afar. The last 100 are in `/var/lib/cbb/actions-log.json`.
+one of them here, as on a full Linux member. The lite member has the full member's presets:
+`lock`, `sleep`, `reboot` and `shutdown` (a minute after the admin asks, which
+`cancel-shutdown` stops), `restart`, which restarts the service, and `keyboard-layout`; and
+your own (`cbb action add NAME -- PROGRAM ARGS`, `cbb action remove NAME`), which CBB's agent
+runs as the user signed in. Each is off until the device's own user turns it on;
+`-by root,phone,computer,watch` limits it to those kinds of admins, and a reboot or shutdown
+takes only admins whose keys are in hardware unless `-any-key`. Turning a preset of the system
+on writes a polkit rule that lets the service's user ask logind for exactly the presets that
+are on (`/etc/polkit-1/rules.d/60-cbb.rules`), so the device needs polkit (`polkitd`);
+`loginctl lock-sessions`, `systemctl suspend` and `shutdown -r +1`/`-P +1` run them. Any admin
+turns the actions off from afar. The last 100 are in `/var/lib/cbb/actions-log.json`.
 
 ## ZX Spectrum Next
 
