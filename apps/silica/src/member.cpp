@@ -13,6 +13,7 @@
 #include <QClipboard>
 #include <QCryptographicHash>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QMimeData>
 #include <QMimeDatabase>
@@ -140,6 +141,8 @@ void Member::start(const Membership &membership, const QString &name, const QByt
     }
     m_error.clear();
     Errors::log(QStringLiteral("member: started in the group %1").arg(membership.groupTag()));
+    m_startedMs = QDateTime::currentMSecsSinceEpoch();
+    m_seen.clear();
     m_peerTimer.start();
     pollMuted();
     pollDevices();
@@ -328,14 +331,37 @@ void Member::take(const QJsonObject &copy)
         call(m_member, QStringLiteral("took"), QJsonObject{{QStringLiteral("id"), id}}, &f);
         int files = 0;
         QString image;
+        QString single, singleType;
         for (const QJsonValue &v : parts) {
             const QJsonObject p = v.toObject();
             if (p.value(QStringLiteral("dir")).toBool())
                 continue;
             ++files;
             const QString type = p.value(QStringLiteral("type")).toString();
+            single = p.value(QStringLiteral("file")).toString();
+            singleType = type;
             if (type == QStringLiteral("image/png") || type == QStringLiteral("image/jpeg") || type == QStringLiteral("image/gif"))
-                image = p.value(QStringLiteral("file")).toString();
+                image = single;
+        }
+        // One image or video goes to Pictures/CBB or Videos/CBB, where the
+        // gallery shows it as an album, as Telegram does; other files stay
+        // in their folder in Downloads/CBB.
+        QString where = folder;
+        const bool picture = singleType.startsWith(QStringLiteral("image/"));
+        if (files == 1 && (picture || singleType.startsWith(QStringLiteral("video/")))) {
+            const QString base = QStandardPaths::writableLocation(picture ? QStandardPaths::PicturesLocation
+                                                                            : QStandardPaths::MoviesLocation);
+            const QDir to(QDir(base.isEmpty() ? QDir::homePath() : base).filePath(QStringLiteral("CBB")));
+            const QString name = QFileInfo(folder).fileName() + QLatin1Char('.') + QFileInfo(single).suffix();
+            if (to.mkpath(QStringLiteral(".")) && QFile::rename(single, to.filePath(name))) {
+                QDir(folder).removeRecursively();
+                if (!image.isEmpty())
+                    image = to.filePath(name);
+                where = to.path();
+            } else {
+                Errors::log(QStringLiteral("member: the file stays in ") + folder + QStringLiteral(": ") + to.path() +
+                            QStringLiteral(" is not writable"));
+            }
         }
         // One image goes into the clipboard as well, and stays out of the
         // phone's next sending.
@@ -352,8 +378,10 @@ void Member::take(const QJsonObject &copy)
         }
         m_error.clear();
         m_last = files == 1 && !image.isEmpty() ? tr("An image") : tr("%1 files in Downloads").arg(files);
+        if (files == 1 && where != folder && image.isEmpty())
+            m_last = tr("A video");
         Errors::log(QStringLiteral("member: saved %1 files of the group's copy").arg(files));
-        emit saved(folder, files);
+        emit saved(where, files);
         emit changed();
     });
     t->start();
@@ -376,6 +404,9 @@ void Member::event(const QByteArray &json)
                              QByteArray::fromBase64(e.value(QStringLiteral("issuer")).toString().toLatin1()), roots);
     } else if (type == QStringLiteral("mute")) {
         pollMuted();
+    } else if (type == QStringLiteral("command")) {
+        command(e.value(QStringLiteral("token")).toDouble(), e.value(QStringLiteral("from")).toString(),
+                e.value(QStringLiteral("command")).toObject());
     } else if (type == QStringLiteral("copy")) {
         // Images or files from another device come by themselves while
         // sync is on, as texts do through write.
@@ -383,6 +414,71 @@ void Member::event(const QByteArray &json)
         if (copy.value(QStringLiteral("kind")).toString() == QStringLiteral("media") && !m_paused)
             take(copy);
     }
+}
+
+void Member::command(double token, const QString &from, const QJsonObject &record)
+{
+    if (!m_member)
+        return;
+    const auto refuse = [&](const QString &reason) {
+        Errors::log(QStringLiteral("member: refused a command from %1: %2").arg(from, reason));
+        answer(token, QStringLiteral("refused"), reason);
+    };
+    Failure failure;
+    const QJsonObject c =
+        call(m_member, QStringLiteral("check_command"), QJsonObject{{QStringLiteral("command"), record}}, &failure);
+    if (!failure.isNull()) {
+        refuse(failure.details.isEmpty() ? failure.message : failure.details);
+        return;
+    }
+    const QJsonObject body = c.value(QStringLiteral("command")).toObject();
+    const QString id = body.value(QStringLiteral("id")).toString();
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (qint64(body.value(QStringLiteral("time_ms")).toDouble()) < m_startedMs) {
+        refuse(QStringLiteral("this device started after the command was signed, so it may have carried it out "
+                              "already; send it again"));
+        return;
+    }
+    for (auto it = m_seen.begin(); it != m_seen.end();)
+        it = it.value() <= now ? m_seen.erase(it) : it + 1;
+    if (m_seen.contains(id)) {
+        refuse(QStringLiteral("this command was carried out already"));
+        return;
+    }
+    if (m_seen.size() >= maxCommands) {
+        refuse(QStringLiteral("too many commands; try again in a minute"));
+        return;
+    }
+    m_seen.insert(id, qint64(body.value(QStringLiteral("expires_ms")).toDouble()));
+    const QString kind = body.value(QStringLiteral("type")).toString();
+    if (kind == QStringLiteral("away-off")) {
+        Errors::log(QStringLiteral("member: %1 turned sync away from home off").arg(body.value(QStringLiteral("by")).toString()));
+        if (m_awayOn)
+            setAway(false);
+        answer(token, QStringLiteral("done"), QString());
+    } else if (kind == QStringLiteral("actions-off")) {
+        // A phone has no quick actions, so none of them stays on.
+        answer(token, QStringLiteral("done"), QString());
+    } else if (kind == QStringLiteral("paste") || kind == QStringLiteral("paste-off")) {
+        // The paste receiver answers, maybe once the keyboard has started.
+        QJsonObject checked = c;
+        checked.insert(QStringLiteral("token"), token);
+        emit commandArrived(checked);
+    } else {
+        refuse(QStringLiteral("this phone takes no %1 commands").arg(kind));
+    }
+}
+
+void Member::answer(double token, const QString &status, const QString &reason)
+{
+    if (!m_member)
+        return;
+    Failure failure;
+    call(m_member, QStringLiteral("answer"),
+         QJsonObject{{QStringLiteral("token"), token}, {QStringLiteral("status"), status}, {QStringLiteral("reason"), reason}},
+         &failure);
+    if (!failure.isNull())
+        Errors::log(QStringLiteral("member: answering a command: %1 (%2)").arg(failure.message, failure.details));
 }
 
 void Member::pause(int minutes)

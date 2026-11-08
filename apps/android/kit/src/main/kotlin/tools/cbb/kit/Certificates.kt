@@ -27,6 +27,9 @@ interface CertificateSigner {
 
     /** An ECDSA signature with SHA-256 over data, DER. */
     fun signature(data: ByteArray): ByteArray
+
+    /** An ECDSA signature, DER, of a SHA-256 digest: what the Rust core's signing callback asks for; not every key gives one. */
+    fun signDigest(digest: ByteArray): ByteArray = throw UnsupportedOperationException("this key signs only whole data")
 }
 
 /** A software P-256 key as a CertificateSigner. */
@@ -41,7 +44,7 @@ class SoftwareSigner(val keyPair: KeyPair = generate()) : CertificateSigner {
         }
 
     /** An ECDSA signature, DER, of a SHA-256 digest: what the Rust member's signing callback asks for. */
-    fun signDigest(digest: ByteArray): ByteArray =
+    override fun signDigest(digest: ByteArray): ByteArray =
         Signature.getInstance("NONEwithECDSA").run {
             initSign(keyPair.private)
             update(digest)

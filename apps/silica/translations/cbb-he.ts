@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>השורש של הקבוצה ביטל את הבקשה; הטלפון נשאר מנהל.</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>הבקשה להשתלט על הקבוצה בוטלה; הטלפון נשאר מנהל.</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>חבר את הטלפון ל-Wi-Fi הביתי כדי להצטרף לקבוצה.</translation>
     </message>
@@ -176,6 +184,22 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>הקלדת הלוח ב-%1</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>המכשיר של המקלדת</translation>
+    </message>
+    <message>
+        <source>Back to the group's order</source>
+        <translation>חזרה לסדר של הקבוצה</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>אוסף חדש…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>בדיקת המפתח שוב</translation>
     </message>
@@ -311,6 +335,30 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Take the group over</source>
+        <translation>השתלטות על הקבוצה</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>משתלט על הקבוצה מ־%1</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>השתלטות על הקבוצה</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>ממתין, נותרו %1 שעות</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>ממתין שהקבוצה תקבל את הבקשה</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>במחלוקת: השורש של הקבוצה השיב לבקשה</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>הסרה</translation>
     </message>
@@ -393,6 +441,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>מקלדת בלוטות'</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>שימוש כמקלדת בלוטות'</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>כבוי</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>מחובר</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>לא עובד</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>פועל</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>הגדרות</translation>
@@ -806,6 +878,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>סרטון</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>תמונה</translation>
     </message>
@@ -833,6 +909,10 @@
 <context>
     <name>Notifier</name>
     <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>%1 מהקבוצה נמצא בגלריה</translation>
+    </message>
+    <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>נשמר %1 מהקבוצה בהורדות</translation>
     </message>
@@ -843,6 +923,275 @@
     <message>
         <source>%1 files</source>
         <translation>%1 קבצים</translation>
+    </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>הודבק מ־%1</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>סידור</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>העברה להתחלה</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>הקדמה</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>דחייה לאחור</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>העברה לסוף</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>העברה אל %1</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>אוסף חדש…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>הוצאה מהאוסף</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>שינוי שם האוסף…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>פירוק האוסף</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>יצירה</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>שינוי שם</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>אוסף חדש</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>שינוי שם האוסף</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>שם</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>משרד, בית, טלוויזיות…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 מתוך %2 מחוברים</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 מתוך %2 מחוברים</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>פירוק האוסף</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>שינוי שם האוסף…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 מתוך %2 מחוברים</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>עדיין אין מכשירים באוסף הזה. לחצו לחיצה ארוכה על אריח של מכשיר בדף הראשי כדי להעביר אותו לכאן.</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>הבלוטות' של הטלפון לא ענה. ייתכן ש-CBB לא מורשה להשתמש בו.</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>הבלוטות' של הטלפון הזה לא יכול לשמש כמקלדת.</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>הבלוטות' כבוי. הפעילו אותו בהגדרות הטלפון, ואז הפעילו שוב את המקלדת.</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>הטלפון לא הצליח לשמש כמקלדת.</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>הבלוטות' של הטלפון לא קיבל את המקלדת.</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>הטלפון לא הצליח לפרסם את המקלדת.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>אין מכשיר מחובר. התחברו לטלפון הזה מהמכשיר, בהגדרות הבלוטות' שלו.</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>אין טקסט בלוח.</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>בטקסט יש יותר מ-%1 תווים, יותר ממה שמקלדת מקלידה.</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>בפריסה של המכשיר אין מקש עבור: %1. בחרו את הפריסה שלו למעלה.</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>המכשיר התנתק; הטקסט לא הוקלד במלואו.</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>מקלדת בלוטות'</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>שימוש כמקלדת בלוטות'</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>הטלפון הזה מקליד בטלוויזיה, בטאבלט, בקונסולה או במחשב שהוא מותאם אליהם, בלי להתקין שם דבר: את הלוח, בהקשה שלכם.</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>מתכונן…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>מחובר אל %1.</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>מכשיר מחובר.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>אין מכשיר מחובר. התחברו לטלפון הזה מהמכשיר, בהגדרות הבלוטות' שלו.</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>גלוי עוד %1 שנ'</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>הפיכת הטלפון לגלוי</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>כל עוד הטלפון גלוי, מכשיר חדש מוצא אותו בהגדרות הבלוטות' שלו בשם “CBB keyboard”.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>ניסיון נוסף</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>פריסת המקלדת של המכשיר</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>אנגלית (ארה״ב)</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>רוסית</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>מהירות</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>%1 תווים בשנייה</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>מקליד…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>הקלדת הלוח</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>הדבקה מרחוק</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>לאפשר למנהלי הקבוצה להדביק שם</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>מנהל הקבוצה מקליד אז טקסט דרך הטלפון הזה במכשיר שהוא מחובר אליו, מהאפליקציה שלו או עם cbb paste. הטלפון מראה מי הדביק ושומר יומן של ההדבקות האחרונות בלי הטקסט שלהן.</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>לאפשר להדבקה ללחוץ Enter</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>גם טקסט עם מעבר שורה צריך את זה: המקלדת מקלידה מעבר שורה כ־Enter.</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>הדבקות אחרונות</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>(לא מאומת)</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>%1 בתים</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>נדחה</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>נכשל</translation>
     </message>
 </context>
 <context>

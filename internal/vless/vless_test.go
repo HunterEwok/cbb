@@ -68,7 +68,11 @@ func link(t *testing.T, s *Server, key [32]byte, id string) tunnel.VLESS {
 }
 
 // roundTrip sends a packet through the client and tells whether it came
-// back.
+// back. Each try sends from a port of its own: the client carries the
+// packets of one source port in one flow, an XHTTP session of its own,
+// for as long as packets keep coming, and Xray gives up on none of its
+// requests, so a session whose first request got no answer would keep
+// every later try from the same port too.
 func roundTrip(t *testing.T, l tunnel.VLESS) bool {
 	t.Helper()
 	c, err := Dial(l)
@@ -76,16 +80,17 @@ func roundTrip(t *testing.T, l tunnel.VLESS) bool {
 		t.Fatal(err)
 	}
 	defer c.Close()
-	conn, err := net.DialUDP("udp", nil, net.UDPAddrFromAddrPort(c.Addr()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
 	b := make([]byte, 64)
 	for range 10 {
+		conn, err := net.DialUDP("udp", nil, net.UDPAddrFromAddrPort(c.Addr()))
+		if err != nil {
+			t.Fatal(err)
+		}
 		conn.Write([]byte("a packet"))
 		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-		if n, err := conn.Read(b); err == nil {
+		n, err := conn.Read(b)
+		conn.Close()
+		if err == nil {
 			return string(b[:n]) == "a packet"
 		}
 	}
@@ -171,16 +176,18 @@ func TestUserOfEachClient(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer c.Close()
-		conn, err := net.DialUDP("udp", nil, net.UDPAddrFromAddrPort(c.Addr()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer conn.Close()
 		b := make([]byte, 64)
 		for range 10 {
+			// A port of its own for each try, as in roundTrip.
+			conn, err := net.DialUDP("udp", nil, net.UDPAddrFromAddrPort(c.Addr()))
+			if err != nil {
+				t.Fatal(err)
+			}
 			conn.Write([]byte("who"))
 			conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-			if n, err := conn.Read(b); err == nil {
+			n, err := conn.Read(b)
+			conn.Close()
+			if err == nil {
 				return string(b[:n])
 			}
 		}

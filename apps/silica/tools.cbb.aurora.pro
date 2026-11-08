@@ -21,7 +21,7 @@ equals(CBB_TARGET, sailfish) {
 DEFINES += CBB_APP_NAME=\\\"$$CBB_APP_NAME\\\"
 
 CONFIG += c++11
-QT += network
+QT += network dbus
 
 # The spec passes VERSION=%{version} to qmake.
 isEmpty(VERSION): VERSION = 0.0.0
@@ -33,6 +33,8 @@ LIBS += $$PWD/core/$$QT_ARCH/libcbb_ffi.a -ldl -lpthread -lm
 SOURCES += \
     src/main.cpp \
     src/admit.cpp \
+    src/blekeyboard.cpp \
+    src/pastereceiver.cpp \
     src/app.cpp \
     src/core.cpp \
     src/errors.cpp \
@@ -43,6 +45,8 @@ SOURCES += \
     src/platform/osinfo.cpp
 HEADERS += \
     src/admit.h \
+    src/blekeyboard.h \
+    src/pastereceiver.h \
     src/app.h \
     src/core.h \
     src/errors.h \
@@ -98,10 +102,18 @@ DISTFILES += \
     qml/pages/AlertsCard.qml \
     qml/pages/RenameDevicePage.qml \
     qml/pages/DeviceTile.qml \
+    qml/pages/DeviceRow.qml \
+    qml/pages/DeviceItems.qml \
+    qml/pages/CollectionTile.qml \
+    qml/pages/CollectionPage.qml \
+    qml/pages/CollectionNameDialog.qml \
+    qml/pages/ArrangePage.qml \
     qml/pages/SettingsPage.qml \
+    qml/pages/KeyboardPage.qml \
     qml/pages/SwitchFace.qml \
     qml/pages/AwayDialog.qml \
     qml/pages/devices.js \
+    qml/pages/arrange.js \
     qml/cover/CoverPage.qml \
     qml/system/Notifier.qml \
     qml/system/ShareTarget.qml \

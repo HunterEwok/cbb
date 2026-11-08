@@ -726,7 +726,7 @@ watches, which show their phone's arrangement as sections.
   let two admins undo each other, would keep nobody but admins from arranging their own
   screen, and would bring the collections' names to the forwarder.
 - **Simple.** One level; a device is in at most one collection; this device's own tile is
-  always first. A device that joins goes to the end, a removed one leaves its collection.
+  first until the user moves it. A device that joins goes to the end, a removed one leaves its collection.
 - **Arranging.** An Arrange mode on every platform, as the iPhone's home screen has: drag a
   tile to its place, or onto another tile to make a collection. Every drag also has a menu
   item ("Move to collection…"), a VoiceOver and TalkBack action, and keyboard keys on the

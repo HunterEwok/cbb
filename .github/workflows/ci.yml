@@ -2312,7 +2312,7 @@ jobs:
       - name: the phones' member through ffi/ joins a computer's group, syncs texts and images with it, and syncs away from home through its tunnel
         run: |
           cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
-          CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" go test -race ./internal/service -run 'TestFFIJoiner|TestFFIMember|TestFFIPhoneRoot|TestFFIPhoneAway' -v
+          CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" go test -race ./internal/service -run 'TestFFIJoiner|TestFFIMember|TestFFIPhoneRoot|TestFFIPhoneAway|TestFFIPhoneTakeover' -v
       - name: the phones' Rust tunnel and hub through ffi/ work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
         run: |
           cargo test --locked -p cbb-ffi --features tunnel tunnel && cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
