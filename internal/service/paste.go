@@ -33,9 +33,6 @@ const (
 	targetDesktop = "desktop"
 	targetTmux    = "tmux"
 	targetConsole = "console"
-	// targetKeyboard is the Bluetooth keyboard's host (keyboard_linux.go), which
-	// no watcher offers.
-	targetKeyboard = "bluetooth-keyboard"
 )
 
 // injectWait bounds how long a watcher may take to inject; typing takes
@@ -227,56 +224,6 @@ func (s *Service) stillAllowed(c group.Record, body group.CommandBody) func() bo
 	}
 }
 
-// typingCheck is how often a paste typed after its answer checks that it
-// may go on.
-var typingCheck = 500 * time.Millisecond
-
-// typeLater types with typ after the answer, as a long text takes longer
-// than the sender waits: one text at a time on target, false when one is
-// typing there. Typing stops once still says the paste may no longer go on.
-func (s *Service) typeLater(target string, still func() bool, typ func(context.Context) error) bool {
-	s.mu.Lock()
-	if s.typing == nil {
-		s.typing = map[string]bool{}
-	}
-	if s.typing[target] {
-		s.mu.Unlock()
-		return false
-	}
-	s.typing[target] = true
-	s.mu.Unlock()
-	ctx, cancel := context.WithCancel(context.Background())
-	t := time.NewTicker(typingCheck)
-	go func() {
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				if !still() {
-					cancel()
-					return
-				}
-			}
-		}
-	}()
-	go func() {
-		defer func() {
-			cancel()
-			s.mu.Lock()
-			delete(s.typing, target)
-			s.mu.Unlock()
-		}()
-		if err := typ(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			s.logf("cbb: typing a paste on %s: %v", target, err)
-		} else if errors.Is(err, context.Canceled) {
-			s.logf("cbb: stopped typing a paste on %s: it may no longer go on", target)
-		}
-	}()
-	return true
-}
-
 // inject hands the text to the watchers that can put it in, best target
 // first, until one did: a desktop session, then tmux, then a text console
 // when the user allowed consoles.
@@ -286,11 +233,8 @@ func (s *Service) inject(body group.CommandBody, text string, set remotepaste.Se
 		res.Reason = "the text has nothing that may be pasted: only control characters"
 		return res
 	}
-	if r, ok := s.keyboardPaste(body, text, set.Enter, still); ok {
-		return r
-	}
-	if r, ok := s.tvPaste(body, text, set.Enter, still); ok {
-		return r
+	if r, ok := s.host.Paste(text, set.Enter, body.Enter, still); ok {
+		return node.Result{ID: body.ID, Status: r.Status, Reason: r.Reason}
 	}
 	// A Bluetooth keyboard and a TV check line breaks themselves. Elsewhere
 	// a line break runs what comes before it wherever the focused program
@@ -555,12 +499,7 @@ func (s *Service) pasteStatusLocked() *control.Paste {
 			p.Targets = append(p.Targets, w.inject)
 		}
 	}
-	if s.keyboardPastes() {
-		p.Targets = append(p.Targets, targetKeyboard)
-	}
-	if s.tvPastes() {
-		p.Targets = append(p.Targets, targetTV)
-	}
+	p.Targets = append(p.Targets, s.host.Targets()...)
 	slices.Sort(p.Targets)
 	return p
 }

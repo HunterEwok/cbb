@@ -15,12 +15,14 @@ All notable changes to cbb are documented in this file. The format follows
   the phones show the six digits under their QR code (`cbb_join_announce` for Aurora).
 - `cbb-helper`, the Go helper of the Rust program `cbb` (docs/design.md, "The service and its
   helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
-  its hello and starts it again when it stops. It does nothing else yet; the steps that make
+  its hello and starts it again when it stops. It starts only a helper that no other user
+  can change, of its own release, with only the environment it needs. On a Mac the Rust
+  `cbb` keeps its keys in the Secure Enclave itself, without the helper. It does nothing else yet; the steps that make
   the Rust `cbb` every computer's service hand it what needs Go.
 - The Rust `cbb` keeps its device key in the TPM, or a Mac's Secure Enclave, through
   `cbb-helper`, as the Go member does: `cbb pair` makes it there, `identity.json` keeps the
   hardware's blob, and every signature goes through the helper (`TestLiteTPM`, on swtpm).
-  The helper also signs with a key on a YubiKey after its PIN (`card-sign`), and seals
+  The Rust `cbb` signs with a key on a YubiKey itself after its PIN, and the helper seals
   secrets (`seal`, `unseal`): the Rust `cbb` keeps `seal.json` and `tunnel.json` sealed by
   the hardware, and reads and writes a Go hub's `tunnel.json` as Go does
   (`testdata/interop/tunnel-state.json`).
@@ -73,7 +75,28 @@ All notable changes to cbb are documented in this file. The format follows
   with a new key in each period of the credentials (`TestLiteHubCredential`). A Rust hub
   makes remote invitations (`invite`, with the admin's confirmation of each device that uses
   one, `TestLiteInvite`), and the Rust member joins with one (`cbb pair -invite`), offering
-  its own tunnel key through the guest tunnel once it joined (`TestLiteJoinInvite`).
+  its own tunnel key through the guest tunnel once it joined (`TestLiteJoinInvite`). An admin
+  Rust service pastes on another device, runs its quick actions and turns either off there,
+  one device or all (`cbb paste -on`, `cbb action NAME -on`, `cbb action off -on`/`-all`,
+  `cbb paste-receive off -on`/`-all`, `TestLiteAdminCommands`). The Rust service has every
+  preset the Go service has (lock, sleep, shutdown and the keyboard's layout too) and its
+  user's own actions (`cbb action add`, `remove`), which CBB's agent runs in the user's
+  session, as it runs the presets on a Mac and Windows (`TestLiteOwnActions`); the uinput
+  helper presses a remote paste's keys for it with a one-time grant (`TestLiteKeysGrant`).
+  The Rust service is a Bluetooth keyboard and a TV's remote through cbb-helper, which runs
+  the Go service's code for both (`internal/peripheral`): `cbb keyboard`, `cbb remote`, their
+  status, the remote pastes the user sends there, and the quick action `keyboard-layout`
+  (`TestLitePeripherals`). The Rust service passes the group's signed release on as the Go
+  service does: it keeps the newest that checks out, names it in its hello, sends it to the
+  computers that hold an older one, shows it in status, and serves the archives that cbb
+  update installed to its peers (`release`, `release-held`, `release-file`, `release-get`,
+  `release-want`, `TestLiteRelease`, `TestLiteReleaseArchives`). The Rust `cbb update` hands
+  the service the release and the archive it installed, downloads on a hub the archives the
+  members update from, and installs from the group when no update server answers.
+- A request to the Rust service while it is still starting waits for it rather than hearing
+  that the device is in no group.
+- The Rust member no longer can deadlock when a renewed certificate and new records come at
+  once (seen in `TestLiteTakeover`).
 - A pairing window closed while it sent its Welcome now ends when that attempt ends, also when
   the attempt fails, in Go and in Rust; an invitation cancelled at that moment no longer
   crashes the Go service.

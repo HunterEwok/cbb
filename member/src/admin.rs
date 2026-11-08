@@ -550,6 +550,12 @@ pub fn find_device(node: &Node, target: &str) -> Result<Device> {
 
 const NOT_ADMIN: &str =
     "only an admin can change the devices list: the group's root, an admin it made (cbb admin), or an admin phone";
+const NOT_COMMANDER: &str = "only an admin pastes on another device, runs its actions or turns either off: the group's root, an admin it made (cbb admin), or an admin phone";
+/// How long a command takes to reach its device and come back, besides
+/// the work it orders, as Go's commandOn.
+const COMMAND_SLACK: Duration = Duration::from_secs(5);
+/// How long a quick action may take on its device, as Go's actionWait.
+pub const ACTION_WAIT: Duration = Duration::from_secs(20);
 const FROZEN: &str = "another admin froze this computer's admin key: it changes nothing until the group's root or an admin phone unfreezes it";
 
 /// A computer admin's powers: those of Go's computerAdminPowers.
@@ -1057,6 +1063,59 @@ impl Admin<'_> {
         Ok(d.name)
     }
 
+    /// Has the device target names put text where its focus is, as Go's
+    /// sendPaste: mode `paste` or `type`, kind `text` or `secret`; wait is
+    /// how long its paste target may take.
+    pub fn paste_on(&self, target: &str, o: cbb_core::manage::Order, wait: Duration) -> Result<()> {
+        let d = find_device(self.node, target)?;
+        if d.id == self.me() {
+            return Err(Error::msg("remote paste is for another device; this one is where you type"));
+        }
+        self.order_command_for(&d, o, NOT_COMMANDER, COMMAND_SLACK + wait).map(|_| ())
+    }
+
+    /// Has the device target names run its quick action name, as Go's
+    /// runActionOn.
+    pub fn action_on(&self, target: &str, name: &str) -> Result<()> {
+        if !cbb_core::command::valid_action_name(name) {
+            return Err(Error::msg(format!("{name:?} is not an action's name")));
+        }
+        let d = find_device(self.node, target)?;
+        if d.id == self.me() {
+            return Err(Error::msg("an action runs on another device; here, do it yourself"));
+        }
+        let o = cbb_core::manage::Order::Action(name.into());
+        self.order_command_for(&d, o, NOT_COMMANDER, COMMAND_SLACK + ACTION_WAIT).map(|_| ())
+    }
+
+    /// Turns remote paste (paste true) or every quick action off on the
+    /// device target names, or with all on every device of the group, as
+    /// Go's setReceive and actionsOffOn. off_here turns it off on this
+    /// device, where the target is this one.
+    pub fn off_on(&self, target: &str, all: bool, paste: bool, off_here: &dyn Fn() -> Result<()>) -> Result<()> {
+        let me = self.me();
+        let targets: Vec<Device> = if all {
+            self.node.devices().into_iter().filter(|d| d.id != me).collect()
+        } else {
+            vec![find_device(self.node, target)?]
+        };
+        if all || targets.iter().any(|d| d.id == me) {
+            off_here()?;
+        }
+        let o = || if paste { cbb_core::manage::Order::PasteOff } else { cbb_core::manage::Order::ActionsOff };
+        let failed: Vec<String> = targets
+            .iter()
+            .filter(|d| d.id != me)
+            .filter_map(|d| self.order_command_for(d, o(), NOT_COMMANDER, COMMAND_SLACK).err())
+            .map(|e| e.message().to_string())
+            .collect();
+        if !failed.is_empty() {
+            let what = if paste { "remote paste" } else { "the quick actions" };
+            return Err(Error::msg(format!("{what} may still be on: {}", failed.join("; "))));
+        }
+        Ok(())
+    }
+
     /// Signs the device d a record with forward_only unless its newest has
     /// it, as Go's markForwardOnly: d then passes the copies on as a hub
     /// and reads none (docs/protocol.md, section 11, "Two kinds of hub").
@@ -1155,6 +1214,17 @@ impl Admin<'_> {
         o: cbb_core::manage::Order,
         not_admin: &str,
     ) -> Result<crate::wire::CommandResult> {
+        self.order_command_for(d, o, not_admin, Duration::from_secs(20))
+    }
+
+    /// order_command, waiting up to wait for the result.
+    fn order_command_for(
+        &self,
+        d: &Device,
+        o: cbb_core::manage::Order,
+        not_admin: &str,
+        wait: Duration,
+    ) -> Result<crate::wire::CommandResult> {
         let s = self.signing().map_err(|_| Error::msg(not_admin))?;
         if !s.root && self.node.records().lock().unwrap().frozen(&s.ca.key_hash()) {
             return Err(Error::msg(FROZEN));
@@ -1162,10 +1232,7 @@ impl Admin<'_> {
         let me = self.me();
         let signer = cbb_core::manage::Signer { ca: &s.ca, key: &*s.key, me: &me };
         let r = cbb_core::manage::order(&self.node.records().lock().unwrap(), &signer, &d.id, &o, uptime::wall_ms())?;
-        let res = self
-            .node
-            .command(&r, Duration::from_secs(20))
-            .map_err(|e| Error::msg(format!("{}: {}", d.name, e.message())))?;
+        let res = self.node.command(&r, wait).map_err(|e| Error::msg(format!("{}: {}", d.name, e.message())))?;
         if res.status != "done" {
             return Err(Error::msg(format!("{} {} it: {}", d.name, res.status, res.reason)));
         }

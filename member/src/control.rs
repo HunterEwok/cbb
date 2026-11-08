@@ -146,6 +146,22 @@ pub struct Header {
     /// In hubs: the table of main hubs, names or device IDs in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<String>,
+    /// In an inject to a desktop session, the grant its desktop connector
+    /// hands the uinput helper, which asks with keys whether it may press
+    /// the paste's keys.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub keys: String,
+    /// In keyboard on: the keyboard's settings, as Go's control.Keyboard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyboard: Option<serde_json::Value>,
+    /// In a watch: the watcher runs the quick actions in its user's
+    /// session (CBB's agent), which the service hands it with act.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub act: bool,
+    /// In an act: the program and arguments of the user's own action;
+    /// empty for a preset.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub command: Vec<String>,
     /// The text of a remote invitation: made by invite, used by join.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub invite: String,
@@ -230,6 +246,19 @@ pub struct Status {
     /// Remote paste on this device; None when in no group.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paste: Option<Paste>,
+    /// The Bluetooth keyboard, as Go's control.Keyboard, which cbb-helper
+    /// gives; None where it was never turned on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyboard: Option<serde_json::Value>,
+    /// The newest signed release the group passed around, and that
+    /// version again in update when this device runs an older one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub release: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub update: String,
+    /// The TVs this device is the remote of, as Go's control.TV.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tvs: Vec<serde_json::Value>,
     /// This device's quick actions, the presets in their order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub actions: Vec<Action>,
@@ -267,7 +296,7 @@ pub struct Action {
     pub by: Vec<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub any_key: bool,
-    /// The program of a user's own action, which only a full member has.
+    /// The program and arguments of a user's own action.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub command: Vec<String>,
 }
@@ -497,6 +526,18 @@ pub fn is_admin(op: &str) -> bool {
             | "write"
             | "inject"
             | "injected"
+            | "act"
+            | "acted"
+            // The signed release cbb update fetched, for the group, and the
+            // one held.
+            | "release"
+            | "release-get"
+            | "release-held"
+            | "entries"
+            | "entries-get"
+            // The uinput helper, as root, through the socket's group; the
+            // service checks that it is root.
+            | "keys"
             // This device's own pause of receiving (design.md, "Muting a
             // device"); the lite member mutes no other device.
             | "mute"

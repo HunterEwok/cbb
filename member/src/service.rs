@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::actions;
 use crate::away::Away;
@@ -62,8 +62,14 @@ pub(crate) const CONSOLE: &str = "console";
 /// driver on a Next's Pi.
 pub(crate) const NEXT: &str = "next";
 
+/// How often a paste typed after its answer checks that it may go on.
+const TYPING_CHECK: Duration = Duration::from_millis(500);
+
 /// How long a watcher may take to put a paste in; typing takes TYPE_WAIT
 /// more for each byte, as on a full member.
+/// The most archives a hub asks cbb update for at a time.
+const MAX_WANTED: usize = 16;
+
 /// How long a request waits for a device in a group to start.
 const START_WAIT: Duration = Duration::from_secs(10);
 const INJECT_WAIT: Duration = Duration::from_secs(5);
@@ -74,7 +80,19 @@ const TYPE_WAIT: Duration = Duration::from_millis(5);
 enum ToWatcher {
     Write(WriteReq),
     Inject(Inject),
+    Act(Act),
 }
+
+/// A quick action for an agent to run in the user's session: a preset by
+/// its name, or with command the user's own; the answer goes to done.
+struct Act {
+    name: String,
+    command: Vec<String>,
+    done: SyncSender<(String, String)>,
+}
+
+/// The quick actions in peer::may_take, as Go's targetAct.
+const ACT: &str = "act";
 
 /// A remote paste for a watcher, with where its answer goes: the status,
 /// done, refused or failed, and the reason.
@@ -85,9 +103,24 @@ struct Inject {
     /// The target may paste where nothing tells whether the session is
     /// locked (remotepaste::Settings).
     no_lock_check: bool,
+    /// The grant for the uinput helper, for a desktop session.
+    keys: String,
     kind: String,
     name: String,
     done: SyncSender<(String, String)>,
+}
+
+/// A grant lets the uinput helper press the keys of one remote paste for
+/// the user of the desktop session the service handed it to, as Go's
+/// keysGrant: the paste keys once, then Enter once if the command asked for
+/// it. The helper presses keys anywhere, so it presses none the service did
+/// not ask for, after the paste switches and the checks on the signer.
+struct Grant {
+    uid: u32,
+    enter: bool,
+    pasted: bool,
+    done: bool,
+    until: Instant,
 }
 
 /// The pastes sent to a watcher that wait for its answer, by their seq.
@@ -101,8 +134,10 @@ struct Watcher {
     /// It holds a clipboard: tmux, the console and paste-only watchers do
     /// not, so they get no writes and report no copies.
     board: bool,
-    /// Its user, read when it offers a target (peer.rs).
+    /// Its user, read when it offers a target or the actions (peer.rs).
     uid: Option<u32>,
+    /// It runs the quick actions in its user's session (CBB's agent).
+    act: bool,
     /// Its clipboard takes images, files and formatted text whole.
     images: bool,
     files: bool,
@@ -146,6 +181,11 @@ struct Service {
     node: RwLock<Option<Arc<Node>>>,
     away: RwLock<Option<Arc<Away>>>,
     watchers: Mutex<Vec<Watcher>>,
+    /// The grants of the remote pastes handed to desktop sessions, for the
+    /// uinput helper's keys, by their tokens.
+    grants: Mutex<HashMap<String, Grant>>,
+    /// The Bluetooth keyboard and the TVs' remotes, through cbb-helper.
+    peripherals: Arc<crate::peripheral::Peripherals>,
     next_watcher: AtomicUsize,
     /// The limits of remote paste per sender.
     pastes: Mutex<remotepaste::Limiter>,
@@ -238,6 +278,8 @@ pub fn run(cfg: Config) -> Result<()> {
         node: RwLock::new(None),
         away: RwLock::new(None),
         watchers: Mutex::new(Vec::new()),
+        grants: Mutex::new(HashMap::new()),
+        peripherals: Arc::new(crate::peripheral::Peripherals::new(&cfg.state_dir, &cfg.name)),
         next_watcher: AtomicUsize::new(0),
         pastes: Mutex::new(remotepaste::Limiter::default()),
         acts: Mutex::new(remotepaste::Limiter::default()),
@@ -258,6 +300,11 @@ pub fn run(cfg: Config) -> Result<()> {
         pairing: Mutex::new(None),
         port: Mutex::new(None),
     });
+    {
+        // The helper puts a keyboard that is on back on BlueZ.
+        let p = svc.peripherals.clone();
+        std::thread::spawn(move || p.status());
+    }
     if let Some(h) = svc.helper.clone() {
         // Started at once, so that a helper that cannot run shows in the
         // log at the start rather than at the first request.
@@ -1011,7 +1058,7 @@ impl Service {
                 res.status = "failed".into();
                 res.reason = format!("reading the quick actions: {}", e.for_log());
             }
-            Ok(_) if !actions::PRESETS.contains(&body.action.as_str()) => {
+            Ok(set) if !set.has(&body.action) => {
                 res.reason = format!("this device has no action {:?}", body.action);
             }
             Ok(set) => {
@@ -1026,7 +1073,7 @@ impl Service {
                 } else if !self.acts.lock().unwrap().allow(&from.key, uptime::wall_ms()) {
                     res.reason = "too many actions: at most one a second and 30 a minute from one device".into();
                 } else {
-                    res = self.run_action(&body);
+                    res = self.run_action(&body, &set.get(&body.action).command);
                 }
             }
         }
@@ -1056,8 +1103,11 @@ impl Service {
         res
     }
 
-    /// Runs a preset that passed the checks.
-    fn run_action(&self, body: &crate::records::Command) -> wire::CommandResult {
+    /// Runs an action that passed the checks: the user's own (command) and,
+    /// but on Linux, the presets of the system in the signed-in user's
+    /// session through CBB's agent, as Go's sessionRunner; on Linux the
+    /// presets through logind.
+    fn run_action(&self, body: &crate::records::Command, command: &[String]) -> wire::CommandResult {
         let mut res = wire::CommandResult {
             id: body.id.clone(),
             by: String::new(),
@@ -1073,12 +1123,69 @@ impl Service {
             });
             return res;
         }
-        match actions::run(&body.action) {
+        let ran = if body.action == actions::LAYOUT {
+            self.next_keyboard_layout()
+        } else if !command.is_empty() || !cfg!(target_os = "linux") {
+            self.in_session(&body.action, command)
+        } else {
+            actions::run(&body.action)
+        };
+        match ran {
             Ok(()) => {}
             Err(actions::Failure::Refused(why)) => (res.status, res.reason) = ("refused".into(), why),
             Err(actions::Failure::Failed(e)) => (res.status, res.reason) = ("failed".into(), e.for_log()),
         }
         res
+    }
+
+    /// Hands the action name, with command the user's own, to an agent
+    /// that offers to run the actions as the user at the screen, as Go's
+    /// sessionRunner: the first that answers decides.
+    fn in_session(&self, name: &str, command: &[String]) -> std::result::Result<(), actions::Failure> {
+        let ws: Vec<(Option<u32>, SyncSender<ToWatcher>)> =
+            self.watchers.lock().unwrap().iter().filter(|w| w.act).map(|w| (w.uid, w.tx.clone())).collect();
+        if ws.is_empty() {
+            return Err(actions::Failure::Refused(
+                "nobody is signed in here with CBB's agent running, and the actions run in the user's session".into(),
+            ));
+        }
+        let ws: Vec<SyncSender<ToWatcher>> = ws
+            .into_iter()
+            .filter(|(uid, _)| peer::may_take(*uid, ACT, peer::at_screen) == peer::Verdict::Allowed)
+            .map(|(_, tx)| tx)
+            .collect();
+        if ws.is_empty() {
+            return Err(actions::Failure::Refused(
+                "CBB's agent runs here only as users who are not signed in at the screen, and the actions run in that user's session".into(),
+            ));
+        }
+        let mut reasons: Vec<String> = Vec::new();
+        for tx in ws {
+            let (done, answer) = mpsc::sync_channel(1);
+            let a = Act { name: name.into(), command: command.to_vec(), done };
+            if tx.try_send(ToWatcher::Act(a)).is_err() {
+                continue;
+            }
+            let Ok((status, reason)) = answer.recv_timeout(crate::admin::ACTION_WAIT) else {
+                return Err(actions::Failure::Failed(Error::msg("the agent did not answer")));
+            };
+            match status.as_str() {
+                "done" => return Ok(()),
+                "refused" => return Err(actions::Failure::Refused(reason)),
+                _ => reasons.push(reason),
+            }
+        }
+        if reasons.is_empty() {
+            return Err(actions::Failure::Failed(Error::msg("the agent is busy")));
+        }
+        reasons.dedup();
+        Err(actions::Failure::Failed(Error::msg(reasons.join("; "))))
+    }
+
+    /// The keyboard-layout preset: the Bluetooth keyboard types in the next
+    /// layout.
+    fn next_keyboard_layout(&self) -> std::result::Result<(), actions::Failure> {
+        self.peripherals.next_layout()
     }
 
     /// Turns every quick action off here; the rights the user granted stay
@@ -1099,33 +1206,58 @@ impl Service {
         let [a] = h.actions.as_slice() else {
             return Err(Error::msg("set one quick action at a time"));
         };
-        if !a.command.is_empty() {
-            return Err(Error::msg(
-                "the lite member has only the presets reboot, cancel-shutdown and restart; actions of your own need a full member",
-            ));
-        }
-        if !actions::PRESETS.contains(&a.name.as_str()) {
-            return Err(Error::msg(format!(
-                "this device has no action {:?}: the lite member has reboot, cancel-shutdown and restart",
-                a.name
-            )));
-        }
-        for k in &a.by {
-            if !actions::KINDS.contains(&k.as_str()) {
-                return Err(Error::msg(format!("{k:?} is not a kind of admin: root, phone, computer or watch")));
-            }
-        }
+        let by = actions::parse_kinds(&a.by.join(","))?;
         let mut set = actions::load(&self.state_dir)?;
-        set.set(actions::Action {
-            name: a.name.clone(),
-            on: a.on,
-            by: a.by.clone(),
-            any_key: a.any_key,
-            ..Default::default()
-        });
+        let command = if !a.command.is_empty() {
+            if let Some(why) = actions::check_own(&a.name, &a.command) {
+                return Err(Error::msg(why));
+            }
+            if !set.has(&a.name) && set.own().len() >= actions::MAX_OWN {
+                return Err(Error::msg(format!(
+                    "this device has {} actions of its user's own already, the most it keeps",
+                    actions::MAX_OWN
+                )));
+            }
+            a.command.clone()
+        } else if actions::PRESETS.contains(&a.name.as_str()) {
+            Vec::new()
+        } else if set.has(&a.name) {
+            set.get(&a.name).command // enable or disable keeps it
+        } else {
+            return Err(Error::msg(format!(
+                "this device has no action {:?}; the presets are {}, and cbb action add adds your own",
+                a.name,
+                actions::PRESETS.join(", ")
+            )));
+        };
+        set.set(actions::Action { name: a.name.clone(), on: a.on, by: by.clone(), any_key: a.any_key, command });
         actions::save(&self.state_dir, &set).map_err(|e| e.context("saving the quick actions"))?;
         node.set_actions(set.on());
-        (self.log)(&format!("cbb: the action {} is {} here", a.name, if a.on { "on" } else { "off" }));
+        (self.log)(&format!(
+            "cbb: the action {} is {} here (by {by:?}, any key {})",
+            a.name,
+            if a.on { "on" } else { "off" },
+            a.any_key
+        ));
+        Ok(self.action_reply(&set))
+    }
+
+    /// cbb action remove: the user's own action goes.
+    fn remove_action(&self, h: &Header) -> Result<Message> {
+        let node = self.node()?;
+        let mut set = actions::load(&self.state_dir)?;
+        if !set.remove(&h.name) {
+            if actions::PRESETS.contains(&h.name.as_str()) {
+                return Err(Error::msg(format!(
+                    "{} is a preset, which stays; cbb action disable {} turns it off",
+                    h.name, h.name
+                )));
+            }
+            return Err(Error::msg(format!("this device has no action of its user's own named {:?}", h.name)));
+        }
+        actions::save(&self.state_dir, &set).map_err(|e| e.context("saving the quick actions"))?;
+        node.set_actions(set.on());
+        (self.log)(&format!("cbb: the action {} is removed here", h.name));
         Ok(self.action_reply(&set))
     }
 
@@ -1168,7 +1300,18 @@ impl Service {
             Ok(_) if !self.pastes.lock().unwrap().allow(&from.key, uptime::wall_ms()) => {
                 res.reason = "too many pastes: at most one a second and 30 a minute from one device".into();
             }
-            Ok(set) => res = self.inject(&body, &remotepaste::clean(&body.text), set, &from.name),
+            Ok(set) => {
+                let text = remotepaste::clean(&body.text);
+                match (!text.is_empty()).then(|| self.peripherals.paste(&text, set.enter, body.enter)).flatten() {
+                    Some((status, reason)) => {
+                        (res.status, res.reason) = (status, reason);
+                        if res.status == "done" {
+                            self.watch_typing(c, &body, text.len());
+                        }
+                    }
+                    None => res = self.inject(&body, &text, set, &from.name),
+                }
+            }
         }
         if res.status == "done" {
             (self.log)(&format!("cbb: {} pasted {} bytes here", from.who(&body), body.text.len()));
@@ -1192,6 +1335,28 @@ impl Service {
             }
         }
         res
+    }
+
+    /// Watches a paste the keyboard's host or a Roku types after its
+    /// answer, as Go's stillAllowed: once the records no longer take its
+    /// command c from its signer, removed or frozen meanwhile, the helper
+    /// stops typing; it stops by itself when remote paste goes off.
+    fn watch_typing(&self, c: &crate::records::Record, body: &crate::records::Command, len: usize) {
+        let Ok(node) = self.node() else { return };
+        let (c, at, p) = (c.clone(), body.time_ms, self.peripherals.clone());
+        // At most as long as the slowest typing: a Roku's pace, or the
+        // keyboard's slowest rate.
+        let until = Instant::now() + Duration::from_secs(60) + Duration::from_millis(200) * len as u32;
+        std::thread::spawn(move || {
+            while Instant::now() < until && !STOP.load(Ordering::SeqCst) {
+                std::thread::sleep(TYPING_CHECK);
+                let me = node.identity().id.to_string();
+                if node.records().lock().unwrap().verify_command(&c, &me, at).is_err() {
+                    p.stop();
+                    return;
+                }
+            }
+        });
     }
 
     /// Hands the text to the watchers that can put it in, best target
@@ -1254,7 +1419,7 @@ impl Service {
         // the system tells who that is.
         let secret = body.paste_kind == "secret";
         let mut why = "";
-        let targets: Vec<(String, SyncSender<ToWatcher>)> = targets
+        let targets: Vec<(String, Option<u32>, SyncSender<ToWatcher>)> = targets
             .into_iter()
             .filter(|(t, uid, _)| match peer::may_take(*uid, t, peer::at_screen) {
                 peer::Verdict::Allowed => true,
@@ -1270,7 +1435,6 @@ impl Service {
                     false
                 }
             })
-            .map(|(t, _, tx)| (t, tx))
             .collect();
         if targets.is_empty() {
             res.reason = why.into();
@@ -1278,21 +1442,30 @@ impl Service {
         }
         let wait = if body.mode == "type" { INJECT_WAIT + TYPE_WAIT * text.len() as u32 } else { INJECT_WAIT };
         let mut reasons: Vec<String> = Vec::new();
-        for (target, tx) in targets {
+        for (target, uid, tx) in targets {
             let (done, answer) = mpsc::sync_channel(1);
+            let keys = match uid {
+                Some(uid) if target == DESKTOP => self.grant_keys(uid, body.enter, wait),
+                _ => String::new(),
+            };
             let i = Inject {
                 text: text.to_string(),
                 method: body.mode.clone(),
                 enter: body.enter,
                 no_lock_check: set.no_lock_check,
+                keys: keys.clone(),
                 kind: body.paste_kind.clone(),
                 name: name.to_string(),
                 done,
             };
             if tx.try_send(ToWatcher::Inject(i)).is_err() {
+                self.grants.lock().unwrap().remove(&keys);
                 continue;
             }
-            let reason = match answer.recv_timeout(wait) {
+            let answered = answer.recv_timeout(wait);
+            // The grant ends with the session's answer.
+            self.grants.lock().unwrap().remove(&keys);
+            let reason = match answered {
                 Ok((status, _)) if status == "done" => {
                     res.status = status;
                     return res;
@@ -1318,12 +1491,49 @@ impl Service {
         res
     }
 
+    /// Makes the grant of a remote paste for uid, a desktop session's user,
+    /// valid for wait, as Go's grantKeys.
+    fn grant_keys(&self, uid: u32, enter: bool, wait: Duration) -> String {
+        let mut b = [0u8; 16];
+        if getrandom::fill(&mut b).is_err() {
+            return String::new();
+        }
+        let token: String = b.iter().map(|x| format!("{x:02x}")).collect();
+        let now = Instant::now();
+        let mut grants = self.grants.lock().unwrap();
+        grants.retain(|_, g| g.until > now);
+        grants.insert(token.clone(), Grant { uid, enter, pasted: false, done: false, until: now + wait });
+        token
+    }
+
+    /// Answers the uinput helper's keys (Go's takeKeys): whether it may
+    /// press the keys req, paste or enter, for the user uid under the grant.
+    fn take_keys(&self, grant: &str, req: &str, uid: &str) -> Result<()> {
+        let mut grants = self.grants.lock().unwrap();
+        let ok = match grants.get_mut(grant) {
+            Some(g) if g.until > Instant::now() && g.uid.to_string() == uid => match req {
+                "paste" if !g.pasted => {
+                    g.pasted = true;
+                    true
+                }
+                "enter" if g.enter && g.pasted && !g.done => {
+                    g.done = true;
+                    true
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+        if ok { Ok(()) } else { Err(Error::msg("no remote paste asked for these keys now")) }
+    }
+
     /// Remote paste here, for the status: the switches and the targets that
     /// run.
     fn paste_status(&self) -> Option<control::Paste> {
         let set = remotepaste::load(&self.state_dir).ok()?;
         let mut targets: Vec<String> =
             self.watchers.lock().unwrap().iter().filter(|w| !w.target.is_empty()).map(|w| w.target.clone()).collect();
+        targets.extend(self.peripherals.status().map(|p| p.targets).unwrap_or_default());
         targets.sort();
         targets.dedup();
         Some(control::Paste {
@@ -1343,17 +1553,24 @@ impl Service {
             "on" | "off" => {}
             n => return Err(Error::msg(format!("remote paste is on or off, not {n:?}"))),
         }
-        if !h.device.is_empty() {
-            return Err(Error::msg(if h.name == "on" {
-                "only a device's own user turns remote paste on there"
-            } else {
-                "only an admin turns remote paste off on another device; the lite member is never one: use the phone app or a full member"
-            }));
+        if h.name == "on" && (!h.device.is_empty() || h.all) {
+            return Err(Error::msg("only a device's own user turns remote paste on there"));
         }
         if h.name == "off" && (h.enter || h.console || h.no_lock_check) {
             return Err(Error::msg("-enter, -console and -no-lock-check go with on"));
         }
         self.node()?;
+        if !h.device.is_empty() || h.all {
+            let off_here = || {
+                remotepaste::save(&self.state_dir, remotepaste::Settings::default())
+                    .map_err(|e| e.context("saving the remote paste settings"))?;
+                (self.log)("cbb: remote paste is off here");
+                Ok(())
+            };
+            self.admin(|a| a.off_on(&h.device, h.all, true, &off_here))?;
+            let status = Status { paste: self.paste_status(), ..Default::default() };
+            return Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()));
+        }
         let set = remotepaste::Settings {
             on: h.name == "on",
             enter: h.enter,
@@ -1367,6 +1584,21 @@ impl Service {
         ));
         let status = Status { paste: self.paste_status(), ..Default::default() };
         Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
+    }
+
+    /// cbb paste -on: signs a paste command for the member h.device and
+    /// waits for its result, as Go's sendPaste.
+    fn paste_on(&self, h: &Header, payload: &[u8]) -> Result<Message> {
+        let mode = if h.method.is_empty() { "paste" } else { h.method.as_str() };
+        let kind = if h.kind.is_empty() { "text" } else { h.kind.as_str() };
+        let text = remotepaste::clean(&String::from_utf8_lossy(payload));
+        if text.is_empty() {
+            return Err(Error::msg("nothing to paste: the text is empty or only control characters"));
+        }
+        let wait = if mode == "type" { INJECT_WAIT + TYPE_WAIT * text.len() as u32 } else { INJECT_WAIT };
+        let o = cbb_core::manage::Order::Paste { mode: mode.into(), kind: kind.into(), text, enter: h.enter };
+        self.admin(|a| a.paste_on(&h.device, o, wait))?;
+        Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
     }
 
     /// Passes a write the engine decided on to every watcher that holds a
@@ -1480,12 +1712,45 @@ impl Service {
             }
             return;
         }
+        if m.header.op == "keys" {
+            let answer = if peer::uid(&out).is_some_and(peer::privileged) {
+                self.take_keys(&m.header.keys, &m.header.name, &m.header.value)
+                    .map(|()| control::reply(Header::default(), Vec::new()))
+                    .unwrap_or_else(|e| control::failure(&e))
+            } else {
+                control::failure(&Error::msg("only the uinput helper, as root, asks for a paste's keys"))
+            };
+            let _ = control::write(&mut out, &answer);
+            return;
+        }
         if m.header.op == "invite" {
             let res = self
                 .admin(|a| a.admitter(false))
                 .and_then(|admitter| self.away()?.invite(admitter, m.header.expires, r, &mut out));
             if let Err(e) = res {
                 (self.log)(&format!("cbb: invite: {}", e.for_log()));
+                let _ = control::write(&mut out, &control::failure(&e));
+            }
+            return;
+        }
+        if m.header.op == "release-file" {
+            let answer = match self.receive_release_file(&m, &mut r) {
+                Ok(()) => control::reply(Header::default(), Vec::new()),
+                Err(e) => {
+                    (self.log)(&format!("cbb: release-file: {}", e.for_log()));
+                    if let Ok(c) = out.try_clone() {
+                        let _ = c.set_read_timeout(Some(Duration::from_secs(5)));
+                    }
+                    while let Ok(Some(_)) = r.read() {}
+                    control::failure(&e)
+                }
+            };
+            let _ = control::write(&mut out, &answer);
+            return;
+        }
+        if m.header.op == "release-get" {
+            if let Err(e) = self.send_release_file(&m.header.value, &mut out) {
+                (self.log)(&format!("cbb: release-get: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));
             }
             return;
@@ -1548,6 +1813,89 @@ impl Service {
         let sent = parts.and_then(|parts| copies::send(out, &ev.text, &parts));
         let _ = std::fs::remove_dir_all(&dir);
         sent
+    }
+
+    /// Takes an archive of the release held from cbb update, which
+    /// installed it (Go's receiveReleaseFile): Value its SHA-256 and Part
+    /// its size, its bytes in data messages; it must be listed, whole and
+    /// match its hash.
+    fn receive_release_file(&self, m: &Message, r: &mut control::Reader<UnixStream>) -> Result<()> {
+        use std::io::Write;
+        let node = self.node()?;
+        let releases = node.releases();
+        let sha = m.header.value.to_ascii_lowercase();
+        let now = uptime::wall_ms();
+        let a =
+            releases.file(&sha, now).ok_or_else(|| Error::msg("the release this device holds lists no such file"))?;
+        if m.header.part.as_ref().map(|p| p.size) != Some(a.size) {
+            return Err(Error::msg(format!("{} is {} bytes, not as said", a.name, a.size)));
+        }
+        let tmp = releases.files_dir()?.join(format!(".part-{}", files::random_name()));
+        let res = (|| {
+            let mut f = std::fs::File::create(&tmp).context("cannot keep the archive")?;
+            let mut got: i64 = 0;
+            while got < a.size {
+                let d = r.read()?.filter(|d| d.header.op == "data" && !d.payload.is_empty());
+                let d = d.filter(|d| i64::try_from(d.payload.len()).is_ok_and(|n| n <= a.size - got));
+                let d = d.ok_or_else(|| Error::msg(format!("the bytes of {} did not come as said", a.name)))?;
+                f.write_all(&d.payload).context("cannot keep the archive")?;
+                got += d.payload.len() as i64;
+            }
+            drop(f);
+            releases.keep_file(&sha, &tmp, now)
+        })();
+        let _ = std::fs::remove_file(&tmp);
+        res
+    }
+
+    /// Answers release-get (Go's sendReleaseFile): the archive of the
+    /// release held whose SHA-256 is sha, from this member or its peers, as
+    /// a part and its bytes, then done.
+    fn send_release_file(&self, sha: &str, out: &mut UnixStream) -> Result<()> {
+        use std::io::Read;
+        let node = self.node()?;
+        let sha = sha.to_ascii_lowercase();
+        node.fetch_release_file(&sha)?;
+        let path = node.releases().path_of(&sha);
+        let mut f = std::fs::File::open(&path).context("the file left this device")?;
+        let size =
+            node.releases().held(&sha, uptime::wall_ms()).ok_or_else(|| Error::msg("the file left this device"))?;
+        let reply = |h: Header, payload: Vec<u8>| Message::new(Header { op: "reply".into(), ..h }, payload);
+        let part = control::Part { size: size as i64, ..Default::default() };
+        control::write(out, &reply(Header { part: Some(part), ..Default::default() }, Vec::new()))?;
+        let mut buf = vec![0; 1 << 20];
+        let mut sent = 0u64;
+        while sent < size {
+            let n = f.read(&mut buf).context("cannot read the archive")?;
+            if n == 0 {
+                return Err(Error::msg("the archive changed its size"));
+            }
+            sent += n as u64;
+            control::write(out, &reply(Header::default(), buf[..n].to_vec()))?;
+        }
+        control::write(out, &reply(Header { done: true, ..Default::default() }, Vec::new()))
+    }
+
+    /// On a hub, the archives of the release held that the group's members
+    /// update from and this device does not hold whole, at most
+    /// MAX_WANTED, for its cbb update to download (Go's
+    /// wantedReleaseFiles); elsewhere none.
+    fn wanted_release_files(&self) -> Result<Option<Vec<String>>> {
+        let node = self.node()?;
+        if !self.away()?.is_hub() {
+            return Ok(None);
+        }
+        let now = uptime::wall_ms();
+        let names = node.archives();
+        let wanted: Vec<String> = node
+            .releases()
+            .files(now)
+            .into_iter()
+            .filter(|a| names.contains(&a.name) && node.releases().held(&a.sha256, now).is_none())
+            .map(|a| a.name)
+            .take(MAX_WANTED)
+            .collect();
+        Ok(Some(wanted).filter(|w| !w.is_empty()))
     }
 
     /// The folder for the parts of copies on their way, in the state
@@ -1630,6 +1978,7 @@ impl Service {
             )),
             "status" => {
                 let node = self.node()?;
+                let peripherals = self.peripherals.status();
                 let id = node.identity();
                 let skews = node.engine.skews();
                 let peers = node
@@ -1657,6 +2006,14 @@ impl Service {
                     sync_until_ms: node.engine.sync().1,
                     away: self.away()?.status(&node),
                     paste: self.paste_status(),
+                    keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
+                    tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
+                    release: node.releases().version(uptime::wall_ms()).unwrap_or_default(),
+                    update: node
+                        .releases()
+                        .version(uptime::wall_ms())
+                        .filter(|v| crate::releases::offered(v))
+                        .unwrap_or_default(),
                     actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
                     stop: node.stop(),
                     removed: node.removed(),
@@ -1752,21 +2109,60 @@ impl Service {
                 self.admin(|a| a.set_hubs(&h.hubs))?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
-            "paste-receive" => self.set_receive(h),
-            "action-set" => self.set_action(h),
-            "actions-off" if h.device.is_empty() && !h.all => {
+            "release" => {
+                let set: serde_json::Value =
+                    serde_json::from_slice(&m.payload).map_err(|e| Error::with("the request carries no release", e))?;
+                self.node()?.put_release(&set)?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
+            "release-want" => {
+                let data = serde_json::to_vec(&self.wanted_release_files()?).context("cannot encode the files")?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, data))
+            }
+            "release-held" => {
+                let set = self
+                    .node()?
+                    .releases()
+                    .current(uptime::wall_ms())
+                    .ok_or_else(|| Error::msg("this device holds no signed release"))?;
+                let data = serde_json::to_vec(&set).context("cannot encode the release")?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, data))
+            }
+            "update-way" => {
                 let node = self.node()?;
-                self.all_actions_off(&node)?;
-                (self.log)("cbb: the quick actions are off here");
+                let data = match self.away()?.update_way(&node) {
+                    Some(v) => serde_json::to_vec(&v).context("cannot encode the way")?,
+                    None => Vec::new(),
+                };
+                Ok(control::reply(Header { done: true, ..Default::default() }, data))
+            }
+            "paste-receive" => self.set_receive(h),
+            "keyboard" | "remote" => {
+                let p = self.peripherals.serve(&h.op, h, &m.payload)?;
+                let status = Status { keyboard: p.keyboard, tvs: p.tvs, ..Default::default() };
+                Ok(control::reply(Header { status: Some(status), done: true, ..Default::default() }, Vec::new()))
+            }
+            "action-set" => self.set_action(h),
+            "actions-off" => {
+                let node = self.node()?;
+                let off_here = || {
+                    self.all_actions_off(&node)?;
+                    (self.log)("cbb: the quick actions are off here");
+                    Ok(())
+                };
+                if h.device.is_empty() && !h.all {
+                    off_here()?;
+                } else {
+                    self.admin(|a| a.off_on(&h.device, h.all, false, &off_here))?;
+                }
                 Ok(self.action_reply(&actions::load(&self.state_dir)?))
             }
-            "actions-off" | "action-on" => Err(Error::msg(
-                "only an admin runs or turns off quick actions on another device; the lite member is never one: use the phone app or a full member",
-            )),
-            "action-remove" => Err(Error::msg("the lite member has only presets, which cbb action disable turns off")),
-            "paste-on" => Err(Error::msg(
-                "only an admin pastes on another device; the lite member is never one: use the phone app or a full member",
-            )),
+            "action-on" => {
+                self.admin(|a| a.action_on(&h.device, &h.name))?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
+            "action-remove" => self.remove_action(h),
+            "paste-on" => self.paste_on(h, &m.payload),
             "mute" | "unmute" => {
                 self.mute_op(h)?;
                 Ok(control::reply(Header::default(), Vec::new()))
@@ -2009,13 +2405,20 @@ impl Service {
         // Whether the user is at the screen is asked at each paste; a user
         // the system does not name, or a console helper that is not root,
         // never takes one.
-        let uid = if target.is_empty() { None } else { peer::uid(&out) };
+        let mut act = m.header.act;
+        let uid = if target.is_empty() && !act { None } else { peer::uid(&out) };
         let keyboard = target == CONSOLE || target == NEXT;
         if !target.is_empty() && (uid.is_none() || keyboard && !uid.is_some_and(peer::privileged)) {
             (self.log)(&format!(
                 "cbb: a watcher offers the paste target {target} as a user that may not take it; it gets no remote pastes"
             ));
             target.clear();
+        }
+        if act && uid.is_none() {
+            (self.log)(
+                "cbb: a watcher offers to run the quick actions as a user the system does not name; it runs none",
+            );
+            act = false;
         }
         let board = !m.header.paste_only && target != TMUX && !keyboard;
         let (images, files, html) = (m.header.images, m.header.files, m.header.html);
@@ -2037,7 +2440,17 @@ impl Service {
             let _ = tx.try_send(ToWatcher::Write(w));
         }
         let id = self.next_watcher.fetch_add(1, Ordering::SeqCst);
-        self.watchers.lock().unwrap().push(Watcher { id, target: target.clone(), board, uid, images, files, html, tx });
+        self.watchers.lock().unwrap().push(Watcher {
+            id,
+            target: target.clone(),
+            board,
+            uid,
+            act,
+            images,
+            files,
+            html,
+            tx,
+        });
         let waiting: Arc<Mutex<Waiting>> = Arc::default();
         {
             let waiting = waiting.clone();
@@ -2066,11 +2479,26 @@ impl Service {
                                     method: i.method,
                                     enter: i.enter,
                                     no_lock_check: i.no_lock_check,
+                                    keys: i.keys,
                                     kind: i.kind,
                                     name: i.name,
                                     ..Default::default()
                                 },
                                 i.text.into_bytes(),
+                            )
+                        }
+                        ToWatcher::Act(a) => {
+                            seq += 1;
+                            waiting.lock().unwrap().insert(seq, a.done);
+                            Message::new(
+                                Header {
+                                    op: "act".into(),
+                                    seq,
+                                    name: a.name,
+                                    command: a.command,
+                                    ..Default::default()
+                                },
+                                Vec::new(),
                             )
                         }
                     };
@@ -2084,7 +2512,7 @@ impl Service {
             });
         }
         while let Ok(Some(m)) = r.read() {
-            if m.header.op == "injected" {
+            if m.header.op == "injected" || m.header.op == "acted" {
                 if let Some(done) = waiting.lock().unwrap().remove(&m.header.seq) {
                     let _ = done.try_send(injected(&m.header));
                 }
@@ -2134,7 +2562,7 @@ fn injected(h: &Header) -> (String, String) {
 fn action_status(set: &actions::Settings) -> Vec<control::Action> {
     set.all()
         .into_iter()
-        .map(|a| control::Action { name: a.name, on: a.on, by: a.by, any_key: a.any_key, ..Default::default() })
+        .map(|a| control::Action { name: a.name, on: a.on, by: a.by, any_key: a.any_key, command: a.command })
         .collect()
 }
 

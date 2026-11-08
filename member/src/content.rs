@@ -289,7 +289,7 @@ fn manifest_size(m: &Manifest, path: &str, kind: &str) -> u64 {
 }
 
 /// A file's size and SHA-256.
-fn file_sum(path: &Path) -> Result<(u64, [u8; 32])> {
+pub fn file_sum(path: &Path) -> Result<(u64, [u8; 32])> {
     let mut f = File::open(path).context(format!("read {}", path.display()))?;
     let mut h = Sha256::new();
     let mut buf = vec![0u8; 1 << 16];

@@ -282,7 +282,7 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 		}
 		reply(c, control.Header{Done: true}, nil)
 	case control.OpKeyboard:
-		if err := s.keyboard(ctx, m); err != nil {
+		if err := s.host.Keyboard(ctx, m); err != nil {
 			fail(c, err)
 			return
 		}
@@ -300,7 +300,7 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 		}
 		reply(c, control.Header{Done: true}, nil)
 	case control.OpRemote:
-		if err := s.remote(ctx, m); err != nil {
+		if err := s.host.Remote(ctx, m); err != nil {
 			fail(c, err)
 			return
 		}
@@ -530,8 +530,8 @@ func (s *Service) status() *control.Status {
 	defer s.mu.Unlock()
 	st := &control.Status{Role: string(s.cfg.Role), OS: s.cfg.OS, Version: version.String()}
 	st.Release, st.Update = s.releaseStatus()
-	st.TVs = s.tvStatus()            // a TV's remote needs no group
-	st.Keyboard = s.keyboardStatus() // nor does the Bluetooth keyboard
+	st.TVs = s.host.TVStatus()            // a TV's remote needs no group
+	st.Keyboard = s.host.KeyboardStatus() // nor does the Bluetooth keyboard
 	if s.id == nil {
 		st.LeftOldGroup = s.leftOld
 		return st

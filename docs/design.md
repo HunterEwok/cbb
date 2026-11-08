@@ -167,6 +167,14 @@ ends, the Go service described below is still the computers' member.
   which goes to `cbb`'s log. No socket or pipe has a name, so no other process can ask the
   helper for anything, and above all for a signature with a device's key. Started by hand,
   on a terminal or with arguments, the helper refuses to run.
+- **Checked before it starts.** The helper signs with the device's keys, so `cbb` trusts
+  it no less than itself: on Unix the program, its links followed, and its folder belong
+  to root, to `cbb`'s user or to the owner of `cbb`'s own program, and neither group nor
+  others may write to them (`cbb`'s own folder counts as trusted); on Windows the
+  installer's Program Files folder stands for that. The helper gets only the environment
+  it needs: the variables that start with `CBB_` and a short list for Go, PC/SC, D-Bus
+  and Windows. A release of `cbb` takes only the helper of the same release, which its
+  hello names; a build that is not a release takes any.
 - **Messages.** The control socket's: a JSON header on one line, then `len` bytes of
   payload (docs/protocol.md, section 8). A request carries a `seq` of `cbb`'s own; the
   helper answers it with op `reply`, the same `seq` and `done`, or with `error` and, in
@@ -184,11 +192,25 @@ ends, the Go service described below is still the computers' member.
   where the key would go into a file, which `cbb` then makes itself. `identity.json` keeps
   the blob as the Go member's file does (`key_tpm`, `key_se`); `key-public` loads it by the
   blob and `key-sign` signs a SHA-256 digest with it, so `cbb`'s handshakes, copies and
-  records are signed in the hardware and the key never leaves it. `card-sign` signs with a
-  key on a YubiKey, found by its certificate's key hash, after its PIN. `seal` and `unseal`
+  records are signed in the hardware and the key never leaves it. `seal` and `unseal`
   seal a secret with the TPM or the Secure Enclave as Go's `group.Sealer` does: `cbb` keeps
   the key for sealed messages (`seal.json`) and the tunnel's keys (`tunnel.json`, with the
-  hub's fields Go writes) sealed in the same fields as the Go member.
+  hub's fields Go writes) sealed in the same fields as the Go member. On a Mac, which has no
+  TPM, `cbb` does all of this with the Secure Enclave itself (`member/src/sekey.rs`, through
+  Security.framework, the same blobs and the same sealed format as Go's `internal/sekey`,
+  checked against `testdata/interop/go-sekey-seal.json`), so there the helper holds no key.
+  A YubiKey `cbb` reads itself on every system (`member/src/piv.rs`, Go's `internal/piv`
+  translated, through pcscd's socket on Linux, PCSC.framework on a Mac and winscard on
+  Windows): it finds the slot by its certificate's key hash, takes the PIN and signs.
+- **The keyboard and the TVs.** `keyboard`, `remote`, `peripheral-status`,
+  `peripheral-paste`, `peripheral-stop` and `keyboard-layout` run Go's `internal/peripheral`,
+  the code the Go service runs too, with the state folder and the device's name in each
+  request: the helper keeps the Bluetooth keyboard on BlueZ and a TV pairing between requests,
+  and `cbb` asks it only once the keyboard or a TV was set up there (`keyboard`, `tvs.json`).
+  A remote paste goes to the keyboard's host or the TV the user sends pastes to before the
+  watchers; one typed after its answer stops when remote paste goes off, which the helper
+  reads in the same folder, or when `cbb`'s records no longer take its command, when `cbb`
+  sends `peripheral-stop` (`TestLitePeripherals`).
 - **The clients' operations.** The Rust service already takes what the command line and the
   desktops' agents ask on the control socket: `status`, `devices`, `config` (the largest
   copy, `limits` in its state), `copy` and `paste`, the watchers' `watch`, `clipboard`,
@@ -224,7 +246,7 @@ ends, the Go service described below is still the computers' member.
   each connected admin whose admin CA is from an earlier root a new one for the same key, as
   Go's `renewAdminCAs` (`TestLiteTakeover`). Any
   member claims the group the same way with the recovery key (`recovery`): the sheet's key,
-  or with `yubikey` the card's, which cbb-helper's `card-sign` uses after the PIN, signs the
+  or with `yubikey` the card's, which `cbb` signs with after the PIN (`member/src/piv.rs`), signs the
   claim under the recovery key's admin CA from the records or the sheet (`TestLiteRecovery`).
 - **The hub.** On an admin whose key level allows it, `hub` makes the Rust service the
   group's hub as Go's `cbb global hub` does: the state in `tunnel.json` becomes a hub's
@@ -2138,8 +2160,10 @@ with a signed command, and the member logs every action it runs and who asked.
 
 #### Where
 
-Linux, Mac and Windows run actions; lite members run the presets reboot and restart the
-service (the ESP32 restarts); the phones send only, since iOS runs nothing for another
+Linux, Mac and Windows run actions, the Rust service as the Go one: the presets of the system
+through logind on Linux, and the user's own and, on a Mac and Windows, every preset through
+CBB's agent in the user's session (the watch with `act`, answered with `acted`); the ESP32
+restarts; the phones send only, since iOS runs nothing for another
 device and Android would need more rights than the app should hold.
 
 #### Steps

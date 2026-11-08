@@ -38,13 +38,14 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_CONTAINER` | the service | Set by the Docker image: the service runs in a container, whose keys are in a file in its volume, so it makes no group (`cbb new`, `cbb takeover`) and offers no admin key, and the root cannot make it an admin. |
 | `CBB_KEYS_IN_FILE` | the service, in a container | `yes` allows a container to hold the group's keys anyway: to make the group, or to be made an admin and so the hub. Anyone who copies its volume then has those keys. |
 | `CBB_ROOTLESS` | `cbb` on Linux, the lite member too | `1`, set by the user units of a rootless install (`install.sh --rootless`), makes `cbb` use the user's own paths: the socket in `$XDG_RUNTIME_DIR/cbb`, the state, settings and update folder under the user's home; the service then refuses to be the root, an admin or a hub. Unset, `cbb` in `~/.local/bin` does the same. |
-| `CBB_HELPER` | the lite member | The Go helper `cbb-helper` to start, instead of the one beside the program; empty for none (docs/design.md, "The service and its helper"). |
+| `CBB_HELPER` | the lite member | The Go helper `cbb-helper` to start, instead of the one beside the program; empty for none. Like the one beside it, it starts only if nobody but root or `cbb`'s user may change it (docs/design.md, "The service and its helper"). |
 | `CBB_SOCKET` | `cbb`, the lite member, the Mac app | Another control socket, for tests or a second instance. |
 | `CBB_ADMIN_SOCKET` | `cbb` | Another admin socket, the one for the commands that change the group; by default the admin socket next to the control socket. |
 | `CBB_STATE` | the lite member | Another state directory. |
 | `CBB_STANDBY_GRACE` | the lite member's `cbb service` | Seconds a hub that lost the hub above it tries the hubs above before it serves again, 60 by default; tests set it shorter. |
 | `CBB_HUB_KEY_AHEAD` | the lite member's `cbb service` | Seconds a hub's offers carry its key for a new period of the server credentials before it serves with it, three days by default; tests set it shorter. |
 | `CBB_TEST_RESOLVE` | the lite member's `cbb service` | For tests only: `host=ip` pairs, separated by commas, that stand in for DNS when it looks up the project's relay by the names `entries.json` gives. |
+| `CBB_TEST_BLUEZ` | cbb-helper on Linux | For tests only: the D-Bus address of a test's BlueZ (`bluetest`), which the Bluetooth keyboard registers with instead of the system bus. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-site www.example.com`. |
 | `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |
 

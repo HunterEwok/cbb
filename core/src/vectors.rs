@@ -375,6 +375,7 @@ fn device_cleaned() {
         os_version: "Raspbian 13".into(),
         version: "0.5.0".into(),
         mac: "dc:a6:32:00:00:01".into(),
+        archive: "cbb-linux-arm64.tar.gz".into(),
     };
     assert_eq!(good.cleaned(), good);
     let bad = wire::DeviceInfo {
@@ -382,6 +383,7 @@ fn device_cleaned() {
         os_version: "9".repeat(33),
         version: "1\n2".into(),
         mac: "DC:A6:32:00:00:01".into(),
+        archive: "cbb-linux-arm64.exe".into(),
     };
     assert!(bad.cleaned().is_empty());
 }

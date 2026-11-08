@@ -255,6 +255,25 @@ impl Away {
     }
 
     /// What cbb global and cbb status show; None while it is off.
+    /// The way over VLESS by which cbb update reaches the mirror on the
+    /// hub's forwarder, as Go's updateVLESS: a hub's own forwarder's, with
+    /// the group's VLESS user ID, or the hub's this member uses or tries
+    /// first; None without VLESS.
+    pub fn update_way(&self, node: &Node) -> Option<serde_json::Value> {
+        let order = node.hub_order();
+        let cur = self.st.lock().unwrap();
+        let st = cur.as_ref()?;
+        if st.is_hub {
+            let f = st.forwarder.as_ref().filter(|f| !f.vless_id.is_empty())?;
+            let mut v = f.vless.clone()?;
+            v.as_object_mut()?.insert("id".into(), f.vless_id.clone().into());
+            return Some(v);
+        }
+        let using = self.using.lock().unwrap().as_ref().map(|(d, _)| d.clone());
+        let hub = using.and_then(|d| st.hub(&d).cloned()).or_else(|| st.hubs_to_try(&order).into_iter().next());
+        hub?.vless
+    }
+
     pub fn status(&self, node: &Node) -> Option<control::Away> {
         let st = self.st.lock().unwrap();
         let error = self.error.lock().unwrap().clone();

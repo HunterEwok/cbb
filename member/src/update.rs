@@ -356,6 +356,28 @@ fn fetch_with(tool: &str, url: &str, mut child: std::process::Child, path: &Path
     res
 }
 
+/// The service, which passes the signed release and its archives through
+/// the group (docs/protocol.md, section 16, "In the group"), as Go's cbb
+/// update asks it.
+pub trait Group {
+    /// Hands the service the release, `{keys, channel, release}`, that a
+    /// server gave, for the group.
+    fn share(&self, set: &serde_json::Value);
+    /// The release the service holds, for when no server answers.
+    fn held(&self) -> Result<serde_json::Value>;
+    /// Writes the archive with the SHA-256 sha and size bytes to path, from
+    /// the service, which holds it or fetches it from its peers.
+    fn get(&self, sha: &str, size: i64, path: &Path) -> Result<()>;
+    /// Hands the service the archive at path, now installed, to serve.
+    fn keep(&self, sha: &str, size: i64, path: &Path);
+    /// On a hub, the archives the group's members update from that the
+    /// service does not hold.
+    fn want(&self) -> Vec<String>;
+}
+
+/// Found::source of a release the service held.
+pub const FROM_GROUP: usize = usize::MAX;
+
 /// The release a check found.
 pub struct Found {
     pub release: Release,
@@ -364,7 +386,8 @@ pub struct Found {
     /// It did not become healthy here before.
     pub failed: bool,
     pub seen: Seen,
-    /// The index of the source it came from, which the archive comes from.
+    /// The index of the source it came from, which the archive comes from;
+    /// FROM_GROUP for the service's.
     pub source: usize,
 }
 
@@ -383,6 +406,8 @@ pub struct Updater<'a> {
     pub install: &'a Installer<'a>,
     pub healthy: &'a Health<'a>,
     pub log: &'a dyn Fn(&str),
+    /// The service, when one runs.
+    pub group: Option<&'a dyn Group>,
 }
 
 impl Updater<'_> {
@@ -436,15 +461,64 @@ impl Updater<'_> {
                     continue;
                 }
             };
-            return Ok(Found {
-                newer: release::compare(&r.version, &self.installed).is_gt(),
-                failed: st.failed.contains(&r.version),
-                release: r,
-                seen,
-                source: i,
+            if let Some(g) = self.group {
+                g.share(&serde_json::json!({"keys": keys, "channel": ch, "release": rel}));
+            }
+            return Ok(self.found(st, r, seen, i));
+        }
+        // The release the group passed around, when no server answers.
+        if let Some(g) = self.group {
+            let held = g.held().and_then(|v| {
+                #[derive(Deserialize)]
+                struct Set {
+                    keys: File,
+                    channel: File,
+                    release: File,
+                }
+                let set: Set = serde_json::from_value(v).context("the service's release does not decode")?;
+                release::check(&set.keys, &set.channel, &set.release, &roots, CHANNEL, self.now_ms, &st.seen)
             });
+            match held {
+                Ok((r, seen)) => {
+                    (self.log)("No update server answered; the release comes from the group.");
+                    return Ok(self.found(st, r, seen, FROM_GROUP));
+                }
+                Err(e) if e.is_answer() => return Err(e),
+                Err(e) => errs.push(format!("the group: {}", e.message())),
+            }
         }
         Err(Error::msg(format!("no update server answered: {}", errs.join("; "))))
+    }
+
+    fn found(&self, st: &State, r: Release, seen: Seen, source: usize) -> Found {
+        Found {
+            newer: release::compare(&r.version, &self.installed).is_gt(),
+            failed: st.failed.contains(&r.version),
+            release: r,
+            seen,
+            source,
+        }
+    }
+
+    /// On a hub, downloads the archives of r that the group's members
+    /// update from and the service lacks, from the source the release came
+    /// from, and hands them to the service, so that devices on networks
+    /// that block the update servers get them through the group (Go's
+    /// archivesForGroup).
+    pub fn archives_for_group(&self, source: usize, r: &Release) {
+        let (Some(g), Some(src)) = (self.group, self.sources.get(source)) else { return };
+        for name in g.want() {
+            let Some(a) = r.files.iter().find(|a| a.name == name) else { continue };
+            let file = self.work.join(format!(".group-{name}"));
+            let res = mkdir_private(&self.work)
+                .and_then(|()| src.fetch_to(&a.name, &r.version, &file, MAX_ARCHIVE.min(a.size.max(0) as u64)))
+                .and_then(|()| r.check_file(&a.name, &fs::read(&file).context("cannot read the downloaded archive")?));
+            match res {
+                Ok(()) => g.keep(&a.sha256, a.size, &file),
+                Err(e) => (self.log)(&format!("Not every archive for the group came: {}", e.message())),
+            }
+            let _ = fs::remove_file(&file);
+        }
     }
 
     /// Downloads the archive, checks it and the program in it, installs it
@@ -474,14 +548,24 @@ impl Updater<'_> {
         mkdir_private(&new)?;
         (self.log)(&format!("Downloading {} ({})...", asset.name, r.version));
         let file = self.work.join(&asset.name);
-        self.sources[source].fetch_to(&asset.name, &r.version, &file, MAX_ARCHIVE.min(asset.size.max(0) as u64))?;
+        let max = MAX_ARCHIVE.min(asset.size.max(0) as u64);
+        match (source, self.group) {
+            (FROM_GROUP, Some(g)) => g.get(&asset.sha256, asset.size, &file)?,
+            (FROM_GROUP, None) => return Err(Error::msg("the release came from the group, which no longer answers")),
+            _ => self.sources[source].fetch_to(&asset.name, &r.version, &file, max)?,
+        }
         let data = fs::read(&file).context("cannot read the downloaded archive")?;
         r.check_file(&asset.name, &data)?;
         drop(data);
         // The archive's hash is the signed one, so its names are the
         // project's; tar unpacks it into a folder of its own.
-        let out = Command::new("tar").arg("-xzf").arg(&file).arg("-C").arg(&new).output().context("cannot run tar")?;
-        let _ = fs::remove_file(&file);
+        let out = Command::new("tar").arg("-xzf").arg(&file).arg("-C").arg(&new).output();
+        let out = out.context("cannot run tar").inspect_err(|_| {
+            let _ = fs::remove_file(&file);
+        })?;
+        // The archive stays until the install ends, for the service to
+        // serve to the group then.
+        let _gone = Remove(&file);
         if !out.status.success() {
             return Err(Error::msg(format!(
                 "cannot unpack {}: {}",
@@ -517,6 +601,9 @@ impl Updater<'_> {
                 st.failed.retain(|v| v != &r.version);
                 st.available.clear();
                 (self.log)(&format!("CBB {} is installed.", r.version));
+                if let Some(g) = self.group {
+                    g.keep(&asset.sha256, asset.size, &file);
+                }
                 return Ok(());
             }
             Err(e) => e,
@@ -538,6 +625,15 @@ impl Updater<'_> {
             )));
         }
         Err(err.context(format!("{why}; {} is back, and automatic updates skip {}", self.installed, r.version)))
+    }
+}
+
+/// Deletes its file when dropped.
+struct Remove<'a>(&'a Path);
+
+impl Drop for Remove<'_> {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(self.0);
     }
 }
 
@@ -852,6 +948,7 @@ mod tests {
             install: &install,
             healthy: &healthy,
             log: &|_| {},
+            group: None,
         };
         let res = u.check(st).and_then(|f| {
             assert!(f.newer);
@@ -868,6 +965,91 @@ mod tests {
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    /// The service in the tests: it holds the release in dir and its
+    /// archive, and notes what cbb update hands it.
+    struct FakeGroup {
+        dir: PathBuf,
+        shared: RefCell<Vec<serde_json::Value>>,
+        kept: RefCell<Vec<(String, i64)>>,
+        want: Vec<String>,
+    }
+
+    impl Group for FakeGroup {
+        fn share(&self, set: &serde_json::Value) {
+            self.shared.borrow_mut().push(set.clone());
+        }
+        fn held(&self) -> Result<serde_json::Value> {
+            let read =
+                |n: &str| serde_json::from_slice::<serde_json::Value>(&fs::read(self.dir.join(n)).unwrap()).unwrap();
+            Ok(
+                serde_json::json!({"keys": read("keys.json"), "channel": read("stable.json"), "release": read("release.json")}),
+            )
+        }
+        fn get(&self, _: &str, _: i64, path: &Path) -> Result<()> {
+            fs::copy(self.dir.join(ARCHIVE), path).map(|_| ()).context("no archive")
+        }
+        fn keep(&self, sha: &str, size: i64, path: &Path) {
+            assert_eq!(hex(&sha256(&fs::read(path).unwrap())), sha);
+            self.kept.borrow_mut().push((sha.into(), size));
+        }
+        fn want(&self) -> Vec<String> {
+            self.want.clone()
+        }
+    }
+
+    /// cbb update hands the service the release a server gave and the
+    /// archive it installed, downloads for a hub the archives the group
+    /// wants, and installs from the group when no server answers.
+    #[test]
+    fn the_group_passes_it() {
+        for servers in [true, false] {
+            let dir = tmp(if servers { "group-servers" } else { "group-only" });
+            publish(&dir, "0.6.1", 1, None);
+            let empty = dir.join("empty");
+            fs::create_dir_all(&empty).unwrap();
+            let program = dir.join("bin/cbb");
+            fs::create_dir_all(program.parent().unwrap()).unwrap();
+            fs::write(&program, "cbb 0.6.0").unwrap();
+            let g = FakeGroup {
+                dir: dir.clone(),
+                shared: RefCell::new(Vec::new()),
+                kept: RefCell::new(Vec::new()),
+                want: vec![ARCHIVE.into(), "cbb-plan9-amd64.tar.gz".into()],
+            };
+            let installed = RefCell::new(String::new());
+            let install = |_: &Path, bin: &Path| -> Result<()> {
+                *installed.borrow_mut() = fs::read_to_string(bin).unwrap();
+                Ok(())
+            };
+            let u = Updater {
+                work: dir.join("work"),
+                roots: vec![spki(&key(1))],
+                sources: vec![Source::Dir(if servers { dir.clone() } else { empty.clone() })],
+                installed: "0.6.0".into(),
+                archive: ARCHIVE.into(),
+                program,
+                now_ms: NOW,
+                install: &install,
+                healthy: &|_, _| Ok(()),
+                log: &|_| {},
+                group: Some(&g),
+            };
+            let mut st = State::default();
+            let f = u.check(&st).unwrap();
+            assert_eq!(f.source == FROM_GROUP, !servers);
+            assert_eq!(g.shared.borrow().len(), usize::from(servers));
+            if servers {
+                u.archives_for_group(f.source, &f.release);
+                assert_eq!(g.kept.borrow().len(), 1, "the archive for the group");
+            }
+            u.apply(f.source, &mut st, &f.release).unwrap();
+            assert_eq!(installed.borrow().as_str(), "cbb 0.6.1");
+            let sha = &f.release.files.iter().find(|a| a.name == ARCHIVE).unwrap().sha256;
+            assert_eq!(g.kept.borrow().last().map(|k| &k.0), Some(sha), "the archive installed");
+            assert!(!dir.join("work").join(ARCHIVE).exists(), "the archive stays after the install");
+        }
     }
 
     #[test]
@@ -962,6 +1144,7 @@ mod tests {
             install: &install,
             healthy: &healthy,
             log: &|_| {},
+            group: None,
         };
         u.check(st)
     }
@@ -1060,6 +1243,7 @@ mod tests {
             install: &install,
             healthy: &healthy,
             log: &|_| {},
+            group: None,
         };
         assert_eq!(u.check(&State::default()).err().unwrap().for_user(), NO_ROOTS);
         let gh = Source::Http { base: GITHUB.into(), github: true };
