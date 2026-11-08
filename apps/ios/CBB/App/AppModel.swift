@@ -1156,6 +1156,19 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Pastes a picture or files where a computer's focus is; true when it did.
+    @discardableResult
+    func pasteMedia(_ id: String, parts: [CoreMember.Part], enter: Bool) async -> Bool {
+        do {
+            try await group.pasteMedia(id, parts: parts, enter: enter)
+            message = String(localized: "Pasted.", bundle: .app)
+            return true
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
+    }
+
     /// Runs a quick action on a device; true when it did.
     @discardableResult
     func runAction(_ id: String, name: String) async -> Bool {
