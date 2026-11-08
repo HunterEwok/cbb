@@ -18,14 +18,10 @@ Column {
     property var view: []          // the whole view, for the collections
     property string inCollection: "" // the collection these devices are in
 
-    // This phone stays first, out of the arrangement: its level leaves it out.
+    // This phone is an item as the others are: first until the user moves it.
     function arrange(level, index, inCollection) {
-        var item = level[index]
-        if (item.kind === "device" && item.device.self)
-            return
-        var others = level.filter(function(i) { return !(i.kind === "device" && i.device.self) })
         pageStack.push(Qt.resolvedUrl("ArrangePage.qml"), {
-            item: item, level: others, index: others.indexOf(item), view: items.view, inCollection: inCollection
+            item: level[index], level: level, index: index, view: items.view, inCollection: inCollection
         })
     }
 
@@ -44,12 +40,6 @@ Column {
         return -1
     }
     function dragStart(at) {
-        // This phone stays first: a long press only opens its menu.
-        var item = items.level[at]
-        if (item.kind === "device" && item.device.self) {
-            items.arrange(items.level, at, items.inCollection)
-            return
-        }
         dragFrom = at
         dragOver = at
         dragMoved = false

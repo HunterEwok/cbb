@@ -122,10 +122,11 @@ impl Arrangement {
     /// What the app shows: the stored items in order without the devices
     /// that are not listed, collections without listed devices left out
     /// unless they were just made, then the listed devices that appear
-    /// nowhere, in the order given. me, this device, is never among them:
-    /// the app shows it first.
+    /// nowhere, in the order given. me, this device, is an item as the
+    /// others are, first while the stored items do not place it.
     pub fn view(&self, devices: &[String], me: Option<&str>) -> Vec<Item> {
-        let listed: BTreeSet<&str> = devices.iter().map(String::as_str).filter(|d| Some(*d) != me).collect();
+        let devices = self_first(devices, me);
+        let listed: BTreeSet<&str> = devices.iter().map(String::as_str).collect();
         let mut seen: BTreeSet<String> = BTreeSet::new();
         let mut out = Vec::new();
         for it in &self.items {
@@ -148,9 +149,13 @@ impl Arrangement {
                 }
             }
         }
-        for d in devices {
+        for d in &devices {
             if listed.contains(d.as_str()) && seen.insert(d.clone()) {
-                out.push(Item::Device(d.clone()));
+                if Some(d.as_str()) == me {
+                    out.insert(0, Item::Device(d.clone()));
+                } else {
+                    out.push(Item::Device(d.clone()));
+                }
             }
         }
         out
@@ -171,8 +176,8 @@ impl Arrangement {
         });
     }
 
-    /// Makes the change, on the arrangement as view shows it for devices
-    /// (me left out); the stored items then hold the whole order. A change
+    /// Makes the change, on the arrangement as view shows it for devices;
+    /// the stored items then hold the whole order. A change
     /// that does not fit fails and leaves the arrangement as it was.
     pub fn apply(&mut self, op: &Op, devices: &[String], me: Option<&str>) -> Result<()> {
         let mut shown: BTreeSet<String> = BTreeSet::new();
@@ -185,14 +190,30 @@ impl Arrangement {
             }
         }
         let mut w = Work { items: self.items.clone() };
-        for d in devices {
-            if Some(d.as_str()) != me && shown.contains(d) && w.find(d).is_none() {
-                w.items.push(Item::Device(d.clone()));
+        let devices = self_first(devices, me);
+        for d in &devices {
+            if shown.contains(d) && w.find(d).is_none() {
+                if Some(d.as_str()) == me {
+                    w.items.insert(0, Item::Device(d.clone()));
+                } else {
+                    w.items.push(Item::Device(d.clone()));
+                }
             }
         }
-        w.apply(op, devices, &shown)?;
+        w.apply(op, &devices, &shown)?;
         self.items = w.items;
         Ok(())
+    }
+}
+
+/// devices with me, this device, first: the group's order as the app shows
+/// it.
+fn self_first(devices: &[String], me: Option<&str>) -> Vec<String> {
+    match me {
+        Some(m) if devices.iter().any(|d| d == m) => {
+            core::iter::once(m.to_string()).chain(devices.iter().filter(|d| d.as_str() != m).cloned()).collect()
+        }
+        _ => devices.to_vec(),
     }
 }
 

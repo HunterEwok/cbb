@@ -833,8 +833,8 @@ change (Move to start, Move earlier, Move later, Move to end, Move to each colle
 collection…, Take out of collection, and on a collection Rename collection… and Ungroup).
 Among the tiles a long press then a drag carries a tile over the others, as on Android, with
 no Arrange mode: it takes the place of the tile it is dropped on, a device dropped on a
-collection goes into it, and one dropped on this phone goes to the start; this phone's own
-tile is not dragged. A collection is a tile, or a section in the list, and a tap opens its page, with
+collection goes into it. This phone's own tile is first until the user moves it, as on the
+other phones. A collection is a tile, or a section in the list, and a tap opens its page, with
 Rename and Ungroup in its pull-down menu. The main page's pull-down menu has **New
 collection…** and **Back to the group's order**.
 

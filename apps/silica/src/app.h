@@ -120,8 +120,8 @@ public:
     // The member's devices (Member::devices) in the user's order and
     // collections (docs/apps.md, "Collections and the order of the tiles";
     // cbb_core::arrange through the core's arrange call): each item is
-    // {kind: "device", device} or {kind: "collection", id, name, devices},
-    // this phone first.
+    // {kind: "device", device} or {kind: "collection", id, name, devices};
+    // this phone is first until the user moves it.
     // The arrangement forgets devices that left the group once the list is
     // whole (it holds this phone). stamp is the arrangement property.
     Q_INVOKABLE QVariantList arranged(const QVariantList &devices, int stamp);

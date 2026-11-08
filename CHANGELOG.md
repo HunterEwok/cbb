@@ -1309,8 +1309,8 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Changed
 - The tile of the device an app runs on comes first by default, and moves as the other tiles
-  do, into a collection too (docs/apps.md, "Collections and the order of the tiles"); on
-  Aurora, which cannot move tiles yet, it stays first. A tile's system and its mark ("this
+  do, into a collection too (docs/apps.md, "Collections and the order of the tiles"), on Aurora
+  too, where the core's arrangement follows the same rule. A tile's system and its mark ("this
   phone", "hub", "muted") take two lines where one is too narrow, and Aurora shows two tiles
   in a row, as the other phones do, so neither is cut.
 - The tray app on Linux and Windows has the house (sync) and the globe (Everywhere, sync away
