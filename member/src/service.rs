@@ -3366,6 +3366,7 @@ fn act_takers<T>(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use super::{CONSOLE, DESKTOP, TMUX, act_takers, grant_keys, paste_takers, peer, take_keys};
 
     /// Users that the tests' fake system names, far from real accounts', as
