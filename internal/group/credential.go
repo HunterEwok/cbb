@@ -782,13 +782,6 @@ func (s *Credentials) ListStale(got, want []KeyHash, ordered bool) bool {
 	return false
 }
 
-// NextVersion returns the version of a credential after prev: one above
-// it, or the time in seconds when that is more, so a signer that lost its
-// state still signs a newer version.
-func NextVersion(prev uint64, now time.Time) uint64 {
-	return max(prev+1, uint64(max(now.Unix(), 0)))
-}
-
 // Save writes the credentials to dir/credentials.json.
 func (s *Credentials) Save(dir string) error {
 	data, err := json.MarshalIndent(s.All(), "", "\t")
@@ -820,3 +813,13 @@ func LoadCredentials(dir string, groupCA, root *x509.Certificate, member func(Ke
 
 // GroupCA returns the group CA of the set.
 func (s *Credentials) GroupCA() *x509.Certificate { return s.groupCA }
+
+// PublicKeyHash returns the hash of a public key, as KeyHashOf a
+// certificate of it: SHA-256 over its SubjectPublicKeyInfo.
+func PublicKeyHash(pub crypto.PublicKey) KeyHash {
+	spki, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		return KeyHash{}
+	}
+	return sha256.Sum256(spki)
+}

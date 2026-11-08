@@ -286,3 +286,26 @@ internal/pair/swift_test.go TestSwiftMemberAdmitsGoJoiner D-88: it exchanged cer
 internal/pair/swift_test.go TestSwiftMemberAdmitsGoJoinerTLS D-88: internal/service TestSwiftAdmitsComputer runs the same tool against the Rust cbb
 internal/pair/swift_test.go TestSwiftHubAdmitsInvitedGoJoiner D-88: the Rust cbb joins with an invitation only through the hub's guest tunnel (TestLiteInvite); the core's admission of an invitation is what the phones run, checked by admit/tests.rs an_invitation_asks_the_admin
 internal/pair/swift_test.go TestSwiftJoinsComputerRoot D-88: internal/service TestSwiftJoinsComputerRoot runs the same tool against the Rust cbb
+internal/clip/clip_test.go TestAheadRefused D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip.rs ahead_refused tests the same
+internal/clip/clip_test.go TestConvergence D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs convergence tests the same
+internal/clip/clip_test.go TestCopied D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs copied tests the same
+internal/clip/clip_test.go TestEcho D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs echo tests the same
+internal/clip/clip_test.go TestHello D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs hello tests the same
+internal/clip/clip_test.go TestLocalClipboard D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs local_clipboard tests the same
+internal/clip/clip_test.go TestReceivedOrdering D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs received_ordering tests the same
+internal/clip/clip_test.go TestReofferOfLocalText D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs reoffer_of_local_text tests the same
+internal/clip/clip_test.go TestReviewChain D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs review_chain tests the same
+internal/clip/clip_test.go TestSameTextNewerEvent D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs same_text_newer_event tests the same
+internal/clip/clip_test.go TestSecrets D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs secret_expires_and_travels_only_as_a_mark, secret_stays_a_secret_when_offered_again, secret_expires_by_its_age, a_skipped_marked_item_is_remembered, the_secret_memory_holds_many_by_age, a_restored_secret_does_not_circulate, a_mark_hides_an_older_text_and_the_full_secret_replaces_it, and core/src/clip.rs hellos_carry_only_the_mark_of_a_secret tests the same
+internal/clip/clip_test.go TestSendFromThePhone D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs send_from_the_phone tests the same
+internal/clip/clip_test.go TestSkew D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs skew tests the same
+internal/clip/clip_test.go TestTimeAndSleep D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs time_and_sleep and just_booted tests the same
+internal/clip/clip_test.go TestUniversalClipboardRelay D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs universal_clipboard_relay tests the same
+internal/clip/clip_test.go TestWritePolicy D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs write_policy, and core/src/clip.rs live_window for the group's window and a forgotten event tests the same
+internal/clip/media_test.go TestMediaEvents D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip.rs takes_media and media_events tests the same
+internal/clip/mode_test.go TestModeSecretStaysSecret D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs own_mode_keeps_a_secret_a_secret tests the same
+internal/clip/mode_test.go TestModes D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip.rs modes tests the same
+internal/clip/mode_test.go TestMute D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip/engine_tests.rs mute tests the same
+internal/clip/mode_test.go TestParseMode D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip.rs modes reads every mode's name and refuses others tests the same
+internal/clip/mode_test.go TestSyncOffForAWhile D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip.rs sync_off_for_a_while tests the same
+internal/clip/sealedengine_test.go TestSealedEvents D-88: Go's sync engine is gone, the Rust core's is the one members run; core/src/clip.rs sealed_copies tests the same

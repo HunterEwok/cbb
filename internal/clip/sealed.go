@@ -654,7 +654,7 @@ func sealInGo(id, origin string, t hlc.Timestamp, cert, issuer []byte, readers [
 	return s, s.ToSign(), nil
 }
 
-// EventOf is the engine's event of a sealed copy that this member, me,
+// EventOf is the event of a sealed copy that this member, me,
 // received and checked: opened with its secret when the copy is sealed to
 // it, Unread otherwise. A copy that is sealed to me but does not open is
 // Unread too, since the others may read theirs; err then says why, for

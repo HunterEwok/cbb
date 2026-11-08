@@ -16,6 +16,7 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/hlc"
 )
 
 // The forge speaks the member protocol's frames itself (docs/protocol.md,
@@ -154,11 +155,23 @@ func (m *memberConn) cert(cert, issuer *x509.Certificate) error {
 	return m.send(msg)
 }
 
-// event sends ev, sealed, as it is, as a member passing on one it
+// event sends ev, a sealed copy, as it is, as a member passing on one it
 // received.
-func (m *memberConn) event(ev clip.Event) error {
-	if ev.Sealed == nil {
-		return errors.New("a copy that is not sealed")
+func (m *memberConn) event(ev *clip.Sealed) error {
+	return m.send(map[string]any{"t": "event", "event": ev})
+}
+
+// sealText seals text from id, whose state is in state, to the readers its
+// records give, as the member's own copy.
+func sealText(id *group.Identity, state, text string) (*clip.Sealed, error) {
+	rs, err := group.LoadRecords(state, id.GroupCA.Cert)
+	if err != nil {
+		return nil, err
 	}
-	return m.send(map[string]any{"t": "event", "event": ev.Sealed})
+	var issuer []byte
+	if id.Issuer != nil {
+		issuer = id.Issuer.Raw
+	}
+	return clip.SealCopy(clip.NewID(), string(id.ID), hlc.Timestamp{Wall: time.Now().UnixMilli(), Logical: 1}, id.Cert.Raw, issuer,
+		rs.Readers(false), clip.Content{Kind: clip.Text, Text: text}, nil, clip.NewKey(), id.Key)
 }

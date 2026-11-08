@@ -42,9 +42,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/hlc"
 )
 
 func main() {
@@ -181,7 +179,6 @@ func run(state, signerDir string, to group.DeviceID, addr, system string, cases 
 	if ca == nil {
 		return fmt.Errorf("%s holds no admin key", signerDir)
 	}
-	eng := clip.New(clip.Config{Self: string(id.ID), Clock: hlc.NewClock(nil, hlc.Timestamp{}, nil)})
 	n, err := dialMember(id, to, addr, system)
 	if err != nil {
 		return fmt.Errorf("connecting to %s: %v", addr, err)
@@ -323,8 +320,8 @@ func run(state, signerDir string, to group.DeviceID, addr, system string, cases 
 			if err != nil {
 				return err
 			}
-			ev, ok, err := eng.Copied(parts[1], clip.Text, clip.Copy)
-			if err != nil || !ok {
+			ev, err := sealText(id, state, parts[1])
+			if err != nil {
 				return fmt.Errorf("making the event: %v", err)
 			}
 			for range count {
