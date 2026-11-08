@@ -1676,14 +1676,14 @@ impl Service {
         };
         let (targets, text_only) = {
             let ws = self.watchers.lock().unwrap();
-            let targets: Vec<(String, Option<u32>, SyncSender<ToWatcher>)> = ws
+            let targets: Vec<(String, Option<peer::Who>, SyncSender<ToWatcher>)> = ws
                 .iter()
                 .filter(|w| w.target == DESKTOP && w.takes(&m))
                 .map(|w| (w.target.clone(), w.uid, w.tx.clone()))
                 .collect();
             (targets, ws.iter().any(|w| !w.target.is_empty()))
         };
-        let targets: Vec<(Option<u32>, SyncSender<ToWatcher>)> = targets
+        let targets: Vec<(Option<peer::Who>, SyncSender<ToWatcher>)> = targets
             .into_iter()
             .filter(|(t, uid, _)| !matches!(peer::may_take(*uid, t, peer::at_screen), peer::Verdict::Refused))
             .map(|(_, uid, tx)| (uid, tx))
