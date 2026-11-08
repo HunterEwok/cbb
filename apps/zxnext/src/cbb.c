@@ -609,6 +609,7 @@ static void via_send(uint8_t c)
 static uint8_t via_recv(uint8_t *c, uint16_t seconds)
 {
     uint16_t start = FRAMES_LO;
+    if (!seconds) seconds = 1;
     for (;;) {
         driver(DRV_CBB_IN, 0);
         if (drv.de & 0x100) {
@@ -753,7 +754,8 @@ static void link_quit(void)
 // overflows the Next's 512-byte buffer. 19200 is 1920 bytes a second.
 #define ESP_SPEED 115200UL
 #define ESP_NET_SPEED 19200UL
-// .cbb install's speed for the site's files: 2M first, then a step slower
+// .cbb install's speed for the site's files: 460800 first, the fastest that
+// held on a real Next's ESP, then a step slower
 // each time the bytes do not come whole (speed_down()), as far as the
 // Next reads them as they come at 28 MHz; it asks for each chunk, so
 // nothing more than one answer comes at a time.
@@ -764,16 +766,21 @@ static void link_quit(void)
 static uint32_t esp_speeds[] = {ESP_SPEED, ESP_NET_SPEED, ESP_FETCH_TOP};
 #define esp_fetch (esp_speeds[2])
 
+// The speed the ESP last answered at, which esp_answers() tries first.
+static uint32_t esp_now;
+
 // Whether the ESP answers AT at speed; leaves it selected. The CR LF first
 // ends whatever an earlier try at the other speed left in its line.
 static uint8_t esp_at(uint32_t speed)
 {
     link_open_esp(speed);
-    while (link_line(line, sizeof line, 1) == LINK_OK) {
-    }
+    link_drain();
     link_send_str("\r\nAT\r\n");
     while (link_line(line, sizeof line, 2) == LINK_OK) {
-        if (strcmp(line, "OK") == 0) return 1;
+        if (strcmp(line, "OK") == 0) {
+            esp_now = speed;
+            return 1;
+        }
     }
     return 0;
 }
@@ -812,9 +819,13 @@ static void esp_escape(uint32_t speed)
 static uint8_t esp_answers(uint32_t speed)
 {
     uint8_t i;
+    uint32_t at = esp_now;
+    // From the speed it last answered at, without a try at the new one.
+    if (at && at != speed && esp_at(at)) goto switch_now;
     if (esp_at(speed)) return 1;
     for (i = 0; i < sizeof esp_speeds / sizeof esp_speeds[0]; i++) {
         if (esp_speeds[i] == speed || !esp_at(esp_speeds[i])) continue;
+    switch_now:
         sprintf(line, "AT+UART_CUR=%lu,8,1,0,0\r\n", speed);
         link_send_str(line);
         // The OK comes at the old speed; then the ESP switches.
@@ -3065,6 +3076,7 @@ static void img_via_send(uint8_t c)
 static uint8_t img_via_recv(uint8_t *c, uint16_t seconds)
 {
     uint16_t start = FRAMES_LO;
+    if (!seconds) seconds = 1;
     for (;;) {
         driver(DRV_CBB_IN, 0);
         if (drv.de & 0x100) {
