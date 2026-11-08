@@ -10354,48 +10354,48 @@
         }
       }
     },
-    "Full member": {
+    "Member": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عضو كامل"
+            "value": "عضو"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Miembro completo"
+            "value": "Miembro"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "חבר מלא"
+            "value": "חבר"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "पूर्ण सदस्य"
+            "value": "सदस्य"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Полный участник"
+            "value": "Участник"
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mwanachama kamili"
+            "value": "Mwanachama"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "完整成员"
+            "value": "成员"
           }
         }
       }
@@ -10446,48 +10446,48 @@
         }
       }
     },
-    "Full member, rootless": {
+    "Member, rootless": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عضو كامل، بلا صلاحيات root"
+            "value": "عضو، بلا صلاحيات root"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Miembro completo, sin root"
+            "value": "Miembro, sin root"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "חבר מלא, ללא root"
+            "value": "חבר, ללא root"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "पूर्ण सदस्य, बिना रूट"
+            "value": "सदस्य, बिना रूट"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Полный участник, rootless"
+            "value": "Участник, rootless"
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mwanachama kamili, bila root"
+            "value": "Mwanachama, bila root"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "完整成员，无 root"
+            "value": "成员，无 root"
           }
         }
       }
@@ -11454,98 +11454,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "列表"
-          }
-        }
-      }
-    },
-    "Lite member": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عضو خفيف"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Miembro ligero"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "חבר קל"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "लाइट सदस्य"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Лёгкий участник"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mwanachama mwepesi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "轻量成员"
-          }
-        }
-      }
-    },
-    "Lite member, rootless": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عضو خفيف، بلا صلاحيات root"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Miembro ligero, sin root"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "חבר קל, ללא root"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "लाइट सदस्य, बिना रूट"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Лёгкий участник, rootless"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mwanachama mwepesi, bila root"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "轻量成员，无 root"
           }
         }
       }

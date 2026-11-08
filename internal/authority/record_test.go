@@ -72,7 +72,7 @@ func ptr[T any](v T) *T { return &v }
 
 func deviceBody(t *testing.T) authority.Body {
 	k := hashOf(t, &newKey(t).PublicKey)
-	return authority.Body{Type: authority.TypeDevice, Group: tag, Seq: 1, TimeMS: 1, Device: string(group.NewDeviceID()), Name: "Laptop", Role: "full", OS: "linux", Key: &k}
+	return authority.Body{Type: authority.TypeDevice, Group: tag, Seq: 1, TimeMS: 1, Device: string(group.NewDeviceID()), Name: "Laptop", Role: "member", Caps: authority.Caps, OS: "linux", Key: &k}
 }
 
 func TestSignVerify(t *testing.T) {
@@ -188,7 +188,12 @@ func TestParseBodyRefuses(t *testing.T) {
 		"no algorithm":               strings.Replace(good, `"alg":"es256",`, ``, 1),
 		"seq 0":                      strings.Replace(good, `"seq":1`, `"seq":0`, 1),
 		"seq 2 without prev":         strings.Replace(good, `"seq":1`, `"seq":2`, 1),
-		"an unknown role":            strings.Replace(good, `"role":"full"`, `"role":"linux"`, 1),
+		"an unknown role":            strings.Replace(good, `"role":"member"`, `"role":"linux"`, 1),
+		"an earlier role":            strings.Replace(good, `"role":"member"`, `"role":"full"`, 1),
+		"an unknown cap":             strings.Replace(good, `"caps":["admin","dials","hub"]`, `"caps":["admin","dials","relay"]`, 1),
+		"caps not sorted":            strings.Replace(good, `"caps":["admin","dials","hub"]`, `"caps":["dials","admin","hub"]`, 1),
+		"an admin without the cap":   strings.Replace(strings.Replace(good, `"caps":["admin","dials","hub"]`, `"caps":["dials"]`, 1), `{"alg"`, `{"admin":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","alg"`, 1),
+		"caps on a phone":            strings.Replace(good, `"role":"member"`, `"role":"phone"`, 1),
 		"an unknown os":              strings.Replace(good, `"os":"linux"`, `"os":"beos"`, 1),
 		"powers without admin":       strings.Replace(good, `"role"`, `"powers":["admit"],"role"`, 1),
 		"a name with a control char": strings.Replace(good, `"Laptop"`, `"Lap\u0007top"`, 1),

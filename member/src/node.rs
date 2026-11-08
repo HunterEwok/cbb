@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The member protocol (docs/protocol.md, section 4) on a lite member: it
-//! dials the computers, and takes the connections of phones and of the
-//! lite members with a lower device ID; it sends its hello, forwards each
+//! The member protocol (docs/protocol.md, section 4) on a Rust member: it
+//! dials the members its caps and their device IDs say it dials, and takes
+//! the connections of phones and the other members; it sends its hello, forwards each
 //! event the first time the engine sees it to every other connection,
 //! exchanges the group's records and keeps a renewed certificate.
 //!
@@ -119,6 +119,8 @@ pub struct Peer {
     /// What it supports beyond its protocol version: `media` from one that
     /// serves the content of media events.
     pub features: Vec<String>,
+    /// What its hello says it can do, the names this member knows, sorted.
+    pub caps: Vec<String>,
     /// Its certificate chain as the handshake checked it, leaf first, DER:
     /// for a phone's app, which renews it and checks what it may do.
     pub chain: Vec<Vec<u8>>,
@@ -161,7 +163,11 @@ type TunnelKeys = Option<(Vec<u8>, Vec<u8>)>;
 /// phone's app that runs it (crate::phone).
 #[derive(Clone)]
 pub struct Presence {
+    /// `member`, or `phone` for a phone's app.
     pub role: String,
+    /// What this member can do (cbb_core::authority::CAPS), sent in its
+    /// hellos; none from a phone.
+    pub caps: Vec<String>,
     pub name: String,
     pub os: String,
     /// Where the device key is: "file", "rootless" or "hardware".
@@ -388,7 +394,8 @@ impl Node {
         Node {
             ident: RwLock::new(Arc::new(ident)),
             presence: Arc::new(Presence {
-                role: "lite".into(),
+                role: "member".into(),
+                caps: Vec::new(),
                 name: name.to_string(),
                 os: "linux".into(),
                 key_store: if crate::rootless::is() { "rootless" } else { "file" }.into(),
@@ -457,9 +464,19 @@ impl Node {
         }
     }
 
-    /// The role its hellos present: `lite`, `full` or `phone`.
+    /// The role its hellos present: `member` or `phone`.
     pub fn role(&self) -> &str {
         &self.presence.role
+    }
+
+    /// What its hellos say it can do.
+    pub fn caps(&self) -> &[String] {
+        &self.presence.caps
+    }
+
+    /// Whether its hellos say it can do c.
+    pub fn can(&self, c: &str) -> bool {
+        cbb_core::authority::has_cap(&self.presence.caps, c)
     }
 
     /// The name its hellos present.
@@ -479,13 +496,13 @@ impl Node {
     }
 
     /// Sets the tunnel key and preshared key the hellos offer from now on,
-    /// and connects to the full members again, so that the group's hubs get
+    /// and connects to the members again, so that the group's hubs get
     /// them.
     pub fn set_tunnel_key(&self, key: TunnelKeys) {
         *self.tunnel_key.write().unwrap() = key;
         self.reconnects.fetch_add(1, Ordering::SeqCst);
         for c in self.conns.lock().unwrap().values() {
-            if c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "full") {
+            if c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "member") {
                 c.close(true);
             }
         }
@@ -999,7 +1016,7 @@ impl Node {
         store.open_into(sum, m, key, out)
     }
 
-    /// Queues a message for the group's hubs connected: the full members
+    /// Queues a message for the group's hubs connected: the members
     /// the records make the root or an admin, by the key they proved
     /// (docs/protocol.md, section 11, "Several hubs"); returns those it
     /// went to.
@@ -1007,8 +1024,8 @@ impl Node {
         let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
         let mut to = Vec::new();
         for c in conns.iter().filter(|c| !c.records_only) {
-            let full = c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "full");
-            if full && self.records.lock().unwrap().admin_peer(c.id.as_str(), &c.chain) {
+            let member = c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "member");
+            if member && self.records.lock().unwrap().admin_peer(c.id.as_str(), &c.chain) {
                 self.enqueue(c, Out::Message(m.clone()));
                 to.push(c.id.clone());
             }
@@ -1017,7 +1034,7 @@ impl Node {
     }
 
     /// Sends a command to the members that pass it on (docs/protocol.md,
-    /// section 15): the group's hubs connected, full members, and the
+    /// section 15): the group's hubs connected, members, and the
     /// phones among the root and the admins, as the phone that is the hub;
     /// returns those it went to.
     fn send_to_passers(&self, m: &Message) -> Vec<DeviceId> {
@@ -1025,7 +1042,8 @@ impl Node {
         let mut to = Vec::new();
         for c in conns.iter().filter(|c| !c.records_only) {
             let role = c.peer.lock().unwrap().as_ref().map(|p| p.role.clone()).unwrap_or_default();
-            if (role == "full" || role == "phone") && self.records.lock().unwrap().admin_peer(c.id.as_str(), &c.chain) {
+            if (role == "member" || role == "phone") && self.records.lock().unwrap().admin_peer(c.id.as_str(), &c.chain)
+            {
                 self.enqueue(c, Out::Message(m.clone()));
                 to.push(c.id.clone());
             }
@@ -1740,7 +1758,7 @@ impl Node {
                 // phones update from their stores (section 16, "In the
                 // group").
                 if !c.records_only
-                    && (m.role == "full" || m.role == "lite")
+                    && m.role == cbb_core::authority::ROLE_MEMBER
                     && releases::newer(self.releases.order(now), (body.release_keys_seq, body.release_seq))
                     && let Some(set) = self.releases.current(now)
                 {
@@ -1930,7 +1948,7 @@ impl Node {
     fn send_release(&self, set: &serde_json::Value, from: Option<&DeviceId>) {
         let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
         for c in conns.iter().filter(|c| Some(&c.id) != from && !c.records_only) {
-            let computer = c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "full" || p.role == "lite");
+            let computer = c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == cbb_core::authority::ROLE_MEMBER);
             if computer {
                 self.enqueue(c, Out::Message(wire::release(set)));
             }
@@ -2237,6 +2255,7 @@ fn writer(
                     if c.records_only { (0, 0) } else { entries.order(uptime::wall_ms()) },
                     who.admin_key.read().unwrap().as_deref(),
                 );
+                let m = wire::with_caps(m, &who.caps);
                 let m = wire::with_features(m, if content.is_some() && !c.records_only { &["media"] } else { &[] });
                 Some(wire::with_release(m, if c.records_only { (0, 0) } else { releases.order(uptime::wall_ms()) }))
             }
@@ -2410,6 +2429,7 @@ fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool
         reach: Vec::new(),
         records_only,
         features: body.features.iter().take(32).filter(|f| f.len() <= 32).cloned().collect(),
+        caps: wire::clean_caps(&body.caps),
         chain: Vec::new(),
     }
 }

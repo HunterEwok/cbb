@@ -62,7 +62,7 @@ Page {
             }
             MenuItem {
                 // The admin key comes from the computer's hello.
-                visible: page.acts && app.root && page.device.role === "full" && !page.device.admin
+                visible: page.acts && app.root && Devices.can(page.device, "admin") && !page.device.admin
                          && page.device.online
                 text: qsTr("Make an admin")
                 onClicked: remorse.execute(qsTr("Making %1 an admin").arg(Devices.name(page.device)),

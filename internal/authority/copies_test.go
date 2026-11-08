@@ -27,8 +27,8 @@ func (w *world) wantIncoming(s *authority.State, ms int64) {
 // time wins.
 func TestCopiesSetting(t *testing.T) {
 	w := newWorld(t)
-	w.makeAdmin("C", "full", computerPowers)
-	w.makeAdmin("D", "full", []string{authority.PowerAdmit})
+	w.makeAdmin("C", "member", computerPowers)
+	w.makeAdmin("D", "member", []string{authority.PowerAdmit})
 	w.wantIncoming(w.evalAll(nil), 0)
 
 	// An admin with no power beyond admit sets it.

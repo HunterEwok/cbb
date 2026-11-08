@@ -194,17 +194,19 @@ class PhoneGroupTest {
     }
 
     @Test
-    fun liteMember() {
+    fun memberWithoutAdmin() {
         val rootKey = SoftwareSigner()
         val root = PhoneGroup.create(rootKey, SoftwareSigner().publicKeyDER, t0)
         val l = Listener()
         val addrs = listOf("192.168.20.5:8764", "203.0.113.7:8764", "[fd00::5]:8764", "[2001:db8::5]:8764")
-        val (_, j) = pair(root, rootKey, l, Pairing.Info("router", "linux", role = Pairing.Info.LITE), addrs = addrs)
+        val (_, j) = pair(root, rootKey, l, Pairing.Info("router", "linux", caps = listOf("dials", "hub")), addrs = addrs)
         // Only the home network addresses are kept, to dial it when mDNS does not reach its subnet.
         assertEquals(mapOf(l.device to listOf("192.168.20.5:8764", "[fd00::5]:8764")), root.addresses)
         val welcome = j.getOrThrow().welcome
         assertNull(welcome.adminCA)
-        assertEquals("lite", root.devices.first { it.id == l.device }.role)
+        val d = root.devices.first { it.id == l.device }
+        assertEquals("member", d.role)
+        assertEquals(listOf("dials", "hub"), d.caps)
         assertFailsWith<PhoneGroup.Failure> { root.makeAdmin(l.device, SoftwareSigner().publicKeyDER, rootKey, t0, allowFileKey = true) }
     }
 
@@ -264,7 +266,7 @@ class PhoneGroupTest {
         assertEquals(listOf("MyPixel"), g.devices.map { it.name })
         val pi = SyncEngine.newID()
         val cert = GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, rootKey, t0)
-        g.record(pi, "pi", "full", Records.keyHashOfCert(cert), rootKey, t0)
+        g.record(pi, "pi", "member", Records.keyHashOfCert(cert), rootKey, t0, caps = Records.CAPS)
         g.computers.add(PhoneGroup.Computer(pi, "pi", "linux", cert, Instant.ofEpochMilli(t0.toEpochMilli()), listOf("10.0.0.5:8764")))
         g.setKeyLevel(Records.LEVEL_FILES, rootKey, t0)
         val (ca, _) = g.makeAdmin(pi, SoftwareSigner().publicKeyDER, rootKey, t0.plusSeconds(1), allowFileKey = true)
@@ -293,7 +295,7 @@ class PhoneGroupTest {
         val g = PhoneGroup.create(root, SoftwareSigner().publicKeyDER, t0)
         assertEquals(Records.HARDWARE, g.keyLevel)
         val pi = SyncEngine.newID()
-        g.record(pi, "pi", "full", Records.keyHashOfCert(GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, root, t0)), root, t0)
+        g.record(pi, "pi", "member", Records.keyHashOfCert(GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, root, t0)), root, t0, caps = Records.CAPS)
         val adminKey = SoftwareSigner().publicKeyDER
         val t1 = t0.plusSeconds(1)
         // At the level hardware a key in a file is no admin, even with the consent.
@@ -320,7 +322,7 @@ class PhoneGroupTest {
         val g = PhoneGroup.create(root, SoftwareSigner().publicKeyDER, t0)
         val pi = SyncEngine.newID()
         val piKey = Records.keyHashOfCert(GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, root, t0))
-        g.record(pi, "pi", "full", piKey, root, t0, os = "linux")
+        g.record(pi, "pi", "member", piKey, root, t0, os = "linux", caps = Records.CAPS)
         g.setKeyLevel(Records.LEVEL_FILES, root, t0)
         val (ca, _) = g.makeAdmin(pi, SoftwareSigner().publicKeyDER, root, t0.plusSeconds(1), allowFileKey = true)
         val r = g.rename(pi, "  living room pi ", root, t0.plusSeconds(2))
@@ -330,7 +332,7 @@ class PhoneGroupTest {
         assertTrue(d.admin)
         assertContentEquals(Records.keyHashOfCert(ca), d.adminKey)
         assertContentEquals(piKey, d.key)
-        assertEquals("full", d.role)
+        assertEquals("member", d.role)
         assertEquals("linux", d.os)
         assertFailsWith<PhoneGroup.Failure> { g.rename(pi, " ", root, t0) }
         assertFailsWith<PhoneGroup.Failure> { g.rename(pi, "x".repeat(65), root, t0) }
@@ -343,11 +345,11 @@ class PhoneGroupTest {
         val root = SoftwareSigner()
         val g = PhoneGroup.create(root, SoftwareSigner().publicKeyDER, t0)
         val pi = SyncEngine.newID()
-        g.record(pi, "pi", "full", Records.keyHashOfCert(GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, root, t0)), root, t0)
+        g.record(pi, "pi", "member", Records.keyHashOfCert(GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, root, t0)), root, t0, caps = Records.CAPS)
         g.setKeyLevel(Records.LEVEL_FILES, root, t0)
         g.makeAdmin(pi, SoftwareSigner().publicKeyDER, root, t0.plusSeconds(1), allowFileKey = true)
         val deck = SyncEngine.newID()
-        g.record(deck, "deck", "full", Records.keyHashOfCert(GroupCertificates.member(deck, SoftwareSigner().publicKeyDER, g.groupCA, root, t0)), root, t0)
+        g.record(deck, "deck", "member", Records.keyHashOfCert(GroupCertificates.member(deck, SoftwareSigner().publicKeyDER, g.groupCA, root, t0)), root, t0, caps = Records.CAPS)
         val watchKey = SoftwareSigner()
         val watch = SyncEngine.newID()
         val (ca, _) = g.addWatch(watch, "Watch", "wearos", watchKey.publicKeyDER, root, t0.plusSeconds(1))
@@ -404,7 +406,7 @@ class PhoneGroupTest {
         // A device record the watch signs admits nobody.
         val deck = SyncEngine.newID()
         val deckCert = GroupCertificates.member(deck, SoftwareSigner().publicKeyDER, ca, watchKey, t0)
-        g.add(listOf(g.records.sign(V2.device(deck, "deck", "full", Records.keyHashOfCert(deckCert), watchKey, t0.plusSeconds(1)), watchKey, ca)))
+        g.add(listOf(g.records.sign(V2.device(deck, "deck", "member", Records.keyHashOfCert(deckCert), watchKey, t0.plusSeconds(1)), watchKey, ca)))
         assertTrue(g.devices.none { it.id == deck })
         assertNotNull(g.records.refused(listOf(deckCert, ca)))
 
@@ -419,7 +421,7 @@ class PhoneGroupTest {
         val g = PhoneGroup.create(root, SoftwareSigner().publicKeyDER, t0)
         val pi = SyncEngine.newID()
         val piKey = Records.keyHashOfCert(GroupCertificates.member(pi, SoftwareSigner().publicKeyDER, g.groupCA, root, t0))
-        g.record(pi, "pi", "full", piKey, root, t0)
+        g.record(pi, "pi", "member", piKey, root, t0, caps = Records.CAPS)
         val adminKey = SoftwareSigner()
         g.setKeyLevel(Records.LEVEL_FILES, root, t0)
         // A computer whose keys sit in a file, or that does not say, needs
@@ -430,7 +432,7 @@ class PhoneGroupTest {
         assertFailsWith<PhoneGroup.Rootless> {
             g.makeAdmin(pi, adminKey.publicKeyDER, root, t0.plusSeconds(1), keyStore = Records.ROOTLESS, allowFileKey = true)
         }
-        assertEquals(Records.ROOTLESS, Records.storeOf(Records.ROOTLESS, "full"))
+        assertEquals(Records.ROOTLESS, Records.storeOf(Records.ROOTLESS, "member"))
         assertEquals(Records.FILE, g.devices.first { it.id == pi }.store)
         val (ca, r) = g.makeAdmin(pi, adminKey.publicKeyDER, root, t0.plusSeconds(1), allowFileKey = true)
         assertContentEquals(adminKey.publicKeyDER, CertificateInfo(ca).publicKey)
@@ -449,7 +451,7 @@ class PhoneGroupTest {
         // The admin computer admits the deck; removing the computer keeps it.
         val deck = SyncEngine.newID()
         val deckCert = GroupCertificates.member(deck, SoftwareSigner().publicKeyDER, ca, adminKey, t0)
-        g.add(listOf(g.records.sign(V2.device(deck, "deck", "full", Records.keyHashOfCert(deckCert), adminKey, t0), adminKey, ca)))
+        g.add(listOf(g.records.sign(V2.device(deck, "deck", "member", Records.keyHashOfCert(deckCert), adminKey, t0), adminKey, ca)))
         assertTrue(g.devices.any { it.id == deck })
         g.revoke(pi, root, t0)
         assertEquals(setOf(g.device, deck), g.devices.map { it.id }.toSet())
@@ -487,7 +489,7 @@ class PhoneGroupTest {
         val deskCert = GroupCertificates.member(desk, deskKey.publicKeyDER, adminCA, adminKey, t0)
         val set = RecordSet()
         set.signed(V2.device(adminDevice, "Second", "phone", Records.keyHash(adminKey.publicKeyDER), ca, t0, Records.keyHashOfCert(adminCA)), ca, g.groupCA)
-        set.signed(V2.device(desk, "Desk", "full", Records.keyHashOfCert(deskCert), adminKey, t0), adminKey, g.groupCA, adminCA)
+        set.signed(V2.device(desk, "Desk", "member", Records.keyHashOfCert(deskCert), adminKey, t0), adminKey, g.groupCA, adminCA)
         val records = set.records
         File(dir, "swift-admin.json").writeBytes(
             Wire.encode(
@@ -501,7 +503,7 @@ class PhoneGroupTest {
         )
 
         // The root makes a computer an admin.
-        g.record(pc, "pi", "full", Records.keyHashOfCert(cert), ca, t0)
+        g.record(pc, "pi", "member", Records.keyHashOfCert(cert), ca, t0, caps = Records.CAPS)
         val computerKey = SoftwareSigner()
         g.setKeyLevel(Records.LEVEL_FILES, ca, t0)
         val (computerCA, _) = g.makeAdmin(pc, computerKey.publicKeyDER, ca, t0.plusSeconds(1), allowFileKey = true)

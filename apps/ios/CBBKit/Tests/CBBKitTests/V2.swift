@@ -6,9 +6,10 @@ import Foundation
 /// Record bodies of version 2 for the tests, signed through the set.
 extension Records.Body {
     static func device(_ device: String, name: String, role: String, key: Data, admin: Data? = nil, powers: [String]? = nil,
-                       commands: [String]? = nil, holdsRoot: Bool = false, signer: CertificateSigner, now: Date) -> Records.Body {
+                       commands: [String]? = nil, holdsRoot: Bool = false, caps: [String]? = nil, signer: CertificateSigner, now: Date) -> Records.Body {
         var b = Records.Body(type: "device", signer: Records.keyHash(spki: signer.publicKeyDER), timeMS: Records.ms(now))
         (b.device, b.name, b.role, b.key, b.admin) = (device, name, role, key, admin)
+        b.caps = caps ?? (role == "member" ? Records.caps : nil)
         if admin != nil {
             let g = PhoneGroup.grants(role: role)
             (b.powers, b.commands) = (powers ?? g.powers, commands ?? g.commands)

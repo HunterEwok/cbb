@@ -124,7 +124,7 @@ func resolveBothHistories(t *testing.T) []nextCase {
 	}
 	device := func(c *x509.Certificate, name string, ms int64) RecordBody {
 		k := KeyHashOf(c)
-		return RecordBody{Type: RecordDevice, TimeMS: ms, Device: string(DeviceID(c.Subject.CommonName)), Name: name, Role: RoleFull, Key: &k}
+		return RecordBody{Type: RecordDevice, TimeMS: ms, Device: string(DeviceID(c.Subject.CommonName)), Name: name, Role: RoleMember, Caps: AllCaps, Key: &k}
 	}
 	sign(RecordBody{
 		Type: RecordDevice, TimeMS: 1, Device: string(DeviceID(phone.Subject.CommonName)), Name: "phone", Role: RolePhone,

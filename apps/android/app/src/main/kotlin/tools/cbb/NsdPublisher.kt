@@ -54,8 +54,8 @@ class NsdPublisher(context: Context, private val device: String, private val por
 
     companion object {
         /**
-         * The hub phone: the TXT v=1, g=<tag>, r=phone. The computers and
-         * the lite members note it but do not dial it: it dials them.
+         * The hub phone: the TXT v=1, g=<tag>, r=phone. The members note
+         * it but do not dial it: it dials them.
          */
         fun hub(context: Context, device: String, tag: String, memberPort: Int) =
             NsdPublisher(context, device, memberPort, mapOf("v" to "1", "g" to tag, "r" to "phone"))

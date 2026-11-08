@@ -63,11 +63,11 @@ class RootTest {
 
         init {
             root.record(bDevice, "B", "phone", Records.keyHashOfCert(bCert), rootKey, now, Records.keyHashOfCert(adminCA))
-            root.record(one.device, "one", "full", one.keyHash, rootKey, now)
+            root.record(one.device, "one", "member", one.keyHash, rootKey, now, caps = Records.CAPS)
             b.isRoot = false
             b.adminCA = adminCA
             b.add(root.records.records)
-            b.record(two.device, "two", "full", two.keyHash, adminKey, now)
+            b.record(two.device, "two", "member", two.keyHash, adminKey, now, caps = Records.CAPS)
             root.add(b.records.records)
             member = CoreMember.start(
                 CoreMember.Start(dir, "B", "android", "17", "0.6.0", device = bDevice, publicKey = bKey.publicKeyDER,
@@ -157,7 +157,7 @@ class RootTest {
         val now = Instant.now()
         val three = Computer(g.b.currentRoot, g.newRootKey, now)
         assertEquals(three.device, GroupCertificates.verifyMember(listOf(three.cert), g.b.trusted, now))
-        g.b.record(three.device, "three", "full", three.keyHash, g.newRootKey, now)
+        g.b.record(three.device, "three", "member", three.keyHash, g.newRootKey, now, caps = Records.CAPS)
         assertNull(g.b.records.refused(listOf(three.cert)))
         val later = now.plusSeconds(500L * 24 * 3600)
         val renewed = assertNotNull(g.b.renewal(listOf(g.one.cert), g.newRootKey, later)).cert
@@ -278,7 +278,7 @@ class RootTest {
         assertNotNull(set.refused(listOf(stolen.cert)))
         assertNotNull(set.refused(listOf(viaThief, thiefCA)))
         val otherRoot = GroupCertificates.groupCA(SoftwareSigner(), t0, pathLength = 1)
-        set.add(set.sign(V2.device(stolen.device, "stolen", "full", stolen.keyHash, g.rootKey, Instant.now()), g.rootKey), g.root.groupCA)
+        set.add(set.sign(V2.device(stolen.device, "stolen", "member", stolen.keyHash, g.rootKey, Instant.now()), g.rootKey), g.root.groupCA)
         set.add(set.sign(V2.claim(otherRoot, thiefKey, Instant.now()), thiefKey, thiefCA), g.root.groupCA)
         assertEquals(listOf("B", "one", "two"), set.devices.map { it.name })
         assertEquals(g.b.roots.map { Key(it) }, set.roots.map { Key(it) })

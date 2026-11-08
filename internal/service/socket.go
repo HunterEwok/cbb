@@ -1010,7 +1010,7 @@ func (s *Service) join(ctx context.Context, c net.Conn, r *control.Reader, m *co
 	s.loadSealSecretLocked()
 	sealKey := s.sealPublic
 	s.mu.Unlock()
-	j, err := pair.NewJoiner(pair.Info{Name: s.cfg.Name, OS: s.cfg.OS, Seal: sealKey})
+	j, err := pair.NewJoiner(pair.Info{Name: s.cfg.Name, OS: s.cfg.OS, Caps: group.AllCaps, Seal: sealKey})
 	if err != nil {
 		end()
 		fail(c, err)

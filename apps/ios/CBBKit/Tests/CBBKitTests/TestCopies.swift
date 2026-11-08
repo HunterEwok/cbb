@@ -11,7 +11,7 @@ struct TestCopies {
     var idA: String { a.device }
     var idB: String { b.device }
 
-    init(roleB: String = "full") throws {
+    init(roleB: String = "member") throws {
         let now = Date()
         let ca = SoftwareSigner(), ka = SoftwareSigner(), kb = SoftwareSigner()
         func secret() -> Data { Data((0..<32).map { _ in UInt8.random(in: 0...255) }) }
@@ -19,7 +19,7 @@ struct TestCopies {
         var g = try PhoneGroup.create(caSigner: ca, memberKey: ka.publicKeyDER, seal: try Core.sealPublic(sa), now: now)
         let idB = Member.newID()
         let certB = try GroupCertificates.member(device: idB, publicKey: kb.publicKeyDER, ca: g.groupCA, caSigner: ca, now: now)
-        _ = try g.record(device: idB, name: "pi", role: roleB, os: "linux", key: Records.keyHash(spki: kb.publicKeyDER),
+        _ = try g.record(device: idB, name: "pi", role: roleB, caps: roleB == "member" ? Records.caps : nil, os: "linux", key: Records.keyHash(spki: kb.publicKeyDER),
                          store: Records.file, seal: try Core.sealPublic(sb), caSigner: ca, now: now)
         let set = g.records
         a = CopyKeys(device: g.device, cert: g.memberCert, issuer: nil, signer: ka, secret: sa, records: { set })

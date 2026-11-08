@@ -97,8 +97,8 @@ func TestContentTransfer(t *testing.T) {
 	bp.Type = clip.TypePNG
 	sp := store.put(small)
 	sp.Type = clip.TypeHTML
-	mac := newMember(t, Full, withContent(&store), withTimers(50*time.Millisecond, 2*time.Second))
-	pi := newMember(t, Full, withContent(&memContent{}), withTimers(50*time.Millisecond, 2*time.Second))
+	mac := newMember(t, Member, withContent(&store), withTimers(50*time.Millisecond, 2*time.Second))
+	pi := newMember(t, Member, withContent(&memContent{}), withTimers(50*time.Millisecond, 2*time.Second))
 	link(t, mac, pi)
 	waitPeers(t, mac, 1)
 	waitPeers(t, pi, 1)
@@ -159,7 +159,7 @@ func TestContentTransfer(t *testing.T) {
 	}
 
 	// A member that serves no content is never asked.
-	lite := newMember(t, Full)
+	lite := newMember(t, Member)
 	link(t, lite, mac)
 	waitPeers(t, mac, 2)
 	if _, err := fetchAll(ctx, mac, lite, bp, 0); err == nil || !strings.Contains(err.Error(), "serves no content") {
@@ -253,8 +253,8 @@ func TestFetchStall(t *testing.T) {
 	store := &gatedContent{gate: make(chan struct{})}
 	data := random(t, 3<<20+5)
 	p := store.put(data)
-	mac := newMember(t, Full, withContent(store), withTimers(50*time.Millisecond, 2*time.Second))
-	pi := newMember(t, Full, withContent(&memContent{}), withTimers(50*time.Millisecond, 2*time.Second))
+	mac := newMember(t, Member, withContent(store), withTimers(50*time.Millisecond, 2*time.Second))
+	pi := newMember(t, Member, withContent(&memContent{}), withTimers(50*time.Millisecond, 2*time.Second))
 	link(t, mac, pi)
 	waitPeers(t, mac, 1)
 	waitPeers(t, pi, 1)
@@ -303,8 +303,8 @@ func TestFetchStall(t *testing.T) {
 func TestCancelsOfOtherParts(t *testing.T) {
 	var store memContent
 	p := store.put(random(t, 16<<20))
-	srv := newMember(t, Full, withContent(&store), withTimers(time.Second, 60*time.Second))
-	r := rawPeer(t, srv, newMember(t, Full))
+	srv := newMember(t, Member, withContent(&store), withTimers(time.Second, 60*time.Second))
+	r := rawPeer(t, srv, newMember(t, Member))
 	r.hello(clip.Hello{Wall: time.Now().UnixMilli()})
 	waitPeers(t, srv, 1)
 	for i := range 4 {

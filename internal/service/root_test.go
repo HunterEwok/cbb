@@ -103,13 +103,13 @@ func TestRootHandover(t *testing.T) {
 	recs := group.NewRecords(g)
 	if _, errs := recs.AddAll([]group.Record{
 		sign(t, g, group.RecordBody{Type: group.RecordSettings, TakeoverDelayMS: &noWait}, old.Key),
-		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(holder.ID), Name: "holder", Role: group.RoleFull, Key: &hk}, old.Key),
-		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(later.ID), Name: "later", Role: group.RoleFull, Key: &lk}, old.Key),
+		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(holder.ID), Name: "holder", Role: group.RoleMember, Caps: group.AllCaps, Key: &hk}, old.Key),
+		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(later.ID), Name: "later", Role: group.RoleMember, Caps: group.AllCaps, Key: &lk}, old.Key),
 		// The lost root recorded B as an admin phone, which may claim the group.
 		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(group.NewDeviceID()), Name: "phone B", Role: group.RolePhone, Key: &group.KeyHash{2}, Admin: &bk,
 			Powers: authority.Powers, Commands: authority.Commands}, old.Key),
 		sign(t, g, group.RecordBody{Type: group.RecordClaim, Root: newRoot.Cert.Raw}, adminB.Key, adminB.Cert),
-		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(admitted.ID), Name: "new", Role: group.RoleFull, Key: &nk}, newRoot.Key),
+		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(admitted.ID), Name: "new", Role: group.RoleMember, Caps: group.AllCaps, Key: &nk}, newRoot.Key),
 	}); len(errs) > 0 {
 		t.Fatal(errs)
 	}

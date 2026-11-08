@@ -55,16 +55,27 @@ const (
 	RecordCopies     = authority.TypeCopies
 )
 
-// Device roles in device records: the member roles, and watch
-// for a watch with an admin key of its own, which the root certified and
-// which signs only a few emergency actions (docs/protocol.md, section 10,
-// rule 8).
+// Device roles in device records: a member (a computer, a board or a
+// router with the service or the firmware), a phone with the app, and
+// watch for a watch with an admin key of its own, which the root
+// certified and which signs only a few emergency actions
+// (docs/protocol.md, section 10, rule 8).
 const (
-	RoleFull  = "full"
-	RolePhone = "phone"
-	RoleLite  = "lite"
-	RoleWatch = "watch"
+	RoleMember = authority.RoleMember
+	RolePhone  = authority.RolePhone
+	RoleWatch  = authority.RoleWatch
 )
+
+// What a member can do (docs/protocol.md, section 4, "Capabilities").
+const (
+	CapAdmin = authority.CapAdmin
+	CapDials = authority.CapDials
+	CapHub   = authority.CapHub
+)
+
+// AllCaps is what a computer, a Raspberry Pi or a router can do: all of
+// it, sorted.
+var AllCaps = []string{CapAdmin, CapDials, CapHub}
 
 // Where a device's keys live, as its device record says (docs/protocol.md,
 // section 17): in a file, which a thief with the device can copy, or in
@@ -494,7 +505,9 @@ func (s *Records) Watch(k KeyHash) bool {
 type Device struct {
 	ID   DeviceID
 	Name string
-	Role string // RoleFull, RolePhone, RoleLite or RoleWatch
+	Role string // RoleMember, RolePhone or RoleWatch
+	// Caps is what a member can do (CapAdmin, CapDials, CapHub).
+	Caps []string
 	OS   string // "" when its record does not tell
 	// Key is the member key of its newest counting record.
 	Key KeyHash
@@ -523,6 +536,13 @@ type Device struct {
 // May reports whether the device is an admin with the power p.
 func (d Device) May(p string) bool { return d.Admin && slices.Contains(d.Powers, p) }
 
+// Can reports whether d is a member with the capability c.
+func (d Device) Can(c string) bool { return d.Role == RoleMember && slices.Contains(d.Caps, c) }
+
+// MayHub reports whether d may be one of the group's hubs: a phone, or a
+// member with the cap hub.
+func (d Device) MayHub() bool { return d.Role == RolePhone || d.Can(CapHub) }
+
 // Devices returns the devices list, sorted by name and then ID.
 func (s *Records) Devices() []Device {
 	st := s.State()
@@ -537,7 +557,7 @@ func (s *Records) Devices() []Device {
 	}
 	var out []Device
 	for _, d := range st.Devices {
-		dev := Device{ID: DeviceID(d.Device), Name: d.Name, Role: d.Role, OS: d.OS, Store: StoreOf(d.Store, d.Role), Kind: d.Kind, Proof: d.Proof,
+		dev := Device{ID: DeviceID(d.Device), Name: d.Name, Role: d.Role, Caps: d.Caps, OS: d.OS, Store: StoreOf(d.Store, d.Role), Kind: d.Kind, Proof: d.Proof,
 			Seal: d.Seal, ForwardOnly: d.ForwardOnly, Keys: d.Keys, Powers: d.Powers, Commands: d.Commands, Frozen: d.Frozen}
 		if d.Admin != nil {
 			// A frozen admin is no admin until the freeze ends.
@@ -837,6 +857,7 @@ func (s *Records) HubOrder() []DeviceID {
 	for _, d := range s.Devices() {
 		trusted := d.ID == root || d.May(authority.PowerHub)
 		switch {
+		case !d.MayHub():
 		case (trusted || d.ForwardOnly) && d.Role == RolePhone:
 			hubs = append(hubs, hub{d.ID, 0})
 		case trusted:

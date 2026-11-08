@@ -1307,18 +1307,26 @@ type Device struct {
 	Device string `json:"device"`
 	Name   string `json:"name"`
 	Role   string `json:"role"`
-	OS     string `json:"os,omitempty"`
-	Keys   []Hash `json:"keys"`
-	Store  string `json:"store,omitempty"`
-	Kind   string `json:"kind,omitempty"`
-	Proof  string `json:"proof,omitempty"`
-	Seal   []byte `json:"seal,omitempty"`
+	// Caps: what a member can do (Caps).
+	Caps  []string `json:"caps,omitempty"`
+	OS    string   `json:"os,omitempty"`
+	Keys  []Hash   `json:"keys"`
+	Store string   `json:"store,omitempty"`
+	Kind  string   `json:"kind,omitempty"`
+	Proof string   `json:"proof,omitempty"`
+	Seal  []byte   `json:"seal,omitempty"`
 	// ForwardOnly: the device passes copies on as a hub and reads none.
 	ForwardOnly bool     `json:"forward_only,omitempty"`
 	Admin       *Hash    `json:"admin,omitempty"`
 	Powers      []string `json:"powers,omitempty"`
 	Commands    []string `json:"commands,omitempty"`
 	Frozen      bool     `json:"frozen,omitempty"`
+}
+
+// MayHub reports whether d may be one of the group's hubs: a phone, or a
+// member with the cap hub.
+func (d *Device) MayHub() bool {
+	return d.Role == RolePhone || d.Role == RoleMember && HasCap(d.Caps, CapHub)
 }
 
 // Claim is a claim of the state.
@@ -1435,7 +1443,7 @@ func (ep *epoch) hubs(devices []Device) []string {
 	}
 	may := map[string]bool{}
 	for _, d := range devices {
-		may[d.Device] = d.Role == "full" || d.Role == "phone"
+		may[d.Device] = d.MayHub()
 	}
 	var out []string
 	for _, h := range best.Body.Hubs {
@@ -1595,7 +1603,7 @@ func (ep *epoch) device(id string, rs []*rec) (Device, bool) {
 		return a.Body.Seq > b.Body.Seq
 	})
 	n := counting[0].Body
-	d := Device{Device: id, Name: n.Name, Role: n.Role, OS: n.OS, Store: n.Store, Kind: n.Kind, Proof: n.Proof, Seal: n.Seal, ForwardOnly: n.ForwardOnly}
+	d := Device{Device: id, Name: n.Name, Role: n.Role, Caps: n.Caps, OS: n.OS, Store: n.Store, Kind: n.Kind, Proof: n.Proof, Seal: n.Seal, ForwardOnly: n.ForwardOnly}
 	for k := range keys {
 		d.Keys = append(d.Keys, k)
 	}

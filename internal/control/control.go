@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/HunterEwok/cbb/internal/release"
 )
@@ -453,12 +454,16 @@ type Joining struct {
 // Device is a member as status shows it, or a device of the group as
 // devices lists it.
 type Device struct {
-	ID     string `json:"id"`
-	Name   string `json:"name,omitempty"`
-	Role   string `json:"role,omitempty"`
-	OS     string `json:"os,omitempty"`      // its operating system; "" when unknown
-	Store  string `json:"store,omitempty"`   // where its keys live: group.StoreFile, StoreHardware, StoreProven or StoreRootless; "" when the member does not say
-	SkewMS int64  `json:"skew_ms,omitempty"` // how far its clock is ahead of this one
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+	Role string `json:"role,omitempty"`
+	// Caps is what a member can do: "admin", "dials" and "hub", from its
+	// record, or from its hello while it has none (docs/protocol.md,
+	// section 4, "Capabilities").
+	Caps   []string `json:"caps,omitempty"`
+	OS     string   `json:"os,omitempty"`      // its operating system; "" when unknown
+	Store  string   `json:"store,omitempty"`   // where its keys live: group.StoreFile, StoreHardware, StoreProven or StoreRootless; "" when the member does not say
+	SkewMS int64    `json:"skew_ms,omitempty"` // how far its clock is ahead of this one
 	// Form, OSVersion, Version and MAC are what its hello says about its
 	// device; "" when it says nothing or is not connected.
 	Form      string `json:"form,omitempty"`
@@ -487,6 +492,9 @@ type Device struct {
 	ForwardOnly bool `json:"forward_only,omitempty"`
 	Hub         bool `json:"hub,omitempty"` // one of the group's hubs, as this device knows: itself while it is a hub, or a hub whose offer it keeps; Away.HubDevice says which one it uses
 }
+
+// Can reports whether d is a member with the capability c.
+func (d Device) Can(c string) bool { return d.Role == "member" && slices.Contains(d.Caps, c) }
 
 // Message is a header and its payload.
 type Message struct {

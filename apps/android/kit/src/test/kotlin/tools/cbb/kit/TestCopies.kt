@@ -10,7 +10,7 @@ import java.time.Instant
  * A group of a phone and a computer whose copies are sealed end to end, for
  * tests of two nodes: each side's CopyKeys over the same records.
  */
-class TestCopies(roleB: String = "full") {
+class TestCopies(roleB: String = "member") {
     val a: CopyKeys
     val b: CopyKeys
 
@@ -30,7 +30,7 @@ class TestCopies(roleB: String = "full") {
         val g = PhoneGroup.create(ca, ka.publicKeyDER, now, seal = Core.sealPublic(sa))
         val idB = SyncEngine.newID()
         val certB = GroupCertificates.member(idB, kb.publicKeyDER, g.groupCA, ca, now)
-        g.record(idB, "pi", roleB, Records.keyHash(kb.publicKeyDER), ca, now, os = "linux", store = Records.FILE, seal = Core.sealPublic(sb))
+        g.record(idB, "pi", roleB, Records.keyHash(kb.publicKeyDER), ca, now, os = "linux", store = Records.FILE, seal = Core.sealPublic(sb), caps = if (roleB == "member") Records.CAPS else null)
         val set = g.records
         a = CopyKeys(g.device, g.memberCert, null, ka, sa) { set }
         b = CopyKeys(idB, certB, null, kb, sb) { set }

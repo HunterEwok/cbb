@@ -546,7 +546,7 @@ mod tests {
 
     #[test]
     fn a_phone_hub_is_tried_often() {
-        let devices = [device("p", "phone"), device("c", "full")];
+        let devices = [device("p", "phone"), device("c", "member")];
         assert_eq!(hub_wait(&devices, "p"), PHONE_HUB_WAIT);
         assert_eq!(hub_wait(&devices, "c"), MAX_WAIT);
         assert_eq!(hub_wait(&[], "p"), MAX_WAIT);

@@ -93,7 +93,7 @@ func deviceRecord(t *testing.T, root *x509.Certificate, signer *CA, chain []*x50
 	key := KeyHashOf(cert)
 	r, err := signRecord(RecordBody{
 		Type: RecordDevice, Group: Tag(root), TimeMS: ms,
-		Device: string(DeviceID(cert.Subject.CommonName)), Name: name, Role: RoleFull, Key: &key,
+		Device: string(DeviceID(cert.Subject.CommonName)), Name: name, Role: RoleMember, Caps: AllCaps, Key: &key,
 	}, signer.Key, chain...)
 	if err != nil {
 		t.Fatal(err)
@@ -185,11 +185,11 @@ func TestRecordsRejected(t *testing.T) {
 		t.Errorf("%d records kept, want none", s.Len())
 	}
 	for name, body := range map[string]RecordBody{
-		"bad name":      {Type: RecordDevice, Device: string(admin.ID), Name: "a\nb", Role: RoleFull, OS: OSMacOS, Key: &KeyHash{}},
+		"bad name":      {Type: RecordDevice, Device: string(admin.ID), Name: "a\nb", Role: RoleMember, Caps: AllCaps, OS: OSMacOS, Key: &KeyHash{}},
 		"unknown role":  {Type: RecordDevice, Device: string(admin.ID), Name: "a", Role: "toaster", Key: &KeyHash{}},
 		"no keys":       {Type: RecordRevoke},
 		"unknown type":  {Type: "gift"},
-		"no device key": {Type: RecordDevice, Device: string(admin.ID), Name: "a", Role: RoleFull, OS: OSMacOS},
+		"no device key": {Type: RecordDevice, Device: string(admin.ID), Name: "a", Role: RoleMember, Caps: AllCaps, OS: OSMacOS},
 	} {
 		if _, err := signRecord(body, admin.GroupCA.Key); err == nil {
 			t.Errorf("%s: signed", name)
@@ -399,11 +399,11 @@ func TestRecordRoles(t *testing.T) {
 	}
 	s := NewRecords(admin.GroupCA.Cert)
 	for i, tc := range []struct{ role, os string }{
-		{RoleFull, ""},
-		{RoleFull, OSWindows},
-		{RoleFull, OSMacOS},
+		{RoleMember, ""},
+		{RoleMember, OSWindows},
+		{RoleMember, OSMacOS},
 		{RolePhone, OSiOS},
-		{RoleLite, OSNone},
+		{RoleMember, OSNone},
 		{RolePhone, OSAndroid},
 		{RolePhone, OSAurora},
 		{RolePhone, OSSailfish},
@@ -435,7 +435,7 @@ func TestRecordRoles(t *testing.T) {
 		{Type: RecordDevice, Device: string(admin.ID), Name: "d", Role: "mac", Key: &key},
 		{Type: RecordDevice, Device: string(admin.ID), Name: "d", Role: "iphone", Key: &key},
 		{Type: RecordDevice, Device: string(admin.ID), Name: "d", Role: "computer", Key: &key},
-		{Type: RecordDevice, Device: string(admin.ID), Name: "d", Role: RoleFull, OS: "darwin", Key: &key},
+		{Type: RecordDevice, Device: string(admin.ID), Name: "d", Role: RoleMember, Caps: AllCaps, OS: "darwin", Key: &key},
 	} {
 		bad.Group = Tag(admin.GroupCA.Cert)
 		if _, err := signRecord(bad, admin.GroupCA.Key); err == nil {
@@ -522,13 +522,13 @@ func TestAuthorityRecords(t *testing.T) {
 func TestStoreOf(t *testing.T) {
 	for _, c := range []struct{ store, role, want string }{
 		{StoreFile, RolePhone, StoreFile},
-		{StoreHardware, RoleFull, StoreHardware},
-		{StoreProven, RoleFull, StoreProven},
-		{StoreRootless, RoleFull, StoreRootless},
+		{StoreHardware, RoleMember, StoreHardware},
+		{StoreProven, RoleMember, StoreProven},
+		{StoreRootless, RoleMember, StoreRootless},
 		{"", RolePhone, StoreHardware},
-		{"", RoleFull, StoreFile},
-		{"", RoleLite, StoreFile},
-		{"tpm", RoleFull, StoreFile},
+		{"", RoleMember, StoreFile},
+		{"", RoleMember, StoreFile},
+		{"tpm", RoleMember, StoreFile},
 	} {
 		if got := StoreOf(c.store, c.role); got != c.want {
 			t.Errorf("StoreOf(%q, %q) = %q, want %q", c.store, c.role, got, c.want)

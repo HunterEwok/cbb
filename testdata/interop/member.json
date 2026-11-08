@@ -2,7 +2,7 @@
 	"frames": [
 		{
 			"t": "hello",
-			"role": "full",
+			"role": "member",
 			"hello": {
 				"wall_ms": 1761024000500,
 				"current": {
@@ -27,7 +27,7 @@
 		},
 		{
 			"t": "hello",
-			"role": "full",
+			"role": "member",
 			"hello": {
 				"wall_ms": 1761024000500,
 				"current": {
@@ -205,7 +205,7 @@
 		},
 		{
 			"t": "hello",
-			"role": "full",
+			"role": "member",
 			"hello": {
 				"wall_ms": 1761024000500,
 				"os": "macos",
@@ -263,7 +263,7 @@
 		},
 		{
 			"t": "hello",
-			"role": "full",
+			"role": "member",
 			"hello": {
 				"wall_ms": 1761024000500,
 				"current": {
@@ -986,15 +986,15 @@
 	],
 	"bodies": [
 		{
-			"text": "{\"t\":\"hello\",\"role\":\"full\",\"hello\":{\"wall_ms\":0}}",
+			"text": "{\"t\":\"hello\",\"role\":\"member\",\"hello\":{\"wall_ms\":0}}",
 			"ok": true
 		},
 		{
-			"text": "{\"t\":\"hello\",\"role\":\"full\",\"hello\":{\"wall_ms\":-0}}",
+			"text": "{\"t\":\"hello\",\"role\":\"member\",\"hello\":{\"wall_ms\":-0}}",
 			"ok": false
 		},
 		{
-			"text": "{\"t\":\"hello\",\"role\":\"full\",\"hello\":{\"wall_ms\":1761024000500.0}}",
+			"text": "{\"t\":\"hello\",\"role\":\"member\",\"hello\":{\"wall_ms\":1761024000500.0}}",
 			"ok": false
 		},
 		{

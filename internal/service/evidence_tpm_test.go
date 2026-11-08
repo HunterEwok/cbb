@@ -91,7 +91,7 @@ func TestTPMCredentialOnlyFromRoot(t *testing.T) {
 	recs := group.NewRecords(root.GroupCA.Cert)
 	key := group.KeyHashOf(root.Cert)
 	r := grouptest.Sign(t, group.RecordBody{Type: group.RecordDevice, Group: group.Tag(root.GroupCA.Cert), Device: string(root.ID),
-		Name: "pi", Role: group.RoleFull, Key: &key, HoldsRoot: true, TimeMS: now.UnixMilli()}, root.GroupCA.Key)
+		Name: "pi", Role: group.RoleMember, Caps: group.AllCaps, Key: &key, HoldsRoot: true, TimeMS: now.UnixMilli()}, root.GroupCA.Key)
 	if _, errs := recs.AddAll([]group.Record{r}); len(errs) > 0 {
 		t.Fatal(errs)
 	}

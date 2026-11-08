@@ -121,7 +121,8 @@ fn group(settings: Option<Body>) -> Group {
         Body {
             device: laptop.clone(),
             name: "laptop".into(),
-            role: "full".into(),
+            role: "member".into(),
+            caps: ["admin", "dials", "hub"].iter().map(|c| (*c).into()).collect(),
             os: "linux".into(),
             key: Some(Hash(certs::random_bytes())),
             admin: Some(Hash(laptop_ca.key_hash())),
@@ -172,7 +173,7 @@ fn an_admin_takes_the_group_from_its_lost_root() {
 
     let root = Cert::parse(&root_der).unwrap();
     let nr = Signer { ca: &root, key: &*g.admin_key, me: &g.admin_phone };
-    let own = Own { name: "Aurora", role: "phone", os: "aurora", store: "hardware", seal: &[] };
+    let own = Own { name: "Aurora", role: "phone", caps: &[], os: "aurora", store: "hardware", seal: &[] };
     let point = g.admin_member.public();
     assert!(finish(&g.rs, &nr, &point, &own, g.ms).is_err());
 
@@ -241,7 +242,7 @@ fn a_root_that_handed_the_group_over_keeps_its_device() {
 
     let root = Cert::parse(&root_der).unwrap();
     let nr = Signer { ca: &root, key: &*key, me: &g.admin_phone };
-    let own = Own { name: "Aurora", role: "phone", os: "aurora", store: "hardware", seal: &[] };
+    let own = Own { name: "Aurora", role: "phone", caps: &[], os: "aurora", store: "hardware", seal: &[] };
     let f = finish(&g.rs, &nr, &g.admin_member.public(), &own, g.ms).unwrap();
     for r in &f.records {
         add(&mut g.rs, r);

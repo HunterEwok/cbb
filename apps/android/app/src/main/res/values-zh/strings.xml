@@ -214,10 +214,8 @@
     <string name="reason_set_mode">更改电脑的同步模式</string>
     <string name="error_command_refused">电脑拒绝了。</string>
     <string name="error_no_answer">电脑没有响应。它可能已离线，或运行的是旧版 CBB。</string>
-    <string name="role_full">完整成员</string>
-    <string name="role_full_rootless">完整成员，无 root</string>
-    <string name="role_lite">轻量成员</string>
-    <string name="role_lite_rootless">轻量成员，无 root</string>
+    <string name="role_member">成员</string>
+    <string name="role_member_rootless">成员，无 root</string>
     <string name="role_phone">手机应用</string>
     <string name="kind_laptop">笔记本电脑</string>
     <string name="kind_desktop">电脑</string>

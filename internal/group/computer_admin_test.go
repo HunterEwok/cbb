@@ -112,7 +112,7 @@ func TestComputerAdmin(t *testing.T) {
 		t.Fatalf("the admin CA was not kept: %v", err)
 	}
 	r, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(pg.root.Cert), TimeMS: nextTime(), Device: string(NewDeviceID()), Name: "deck",
-		Role: RoleFull, Key: &KeyHash{1}}, ca.Key, chain...)
+		Role: RoleMember, Caps: AllCaps, Key: &KeyHash{1}}, ca.Key, chain...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +319,7 @@ func TestRootDeviceAndAdmitted(t *testing.T) {
 	}
 	if _, errs := recs.AddAll([]Record{
 		// A root's record of a device without holds_root names no root.
-		sign(RecordBody{Type: RecordDevice, Device: string(deck), Name: "deck", Role: RoleFull, Key: &k3}, pg.root),
+		sign(RecordBody{Type: RecordDevice, Device: string(deck), Name: "deck", Role: RoleMember, Caps: AllCaps, Key: &k3}, pg.root),
 	}); len(errs) > 0 {
 		t.Fatal(errs)
 	}
@@ -329,7 +329,7 @@ func TestRootDeviceAndAdmitted(t *testing.T) {
 	if _, errs := recs.AddAll([]Record{
 		sign(RecordBody{Type: RecordDevice, Device: string(rootPhone), Name: "root", Role: RolePhone, Key: &k1, HoldsRoot: true}, pg.root),
 		sign(RecordBody{Type: RecordDevice, Device: string(aPhone), Name: "a", Role: RolePhone, Key: &k2, Admin: &ka, Powers: authority.Powers, Commands: authority.Commands}, pg.root),
-		sign(RecordBody{Type: RecordDevice, Device: string(deck), Name: "deck", Role: RoleFull, Key: &k3}, pg.a, pg.a.Cert),
+		sign(RecordBody{Type: RecordDevice, Device: string(deck), Name: "deck", Role: RoleMember, Caps: AllCaps, Key: &k3}, pg.a, pg.a.Cert),
 		// An admin's record of its own device that says it holds the root
 		// counts for nothing.
 		sign(RecordBody{Type: RecordDevice, Device: string(aPhone), Name: "a", Role: RolePhone, Key: &k2, Admin: &ka, HoldsRoot: true}, pg.a, pg.a.Cert),

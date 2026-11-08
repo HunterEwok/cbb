@@ -575,11 +575,11 @@ func offerOf(h tunnel.HubLink) node.TunnelOffer {
 // A device that stopped being a hub tells the computers and the devices
 // that may be hubs instead that it is none, so that they forget its offer.
 func (s *Service) hubShare(peer group.DeviceID) *node.HubShare {
-	may, full := s.mayHost(peer), s.roleOfDevice(peer) == group.RoleFull
+	may, member := s.mayHost(peer), s.roleOfDevice(peer) == group.RoleMember
 	s.tunMu.Lock()
 	defer s.tunMu.Unlock()
 	if st := s.tunnel; st != nil && !st.IsHub && st.Retired {
-		if may || full {
+		if may || member {
 			return &node.HubShare{Stopped: true}
 		}
 		return nil

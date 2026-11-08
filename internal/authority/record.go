@@ -110,9 +110,30 @@ var Powers = []string{PowerAdmit, PowerFreeze, PowerHub, PowerRemove, PowerRemov
 // (docs/protocol.md, section 15).
 var Commands = []string{"action", "actions-off", "away-off", "hub", "mode", "mute", "paste", "paste-off", "unmute"}
 
+// The roles a device record may name: a member (any device with the
+// service or the firmware), a phone with the app, or a watch with an
+// admin key of its own (docs/protocol.md, section 10).
+const (
+	RoleMember = "member"
+	RolePhone  = "phone"
+	RoleWatch  = "watch"
+)
+
+// What a member can do (docs/protocol.md, section 4, "Capabilities"): be
+// one of the group's hubs, hold an admin key, and dial other members. A
+// capability gives no right: only a record a root or an admin signed does.
+const (
+	CapAdmin = "admin"
+	CapDials = "dials"
+	CapHub   = "hub"
+)
+
+// Caps lists every capability, sorted.
+var Caps = []string{CapAdmin, CapDials, CapHub}
+
 // Roles and systems a device record may name.
 var (
-	roles = map[string]bool{"full": true, "phone": true, "lite": true, "watch": true}
+	roles = map[string]bool{RoleMember: true, RolePhone: true, RoleWatch: true}
 	oses  = map[string]bool{"linux": true, "windows": true, "macos": true, "ios": true, "android": true, "aurora": true, "sailfish": true, "watchos": true, "wearos": true, "none": true}
 )
 
@@ -177,9 +198,12 @@ type Body struct {
 	Prev   *Hash  `json:"prev,omitempty"`
 	TimeMS int64  `json:"time_ms"`
 
-	Device   string   `json:"device,omitempty"`
-	Name     string   `json:"name,omitempty"`
-	Role     string   `json:"role,omitempty"`
+	Device string `json:"device,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Role   string `json:"role,omitempty"`
+	// Caps is what a member can do, sorted: CapAdmin, CapDials, CapHub;
+	// only with RoleMember.
+	Caps     []string `json:"caps,omitempty"`
 	OS       string   `json:"os,omitempty"`
 	Key      *Hash    `json:"key,omitempty"`
 	Admin    *Hash    `json:"admin,omitempty"`
@@ -225,7 +249,7 @@ type Body struct {
 // that it may carry; needed lists those it must.
 var (
 	fields = map[string]map[string]bool{
-		TypeDevice:     set("device", "name", "role", "os", "key", "admin", "powers", "commands", "store", "kind", "proof", "holds_root", "seal", "forward_only"),
+		TypeDevice:     set("device", "name", "role", "caps", "os", "key", "admin", "powers", "commands", "store", "kind", "proof", "holds_root", "seal", "forward_only"),
 		TypeRevoke:     set("keys", "seen"),
 		TypeFreeze:     set("keys", "seen"),
 		TypeThaw:       set("records"),
@@ -260,6 +284,7 @@ func (b *Body) present() []string {
 	add(b.Device != "", "device")
 	add(b.Name != "", "name")
 	add(b.Role != "", "role")
+	add(len(b.Caps) > 0, "caps")
 	add(b.OS != "", "os")
 	add(b.Key != nil, "key")
 	add(b.Admin != nil, "admin")
@@ -465,8 +490,17 @@ func (b *Body) checkDevice() error {
 	if b.Admin == nil && (len(b.Powers) > 0 || len(b.Commands) > 0) {
 		return errors.New("authority: powers and commands come only with admin")
 	}
-	if b.ForwardOnly && (b.Role != "full" || b.Admin != nil || b.HoldsRoot) {
-		return errors.New("authority: only a computer that is no admin passes copies on without reading them")
+	if len(b.Caps) > 0 && b.Role != RoleMember {
+		return errors.New("authority: only a member has caps")
+	}
+	if err := sortedOf(b.Caps, Caps, "caps"); err != nil {
+		return err
+	}
+	if b.Admin != nil && b.Role == RoleMember && !HasCap(b.Caps, CapAdmin) {
+		return errors.New("authority: an admin member without the admin cap")
+	}
+	if b.ForwardOnly && (!HasCap(b.Caps, CapHub) || b.Admin != nil || b.HoldsRoot) {
+		return errors.New("authority: only a member that may be a hub and is no admin passes copies on without reading them")
 	}
 	if len(b.Seal) > 0 && len(b.Seal) != SealKeySize {
 		return fmt.Errorf("authority: a device record's seal is %d bytes, not %d", len(b.Seal), SealKeySize)
@@ -476,6 +510,9 @@ func (b *Body) checkDevice() error {
 	}
 	return sortedOf(b.Commands, Commands, "commands")
 }
+
+// HasCap reports whether caps holds c.
+func HasCap(caps []string, c string) bool { return slices.Contains(caps, c) }
 
 // ValidName reports whether s is a device name: 1 to 64 bytes of UTF-8
 // without a control character (U+0000 to U+001F, U+007F to U+009F).
@@ -541,6 +578,7 @@ func sortedOf(vs, known []string, field string) error {
 // Sort puts b's arrays in the order the canonical form wants, for a
 // signer that built them in another order.
 func (b *Body) Sort() {
+	sort.Strings(b.Caps)
 	sort.Strings(b.Powers)
 	sort.Strings(b.Commands)
 	byString := func(hs []Hash) {
