@@ -624,7 +624,7 @@ impl Node {
         let der = |k: &str| -> Option<Vec<u8>> { cbb_core::certs::b64::deserialize(f.get(k)?.clone()).ok() };
         let Some(prev) = der("prev_cert").and_then(|d| Cert::parse(&d).ok()) else { return ident };
         const RENEW_BEFORE: i64 = 240 * 24 * 3600;
-        if uptime::wall_ms() / 1000 >= prev.not_after.saturating_sub(RENEW_BEFORE)
+        if uptime::wall_ms() / 1000 >= prev.not_after.saturating_sub(cbb_core::benchtime::d(RENEW_BEFORE))
             || prev.public_key() != ident.cert.public_key()
         {
             return ident;

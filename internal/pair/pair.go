@@ -54,6 +54,7 @@ import (
 
 	wire "github.com/HunterEwok/cbb/internal/frame"
 	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/invite"
 	"github.com/HunterEwok/cbb/internal/seal"
 )
 
@@ -70,8 +71,8 @@ const (
 	// MaxFailures is the number of failed attempts that closes a window.
 	MaxFailures = 3
 	// MinSecret is the length in bytes of the shortest secret a remote
-	// invitation may carry in place of a code: 128 bits.
-	MinSecret = 16
+	// invitation may carry in place of a code.
+	MinSecret = invite.MinSecret
 
 	attemptTimeout = 30 * time.Second
 	// firstTimeout is how long the joiner has for its first message once

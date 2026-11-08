@@ -670,7 +670,10 @@ fn forwarder_problem(detail: &str) -> String {
 fn hub_key_ahead() -> Duration {
     static AHEAD: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
     *AHEAD.get_or_init(|| {
-        let s = std::env::var("CBB_HUB_KEY_AHEAD").ok().and_then(|v| v.parse().ok()).unwrap_or(3 * 24 * 3600);
+        let s = std::env::var("CBB_HUB_KEY_AHEAD")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(cbb_core::benchtime::d(3 * 24 * 3600) as u64);
         Duration::from_secs(s)
     })
 }

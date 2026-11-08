@@ -25,6 +25,7 @@ mod away;
 mod awaynet;
 #[cfg(feature = "tunnel")]
 mod awg;
+mod benchtime;
 pub mod button;
 mod cli;
 pub mod content;
@@ -248,6 +249,7 @@ pub(crate) struct Global {
 /// The program cbb: reads the arguments and runs the command.
 pub fn main() {
     error::from_env();
+    benchtime::start();
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let mut g = Global {
         state: std::env::var_os("CBB_STATE").map(PathBuf::from).unwrap_or_else(|| {
@@ -319,7 +321,15 @@ pub fn main() {
                     // Without its helper beside it, cbb is the lite member
                     // (installers tell the two apart by this line).
                     let lite = if helper::locate().is_some() { "" } else { ", the lite member" };
-                    println!("cbb {} ({}/{}){lite}", service::VERSION, std::env::consts::OS, std::env::consts::ARCH);
+                    // Never to be mistaken for a release: its certificates
+                    // last minutes.
+                    let scaled = if cbb_core::benchtime::ENABLED { " (time-scaled bench build)" } else { "" };
+                    println!(
+                        "cbb {} ({}/{}){lite}{scaled}",
+                        service::VERSION,
+                        std::env::consts::OS,
+                        std::env::consts::ARCH
+                    );
                     println!("{}", core_version());
                     Ok(())
                 }

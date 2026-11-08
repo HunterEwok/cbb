@@ -7,6 +7,9 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The bench's time-scaled build of the Rust `cbb` (`cargo build -p cbb-lite --features
+  benchtime`, never released), as the Go one's: certificates, renewals, credential periods and
+  the hub key's handover run 100000 times faster, and `CBB_TEST_CLOCK` moves the wall clock.
 - Taking the group over is in the Rust core (`cbb_core::takeover`), each signature through the
   app's or the service's key: the claim from a lost root, as the admin the root handed the
   group to, or with the recovery key; where it stands; the new root's certificate and records
@@ -1934,6 +1937,10 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Removed
 
+- The Go command line `cmd/cbb` and the Go service in it: `cbb` is the Rust program on every
+  member, with `cbb-helper` beside it on computers. Its tests run on the Rust `cbb`
+  (`member/tests/cli_commands.rs`, the service tests in `internal/service`).
+
 - The way in for an iPhone without the app (D-80): every phone now joins through its app,
   with a key of its own. Gone with it are the iPhone shortcut and its token, `cbb pair
   -phone` and `-new-token`, the configuration profile and its pages, the iPhone CA and the
@@ -1955,6 +1962,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- `cbb pair` out of a group waits for the phone on the running service's port, the one its
+  firewall rule opens (on OpenWrt the port in `/etc/config/cbb`), not on the default one.
+- `cbb action`, run by a user, no longer fails on the polkit rule when the actions that are
+  on need no right.
 - The Rust service fetches a file or a release archive once when two requests want it at the
   same time; the second waited on chunks the first had taken and could fail.
 - A lite member away from home reaches a hub that answers only one of its ways, as over VLESS

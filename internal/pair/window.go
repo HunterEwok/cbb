@@ -158,10 +158,6 @@ func Open(admin *group.Identity, code string, opt Options) (*Window, error) {
 	return w, nil
 }
 
-// Code returns the window's code, normalized to six digits; for a window
-// with a secret, the secret.
-func (w *Window) Code() string { return string(w.code) }
-
 // Done is closed when the window closes.
 func (w *Window) Done() <-chan struct{} { return w.done }
 
@@ -288,13 +284,6 @@ func (w *Window) succeed(r *Result) {
 	close(w.done)
 }
 
-// ServerTLS returns the TLS configuration for connections to this window.
-// It presents the certificate the window binds the exchange to: the admin's
-// identity when the window opened, which a renewal while it is open (an
-// admin's new admin CA, a renewed member certificate) does not change, or
-// every joiner would fail as with a wrong code.
-func (w *Window) ServerTLS() *tls.Config { return ServerTLS(w.admin) }
-
 // ServerTLS returns the TLS configuration for pairing connections: the
 // member's own certificate, and any client certificate, which the exchange
 // authenticates.
@@ -359,20 +348,6 @@ func joinerID(cs tls.ConnectionState) (group.DeviceID, error) {
 		return "", errors.New("pair: the joining device's key is not a P-256 key")
 	}
 	return group.ParseDeviceID(c.Subject.CommonName)
-}
-
-// Refuse answers a pairing connection, whose TLS handshake used ServerTLS,
-// with err, such as ErrClosed when no window is open, and closes it. The
-// joiner sees err instead of a broken handshake.
-func Refuse(ctx context.Context, conn *tls.Conn, err error) {
-	defer conn.Close()
-	ctx, cancel := context.WithTimeout(ctx, refuseTimeout)
-	defer cancel()
-	stop := context.AfterFunc(ctx, func() { conn.SetDeadline(time.Unix(1, 0)) })
-	defer stop()
-	// Read the joiner's first message before answering, as Serve does.
-	readFrame(conn)
-	writeFrame(conn, &frame{Error: codeOf(err)})
 }
 
 // Serve runs the member's side of one pairing connection, whose TLS

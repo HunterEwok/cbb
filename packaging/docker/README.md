@@ -64,8 +64,11 @@ docker compose -f compose.server.yaml exec forward cbb forward -show-key
 ## Building it
 
 ```sh
-CGO_ENABLED=0 GOARCH=amd64 go build -trimpath -o cbb-amd64 ./cmd/cbb
-sh packaging/docker/context.sh build amd64=cbb-amd64
+mkdir -p bin-amd64 && cp "$(sh member/packaging/build.sh linux/amd64)/cbb" bin-amd64/cbb
+for p in cbb-helper cbb-forward cbb-relay; do
+	CGO_ENABLED=0 GOARCH=amd64 go build -trimpath -o "bin-amd64/$p" "./cmd/$p"
+done
+sh packaging/docker/context.sh build amd64=bin-amd64/cbb
 docker build -t cbb build
 sh tools/e2e/docker.sh cbb     # two containers pair and sync
 ```

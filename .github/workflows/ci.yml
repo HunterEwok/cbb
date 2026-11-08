@@ -2246,6 +2246,7 @@ jobs:
       - name: cargo clippy
         run: |
           cargo clippy --locked --workspace --all-targets -- -D warnings
+          cargo clippy --locked -p cbb-lite --features benchtime --all-targets -- -D warnings # the bench's time-scaled build
           cargo clippy --locked -p cbb-embassy --features host --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member,tunnel --all-targets -- -D warnings

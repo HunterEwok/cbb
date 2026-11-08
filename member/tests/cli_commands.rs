@@ -2562,7 +2562,7 @@ fn pair_waits_on_the_service_port() {
     let file = dir.join("join.json");
     std::fs::write(&file, "").unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_cbb"))
-        .args(["pair", "-app", file.to_str().unwrap()])
+        .args(["pair", "-app", file.to_str().unwrap(), "-addr", "192.0.2.7"])
         .env("CBB_SOCKET", &sock)
         .env("CBB_STATE", dir.join("state"))
         .env("LC_ALL", "C")

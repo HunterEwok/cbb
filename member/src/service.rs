@@ -583,7 +583,7 @@ pub fn run(cfg: Config) -> Result<()> {
                 }
                 crate::admin::renew_admin_cas(&dir, &node);
                 let seen = (node.records().lock().unwrap().digest(), creds.changes());
-                if seen != cred_seen || cred_at.elapsed() >= CREDENTIAL_CHECK {
+                if seen != cred_seen || cred_at.elapsed() >= credential_check() {
                     creds.refresh(&node);
                     cred_seen = (node.records().lock().unwrap().digest(), creds.changes());
                     cred_at = std::time::Instant::now();
@@ -650,11 +650,24 @@ fn renew_every() -> Duration {
     std::env::var("CBB_TEST_RENEW_EVERY")
         .ok()
         .and_then(|v| v.parse().ok())
-        .map_or(Duration::from_secs(12 * 3600), Duration::from_millis)
+        .map_or_else(scaled_twice_a_day, Duration::from_millis)
 }
+
+/// Twelve hours, or in the bench's time-scaled build that scaled and at
+/// least five seconds, as Go's renewEvery.
+fn scaled_twice_a_day() -> Duration {
+    Duration::from_secs((cbb_core::benchtime::d(12 * 3600) as u64).max(if cbb_core::benchtime::scale() > 1 {
+        5
+    } else {
+        0
+    }))
+}
+
 /// How often the server credentials are looked at when nothing changed, as
 /// Go's renewEvery.
-const CREDENTIAL_CHECK: Duration = Duration::from_secs(12 * 3600);
+fn credential_check() -> Duration {
+    scaled_twice_a_day()
+}
 
 /// Every claim of the records with its state: what changes when a claim
 /// takes effect.

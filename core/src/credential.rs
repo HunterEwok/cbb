@@ -469,7 +469,8 @@ impl Store {
     /// sent a server credential for it is no longer in the group.
     pub fn period_stale(&self, root: &[u8], member: &dyn Fn(&KeyHash) -> bool, now_ms: i64) -> bool {
         let Some(p) = self.period_body(root) else { return true };
-        if p.expires_ms.saturating_sub(now_ms) < PERIOD_LIFETIME_MS - PERIOD_RENEW_MS {
+        let (lifetime, renew) = (crate::benchtime::d(PERIOD_LIFETIME_MS), crate::benchtime::d(PERIOD_RENEW_MS));
+        if p.expires_ms.saturating_sub(now_ms) < lifetime.saturating_sub(renew) {
             return true;
         }
         self.servers.keys().any(|m| !member(m))
@@ -550,7 +551,7 @@ pub fn period_body(group_tag: &str, tag: &str, key_spki: &[u8], version: u64, no
         kind: PERIOD.into(),
         group: group_tag.into(),
         version,
-        expires_ms: now_ms.saturating_add(PERIOD_LIFETIME_MS),
+        expires_ms: now_ms.saturating_add(crate::benchtime::d(PERIOD_LIFETIME_MS)),
         tag: tag.into(),
         key: key_spki.to_vec(),
         ..Body::default()

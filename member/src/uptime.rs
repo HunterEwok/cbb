@@ -16,7 +16,9 @@ pub fn now() -> Duration {
 /// The wall clock in milliseconds since the Unix epoch; in the tests,
 /// moved by test_offset_ms.
 pub fn wall_ms() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0) + test_offset_ms()
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+        + test_offset_ms()
+        + crate::benchtime::clock_offset_ms()
 }
 
 /// The milliseconds the Go service's tests move this service's wall clock
