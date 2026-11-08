@@ -677,7 +677,9 @@ fn phone(r: Option<&str>) -> bool {
 /// The device ID in an instance name, <device ID>._cbb._tcp.local.
 fn instance_id(fullname: &str) -> Option<DeviceId> {
     let label = fullname.strip_suffix(SERVICE)?.strip_suffix('.')?;
-    DeviceId::parse(label).ok()
+    // Without the " (n)" that mDNS adds when the name conflicts, as when
+    // the device's own registration answered for it before an update.
+    DeviceId::parse(&instance(label)).ok()
 }
 
 /// The addresses that would be published, IPv4 first, then routable IPv6,
@@ -704,6 +706,10 @@ mod tests {
         assert_eq!(instance("abc (3)._cbb._tcp.local."), "abc");
         assert_eq!(instance("abc (x)._cbb._tcp.local."), "abc (x)");
         assert_eq!(instance("abc ()._cbb._tcp.local."), "abc ()");
+        let id = "90571e1e690522fc4764f498f647e534";
+        let want = DeviceId::parse(id).ok();
+        assert_eq!(instance_id(&format!("{id} (9).{SERVICE}")), want);
+        assert_eq!(instance_id(&format!("{id}.{SERVICE}")), want);
     }
 
     /// A connection this member ended to send a new hello (a mode, a tunnel

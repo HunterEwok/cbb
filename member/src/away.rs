@@ -89,6 +89,9 @@ pub struct Away {
     standby: Mutex<Option<String>>,
     /// The hub passes a hub above's offer on before it gives way.
     giving_way: AtomicBool,
+    /// The hub is moving to another device: it offers itself to no member
+    /// that connects meanwhile, which would keep it as a hub after the move.
+    moving: AtomicBool,
     /// The guest tunnels of the open invitations, on the hub.
     guests: invite::Guests,
     log: Arc<dyn Fn(&str) + Send + Sync>,
@@ -144,6 +147,7 @@ impl Away {
             fetching: Arc::new(AtomicBool::new(false)),
             standby: Mutex::new(None),
             giving_way: AtomicBool::new(false),
+            moving: AtomicBool::new(false),
             guests: Default::default(),
             log,
         }

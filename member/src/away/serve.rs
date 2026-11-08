@@ -10,6 +10,7 @@
 //! address it came from.
 
 use std::net::{SocketAddr, TcpListener};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -195,7 +196,8 @@ impl Away {
         let share = || self.share_for(node, from).into_iter().collect();
         let Some((key, psk)) = peer.tunnel_key.as_ref() else { return share() };
         let mut cur = self.st.lock().unwrap();
-        let Some(st) = cur.as_mut().filter(|s| s.is_hub) else {
+        let moving = self.moving.load(Ordering::SeqCst);
+        let Some(st) = cur.as_mut().filter(|s| s.is_hub && !moving) else {
             drop(cur);
             return share();
         };

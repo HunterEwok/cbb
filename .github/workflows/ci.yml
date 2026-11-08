@@ -1700,7 +1700,8 @@ jobs:
           for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
           sudo /usr/local/bin/cbb status | grep -q 'Not in a group'
           [ ! -e "/Library/Application Support/cbb-package" ]
-          [ -x /usr/local/bin/cbb-helper ] && [ -x "/Library/Application Support/cbb/bin/cbb-helper" ]
+          # The service's folder is the _cbb account's alone.
+          [ -x /usr/local/bin/cbb-helper ] && sudo test -x "/Library/Application Support/cbb/bin/cbb-helper"
           sudo sh /usr/local/share/cbb/uninstall.sh --purge
           for f in /Applications/CBB.app /usr/local/bin/cbb /usr/local/bin/cbb-helper "/Library/Application Support/cbb" /Library/LaunchDaemons/tools.cbb.plist; do
             if [ -e "$f" ]; then

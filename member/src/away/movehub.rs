@@ -8,6 +8,7 @@
 //! out such a command.
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use serde::{Deserialize, Serialize};
 
@@ -243,7 +244,22 @@ impl Away {
         if order.clients.len() > MAX_CLIENTS {
             return Err(Error::msg(format!("this hub has more than {} clients", MAX_CLIENTS - 1)));
         }
-        let res = admin.hub_command(&d, encode(&order)?)?;
+        self.moving.store(true, Ordering::SeqCst);
+        let res = self.move_to(admin, &d, &order, self_psk, psks);
+        self.moving.store(false, Ordering::SeqCst);
+        res
+    }
+
+    /// The rest of move_hub, while the hub offers itself to no one.
+    fn move_to(
+        &self,
+        admin: &Admin,
+        d: &Device,
+        order: &HubOrder,
+        self_psk: Vec<u8>,
+        psks: Vec<(String, Vec<u8>)>,
+    ) -> Result<()> {
+        let res = admin.hub_command(d, encode(order)?)?;
         let Some(offer) = res.tunnel.and_then(|v| serde_json::from_value::<TunnelOffer>(v).ok()) else {
             return Err(Error::msg(format!(
                 "{} became the hub but sent no offer; turn sync away from home off and on again on this device",
@@ -269,7 +285,7 @@ impl Away {
             sent.len()
         ));
         wait_clients_left(node, &sent, &self.log);
-        self.keep_offer(&d, offer, self_psk, |st| {
+        self.keep_offer(d, offer, self_psk, |st| {
             // A client from now on, with the offers it keeps.
             let hubs = std::mem::take(&mut st.hubs);
             st.clear_periods();

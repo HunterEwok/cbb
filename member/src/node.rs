@@ -16,7 +16,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read};
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
@@ -214,7 +214,7 @@ pub struct Node {
     /// Wakes the dial loops early: the member resumed or found an address.
     kick: (Mutex<u64>, Condvar),
     /// Counts redial: the records may let in devices refused until now.
-    redials: AtomicU64,
+    redials: AtomicUsize,
     /// The commands this member sent, by ID, waiting for their results.
     waiting: Mutex<HashMap<String, Waiting>>,
     /// The commands a phone passed on, by ID: where each came from, and
@@ -359,6 +359,8 @@ struct Conn {
     tunneled: bool,
     closed: AtomicBool,
     bye: AtomicBool,
+    /// The member with the lower device ID dialed it.
+    lower_dialed: bool,
     /// The gets the peer asked for, served in order a chunk at a time.
     gets: Mutex<VecDeque<wire::Get>>,
     /// The fetches waiting for the peer's chunks, by blob.
@@ -408,7 +410,7 @@ impl Node {
             keep_identity: None,
             paused: AtomicBool::new(false),
             kick: (Mutex::new(0), Condvar::new()),
-            redials: AtomicU64::new(0),
+            redials: AtomicUsize::new(0),
             waiting: Mutex::new(HashMap::new()),
             passed: Mutex::new(HashMap::new()),
             on_message: RwLock::new(None),
@@ -736,7 +738,7 @@ impl Node {
     }
 
     /// How many times redial was called.
-    pub fn redials(&self) -> u64 {
+    pub fn redials(&self) -> usize {
         self.redials.load(Ordering::SeqCst)
     }
 
@@ -1365,7 +1367,7 @@ impl Node {
         // How it ended is logged; a connection that came up and ended is
         // dialed again at once when this member ended it to connect again,
         // else after a second.
-        let _ = self.run(sock, conn, id, chain, addr);
+        let _ = self.run(sock, conn, id, chain, addr, true);
         Ok(Dialed { up: true, again: self.reconnects.load(Ordering::SeqCst) != before })
     }
 
@@ -1478,7 +1480,7 @@ impl Node {
         {
             return Err(Error::msg(format!("{id} at {addr} is not the caller this listener expects")));
         }
-        self.run(sock, conn, id, chain, addr)
+        self.run(sock, conn, id, chain, addr, false)
     }
 
     /// Completes the TLS handshake and checks the peer: usage is the side
@@ -1515,7 +1517,21 @@ impl Node {
         Ok((conn, id, chain))
     }
 
-    fn run(&self, sock: TcpStream, conn: tls::Session, id: DeviceId, chain: Vec<Cert>, addr: SocketAddr) -> Result<()> {
+    /// Runs a member connection until it ends; dialed says this member
+    /// dialed it. A new connection to a peer replaces the old one, as a
+    /// reconnect does, unless the old one was dialed by the member with the
+    /// lower device ID and this one was not, as Go's: when both dial at once
+    /// (a redial), the two keep the same connection.
+    fn run(
+        &self,
+        sock: TcpStream,
+        conn: tls::Session,
+        id: DeviceId,
+        chain: Vec<Cert>,
+        addr: SocketAddr,
+        dialed: bool,
+    ) -> Result<()> {
+        let lower_dialed = dialed == (self.ident.read().unwrap().id < id);
         sock.set_read_timeout(Some(TIMEOUT)).context("the connection broke")?;
         let why = self.records.lock().unwrap().refused_peer(&chain);
         let records_only = matches!(why, Some(Refusal::NotListed | Refusal::Stopped | Refusal::TakenOver));
@@ -1539,6 +1555,7 @@ impl Node {
             tunneled: matches!(addr.ip(), std::net::IpAddr::V6(a) if a.octets()[..4] == [0xfd, 0x00, 0x0c, 0xbb]),
             closed: AtomicBool::new(false),
             bye: AtomicBool::new(false),
+            lower_dialed,
             gets: Mutex::new(VecDeque::new()),
             sinks: Mutex::new(HashMap::new()),
         });
@@ -1546,6 +1563,15 @@ impl Node {
             let mut conns = self.conns.lock().unwrap();
             if self.is_closed() || self.is_paused() {
                 return Err(Error::msg("the service is stopping"));
+            }
+            if let Some(old) = conns.get(&id)
+                && old.lower_dialed
+                && !lower_dialed
+                && !old.closed.load(Ordering::SeqCst)
+                && !replaces(&addr, &old.addr)
+            {
+                let _ = c.sock.shutdown(Shutdown::Both);
+                return Err(Error::msg("the connection the lower device ID dialed is up"));
             }
             if let Some(old) = conns.insert(id.clone(), c.clone()) {
                 old.close(false);

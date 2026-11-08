@@ -42,7 +42,7 @@ pub struct Store {
     served: Mutex<HashMap<Vec<u8>, u64>>,
     /// The largest blob served through the group's tunnel: a hub's limit
     /// away from home caps its whole star, as Go's serves.
-    away: std::sync::atomic::AtomicU64,
+    away: Mutex<u64>,
 }
 
 fn hex(b: &[u8]) -> String {
@@ -61,22 +61,18 @@ pub fn empty(state_dir: &Path, log: &dyn Fn(&str)) {
 
 impl Store {
     pub fn open(state_dir: &Path) -> Store {
-        Store {
-            dir: state_dir.join("content"),
-            served: Mutex::new(HashMap::new()),
-            away: std::sync::atomic::AtomicU64::new(u64::MAX),
-        }
+        Store { dir: state_dir.join("content"), served: Mutex::new(HashMap::new()), away: Mutex::new(u64::MAX) }
     }
 
     /// Sets the largest blob served through the group's tunnel.
     pub fn set_away_limit(&self, n: u64) {
-        self.away.store(n, std::sync::atomic::Ordering::Relaxed);
+        *self.away.lock().unwrap() = n;
     }
 
     /// Whether the blob sum is served to a peer through the group's tunnel:
     /// only one held within the limit away from home.
     pub fn serves_away(&self, sum: &[u8]) -> bool {
-        self.held(sum).is_some_and(|n| n <= self.away.load(std::sync::atomic::Ordering::Relaxed))
+        self.held(sum).is_some_and(|n| n <= *self.away.lock().unwrap())
     }
 
     fn path(&self, sum: &[u8]) -> PathBuf {
