@@ -80,7 +80,17 @@ All notable changes to cbb are documented in this file. The format follows
   The Rust service is a Bluetooth keyboard and a TV's remote through cbb-helper, which runs
   the Go service's code for both (`internal/peripheral`): `cbb keyboard`, `cbb remote`, their
   status, the remote pastes the user sends there, and the quick action `keyboard-layout`
-  (`TestLitePeripherals`).
+  (`TestLitePeripherals`). The Rust service passes the group's signed release on as the Go
+  service does: it keeps the newest that checks out, names it in its hello, sends it to the
+  computers that hold an older one, shows it in status, and serves the archives that cbb
+  update installed to its peers (`release`, `release-held`, `release-file`, `release-get`,
+  `release-want`, `TestLiteRelease`, `TestLiteReleaseArchives`). The Rust `cbb update` hands
+  the service the release and the archive it installed, downloads on a hub the archives the
+  members update from, and installs from the group when no update server answers.
+- A request to the Rust service while it is still starting waits for it rather than hearing
+  that the device is in no group.
+- The Rust member no longer can deadlock when a renewed certificate and new records come at
+  once (seen in `TestLiteTakeover`).
 - A pairing window closed while it sent its Welcome now ends when that attempt ends, also when
   the attempt fails, in Go and in Rust; an invitation cancelled at that moment no longer
   crashes the Go service.

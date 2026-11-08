@@ -516,7 +516,7 @@ and of the program.
 | `os_version` | string or absent | the system's version as the user knows it (`15.1`, `11 (build 26100)`, `Debian GNU/Linux 13 (trixie)`), 1-32 bytes without control characters |
 | `version` | string or absent | the sender's own version (`0.5.0`), the same limits |
 | `mac` | string or absent | the MAC address of the network card on the home network, six lowercase hex bytes with colons; phones send none, as their systems hide it |
-| `archive` | string or absent | the release archive this device installs with `cbb update` (`cbb-linux-arm64.tar.gz`, section 16), so that its group's hub fetches it: `cbb-` and two or three parts of 1-16 lowercase letters and digits joined by `-`, then `.tar.gz` or `.zip`; absent on a copy that another tool updates (Homebrew, winget, a package), on phones and on the lite member |
+| `archive` | string or absent | the release archive this device installs with `cbb update` (`cbb-linux-arm64.tar.gz`, section 16), so that its group's hub fetches it: `cbb-` and two or three parts of 1-16 lowercase letters and digits joined by `-`, then `.tar.gz` or `.zip`; absent on a copy that another tool updates (Homebrew, winget, a package) and on phones |
 
 ### Event
 

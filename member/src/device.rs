@@ -19,10 +19,26 @@ pub fn own() -> &'static DeviceInfo {
             os_version: fs::read_to_string("/etc/os-release").map(|s| os_release(&s)).unwrap_or_default(),
             version: env!("CARGO_PKG_VERSION").into(),
             mac: mac(),
-            archive: crate::update::archive_name().unwrap_or_default(),
+            archive: self_archive(),
         }
         .cleaned()
     })
+}
+
+/// The release archive cbb update installs here, for the group's hub to
+/// fetch (docs/protocol.md, section 16, "In the group"): none for a
+/// development build or a copy that a package manager updates, as Go's
+/// selfArchive.
+fn self_archive() -> String {
+    if crate::service::VERSION == "dev" {
+        return String::new();
+    }
+    let (dir, _) = crate::update::paths();
+    let st = crate::update::load_state(&dir).unwrap_or_default();
+    if !st.method.is_empty() && st.method != "get" {
+        return String::new();
+    }
+    crate::update::archive_name().unwrap_or_default()
 }
 
 /// The pretty name of os-release, or its name and version when that is too

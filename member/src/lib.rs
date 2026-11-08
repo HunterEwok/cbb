@@ -1396,6 +1396,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         let work =
             if root { work.clone() } else { std::env::temp_dir().join(format!("cbb-update-{}", std::process::id())) };
         let _ = std::fs::create_dir_all(&work);
+        let link = ServiceLink(g);
         let u = update::Updater {
             work: work.clone(),
             roots,
@@ -1407,6 +1408,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
             install: &update::install,
             healthy: &healthy,
             log: &log,
+            group: Some(&link),
         };
         let found = u.check(&st);
         if !root {
@@ -1422,6 +1424,9 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
             st.checked_ms = update::now_ms();
             st.available = if found.newer && !found.failed { r.version.clone() } else { String::new() };
             update::save_state(&dir, &st)?;
+            if found.source != update::FROM_GROUP {
+                u.archives_for_group(found.source, r);
+            }
         }
         let v = service::VERSION;
         match () {
@@ -1462,6 +1467,113 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         log(&format!("cbb update: {}", e.for_user()));
     }
     res
+}
+
+/// The service as cbb update's link to the group (update::Group), as Go's
+/// cbb update asks it: a service that does not run costs nothing but the
+/// group's help.
+struct ServiceLink<'a>(&'a Global);
+
+impl ServiceLink<'_> {
+    fn open(&self, op: &str, wait: Duration) -> Result<(UnixStream, control::Reader<UnixStream>)> {
+        let path = if control::is_admin(op) { control::admin_socket(&self.0.socket) } else { self.0.socket.clone() };
+        let c = UnixStream::connect(&path).context("cannot reach the service")?;
+        let _ = c.set_read_timeout(Some(wait));
+        let _ = c.set_write_timeout(Some(wait));
+        let r = control::Reader::new(c.try_clone().context("cannot reach the service")?);
+        Ok((c, r))
+    }
+
+    fn answer(r: &mut control::Reader<UnixStream>) -> Result<control::Message> {
+        check(r.read()?.ok_or_else(|| Error::msg("the service closed the connection"))?)
+    }
+
+    fn ask(&self, op: &str, payload: Vec<u8>) -> Result<control::Message> {
+        let (mut c, mut r) = self.open(op, Duration::from_secs(10))?;
+        control::write(
+            &mut c,
+            &control::Message::new(control::Header { op: op.into(), ..Default::default() }, payload),
+        )?;
+        Self::answer(&mut r)
+    }
+}
+
+impl update::Group for ServiceLink<'_> {
+    fn share(&self, set: &serde_json::Value) {
+        if let Ok(data) = serde_json::to_vec(set) {
+            let _ = self.ask("release", data);
+        }
+    }
+
+    fn held(&self) -> Result<serde_json::Value> {
+        let m = self.ask("release-held", Vec::new())?;
+        serde_json::from_slice(&m.payload).context("the service's release does not decode")
+    }
+
+    fn get(&self, sha: &str, size: i64, path: &std::path::Path) -> Result<()> {
+        use std::io::Write;
+        // The service tries its peers for a while before it answers.
+        let (mut c, mut r) = self.open("release-get", Duration::from_secs(15 * 60))?;
+        let h = control::Header { op: "release-get".into(), value: sha.into(), ..Default::default() };
+        control::write(&mut c, &control::Message::new(h, Vec::new()))?;
+        let first = Self::answer(&mut r)?;
+        if first.header.part.as_ref().map(|p| p.size) != Some(size) {
+            return Err(Error::msg("the service answered with another file"));
+        }
+        let mut f = std::fs::File::create(path).context("cannot keep the archive")?;
+        let mut got: i64 = 0;
+        loop {
+            let m = Self::answer(&mut r)?;
+            got += m.payload.len() as i64;
+            if got > size {
+                return Err(Error::msg("the service sent more than the archive"));
+            }
+            f.write_all(&m.payload).context("cannot keep the archive")?;
+            if m.header.done {
+                break;
+            }
+        }
+        if got != size {
+            return Err(Error::msg("the service sent less than the archive"));
+        }
+        Ok(())
+    }
+
+    fn keep(&self, sha: &str, size: i64, path: &std::path::Path) {
+        use std::io::Read;
+        let res = (|| -> Result<()> {
+            let mut f = std::fs::File::open(path).context("cannot read the archive")?;
+            let (mut c, mut r) = self.open("release-file", Duration::from_secs(120))?;
+            let part = control::Part { size, ..Default::default() };
+            let h = control::Header {
+                op: "release-file".into(),
+                value: sha.into(),
+                part: Some(part),
+                ..Default::default()
+            };
+            control::write(&mut c, &control::Message::new(h, Vec::new()))?;
+            let mut buf = vec![0; 1 << 20];
+            loop {
+                let n = f.read(&mut buf).context("cannot read the archive")?;
+                if n == 0 {
+                    break;
+                }
+                let h = control::Header { op: "data".into(), ..Default::default() };
+                control::write(&mut c, &control::Message::new(h, buf[..n].to_vec()))?;
+            }
+            Self::answer(&mut r).map(|_| ())
+        })();
+        if let Err(e) = res {
+            eprintln!("cbb: the service did not take the archive to serve to the group: {}", e.for_log());
+        }
+    }
+
+    fn want(&self) -> Vec<String> {
+        self.ask("release-want", Vec::new())
+            .ok()
+            .and_then(|m| serde_json::from_slice::<Option<Vec<String>>>(&m.payload).ok().flatten())
+            .unwrap_or_default()
+    }
 }
 
 /// The command that updates a copy from method.
