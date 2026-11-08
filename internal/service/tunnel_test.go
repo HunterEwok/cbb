@@ -66,12 +66,12 @@ func TestTunnelKeys(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
-	for _, s := range []*testService{pi, deck, mac} {
+	laptop := startService(t, &h, "laptop")
+	for _, s := range []*testService{pi, deck, laptop} {
 		turnTunnelOn(t, s)
 	}
 	pairWith(t, pi, deck)
-	pairWith(t, pi, mac)
+	pairWith(t, pi, laptop)
 
 	// Make the pi the hub, as cbb will when the user turns it on.
 	pi.stop()
@@ -87,7 +87,7 @@ func TestTunnelKeys(t *testing.T) {
 	piID := pi.status(t).Device
 	hubKey := st.Key.Public()
 
-	for _, s := range []*testService{deck, mac} {
+	for _, s := range []*testService{deck, laptop} {
 		// The members dial the restarted hub again with their backoff,
 		// which a loaded machine stretches past 10 s.
 		waitUpTo(t, 30*time.Second, s.name+" keeps the hub's offer", func() bool {
@@ -119,8 +119,8 @@ func TestTunnelKeys(t *testing.T) {
 	}
 
 	// A member that is no admin making itself a hub too gets nowhere: the
-	// Mac keeps the offer of the pi, the group's root.
-	macID := mac.status(t).Device
+	// laptop keeps the offer of the pi, the group's root.
+	laptopID := laptop.status(t).Device
 	deck.stop()
 	dst := tunnelState(t, deck)
 	dst.IsHub, dst.Hubs = true, nil
@@ -128,25 +128,25 @@ func TestTunnelKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	deck = restartService(t, &h, deck)
-	waitUpTo(t, 30*time.Second, "the deck takes the Mac's key", func() bool {
+	waitUpTo(t, 30*time.Second, "the deck takes the laptop's key", func() bool {
 		for _, m := range tunnelState(t, deck).Members {
-			if m.Device == macID {
+			if m.Device == laptopID {
 				return true
 			}
 		}
 		return false
 	})
-	if st := tunnelState(t, mac); st.Hub(piID) == nil || len(st.Hubs) != 1 {
-		t.Errorf("the Mac took the offer of a member that is no admin")
+	if st := tunnelState(t, laptop); st.Hub(piID) == nil || len(st.Hubs) != 1 {
+		t.Errorf("the laptop took the offer of a member that is no admin")
 	}
 
-	// Removing the Mac drops it from the hub.
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "mac"}, ""); err != nil {
+	// Removing the laptop drops it from the hub.
+	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "laptop"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the hub drops the Mac", func() bool {
+	waitFor(t, "the hub drops the laptop", func() bool {
 		for _, m := range tunnelState(t, pi).Members {
-			if m.Device == macID {
+			if m.Device == laptopID {
 				return false
 			}
 		}

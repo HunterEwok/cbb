@@ -70,8 +70,8 @@ func TestLiteNotDialed(t *testing.T) {
 	}()
 	var h hub
 	pi := startService(t, &h, "pi")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
-	pairWith(t, pi, mac) // the group exists from here
+	laptop := startService(t, &h, "laptop")
+	pairWith(t, pi, laptop) // the group exists from here
 	// The greatest device ID: a full member would dial a full member with it.
 	publishLite(&h, strings.Repeat("f", 32), pi.status(t).Group, ln.Addr().(*net.TCPAddr).Port)
 	time.Sleep(2 * time.Second)
@@ -1009,18 +1009,18 @@ func TestLiteMember(t *testing.T) {
 	dir := joinLite(t, bin, pi)
 	pa := pi.addr()
 
-	// The lite member dials the computers, a Mac too, and syncs with them.
-	mac := startRole(t, &h, "mac", group.OSMacOS)
-	pairWith(t, pi, mac)
+	// The lite member dials the computers, the desk too, and syncs with them.
+	desk := startService(t, &h, "desk")
+	pairWith(t, pi, desk)
 	la := laptop.addr()
-	ma := mac.addr()
+	da := desk.addr()
 	free, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	port := free.Addr().(*net.TCPAddr).Port
 	free.Close()
-	lite := startLite(t, bin, dir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", pa, "-peer", la, "-peer", ma)
+	lite := startLite(t, bin, dir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", pa, "-peer", la, "-peer", da)
 	// The control socket answers while the service still loads its identity.
 	waitFor(t, "the lite member in the group", func() bool {
 		_, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
@@ -1034,7 +1034,7 @@ func TestLiteMember(t *testing.T) {
 	if _, err := lite.do(t, control.Header{Op: control.OpCopy}, "from the lite member"); err != nil {
 		t.Fatal(err)
 	}
-	for _, s := range []*testService{pi, laptop, mac} {
+	for _, s := range []*testService{pi, laptop, desk} {
 		waitFor(t, s.name+" has the lite text", func() bool { return s.paste(t) == "from the lite member" })
 	}
 	if _, err := laptop.do(t, control.Header{Op: control.OpCopy}, "from the laptop"); err != nil {
@@ -1134,23 +1134,23 @@ func TestLiteMember(t *testing.T) {
 		t.Errorf("cbb sync on on the lite member: %v", err)
 	}
 
-	// The lite member dials a Mac as it dials every full member; with the
+	// The lite member dials the desk as it dials every full member; with the
 	// other computers off the two still sync.
 	publishLite(&h, st.Device, st.Group, port)
-	waitFor(t, "the Mac connected to all three", func() bool { return len(mac.status(t).Peers) == 3 })
+	waitFor(t, "the desk connected to all three", func() bool { return len(desk.status(t).Peers) == 3 })
 	pi.stop()
 	laptop.stop()
-	waitFor(t, "the Mac and the lite member alone", func() bool {
-		return len(mac.status(t).Peers) == 1 && len(lite.status(t).Peers) == 1
+	waitFor(t, "the desk and the lite member alone", func() bool {
+		return len(desk.status(t).Peers) == 1 && len(lite.status(t).Peers) == 1
 	})
-	if _, err := mac.do(t, control.Header{Op: control.OpCopy}, "from the Mac"); err != nil {
+	if _, err := desk.do(t, control.Header{Op: control.OpCopy}, "from the desk"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member has the Mac text", func() bool { return lite.paste(t) == "from the Mac" })
+	waitFor(t, "the lite member has the desk text", func() bool { return lite.paste(t) == "from the desk" })
 	if _, err := lite.do(t, control.Header{Op: control.OpCopy}, "back from the lite member"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the Mac has the lite text", func() bool { return mac.paste(t) == "back from the lite member" })
+	waitFor(t, "the desk has the lite text", func() bool { return desk.paste(t) == "back from the lite member" })
 }
 
 // TestLiteRemotePaste: an admin's paste reaches the lite member's tmux

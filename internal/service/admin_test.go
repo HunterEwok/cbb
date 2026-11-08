@@ -308,13 +308,13 @@ func TestRename(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
+	laptop := startService(t, &h, "laptop")
 	pairWith(t, pi, deck)
-	pairWith(t, pi, mac)
-	waitFor(t, "the Mac lists every device", func() bool { return listed(mac.devices(t)) == "deck mac pi" })
+	pairWith(t, pi, laptop)
+	waitFor(t, "the laptop lists every device", func() bool { return listed(laptop.devices(t)) == "deck laptop pi" })
 	makeAdmin(t, pi, deck)
-	if _, err := mac.do(t, control.Header{Op: control.OpRename, Name: "deck", NewName: "steam deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
-		t.Errorf("rename on the Mac: %v", err)
+	if _, err := laptop.do(t, control.Header{Op: control.OpRename, Name: "deck", NewName: "steam deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
+		t.Errorf("rename on the laptop: %v", err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpRename, Name: "deck", NewName: " "}, ""); err == nil || !strings.Contains(err.Error(), "1 to 64") {
 		t.Errorf("an empty name: %v", err)
@@ -331,10 +331,10 @@ func TestRename(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpRename, Name: "pi", NewName: "pi4"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	for _, s := range []*testService{pi, deck, mac} {
-		waitFor(t, s.name+" takes the new names", func() bool { return listed(s.devices(t)) == "mac pi4 steam deck" })
+	for _, s := range []*testService{pi, deck, laptop} {
+		waitFor(t, s.name+" takes the new names", func() bool { return listed(s.devices(t)) == "laptop pi4 steam deck" })
 	}
-	for _, d := range mac.devices(t) {
+	for _, d := range laptop.devices(t) {
 		if d.Name == "steam deck" && (!d.Admin || d.Role != group.RoleFull) || d.Name == "pi4" && !d.Root {
 			t.Errorf("after the rename: %+v", d)
 		}
@@ -446,13 +446,13 @@ func TestHubsTable(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
+	laptop := startService(t, &h, "laptop")
 	pairWith(t, pi, deck)
-	pairWith(t, pi, mac)
-	waitFor(t, "the Mac lists every device", func() bool { return listed(mac.devices(t)) == "deck mac pi" })
+	pairWith(t, pi, laptop)
+	waitFor(t, "the laptop lists every device", func() bool { return listed(laptop.devices(t)) == "deck laptop pi" })
 	makeAdmin(t, pi, deck)
-	if _, err := mac.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
-		t.Errorf("hubs on the Mac: %v", err)
+	if _, err := laptop.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
+		t.Errorf("hubs on the laptop: %v", err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"deck", "deck"}}, ""); err == nil || !strings.Contains(err.Error(), "twice") {
 		t.Errorf("a hub named twice: %v", err)
@@ -461,7 +461,7 @@ func TestHubsTable(t *testing.T) {
 		t.Errorf("no hubs: %v", err)
 	}
 	var deckID string
-	for _, d := range mac.devices(t) {
+	for _, d := range laptop.devices(t) {
 		if d.Name == "deck" {
 			deckID = d.ID
 		}
@@ -469,7 +469,7 @@ func TestHubsTable(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{deckID, "pi"}}, ""); err != nil {
 		t.Fatal(err)
 	}
-	for _, s := range []*testService{pi, deck, mac} {
+	for _, s := range []*testService{pi, deck, laptop} {
 		waitFor(t, s.name+" puts the deck first", func() bool {
 			order := hubOrderIn(s.dir)
 			return len(order) == 2 && string(order[0]) == deckID

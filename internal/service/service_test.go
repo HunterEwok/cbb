@@ -1425,24 +1425,24 @@ func TestDevicesAndRevoke(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
+	laptop := startService(t, &h, "laptop")
 	pairWith(t, pi, deck)
-	pairWith(t, pi, mac)
-	for _, s := range []*testService{pi, deck, mac} {
-		waitFor(t, s.name+" lists every device", func() bool { return listed(s.devices(t)) == "deck mac pi" })
+	pairWith(t, pi, laptop)
+	for _, s := range []*testService{pi, deck, laptop} {
+		waitFor(t, s.name+" lists every device", func() bool { return listed(s.devices(t)) == "deck laptop pi" })
 	}
-	waitFor(t, "the Mac connects to both", func() bool { return len(mac.status(t).Peers) == 2 })
-	for _, d := range mac.devices(t) {
+	waitFor(t, "the laptop connects to both", func() bool { return len(laptop.status(t).Peers) == 2 })
+	for _, d := range laptop.devices(t) {
 		if d.Admin || d.Root != (d.Name == "pi") || !d.Online || d.Role != "full" {
-			t.Errorf("on the Mac: %+v", d)
+			t.Errorf("on the laptop: %+v", d)
 		}
-		if d.Self != (d.Name == "mac") {
+		if d.Self != (d.Name == "laptop") {
 			t.Errorf("self is wrong: %+v", d)
 		}
 	}
 
-	if _, err := mac.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
-		t.Errorf("revoke on the Mac: %v", err)
+	if _, err := laptop.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
+		t.Errorf("revoke on the laptop: %v", err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "cannot remove itself") {
 		t.Errorf("revoking itself: %v", err)
@@ -1450,15 +1450,15 @@ func TestDevicesAndRevoke(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "toaster"}, ""); err == nil {
 		t.Error("revoked a device that is not there")
 	}
-	if _, err := deck.do(t, control.Header{Op: control.OpAdmin, Name: "mac"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
+	if _, err := deck.do(t, control.Header{Op: control.OpAdmin, Name: "laptop"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
 		t.Errorf("admin on a member that is not the root: %v", err)
 	}
 	makeAdmin(t, pi, deck)
 	if _, err := pi.do(t, control.Header{Op: control.OpAdmin, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "already an admin") {
 		t.Errorf("making an admin twice: %v", err)
 	}
-	waitFor(t, "the Mac sees the admin", func() bool {
-		for _, d := range mac.devices(t) {
+	waitFor(t, "the laptop sees the admin", func() bool {
+		for _, d := range laptop.devices(t) {
 			if d.Name == "deck" {
 				return d.Admin
 			}
@@ -1469,16 +1469,16 @@ func TestDevicesAndRevoke(t *testing.T) {
 		t.Errorf("revoking the root: %v", err)
 	}
 	// The admin removes a member.
-	m, err := deck.do(t, control.Header{Op: control.OpRevoke, Name: "MAC"}, "")
-	if err != nil || m.Name != "mac" {
-		t.Fatalf("revoke the Mac: %+v, %v", m, err)
+	m, err := deck.do(t, control.Header{Op: control.OpRevoke, Name: "LAPTOP"}, "")
+	if err != nil || m.Name != "laptop" {
+		t.Fatalf("revoke the laptop: %+v, %v", m, err)
 	}
 	for _, s := range []*testService{pi, deck} {
-		waitFor(t, s.name+" drops the Mac", func() bool {
+		waitFor(t, s.name+" drops the laptop", func() bool {
 			return listed(s.devices(t)) == "deck pi" && len(s.status(t).Peers) == 1
 		})
 	}
-	waitFor(t, "the Mac is alone", func() bool { return len(mac.status(t).Peers) == 0 })
+	waitFor(t, "the laptop is alone", func() bool { return len(laptop.status(t).Peers) == 0 })
 	// The root removes the admin.
 	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err != nil {
 		t.Fatalf("revoke the admin: %v", err)
