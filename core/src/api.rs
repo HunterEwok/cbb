@@ -194,6 +194,7 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
         "new_device_key" => new_device_key(),
         "sign_digest" => sign_digest(serde_json::from_value(args).map_err(bad_args)?),
         "arrange" => arrange(serde_json::from_value(args).map_err(bad_args)?),
+        "keyboard" => keyboard(serde_json::from_value(args).map_err(bad_args)?),
         _ => group::dispatch(op, &args)
             .or_else(|| signed::dispatch(op, &args))
             .unwrap_or_else(|| Err(refuse(Code::Op, Error::msg(alloc::format!("The core has no call named {op:?}."))))),
@@ -239,6 +240,35 @@ fn arrange(a: ArrangeArgs) -> Result<Vec<u8>, Refusal> {
     let mut m = serde_json::Map::new();
     m.insert("view".into(), serde_json::to_value(arr.view(&a.devices, a.me.as_deref())).unwrap_or_default());
     m.insert("stored".into(), serde_json::to_value(&arr).unwrap_or_default());
+    Ok(json(Value::Object(m)))
+}
+
+/// The arguments of `keyboard`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct KeyboardArgs {
+    layout: String,
+    #[serde(default)]
+    text: String,
+}
+
+/// `keyboard`: a phone as a Bluetooth keyboard (crate::keyboard): the
+/// reports that type text in the host's layout, each base64, the report
+/// map, and the characters the layout has no key for (no reports then).
+fn keyboard(a: KeyboardArgs) -> Result<Vec<u8>, Refusal> {
+    use crate::keyboard::{DESCRIPTOR, Layout};
+    let layout = Layout::from_name(&a.layout)
+        .ok_or_else(|| refuse(Code::Request, Error::msg("The core knows no such keyboard layout.")))?;
+    let mut m = serde_json::Map::new();
+    let untypeable: String = layout.untypeable(&a.text).into_iter().collect();
+    let reports: Vec<Value> = if untypeable.is_empty() {
+        layout.reports(&a.text).unwrap_or_default().iter().map(|r| b64_value(r)).collect()
+    } else {
+        Vec::new()
+    };
+    m.insert("reports".into(), Value::Array(reports));
+    m.insert("untypeable".into(), Value::String(untypeable));
+    m.insert("map".into(), b64_value(&DESCRIPTOR));
     Ok(json(Value::Object(m)))
 }
 
@@ -717,6 +747,23 @@ mod tests {
         assert_eq!(code(&short), Code::Request as u64);
         let bad = ask("sign_digest", serde_json::json!({"pkcs8": enc(b"key"), "digest": enc(&digest)}));
         assert_eq!(code(&bad), Code::Request as u64);
+    }
+
+    /// keyboard gives the reports that type a text, or names the
+    /// characters the layout has no key for, and refuses a layout it does
+    /// not know.
+    #[test]
+    fn keyboard_types_or_names_the_characters() {
+        let b64 = |v: &Value| base64::engine::general_purpose::STANDARD.decode(v.as_str().unwrap()).unwrap();
+        let ok = ask("keyboard", serde_json::json!({"layout": "us", "text": "aA"}));
+        let reports: Vec<Vec<u8>> = ok["ok"]["reports"].as_array().unwrap().iter().map(b64).collect();
+        assert_eq!(reports, [vec![0, 0, 4, 0, 0, 0, 0, 0], vec![0; 8], vec![2, 0, 4, 0, 0, 0, 0, 0], vec![0; 8]]);
+        assert_eq!(ok["ok"]["untypeable"], "");
+        assert_eq!(b64(&ok["ok"]["map"]), crate::keyboard::DESCRIPTOR);
+        let no = ask("keyboard", serde_json::json!({"layout": "ru", "text": "aбb a"}));
+        assert_eq!(no["ok"]["untypeable"], "ab");
+        assert!(no["ok"]["reports"].as_array().unwrap().is_empty());
+        assert_eq!(code(&ask("keyboard", serde_json::json!({"layout": "dvorak"}))), Code::Request as u64);
     }
 
     /// evaluate gives each case's state from the case's own JSON.
