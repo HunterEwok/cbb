@@ -1591,6 +1591,16 @@
         }
       }
     },
+    "Saved in Photos.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранено в «Фото»."
+          }
+        }
+      }
+    },
     "Saved in Files, On My iPhone, CBB.": {
       "localizations": {
         "ru": {

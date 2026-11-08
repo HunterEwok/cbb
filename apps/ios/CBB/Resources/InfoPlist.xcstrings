@@ -24,6 +24,16 @@
         }
       }
     },
+    "NSPhotoLibraryAddUsageDescription": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB добавляет в «Фото» изображение или видео, которое прислал ваш компьютер."
+          }
+        }
+      }
+    },
     "NSLocalNetworkUsageDescription": {
       "localizations": {
         "ru": {

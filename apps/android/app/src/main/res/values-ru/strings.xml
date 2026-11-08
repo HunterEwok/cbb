@@ -130,6 +130,7 @@
     <string name="share_confirm_title">Отправить этот текст на компьютеры?</string>
     <string name="share_confirm_body">%1$s передаёт CBB текст (символов: %2$d). Он уйдёт на все компьютеры группы.</string>
     <string name="files_saved">Сохранено в «Загрузках», в папке CBB.</string>
+    <string name="saved_to_gallery">Сохранено в галерее, в альбоме CBB.</string>
     <string name="files_sent">Отправлено на компьютеры, они сейчас заберут это с телефона.</string>
     <string name="share_files_title">Отправить на компьютеры?</string>
     <string name="share_files_body">%1$s передаёт CBB файлы (штук: %2$d). Они уйдут на все компьютеры группы.</string>
