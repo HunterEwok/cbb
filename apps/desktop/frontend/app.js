@@ -402,7 +402,9 @@ function pickTime(title, text, forever) {
     $("mute-title").textContent = title;
     $("mute-text").textContent = text;
     $("mute-forever").textContent = forever;
-    dlg.onclose = () => resolve(dlg.returnValue === "" || dlg.returnValue === "cancel" ? null : Number(dlg.returnValue));
+    // A close event comes later than the close itself: one left over from
+    // the last time finds the dialog open again and is not this one's.
+    dlg.onclose = () => { if (!dlg.open) resolve(dlg.returnValue === "" || dlg.returnValue === "cancel" ? null : Number(dlg.returnValue)); };
     dlg.returnValue = "";
     dlg.showModal();
   });
@@ -594,7 +596,7 @@ function openMenu(ref, level) {
   const dlg = $("tile-menu");
   $("tile-menu-items").innerHTML = items.map(([v, label]) => `<button value="${esc(v)}" class="glass">${esc(label)}</button>`).join("");
   dlg.returnValue = "";
-  dlg.onclose = () => menuChoice(dlg.returnValue, ref, level);
+  dlg.onclose = () => { if (!dlg.open) menuChoice(dlg.returnValue, ref, level); };
   dlg.showModal();
 }
 
@@ -786,7 +788,9 @@ function ask(title, text, ok, field) {
     const input = $("confirm-input");
     input.hidden = field === undefined;
     input.value = field ?? "";
-    dlg.onclose = () => resolve(dlg.returnValue === "ok" ? (field === undefined ? true : input.value) : null);
+    // A close event comes later than the close itself: one left over from
+    // the last question finds the dialog open again and is not this one's.
+    dlg.onclose = () => { if (!dlg.open) resolve(dlg.returnValue === "ok" ? (field === undefined ? true : input.value) : null); };
     dlg.returnValue = "";
     dlg.showModal();
     if (field !== undefined) input.select();
