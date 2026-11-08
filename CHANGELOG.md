@@ -16,7 +16,7 @@ All notable changes to cbb are documented in this file. The format follows
   same way: the site's files through the ESP from 460800, and the Pi's `cbb` from 2M, after
   a 32K probe at each speed, down to the first speed that brings them whole. The install
   fetches the Pi's `cbb` gzipped (`cbb.gz`, under half the bytes), which the Pi unpacks, and
-  asks the site for 32K at a time instead of 8K. `.cbb net on` no longer waits out a second
+  asks the site for 56K at a time instead of 8K. `.cbb net on` no longer waits out a second
   of silence after each step.
   `.cbb show -tape` loads it as a real tape instead, from the Pi's sound through EAR, with
   the cassette's stripes on the border (some 8 minutes).

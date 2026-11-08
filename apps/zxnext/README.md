@@ -107,15 +107,16 @@ ends the copy, and steps down. The install fetches and sends the Pi's `cbb` gzip
 site's `cbb.gz`, under half the bytes), which the Pi unpacks with `gzip -dc` on the way and
 checks against the SHA-256 built into CBB; `.cbb update` with a newer CBB fetches `cbb` as it
 is, which the signed list names. The file's row says each new speed (`AT 921K`),
-and the speed found holds for the rest of the install. It asks the site for 32K at a time, into
-four 8K banks of its own in at $6000, then writes them to the card while the server waits: the
+and the speed found holds for the rest of the install. It asks the site for 56K at a time, into
+seven 8K banks of its own in at $6000, then writes them to the card while the server waits: the
 ESP has no flow control, so nothing may come during a card write, and fewer, larger ranges
 spend less time on the round trips. The Next reads each chunk, and sends the Pi's
 `cbb`, in loops of their own in assembly (about 110 and 70 T-states a byte), fast enough for
 2000000 at 28 MHz; in C it read no faster than 230400 and sent some 32K a second. The signed list `.cbb update` fetches
 first, a few hundred bytes, comes at the ESP's own 115200.
 
-A line shows each download: the percentage, the kilobytes, the speed and the time left, and
+A line shows each download: the percentage, the kilobytes, the average speed since the file
+began (in frames, 50 or 60 a second as the Next is set) and the time left, and
 the border blinks while it runs. SPACE stops it, and `.cbb install` goes on from where a
 download stopped or broke off. After the install's key, a Pi in no group goes on to pair: the
 QR code shows at once, as `.cbb pair` shows it.

@@ -422,6 +422,11 @@ static char **far_argv;
 // .cbb pair CODE: the code from cbb pair on a computer of the group.
 static char *pair_code;
 static uint8_t install_update;
+#define FETCH_BANKS 7
+#define FETCH_WINDOW ((uint8_t *)0x6000)
+#define BASIC_MMU3 11
+// fetch()'s banks (FETCH_BANKS below), with the other always-mapped state.
+static uint8_t fetch_bank[FETCH_BANKS], fetch_banks;
 // For pi_probe() and pi_check(), from the install's page: the Pi's cbb
 // on the card, the speed, its SHA-256.
 static const char *pi_path, *pi_check_sha;
@@ -1458,13 +1463,9 @@ int net_cmd(void)
 // server waits: the ESP has no flow control, and a card write runs with
 // interrupts off for longer than the UART's buffer lasts.
 #define CHUNK MAX_TEXT
-// fetch() asks for FETCH_BANKS banks' worth at a time, into banks of its
-// own in at $6000 (BASIC's, which nothing runs meanwhile): a quarter of the
+// fetch() asks for FETCH_BANKS (above) banks' worth at a time, into banks of its
+// own in at $6000 (BASIC's, which nothing runs meanwhile): a seventh of the
 // round trips to the site.
-#define FETCH_BANKS 4
-#define FETCH_WINDOW ((uint8_t *)0x6000)
-#define BASIC_MMU3 11
-static uint8_t fetch_bank[FETCH_BANKS], fetch_banks;
 
 // The ROM's frame counter, 50 a second while interrupts run.
 // The ROM's scroll count: kept high, the screen scrolls without "scroll?".
@@ -1742,7 +1743,8 @@ static uint8_t percent(uint32_t got, uint32_t size)
 // Draws a file's bar, and the numbers of the one under way.
 static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
 {
-    uint16_t secs = (uint16_t)(FRAMES_LO - start) / 50, left;
+    // The frames are 60 a second on a Next set to 60 Hz (NR 0x05 bit 2).
+    uint16_t secs = (uint16_t)(FRAMES_LO - start) / (ZXN_READ_REG(0x05) & 4 ? 60 : 50), left;
     uint32_t rate = secs ? got / secs : 0;
     char speed[8];
     // One bar for more than one file: their sum.
@@ -1993,7 +1995,8 @@ static uint32_t pi_seconds(struct item *it, uint32_t speed)
 }
 
 // The speed the Pi's cbb goes at first, which the Pi's tty takes for the
-// copy only; then a step slower each time it does not come whole.
+// copy only; then a step slower each time it does not come whole, which
+// the probe tells in a second.
 #define PI_FAST_SPEED 2000000UL
 
 // Waits a few frames, for the UART to send what it holds.
@@ -2007,6 +2010,11 @@ static void wait_frames(uint8_t n)
     }
 }
 #pragma codeseg PAGE_13
+
+// The Pi Zero starts head only after it says CBBGO, which takes it some
+// 200 ms; bytes sent meanwhile at speed overflow its tty's 4K. Half a
+// second after CBBGO, it reads.
+#define pi_ready() wait_frames(25)
 
 // The row of the Pi's cbb on its way to the Pi, under the files.
 #define SEND_ROW ITEMS
@@ -2027,16 +2035,14 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
     if (errno) return fail("the Pi's cbb is not on the card", it->card);
     // Raw: every byte as it is, none taken as a key or echoed; head gives
     // up after twice the time the copy takes, and the tty gets its speed
-    // back after either. CBBGO comes a second after head starts reading:
-    // the bytes that came before, while the Pi Zero started it, would
-    // overflow the tty's buffer at speed. The second also lets the Next,
-    // which takes the speed once the command has left, hear CBBGO at the
-    // new one; the CR first ends the line the rest of the echo left, which
-    // the Next hears garbled at that speed. The subshell keeps the job's
-    // notices off the line.
+    // back after either. The second's sleep lets the Next, which takes
+    // the speed once the command has left, hear CBBGO at the new one; the
+    // CR first ends the line the rest of the echo left, which the Next
+    // hears garbled at that speed. The Pi Zero starts head only after
+    // CBBGO: the Next waits for it (pi_ready()).
     sprintf(line,
-            "s=$(stty -g); stty %lu raw -echo -iexten && ( (sleep 1; printf '\\r\\nCBBGO\\r\\n') & timeout %lu head -c %lu%s >" PI_DIR
-            "/cbb.new; printf '\\r\\nCBBEND\\r\\n' ); stty $s\n",
+            "s=$(stty -g); stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && timeout %lu head -c %lu%s >" PI_DIR
+            "/cbb.new; printf '\\r\\nCBBEND\\r\\n'; stty $s\n",
             speed ? speed : 115200UL, pi_seconds(it, speed), it->size, it->pi == 2 ? " | gzip -dc" : "");
     link_send_str(line);
     if (speed) {
@@ -2053,6 +2059,7 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
         }
         if (strcmp(line, "CBBGO") == 0) break;
     }
+    pi_ready();
     while ((n = esx_f_read(fh, text, CHUNK)) > 0) {
         http_dst = text;
         pi_tx(n);
@@ -2069,25 +2076,21 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
 static int to_pi(struct item *it, uint8_t row)
 {
     uint8_t err;
-    uint16_t start, wait;
+    uint16_t start;
     uint32_t speed = PI_FAST_SPEED;
     if (link_shell()) return pi_silent();
     pi_path = it->card;
     for (;;) {
         // A speed above the line's own carries a probe first.
         pi_speed = speed;
-        wait = 15; // the probe's head: 5 seconds
         err = speed > ESP_SPEED ? far_pi_probe() : 0;
-        if (!err) {
-            wait = pi_seconds(it, speed) + 10;
-            err = pi_send(it, row, speed);
-        }
+        if (!err) err = pi_send(it, row, speed);
         if (err == 2) {
             // A tty that took the speed but lost CBBGO keeps head waiting,
             // until its timeout at the most.
             start = FRAMES_LO;
             while (link_shell()) {
-                if (link_stopped || (uint16_t)(FRAMES_LO - start) / 50 > wait)
+                if (link_stopped || (uint16_t)(FRAMES_LO - start) / 50 > pi_seconds(it, speed) + 10)
                     return fail("the Pi did not get ready", "no CBBGO");
             }
         } else if (!err) {
@@ -2148,7 +2151,7 @@ static int install_files(uint8_t update)
     // checks (read_list()), then opens the site again for the files.
     if (update && !pi_answers) return pi_silent();
     // The list, a few hundred bytes, at the ESP's own speed, which never
-    // loses them; the files from 2M down.
+    // loses them; the files from 460800 down.
     if (update) esp_fetch = ESP_SPEED;
     for (list_checked = !update;;) {
         // An ESP that does not answer at a speed, a step slower.
@@ -2333,13 +2336,14 @@ void usage_run(void)
 #pragma constseg PAGE_19
 
 // The first PROBE bytes of the Pi's cbb at pi_speed, before all of it: the
-// Pi's sha256sum of them against the Next's. 0 when they came whole, 2
-// when the Pi did not say it was ready, 3 when they did not come whole.
+// Pi's sha256sum of them against the Next's. 0 when they came whole or the
+// Pi did not say it was ready (the copy tries the speed then), 3 when they
+// did not come whole, else 1 with the message shown.
 // Not static: far_pi_probe() (far.asm) calls it.
 #define PROBE 32768UL
-static const char pp_cmd[] = "s=$(stty -g); stty %lu raw -echo -iexten && ( (sleep 1; printf '\\r\\nCBBGO\\r\\n') & "
-                             "printf 'CBBP %%s\\r\\n' $(timeout 5 head -c %lu | sha256sum) ); stty $s\n";
-static const char pp_go[] = "CBBGO", pp_sum[] = "CBBP ";
+static const char pp_cmd[] = "s=$(stty -g); stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && "
+                             "printf 'CBBP %%s\\r\\n' $(timeout 5 head -c %lu | sha256sum); stty $s\n";
+static const char pp_go[] = "CBBGO", pp_sum[] = "CBBP ", pp_silent[] = "the Pi did not get ready";
 int pi_probe(void)
 {
     uint8_t fh, err = 3;
@@ -2368,6 +2372,7 @@ int pi_probe(void)
             goto out;
         }
     } while (strcmp(line, pp_go));
+    pi_ready();
     while ((n = esx_f_read(fh, text, MAX_TEXT)) > 0 && size) {
         http_dst = text;
         pi_tx(n);
@@ -2382,7 +2387,17 @@ int pi_probe(void)
 out:
     esx_f_close(fh);
     link_open();
-    if (err != 2) link_prompt();
+    if (err == 2) {
+        // No word from the probe is no verdict on the speed: once the
+        // shell is back (head gives up after 5 seconds, the tty after),
+        // the copy itself tries it.
+        frame = FRAMES_LO;
+        while (link_shell()) {
+            if (link_stopped || (uint16_t)(FRAMES_LO - frame) / 50 > 60) return fail(pp_silent, pp_go);
+        }
+        return 0;
+    }
+    link_prompt();
     return err;
 }
 
@@ -3606,7 +3621,7 @@ static int img_speed(void)
             link_prompt();
             if (err && !lost) goto end;
             // The time from the first byte waited for, so a little under the line's.
-            kbs = frames ? (uint16_t)(IMG_PIXELS * 500 / frames / 1024) : 0;
+            kbs = frames ? (uint16_t)(IMG_PIXELS * (ZXN_READ_REG(0x05) & 4 ? 600 : 500) / frames / 1024) : 0;
             err = !lost && img_crc(0) == crc;
             printf(s_speed_line, speeds[s], lost ? s_lost : err ? s_ok : s_bad, kbs / 10, kbs % 10);
             if (err) break;
