@@ -24,7 +24,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/mdns"
-	"github.com/HunterEwok/cbb/internal/pair"
 )
 
 // hub is the network the tests' services share. Each is a Rust cbb that
@@ -772,7 +771,7 @@ func TestJoinAClosedWindow(t *testing.T) {
 	c := startService(t, &h, "gamma")
 	pairWith(t, a, b)
 	addr := h.memberAddr(t, a.status(t).Device)
-	if _, err := c.do(t, control.Header{Op: control.OpJoin, Code: "123456", Address: addr}, ""); err == nil || !strings.Contains(err.Error(), pair.ErrClosed.Error()) {
+	if _, err := c.do(t, control.Header{Op: control.OpJoin, Code: "123456", Address: addr}, ""); err == nil || !strings.Contains(err.Error(), "the pairing window is closed") {
 		t.Errorf("join at %s without a window: %v", addr, err)
 	}
 }

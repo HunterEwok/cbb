@@ -26,7 +26,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/pair"
 	"github.com/HunterEwok/cbb/internal/phone"
 	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/tunnel"
@@ -122,7 +121,7 @@ func TestLiteRoot(t *testing.T) {
 	laptop := startService(t, &h, "laptop")
 	jc := laptop.dial(t)
 	defer jc.Close()
-	code := pair.NewCode()
+	code := newCode(t)
 	m, err := jc.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Code: code, Expires: 300, Listen: true}})
 	if err != nil || len(m.Addrs) == 0 {
 		t.Fatalf("the laptop's listening join: %v, %+v", err, m)
@@ -1512,7 +1511,7 @@ func TestLiteRelayRoot(t *testing.T) {
 	laptop := startService(t, &h, "laptop")
 	jc := laptop.dial(t)
 	defer jc.Close()
-	code := pair.NewCode()
+	code := newCode(t)
 	m, err := jc.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Code: code, Expires: 300, Listen: true}})
 	if err != nil || len(m.Addrs) == 0 {
 		t.Fatalf("the laptop's listening join: %v, %+v", err, m)

@@ -7,12 +7,14 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"io"
+	"math/big"
 	"net"
 	"os"
 	"os/exec"
@@ -28,7 +30,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/mdns"
-	"github.com/HunterEwok/cbb/internal/pair"
 	"github.com/HunterEwok/cbb/internal/phone"
 	"github.com/HunterEwok/cbb/internal/remotepaste"
 	"github.com/HunterEwok/cbb/internal/tunnel"
@@ -189,10 +190,17 @@ func TestEmbassyJoiner(t *testing.T) {
 	if !strings.Contains(qr, "192.168.69.2%3A8764") && !strings.Contains(qr, "192.168.69.2:8764") {
 		t.Fatalf("esp32-on-linux showed %q, not a QR code with its address", qr)
 	}
-	res := dialJoiner(t, pi.dir, qr)
-	if res.Info.Name != "board" || res.Info.Role != pair.RoleLite || !res.Confirmed {
-		t.Fatalf("the board joined as %+v", res)
+	if name := admitJoiner(t, pi, qr); name != "board" {
+		t.Fatalf("the board joined as %q", name)
 	}
+	waitFor(t, "pi lists the board as a member", func() bool {
+		for _, d := range pi.devices(t) {
+			if d.Name == "board" {
+				return d.Role == group.RoleLite
+			}
+		}
+		return false
+	})
 	var rest strings.Builder
 	for sc.Scan() {
 		rest.WriteString(sc.Text() + "\n")
@@ -738,48 +746,21 @@ func TestFFIJoinerAdmin(t *testing.T) {
 		fmt.Fprintln(in, "PEERS")
 		return next("PEERS ") == "1"
 	})
-	j, err := pair.NewJoiner(pair.Info{Name: "laptop", OS: group.OSLinux})
-	if err != nil {
-		t.Fatal(err)
-	}
-	fp, err := j.Fingerprint()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
-	joined := make(chan *group.Identity, 1)
-	go func() {
-		conn, err := ln.Accept()
-		if err != nil {
-			joined <- nil
-			return
-		}
-		id, err := j.Accept(context.Background(), conn, "135790", func(*group.Identity) error { return nil })
-		if err != nil {
-			t.Errorf("the computer's join: %v", err)
-		}
-		joined <- id
-	}()
-	fmt.Fprintln(in, "ADMIT "+phone.JoinQR(phone.JoinCode{Code: "135790", Addrs: []string{ln.Addr().String()}, Fingerprint: fp}))
-	if got := next("ADMITTED "); got != string(j.ID) {
-		t.Fatalf("the phone admitted %q, not the computer %s", got, j.ID)
-	}
-	t.Logf("the admin phone admitted the computer %s", j.ID)
+	laptop, qr := listeningJoin(t, &h, "laptop")
+	fmt.Fprintln(in, "ADMIT "+qr)
+	admitted := next("ADMITTED ")
+	t.Logf("the admin phone admitted the computer %s", admitted)
 	if got := next("ADMIT DONE "); got != "true" {
 		t.Fatalf("the computer did not confirm its join: %q", got)
 	}
-	id := <-joined
-	if id == nil || id.Issuer == nil || !bytes.Equal(id.Issuer.Raw, ca.Raw) {
+	id := joinedIdentity(t, laptop, admitted)
+	if id.Issuer == nil || !bytes.Equal(id.Issuer.Raw, ca.Raw) {
 		t.Fatalf("the computer's identity: %+v", id)
 	}
 	if err := id.Cert.CheckSignatureFrom(ca); err != nil {
 		t.Fatalf("the computer's certificate is not from the phone's admin CA: %v", err)
 	}
-	if got, err := group.DeviceOf(id.Cert); err != nil || got != j.ID {
+	if got, err := group.DeviceOf(id.Cert); err != nil || string(got) != admitted {
 		t.Fatalf("the computer's certificate names %q: %v", got, err)
 	}
 	waitFor(t, "the root lists the computer the phone admitted", func() bool {
@@ -893,41 +874,15 @@ func TestFFIPhoneRoot(t *testing.T) {
 		t.Fatalf("the phone does not list itself: %s", devices)
 	}
 
-	j, err := pair.NewJoiner(pair.Info{Name: "laptop", OS: group.OSLinux})
-	if err != nil {
-		t.Fatal(err)
-	}
-	fp, err := j.Fingerprint()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
-	joined := make(chan *group.Identity, 1)
-	go func() {
-		conn, err := ln.Accept()
-		if err != nil {
-			joined <- nil
-			return
-		}
-		id, err := j.Accept(context.Background(), conn, "246801", func(*group.Identity) error { return nil })
-		if err != nil {
-			t.Errorf("the computer's join: %v", err)
-		}
-		joined <- id
-	}()
-	fmt.Fprintln(in, "ADMIT "+phone.JoinQR(phone.JoinCode{Code: "246801", Addrs: []string{ln.Addr().String()}, Fingerprint: fp}))
-	if got := next("ADMITTED "); got != string(j.ID) {
-		t.Fatalf("the phone admitted %q, not the computer %s", got, j.ID)
-	}
+	var h hub
+	laptop, qr := listeningJoin(t, &h, "laptop")
+	fmt.Fprintln(in, "ADMIT "+qr)
+	admitted := next("ADMITTED ")
 	if got := next("ADMIT DONE "); got != "true" {
 		t.Fatalf("the computer did not confirm its join: %q", got)
 	}
-	id := <-joined
-	if id == nil || id.Issuer != nil {
+	id := joinedIdentity(t, laptop, admitted)
+	if id.Issuer != nil {
 		t.Fatalf("the computer's identity: %+v", id)
 	}
 	if got := group.Tag(id.GroupCA.Cert); got != made[1] {
@@ -939,7 +894,7 @@ func TestFFIPhoneRoot(t *testing.T) {
 	if err := id.Cert.CheckSignatureFrom(id.GroupCA.Cert); err != nil {
 		t.Fatalf("the computer's certificate is not from the phone's root: %v", err)
 	}
-	if got, err := group.DeviceOf(id.Cert); err != nil || got != j.ID {
+	if got, err := group.DeviceOf(id.Cert); err != nil || string(got) != admitted {
 		t.Fatalf("the computer's certificate names %q: %v", got, err)
 	}
 	fmt.Fprintln(in, "DEVICES")
@@ -952,7 +907,7 @@ func TestFFIPhoneRoot(t *testing.T) {
 		fmt.Fprintln(in, "MANAGE "+req)
 		return next("MANAGED ")
 	}
-	if got := manage(`{"action":"rename","device":"` + string(j.ID) + `","name":"desk"}`); got != `{"ok":{}}` {
+	if got := manage(`{"action":"rename","device":"` + admitted + `","name":"desk"}`); got != `{"ok":{}}` {
 		t.Fatalf("renaming the computer: %s", got)
 	}
 	fmt.Fprintln(in, "DEVICES")
@@ -960,15 +915,15 @@ func TestFFIPhoneRoot(t *testing.T) {
 		t.Fatalf("the phone does not list the computer's new name: %s", devices)
 	}
 	// The computer is not running, so a command for it finds no way there.
-	if got := manage(`{"action":"mute","device":"` + string(j.ID) + `","for_ms":60000,"timeout_ms":1000}`); !strings.Contains(got, "not connected") {
+	if got := manage(`{"action":"mute","device":"` + admitted + `","for_ms":60000,"timeout_ms":1000}`); !strings.Contains(got, "not connected") {
 		t.Fatalf("muting a computer that is not running: %s", got)
 	}
 	// The device's house is a command too: sync_off and sync_on are mode commands.
-	if got := manage(`{"action":"sync_off","device":"` + string(j.ID) + `","timeout_ms":1000}`); !strings.Contains(got, "not connected") {
+	if got := manage(`{"action":"sync_off","device":"` + admitted + `","timeout_ms":1000}`); !strings.Contains(got, "not connected") {
 		t.Fatalf("turning the sync of a computer that is not running off: %s", got)
 	}
 	// The admin key comes from the computer's hello, so it must be connected.
-	if got := manage(`{"action":"make_admin","device":"` + string(j.ID) + `"}`); !strings.Contains(got, "not connected") {
+	if got := manage(`{"action":"make_admin","device":"` + admitted + `"}`); !strings.Contains(got, "not connected") {
 		t.Fatalf("making a computer that is not running an admin: %s", got)
 	}
 	// A group made a moment ago stops nothing.
@@ -986,7 +941,7 @@ func TestFFIPhoneRoot(t *testing.T) {
 	if got := manage(`{"action":"remove","device":"` + made[0] + `"}`); !strings.Contains(got, "cannot remove itself") {
 		t.Fatalf("the phone removing itself: %s", got)
 	}
-	if got := manage(`{"action":"remove","device":"` + string(j.ID) + `"}`); got != `{"ok":{}}` {
+	if got := manage(`{"action":"remove","device":"` + admitted + `"}`); got != `{"ok":{}}` {
 		t.Fatalf("removing the computer: %s", got)
 	}
 	fmt.Fprintln(in, "DEVICES")
@@ -995,48 +950,61 @@ func TestFFIPhoneRoot(t *testing.T) {
 	}
 }
 
-// dialJoiner plays the phone that scanned a listening joiner's QR code: it
-// opens a window with the identity in dir, dials the addresses in the QR
-// code and admits the device with the certificate it names, as the phone
-// kits do.
-func dialJoiner(t *testing.T, dir, qr string) *pair.Result {
+// admitJoiner plays the phone that scanned a listening joiner's QR code
+// with pi, the group's root: pi dials the addresses in the QR code and
+// admits the device with the certificate it names, as cbb pair -qr does,
+// and returns the name the device joined with.
+func admitJoiner(t *testing.T, pi *testService, qr string) string {
 	t.Helper()
 	jc, ok := phone.ParseJoinQR(qr)
 	if !ok || len(jc.Addrs) == 0 || jc.Fingerprint == "" {
 		t.Fatalf("not a QR code of a listening joiner: %q", qr)
 	}
-	id, err := group.Load(dir)
+	m, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, "")
+	if err != nil {
+		t.Fatalf("admitting the joiner: %v", err)
+	}
+	return m.Name
+}
+
+// listeningJoin starts a service named name, out of a group, and has it
+// wait for a phone, as cbb pair does: the QR code the phone scans.
+func listeningJoin(t *testing.T, h *hub, name string) (*testService, string) {
+	t.Helper()
+	s := startService(t, h, name)
+	c := s.dial(t)
+	t.Cleanup(func() { c.Close() })
+	code := newCode(t)
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Code: code, Expires: 300, Listen: true}})
+	if err != nil || len(m.Addrs) == 0 {
+		t.Fatalf("%s's listening join: %v, %+v", name, err, m)
+	}
+	return s, phone.JoinQR(phone.JoinCode{Code: code, Addrs: m.Addrs, Fingerprint: m.Fingerprint})
+}
+
+// joinedIdentity is the identity that s, which waited for a phone, keeps
+// once the phone admitted it as the device admitted.
+func joinedIdentity(t *testing.T, s *testService, admitted string) *group.Identity {
+	t.Helper()
+	waitFor(t, s.name+" in the group", func() bool {
+		st := s.status(t)
+		return st.Group != "" && st.Device == admitted
+	})
+	id, err := group.Load(s.dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	w, err := pair.Open(id, jc.Code, pair.Options{})
+	return id
+}
+
+// newCode is a pairing code: six random digits.
+func newCode(t *testing.T) string {
+	t.Helper()
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), joinTimeout)
-	defer cancel()
-	var lastErr error
-	for _, addr := range jc.Addrs {
-		raw, err := net.DialTimeout("tcp", addr, handshakeTimeout)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if lastErr = w.Dial(ctx, raw, jc.Fingerprint); lastErr == nil {
-			break
-		}
-	}
-	select {
-	case <-w.Done():
-	default:
-		t.Fatalf("dialing the joiner: %v", lastErr)
-	}
-	res, err := w.Result()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return res
+	return fmt.Sprintf("%06d", n.Int64())
 }
 
 // joinLite has the lite member join pi's group: cbb pair on pi shows a
