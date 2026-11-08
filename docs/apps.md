@@ -281,9 +281,11 @@ or resume. A text shared to CBB from the system's share menu (`ShareProvider`, t
 entry's `X-Share Method text`) goes to the group as the phone's copy, and so do images and
 files (`X-Share Method files`, up to 50 MB together). The main page's Sync button, its
 pull-down menu and the cover follow the one button's rule (docs/design.md) through the core's
-`waiting`, `sends` and `took`; images and files from another device are fetched into
-Downloads/CBB by themselves while the phone takes the group's copies (one image goes into the
-clipboard too), with a notification, which is why the app asks for the user's folders.
+`waiting`, `sends` and `took`; images and files from another device are fetched by
+themselves while the phone takes the group's copies, with a notification, which is why the app
+asks for the user's folders: one image goes to Pictures/CBB (and into the clipboard) and one
+video to Videos/CBB, where the gallery shows them as an album, as Telegram does; other files
+go to a folder of their own in Downloads/CBB.
 
 ## Apple Watch
 
@@ -692,6 +694,23 @@ meanwhile. The layouts are the same tables (`internal/keyboard`, checked against
 vectors). The tests run against a fake BlueZ on a private bus; a real adapter and host are
 not yet tried.
 
+The Aurora app is a Bluetooth LE keyboard as the Linux computer is (`src/blekeyboard.cpp`): it
+registers the same HID over GATT service with the phone's BlueZ, through the sandbox's
+`Bluetooth` permission, and takes the reports and the report map from the core's `keyboard`
+call (`cbb_core::keyboard`). Settings, Bluetooth keyboard has the switch, **Make this phone
+visible** (two minutes, as "CBB keyboard"), the device's layout, the speed (10, 20 or 40) and
+**Type the clipboard**; the main page's pull-down menu types the clipboard too while a device
+is connected. Aurora's own pairing dialog asks about a new device, so the app has no agent.
+It is also the Aurora app's remote paste target (`src/pastereceiver.cpp`), since Aurora lets
+no app put keys into another one: with **Let the group's admins paste there** on, on the same
+page, an admin's `paste` command is typed on the connected device. The member passes the
+command to the app, which checks and opens it through the node (`check_command`, the
+paste's text cleaned as the computers clean it), keeps the replay cache, the limits per
+sender (one a second, 30 a minute) and the log of the last pastes without their text, and
+refuses a text with a line break unless **Let a paste press Enter** is on; `paste-off`
+turns the switch off. The package manager takes the `Bluetooth` permission for a regular
+app; not yet tried on the phone: whether the sandbox lets BlueZ call the app's objects.
+
 ## A computer as a TV's remote
 
 A computer can also type on a TV without Bluetooth, as the TV's own remote over the home
@@ -750,9 +769,10 @@ view setting like tiles, list or orbit:
   watch's sections and the remote paste device picker. Actions on a whole collection may
   come later; a remote paste to several devices never.
 
-The model is the same in the three places that hold it: `apps/desktop/arrange.go` (the
+The model is the same in the places that hold it: `apps/desktop/arrange.go` (the
 tray app), the Kotlin kit's `Arrangement.kt` (Android) and the Swift kit's
-`Arrangement.swift` (iPhone, iPad, Mac). All three pass
+`Arrangement.swift` (iPhone, iPad, Mac) and the Rust core's `cbb_core::arrange` (the Aurora
+app, through the core's `arrange` call). All of them pass
 `testdata/arrangement/vectors.json`. It is stored as JSON:
 
 ```json
@@ -844,6 +864,18 @@ kit's `Arrangement.swift` in; kept as `deviceArrangement` in its defaults): as o
 iPhone, with **Arrange devices** and **Back to the group's order** in the toolbar, each
 tile's menu on a right click, and Option with the arrow keys, Home or End moving the
 focused tile in Arrange mode.
+
+**In the Aurora app** (`qml/pages/DeviceItems.qml`, `ArrangePage.qml` and the collection's
+pages, the model in the core's `arrange` call through `App::arranged`, kept as
+`ui/arrangement` in its settings): a long press on a tile or a row opens a page with every
+change (Move to start, Move earlier, Move later, Move to end, Move to each collection, New
+collection…, Take out of collection, and on a collection Rename collection… and Ungroup).
+Among the tiles a long press then a drag carries the tile itself, lifted, as on the iPhone but
+with no Arrange mode: the others make way as it passes over them, a device held over the
+middle of a collection goes into it, and the tile settles into its place when let go. This phone's own tile is first until the user moves it, as on the
+other phones. A collection is a tile, or a section in the list, and a tap opens its page, with
+Rename and Ungroup in its pull-down menu. The main page's pull-down menu has **New
+collection…** and **Back to the group's order**.
 
 **On the watches**: the phone sends its devices in the user's order, each with the name
 of its collection (`collection` in WatchState), and the
@@ -960,19 +992,29 @@ the app on real devices.
   `NSLocalNetworkUsageDescription`.
 - A phone joins another phone's group from its Start screen ("I already use Copy Beyond Borders on
   another phone"):
-  it makes its admin key, listens with `TLSListener` on a port the system picks, and shows
-  the join QR code with its home network addresses (`LocalAddresses`) and its six digits.
-  While it waits it announces itself by Bonjour (NsdManager on Android, mDNS through the
-  core on Aurora) with the TXT `j=1` and its fingerprint (`Discovery.joinerTXT`), so that a
-  computer of the group admits it by the digits typed there (`cbb pair -qr`). An admin
-  phone scans it in "Add a device". The root phone makes every phone it admits an admin; an admin that
-  is not the root admits phones as plain members. An admin phone that removes the root
-  phone takes the group over (`PhoneGroup.takeOver`, docs/records-v2.md): it makes a new
-  root key in the Secure Enclave behind Face ID and signs a claim with its admin key. The
-  claim waits as long as the root decided (72 hours by default, `setTakeoverDelay`), and the
-  root's phone may cancel it (`resolve`). Once the wait is over the app finishes the takeover
-  by itself (`finishTakeOver`): as the new root it signs its own record, keeps the other
-  admins and removes the lost phone. The kit keeps the records file and asks the Rust core
+  it listens on a port the system picks, the core running the TLS, and shows the join QR
+  code with its home network addresses (`LocalAddresses`) and its six digits. While it
+  waits it announces itself by Bonjour (NsdManager on Android, mDNS through the core on
+  Aurora) with the TXT `j=1` and its fingerprint (`Discovery.joinerTXT`), so that a computer
+  of the group admits it by the digits typed there (`cbb pair -qr`). An admin phone scans it
+  in "Add a device". The screen has two buttons on both phones (docs/protocol.md, section 6): "Join"
+  ("I already use CBB on another phone" on the iPhone), answered by any admin of the group,
+  which admits the phone as a plain member, and "Join as an admin", which makes an admin key
+  and offers it, answered only by the root phone, which makes the phone an admin. Both
+  phones make the group, admit and join through the Rust core's admission (each kit's
+  `CorePairing` over ffi's `cbb_group_new`, `cbb_admit_*` and `cbb_join_*`; the Swift
+  kit's `CorePairing.Listener` and `Connection` are the plain TCP sockets around it). An
+  admin phone that removes the root
+  phone takes the group over (docs/records-v2.md) through its member in the Rust core, as the
+  Aurora app does (docs/core-api.md, `cbb_member_manage`): it makes a new root key in the
+  Secure Enclave behind Face ID, the member makes its root CA (`CoreMember.rootCA`) and
+  signs a claim with the phone's admin key (`CoreMember.claim`, after the kit's
+  `PhoneGroup.checkTakeOver`). The claim waits as long as the root decided (72 hours by
+  default, `setTakeoverDelay`), and the root's phone may cancel it (`resolve`). Once the wait
+  is over the app finishes the takeover by itself (`CoreMember.finishTakeover`, which signs
+  nothing while the claim waits, then `PhoneGroup.becameRoot`): as the new root the member
+  signs the phone's certificate from it, its own record, keeps the other admins and removes
+  the lost phone. The kit keeps the records file and asks the Rust core
   what it says (`RecordSet`, docs/core-api.md, "The record set"); the Android kit does the
   same, with its root key in the Keystore behind BiometricPrompt.
 - A phone joins a computer's group as it joins a phone's: "Join a group" shows its QR code
@@ -982,7 +1024,7 @@ the app on real devices.
   `handover` record naming this phone's admin key, which `group_view` reports as `handed_to`),
   Home shows "The group is yours to take". Its button makes a new root key (the Secure Enclave
   or the Keystore, behind Face ID or BiometricPrompt), signs the claim with the admin key
-  (`takeHandedOver`), which takes effect at once, and finishes the takeover as after a lost
+  (the member's `take_handed_over`), which takes effect at once, and finishes the takeover as after a lost
   root; the computer is not removed.
 - A new phone restores the group with the recovery key from its Start screen ("Restore with
   the recovery key"; docs/protocol.md, section 10, "The recovery key"). It scans the
@@ -991,7 +1033,9 @@ the app on real devices.
   by their tag and lets the recovery key issue its member certificate (`Restore`). A computer
   takes it on a connection that carries records only and sends the group's first root in its
   hello; the app checks the records and the computer, makes a new root key behind Face ID or
-  BiometricPrompt, signs a claim with the recovery key and sends it, and forgets the key. Home
+  BiometricPrompt, starts its member in the Rust core, which signs a claim with the recovery
+  key (the member's `recover`, `Restore.claim`), sends the claim on that connection too, and
+  forgets the key. Home
   then shows the claim's time left, and once it takes effect the app finishes as after a lost
   root: it signs its own device record and gets a member certificate from the new root.
 - The recovery key on a YubiKey, over NFC (docs/protocol.md, section 10, "On a hardware

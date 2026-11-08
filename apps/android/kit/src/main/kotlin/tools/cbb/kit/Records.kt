@@ -752,6 +752,15 @@ class RecordSet {
     fun toJson(): ByteArray = Wire.encode(Wire.obj("group_ca" to Wire.bytes(groupCA), "file" to Wire.bytes(file)))
 
     companion object {
+        /** The set of a records file the core wrote (docs/core-api.md, "The record set") for the group of groupCA. */
+        fun fromFile(groupCA: ByteArray, file: ByteArray): RecordSet {
+            val s = RecordSet()
+            s.groupCA = groupCA
+            s.file = file.takeIf { it.isNotEmpty() }
+            s.refresh()
+            return s
+        }
+
         /** A set kept with toJson; the core reads the file again, so what it says follows the rules of this version. */
         fun fromJson(data: ByteArray): RecordSet {
             val s = RecordSet()

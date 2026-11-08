@@ -305,9 +305,15 @@ public enum Piv {
             (self.card, self.slot, self.publicKeyDER, self.pin) = (card, slot, publicKeyDER, pin)
         }
 
-        public func signature(for data: Data) throws -> Data {
+        public func signature(for data: Data) throws -> Data { try signed(data, digest: Data(SHA256.hash(data: data))) }
+
+        public func signature(digest: Data) throws -> Data { try signed(nil, digest: digest) }
+
+        /// The card's signature of digest, checked against the
+        /// certificate's key over data, or over the digest itself without
+        /// data.
+        private func signed(_ data: Data?, digest: Data) throws -> Data {
             try Piv.verify(card, pin: pin)
-            let digest = Data(SHA256.hash(data: data))
             let (r, sw) = try Piv.command(card, 0x87, Piv.algP256, slot, Piv.tlv(0x7c, Piv.tlv(0x82, Data()) + Piv.tlv(0x81, digest)))
             if sw == 0x6982 { throw Piv.fail(.card, "the YubiKey wants its PIN first") }
             guard sw == 0x9000 else { throw Piv.cardFail("signing", sw) }
@@ -321,11 +327,21 @@ public enum Piv {
             }
             guard let pub = try? P256.Signing.PublicKey(derRepresentation: publicKeyDER),
                   let s = try? P256.Signing.ECDSASignature(derRepresentation: sig),
-                  pub.isValidSignature(s, for: data) else {
+                  data.map({ pub.isValidSignature(s, for: $0) }) ?? pub.isValidSignature(s, for: Digest(digest)) else {
                 throw Piv.fail(.card, "the YubiKey's signature does not match its certificate's key")
             }
             return sig
         }
+    }
+
+    /// A SHA-256 digest the core hands in, to check a signature over it.
+    struct Digest: Crypto.Digest {
+        static let byteCount = 32
+        let bytes: Data
+        init(_ bytes: Data) { self.bytes = bytes }
+        func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R { try bytes.withUnsafeBytes(body) }
+        func makeIterator() -> Data.Iterator { bytes.makeIterator() }
+        var description: String { "SHA256 digest: \(bytes.map { String(format: "%02x", $0) }.joined())" }
     }
 
     static func tlv(_ tag: UInt16, _ v: Data) -> Data {

@@ -2417,7 +2417,8 @@ carries:
   learns the hub without its way over VLESS. A client with a `vless` offer MUST NOT send plain
   WireGuard to the hub's endpoints. It tries them over UDP only when the offer has
   `obfuscation` too, and VLESS after them; the way that reached the hub goes first the next
-  time. An offer with `vless` and no `obfuscation` is reached over VLESS only. When the answer
+  time, and after a try that ended before the hub answered, the next try starts with the way
+  after the one it last tried. An offer with `vless` and no `obfuscation` is reached over VLESS only. When the answer
   comes, or changes, the members connect again and get the new offer.
 - The client runs VLESS without encryption (Xray-core) from a local UDP port to that
   endpoint, and points its WireGuard at the local port instead of the offer's `endpoints`.

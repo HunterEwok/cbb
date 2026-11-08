@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/netip"
 	"slices"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -136,6 +137,13 @@ const (
 	minBackoff = time.Second
 	maxBackoff = time.Minute
 )
+
+// helloUnseen is how long, in nanoseconds, a hub whose hellos go over
+// VLESS waits for the forwarder to see one before it registers again;
+// tests shorten it.
+var helloUnseen atomic.Int64
+
+func init() { helloUnseen.Store(int64(20 * time.Second)) }
 
 // errNewCredential ends a registration when the group's hubs' credential
 // changed, so that the hub registers again at once with the new one, and
@@ -378,6 +386,7 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 	var counter uint64
 	seen := netip.AddrPort{}
 	every := helloFirst
+	firstHello := time.Now()
 	t := time.NewTimer(0)
 	defer t.Stop()
 	for {
@@ -392,6 +401,12 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 				report(Report{Registered: true, Seen: seen, VLESS: vl, OverVLESS: over != nil})
 			}
 		case <-t.C:
+			// Over VLESS the hellos go in one flow of the local way, and
+			// a flow whose first request got no answer carries nothing
+			// for as long as packets keep coming: start the way afresh.
+			if over != nil && !seen.IsValid() && time.Since(firstHello) > time.Duration(helloUnseen.Load()) {
+				return errors.New("the forwarder saw none of the hub's hellos over VLESS")
+			}
 			if creds != nil {
 				if now := cfg.Credentials(); len(now) > 0 && now[len(now)-1].ID() != creds[len(creds)-1].ID() {
 					return errNewCredential

@@ -116,19 +116,20 @@ func hostile(t *testing.T, l tunnel.VLESS, network xnet.Network, host string, po
 }
 
 // packetBack sends a packet to the local port and returns the first
-// answer, or "".
+// answer, or "". Each try sends from a port of its own, as roundTrip's do.
 func packetBack(t *testing.T, to netip.AddrPort) string {
 	t.Helper()
-	conn, err := net.DialUDP("udp", nil, net.UDPAddrFromAddrPort(to))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
 	b := make([]byte, 64)
 	for range 10 {
+		conn, err := net.DialUDP("udp", nil, net.UDPAddrFromAddrPort(to))
+		if err != nil {
+			t.Fatal(err)
+		}
 		conn.Write([]byte("a packet"))
 		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-		if n, err := conn.Read(b); err == nil {
+		n, err := conn.Read(b)
+		conn.Close()
+		if err == nil {
 			return string(b[:n])
 		}
 	}

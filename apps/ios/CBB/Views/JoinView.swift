@@ -13,7 +13,7 @@ struct JoinView: View {
     var body: some View {
         VStack(spacing: Tokens.spacingLarge) {
             Spacer()
-            Text("Join a group")
+            Text(model.joinAsAdmin ? LocalizedStringKey("Join as an admin") : LocalizedStringKey("Join a group"))
                 .font(.system(.title, design: .monospaced).weight(.bold))
                 .foregroundStyle(palette.accent)
             if let code = model.joinCode, let image = QRImage.make(code.qrText) {
@@ -29,7 +29,9 @@ struct JoinView: View {
                     .font(.system(.largeTitle, design: .monospaced).weight(.bold))
                     .textSelection(.enabled)
                     .accessibilityLabel(Text(verbatim: code.code.map(String.init).joined(separator: " ")))
-                Text("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.")
+                Text(model.joinAsAdmin
+                    ? LocalizedStringKey("On the group's root phone, tap + and scan this code: only the root adds a phone as an admin. Keep this screen open.")
+                    : LocalizedStringKey("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open."))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(palette.textDim)
             } else if model.message == nil {

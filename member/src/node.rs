@@ -199,6 +199,11 @@ pub struct Node {
     home: Mutex<HashMap<DeviceId, Duration>>,
     /// The signed entry points this member holds and passes on.
     entries: Arc<Entries>,
+    /// One fetch of a blob at a time, by its SHA-256: a second one (cbb
+    /// paste -o while the copy is fetched in the background) waits for the
+    /// first, then finds the blob held, as both would write one file and
+    /// the peer's chunks go to one sink.
+    fetching: Mutex<HashMap<[u8; 32], Arc<Mutex<()>>>>,
     /// The newest signed release the group passed around (section 16).
     releases: Arc<Releases>,
     /// The release archive each peer's hello says it updates from, which
@@ -405,6 +410,7 @@ impl Node {
             actions: RwLock::new(Vec::new()),
             home: Mutex::new(HashMap::new()),
             entries,
+            fetching: Mutex::new(HashMap::new()),
             releases,
             archives: Mutex::new(HashMap::new()),
             keep_identity: None,
@@ -842,6 +848,11 @@ impl Node {
         if store.held(&sum) == Some(size) {
             return Ok(());
         }
+        let lock = self.fetch_lock(&sum);
+        let _one = lock.lock().unwrap_or_else(|e| e.into_inner());
+        if store.held(&sum) == Some(size) {
+            return Ok(());
+        }
         let mut peers: Vec<Arc<Conn>> = self
             .conns
             .lock()
@@ -863,6 +874,14 @@ impl Node {
             }
         }
         Err(last)
+    }
+
+    /// The lock that keeps fetches of the blob sum one at a time; it is
+    /// dropped from the table when no fetch holds or waits for it.
+    fn fetch_lock(&self, sum: &[u8; 32]) -> Arc<Mutex<()>> {
+        let mut m = self.fetching.lock().unwrap();
+        m.retain(|_, l| Arc::strong_count(l) > 1);
+        Arc::clone(m.entry(*sum).or_default())
     }
 
     /// Fetches the archive sha of the release held from the connected peers
@@ -952,11 +971,14 @@ impl Node {
                 }
                 Ok(Piece::Chunk(_)) => {}
                 Ok(Piece::Missing) => break Err(Error::msg("it does not hold the blob")),
-                Err(_) => {
+                Err(mpsc::RecvTimeoutError::Timeout) => {
                     idle += Duration::from_secs(1);
                     if idle >= FETCH_IDLE {
                         break Err(Error::msg("no chunk came for 15 s"));
                     }
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    break Err(Error::msg("another fetch took the blob's chunks"));
                 }
             }
         };

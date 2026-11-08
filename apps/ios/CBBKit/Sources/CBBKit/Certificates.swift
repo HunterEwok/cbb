@@ -10,6 +10,18 @@ public protocol CertificateSigner {
     var publicKeyDER: Data { get }
     /// An ECDSA signature with SHA-256 over data, DER.
     func signature(for data: Data) throws -> Data
+    /// An ECDSA signature, DER, of a SHA-256 digest: what the Rust core's
+    /// signing callback asks for; not every key gives one.
+    func signature(digest: Data) throws -> Data
+}
+
+/// What a key that signs only whole data answers for a digest.
+public struct WholeDataOnly: Error, CustomStringConvertible {
+    public var description: String { "this key signs only whole data" }
+}
+
+public extension CertificateSigner {
+    func signature(digest _: Data) throws -> Data { throw WholeDataOnly() }
 }
 
 /// A software P-256 key as a CertificateSigner.

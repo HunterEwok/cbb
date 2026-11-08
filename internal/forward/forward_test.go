@@ -1322,3 +1322,93 @@ func TestGroupPathKept(t *testing.T) {
 		t.Fatalf("paths %q, %q, %q", a, b, c)
 	}
 }
+
+// A hub whose hellos over VLESS the forwarder never sees, as when the
+// first request of the local way's flow got no answer, registers again
+// with a way of its own rather than wait for ever, and gets seen then.
+func TestHubRegistersAgainWhenNoHelloComes(t *testing.T) {
+	old := helloUnseen.Load()
+	helloUnseen.Store(int64(2 * time.Second))
+	t.Cleanup(func() { helloUnseen.Store(old) })
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back atomic.Value
+	back.Store("127.0.0.1:9")
+	web, webCert := vlesstest.WebServer(t, path, func() string { return back.Load().(string) })
+	vless.TrustForTests(webCert)
+	f, pin := startForwarderWith(t, Config{VLESS: &VLESSConfig{Listen: "127.0.0.1:0",
+		XHTTP: &XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+	back.Store(net.JoinHostPort("127.0.0.1", strconv.Itoa(int(f.vless.Port()))))
+	closed, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dead := closed.Addr().(*net.TCPAddr).AddrPort()
+	closed.Close()
+	given := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: path, ID: vless.RegistrationID}
+	id, _ := tunnel.NewVLESSID()
+	key, err := tunnel.NewPrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr, err := tunnel.Addr(string(group.NewDeviceID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := tunnel.StartHub(tunnel.HubConfig{PrivateKey: key, Addr: addr, Logf: t.Logf})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { h.Close() })
+	cert, _, ca := member(t)
+	// The first registration's hellos are lost on the way.
+	var lose atomic.Bool
+	lose.Store(true)
+	send := func(to netip.AddrPort, b []byte) error {
+		if lose.Load() {
+			return nil
+		}
+		return h.Send(to, b)
+	}
+	reports := make(chan Report, 16)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		Register(ctx, HubConfig{Link: Link{Endpoint: dead, Pin: pin}, Key: key, VLESSID: id,
+			VLESS: func() []tunnel.VLESS { return []tunnel.VLESS{given} },
+			Cert:  func() tls.Certificate { return cert }, Authority: rootAuthority(ca), Send: send,
+			Report: func(r Report) {
+				select {
+				case reports <- r:
+				default:
+				}
+			}})
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+	deadline := time.After(30 * time.Second)
+	for {
+		select {
+		case r := <-reports:
+			switch {
+			case r.Err != nil:
+				if !lose.Load() || !strings.Contains(r.Err.Error(), "saw none of the hub's hellos") {
+					t.Fatalf("registering: %v", r.Err)
+				}
+				lose.Store(false)
+			case r.Seen.IsValid():
+				if lose.Load() {
+					t.Fatal("seen with every hello lost")
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("the hub never registered again")
+		}
+	}
+}

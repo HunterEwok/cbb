@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>समूह के रूट ने अनुरोध रद्द कर दिया; फ़ोन एडमिन बना रहेगा।</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>समूह अपने हाथ में लेने का अनुरोध अमान्य हो गया; फ़ोन एडमिन बना रहेगा।</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>समूह में शामिल होने के लिए फ़ोन को अपने घर के Wi-Fi से जोड़ें।</translation>
     </message>
@@ -176,6 +184,22 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>%1 पर क्लिपबोर्ड टाइप करें</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>कीबोर्ड वाले डिवाइस</translation>
+    </message>
+    <message>
+        <source>Back to the group's order</source>
+        <translation>समूह के क्रम पर लौटें</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>नया संग्रह…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>कुंजी फिर से जाँचें</translation>
     </message>
@@ -311,6 +335,30 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Take the group over</source>
+        <translation>समूह अपने हाथ में लें</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>%1 से समूह अपने हाथ में लिया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>समूह अपने हाथ में लेना</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>प्रतीक्षा, %1 घंटे बाकी</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>समूह को अनुरोध मिलने की प्रतीक्षा</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>विवाद: समूह के रूट ने अनुरोध का जवाब दिया</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>हटाएँ</translation>
     </message>
@@ -393,6 +441,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>ब्लूटूथ कीबोर्ड</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>ब्लूटूथ कीबोर्ड की तरह काम करें</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>बंद</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>कनेक्ट है</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>काम नहीं कर रहा</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>चालू</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>सेटिंग्स</translation>
@@ -806,6 +878,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>एक वीडियो</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>एक छवि</translation>
     </message>
@@ -833,6 +909,10 @@
 <context>
     <name>Notifier</name>
     <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>समूह से %1 गैलरी में है</translation>
+    </message>
+    <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>समूह से %1 डाउनलोड में सहेजा गया</translation>
     </message>
@@ -843,6 +923,275 @@
     <message>
         <source>%1 files</source>
         <translation>%1 फ़ाइलें</translation>
+    </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>%1 से पेस्ट किया गया</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>व्यवस्थित करें</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>शुरू में ले जाएँ</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>पहले ले जाएँ</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>बाद में ले जाएँ</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>अंत में ले जाएँ</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>%1 में ले जाएँ</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>नया संग्रह…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>संग्रह से निकालें</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>संग्रह का नाम बदलें…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>संग्रह हटाएँ</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>बनाएँ</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>नाम बदलें</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>नया संग्रह</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>संग्रह का नाम बदलें</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>नाम</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>दफ़्तर, घर, टीवी…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 में से %1 ऑनलाइन</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 में से %1 ऑनलाइन</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>संग्रह हटाएँ</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>संग्रह का नाम बदलें…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 में से %1 ऑनलाइन</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>इस संग्रह में अभी कोई डिवाइस नहीं है। किसी डिवाइस को यहाँ लाने के लिए मुख्य पेज पर उसकी टाइल दबाकर रखें।</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>फ़ोन के ब्लूटूथ ने जवाब नहीं दिया। हो सकता है CBB को उसे इस्तेमाल करने की अनुमति न हो।</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>इस फ़ोन का ब्लूटूथ कीबोर्ड की तरह काम नहीं कर सकता।</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>ब्लूटूथ बंद है। फ़ोन की सेटिंग में उसे चालू करें, फिर कीबोर्ड दोबारा चालू करें।</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>फ़ोन कीबोर्ड नहीं बन सका।</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>फ़ोन के ब्लूटूथ ने कीबोर्ड स्वीकार नहीं किया।</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>फ़ोन कीबोर्ड की घोषणा नहीं कर सका।</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>कोई डिवाइस कनेक्ट नहीं है। डिवाइस की ब्लूटूथ सेटिंग से इस फ़ोन से कनेक्ट करें।</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>क्लिपबोर्ड में कोई टेक्स्ट नहीं है।</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>टेक्स्ट में %1 से ज़्यादा अक्षर हैं, जितने कीबोर्ड टाइप करता है उससे ज़्यादा।</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>डिवाइस के लेआउट में इनके लिए कोई कुंजी नहीं है: %1। ऊपर उसका लेआउट चुनें।</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>डिवाइस डिस्कनेक्ट हो गया; टेक्स्ट पूरा टाइप नहीं हुआ।</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>ब्लूटूथ कीबोर्ड</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>ब्लूटूथ कीबोर्ड की तरह काम करें</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>यह फ़ोन अपने साथ पेयर किए गए टीवी, टैबलेट, कंसोल या कंप्यूटर में टाइप करता है, वहाँ कुछ इंस्टॉल नहीं करना पड़ता: आपके टैप करने पर क्लिपबोर्ड।</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>तैयार हो रहा है…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>%1 से कनेक्ट है।</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>एक डिवाइस कनेक्ट है।</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>कोई डिवाइस कनेक्ट नहीं है। डिवाइस की ब्लूटूथ सेटिंग से इस फ़ोन से कनेक्ट करें।</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>%1 सेकंड तक दिखेगा</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>इस फ़ोन को दिखने योग्य बनाएँ</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>जब तक यह दिखता है, नया डिवाइस इसे अपनी ब्लूटूथ सेटिंग में “CBB keyboard” नाम से ढूँढ लेता है।</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>फिर से कोशिश करें</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>डिवाइस का कीबोर्ड लेआउट</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>अंग्रेज़ी (अमेरिका)</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>रूसी</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>गति</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>%1 अक्षर प्रति सेकंड</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>टाइप हो रहा है…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>क्लिपबोर्ड टाइप करें</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>रिमोट पेस्ट</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>समूह के एडमिन को वहाँ पेस्ट करने दें</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>तब समूह का कोई एडमिन इस फ़ोन के ज़रिए उस डिवाइस पर टेक्स्ट टाइप करता है जिससे यह जुड़ा है, अपने ऐप से या cbb paste से। यह फ़ोन दिखाता है कि किसने पेस्ट किया, और पिछले पेस्ट का लॉग उनके टेक्स्ट के बिना रखता है।</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>पेस्ट को Enter दबाने दें</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>लाइन ब्रेक वाले टेक्स्ट को भी इसकी ज़रूरत है: कीबोर्ड लाइन ब्रेक को Enter की तरह टाइप करता है।</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>पिछले पेस्ट</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>(असत्यापित)</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>%1 बाइट</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>अस्वीकृत</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>विफल</translation>
     </message>
 </context>
 <context>

@@ -78,18 +78,18 @@ pub struct Signer<'a> {
 }
 
 impl Signer<'_> {
-    fn hash(&self) -> Hash {
+    pub(crate) fn hash(&self) -> Hash {
         Hash(self.ca.key_hash())
     }
 
     /// The admin CA that goes with what it signs: none for the root.
-    fn chain(&self, rs: &Records) -> Option<Vec<u8>> {
+    pub(crate) fn chain(&self, rs: &Records) -> Option<Vec<u8>> {
         (!rs.state().roots.contains(&self.hash())).then(|| self.ca.der.clone())
     }
 
     /// Fails unless the signer is the group's root or an admin that is not
     /// frozen.
-    fn check(&self, rs: &Records) -> Result<()> {
+    pub(crate) fn check(&self, rs: &Records) -> Result<()> {
         let h = self.hash();
         if rs.state().roots.contains(&h) || rs.devices().iter().any(|d| d.admin && d.admin_key == Some(h.0)) {
             Ok(())
