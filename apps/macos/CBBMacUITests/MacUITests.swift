@@ -44,7 +44,9 @@ final class MacUITests: XCTestCase {
         app.terminate()
     }
 
-    /// U12: the Settings window's switch shows the setting the app runs with.
+    /// U12: the Settings window's switch shows the setting the app runs
+    /// with; while it is off, seven clicks on the version show it, as on the
+    /// phones.
     func testSettingsSwitch() {
         for (arg, want) in [("NO", false), ("YES", true)] {
             let app = launch(["-ShowErrorDetails", arg])
@@ -58,6 +60,14 @@ final class MacUITests: XCTestCase {
                 app.typeKey(",", modifierFlags: .command)
             }
             let toggle = app.descendants(matching: .any).matching(identifier: "errorDetails").firstMatch
+            if !want {
+                let version = app.descendants(matching: .any).matching(identifier: "version").firstMatch
+                XCTAssertTrue(version.waitForExistence(timeout: 10), "Settings has no version in \(app.debugDescription)")
+                XCTAssertFalse(toggle.exists, "the error details switch shows before seven clicks")
+                // A click at the row's centre: the row is no control of its own,
+                // which XCUITest may call not hittable.
+                for _ in 0..<7 { version.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click() }
+            }
             XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Settings has no error details switch in \(app.debugDescription)")
             let on = (toggle.value as? Int ?? Int(toggle.value as? String ?? "") ?? -1) == 1
             XCTAssertEqual(on, want, "ShowErrorDetails \(arg) gives the switch \(String(describing: toggle.value))")

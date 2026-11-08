@@ -158,10 +158,12 @@ fn stop_lines(st: &Status) -> Vec<String> {
     let mut out = Vec::new();
     match st.stop.as_str() {
         "full" => out.push(
-            "The group is stopped: its members exchange records only, no clipboard, until the group's root decides."
-                .to_string(),
+            tr!(
+                "The group is stopped: its members exchange records only, no clipboard, until the group's root decides."
+            )
+            .to_string(),
         ),
-        "secrets" => out.push("The group sends no secrets until its root decides.".to_string()),
+        "secrets" => out.push(tr!("The group sends no secrets until its root decides.").to_string()),
         _ => {}
     }
     for c in &st.conflicts {
@@ -223,7 +225,7 @@ fn roughly(ms: i64) -> String {
 /// Whether sync is on, and until when it is off, as Go's syncLine.
 pub fn sync_line(st: &Status) -> String {
     if st.mode == "shared" {
-        return "Sync is on: copies here go to the group, and the group's copies come here.".to_string();
+        return tr!("Sync is on: copies here go to the group, and the group's copies come here.").to_string();
     }
     let until =
         if st.sync_until_ms != 0 { crate::cli::local_minute(st.sync_until_ms) } else { "cbb sync on".to_string() };
@@ -329,7 +331,11 @@ pub fn write_away(w: &mut String, a: Option<&Away>, limit: &str) {
         w.push_str("Sync away from home: on; waiting to meet the group's hub on the home network. The hub\n");
         w.push_str("learns this device's keys there, so away from home it syncs only after that.\n");
     } else if a.through {
-        let _ = writeln!(w, "Sync away from home: on; connected to the hub {} through the tunnel.", a.hub_device);
+        let _ = writeln!(
+            w,
+            "{}",
+            tr!("Sync away from home: on; connected to the hub {} through the tunnel.", a.hub_device)
+        );
     } else if a.vless {
         let _ = writeln!(
             w,
@@ -339,9 +345,12 @@ pub fn write_away(w: &mut String, a: Option<&Away>, limit: &str) {
     } else {
         let _ = writeln!(
             w,
-            "Sync away from home: on; the hub is {}, at {}; not connected through the tunnel.",
-            a.hub_device,
-            a.endpoints.join(", ")
+            "{}",
+            tr!(
+                "Sync away from home: on; the hub is {}, at {}; not connected through the tunnel.",
+                a.hub_device,
+                a.endpoints.join(", ")
+            )
         );
     }
     if a.vless && !a.hub {

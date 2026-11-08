@@ -106,8 +106,14 @@ class WearModel(private val context: Context, private val scope: CoroutineScope)
         Log.i(TAG, "the phone left the group: the watch's admin key is deleted")
     }
 
-    /** Turns the phone's sync away from home on or off, as its Settings do. */
-    fun setAway(on: Boolean) {
+    /** Turns the phone's sync away from home on or off, as its globe does. */
+    fun setAway(on: Boolean) = ask(WatchState.AWAY_PATH, on)
+
+    /** Turns the phone's sync on or off, as its house does. */
+    fun setSync(on: Boolean) = ask(WatchState.SYNC_PATH, on)
+
+    /** Asks the phone to turn a switch, and waits for its new state. */
+    private fun ask(path: String, on: Boolean) {
         if (switching) return
         switching = true
         note = null
@@ -121,13 +127,13 @@ class WearModel(private val context: Context, private val scope: CoroutineScope)
                     return@launch
                 }
                 val messages = Wearable.getMessageClient(context)
-                nodes.forEach { messages.sendMessage(it.id, WatchState.AWAY_PATH, byteArrayOf(if (on) 1 else 0)).await() }
+                nodes.forEach { messages.sendMessage(it.id, path, byteArrayOf(if (on) 1 else 0)).await() }
                 // The phone answers with its new state; the same state when it could not switch.
                 withTimeoutOrNull(ANSWER_MS) { snapshotFlow { state }.first { it != before } }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e(TAG, "away not switched", e)
+                Log.e(TAG, "the switch $path not turned", e)
                 note = Note(R.string.no_answer, if (showsDetails) e.toString() else null)
             } finally {
                 switching = false

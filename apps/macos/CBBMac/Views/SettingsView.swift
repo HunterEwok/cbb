@@ -3,58 +3,69 @@
 import AppKit
 import SwiftUI
 
-/// The app's settings: the colour, light or dark, the sync mode, remote
-/// paste, and error details.
+/// The app's settings, as the tray app's: the look (light or dark, the
+/// colour, the language) as icons in a row, opening at sign-in, the advanced
+/// ones behind a switch (remote paste, the recovery key), and about, where
+/// seven clicks on the version show the switch for error details.
 struct SettingsView: View {
     @EnvironmentObject private var model: MacModel
     @Environment(\.palette) private var palette
     @AppStorage(AccentChoice.key) private var color = Tokens.colors[0].name
     @AppStorage(Appearance.key) private var appearance = Appearance.system.rawValue
     @AppStorage("ShowErrorDetails") private var errorDetails = MacModel.showsErrorDetails
+    @AppStorage("AdvancedSettings") private var advanced = false
     @State private var atLogin = LoginItem.isOn
     @State private var loginError: String?
+    @State private var language = AppLanguage.chosen
+    @State private var versionClicks = 0
+    @State private var recovering = false
 
     var body: some View {
         Form {
             Section {
-                Picker(selection: $color) {
-                    ForEach(Tokens.colors, id: \.name) { pair in
-                        Text(AccentChoice.title(pair.name)).tag(pair.name)
-                    }
-                } label: { Text("Colour") }
+                HStack(spacing: Tokens.spacingMedium) {
+                    Picker(selection: $appearance) {
+                        ForEach(Appearance.allCases) { a in
+                            Image(systemName: a.macSymbol).accessibilityLabel(Text(a.title)).help(Text(a.title)).tag(a.rawValue)
+                        }
+                    } label: { Text("Appearance") }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                    Spacer()
+                    Picker(selection: Binding(get: { language }, set: { language = $0; AppLanguage.choose($0) })) {
+                        Text("System language").tag("")
+                        ForEach(AppLanguage.available, id: \.self) { l in Text(verbatim: AppLanguage.name(l)).tag(l) }
+                    } label: { Image(systemName: "globe").accessibilityLabel(Text("Language")) }
+                        .fixedSize()
+                        .help(Text("Language"))
+                }
                 HStack(spacing: Tokens.spacingSmall) {
                     ForEach(Tokens.colors, id: \.name) { pair in
                         let p = (Appearance(rawValue: appearance) ?? .system).palette(pair.name, for: palette.dark ? .dark : .light)
-                        Circle().fill(p.accent).frame(width: 20, height: 20)
+                        Circle().fill(p.accent).frame(width: 22, height: 22)
                             .overlay(Circle().stroke(palette.text, lineWidth: pair.name == color ? 2 : 0).padding(-3))
                             .onTapGesture { color = pair.name }
+                            .help(Text(AccentChoice.title(pair.name)))
                             .accessibilityLabel(Text(AccentChoice.title(pair.name)))
+                            .accessibilityAddTraits(pair.name == color ? [.isButton, .isSelected] : .isButton)
                     }
                 }
-                Picker(selection: $appearance) {
-                    ForEach(Appearance.allCases) { a in Text(a.title).tag(a.rawValue) }
-                } label: { Text("Appearance") }
-            } header: { Text("Look") }
+                if language != AppLanguage.running {
+                    LabeledContent {
+                        Button { AppLanguage.reopen() } label: { Text("Reopen CBB") }
+                    } label: { Text("The new language shows once CBB opens again.").foregroundStyle(palette.textDim) }
+                }
+            }
             Section {
                 Toggle(isOn: Binding(get: { atLogin }, set: { on in
                     loginError = LoginItem.set(on)
                     atLogin = LoginItem.isOn
-                })) { Text("Open at login") }
+                })) { Text("Open at sign-in") }
                 if let loginError { Text(verbatim: loginError).foregroundStyle(palette.danger) }
-            } footer: {
-                Text("CBB lives in the menu bar; its window opens from there.")
+                Toggle(isOn: $advanced) { Text("Advanced settings") }
             }
-            if model.inGroup, let mode = model.status?.mode.flatMap(SyncMode.init(rawValue:)) {
-                Section {
-                    Picker(selection: Binding(get: { mode }, set: { new in Task { await model.setMode(new) } })) {
-                        ForEach(SyncMode.allCases) { m in Text(m.title).tag(m) }
-                    } label: { Text("Sync") }
-                        .disabled(model.busy)
-                } header: { Text("This Mac's clipboard") } footer: {
-                    Text("Off, the clipboard is this Mac's own; Fetch still brings the group's text.")
-                }
-            }
-            if model.inGroup {
+            if advanced {
                 Section {
                     LabeledContent {
                         if model.pasteAllowed {
@@ -62,32 +73,103 @@ struct SettingsView: View {
                         } else {
                             Button { model.allowPaste() } label: { Text("Allow…") }
                         }
-                    } label: { Text("Pressing keys") }
-                } header: { Text("Remote paste") } footer: {
-                    Text("An admin's paste goes where this Mac's keyboard focus is, while this app is open. macOS asks you to allow the app in System Settings, Privacy & Security, Accessibility. Turn remote paste on with cbb paste-receive on.")
-                }
+                    } label: {
+                        Text("Paste from other devices")
+                    }
+                    .help(Text("An admin's paste goes where this Mac's keyboard focus is, while this app is open. Turn it on with cbb paste-receive on."))
+                    if model.inGroup {
+                        Button { recovering = true } label: { Text("Claim the group with its recovery key") }
+                    }
+                } header: { Text("Advanced") }
             }
             Section {
+                // The whole row takes the clicks, so that a short version
+                // is as easy to hit as a long one.
                 LabeledContent {
                     Text(verbatim: model.status?.version ?? "–").monospaced()
-                } label: { Text("Service version") }
-                Toggle(isOn: $errorDetails) { Text("Show error details") }
-                    .accessibilityIdentifier("errorDetails")
+                } label: { Text("Version") }
+                    .contentShape(Rectangle())
+                    .onTapGesture { versionClicks += 1 }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("version")
+                    .accessibilityAddTraits(.isButton)
+                // Seven clicks on the version show the switch, as on the
+                // phones; it stays in sight while it is on.
+                if versionClicks >= 7 || errorDetails {
+                    Toggle(isOn: $errorDetails) { Text("Show error details") }
+                        .accessibilityIdentifier("errorDetails")
+                }
                 Link(destination: URL(string: "https://github.com/HunterEwok/cbb")!) {
                     Text("Source code and license (AGPL-3.0)")
                 }
-            } header: { Text("About") } footer: {
-                Text("Error messages show the error underneath them, to find out what failed.")
-            }
+            } header: { Text("About") }
         }
         .formStyle(.grouped)
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+        .sheet(isPresented: $recovering) { RecoverySheet().environmentObject(model).modifier(Themed()) }
     }
 }
 
-/// The menu bar item: where the group stands, send and fetch, and the
-/// window.
+extension Appearance {
+    /// The appearance as an icon in Settings.
+    var macSymbol: String {
+        switch self {
+        case .system: "circle.lefthalf.filled"
+        case .dark: "moon"
+        case .light: "sun.max"
+        }
+    }
+}
+
+/// The app's language: the system's, or one the user picks in Settings,
+/// which macOS applies the next time the app opens (AppleLanguages, as
+/// System Settings' per-app language does).
+enum AppLanguage {
+    static let key = "AppleLanguages"
+
+    /// The languages the app is translated into.
+    static var available: [String] {
+        Bundle.main.localizations.filter { $0 != "Base" }.sorted()
+    }
+
+    /// The language the user picked, "" for the system's.
+    static var chosen: String {
+        guard UserDefaults.standard.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "")?[key] != nil else { return "" }
+        return (UserDefaults.standard.array(forKey: key) as? [String])?.first ?? ""
+    }
+
+    /// The language picked when the app opened.
+    static let running = chosen
+
+    static func choose(_ language: String) {
+        if language.isEmpty {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else {
+            UserDefaults.standard.set([language], forKey: key)
+        }
+    }
+
+    /// A language by its own name.
+    static func name(_ language: String) -> String {
+        let locale = Locale(identifier: language)
+        let n = locale.localizedString(forLanguageCode: language) ?? language
+        return n.prefix(1).uppercased(with: locale) + n.dropFirst()
+    }
+
+    /// Opens the app again, in its new language.
+    static func reopen() {
+        let config = NSWorkspace.OpenConfiguration()
+        config.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config) { _, _ in
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+        }
+    }
+}
+
+/// The menu bar item, as the tray app's menu: where the group stands, the
+/// two switches (sync, with a time to turn it off for, and Everywhere), the
+/// window, its settings, an update, quit (docs/apps.md, The Mac app).
 struct MenuContent: View {
     @EnvironmentObject private var model: MacModel
     @Environment(\.openWindow) private var openWindow
@@ -97,24 +179,49 @@ struct MenuContent: View {
             Text(verbatim: problem)
         } else if model.inGroup {
             Text("\(model.devices.filter { $0.online || $0.isSelf }.count) of \(model.devices.count) online")
-            if model.awayOn { Text("Sync away from home is on") }
         } else {
             Text("This Mac is in no group yet")
         }
-        Divider()
-        Button { Task { await model.send() } } label: { Text("Send the clipboard") }
-            .disabled(!model.inGroup || model.busy)
-        Button { Task { await model.fetch() } } label: { Text("Fetch") }
-            .disabled(!model.inGroup || model.busy)
         if let message = model.message { Text(verbatim: message) }
+        if model.inGroup {
+            Divider()
+            Toggle(isOn: Binding(get: { !model.syncOff }, set: { on in Task { await model.turnSync(on) } })) {
+                model.syncOff ? Text(verbatim: SyncSwitches.syncOffTitle(until: model.syncOffUntil)) : Text("Sync")
+            }
+            .disabled(model.busy)
+            if !model.syncOff {
+                Menu {
+                    ForEach(PauseTime.allCases) { t in
+                        Button { Task { await model.turnSync(false, forMS: t.ms) } } label: { Text(t.title) }
+                    }
+                } label: { Text("Turn sync off") }
+                    .disabled(model.busy)
+            }
+            Toggle(isOn: Binding(get: { model.awayOn }, set: { on in
+                if on {
+                    // The window asks first.
+                    open()
+                    model.askingAway = true
+                } else {
+                    Task { await model.setAway(false) }
+                }
+            })) { Text("Everywhere") }
+                .disabled(model.busy || (model.syncOff && !model.awayOn))
+        }
         Divider()
-        Button {
-            openWindow(id: "main")
-            NSApp.activate(ignoringOtherApps: true)
-        } label: { Text("Open CBB") }
+        Button { open() } label: { Text("Open CBB") }
             .keyboardShortcut("o")
         SettingsLink { Text("Settings…") }.keyboardShortcut(",")
+        if model.problem == nil, let version = model.status?.update, !version.isEmpty {
+            Button { Task { await model.update() } } label: { Text("Update to \(version)") }
+                .disabled(model.busy)
+        }
         Divider()
         Button { NSApp.terminate(nil) } label: { Text("Quit") }.keyboardShortcut("q")
+    }
+
+    private func open() {
+        openWindow(id: "main")
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

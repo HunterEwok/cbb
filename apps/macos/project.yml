@@ -31,7 +31,7 @@ targets:
         CFBundleName: CBB
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ru]
+        CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
         LSApplicationCategoryType: public.app-category.utilities
         # Lives in the menu bar only, as the tray app on Windows and Linux:
         # no Dock icon; the window opens from the menu.

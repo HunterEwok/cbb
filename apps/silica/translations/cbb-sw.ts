@@ -180,86 +180,6 @@
         <translation>Kagua ufunguo tena</translation>
     </message>
     <message>
-        <source>Join a group</source>
-        <translation>Jiunge na kikundi</translation>
-    </message>
-    <message>
-        <source>Last copy</source>
-        <translation>Nakala ya mwisho</translation>
-    </message>
-    <message>
-        <source>Leave the group</source>
-        <translation>Ondoka kwenye kikundi</translation>
-    </message>
-    <message>
-        <source>Leaving the group</source>
-        <translation>Inaondoka kwenye kikundi</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>Jiunge na kikundi kama msimamizi</translation>
-    </message>
-    <message>
-        <source>For 15 minutes</source>
-        <translation>Kwa dakika 15</translation>
-    </message>
-    <message>
-        <source>For an hour</source>
-        <translation>Kwa saa moja</translation>
-    </message>
-    <message>
-        <source>For 8 hours</source>
-        <translation>Kwa saa 8</translation>
-    </message>
-    <message>
-        <source>Until I turn it on</source>
-        <translation>Hadi niiwashe</translation>
-    </message>
-    <message>
-        <source>Taking copies</source>
-        <translation>Inapokea nakala</translation>
-    </message>
-    <message>
-        <source>Not taking copies until %1</source>
-        <translation>Haipokei nakala hadi %1</translation>
-    </message>
-    <message>
-        <source>Not taking copies</source>
-        <translation>Haipokei nakala</translation>
-    </message>
-    <message>
-        <source>Tap to take no copies from the group, or again; hold it for a time</source>
-        <translation>Gusa ili usipokee nakala za kikundi, au upokee tena; shikilia ili kuchagua muda</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
-        <translation>Msimamizi amenyamazisha simu hii hadi %1: nakala zake hazifiki kwenye kikundi.</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
-        <translation>Msimamizi amenyamazisha simu hii: nakala zake hazifiki kwenye kikundi hadi msimamizi aiondolee unyamazishaji.</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>Katika kikundi</translation>
-    </message>
-    <message>
-        <source>Admin</source>
-        <translation>Msimamizi</translation>
-    </message>
-    <message>
-        <source>Member</source>
-        <translation>Mwanachama</translation>
-    </message>
-    <message>
-        <source>The phone has no key yet. Pull down to check it again.</source>
-        <translation>Simu bado haina ufunguo. Vuta chini ili kuangalia tena.</translation>
-    </message>
-    <message>
-        <source>Devices</source>
-        <translation>Vifaa</translation>
-    </message>
-    <message>
         <source>Settings</source>
         <translation>Mipangilio</translation>
     </message>
@@ -272,60 +192,124 @@
         <translation>Onyesha vifaa kama orodha</translation>
     </message>
     <message>
-        <source>Add a device</source>
-        <translation>Ongeza kifaa</translation>
+        <source>Scan a code</source>
+        <translation>Changanua msimbo</translation>
     </message>
     <message>
-        <source>Make a group</source>
+        <source>Create a group</source>
         <translation>Unda kikundi</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>Inaondoka kwenye kikundi na kufuta ufunguo wake wa mzizi</translation>
+        <source>Join a group</source>
+        <translation>Jiunge na kikundi</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one or make one.</source>
-        <translation>Simu bado haiko kwenye kikundi. Vuta chini ili ujiunge na kikundi au uunde kimoja.</translation>
+        <source>Join a group as an admin</source>
+        <translation>Jiunge na kikundi kama msimamizi</translation>
     </message>
     <message>
-        <source>Root</source>
-        <translation>Mzizi</translation>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>Simu bado haina ufunguo. Vuta chini ili kuangalia tena.</translation>
     </message>
     <message>
-        <source>Sync the clipboard</source>
-        <translation>Sawazisha ubao wa kunakili</translation>
+        <source>%1 of %2 online</source>
+        <translation>%1 kati ya %2 mtandaoni</translation>
     </message>
     <message>
-        <source>Sync</source>
-        <translation>Sawazisha</translation>
+        <source>Sync is on</source>
+        <translation>Usawazishaji umewashwa</translation>
     </message>
     <message>
-        <source>Fetching…</source>
-        <translation>Inaleta…</translation>
+        <source>Sync is off until %1</source>
+        <translation>Usawazishaji umezimwa hadi %1</translation>
+    </message>
+    <message>
+        <source>Sync is off</source>
+        <translation>Usawazishaji umezimwa</translation>
+    </message>
+    <message>
+        <source>Everywhere is off</source>
+        <translation>Kila mahali imezimwa</translation>
+    </message>
+    <message>
+        <source>Everywhere waits while sync is off</source>
+        <translation>Kila mahali inasubiri wakati usawazishaji umezimwa</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>Nyumbani: inasawazisha moja kwa moja.</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>Inaunganisha na kitovu kupitia handaki…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>Imeunganishwa na kitovu %1 kupitia handaki.</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>Imeunganishwa na kitovu kupitia handaki.</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>Inasubiri kitovu: fungua programu mara moja nyumbani, karibu na kompyuta ya kikundi.</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>Zima usawazishaji</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>Washa usawazishaji</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere off</source>
+        <translation>Zima Kila mahali</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere on</source>
+        <translation>Washa Kila mahali</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>Msimamizi amenyamazisha simu hii hadi %1: nakala zake hazifiki kwenye kikundi.</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>Msimamizi amenyamazisha simu hii: nakala zake hazifiki kwenye kikundi hadi msimamizi aiondolee unyamazishaji.</translation>
+    </message>
+    <message>
+        <source>Lost phone?</source>
+        <translation>Umepoteza simu?</translation>
+    </message>
+    <message>
+        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
+        <translation>Fanya simu ya pili kuwa msimamizi: kwenye simu hiyo, gusa Jiunge na kikundi kama msimamizi, kisha changanua msimbo wake hapa kwa Changanua msimbo. Gusa ili kufunga.</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>Vifaa</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>Zima kwa dakika 15</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>Zima kwa saa moja</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>Zima kwa saa 8</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>Zima hadi niiwashe</translation>
     </message>
 </context>
 <context>
     <name>DevicePage</name>
-    <message>
-        <source>System</source>
-        <translation>Mfumo</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>Katika kikundi</translation>
-    </message>
-    <message>
-        <source>Type</source>
-        <translation>Aina</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>Hali</translation>
-    </message>
-    <message>
-        <source>Device ID</source>
-        <translation>Kitambulisho cha kifaa</translation>
-    </message>
     <message>
         <source>Remove</source>
         <translation>Ondoa</translation>
@@ -333,6 +317,14 @@
     <message>
         <source>Removing %1</source>
         <translation>Inaondoa %1</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>Fanya msimamizi</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>Inamfanya %1 kuwa msimamizi</translation>
     </message>
     <message>
         <source>Unfreeze</source>
@@ -351,24 +343,52 @@
         <translation>Nyamazisha hadi uondoe</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>Nyamazisha kwa saa moja</translation>
-    </message>
-    <message>
         <source>Muting %1</source>
         <translation>Inanyamazisha %1</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Nyamazisha kwa saa moja</translation>
     </message>
     <message>
         <source>Rename</source>
         <translation>Badilisha jina</translation>
     </message>
     <message>
-        <source>Make an admin</source>
-        <translation>Fanya msimamizi</translation>
+        <source>Sync</source>
+        <translation>Usawazishaji</translation>
     </message>
     <message>
-        <source>Making %1 an admin</source>
-        <translation>Inamfanya %1 kuwa msimamizi</translation>
+        <source>Sync is off</source>
+        <translation>Usawazishaji umezimwa</translation>
+    </message>
+    <message>
+        <source>Sync is on</source>
+        <translation>Usawazishaji umewashwa</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>Zaidi</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>Aina</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>Katika kikundi</translation>
+    </message>
+    <message>
+        <source>System version</source>
+        <translation>Toleo la mfumo</translation>
+    </message>
+    <message>
+        <source>MAC address</source>
+        <translation>Anwani ya MAC</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>Kitambulisho cha kifaa</translation>
     </message>
 </context>
 <context>
@@ -396,6 +416,42 @@
     <message>
         <source>Puts the error itself under each error message</source>
         <translation>Huweka hitilafu yenyewe chini ya kila ujumbe wa hitilafu</translation>
+    </message>
+    <message>
+        <source>Notifications</source>
+        <translation>Arifa</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>Vifaa vinajiunga au kuondoka</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>Kifaa kinakuwa msimamizi</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>Kifaa kinagandishwa au kuyeyushwa</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>Simu nyingine inachukua kikundi</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Kikundi</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>Ondoka kwenye kikundi</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>Inaondoka kwenye kikundi na kufuta ufunguo wake wa mzizi</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>Inaondoka kwenye kikundi</translation>
     </message>
     <message>
         <source>About</source>
@@ -438,64 +494,8 @@
         <translation>Alama ya ufunguo</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>Kikundi</translation>
-    </message>
-    <message>
         <source>Device</source>
         <translation>Kifaa</translation>
-    </message>
-    <message>
-        <source>Notifications</source>
-        <translation>Arifa</translation>
-    </message>
-    <message>
-        <source>Devices join or leave</source>
-        <translation>Vifaa vinajiunga au kuondoka</translation>
-    </message>
-    <message>
-        <source>A device becomes an admin</source>
-        <translation>Kifaa kinakuwa msimamizi</translation>
-    </message>
-    <message>
-        <source>A device is frozen or unfrozen</source>
-        <translation>Kifaa kinagandishwa au kuyeyushwa</translation>
-    </message>
-    <message>
-        <source>Another phone takes the group over</source>
-        <translation>Simu nyingine inachukua kikundi</translation>
-    </message>
-    <message>
-        <source>Away from home</source>
-        <translation>Mbali na nyumbani</translation>
-    </message>
-    <message>
-        <source>Sync away from home</source>
-        <translation>Sawazisha ukiwa mbali na nyumbani</translation>
-    </message>
-    <message>
-        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
-        <translation>Simu isipokuwa kwenye mtandao wa nyumbani, husawazisha kupitia handaki la WireGuard la kitovu chako mwenyewe, kompyuta ya kikundi iliyowekwa kwa cbb global hub; mlango wake unafikika kutoka intaneti, lakini kupitia WireGuard yenye funguo za kikundi pekee. Kitovu hujibu simu hii itakapounganika nyumbani wakati ujao. Hakuna kinachoenda kwingine, na bila handaki hakuna muunganisho. Kuzima husahaulisha simu hii ufunguo wake wa handaki.</translation>
-    </message>
-    <message>
-        <source>At home: syncing directly.</source>
-        <translation>Nyumbani: inasawazisha moja kwa moja.</translation>
-    </message>
-    <message>
-        <source>Connecting to the hub through the tunnel…</source>
-        <translation>Inaunganisha na kitovu kupitia handaki…</translation>
-    </message>
-    <message>
-        <source>Connected to the hub %1 through the tunnel.</source>
-        <translation>Imeunganishwa na kitovu %1 kupitia handaki.</translation>
-    </message>
-    <message>
-        <source>Connected to the hub through the tunnel.</source>
-        <translation>Imeunganishwa na kitovu kupitia handaki.</translation>
-    </message>
-    <message>
-        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
-        <translation>Inasubiri kitovu: fungua programu mara moja nyumbani, karibu na kompyuta ya kikundi.</translation>
     </message>
 </context>
 <context>
@@ -674,8 +674,8 @@
         <translation>Imenyamazishwa</translation>
     </message>
     <message>
-        <source>Paused</source>
-        <translation>Imesitishwa</translation>
+        <source>Sync is off</source>
+        <translation>Usawazishaji umezimwa</translation>
     </message>
     <message>
         <source>Looking for devices</source>
@@ -843,6 +843,21 @@
     <message>
         <source>%1 files</source>
         <translation>faili %1</translation>
+    </message>
+</context>
+<context>
+    <name>AwayDialog</name>
+    <message>
+        <source>Turn Everywhere on?</source>
+        <translation>Washa Kila mahali?</translation>
+    </message>
+    <message>
+        <source>Turn on</source>
+        <translation>Washa</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>Simu isipokuwa kwenye mtandao wa nyumbani, husawazisha kupitia handaki la WireGuard la kitovu chako mwenyewe, kompyuta ya kikundi iliyowekwa kwa cbb global hub; mlango wake unafikika kutoka intaneti, lakini kupitia WireGuard yenye funguo za kikundi pekee. Kitovu hujibu simu hii itakapounganika nyumbani wakati ujao. Hakuna kinachoenda kwingine, na bila handaki hakuna muunganisho. Kuzima husahaulisha simu hii ufunguo wake wa handaki.</translation>
     </message>
 </context>
 </TS>

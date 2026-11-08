@@ -42,11 +42,6 @@ internal fun KeyLevelSection(model: AppModel, level: String) {
             }
         }
         model.keyLevelNote?.let { NoteText(it) }
-        Text(
-            stringResource(R.string.key_level_body),
-            Modifier.padding(Tokens.spacingMedium),
-            style = MaterialTheme.typography.bodyMedium,
-            color = palette.textDim,
-        )
+        Tip(R.string.key_level_body, Modifier.padding(Tokens.spacingMedium))
     }
 }

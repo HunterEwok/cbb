@@ -4,20 +4,19 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import SwiftUI
 
-/// Joining a phone's group from the app: the QR code the phone scans,
-/// which cbb pair -app writes once it runs as the administrator
-/// (MacModel.joinPhone). Cancel removes the file, and cbb hangs up.
+/// Joining a group from the app: the QR code a phone of the group scans and
+/// the six digits a computer of the group types, which cbb pair -app writes
+/// once it runs as the administrator (MacModel.joinGroup). Cancel removes
+/// the file, and cbb hangs up.
 struct JoinSheet: View {
     @EnvironmentObject private var model: MacModel
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.spacingLarge) {
-            Text("Join a phone's group").font(.title2.weight(.semibold))
+            Text("Join a group").font(.title2.weight(.semibold))
             if let join = model.join {
                 VStack(spacing: Tokens.spacingMedium) {
-                    Text("In the CBB app on the phone, tap \"Connect a new device\" and scan this code:")
-                        .fixedSize(horizontal: false, vertical: true)
                     if let image = Self.qrImage(join.qr) {
                         Image(nsImage: image)
                             .interpolation(.none)
@@ -27,11 +26,21 @@ struct JoinSheet: View {
                             .background(.white, in: RoundedRectangle(cornerRadius: 8))
                             .accessibilityLabel(Text("QR code"))
                     }
-                    Text("Without a camera, paste this into the app:").font(.caption).foregroundStyle(palette.textDim)
-                    Text(verbatim: join.qr)
-                        .font(.system(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let digits = join.digits {
+                        Text(verbatim: digits)
+                            .font(.system(size: 34, weight: .semibold, design: .monospaced))
+                            .textSelection(.enabled)
+                            .accessibilityLabel(Text("The six digits: \(digits)"))
+                    }
+                    Text("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.")
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    DisclosureGroup {
+                        Text(verbatim: join.qr)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } label: { Text("Without a camera").font(.caption).foregroundStyle(palette.textDim) }
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         let minutes = max(0, Int((join.ends.timeIntervalSince(context.date) / 60).rounded(.up)))
                         Text("The code is valid for \(minutes) more min.").font(.caption).foregroundStyle(palette.textDim)
@@ -43,7 +52,7 @@ struct JoinSheet: View {
             } else {
                 HStack(spacing: Tokens.spacingMedium) {
                     ProgressView().controlSize(.small)
-                    Text("Allow cbb to run as the administrator; the QR code shows next.").foregroundStyle(palette.textDim)
+                    Text("Allow cbb to run as the administrator; the code shows next.").foregroundStyle(palette.textDim)
                 }
             }
             HStack {

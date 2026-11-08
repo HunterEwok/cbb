@@ -105,8 +105,14 @@ final class WatchModel: NSObject, ObservableObject {
         WCSession.default.activate()
     }
 
-    /// Turns the phone's sync away from home on or off, as its Settings do.
-    func setAway(_ on: Bool) {
+    /// Turns the phone's sync away from home on or off, as its globe does.
+    func setAway(_ on: Bool) { ask(WatchState.awayKey, on) }
+
+    /// Turns the phone's sync on or off, as its house does.
+    func setSync(_ on: Bool) { ask(WatchState.syncKey, on) }
+
+    /// Asks the phone to turn a switch, and takes its new state.
+    private func ask(_ key: String, _ on: Bool) {
         let session = WCSession.default
         guard session.isReachable else {
             note = String(localized: "Open CBB on the iPhone, then try again.")
@@ -114,7 +120,7 @@ final class WatchModel: NSObject, ObservableObject {
         }
         switching = true
         note = nil
-        session.sendMessage([WatchState.awayKey: on], replyHandler: { reply in
+        session.sendMessage([key: on], replyHandler: { reply in
             let s = WatchState(reply)
             Task { @MainActor in
                 if let s {
@@ -124,7 +130,7 @@ final class WatchModel: NSObject, ObservableObject {
                 self.switching = false
             }
         }, errorHandler: { error in
-            log.error("away not switched: \(String(reflecting: error), privacy: .public)")
+            log.error("\(key, privacy: .public) not switched: \(String(reflecting: error), privacy: .public)")
             Task { @MainActor in
                 self.switching = false
                 self.note = String(localized: "The iPhone did not answer. Try again.")
