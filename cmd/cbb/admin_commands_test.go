@@ -117,7 +117,7 @@ func TestDeviceCommands(t *testing.T) {
 
 func TestSyncAndNetwork(t *testing.T) {
 	inG := func(st control.Status) control.Header {
-		st.Role, st.OS, st.Group = "full", "linux", "g1"
+		st.Role, st.OS, st.Group = "member", "linux", "g1"
 		return control.Header{Status: &st}
 	}
 	runCommandCases(t, []commandCase{

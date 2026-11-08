@@ -126,7 +126,14 @@ func TestSwiftMemberTLS(t *testing.T) {
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(context.Background(), tls.Server(raw, server.ServerTLS())) }()
 
-	waitWrite(t, server, "from swift")
+	select {
+	case w := <-server.writes:
+		if w.Text != "from swift" {
+			fail("wrote %q, want %q", w.Text, "from swift")
+		}
+	case <-time.After(5 * time.Second):
+		fail("never wrote %q", "from swift")
+	}
 	if p := server.Peers(); len(p) != 1 || p[0].ID != phoneID || p[0].Role != Phone || (p[0].Name != "iPhone" && p[0].Name != "Android") {
 		fail("peers %+v, want the phone", p)
 	}

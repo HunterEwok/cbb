@@ -7,7 +7,12 @@
 # new version one at a time, keeping their state directories, as cbb update
 # does.
 #
-#   sh tools/e2e/upgrade.sh path/to/old/cbb path/to/new/cbb
+#   sh tools/e2e/upgrade.sh path/to/old/cbb path/to/new/cbb [path/to/cli]
+#
+# With path/to/cli, the new version is the Rust service (member/), run as a
+# computer's with cbb-helper when it is beside it, and every command
+# runs path/to/cli, the Go cbb, against the service's socket: the move of
+# the computers from the Go service to the Rust one, on the same state.
 #
 # From 0.6 on, the group must survive: the same group and devices, copies
 # both ways between an updated member and those not yet updated, then
@@ -21,6 +26,8 @@ set -eu
 abs() { echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; }
 old=$(abs "$1")
 new=$(abs "$2")
+cli=
+if [ $# -gt 2 ]; then cli=$(abs "$3"); fi
 image=${E2E_IMAGE:-debian:stable-slim}
 run=cbup-$$
 net=$run-net
@@ -47,7 +54,7 @@ trap cleanup EXIT
 cb() { # member, arguments...
 	m=$1
 	shift
-	docker exec -i "$run-$m" /cb/cbb "$@"
+	docker exec -i "$run-$m" /cb/cli "$@"
 }
 
 # eventually runs a command until it succeeds, for up to 20 seconds.
@@ -63,9 +70,17 @@ eventually() {
 }
 
 # start runs a member on a version, with its state in its own volume.
+# The commands run the member's own binary, or path/to/cli when it is given.
 start() { # member, binary
+	mounts="-v $2:/cb/cbb:ro -v ${cli:-$2}:/cb/cli:ro"
+	if [ -n "$cli" ] && [ "$2" = "$new" ]; then
+		if [ -f "$(dirname "$new")/cbb-helper" ]; then
+			mounts="$mounts -v $(dirname "$new")/cbb-helper:/cb/cbb-helper:ro"
+		fi
+	fi
+	# shellcheck disable=SC2086 # several mounts
 	docker run -d --name "$run-$1" --hostname "host-$1" --network "$net" \
-		-e CBB_SOCKET=/s/c.sock -v "$run-$1:/s" -v "$2:/cb/cbb:ro" "$image" \
+		-e CBB_SOCKET=/s/c.sock -v "$run-$1:/s" $mounts "$image" \
 		/cb/cbb service -state /s -socket /s/c.sock >/dev/null
 	eventually "$1 starts" cb "$1" status
 }
@@ -75,11 +90,16 @@ update() { # member
 	docker stop -t 10 "$run-$1" >/dev/null
 	docker rm "$run-$1" >/dev/null
 	start "$1" "$new"
-	cb "$1" version | grep -q "$newv" || fail "$1 does not run $newv"
+	if [ -n "$cli" ]; then
+		# The Go cbb's version shows its own; the service's is in status.
+		cb "$1" status | grep -q "$newv" || fail "$1 does not run $newv"
+	else
+		cb "$1" version | grep -q "$newv" || fail "$1 does not run $newv"
+	fi
 }
 
 pair() { # admin, joiner
-	docker exec -d "$run-$1" sh -c '/cb/cbb pair >/s/pair.out 2>&1'
+	docker exec -d "$run-$1" sh -c '/cb/cli pair >/s/pair.out 2>&1'
 	eventually "a code on $1" docker exec "$run-$1" grep -q 'Pairing code' /s/pair.out
 	code=$(docker exec "$run-$1" sed -n 's/^Pairing code: \([0-9]*\) \([0-9]*\)$/\1\2/p' /s/pair.out)
 	printf '%s\n' "$code" | cb "$2" pair -code >/dev/null || fail "$2 could not join with the code from $1"
@@ -90,7 +110,7 @@ connected() { # member, count: the other devices that cbb status lists online
 }
 
 has() { # member, text
-	[ "$(docker exec "$run-$1" /cb/cbb paste)" = "$2" ]
+	[ "$(docker exec "$run-$1" /cb/cli paste)" = "$2" ]
 }
 
 copies() { # from, text, to...
@@ -108,7 +128,7 @@ group() {
 	cb "$1" status | awk '/^NAME/ { on = 1; next } on && NF { print $NF }' | sort
 }
 
-version() { "$1" version | sed -n 's/^[a-z]* v\([0-9][0-9.]*\).*/\1/p'; }
+version() { "$1" version | sed -n 's/^[a-z]* v\{0,1\}\([0-9][0-9.]*\).*/\1/p' | head -n 1; }
 oldv=$(version "$old")
 newv=$(version "$new")
 [ -n "$oldv" ] && [ -n "$newv" ] || fail "no versions: $oldv, $newv"

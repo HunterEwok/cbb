@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net"
 	"os"
@@ -27,7 +28,25 @@ import (
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/pair"
 	"github.com/HunterEwok/cbb/internal/phone"
+	"github.com/HunterEwok/cbb/internal/relay"
+	"github.com/HunterEwok/cbb/internal/tunnel"
+	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
+
+// adminOn makes the device name an admin on the root, once it is connected
+// there to get its admin CA.
+func adminOn(t *testing.T, cli string, root *testService, name string) {
+	t.Helper()
+	var out string
+	var err error
+	waitFor(t, name+" connected to "+root.name+" for cbb admin", func() bool {
+		out, err = runCLI(cli, root.socket, "", "admin", "-allow-file-key", name)
+		return err == nil || !strings.Contains(out, "is not connected")
+	})
+	if err != nil {
+		t.Fatalf("cbb admin %s on %s: %v\n%s", name, root.name, err, out)
+	}
+}
 
 // goCLI builds the Go command line for the tests that run it against the
 // Rust service.
@@ -160,6 +179,14 @@ func TestLiteRoot(t *testing.T) {
 	must("", "rename", "laptop", "desk")
 	waitFor(t, "the laptop renamed", listed("desk", false))
 
+	// A mute and its end: each makes the laptop connect again half a second
+	// later (restartAfter), so they come long before the removal at the end,
+	// which reaches only a laptop whose connection is up when it is sent.
+	must("", "mute", "-on", "desk")
+	waitFor(t, "the laptop muted", func() bool { return laptop.status(t).Muted })
+	must("", "unmute", "-on", "desk")
+	waitFor(t, "the laptop unmuted", func() bool { return !laptop.status(t).Muted })
+
 	if out, err := cbb("", "admin", "desk"); err == nil || !strings.Contains(out, "allow-file-key") {
 		t.Errorf("cbb admin of a computer whose keys are in a file: %v\n%s", err, out)
 	}
@@ -199,7 +226,7 @@ func TestLiteRoot(t *testing.T) {
 	if out, err := cbb("", "remove", "nobody"); err == nil || !strings.Contains(out, `no device "nobody"`) {
 		t.Errorf("cbb remove of an unknown device: %v\n%s", err, out)
 	}
-	// The group's settings, a mute and a handover.
+	// The group's settings and a handover.
 	must("", "incoming", "2m")
 	waitFor(t, "the laptop takes the incoming time", func() bool { return laptop.status(t).IncomingMS == 120000 })
 	if out := must("", "takeover", "-delay", "0s"); !strings.Contains(out, "now waits 0s") {
@@ -208,10 +235,6 @@ func TestLiteRoot(t *testing.T) {
 	if out, err := cbb("", "takeover", "-delay", "200h"); err == nil || !strings.Contains(out, "from 0s to 168h") {
 		t.Errorf("a takeover delay too long: %v\n%s", err, out)
 	}
-	must("", "mute", "-on", "desk")
-	waitFor(t, "the laptop muted", func() bool { return laptop.status(t).Muted })
-	must("", "unmute", "-on", "desk")
-	waitFor(t, "the laptop unmuted", func() bool { return !laptop.status(t).Muted })
 	if out := must("", "handover", "desk"); !strings.Contains(out, "Handed the group over to desk") {
 		t.Errorf("cbb handover:\n%s", out)
 	}
@@ -390,9 +413,7 @@ func TestLiteTakeover(t *testing.T) {
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 2 && st.Status.Role == "member"
 	})
 
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
 	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "laptop"); err != nil {
 		t.Fatalf("cbb admin laptop on the desk: %v\n%s", err, out)
@@ -596,9 +617,7 @@ func TestLiteHub(t *testing.T) {
 	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: hubAt, Consent: true}, ""); err == nil || !strings.Contains(err.Error(), "admin") {
 		t.Errorf("a hub that is no admin: %v", err)
 	}
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	// It is an admin once its admin CA came.
 	var m *control.Message
 	waitFor(t, "the Rust member a hub", func() bool {
@@ -689,9 +708,7 @@ func TestLiteHubs(t *testing.T) {
 	deskAddr := desk.addr()
 	env := []string{"CBB_STANDBY_GRACE=2"}
 	rust := startLiteEnv(t, bin, dir, env, "-no-mdns", "-no-listen", "-peer", deskAddr, "-peer", laptop.addr())
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	deskPort, rustPort := freeUDP(t), freeUDP(t)
 	for _, s := range []*testService{desk, laptop} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
@@ -807,9 +824,7 @@ func TestLiteHubCommands(t *testing.T) {
 	}
 	c.Close()
 	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	for _, s := range []*testService{desk, laptop} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 			t.Fatal(err)
@@ -945,9 +960,7 @@ func TestLiteHubForwarder(t *testing.T) {
 	}
 	c.Close()
 	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
 	waitFor(t, "the Rust member a hub", func() bool {
 		_, err := rust.do(t, req, "")
@@ -981,6 +994,103 @@ func TestLiteHubForwarder(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "through the forwarder" })
+}
+
+// TestLiteHubCredential: a Rust admin's hub registers with the Go
+// forwarder with the group's hubs' credential that the Go root signs
+// (docs/protocol.md, section 18), as Go's hubCredentials, serves with a key
+// of its own for the period (section 11, "The hub's key"), and a Go laptop
+// away from home reaches it through the forwarder.
+func TestLiteHubCredential(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cert, err := forward.NewCert()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		f.Serve(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-served
+	}()
+
+	cli := goCLI(t)
+	var h hub
+	desk := startService(t, &h, "desk")
+	laptop := startService(t, &h, "laptop")
+	pairWith(t, desk, laptop)
+	c, code := openWindow(t, desk)
+	dir := t.TempDir()
+	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
+	join.Stdin = strings.NewReader(code + "\n")
+	join.Stderr = testWriter{t, "rust join: ", nil}
+	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+		t.Fatalf("cbb pair: %v; %s", err, out)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "rust" {
+		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
+	}
+	c.Close()
+	rust := startLiteEnv(t, bin, dir, []string{"CBB_HUB_KEY_AHEAD=2"}, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	adminOn(t, cli, desk, "rust")
+	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
+	waitFor(t, "the Rust member a hub", func() bool {
+		_, err := rust.do(t, req, "")
+		if err != nil && !strings.Contains(err.Error(), "admin") {
+			t.Fatalf("cbb global hub on the Rust member: %v", err)
+		}
+		return err == nil
+	})
+	// The desk, the root, lists the Rust admin's server key in the hubs'
+	// credential; the Rust hub then registers with it in place of its
+	// member certificate and the records.
+	waitUpTo(t, 60*time.Second, "the Rust hub registers with the hubs' credential", func() bool {
+		return rust.logged("registered with the forwarder with the group's hubs' credential")
+	})
+	// The period gives the hub a key of its own for its clients, which it
+	// serves with CBB_HUB_KEY_AHEAD later, registering again with it.
+	waitUpTo(t, 30*time.Second, "the Rust hub serves with its key for the period", func() bool {
+		return rust.logged("the hub serves with its key for the new period from now on")
+	})
+	waitFor(t, "the Rust hub registered with the forwarder", func() bool {
+		a := rust.status(t).Away
+		return a != nil && a.Forwarder != nil && a.Forwarder.Registered && a.Forwarder.Seen != ""
+	})
+	rustID := rust.status(t).Device
+	if _, err := laptop.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitUpTo(t, 30*time.Second, "the laptop keeps the Rust hub's offer at the forwarder", func() bool {
+		hl := tunnelState(t, laptop).Hub(rustID)
+		return hl != nil && len(hl.Endpoints) == 1 && hl.Endpoints[0].String() == f.Addr().String()
+	})
+
+	laptopID := laptop.status(t).Device
+	laptop.stop()
+	h.hide(laptopID)
+	laptop = restartService(t, &h, laptop)
+	waitUpTo(t, 30*time.Second, "the laptop reaches the Rust hub through the forwarder", func() bool {
+		st := laptop.status(t)
+		return st.Away != nil && st.Away.Through && slices.ContainsFunc(st.Peers, func(p control.Device) bool { return p.ID == rustID })
+	})
+	if _, err := laptop.do(t, control.Header{Op: control.OpCopy}, "through the forwarder, credentialed"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "through the forwarder, credentialed" })
 }
 
 // TestLiteForwardOnly has a Rust admin make another Rust member, no admin,
@@ -1045,9 +1155,7 @@ func TestLiteForwardOnly(t *testing.T) {
 	rustAt := free.Addr().String()
 	free.Close()
 	rust := startLite(t, bin, rustDir, "-no-mdns", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
-	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
-		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
-	}
+	adminOn(t, cli, desk, "rust")
 	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
 	boardDir := join(rust, rustAt, "board")
 	board := startLite(t, bin, boardDir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", rustAt)
@@ -1071,5 +1179,467 @@ func TestLiteForwardOnly(t *testing.T) {
 	})
 	if _, err := board.do(t, control.Header{Op: control.OpCopy}, "from a hub that only passes copies on"); err == nil || !strings.Contains(err.Error(), "only passes the copies on") {
 		t.Errorf("a copy on the board: %v", err)
+	}
+}
+
+// TestLiteHubVLESS has a Rust hub's clients come over VLESS with XHTTP:
+// the admin Rust service is the hub with a forwarder and -vless, registers
+// the group's VLESS user ID, keeps the forwarder's VLESS settings, and the
+// lite member, whose offer's UDP address then leads nowhere, reaches it
+// through the forwarder's VLESS behind a TLS web server.
+func TestLiteHubVLESS(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vlessAddr := free.Addr().String()
+	free.Close()
+	web, ca := vlesstest.WebServerCA(t, path, func() string { return vlessAddr })
+	roots := filepath.Join(t.TempDir(), "roots.pem")
+	if err := os.WriteFile(roots, ca, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cert, err := forward.NewCert()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json"),
+		VLESS: &forward.VLESSConfig{Listen: vlessAddr, XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		f.Serve(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-served
+	}()
+
+	cli := goCLI(t)
+	var h hub
+	desk := startService(t, &h, "desk")
+	c, code := openWindow(t, desk)
+	rustDir := t.TempDir()
+	join := exec.Command(bin, "-state", rustDir, "pair", "-name", "rust", "-code", desk.addr())
+	join.Stdin = strings.NewReader(code + "\n")
+	join.Stderr = testWriter{t, "rust join: ", nil}
+	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+		t.Fatalf("cbb pair: %v; %s", err, out)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "rust" {
+		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
+	}
+	c.Close()
+	free, err = net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rustAt := free.Addr().String()
+	free.Close()
+	rust := startLite(t, bin, rustDir, "-no-mdns", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
+	adminOn(t, cli, desk, "rust")
+	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(),
+		ForwarderKey: forward.Pin(cert.Leaf), VLESS: true, Consent: true}
+	waitFor(t, "the Rust member a hub", func() bool {
+		_, err := rust.do(t, req, "")
+		if err != nil && !strings.Contains(err.Error(), "admin") {
+			t.Fatalf("cbb global hub -vless on the Rust member: %v", err)
+		}
+		return err == nil
+	})
+	waitFor(t, "the Rust hub registers with the forwarder", func() bool {
+		a := rust.status(t).Away
+		return a != nil && a.Forwarder != nil && a.Forwarder.Registered
+	})
+	rustID := rust.status(t).Device
+	waitFor(t, "the Rust hub keeps the forwarder's VLESS settings", func() bool {
+		var st struct {
+			Forwarder *struct {
+				VLESSID string          `json:"vless_id"`
+				VLESS   json.RawMessage `json:"vless"`
+			} `json:"forwarder"`
+		}
+		raw, err := os.ReadFile(filepath.Join(rustDir, "tunnel.json"))
+		return err == nil && json.Unmarshal(raw, &st) == nil && st.Forwarder != nil && st.Forwarder.VLESSID != "" && len(st.Forwarder.VLESS) > 0
+	})
+
+	dir := joinLite(t, bin, desk)
+	home := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", rustAt)
+	if _, err := home.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitUpTo(t, 30*time.Second, "the lite member keeps the Rust hub's offer with VLESS", func() bool {
+		type kept struct {
+			Device string          `json:"device"`
+			VLESS  json.RawMessage `json:"vless"`
+		}
+		var st struct {
+			Hubs []kept `json:"hubs"`
+		}
+		raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
+		return err == nil && json.Unmarshal(raw, &st) == nil &&
+			slices.ContainsFunc(st.Hubs, func(h kept) bool { return h.Device == rustID && len(h.VLESS) > 0 })
+	})
+	home.stop()
+
+	// No UDP gets through: the offer's address becomes one that nobody
+	// answers.
+	dead, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dead.Close()
+	file := filepath.Join(dir, "tunnel.json")
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st map[string]any
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatal(err)
+	}
+	hubs, _ := st["hubs"].([]any)
+	if len(hubs) != 1 {
+		t.Fatalf("tunnel.json keeps %d hubs: %s", len(hubs), raw)
+	}
+	kept := hubs[0].(map[string]any)
+	if kept["vless"] == nil || kept["obfuscation"] == nil {
+		t.Fatalf("tunnel.json keeps no VLESS or AmneziaWG settings: %s", raw)
+	}
+	kept["endpoints"] = []string{dead.LocalAddr().String()}
+	if raw, err = json.Marshal(st); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	away := startLiteEnv(t, bin, dir, []string{"SSL_CERT_FILE=" + roots}, "-no-mdns", "-no-listen")
+	waitUpTo(t, 60*time.Second, "the lite member reaches the Rust hub over VLESS", func() bool {
+		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && m.Status.Away != nil && m.Status.Away.Through &&
+			slices.ContainsFunc(m.Status.Peers, func(p control.Device) bool { return p.ID == rustID })
+	})
+	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "to the Rust hub, over VLESS"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "to the Rust hub, over VLESS" })
+}
+
+// TestLiteNetwork runs cbb network against the Rust service, which keeps
+// the known networks as Go's networks.go does (member/src/networks.rs has
+// the rules' tests, with Go's network IDs): the member port and mDNS then
+// work on the networks this device is on now.
+func TestLiteNetwork(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cli := goCLI(t)
+	root := startLite(t, bin, t.TempDir(), "-no-mdns", "-no-listen")
+	if out, err := runCLI(cli, root.socket, "", "new"); err != nil {
+		t.Fatalf("cbb new: %v\n%s", err, out)
+	}
+	waitFor(t, "the Rust root in its group", func() bool {
+		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && st.Status.Group != ""
+	})
+	out, err := runCLI(cli, root.socket, "", "network")
+	if err != nil || !strings.Contains(out, "publishes itself and takes connections here") {
+		t.Fatalf("cbb network: %v\n%s", err, out)
+	}
+}
+
+// TestLiteRelay runs the Rust service in a group without a hub: it meets
+// the Go desk at a blind relay, and once it is away from home they sync
+// through it (docs/design.md, "Blind relay").
+func TestLiteRelay(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	var h hub
+	desk := startService(t, &h, "desk")
+	c, code := openWindow(t, desk)
+	dir := t.TempDir()
+	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
+	join.Stdin = strings.NewReader(code + "\n")
+	join.Stderr = testWriter{t, "rust join: ", nil}
+	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
+		t.Fatalf("cbb pair: %v; %s", err, out)
+	}
+	if m, err := c.Receive(); err != nil || m.Name != "rust" {
+		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
+	}
+	c.Close()
+	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr())
+	waitFor(t, "the Rust member connected to the desk", func() bool {
+		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
+	})
+	r, keys := startRelay(t, desk.status(t).Group)
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: "nope", Consent: true}, ""); err == nil {
+		t.Error("a relay with a bad key")
+	}
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin()}, ""); err == nil || !strings.Contains(err.Error(), "learns") {
+		t.Errorf("a relay without consent: %v", err)
+	}
+	for _, s := range []*testService{desk, rust} {
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
+			t.Fatalf("cbb global relay on the %s: %v", s.name, err)
+		}
+	}
+	deskID, rustID := desk.status(t).Device, rust.status(t).Device
+	waitUpTo(t, 60*time.Second, "both meet at the relay", func() bool {
+		a, b := desk.status(t).Away, rust.status(t).Away
+		return a != nil && a.Relay != nil && a.Relay.Connected && slices.Equal(a.Relay.Online, []string{rustID}) &&
+			b != nil && b.Relay != nil && b.Relay.Connected && slices.Equal(b.Relay.Online, []string{deskID})
+	})
+	raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
+	if err != nil || !strings.Contains(string(raw), r.Addr().String()) {
+		t.Errorf("tunnel.json with the relay: %v\n%s", err, raw)
+	}
+
+	// Away from home the Rust member knows no address of the desk: the
+	// relay joins them.
+	rust.stop()
+	rust = startLite(t, bin, dir, "-no-mdns", "-no-listen")
+	waitUpTo(t, 30*time.Second, "the Rust member reaches the desk through the relay", func() bool {
+		st := rust.status(t)
+		return st.Away != nil && st.Away.Through && len(st.Peers) == 1 && st.Peers[0].ID == deskID
+	})
+	if _, err := rust.do(t, control.Header{Op: control.OpCopy}, "via the relay"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the desk has it", func() bool { return desk.paste(t) == "via the relay" })
+	if _, err := desk.do(t, control.Header{Op: control.OpCopy}, "back home"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the Rust member has it", func() bool { return rust.paste(t) == "back home" })
+
+	// Turning sync away from home off leaves the relay.
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "off"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the relay drops the Rust member", func() bool {
+		_, n := r.Stats()
+		return n == 1
+	})
+}
+
+// startRelay runs a blind relay for the group of tag until the test ends.
+func startRelay(t *testing.T, tag string) (*relay.Relay, relay.Keys) {
+	t.Helper()
+	keys, err := relay.NewKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := relay.Listen(relay.Config{Listen: "127.0.0.1:0", Keys: keys, Groups: []string{tag}, Logf: t.Logf})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		r.Serve(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-served
+	})
+	return r, keys
+}
+
+// TestLiteRelayRoot runs the Rust service as the root of a group that meets
+// at a blind relay: it starts the period and signs the hubs' and the
+// members' credentials (docs/protocol.md, section 18), with which both
+// devices register there, and the Go laptop and it sync through the relay.
+func TestLiteRelayRoot(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	cli := goCLI(t)
+	dir := t.TempDir()
+	root := startLite(t, bin, dir, "-no-mdns")
+	if out, err := runCLI(cli, root.socket, "", "new"); err != nil {
+		t.Fatalf("cbb new: %v\n%s", err, out)
+	}
+	waitFor(t, "the Rust root in its group", func() bool {
+		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
+		return err == nil && st.Status != nil && st.Status.Group != "" && st.Status.Role == "member"
+	})
+	var h hub
+	laptop := startService(t, &h, "laptop")
+	jc := laptop.dial(t)
+	defer jc.Close()
+	code := pair.NewCode()
+	m, err := jc.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Code: code, Expires: 300, Listen: true}})
+	if err != nil || len(m.Addrs) == 0 {
+		t.Fatalf("the laptop's listening join: %v, %+v", err, m)
+	}
+	qr := phone.JoinQR(phone.JoinCode{Code: code, Addrs: m.Addrs, Fingerprint: m.Fingerprint})
+	if out, err := runCLI(cli, root.socket, qr+"\n", "pair", "-qr"); err != nil || !strings.Contains(out, "laptop joined the group") {
+		t.Fatalf("cbb pair -qr: %v\n%s", err, out)
+	}
+	if m, err := jc.Receive(); err != nil || m.Error != "" {
+		t.Fatalf("the laptop's join ended with %+v, %v", m, err)
+	}
+	root.stop()
+	root = startLite(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
+	laptopID, rootID := laptop.status(t).Device, root.status(t).Device
+	waitFor(t, "the Rust root connected to the laptop", func() bool {
+		p := root.status(t).Peers
+		return len(p) == 1 && p[0].ID == laptopID
+	})
+	r, keys := startRelay(t, laptop.status(t).Group)
+	for _, s := range []*testService{root, laptop} {
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
+			t.Fatalf("cbb global relay on the %s: %v", s.name, err)
+		}
+	}
+	// The root's credentials: the period, both server keys, the hubs' and
+	// the members' credential.
+	waitUpTo(t, 30*time.Second, "the Rust root signs the group's credentials", func() bool {
+		raw, err := os.ReadFile(filepath.Join(dir, "credentials.json"))
+		var all []json.RawMessage
+		return err == nil && json.Unmarshal(raw, &all) == nil && len(all) == 5
+	})
+	waitUpTo(t, 60*time.Second, "both meet at the relay with the credentials", func() bool {
+		a, b := root.status(t).Away, laptop.status(t).Away
+		return a != nil && a.Relay != nil && a.Relay.Connected && slices.Equal(a.Relay.Online, []string{laptopID}) &&
+			b != nil && b.Relay != nil && b.Relay.Connected && slices.Equal(b.Relay.Online, []string{rootID})
+	})
+
+	root.stop()
+	root = startLite(t, bin, dir, "-no-mdns")
+	waitUpTo(t, 30*time.Second, "the Rust root reaches the laptop through the relay", func() bool {
+		st := root.status(t)
+		return st.Away != nil && st.Away.Through && len(st.Peers) == 1 && st.Peers[0].ID == laptopID
+	})
+	if _, err := root.do(t, control.Header{Op: control.OpCopy}, "from the root"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the laptop has it", func() bool { return laptop.paste(t) == "from the root" })
+}
+
+// TestLiteRelayProject sets the Rust service to the project's relay,
+// whose key the signed keys.json gives, then changes the relay's key: once
+// a newer keys.json names the new key, the device registers again by
+// itself. Then the relay moves, and entries.json says where to, as
+// TestProjectRelayNewKey does with a Go device.
+func TestLiteRelayProject(t *testing.T) {
+	bin := os.Getenv("CBB_LITE")
+	if bin == "" {
+		t.Skip("CBB_LITE is not set")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the Rust member's tests run on Linux")
+	}
+	signer := newReleaseSigner(t)
+	var h hub
+	pi := startWith(t, &h, "pi", "linux", func(c *Config) { c.ReleaseRoots = signer.roots(t) })
+	dir := joinLite(t, bin, pi)
+	pemFile := filepath.Join(t.TempDir(), "roots.pem")
+	if err := os.WriteFile(pemFile, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.roots(t)[0]}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lite := startLiteEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile, "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1"}, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	group := pi.status(t).Group
+	serve := func(keys relay.Keys, at string) (*relay.Relay, func()) {
+		r, err := relay.Listen(relay.Config{Listen: at, Keys: keys, Groups: []string{group}, Logf: t.Logf})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		served := make(chan struct{})
+		go func() {
+			defer close(served)
+			r.Serve(ctx)
+		}()
+		return r, func() {
+			cancel()
+			<-served
+		}
+	}
+	oldKeys, err := relay.NewKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	newKeys, err := relay.NewKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, stop := serve(oldKeys, "127.0.0.1:0")
+	at := r.Addr().String()
+
+	if _, err := lite.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 1, oldKeys)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lite.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: at, RelayKey: relay.Project, Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	connected := func() bool {
+		a := lite.status(t).Away
+		return a != nil && a.Relay != nil && a.Relay.Connected
+	}
+	waitUpTo(t, 60*time.Second, "the Rust member registers with the relay's listed key", connected)
+
+	// The relay changes its key; the device refuses the new one until
+	// keys.json names it, then takes it without being set again.
+	stop()
+	_, stop = serve(newKeys, at)
+	waitUpTo(t, 60*time.Second, "the Rust member says the key is unknown", func() bool {
+		a := lite.status(t).Away
+		return a != nil && a.Relay != nil && !a.Relay.Connected && a.Relay.Error != "" && a.Relay.Detail != ""
+	})
+	if _, err := lite.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 2, oldKeys, newKeys)); err != nil {
+		t.Fatal(err)
+	}
+	waitUpTo(t, 90*time.Second, "the Rust member registers with the new key", connected)
+	if a := lite.status(t).Away; a.Relay.Error != "" {
+		t.Errorf("an error left in status: %q", a.Relay.Error)
+	}
+
+	// It moves to another port under a name of its own.
+	stop()
+	moved, stop := serve(newKeys, "127.0.0.1:0")
+	defer stop()
+	_, port, _ := net.SplitHostPort(moved.Addr().String())
+	if _, err := lite.do(t, control.Header{Op: control.OpEntries}, signer.signRelay(t, 3, []string{"relay.example.org:" + port}, newKeys)); err != nil {
+		t.Fatal(err)
+	}
+	waitUpTo(t, 90*time.Second, "the Rust member registers where the relay moved", func() bool {
+		a := lite.status(t).Away
+		return connected() && a.Relay.Endpoint == moved.Addr().String()
+	})
+	raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
+	if err != nil || !strings.Contains(string(raw), moved.Addr().String()) {
+		t.Errorf("tunnel.json after the move: %v\n%s", err, raw)
 	}
 }

@@ -32,16 +32,7 @@ func TestJoinByShownCode(t *testing.T) {
 		t.Fatalf("listening join on beta: %+v, %v", m, err)
 	}
 	waitFor(t, "beta announces that it waits", func() bool {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		for d := range h.members {
-			for _, s := range d.peer().TXT {
-				if s == "j=1" {
-					return true
-				}
-			}
-		}
-		return false
+		return h.anyPublishes("j=1")
 	})
 	if _, err := a.do(t, control.Header{Op: control.OpPair, Code: "135791"}, ""); err == nil {
 		t.Error("a wrong code admitted the device")

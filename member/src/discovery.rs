@@ -2,11 +2,11 @@
 // Copyright (C) 2026 HunterEwok
 
 //! Finding the members and dialing them, and taking the connections of
-//! those that dial this one (docs/protocol.md, sections 3 and 4). A lite
-//! member publishes itself with `r=lite`, a computer with the service as a
-//! full member without it, and either listens on the member port, so
-//! that phones reach it without a computer; it dials the full members, and
-//! the lite members whose device ID is greater than its own.
+//! those that dial this one (docs/protocol.md, sections 3 and 4). A member
+//! that does not dial publishes itself with `r=listen`, one that dials
+//! without it, and either listens on the member port, so that phones reach
+//! it without a computer; a member that dials dials those with `r=listen`
+//! and, of the others, those whose device ID is greater than its own.
 //! Members can also be given by address, for a network where multicast
 //! does not reach.
 
@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, SocketAddrV6, TcpListener};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::certs::DeviceId;
 use crate::interfaces;
@@ -53,12 +53,123 @@ impl Drop for Announcement {
     }
 }
 
+/// How long a joiner browses for a member with an open pairing window, as
+/// Go's service does, and how long it waits after the first for others.
+pub const PAIRING_BROWSE: Duration = Duration::from_secs(5);
+const PAIRING_SETTLE: Duration = Duration::from_secs(2);
+
+/// The addresses of the members that announce an open pairing window (TXT
+/// `p=1`), for a device that joins with a code alone: browsed for up to
+/// wait, then a moment more for the others; an error when none is found.
+/// More than one window is refused, as in Go: the code fits only one.
+pub fn find_pairing(wait: Duration) -> crate::error::Result<Vec<SocketAddr>> {
+    use crate::error::Error;
+    let open = browse_txt(wait, |info| (info.get_property_val_str("p") == Some("1")).then_some(()))?;
+    match open.len() {
+        0 => Err(Error::msg(
+            "no member with an open pairing window found; run cbb pair on the group's root or an admin, or give its address",
+        )),
+        1 => Ok(open.into_values().next().map(|(a, ())| a).unwrap_or_default()),
+        n => Err(Error::msg(format!(
+            "{n} devices announce a pairing window ({}); give the address that cbb pair showed",
+            open.keys().cloned().collect::<Vec<_>>().join(", ")
+        ))),
+    }
+}
+
+/// The devices that announce that they wait to join (TXT `j=1` with their
+/// certificate's fingerprint `f`, docs/protocol.md section 3), with their
+/// addresses, for cbb pair with a code alone, as Go's findJoiners.
+pub fn find_joiners(wait: Duration) -> crate::error::Result<Vec<(Vec<SocketAddr>, String)>> {
+    let waiting = browse_txt(wait, |info| {
+        let fp = info.get_property_val_str("f").filter(|f| !f.is_empty())?;
+        (info.get_property_val_str("j") == Some("1")).then(|| fp.to_string())
+    })?;
+    if waiting.is_empty() {
+        return Err(crate::error::Error::msg(
+            "no device that waits to join was found; on the new device, choose to join a group (cbb pair there) and type the code it shows",
+        ));
+    }
+    Ok(waiting.into_values().collect())
+}
+
+/// Browses for up to wait for the members whose TXT pick takes, then a
+/// moment more for the others; by instance name, their addresses and what
+/// pick made of them.
+fn browse_txt<T>(
+    wait: Duration,
+    pick: impl Fn(&mdns_sd::ResolvedService) -> Option<T>,
+) -> crate::error::Result<std::collections::BTreeMap<String, (Vec<SocketAddr>, T)>> {
+    use crate::error::Error;
+    let daemon = mdns_sd::ServiceDaemon::new().map_err(|e| Error::with("cannot browse with mDNS", e))?;
+    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
+    let only = interfaces::only();
+    if !only.is_empty() {
+        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
+        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
+    }
+    let rx = daemon.browse(SERVICE).map_err(|e| Error::with("cannot browse with mDNS", e))?;
+    let mut found = std::collections::BTreeMap::new();
+    let mut deadline = std::time::Instant::now() + wait;
+    let mut settled = false;
+    while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
+        let Ok(ev) = rx.recv_timeout(left) else { break };
+        let mdns_sd::ServiceEvent::ServiceResolved(info) = ev else { continue };
+        let Some(v) = pick(&info) else { continue };
+        let addrs = order(info.get_addresses().iter().map(|ip| match ip {
+            mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
+                SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, v6.scope_id().index))
+            }
+            other => SocketAddr::new(other.to_ip_addr(), info.port),
+        }));
+        if addrs.is_empty() {
+            continue;
+        }
+        found.insert(instance(&info.fullname), (addrs, v));
+        if !settled {
+            settled = true;
+            deadline = std::time::Instant::now() + PAIRING_SETTLE;
+        }
+    }
+    let _ = daemon.shutdown();
+    Ok(found)
+}
+
+/// The device a found service is: its instance name without the " (n)"
+/// that mDNS adds when a name conflicts, as when one daemon announces the
+/// same device again.
+fn instance(fullname: &str) -> String {
+    let name = fullname.split('.').next().unwrap_or(fullname);
+    match name.rsplit_once(" (") {
+        Some((base, n))
+            if n.strip_suffix(')').is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())) =>
+        {
+            base.to_string()
+        }
+        _ => name.to_string(),
+    }
+}
+
+/// Whether the tests put this device on another network: the folder
+/// CBB_TEST_ELSEWHERE names holds a file named by its device ID. It then
+/// neither publishes itself nor dials what browsing finds, as the Go
+/// service's tests' hidden members.
+fn elsewhere(me: &DeviceId) -> bool {
+    std::env::var_os("CBB_TEST_ELSEWHERE").is_some_and(|d| std::path::Path::new(&d).join(me.as_str()).exists())
+}
+
 const MAX_WAIT: Duration = Duration::from_secs(30);
+/// How long a member that dials waits for one with a lower device ID to
+/// dial it before it dials that one itself, as Go's fallbackDial.
+const FALLBACK: Duration = Duration::from_secs(30);
 /// At most this many connections may be in their TLS handshake at once.
 const MAX_HANDSHAKES: usize = 16;
 /// The members found by browsing that are dialed at once, as Go's mDNS
 /// cache reports at most.
 const MAX_FOUND: usize = 64;
+/// How often the networks where this device publishes itself are checked
+/// again: an interface may have come up or moved to another network.
+const RECHECK: Duration = Duration::from_secs(5);
 
 /// The addresses of a found member; None once it is gone.
 type Addrs = Arc<Mutex<Option<Vec<SocketAddr>>>>;
@@ -68,32 +179,35 @@ type Addrs = Arc<Mutex<Option<Vec<SocketAddr>>>>;
 /// connection that came up ended, and after a round of failures 1 s,
 /// doubling to 30 s.
 fn dial_loop(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>) {
-    dial_loop_after(node, addrs, peer, false)
+    dial_loop_as(node, addrs, peer, false)
 }
 
-/// The wait before a member dials a member with a lower device ID that
-/// should have dialed it (docs/protocol.md, section 4, "Who dials whom").
-const FALLBACK: Duration = Duration::from_secs(30);
-
-/// As dial_loop; with fallback, only once no connection to peer has been
-/// up for FALLBACK, since the peer, with the lower device ID, dials this
-/// member, unless a firewall here keeps it out.
-fn dial_loop_after(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, fallback: bool) {
+/// As dial_loop; later, for a member that dials with a lower device ID,
+/// which dials this one (docs/protocol.md, section 4, "Who dials whom"):
+/// it dials only once no connection to it has been up for
+/// FALLBACK, a firewall may stop that member's dials, or at once on
+/// Node::redial, as Go's later dialer.
+fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bool) {
     let mut wait = FIRST_WAIT;
-    let mut last_up = std::time::Instant::now();
+    let mut redials = node.redials();
+    let mut since = std::time::Instant::now();
     loop {
         if node.is_closed() {
             return;
         }
         let Some(list) = addrs.lock().unwrap().clone() else { return };
-        if let Some(p) = peer.as_ref().filter(|_| fallback) {
+        if let (true, Some(p)) = (later, &peer) {
+            let r = node.redials();
             if node.connected(p) {
-                last_up = std::time::Instant::now();
-            }
-            if last_up.elapsed() < FALLBACK {
+                (since, redials) = (std::time::Instant::now(), r);
                 node.nap(Duration::from_secs(1));
                 continue;
             }
+            if r == redials && since.elapsed() < FALLBACK {
+                node.nap(Duration::from_secs(1));
+                continue;
+            }
+            redials = r;
         }
         // A connection up to the peer is left alone; a loopback address
         // (the tunnel's, a relay's) replaces one at home (Node::connected_for).
@@ -112,6 +226,11 @@ fn dial_loop_after(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, fallba
         wait = next_wait(wait, up, again);
         if wait.is_zero() {
             wait = FIRST_WAIT;
+            continue;
+        }
+        if later {
+            // The next try waits for FALLBACK again, or a redial.
+            since = std::time::Instant::now();
             continue;
         }
         // A kick (the app resumed, or handed in new addresses) tries again
@@ -138,7 +257,7 @@ fn next_wait(last: Duration, up: bool, again: bool) -> Duration {
 
 /// Listens on the member port, on all addresses, for the members that dial
 /// this one; only home network addresses may connect. It returns the port,
-/// or None when it cannot listen: the lite member then only dials.
+/// or None when it cannot listen: the member then only dials.
 pub fn listen(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<u16> {
     listen_until(node, port, false, None, Arc::new(AtomicBool::new(false)), log)
 }
@@ -183,6 +302,15 @@ pub fn listen_until(
             if !home_address(addr.ip()) || !interfaces::arrived(&sock) || busy.load(Ordering::SeqCst) >= MAX_HANDSHAKES
             {
                 continue; // dropping the socket closes it
+            }
+            if let Ok(local) = sock.local_addr()
+                && !node.takes_on(local, addr)
+            {
+                log(&format!(
+                    "cbb: a connection from {} to {local}, on a network this device has not met its group on; closed",
+                    addr.ip()
+                ));
+                continue;
             }
             busy.fetch_add(1, Ordering::SeqCst);
             let (node, busy, log, admit) = (node.clone(), busy.clone(), log.clone(), admit.clone());
@@ -289,6 +417,18 @@ impl Dialers {
     }
 }
 
+/// The mDNS sockets opened before the service gave up root (cbb service
+/// -user), which browsing takes when it starts.
+static PREOPENED: Mutex<Option<mdns_sd::ServiceDaemon>> = Mutex::new(None);
+
+/// Opens the mDNS sockets now, as Go's mdns.Preopen: on FreeBSD a socket on
+/// port 5353 shares it with avahi or another user's responder only when
+/// root opened it, and cbb service -user gives up root right after.
+pub fn preopen() -> Result<(), mdns_sd::Error> {
+    *PREOPENED.lock().unwrap_or_else(|e| e.into_inner()) = Some(mdns_sd::ServiceDaemon::new()?);
+    Ok(())
+}
+
 /// Starts dialing: the members at the given addresses, and, with mdns, the
 /// members of the group tag that browsing finds. With a port, it also
 /// publishes this member there.
@@ -315,7 +455,7 @@ pub fn start(
 }
 
 /// Starts dialing as a phone does: it publishes nothing and listens on no
-/// port, so it dials every member that browsing finds, lite members too,
+/// port, so it dials every member that browsing finds, those with `r=listen` too,
 /// whatever their device IDs.
 pub fn start_as_phone(node: Arc<Node>, tag: String, log: Arc<dyn Fn(&str) + Send + Sync>) {
     std::thread::spawn(move || {
@@ -332,7 +472,11 @@ fn browse(
     as_phone: bool,
     log: &(dyn Fn(&str) + Send + Sync),
 ) -> Result<(), mdns_sd::Error> {
-    let daemon = mdns_sd::ServiceDaemon::new()?;
+    let preopened = PREOPENED.lock().unwrap_or_else(|e| e.into_inner()).take();
+    let daemon = match preopened {
+        Some(d) => d,
+        None => mdns_sd::ServiceDaemon::new()?,
+    };
     // As Go's responder: no loopback interfaces.
     let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
     // On a router, only the devices of the interface list.
@@ -342,14 +486,64 @@ fn browse(
         let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
     }
     let me = node.identity().id.clone();
+    if let Ok(events) = daemon.monitor() {
+        let n = node.clone();
+        std::thread::spawn(move || {
+            while let Ok(ev) = events.recv() {
+                if let mdns_sd::DaemonEvent::NameChange(c) = ev {
+                    n.logf(&format!(
+                        "cbb: mDNS renamed {} to {}: another device answers for the name",
+                        c.original, c.new_name
+                    ));
+                }
+            }
+        });
+    }
     // A member that dials publishes itself without a role; one that does
     // not says so, and every other member dials it.
     let dials = node.can(cbb_core::authority::CAP_DIALS);
     // The protocol version, the group tag, r=listen on a member that does
     // not dial, and p=1 while a pairing window is open, which a joiner
     // looks for.
-    let publish = |window: bool| -> Result<(), mdns_sd::Error> {
+    // With known networks (a computer's service), only the addresses of
+    // the interfaces on them are published, or every address while a
+    // pairing window is open, as Go's responder with Publish; None for all.
+    let where_ = || -> Option<Vec<IpAddr>> {
+        if elsewhere(&me) {
+            return Some(Vec::new());
+        }
+        let mut out: Vec<IpAddr> = match node.networks() {
+            Some(n) if !node.window_open() => {
+                n.published().into_iter().flat_map(|f| f.prefixes.into_iter().map(|(a, _)| a)).collect()
+            }
+            // Every address, listed here rather than by mdns-sd's
+            // enable_addr_auto: a registration updated in place from a
+            // list of addresses to automatic ones answered with none.
+            _ => if_addrs::get_if_addrs()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|f| !f.is_loopback() && interfaces::allowed(&f.name))
+                .map(|f| f.ip())
+                .collect(),
+        };
+        out.sort();
+        out.dedup();
+        Some(out)
+    };
+    let mut registered: Option<String> = None;
+    let mut publish = |window: bool, at: &Option<Vec<IpAddr>>| -> Result<(), mdns_sd::Error> {
         let Some(port) = port else { return Ok(()) };
+        if at.as_ref().is_some_and(Vec::is_empty) {
+            // On no known network: browse only.
+            if let Some(name) = registered.take() {
+                let _ = daemon.unregister(&name);
+            }
+            return Ok(());
+        }
+        // A registration of the same name is updated in place below: taking
+        // it back first would have the new one probe against the old one's
+        // records, which mdns-sd takes for another device's and renames this
+        // one ("ID (2)"), which nobody finds by its ID.
         let mut txt = vec![("v", "1"), ("g", tag)];
         if !dials && !as_phone {
             txt.push(("r", "listen"));
@@ -357,13 +551,18 @@ fn browse(
         if window {
             txt.push(("p", "1"));
         }
-        let info =
-            mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &format!("{}.", me.host_name()), "", port, &txt[..])?
-                .enable_addr_auto();
+        let host = format!("{}.", me.host_name());
+        let info = match at {
+            Some(addrs) => mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &host, &addrs[..], port, &txt[..])?,
+            None => mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &host, "", port, &txt[..])?.enable_addr_auto(),
+        };
+        registered = Some(info.get_fullname().to_string());
         daemon.register(info)
     };
     let mut window = node.window_open();
-    publish(window)?;
+    let mut at = where_();
+    publish(window, &at)?;
+    let mut checked = Instant::now();
     let events = daemon.browse(SERVICE)?;
     let mut found: HashMap<DeviceId, Addrs> = HashMap::new();
     loop {
@@ -371,10 +570,23 @@ fn browse(
         if node.is_closed() {
             break;
         }
-        if node.window_open() != window {
-            window = !window;
-            if let Err(e) = publish(window) {
-                log(&format!("cbb: announcing the pairing window failed: {e}"));
+        let away = elsewhere(&me);
+        if away && !found.is_empty() {
+            for (_, a) in found.drain() {
+                *a.lock().unwrap() = None;
+            }
+        }
+        if node.window_open() != window
+            || checked.elapsed() >= RECHECK
+            || away != at.as_ref().is_some_and(Vec::is_empty)
+        {
+            checked = Instant::now();
+            let now = where_();
+            if node.window_open() != window || now != at {
+                (window, at) = (node.window_open(), now);
+                if let Err(e) = publish(window, &at) {
+                    log(&format!("cbb: announcing this device failed: {e}"));
+                }
             }
         }
         let Ok(ev) = ev else {
@@ -386,6 +598,9 @@ fn browse(
         match ev {
             mdns_sd::ServiceEvent::ServiceResolved(info) => {
                 let Some(id) = instance_id(&info.fullname) else { continue };
+                if away {
+                    continue;
+                }
                 // Members of another group, or of a replaced CA, are ignored.
                 let r = info.get_property_val_str("r");
                 if id == me || info.get_property_val_str("g") != Some(tag) {
@@ -401,12 +616,12 @@ fn browse(
                 }
                 // A phone dials every member, and a member that dials
                 // every member that does not; of two members that dial, the
-                // lower ID dials, and the other only when no connection has
-                // come up for FALLBACK. A member that does not dial waits.
+                // lower ID dials, and the other later. A member that does
+                // not dial waits.
                 if !as_phone && !dials {
                     continue;
                 }
-                let fallback = !as_phone && !listens_only(r) && id < me;
+                let later = !as_phone && !listens_only(r) && id < me;
                 let addrs = order(info.get_addresses().iter().map(|ip| match ip {
                     mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
                         SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, v6.scope_id().index))
@@ -430,7 +645,7 @@ fn browse(
                         let cur: Addrs = Arc::new(Mutex::new(Some(addrs)));
                         found.insert(id.clone(), cur.clone());
                         let node = node.clone();
-                        std::thread::spawn(move || dial_loop_after(node, cur, Some(id), fallback));
+                        std::thread::spawn(move || dial_loop_as(node, cur, Some(id), later));
                     }
                 }
             }
@@ -465,7 +680,9 @@ fn phone(r: Option<&str>) -> bool {
 /// The device ID in an instance name, <device ID>._cbb._tcp.local.
 fn instance_id(fullname: &str) -> Option<DeviceId> {
     let label = fullname.strip_suffix(SERVICE)?.strip_suffix('.')?;
-    DeviceId::parse(label).ok()
+    // Without the " (n)" that mDNS adds when the name conflicts, as when
+    // the device's own registration answered for it before an update.
+    DeviceId::parse(&instance(label)).ok()
 }
 
 /// The addresses that would be published, IPv4 first, then routable IPv6,
@@ -484,6 +701,19 @@ fn order(addrs: impl Iterator<Item = SocketAddr>) -> Vec<SocketAddr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A name mDNS made unique by " (n)" names the same device.
+    #[test]
+    fn instance_drops_the_conflict_suffix() {
+        assert_eq!(instance("abc._cbb._tcp.local."), "abc");
+        assert_eq!(instance("abc (3)._cbb._tcp.local."), "abc");
+        assert_eq!(instance("abc (x)._cbb._tcp.local."), "abc (x)");
+        assert_eq!(instance("abc ()._cbb._tcp.local."), "abc ()");
+        let id = "90571e1e690522fc4764f498f647e534";
+        let want = DeviceId::parse(id).ok();
+        assert_eq!(instance_id(&format!("{id} (9).{SERVICE}")), want);
+        assert_eq!(instance_id(&format!("{id}.{SERVICE}")), want);
+    }
 
     /// A connection this member ended to send a new hello (a mode, a tunnel
     /// key) is dialed again at once, one that came up and ended after a

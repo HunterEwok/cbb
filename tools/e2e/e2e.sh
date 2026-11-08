@@ -6,7 +6,13 @@
 # containers on one network find each other with mDNS, pair with codes,
 # and sync copies; a fourth container browses them with avahi.
 #
-#   sh tools/e2e/e2e.sh path/to/cbb     # a static Linux binary
+#   sh tools/e2e/e2e.sh path/to/cbb [path/to/cli]
+#
+# path/to/cbb is the service, a Linux binary: the Rust program (member/), or
+# the Go one (cmd/cbb); cbb-helper, the Go helper the Rust one starts for what
+# needs Go, goes into the containers too when it is beside it. path/to/cli,
+# when given, runs the commands against that service over its socket in
+# place of path/to/cbb: the Go cbb, whose output the checks below read.
 #
 # With CBB_E2E_COVERDIR set to a directory, a cbb built with -cover writes its
 # coverage there (GOCOVERDIR in every container), for CI's coverage summary.
@@ -15,6 +21,18 @@
 set -eu
 
 bin=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+cli=$bin
+if [ $# -gt 1 ]; then
+	cli=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
+fi
+# The containers' mounts: the service, its helper when it has one, the
+# commands' program.
+mounts() {
+	printf -- '-v %s:/cb/cbb:ro -v %s:/cb/cli:ro' "$bin" "$cli"
+	if [ -f "$(dirname "$bin")/cbb-helper" ]; then
+		printf -- ' -v %s/cbb-helper:/cb/cbb-helper:ro' "$(dirname "$bin")"
+	fi
+}
 image=${E2E_IMAGE:-debian:stable-slim}
 run=cbe2e-$$
 net=$run-net
@@ -34,6 +52,7 @@ fail() {
 	for m in $members; do
 		echo "--- log of $m" >&2
 		docker logs "$run-$m" 2>&1 | tail -20 >&2 || true
+		docker exec "$run-$m" cat /tmp/pair.out >&2 2>/dev/null || true
 	done
 	exit 1
 }
@@ -47,7 +66,7 @@ trap cleanup EXIT
 cb() { # member, arguments...
 	m=$1
 	shift
-	docker exec -i "$run-$m" /cb/cbb "$@"
+	docker exec -i "$run-$m" /cb/cli "$@"
 }
 
 # eventually runs a command until it succeeds, for up to 20 seconds.
@@ -65,8 +84,9 @@ eventually() {
 say "starting three members"
 docker network create "$net" >/dev/null
 for m in $members; do
+	# shellcheck disable=SC2046 # mounts prints several flags
 	docker run -d --rm --name "$run-$m" --hostname "host-$m" --network "$net" \
-		-e CBB_SOCKET=/tmp/c.sock -v "$bin:/cb/cbb:ro" -v "$cover:/cover" -e GOCOVERDIR=/cover "$image" \
+		-e CBB_SOCKET=/tmp/c.sock $(mounts) -v "$cover:/cover" -e GOCOVERDIR=/cover "$image" \
 		/cb/cbb service -state /tmp -socket /tmp/c.sock >/dev/null
 done
 for m in $members; do
@@ -74,7 +94,7 @@ for m in $members; do
 done
 
 pair() { # admin, joiner
-	docker exec -d "$run-$1" sh -c '/cb/cbb pair >/tmp/pair.out 2>&1'
+	docker exec -d "$run-$1" sh -c '/cb/cli pair >/tmp/pair.out 2>&1'
 	eventually "a code on $1" docker exec "$run-$1" grep -q 'Pairing code' /tmp/pair.out
 	code=$(docker exec "$run-$1" sed -n 's/^Pairing code: \([0-9]*\) \([0-9]*\)$/\1\2/p' /tmp/pair.out)
 	printf '%s\n' "$code" | cb "$2" pair -code || fail "$2 could not join with the code from $1"
@@ -101,10 +121,10 @@ done
 say "a copy on one member reaches the others"
 printf 'hello from a\n' | cb a copy
 for m in b c; do
-	eventually "$m has the copy" sh -c "[ \"\$(docker exec $run-$m /cb/cbb paste)\" = 'hello from a' ]"
+	eventually "$m has the copy" sh -c "[ \"\$(docker exec $run-$m /cb/cli paste)\" = 'hello from a' ]"
 done
 printf 'a secret' | cb c copy -secret
-eventually "a has the secret" sh -c "[ \"\$(docker exec $run-a /cb/cbb paste)\" = 'a secret' ]"
+eventually "a has the secret" sh -c "[ \"\$(docker exec $run-a /cb/cli paste)\" = 'a secret' ]"
 
 say "avahi browses the members"
 docker run -d --rm --name "$run-avahi" --network "$net" "$image" sleep 600 >/dev/null
@@ -114,12 +134,13 @@ docker exec "$run-avahi" sh -c 'mkdir -p /run/dbus && dbus-daemon --system --for
 eventually "avahi browses the members" sh -c "[ \$(docker exec $run-avahi avahi-browse -rtp _cbb._tcp | grep -c '^=') -ge 3 ]"
 
 say "a wrong code does not join"
+# shellcheck disable=SC2046 # mounts prints several flags
 docker run -d --rm --name "$run-d" --network "$net" -e CBB_SOCKET=/tmp/c.sock \
-	-v "$bin:/cb/cbb:ro" -v "$cover:/cover" -e GOCOVERDIR=/cover "$image" /cb/cbb service -state /tmp -socket /tmp/c.sock >/dev/null
+	$(mounts) -v "$cover:/cover" -e GOCOVERDIR=/cover "$image" /cb/cbb service -state /tmp -socket /tmp/c.sock >/dev/null
 members="$members d"
 eventually "d starts" cb d status
 admin=${members%% *}
-docker exec -d "$run-$admin" sh -c '/cb/cbb pair >/tmp/pair2.out 2>&1'
+docker exec -d "$run-$admin" sh -c '/cb/cli pair >/tmp/pair2.out 2>&1'
 eventually "a code" docker exec "$run-$admin" grep -q 'Pairing code' /tmp/pair2.out
 code=$(docker exec "$run-$admin" sed -n 's/^Pairing code: \([0-9]*\) \([0-9]*\)$/\1\2/p' /tmp/pair2.out)
 [ "$code" = "$wrong" ] && wrong=111111

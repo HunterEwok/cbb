@@ -2,7 +2,7 @@
 # Architecture decisions
 
 For engineers. Every decision that shapes Copy Beyond Borders, numbered once and never
-renumbered: the code, the changelog and the other documents cite them as D-1 to D-87. The
+renumbered: the code, the changelog and the other documents cite them as D-1 to D-88. The
 reasons and the details of each are in the [design](design.md) and the
 [protocol](protocol.md); this page is the register.
 
@@ -26,7 +26,7 @@ A decision is never deleted. The statuses are `accepted`, `replaced by D-N` and
 | ID | Status | Decision |
 |---|---|---|
 | D-1 | accepted | License: AGPL-3.0-only. Code contributions are not accepted, so no contributor agreement is needed, and the one author can also offer a commercial license without the AGPL's obligations (README, "License"). |
-| D-2 | accepted | Language: Go, for reliable ARMv6 builds, TLS and networking in the standard library, and development speed. |
+| D-2 | replaced by D-88 | Language: Go, for reliable ARMv6 builds, TLS and networking in the standard library, and development speed. |
 | D-3 | accepted | A group of equal members instead of a central server; any member may be off. |
 | D-4 | accepted | Encryption with the project's own TLS and pairing instead of an overlay VPN, which on iOS would conflict with other VPN apps. |
 | D-5 | accepted | At home, members find each other on one network; away from home they reach the hub through the group's own tunnel (D-38). |
@@ -112,4 +112,5 @@ A decision is never deleted. The statuses are `accepted`, `replaced by D-N` and
 | D-85 | accepted | Every device follows one clipboard rule: a copy from another device goes into the clipboard while it is live, for the group's live window after it was copied (one minute by default, 5 seconds to an hour, set by the root or any admin in a signed `copies` record), counted in durations; once it has passed, the copy is gone and the device's own copy of any age is what its button sends. There is no rejoin window and no separate fetch, and a copy from a removed device is dropped even before it is written. |
 | D-86 | accepted | The iPhone and Android apps run the Rust core's member (ffi/, docs/core-api.md, "The member") in place of their own Swift and Kotlin nodes: one implementation of the member protocol, the clipboard rule and the button for every phone, as the Aurora app runs it. The apps keep what is theirs: finding the members (Bonjour, NSD) and handing their addresses in, the keys and Face ID or BiometricPrompt, pairing, the records they sign, the tunnel and the relay (whose loopback ports they hand in), and the answers to commands, renewals and tunnel keys, which the member asks of them by its events. |
 | D-87 | accepted | The phones run one tunnel, the lite member's in Rust (`ffi/src/tunnel.rs`), for the client, the phone as the hub with its forwarder and invitations, and the blind relay, in place of a Go tunnel bound by gomobile: one WireGuard, AmneziaWG and VLESS for the lite member and every phone, and app builds without Go. The phones reach a forwarder over VLESS with XHTTP behind a web server only; REALITY stays on the Go servers, whose ClientHello rustls cannot hide. |
+| D-88 | accepted | The computers run the Rust `cbb` (member/) as their service and command line, on every member; Go stays only in `cbb-helper`, the child it starts over inherited pipes for what needs Go (keys in the TPM, the agent, the peripherals), and in the relay's and forwarder's servers until they move. Go code that moves into the helper's packages takes its tests with it, and what the Rust service does itself is tested there. It replaces D-2 for the service; D-12 and D-32 hold, with the Rust `cbb`'s own mDNS code in place of Go's, and D-38 and D-40 too, WireGuard and AmneziaWG inside the Rust `cbb` and VLESS with REALITY in `cbb-helper`. |
 | D-89 | accepted | The roles `full` and `lite` are one role, `member`, with capabilities in its hello, its device record and its pairing Info: `admin` (may hold an admin key, which gives no rights by itself), `dials` (dials other members; of two that dial, the lower device ID does, the other after 30 s) and `hub` (may be chosen as the hub). Computers, Raspberry Pis and routers have all three, the ZX Next's Pi `admin` and `dials`, an ESP32 none; publishing on every network is a local setting. The phone and watch roles stay. Groups whose records name `full` or `lite`, none of them in a release, are set up again. Ruled out: a third role for each new kind of device, and keeping `full` and `lite` as aliases. |

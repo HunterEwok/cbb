@@ -3,29 +3,27 @@
 
 //go:build linux || freebsd
 
-package main
+package agent
 
 import (
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/connector"
-	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/desktop"
 )
 
 // runDesktop is the agent on a Linux desktop: it opens the session's
 // clipboard through Wayland or X11, and opens it again when the display
 // connection drops.
-func runDesktop(ctx context.Context, logf func(string, ...any), stderr io.Writer) int {
+func runDesktop(ctx context.Context, socket string, logf func(string, ...any)) error {
 	if !lockAgent() {
 		logf("cbb: another agent links this session's clipboard already")
-		return 0
+		return nil
 	}
 	backoff := time.Second
 	failures := 0
@@ -35,15 +33,15 @@ func runDesktop(ctx context.Context, logf func(string, ...any), stderr io.Writer
 			// The session is gone, or not there yet: try a few times, then
 			// give up, so a connector does not outlive its session.
 			if failures++; failures > 10 {
-				return fail(stderr, err)
+				return err
 			}
 		} else {
 			failures, backoff = 0, time.Second
 			logf("cbb: linked the clipboard through %s", how)
-			err = connector.Run(ctx, connector.Config{Socket: control.SocketPath(), Board: b, Commands: true, Files: receivedFiles(), Logf: logf})
+			err = connector.Run(ctx, connector.Config{Socket: socket, Board: b, Commands: true, Files: ReceivedFiles(), Logf: logf})
 			b.Close()
 			if err == nil || !errors.Is(err, connector.ErrBoardGone) {
-				return 0
+				return nil
 			}
 			logf("cbb: %v; opening the display again", err)
 		}
@@ -53,7 +51,7 @@ func runDesktop(ctx context.Context, logf func(string, ...any), stderr io.Writer
 		}
 		backoff = min(2*backoff, 30*time.Second)
 	}
-	return 0
+	return nil
 }
 
 // lockAgent reports whether this is the user's only agent: the user unit

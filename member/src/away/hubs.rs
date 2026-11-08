@@ -68,6 +68,10 @@ impl Away {
     /// peer that may be a hub; on a device that stopped being one, that it
     /// is none, for the members and the devices that may be hubs.
     pub(super) fn share_for(&self, node: &Node, peer: &DeviceId) -> Option<Message> {
+        // A hub moving to another device shares nothing.
+        if self.moving.load(std::sync::atomic::Ordering::SeqCst) {
+            return None;
+        }
         let may = node.records().lock().unwrap().may_host(peer.as_str());
         let member = node.devices().iter().any(|d| d.id == peer.as_str() && d.role == "member");
         let cur = self.st.lock().unwrap();

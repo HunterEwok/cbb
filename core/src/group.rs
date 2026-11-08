@@ -116,6 +116,11 @@ pub enum Refusal {
     /// its device (Records::stopped). Its connection carries records only,
     /// so that the root's decision reaches every member.
     Stopped,
+    /// The chain is an old root's that an admin took the group over from
+    /// (Records::taken_over). Its connection carries records only, so that
+    /// the old root, if it is still in use, learns of the takeover and can
+    /// undo it. Only Records::refused_peer returns it.
+    TakenOver,
 }
 
 impl Refusal {
@@ -123,6 +128,7 @@ impl Refusal {
         match self {
             Refusal::NotListed => "no device record that counts names the device's key",
             Refusal::Stopped => "the group's records stop the exchange until its root decides",
+            Refusal::TakenOver => "the group was taken over from this root; its connection carries records only",
             Refusal::Refused(why) => why,
         }
     }
@@ -505,6 +511,16 @@ impl Records {
         None
     }
 
+    /// Why a peer's connection is refused or carries records only: refused,
+    /// except that an old root an admin took the group over from gets
+    /// records only (Refusal::TakenOver), as Go's allow.
+    pub fn refused_peer(&self, chain: &[Cert]) -> Option<Refusal> {
+        match self.refused(chain) {
+            Some(Refusal::Refused(_)) if self.taken_over(chain).is_some() => Some(Refusal::TakenOver),
+            r => r,
+        }
+    }
+
     /// Whether the state stops the exchange with dev: the whole group stops
     /// (stop full), or dev gets nothing (docs/protocol.md, section 10,
     /// "Stopping the exchange"). A connection with it carries records only.
@@ -852,6 +868,32 @@ impl Records {
     /// (docs/protocol.md, section 10, "Two numbers"), the key goes on from
     /// the record below the fork, and what it signs counts.
     pub fn next_for(&self, signer: &Hash) -> (i64, Option<Hash>) {
+        let (by_id, dead) = self.branches(signer);
+        by_id
+            .iter()
+            .filter(|(id, _)| !dead(**id))
+            // Of two records with one seq, which only a key that signed two
+            // histories has, the lower ID, so that every member gives the same.
+            .max_by(|(ia, a), (ib, b)| a.seq.cmp(&b.seq).then_with(|| ib.cmp(ia)))
+            .map_or((1, None), |(id, b)| (b.seq.saturating_add(1), Some(*id)))
+    }
+
+    /// The records of signer on a branch a root's resolve voided, in the
+    /// order of their seq, as Go's Voided: what the key signs again once the
+    /// root voided both its histories (docs/protocol.md, section 10, "Going
+    /// on after two histories").
+    pub fn voided(&self, signer: &Hash) -> Vec<Record> {
+        let (by_id, dead) = self.branches(signer);
+        let mut out: Vec<(i64, Hash)> = by_id.iter().filter(|(id, _)| dead(**id)).map(|(id, b)| (b.seq, *id)).collect();
+        out.sort();
+        out.into_iter().filter_map(|(_, id)| self.recs.values().find(|r| r.id() == id).cloned()).collect()
+    }
+
+    /// The bodies of signer's records by ID, and whether one is on a voided
+    /// branch: its prev chain, as far as the set holds it, passes through a
+    /// record that a root's resolve names and that has a sibling.
+    #[allow(clippy::type_complexity)]
+    fn branches(&self, signer: &Hash) -> (BTreeMap<Hash, Body>, Box<dyn Fn(Hash) -> bool>) {
         let roots = self.state().roots;
         let mut voided: BTreeMap<Hash, ()> = BTreeMap::new();
         let mut by_id: BTreeMap<Hash, Body> = BTreeMap::new();
@@ -871,26 +913,21 @@ impl Records {
         }
         // A record is on a voided branch when its prev chain, as far as the
         // set holds it, passes through a voided record with a sibling.
-        let dead = |mut id: Hash| {
+        let chains: BTreeMap<Hash, (i64, Option<Hash>)> = by_id.iter().map(|(id, b)| (*id, (b.seq, b.prev))).collect();
+        let dead = move |mut id: Hash| {
             for _ in 0..=authority::MAX_SEQ {
-                let Some(b) = by_id.get(&id) else { return false };
-                if voided.contains_key(&id) && by_seq.get(&b.seq).copied().unwrap_or(0) > 1 {
+                let Some((seq, prev)) = chains.get(&id) else { return false };
+                if voided.contains_key(&id) && by_seq.get(seq).copied().unwrap_or(0) > 1 {
                     return true;
                 }
-                match b.prev {
-                    Some(p) => id = p,
+                match prev {
+                    Some(p) => id = *p,
                     None => return false,
                 }
             }
             false
         };
-        by_id
-            .iter()
-            .filter(|(id, _)| !dead(**id))
-            // Of two records with one seq, which only a key that signed two
-            // histories has, the lower ID, so that every member gives the same.
-            .max_by(|(ia, a), (ib, b)| a.seq.cmp(&b.seq).then_with(|| ib.cmp(ia)))
-            .map_or((1, None), |(id, b)| (b.seq.saturating_add(1), Some(*id)))
+        (by_id, Box::new(dead))
     }
 
     /// The canonical bytes of body as its signer's next record, to sign:

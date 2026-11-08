@@ -16,7 +16,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -38,16 +37,8 @@ type fakePhone struct {
 	tc *tls.Conn
 }
 
-func (p *fakePhone) dial(h *hub, to *group.Identity) {
+func (p *fakePhone) dial(addr string, to *group.Identity) {
 	p.t.Helper()
-	addr := ""
-	h.mu.Lock()
-	for m := range h.members {
-		if m.cfg.ID == string(to.ID) {
-			addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(int(m.cfg.Port)))
-		}
-	}
-	h.mu.Unlock()
 	raw, err := net.Dial("tcp", addr)
 	if err != nil {
 		p.t.Fatal(err)
@@ -137,7 +128,7 @@ func TestComputerAdmin(t *testing.T) {
 	ca := adminCAFor(t, root, pending)
 	ak := group.KeyHashOf(ca)
 	p := &fakePhone{t: t, id: phone}
-	p.dial(&h, pi)
+	p.dial(a.addr(), pi)
 	p.send(map[string]any{"t": "admin", "admin_ca": ca.Raw})
 	p.send(map[string]any{"t": "records", "records": []group.Record{
 		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(pi.ID), Name: "pi", Role: group.RoleMember, Caps: group.AllCaps, Key: &pk, Admin: &ak,
@@ -385,9 +376,10 @@ func TestEvidence(t *testing.T) {
 	statusURL, statusRoots, statusEvery = mirror.URL+"/", func() [][]byte { return [][]byte{rootSPKI} }, 100*time.Millisecond
 	t.Cleanup(func() { statusURL, statusRoots, statusEvery = oldURL, oldRoots, oldEvery })
 
+	// The mirror and the attestation roots are the Go service's own.
 	var h hub
-	pi := startService(t, &h, "pi")
-	deck := startService(t, &h, "deck")
+	pi := startGoService(t, &h, "pi")
+	deck := startGoService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	waitFor(t, "deck is listed", func() bool { return listed(pi.devices(t)) == "deck pi" })
 	deck.stop()
@@ -410,7 +402,7 @@ func TestEvidence(t *testing.T) {
 	t.Cleanup(func() { attestRoots = nil })
 
 	p := &fakePhone{t: t, id: id}
-	p.dial(&h, mustLoad(t, pi.dir))
+	p.dial(pi.addr(), mustLoad(t, pi.dir))
 	ev := func(chain [][]byte) map[string]any {
 		return map[string]any{"t": "evidence", "evidence": map[string]any{"format": "android-key", "key": "member", "salt": salt, "chain": chain}}
 	}

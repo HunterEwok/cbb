@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The lite member's quick actions (docs/design.md, "Quick actions"), as
-//! the full member's internal/actions, in the same files: reboot, cancel a
-//! pending reboot, and restart the service. Each is off until the device's
-//! own user turns it on there; the checks of the signer, the polkit rule
-//! that lets the service ask logind, and the log of the last ones.
+//! The quick actions (docs/design.md, "Quick actions"), as the full
+//! member's internal/actions, in the same files: the presets and the user's
+//! own actions. Each is off until the device's own user turns it on there;
+//! the checks of the signer, the polkit rule that lets the service ask
+//! logind, and the log of the last ones.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -15,13 +15,21 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Context, Error, Result};
 use crate::files;
 
-/// The presets of the lite member, in the order the apps show them. A
-/// board has no screen to lock and often no button to start it again, so
-/// it has no lock, sleep or shutdown.
+/// The presets, in the order the apps show them: lock the screen, sleep,
+/// reboot, shut down, cancel a reboot or shutdown that is pending, restart
+/// the service, and switch the layout the computer's Bluetooth keyboard
+/// types in to the next one.
+pub const LOCK: &str = "lock";
+pub const SLEEP: &str = "sleep";
 pub const REBOOT: &str = "reboot";
+pub const SHUTDOWN: &str = "shutdown";
 pub const CANCEL: &str = "cancel-shutdown";
 pub const RESTART: &str = "restart";
-pub const PRESETS: &[&str] = &[REBOOT, CANCEL, RESTART];
+pub const LAYOUT: &str = "keyboard-layout";
+pub const PRESETS: &[&str] = &[LOCK, SLEEP, REBOOT, SHUTDOWN, CANCEL, RESTART, LAYOUT];
+
+/// How many actions of their own a device's user may add.
+pub const MAX_OWN: usize = 32;
 
 /// The kinds of signers an action may allow: the group's root, an admin
 /// phone, an admin computer, a watch with an admin key of its own.
@@ -39,8 +47,8 @@ pub struct Action {
     pub by: Vec<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub any_key: bool,
-    /// The program of a full member's own action, kept as it was so that
-    /// saving the shared file loses nothing; the lite member never runs it.
+    /// The program and its arguments of the user's own action, which the
+    /// agent runs as the user signed in; empty for a preset.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub command: Vec<String>,
 }
@@ -56,7 +64,8 @@ const SETTINGS_FILE: &str = "actions.json";
 pub const LOG_FILE: &str = "actions-log.json";
 /// How many actions the log keeps.
 pub const LOG_SIZE: usize = 100;
-/// How long a reboot waits, which cancel-shutdown stops, in minutes.
+/// How long a reboot or shutdown waits, which cancel-shutdown stops, in
+/// minutes.
 const DELAY_MINUTES: &str = "+1";
 
 impl Settings {
@@ -69,7 +78,25 @@ impl Settings {
             .unwrap_or_else(|| Action { name: name.into(), ..Default::default() })
     }
 
-    /// Sets a preset, keeping the presets in their order.
+    /// Whether this device has the action name: a preset, or one of its
+    /// user's own.
+    pub fn has(&self, name: &str) -> bool {
+        PRESETS.contains(&name) || self.actions.iter().any(|a| a.name == name)
+    }
+
+    /// The user's own actions.
+    pub fn own(&self) -> Vec<Action> {
+        self.actions.iter().filter(|a| !a.command.is_empty()).cloned().collect()
+    }
+
+    /// Takes the user's own action name away.
+    pub fn remove(&mut self, name: &str) -> bool {
+        let n = self.actions.len();
+        self.actions.retain(|a| a.name != name || a.command.is_empty());
+        self.actions.len() != n
+    }
+
+    /// Sets an action, keeping the presets in their order.
     pub fn set(&mut self, a: Action) {
         self.actions.retain(|x| x.name != a.name);
         self.actions.push(a);
@@ -83,15 +110,14 @@ impl Settings {
         }
     }
 
-    /// The presets that are on: a full member's own actions in the same
-    /// file are not the lite member's to offer.
+    /// The actions that are on.
     pub fn on(&self) -> Vec<String> {
-        self.actions.iter().filter(|a| a.on && PRESETS.contains(&a.name.as_str())).map(|a| a.name.clone()).collect()
+        self.actions.iter().filter(|a| a.on).map(|a| a.name.clone()).collect()
     }
 
-    /// Every preset as it stands, for cbb action.
+    /// Every preset as it stands, then the user's own, for cbb action.
     pub fn all(&self) -> Vec<Action> {
-        PRESETS.iter().map(|p| self.get(p)).collect()
+        PRESETS.iter().map(|p| self.get(p)).chain(self.own()).collect()
     }
 }
 
@@ -125,10 +151,33 @@ pub fn parse_kinds(s: &str) -> Result<Vec<String>> {
     Ok(out)
 }
 
-/// Whether only admins with keys in hardware reboot until the user says
-/// otherwise: a stolen key in a file must not (D-71).
+/// Whether only admins with keys in hardware run the action name until
+/// its user says otherwise: reboot and shut down, which a stolen key in a
+/// file must not do (D-71).
 pub fn hardware_by_default(name: &str) -> bool {
-    name == REBOOT
+    name == REBOOT || name == SHUTDOWN
+}
+
+/// Why name and command cannot be an action of the user's own, or None: a
+/// name that is not a preset, and a program by its full path, so that
+/// nothing in PATH or a shell decides what runs (Go's CheckOwn).
+pub fn check_own(name: &str, command: &[String]) -> Option<String> {
+    if !cbb_core::command::valid_action_name(name) {
+        return Some(format!(
+            "{name:?} is not an action's name: 1 to {} of a-z, 0-9 and -, starting with a letter",
+            cbb_core::command::MAX_ACTION_NAME
+        ));
+    }
+    if PRESETS.contains(&name) {
+        return Some(format!("{name} is a preset; give your own action another name"));
+    }
+    let Some(prog) = command.first() else {
+        return Some("an action of your own needs a command: cbb action add NAME -- PROGRAM ARGS".into());
+    };
+    if !Path::new(prog).is_absolute() {
+        return Some(format!("give the program by its full path, not {prog:?}"));
+    }
+    None
 }
 
 /// The admin that signed an action command, as the group's records show it
@@ -195,22 +244,30 @@ pub enum Failure {
     Failed(Error),
 }
 
-/// Runs reboot or cancel-shutdown through shutdown(8), which asks logind
-/// over the system bus; the polkit rule of grant lets the service's user
-/// do it. Restart is the service's own.
+/// Runs a preset of the system through logind's tools, which ask logind
+/// over the system bus: loginctl locks the sessions, systemctl suspends,
+/// shutdown(8) schedules a reboot or shutdown or cancels it; the polkit rule
+/// of grant lets the service's user do exactly the presets that are on.
+/// Restart and the keyboard's layout are the service's own.
 pub fn run(name: &str) -> std::result::Result<(), Failure> {
-    let args: &[&str] = match name {
-        REBOOT => &["-r", DELAY_MINUTES],
-        CANCEL => &["-c"],
+    let (tool, args): (&str, &[&str]) = match name {
+        LOCK => ("loginctl", &["lock-sessions"]),
+        SLEEP => ("systemctl", &["suspend"]),
+        REBOOT => ("shutdown", &["-r", DELAY_MINUTES]),
+        SHUTDOWN => ("shutdown", &["-P", DELAY_MINUTES]),
+        CANCEL => ("shutdown", &["-c"]),
         n => return Err(Failure::Refused(format!("this device has no action {n:?}"))),
     };
-    let bin = ["/usr/sbin/shutdown", "/sbin/shutdown"].into_iter().find(|p| Path::new(p).exists());
+    let bin = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        .into_iter()
+        .map(|d| format!("{d}/{tool}"))
+        .find(|p| Path::new(p).exists());
     let Some(bin) = bin else {
-        return Err(Failure::Failed(Error::msg(
-            "this system has no shutdown command, so the lite member cannot reboot it",
-        )));
+        return Err(Failure::Failed(Error::msg(format!(
+            "this system has no {tool}, so CBB cannot {name} it; the action needs systemd's logind"
+        ))));
     };
-    let out = Command::new(bin)
+    let out = Command::new(&bin)
         .args(args)
         .stdin(std::process::Stdio::null())
         .output()
@@ -235,12 +292,15 @@ fn denied(said: &str) -> bool {
 /// The service's user, which the polkit rule lets act.
 const SERVICE_USER: &str = "cbb";
 
-/// The polkit actions of each preset that needs one: a reboot while
-/// someone is logged in needs the multiple-sessions right too, and
+/// The polkit actions of each preset that needs one: a reboot or shutdown
+/// while someone is logged in needs the multiple-sessions right too, and
 /// cancelling one needs the right that scheduled it.
 fn rights_of(name: &str) -> &'static [&'static str] {
     match name {
+        LOCK => &["org.freedesktop.login1.lock-sessions"],
+        SLEEP => &["org.freedesktop.login1.suspend", "org.freedesktop.login1.suspend-multiple-sessions"],
         REBOOT => &["org.freedesktop.login1.reboot", "org.freedesktop.login1.reboot-multiple-sessions"],
+        SHUTDOWN => &["org.freedesktop.login1.power-off", "org.freedesktop.login1.power-off-multiple-sessions"],
         _ => &[],
     }
 }
@@ -380,6 +440,13 @@ mod tests {
         let by_root = Action { by: vec!["root".into()], ..on(RESTART) };
         assert!(check(&by_root, &phone).unwrap().contains("only for root"));
         assert_eq!(check(&by_root, &root), None);
+        assert!(check(&on(SHUTDOWN), &file_pc).unwrap().contains("keys are in hardware"));
+        assert_eq!(check(&on(LOCK), &file_pc), None);
+        assert_eq!(check_own("backup", &["/usr/local/bin/backup".into()]), None);
+        assert!(check_own(LOCK, &["/bin/true".into()]).unwrap().contains("is a preset"));
+        assert!(check_own("backup", &["backup.sh".into()]).unwrap().contains("full path"));
+        assert!(check_own("Backup", &["/bin/true".into()]).unwrap().contains("not an action's name"));
+        assert!(check_own("backup", &[]).unwrap().contains("needs a command"));
         assert_eq!(parse_kinds(" phone,root,phone").unwrap(), ["phone", "root"]);
         assert!(parse_kinds("admin").is_err());
     }
@@ -398,8 +465,8 @@ mod tests {
         let mut off = s.clone();
         off.all_off();
         assert!(off.on().is_empty() && off.get(REBOOT).by == ["phone"]);
-        // The full member's file reads too: its own actions are not offered
-        // here, and saving keeps them as they were.
+        // The user's own actions come after the presets, and saving keeps
+        // them as they were.
         std::fs::write(
             dir.join(SETTINGS_FILE),
             r#"{"actions":[{"name":"reboot","on":true,"any_key":true},{"name":"backup","on":true,"command":["/bin/true"]}]}"#,
@@ -407,12 +474,16 @@ mod tests {
         .unwrap();
         let mut s = load(&dir).unwrap();
         assert!(s.get(REBOOT).any_key);
-        assert_eq!(s.on(), [REBOOT]);
+        assert_eq!(s.on(), [REBOOT, "backup"]);
+        assert!(s.has("backup") && s.has(LOCK) && !s.has("backups"));
+        assert_eq!(s.all().last().unwrap().name, "backup");
         s.set(Action { name: RESTART.into(), on: true, ..Default::default() });
         save(&dir, &s).unwrap();
-        let s = load(&dir).unwrap();
+        let mut s = load(&dir).unwrap();
         assert_eq!(s.get("backup").command, ["/bin/true"]);
         assert!(s.get("backup").on);
+        assert!(!s.remove(REBOOT), "a preset stays");
+        assert!(s.remove("backup") && !s.has("backup"));
         for i in 0..LOG_SIZE + 3 {
             let e = Entry { time_ms: i as i64, action: REBOOT.into(), result: "done".into(), ..Default::default() };
             append(&dir, e).unwrap();

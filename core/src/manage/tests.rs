@@ -257,6 +257,30 @@ fn mute_and_unmute_are_sealed_to_the_receiver() {
 }
 
 #[test]
+fn pastes_and_actions_are_sealed_to_the_receiver() {
+    let g = group();
+    let s = Signer { ca: &g.admin_ca, key: &*g.admin_key, me: &g.admin_phone };
+    let paste = Order::Paste { mode: "type".into(), kind: "secret".into(), text: "hello".into(), enter: true };
+    let r = order(&g.rs, &s, &g.laptop, &paste, now_ms()).unwrap();
+    let mut c = g.rs.verify_command(&r, &g.laptop, now_ms()).unwrap();
+    assert!(c.sealed() && c.text.is_empty());
+    c.open(&g.laptop_seal).unwrap();
+    assert_eq!(
+        (c.kind.as_str(), c.mode.as_str(), c.paste_kind.as_str(), c.text.as_str(), c.enter),
+        ("paste", "type", "secret", "hello", true)
+    );
+    let r = order(&g.rs, &s, &g.laptop, &Order::Action("lock".into()), now_ms()).unwrap();
+    let mut c = g.rs.verify_command(&r, &g.laptop, now_ms()).unwrap();
+    c.open(&g.laptop_seal).unwrap();
+    assert_eq!((c.kind.as_str(), c.action.as_str()), ("action", "lock"));
+    for (o, kind) in [(Order::PasteOff, "paste-off"), (Order::ActionsOff, "actions-off")] {
+        let r = order(&g.rs, &s, &g.laptop, &o, now_ms()).unwrap();
+        assert_eq!(g.rs.verify_command(&r, &g.laptop, now_ms()).unwrap().kind, kind);
+    }
+    assert!(order(&g.rs, &s, &g.laptop, &Order::Action("Not a name".into()), now_ms()).is_err());
+}
+
+#[test]
 fn the_root_makes_a_computer_an_admin() {
     let mut g = group();
     let key = soft();

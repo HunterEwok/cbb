@@ -16,6 +16,9 @@
 # archive carries cbb-desktop the same way), and the archive is cbb-windows-<NAME>.zip, which
 # Windows opens without other tools. The release workflow and CI both use
 # it, so a wrong path fails on every pull request, not only at a release.
+# cbb-helper (cbb-helper.exe), when it was built beside the binary, goes
+# beside cbb, where the Rust cbb looks for it (docs/design.md, "The service
+# and its helper"); its modules' notices join the others.
 # With CORE_NOTICES naming a file, the notices of the Rust core's crates
 # (member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm)
 # follow those of the Go modules, for a binary built with the core.
@@ -53,6 +56,7 @@ notices() {
 	echo "only (LICENSE). It is built with the code below, under its own licenses."
 	{
 		modules "$root/cmd/cbb"
+		if [ -n "$helper" ]; then modules "$root/cmd/cbb-helper"; fi
 		if [ -n "$desktop" ]; then modules "$root/apps/desktop"; fi
 	} | sort -u | while read -r mod version moddir; do
 		printf '\n================================================================\n%s %s\n' "$mod" "$version"
@@ -87,6 +91,11 @@ case $os in
 windows) [ ! -f "$(dirname "$bin")/cbb-desktop.exe" ] || desktop=$(dirname "$bin")/cbb-desktop.exe ;;
 linux) [ ! -f "$(dirname "$bin")/cbb-desktop" ] || desktop=$(dirname "$bin")/cbb-desktop ;;
 esac
+# The Go helper, when it was built beside the binary.
+helper=
+exe=
+[ "$os" != windows ] || exe=.exe
+[ ! -f "$(dirname "$bin")/cbb-helper$exe" ] || helper=$(dirname "$bin")/cbb-helper$exe
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/cbb/packaging" "$out"
@@ -96,6 +105,9 @@ notices >"$work/cbb/THIRD_PARTY_NOTICES"
 if [ "$os" = windows ]; then
 	cp "$bin" "$work/cbb/cbb.exe"
 	cp "$(dirname "$bin")/cbbw.exe" "$work/cbb/cbbw.exe"
+	if [ -n "$helper" ]; then
+		cp "$helper" "$work/cbb/cbb-helper.exe"
+	fi
 	if [ -n "$desktop" ]; then
 		cp "$desktop" "$work/cbb/cbb-desktop.exe"
 	fi
@@ -106,6 +118,9 @@ if [ "$os" = windows ]; then
 	exit 0
 fi
 cp "$bin" "$work/cbb/cbb"
+if [ -n "$helper" ]; then
+	cp "$helper" "$work/cbb/cbb-helper"
+fi
 cp -R "$root/packaging/$dir" "$root/packaging/tmux" "$root/packaging/update.sh" "$root/packaging/pair.sh" "$work/cbb/packaging/"
 if [ -n "$desktop" ]; then
 	cp "$desktop" "$work/cbb/cbb-desktop"

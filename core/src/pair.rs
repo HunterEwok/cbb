@@ -113,7 +113,13 @@ pub enum Refusal {
     TooMany,
     Taken,
     Refused,
+    /// The admin did not confirm a device that used a remote invitation.
+    Declined,
 }
+
+/// The shortest secret of a remote invitation, in bytes, as Go's
+/// pair.MinSecret.
+pub const MIN_SECRET: usize = 16;
 
 impl Refusal {
     /// The refusal a frame's error code names.
@@ -125,6 +131,7 @@ impl Refusal {
             "expired" => Refusal::Expired,
             "too-many" => Refusal::TooMany,
             "taken" => Refusal::Taken,
+            "declined" => Refusal::Declined,
             _ => Refusal::Refused, // the peer's own words are never shown
         }
     }
@@ -139,6 +146,7 @@ impl Refusal {
             Refusal::TooMany => "too-many",
             Refusal::Taken => "taken",
             Refusal::Refused => "refused",
+            Refusal::Declined => "declined",
         }
     }
 
@@ -152,6 +160,7 @@ impl Refusal {
             Refusal::TooMany => "three failed attempts; the pairing window is closed",
             Refusal::Taken => "the joining device's ID is in the group already; start the join again",
             Refusal::Refused => "the other device refused the pairing",
+            Refusal::Declined => "the admin did not confirm this device",
         }
     }
 }
@@ -310,6 +319,27 @@ impl Joiner {
     /// send.
     pub fn start(&self, code: &str, member_der: &[u8], sid: &[u8], member_first: bool) -> Result<(Exchange, Vec<u8>)> {
         let code = normalize_code(code)?;
+        self.start_with(code.as_bytes(), member_der, sid, member_first)
+    }
+
+    /// Starts the exchange like start with a remote invitation's secret in
+    /// place of a typed code (docs/design.md, "Joining from another
+    /// network"), as Go's JoinSecret: the member asks its admin to confirm
+    /// the device before it sends the Welcome.
+    pub fn start_secret(&self, secret: &[u8], member_der: &[u8], sid: &[u8]) -> Result<(Exchange, Vec<u8>)> {
+        if secret.len() < MIN_SECRET {
+            return Err(Error::msg("the invitation's secret is too short"));
+        }
+        self.start_with(secret, member_der, sid, false)
+    }
+
+    fn start_with(
+        &self,
+        password: &[u8],
+        member_der: &[u8],
+        sid: &[u8],
+        member_first: bool,
+    ) -> Result<(Exchange, Vec<u8>)> {
         let member_cert = Cert::parse(member_der).wrap("the member's certificate")?;
         let ci = channel_id(member_der, &self.cert);
         let (admin_key, admin_proof) = match &self.admin {
@@ -332,7 +362,7 @@ impl Joiner {
         .context("cannot encode the joiner's info")?;
         let (st, msg) = cpace::start(&cpace::Config {
             role: cpace::Role::Initiator,
-            password: code.as_bytes(),
+            password,
             channel_id: &ci,
             session_id: sid,
             ad: &ad,
@@ -395,14 +425,14 @@ impl Exchange {
     pub fn reply(&mut self, body: &[u8]) -> core::result::Result<Vec<u8>, Failure> {
         let reply: Frame = decode(body)?;
         if !reply.error.is_empty() {
-            return Err(Error::with("the pairing failed", Refusal::of(&reply.error)).into());
+            return Err(Error::with(format!("pair: {}", Refusal::of(&reply.error)), Refusal::of(&reply.error)).into());
         }
         let peer_ad = reply.ad.unwrap_or_default();
         self.st.finish(&reply.msg.unwrap_or_default(), &peer_ad).context("the pairing failed")?;
         let member: MemberAd = serde_json::from_slice(&peer_ad).context("the member's description does not decode")?;
         if self.member_first && self.st.verify(&reply.tag.unwrap_or_default()).is_err() {
             return Err(Failure {
-                error: Error::with("the pairing failed", Refusal::WrongCode),
+                error: Error::with(format!("pair: {}", Refusal::WrongCode), Refusal::WrongCode),
                 send: frame(&Frame { error: "wrong-code".into(), ..Default::default() }).ok(),
             });
         }
@@ -421,7 +451,7 @@ impl Exchange {
             self.member.as_ref().ok_or_else(|| Error::msg("the pairing failed: the frames came out of order"))?;
         let last: Frame = decode(body)?;
         if !last.error.is_empty() {
-            return Err(Error::with("the pairing failed", Refusal::of(&last.error)));
+            return Err(Error::with(format!("pair: {}", Refusal::of(&last.error)), Refusal::of(&last.error)));
         }
         let proved = self.member_first || last.tag.as_deref().is_some_and(|t| self.st.verify(t).is_ok());
         let Some(welcome) = last.welcome.filter(|_| proved) else {

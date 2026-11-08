@@ -14,12 +14,12 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"github.com/HunterEwok/cbb/internal/actions"
 	"github.com/HunterEwok/cbb/internal/blekeyboard"
 	"github.com/HunterEwok/cbb/internal/blekeyboard/bluetest"
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/keyboard"
+	"github.com/HunterEwok/cbb/internal/peripheral"
 )
 
 // TestKeyboard: cbb keyboard on a Linux computer, against a fake BlueZ:
@@ -81,7 +81,7 @@ func TestKeyboard(t *testing.T) {
 	if _, err := deck.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if p := deck.status(t).Paste; !slices.Contains(p.Targets, targetKeyboard) {
+	if p := deck.status(t).Paste; !slices.Contains(p.Targets, peripheral.TargetKeyboard) {
 		t.Errorf("the paste targets: %v", p.Targets)
 	}
 	paste := func(text string) error {
@@ -131,16 +131,16 @@ func TestKeyboardNoGroup(t *testing.T) {
 // and refuses while the keyboard is off.
 func TestNextKeyboardLayout(t *testing.T) {
 	dir := t.TempDir()
-	s := &Service{cfg: Config{StateDir: dir, OS: group.OSLinux}, logf: t.Logf}
-	var r *actions.Refusal
-	if err := s.nextKeyboardLayout(); !errors.As(err, &r) {
+	s := &peripheral.Host{Dir: dir, OS: group.OSLinux, Logf: t.Logf}
+	var r *peripheral.Refusal
+	if err := s.NextKeyboardLayout(); !errors.As(err, &r) {
 		t.Fatalf("with the keyboard off: %v", err)
 	}
 	if err := blekeyboard.Save(dir, blekeyboard.Settings{On: true, Layout: keyboard.US}); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []keyboard.Layout{keyboard.RU, keyboard.US} {
-		if err := s.nextKeyboardLayout(); err != nil {
+		if err := s.NextKeyboardLayout(); err != nil {
 			t.Fatal(err)
 		}
 		if set, _ := blekeyboard.Load(dir); set.Layout != want || !set.On {

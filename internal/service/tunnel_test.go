@@ -883,6 +883,9 @@ func TestSeveralHubs(t *testing.T) {
 	// pi for up to handshakeTimeout: long enough to sync on a slow runner.
 	upCheck, standbyGrace = 20*time.Second, 2*time.Second
 	t.Cleanup(func() { upCheck, standbyGrace = 5*time.Minute, time.Minute })
+	// The Rust service takes them from its environment.
+	t.Setenv("CBB_UP_CHECK", "20")
+	t.Setenv("CBB_STANDBY_GRACE", "2")
 	var h hub
 	pi := startService(t, &h, "pi")
 	mac := startService(t, &h, "mac")

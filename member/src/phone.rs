@@ -76,7 +76,7 @@ pub struct Config {
 pub struct DeviceView {
     pub id: String,
     pub name: String,
-    /// `full`, `phone`, `lite` or `watch`.
+    /// `member`, `phone` or `watch`.
     pub role: String,
     /// What a member can do, from its record, or from its hello while no
     /// record lists it.
@@ -160,9 +160,14 @@ impl Member {
         ));
         let tag = ident.tag();
         let away = Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()));
-        let device =
-            DeviceInfo { form: "phone".into(), os_version: cfg.os_version, version: cfg.version, mac: String::new() }
-                .cleaned();
+        let device = DeviceInfo {
+            form: "phone".into(),
+            os_version: cfg.os_version,
+            version: cfg.version,
+            mac: String::new(),
+            archive: String::new(),
+        }
+        .cleaned();
         if let Err(e) = mute::load(&cfg.state_dir, &engine) {
             log(&format!("cbb: the mute: {}; not muted", e.for_log()));
         }

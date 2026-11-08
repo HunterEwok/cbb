@@ -7,7 +7,9 @@
 #   sh packaging/macos/pkg.sh VERSION path/to/cbb path/to/CBB.app OUT.pkg [IDENTITY]
 #
 # VERSION is the release's (0.6.0, 0.6.0-rc.1). cbb and CBB.app come signed
-# (sign.sh); cbb is the universal program, for Apple silicon and Intel.
+# (sign.sh); cbb is the universal program, for Apple silicon and Intel, and
+# cbb-helper, the Go helper cbb starts as its child, is beside it, universal
+# and signed as well.
 # IDENTITY, a Developer ID Installer identity in a keychain (its SHA-1 hash
 # or name), signs the package with a secure timestamp; without it the package
 # is unsigned, for CI's test of it. The package puts the app in /Applications
@@ -34,11 +36,14 @@ case $version in
 	exit 2
 	;;
 esac
-for arch in arm64 x86_64; do
-	if ! lipo "$bin" -verify_arch "$arch" 2>/dev/null; then
-		echo "pkg.sh: $bin has no $arch; make it with lipo -create from both builds" >&2
-		exit 1
-	fi
+helper=$(dirname "$bin")/cbb-helper
+for f in "$bin" "$helper"; do
+	for arch in arm64 x86_64; do
+		if ! lipo "$f" -verify_arch "$arch" 2>/dev/null; then
+			echo "pkg.sh: $f is missing or has no $arch; make it with lipo -create from both builds" >&2
+			exit 1
+		fi
+	done
 done
 
 work=$(mktemp -d)
@@ -48,6 +53,7 @@ share="$root/Library/Application Support/cbb-package"
 mkdir -p "$root/Applications" "$share/macos" "$work/scripts"
 ditto "$app" "$root/Applications/CBB.app"
 ditto "$bin" "$share/cbb"
+ditto "$helper" "$share/cbb-helper"
 for f in install.sh uninstall.sh tools.cbb.plist tools.cbb.agent.plist; do
 	cp "$here/$f" "$share/macos/"
 done
@@ -68,7 +74,7 @@ pkg="/Library/Application Support/cbb-package"
 # nobody else may write to them.
 d=$pkg
 set --
-for f in "$pkg/cbb" "$pkg/update.sh" "$pkg/macos" "$pkg/macos/"*; do
+for f in "$pkg/cbb" "$pkg/cbb-helper" "$pkg/update.sh" "$pkg/macos" "$pkg/macos/"*; do
 	set -- "$f" "$@"
 done
 while :; do
