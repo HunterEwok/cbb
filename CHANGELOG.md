@@ -1447,7 +1447,8 @@ All notable changes to cbb are documented in this file. The format follows
 - The Rust service refuses the group's keys in a container unless `CBB_KEYS_IN_FILE=yes`, as
   the Go service does, and `cbb pair -code` without an address hands the code to the running
   service. The Docker image carries the Rust `cbb` with the Go programs beside it, and the
-  systemd units of `cbb-forward` and `cbb-relay` run those programs.
+  systemd units of `cbb-forward` and `cbb-relay` run those programs, which the Homebrew
+  formula installs too.
 - The Android and iPhone apps put one received image or video, and an image the button
   fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
   Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).
