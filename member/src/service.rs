@@ -254,9 +254,19 @@ extern "C" fn on_signal(_: libc::c_int) {
     STOP.store(true, Ordering::SeqCst);
 }
 
-/// Logs to standard error, which systemd or procd keeps.
+/// Has the service stop, as SIGTERM does; Windows' service manager asks
+/// with it.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn request_stop() {
+    STOP.store(true, Ordering::SeqCst);
+}
+
+/// Logs to the service's log file where it has one (crate::logfile), else
+/// to standard error, which systemd or procd keeps.
 pub fn log_line(s: &str) {
-    eprintln!("{s}");
+    if !crate::logfile::line(s) {
+        eprintln!("{s}");
+    }
 }
 
 /// Runs the service until SIGTERM or SIGINT.

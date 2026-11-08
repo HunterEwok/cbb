@@ -90,7 +90,11 @@ All notable changes to cbb are documented in this file. The format follows
   The Rust service builds for Windows: its control sockets are AF_UNIX sockets there too, in
   a folder whose access list lets in the system, administrators, the user who started it and
   the group `cbb`, and it tells a client's user and session by the socket's peer, as the Go
-  service does; CI checks it for Windows, macOS and FreeBSD.
+  service does; CI checks it for Windows, macOS and FreeBSD. Under Windows' service manager
+  the Rust service reports itself running, stops on a stop request or at shutdown, ends with
+  an error of its own when it fails so that its recovery actions start it again, and logs to
+  `ProgramData\cbb\logs\service.log`; started by launchd on a Mac, to
+  `/Library/Logs/cbb/service.log`; both move to `.1` past 1 MiB, as the Go service's logs.
 - A request to the Rust service while it is still starting waits for it rather than hearing
   that the device is in no group.
 - The Rust member no longer can deadlock when a renewed certificate and new records come at

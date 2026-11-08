@@ -38,6 +38,7 @@ pub mod identity;
 mod interfaces;
 mod keys;
 mod leave;
+mod logfile;
 mod mute;
 pub mod networks;
 mod next;
@@ -566,7 +567,40 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
     if !records::valid_name(&cfg.name) {
         return Err(Error::msg("the device name must be 1 to 64 bytes without control characters"));
     }
-    service::run(cfg)
+    #[cfg(windows)]
+    {
+        // Under the service manager, which gives it no standard error, the
+        // service logs to ProgramData\cbb\logs\service.log; started by
+        // hand, in the console until Ctrl+C.
+        let run: sys::service_windows::Run = Box::new(move |in_service| {
+            if !in_service {
+                return service::run(cfg);
+            }
+            logfile::set(&sys::program_data().join("cbb").join("logs").join("service.log"))?;
+            let res = service::run(cfg);
+            if let Err(e) = &res {
+                service::log_line(&format!("cbb: {}", e.for_user()));
+            }
+            res
+        });
+        match sys::service_windows::run(run, service::request_stop) {
+            Ok(res) => res,
+            Err(run) => run(false),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        // Started by launchd (packaging/macos/tools.cbb.plist), its own log,
+        // moved aside past 1 MiB as on Windows; standard error follows it, so
+        // a crash lands there too.
+        #[cfg(target_os = "macos")]
+        if std::env::var("XPC_SERVICE_NAME").as_deref() == Ok("tools.cbb")
+            && let Err(e) = logfile::set(std::path::Path::new("/Library/Logs/cbb/service.log"))
+        {
+            eprintln!("cbb: the log: {}", e.for_user());
+        }
+        service::run(cfg)
+    }
 }
 
 /// Connects to the service's control socket, which only the members of the

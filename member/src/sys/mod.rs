@@ -21,6 +21,8 @@ pub use uds_windows::{UnixListener, UnixStream};
 mod acl_windows;
 #[cfg(windows)]
 pub use acl_windows::listen as listen_windows;
+#[cfg(windows)]
+pub mod service_windows;
 
 /// Whether the process runs as root, or on Windows as an administrator or
 /// the system.
@@ -236,4 +238,79 @@ pub fn euid() -> u32 {
 #[cfg(windows)]
 pub fn euid() -> u32 {
     0
+}
+
+/// A moment of the local clock, for the log's lines.
+pub struct LocalTime {
+    pub year: i32,
+    pub month: u32,
+    pub day: u32,
+    pub hour: u32,
+    pub minute: u32,
+    pub second: u32,
+}
+
+/// The local clock's time now.
+#[cfg(unix)]
+pub fn local_time() -> LocalTime {
+    // SAFETY: time with a null pointer only returns the time; localtime_r
+    // writes into tm, which is a valid tm.
+    unsafe {
+        let now = libc::time(std::ptr::null_mut());
+        let mut tm: libc::tm = std::mem::zeroed();
+        libc::localtime_r(&now, &mut tm);
+        LocalTime {
+            year: tm.tm_year + 1900,
+            month: (tm.tm_mon + 1) as u32,
+            day: tm.tm_mday as u32,
+            hour: tm.tm_hour as u32,
+            minute: tm.tm_min as u32,
+            second: tm.tm_sec as u32,
+        }
+    }
+}
+
+/// The local clock's time now.
+#[cfg(windows)]
+pub fn local_time() -> LocalTime {
+    use windows_sys::Win32::System::SystemInformation::GetLocalTime;
+    // SAFETY: GetLocalTime writes into st, which is a valid SYSTEMTIME.
+    let st = unsafe {
+        let mut st = std::mem::zeroed();
+        GetLocalTime(&mut st);
+        st
+    };
+    LocalTime {
+        year: st.wYear as i32,
+        month: st.wMonth as u32,
+        day: st.wDay as u32,
+        hour: st.wHour as u32,
+        minute: st.wMinute as u32,
+        second: st.wSecond as u32,
+    }
+}
+
+/// Makes file the process's standard error, which the children it starts
+/// inherit.
+#[cfg(unix)]
+pub fn set_stderr(file: &std::fs::File) {
+    use std::os::fd::AsRawFd;
+    // SAFETY: both are open descriptors; dup2 only replaces descriptor 2.
+    unsafe {
+        libc::dup2(file.as_raw_fd(), 2);
+    }
+}
+
+/// Makes file the process's standard error, which the children it starts
+/// inherit.
+#[cfg(windows)]
+pub fn set_stderr(file: &std::fs::File) {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::Console::{STD_ERROR_HANDLE, SetStdHandle};
+    // The handle stays valid as long as the log keeps its file; the next
+    // file replaces it before the old one closes.
+    // SAFETY: the handle is an open file's.
+    unsafe {
+        SetStdHandle(STD_ERROR_HANDLE, file.as_raw_handle());
+    }
 }
