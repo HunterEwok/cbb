@@ -362,8 +362,14 @@ jobs:
             go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
             # The tray app goes in the archive too, as at a release.
             (cd apps/desktop && go build -trimpath -ldflags=-H=windowsgui -o "$RUNNER_TEMP/cbb-desktop.exe" .)
+            go build -trimpath -o "$RUNNER_TEMP/cbb-helper.exe" ./cmd/cbb-helper
           else
             go build -overlay "$overlay" -tags cbbwasm -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+            # The helper beside cbb, for the archive; not for the routers
+            # (MIPS), where cbb runs without it.
+            if [ "$GOARCH" != mips ] && [ "$GOARCH" != mipsle ]; then
+              go build -trimpath -o "$RUNNER_TEMP/cbb-helper" ./cmd/cbb-helper
+            fi
           fi
       - name: the release archive
         run: |
@@ -372,7 +378,7 @@ jobs:
           if [ "$GOOS" = windows ]; then
             CORE_NOTICES=$RUNNER_TEMP/core-notices sh packaging/archive.sh "$RUNNER_TEMP/cbb.exe" "$GOOS" "$name" "$RUNNER_TEMP/dist"
             unzip -Z1 "$RUNNER_TEMP/dist/cbb-$GOOS-$name.zip" >"$RUNNER_TEMP/list"
-            for f in cbb.exe cbbw.exe cbb-desktop.exe packaging/windows/install.ps1 packaging/windows/uninstall.ps1; do
+            for f in cbb.exe cbbw.exe cbb-desktop.exe cbb-helper.exe packaging/windows/install.ps1 packaging/windows/uninstall.ps1; do
               grep -qx "cbb/$f" "$RUNNER_TEMP/list"
             done
             file "$RUNNER_TEMP/cbb.exe" | grep -q '(console)'
@@ -381,6 +387,9 @@ jobs:
           else
             CORE_NOTICES=$RUNNER_TEMP/core-notices sh packaging/archive.sh "$RUNNER_TEMP/cbb" "$GOOS" "$name" "$RUNNER_TEMP/dist"
             tar -tzf "$RUNNER_TEMP/dist/cbb-$GOOS-$name.tar.gz" | grep -qx "cbb/cbb"
+            if [ "$GOARCH" != mips ] && [ "$GOARCH" != mipsle ]; then
+              tar -tzf "$RUNNER_TEMP/dist/cbb-$GOOS-$name.tar.gz" | grep -qx "cbb/cbb-helper"
+            fi
             # The notices name the core's crates too.
             tar -xzOf "$RUNNER_TEMP/dist/cbb-$GOOS-$name.tar.gz" cbb/THIRD_PARTY_NOTICES | grep -q '^chacha20poly1305 '
           fi
@@ -791,12 +800,15 @@ jobs:
           desktop-file-validate packaging/linux/cbb-desktop.desktop
       - name: get.sh installs a release archive and refuses a changed one
         run: |
-          # The archive as the release workflow makes it.
+          # The archive as the release workflow makes it, with cbb-helper.
           rel="$RUNNER_TEMP/release"
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb-helper" ./cmd/cbb-helper
           sh packaging/archive.sh "$RUNNER_TEMP/cbb" linux amd64 "$rel"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
           sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall
           systemctl is-active cbb.service
+          # The helper beside cbb, root's, as cbb takes it.
+          test "$(stat -c '%U %a' /usr/local/bin/cbb-helper)" = "root 755"
           for _ in $(seq 20); do sudo cbb status && break; sleep 0.5; done
           sudo cbb status | grep -q 'Not in a group'
           echo tampered >>"$rel/cbb-linux-amd64.tar.gz"
@@ -904,6 +916,7 @@ jobs:
       - name: install.sh keeps a port, and uninstall.sh removes it all
         run: |
           sudo CBB_FIREWALL=no sh packaging/linux/install.sh --port 9000 "$RUNNER_TEMP/cbb" | grep 'TCP port 9000' >/dev/null
+          test -x /usr/local/bin/cbb-helper
           grep -qx 'CBB_PORT=9000' /etc/cbb/cbb.env
           sudo CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/cbb" | grep 'TCP port 9000' >/dev/null
           sudo CBB_FIREWALL=no sh packaging/linux/install.sh --console --uinput --port 8764 "$RUNNER_TEMP/cbb" | grep 'TCP port 8764' >/dev/null
@@ -922,7 +935,7 @@ jobs:
           # The desktop agent's user unit, enabled for every user's graphical session.
           test -L /etc/systemd/user/graphical-session.target.wants/cbb-agent.service
           sudo sh /usr/local/share/cbb/uninstall.sh --purge
-          for f in /usr/local/bin/cbb /etc/systemd/system/cbb.service /etc/systemd/system/cbb-console.service /usr/local/share/cbb /etc/cbb /var/lib/cbb /var/lib/cbb-update \
+          for f in /usr/local/bin/cbb /usr/local/bin/cbb-helper /etc/systemd/system/cbb.service /etc/systemd/system/cbb-console.service /usr/local/share/cbb /etc/cbb /var/lib/cbb /var/lib/cbb-update \
             /etc/systemd/system/cbb-uinput.service /etc/modules-load.d/cbb-uinput.conf /run/cbb-keys \
             /etc/systemd/user/cbb-agent.service /etc/systemd/user/graphical-session.target.wants/cbb-agent.service; do
             if [ -e "$f" ]; then
@@ -1181,6 +1194,7 @@ jobs:
           $cbb = "$env:ProgramFiles\cbb\cbb.exe"
           # The tray app, with its sign-in entry and Start menu shortcut.
           if (-not (Test-Path "$env:ProgramFiles\cbb\cbb-desktop.exe")) { throw 'no tray app' }
+          if (-not (Test-Path "$env:ProgramFiles\cbb\cbb-helper.exe")) { throw 'no cbb-helper.exe' }
           $trayRun = (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run -Name 'cbb tray').'cbb tray'
           if ($trayRun -notmatch 'cbb-desktop\.exe"$') { throw "the tray app's sign-in entry: $trayRun" }
           if (-not (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\CBB.lnk")) { throw 'no Start menu shortcut' }

@@ -7,6 +7,10 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The release archives carry `cbb-helper` beside `cbb`, and the installers (Linux, rootless,
+  macOS, FreeBSD, Windows, Homebrew) install it there, owned by root where `cbb` is, and
+  remove it again; CI checks that each archive and installer has it. OpenWrt and the
+  container image go without it.
 - A new device shows a code, and a computer of the group types it: a device that listens to
   join announces itself by mDNS (TXT `j=1` and its fingerprint, docs/protocol.md sections 3
   and 6), and `cbb pair -qr` takes the six digits as well as the QR code's text, finds the
