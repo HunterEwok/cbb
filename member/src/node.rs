@@ -1757,8 +1757,10 @@ impl Node {
     /// Keeps a certificate an admin renewed for this member, or this
     /// member's app for itself.
     pub fn renewed(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<()> {
-        let mut ident = self.ident.write().unwrap();
-        let next = ident.with_cert_from(der, issuer)?;
+        // The records are checked before the identity is locked: the
+        // records' holders lock them first and the identity after
+        // (add_records, settle).
+        let mut next = self.identity().with_cert_from(der, issuer)?;
         let chain: Vec<Cert> = std::iter::once(next.cert.clone()).chain(next.issuer.clone()).collect();
         let records = self.records.lock().unwrap();
         // Its own device record may come after it, as right after joining:
@@ -1774,6 +1776,9 @@ impl Node {
             return Err(Error::msg("its issuer was removed from the group"));
         }
         drop(records);
+        let mut ident = self.ident.write().unwrap();
+        // Roots adopted meanwhile stay.
+        next.roots = ident.roots.clone();
         self.save_identity(&next)?;
         self.logf(&format!("cbb: got a renewed certificate, valid until {}", date(next.cert.not_after)));
         *ident = Arc::new(next);
