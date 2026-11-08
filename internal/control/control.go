@@ -43,7 +43,7 @@ const (
 	OpThaw        = "thaw"           // client → service: on the root, unfreeze the admin computer Name names
 	OpResolve     = "resolve"        // client → service: on the root, void both histories of every key that signed two; Name answers whose
 	OpAway        = "away"           // client → service: Name "on", "off", "hub", "hub-off", "move" (to Device) or "relay": sync away from home
-	OpMode        = "mode"           // client → service: Name "own", "shared", "receive" or "send": the sync mode
+	OpSync        = "sync"           // client → service: Name "on" or "off" (for ForMS, 0 for until turned on): sync this device's clipboard with the group, or with Device as an admin (no ForMS)
 	OpNetwork     = "network"        // client → service: take the networks this device is on now as known
 	OpAdmin       = "admin"          // client → service: on the root, make the device Name names an admin
 	OpTakeover    = "takeover"       // client → service: on an admin, take the group over from the lost root Name names
@@ -87,8 +87,8 @@ const (
 	OpReleaseWant = "release-want"   // client → service: on a hub, the names of the held release's archives the group's members update from and it does not hold, in JSON, for cbb update to download
 	OpKeyboard    = "keyboard"       // client → service: Name "on" (Keyboard the settings), "off", "pair", "type" (the payload) or "" (status): this computer as a Bluetooth keyboard
 	OpKeys        = "keys"           // uinput helper (root) → service: may it press Name ("paste" or "enter") for the user Value, under the grant Keys of an inject
-	OpMute        = "mute"           // client → service: for ForMS, 0 for until unmute: take no copies from the group here, or as an admin mute Device, whose copies then stay its own
-	OpUnmute      = "unmute"         // client → service: take the group's copies here again, or as an admin end the mute of Device
+	OpMute        = "mute"           // client → service: as an admin, mute Device for ForMS, 0 for until unmute: its copies then stay its own
+	OpUnmute      = "unmute"         // client → service: as an admin, end the mute of Device
 	OpRemote      = "remote"         // client → service: Name "add" (Address, Value the kind, NewName, Consent), "code" (Code), "cancel", "remove", "pastes" (Value on or off), "type" (the payload), for the TV Device, or "" (status): this device as a TV's remote
 )
 
@@ -294,18 +294,17 @@ type Status struct {
 	CertEndsMS int64  `json:"cert_ends_ms,omitempty"`
 	Role       string `json:"role"`
 	OS         string `json:"os,omitempty"` // this device's operating system
-	// Mode is the sync mode: own, shared, receive or send; "" when in no group.
-	Mode string `json:"mode,omitempty"`
+	// Mode is shared while sync is on and own while it is off; "" when in
+	// no group. SyncUntilMS is when sync that is off turns on again by
+	// itself, in Unix milliseconds; 0 for until it is turned on.
+	Mode        string `json:"mode,omitempty"`
+	SyncUntilMS int64  `json:"sync_until_ms,omitempty"`
 	// Muted says that an admin muted this device, its copies its own,
 	// until MutedUntilMS in Unix milliseconds, 0 for until an admin
-	// unmutes it. Paused says that its user paused receiving: the group's
-	// copies stay out of its clipboard until PausedUntilMS, 0 for until
-	// cbb unmute.
-	Muted         bool     `json:"muted,omitempty"`
-	MutedUntilMS  int64    `json:"muted_until_ms,omitempty"`
-	Paused        bool     `json:"paused,omitempty"`
-	PausedUntilMS int64    `json:"paused_until_ms,omitempty"`
-	Peers         []Device `json:"peers,omitempty"`
+	// unmutes it.
+	Muted        bool     `json:"muted,omitempty"`
+	MutedUntilMS int64    `json:"muted_until_ms,omitempty"`
+	Peers        []Device `json:"peers,omitempty"`
 	// Unreached lists the members at home that could not connect to this
 	// device's member port and sync with it only because it dials them:
 	// a firewall here likely drops the port.

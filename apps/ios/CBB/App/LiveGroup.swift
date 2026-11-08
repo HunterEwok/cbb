@@ -635,14 +635,18 @@ final class LiveGroup: GroupController {
         let device = Member.newID()
         let cert = try GroupCertificates.selfSigned(device: device, signer: member)
         let id = try identity(certificate: cert, member)
-        let listener = try TLSListener(alpn: Pairing.alpn, identity: id) { !$0.isEmpty }
+        let fingerprint = Pairing.fingerprint(cert: cert)
+        // Announced by Bonjour while it waits, so that a computer of the
+        // group finds it by the code typed there (docs/protocol.md, section 6).
+        let listener = try TLSListener(alpn: Pairing.alpn, identity: id,
+                                       service: (name: device, txt: Discovery.joinerTXT(fingerprint: fingerprint))) { !$0.isEmpty }
         let port = try await listener.start()
         let addrs = LocalAddresses.current().map { JoinCode.address(host: $0, port: port) }
         guard !addrs.isEmpty else {
             listener.stop()
             throw Failure.noNetwork
         }
-        let code = JoinCode(code: JoinCode.newCode(), addrs: addrs, fingerprint: Pairing.fingerprint(cert: cert))
+        let code = JoinCode(code: JoinCode.newCode(), addrs: addrs, fingerprint: fingerprint)
         show(code)
         let info = Pairing.Info(name: PhoneGroup.validName(UIDevice.current.name), os: "ios", adminKey: admin.publicKeyDER,
                                 seal: Self.sealKey())
@@ -1054,7 +1058,7 @@ final class LiveGroup: GroupController {
     func setMode(_ id: String, to mode: String) async throws {
         if id == state?.device {
             try modeBox.set(mode)
-            try? node?.setMode(mode)
+            try? node?.setSync(on: mode != "own")
             return
         }
         guard let node else { throw CoreMember.Failure.notConnected }
@@ -1407,7 +1411,7 @@ final class LiveGroup: GroupController {
                                         seal: try SealKey.secret(), cert: g.memberCert, issuer: g.memberIssuer, groupCA: g.groupCA,
                                         roots: g.trusted)) { try signer.signature(digest: $0) }
         try node.addRecords(g.records.records)
-        try node.setMode(modeBox.mode)
+        try node.setSync(on: modeBox.mode != "own")
         if let muted = modeBox.mutedUntilMS { try node.setMute(untilMS: muted) }
         let box = RecordBox(groupCA: g.groupCA, set: g.records)
         let credentials = CredentialBox(url: credentialsURL, group: g)
@@ -1425,17 +1429,17 @@ final class LiveGroup: GroupController {
         // group's other hubs and passes their offers on; it is no client
         // itself (D-64; docs/protocol.md, section 11, "Several hubs").
         let awayState = AwayKeychain.load()
-        let hub = HubOnPhone(device: g.device, tunnels: GoHubTunnels(), state: HubKeychain.load(), save: { try HubKeychain.save($0) },
+        let hub = HubOnPhone(device: g.device, tunnels: RustHubTunnels(), state: HubKeychain.load(), save: { try HubKeychain.save($0) },
                              log: { what, error in hubLog.error("\(what, privacy: .public): \(error.map { String(reflecting: $0) } ?? "", privacy: .public)") })
         let isHub = g.isAdmin && hub.isOn
-        if !isHub, let s = awayState, let key = try? GoTunnels().publicKey(s.key) { try node.setTunnelKey(key, psk: s.psk) }
+        if !isHub, let s = awayState, let key = try? RustTunnels().publicKey(s.key) { try node.setTunnelKey(key, psk: s.psk) }
         let relay = Relay(group: g.tag, device: g.device)
         relay.allowed = Self.allowed(g)
         // Through the tunnel the phone dials the hub's member port at its
         // loopback port, with the same TLS as at home, and only while the
         // hub is not found here.
         let away = AwayFromHome(
-            device: g.device, tunnels: GoTunnels(), state: awayState, save: { try AwayKeychain.save($0) },
+            device: g.device, tunnels: RustTunnels(), state: awayState, save: { try AwayKeychain.save($0) },
             atHome: { hub in await relay.atHome(hub) },
             dial: { port, hub in try await Self.reach(node, key: "away", port: port, device: hub) },
             serve: { link, _ in try await (link as? Link)?.served() },
@@ -1446,7 +1450,7 @@ final class LiveGroup: GroupController {
         // At a blind relay the phone dials the device the relay joined at
         // the relay link's loopback port, while it is not found here.
         let blindRelay = RelayOnPhone(
-            device: g.device, links: GoRelayLinks(), settings: RelayKeychain.load(), save: { try RelayKeychain.save($0) },
+            device: g.device, links: RustRelayLinks(), settings: RelayKeychain.load(), save: { try RelayKeychain.save($0) },
             dial: { port, peer in try await Self.reach(node, key: "relay:\(peer)", port: port, device: peer) },
             serve: { link, _ in try await (link as? Link)?.served() },
             elsewhere: { relay.found($0) },
@@ -1633,7 +1637,7 @@ final class LiveGroup: GroupController {
             let (result, change) = modeBox.take(c, from: from, records: box, me: device)
             try? node.answer(token, result: result)
             switch change {
-            case let .mode(mode)?: try? node.setMode(mode)
+            case let .mode(mode)?: try? node.setSync(on: mode != "own")
             case .mute?:
                 // Connects again once the result has gone back, so that the
                 // hellos say whether it is muted.
@@ -1917,7 +1921,7 @@ final class LiveGroup: GroupController {
     }
 
     /// The project's forwarder at the address its name has now, IPv4 first,
-    /// as cbbtun takes it; nil when the name cannot be looked up.
+    /// as the hub takes it; nil when the name cannot be looked up.
     nonisolated static func projectForwarder() async -> HubState.Forwarder? {
         let hostPort = HubState.Forwarder.projectHost
         return await Task.detached { () -> HubState.Forwarder? in

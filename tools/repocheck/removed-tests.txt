@@ -29,6 +29,10 @@ internal/service/service_test.go TestAloneHoldsTheName D-80: the election for cb
 internal/service/service_test.go TestHolderPriority D-80: the election for cbb.local is gone
 internal/service/service_test.go TestIPhone D-80: the shortcut's endpoints on the member port are gone
 internal/service/service_test.go TestShortcutTokenOnlySyncs D-80: the shortcut's tokens are gone
+cmd/cbb/admin_commands_test.go TestModeAndNetwork D-55: cbb mode went with the four modes; cbb sync and network are in TestSyncAndNetwork
+cmd/cbb/admin_commands_test.go TestModeLine D-55: the four modes' lines went with them; sync's line is in TestSyncLine
+internal/service/mode_test.go TestAdminSetsTheMode D-55: an admin turns sync on or off now, in sync_test.go's TestAdminTurnsSync
+internal/service/mode_test.go TestSyncModes D-55: the four modes are gone; sync on and off is in sync_test.go's TestSyncOnOff
 apps/ios/CBBKit/Tests/CBBKitTests/MemberTests.swift testEngine D-86: the Swift sync engine is gone; the Rust member's engine keeps the rules (core clip tests)
 apps/ios/CBBKit/Tests/CBBKitTests/MemberTests.swift testNoSecretsSendsTheMark D-86: the Swift node is gone; the Rust member's node sends the mark of a secret
 apps/ios/CBBKit/Tests/CBBKitTests/ContentTests.swift testTooManyGets D-86: the Swift node is gone; the Rust member serves the content
@@ -48,3 +52,18 @@ apps/android/kit/src/test/kotlin/tools/cbb/kit/DiscoveryTest.kt dialFailuresBack
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt aCopyWaits D-86: the button's rule is the Rust member's now (waiting), tested in lite and by TestFFIMember
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt theButton D-86: the button's rule is the Rust member's now (sends), tested in lite and by TestFFIMember
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt theButtonKeepsWhatThePhoneSent D-86: the button's rule is the Rust member's now (sends, took), tested in lite and by TestFFIMember
+mobile/cbbtun/cbbtun_test.go TestThroughTunnel D-87: the Go phone tunnel is gone; TestRustPhoneTunnel runs the Rust one against the Go hub
+mobile/cbbtun/cbbtun_test.go TestThroughObfuscatedTunnel D-87: the Go phone tunnel is gone; TestRustPhoneTunnel runs the Rust one with AmneziaWG
+mobile/cbbtun/cbbtun_test.go TestThroughVLESS D-87: the Go phone tunnel is gone; TestRustPhoneTunnel runs the Rust one over VLESS with XHTTP
+mobile/cbbtun/cbbtun_test.go TestCloseEndsConnections D-87: the Go phone tunnel is gone; ffi's stop_ends_connections checks the Rust one
+mobile/cbbtun/cbbtun_test.go TestBadArguments D-87: the Go phone tunnel is gone; ffi's bad_arguments checks the Rust one
+mobile/cbbtun/cbbtun_test.go TestNewObfuscation D-87: the Go phone tunnel is gone; ffi's keys checks new_obfuscation and new_vless_id
+mobile/cbbtun/hub_test.go TestPhoneHub D-87: the Go phone hub is gone; TestRustPhoneHub runs the Rust one with Go clients
+mobile/cbbtun/hub_test.go TestPhoneHubWithoutRecords D-87: the Go phone hub is gone; TestRustPhoneHubForwarder registers the Rust one without records, then with them
+mobile/cbbtun/hub_test.go TestHubBadArguments D-87: the Go phone hub is gone; ffi's bad_arguments checks the Rust one's start and registration
+mobile/cbbtun/hub_test.go TestPhoneHubInvitation D-87: the Go phone hub is gone; TestRustPhoneHubInvite runs the Rust one's invitation
+mobile/cbbtun/hub_test.go TestPhoneHubWays D-87: the Go phone hub is gone; ways_in_over_vless and TestRustPhoneHubOverXHTTP check the Rust one's ways in
+mobile/cbbtun/onlycbb_test.go TestPhoneHubReachesOnlyTheMemberListener D-87: the Go phone hub is gone; TestRustPhoneHubReachesOnlyTheMemberListener checks the Rust one
+mobile/cbbtun/relay_test.go TestPhoneAtRelay D-87: the Go relay link is gone; TestRustPhoneRelay runs the Rust one against the Go relay
+mobile/cbbtun/relay_test.go TestPhoneAtRelayWithCredentials D-87: the Go relay link is gone; TestRustPhoneRelayCredentials runs the Rust one with the server credentials
+mobile/cbbtun/relay_test.go TestRelayBadArguments D-87: the Go relay link is gone; ffi's bad_arguments checks the Rust one

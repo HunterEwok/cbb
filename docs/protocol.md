@@ -224,7 +224,9 @@ already expired cannot be renewed this way, since the handshake fails; the devic
 Full members (Linux, FreeBSD, Windows and macOS computers) and lite members publish and browse;
 phones and joining devices only browse, except a phone that is the group's hub, which
 publishes `v=1`, `g=<tag>`, `r=phone` while its app is open (design.md, "The phone as the
-hub").
+hub"), and a device that listens to join (section 6, "The joiner listens"), which publishes
+its new device ID as the instance, its listening port in the SRV record and `v=1`, `j=1`,
+`f=<fingerprint>` while it waits.
 [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) and
 [RFC 6763](https://www.rfc-editor.org/rfc/rfc6763) apply where this section is silent. Source: `internal/mdns`; a lite
 member publishes and browses with the `mdns-sd` crate (`member/src/discovery.rs`), which
@@ -258,6 +260,8 @@ TXT strings (each at most 255 bytes):
 | `v` | `1` | protocol version |
 | `g` | group tag | members of another group, or of a replaced CA, are ignored |
 | `p` | `1` | present only while a computer pairing window is open |
+| `j` | `1` | present only on a device that listens to join; it has no `g`, so no member dials it as one |
+| `f` | fingerprint | with `j`: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp` |
 | `r` | `lite` or `phone` | `lite` on a lite member, which the full members do not dial (section 4); `phone` on a phone that is the group's hub while its app is open, which the full and lite members do not dial, since it dials them; the other phones dial it |
 
 The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
@@ -489,7 +493,7 @@ depends on a version number.
 | `admin_key` | string or absent | from a full member that is neither the root nor an admin yet, or an admin whose admin CA is from a root before the current one: the SubjectPublicKeyInfo of its admin key, DER in base64 (section 10, "Admins") |
 | `tunnel_key` | string or absent | the sender's WireGuard public key, 32 bytes in base64, for the group's hubs (section 11) |
 | `tunnel_psk` | string or absent | always with `tunnel_key`, which a receiver ignores without it: the WireGuard preshared key the sender chose for its tunnels, 32 bytes in base64, which every hub of the group uses for it (section 11, "Several hubs") |
-| `mode` | string or absent | the sender's sync mode: `own`, `shared`, `receive` or `send` (design.md, "Sync modes"); shown, never trusted; a receiver ignores an unknown one. It changes only what the sender itself does with its clipboard, so a receiver handles the sender's events the same in every mode |
+| `mode` | string or absent | the sender's sync: `shared` (on) or `own` (off; design.md, "Sync on and off"); shown, never trusted; a receiver ignores an unknown one. It changes only what the sender itself does with its clipboard, so a receiver handles the sender's events the same either way |
 | `muted` | bool or absent | `true` from a sender an admin muted, whose copies stay its own (design.md, "Muting a device"); shown, never trusted. A receiver handles the sender's events the same either way |
 | `muted_for_ms` | integer or absent | with `muted`: how many milliseconds the mute still lasts, at most 2 592 000 000 (30 days); absent or 0 for until it is lifted. A receiver keeps the end on its own clock, so the clocks need not agree; a larger value counts as 30 days |
 | `device` | object or absent | what the sender says about its device: Device (below); shown, never trusted |
@@ -825,7 +829,7 @@ or the `current` of a hello), after validation:
    forwarded); otherwise nothing happens.
 2. Otherwise: check it (section 4, "Opening") and drop it when that fails; observe its timestamp, record the ID, and forward it to every other connection
    (also when it is older than the current event, and also a mark). A member MUST forward
-   every new event so, whatever its sync mode: the mode decides only what it does with its
+   every new event so, with sync on or off: sync decides only what it does with its
    own clipboard. If it is later than the
    current event, it becomes the current event, also on a member that cannot read it.
 
@@ -850,8 +854,7 @@ frames like any other event.
 ### Writing the member's own clipboard (local policy)
 
 When an event becomes current (or a mark gets its text) it is written to the local clipboard
-when all of these hold: the member's sync mode takes the group's copies (`shared` or
-`receive`); this member opened the current event (section 4, "Opening") and it is live (it has
+when all of these hold: the member's sync is on (mode `shared`); this member opened the current event (section 4, "Opening") and it is live (it has
 a text, and a secret is younger than the secret TTL); the local clipboard does not already
 hold the text; and it was copied less than the group's live window ago. The live window is
 the `incoming_ms` of the group's copies setting (section 10, "The copies setting"), 60 s
@@ -1052,7 +1055,7 @@ it joins, the root names its admin key in a `handover` record (`cbb handover`, s
 
 ### The joiner listens (for the phone)
 
-`cbb pair` without `-code` turns the direction round, so that the device that scans
+`cbb pair` without `-code`, on a device in no group, turns the direction round, so that the device that scans
 the QR code dials the computer, and nothing is announced:
 
 - The joiner listens on its member port, which nothing holds while it is in no group, when
@@ -1082,7 +1085,15 @@ the QR code dials the computer, and nothing is announced:
   attempts, one at a time, and gives up after the third wrong code or the 5 minutes.
 - On the member the window counts attempts as above. It is not announced (`p` stays unset)
   and takes no pairing connections on the member port, so the code is good only against the
-  computer whose certificate `fp` names.
+  device whose certificate `fp` names.
+- While it listens the joiner announces itself by mDNS (section 3: TXT `j=1` and `f`, its
+  fingerprint), so that a computer of the group admits it by the six digits alone, which the
+  user types from the joiner's screen, where a phone scans the QR code. The computer browses
+  for such devices for up to 10 s, then dials each with the code, the addresses and `f` taking
+  the place of the QR code's, until one joins; at another device that waits, the code fails
+  as a wrong one there. The announcement is not authenticated, and needs not be: CPace gives
+  a device that does not know the code one guess per attempt and nothing to test guesses
+  with offline, and the code admits only the device the user sees.
 - A phone joins a phone group the same way (CBBKit's `PairingJoiner`): it listens
   while its "Join a group" screen is open, shows this QR code, and an admin phone scans it
   and dials. The phone makes its admin key before it listens and sends it in ADa; the root
@@ -1219,17 +1230,17 @@ A connection carries one request: the service reads the first message and dispat
 | `paste` | none | `{kind, done}` + payload = the member's own clipboard text; error `the clipboard is empty` when unknown or an expired secret, and one that names `cbb paste -o` for images or files without a text |
 | `copy-media` | payload = the plain-text alternative, or none; then for each part `{"op":"part", part}`, followed for a file or clipboard data by `{"op":"data"}` messages whose payloads, at most 1 MiB each, are exactly its `size` bytes; last `{"op":"part", done}` | `{done}`: the parts are in the cache and the copy went to the group as a `media` event (section 4, "Media"), also written to the member's own clipboard. An error when the copy is over this device's limit, its manifest is not valid or the bytes do not come as said. `cbb copy FILE...` reads the files as the user and sends them |
 | `copied-media` | as `copy-media` | as `copy-media`, but a watcher's report that its clipboard changed: the copy goes to the group as an event when the engine decides so (section 5) and is not written back to the member's own clipboard |
-| `paste-media` | none | once every part of the member's own images or files (in mode `own` the group's) is in the cache, fetched first if it is not: `{kind: "media"}` + payload = the plain-text alternative; then for each part `{part}` and its bytes in answers of at most 1 MiB; last `{done}`. An error when the clipboard holds none, or they did not arrive. `cbb paste -o DIR` writes them |
+| `paste-media` | none | once every part of the member's own images or files (with sync off the group's) is in the cache, fetched first if it is not: `{kind: "media"}` + payload = the plain-text alternative; then for each part `{part}` and its bytes in answers of at most 1 MiB; last `{done}`. An error when the clipboard holds none, or they did not arrive. `cbb paste -o DIR` writes them |
 | `config` | `{name?, value?}`: `max-copy` or `max-copy-away` and a size such as `200MiB` | `{status, done}`, with the setting saved first when `name` is given; `status.media` = `{max_copy, max_copy_away, fetching?, fetched?, from?, failed?}`, in bytes, also in `status` |
 | `status` | none | `{status, done}`; `status` = `{device, group, role, os, peers: [{id, role, os, skew_ms}], unreached?, port, cert_ends_ms, incoming_ms, away?, version}`; `cert_ends_ms` is when this device's member certificate ends, in Unix milliseconds, `unreached` lists the members at home that could not connect to this one and synced only because it dialed them back, `port` is the member port; `incoming_ms` is the group's live window (section 5, "Writing the member's own clipboard"); `away`, present while sync away from home is on: `{hub, port, endpoints, clients, hub_device, through, keys_in_file, error, detail, forwarder?, relay?}` (section 11); `forwarder`, on a hub with one: `{endpoint, registered, seen, error, detail}` (section 13); `relay`, on a device with one: `{endpoint, connected, online, error, detail}`, where `online` lists the other devices of the group on the relay and `through` tells whether a member connection runs through it (section 14) |
 | `leave` | none | `{done}`: the device leaves its group (D-83): the service deletes the keys and the group's files, turns remote paste and the quick actions off, and restarts in no group. Refused on the group's root while the group has other devices; taken while the group file is damaged |
 | `new` | none | `{status, done}`: the device creates a group and is its root (section 10). Only on a device in no group |
-| `pair` | none | first `{code, expires: 300, address}` (the member port at the first private IPv4 address), then `{name: <joined device name>, done}` or an error. Only on the group's root or an admin; elsewhere the error names them. Hanging up closes the window |
+| `pair` | none, or `{code, addrs?, fingerprint?, admins?}` | without `code`: first `{code, expires: 300, address}` (the member port at the first private IPv4 address), then `{name: <joined device name>, done}` or an error. With `code`, a device that listens to join (section 6, "The joiner listens") is admitted: at `addrs` with `fingerprint`, as its QR code gives them, or, without them, each device that announces that it waits (section 3, TXT `j`) found within 10 s, until one joins; then `{name, done}` or an error. `admins`, on the root, lets the window make a phone an admin. Only on the group's root or an admin; elsewhere the error names them. Hanging up closes the window |
 | `join` | `{code, address?}`, `{code, listen, expires}` or `{invite, consent}` | `{done}` or an error. Without `address` it browses for `p=1`. With `listen` it first answers `{addrs, fingerprint}` for the QR code, then `{done}` or an error when a member admitted it, or after `expires` seconds. With `invite`, the text of a remote invitation (section 12), it needs `consent` (sync away from home is turned on, and the device keeps its keys in files), first answers `{fingerprint}` (of this device's key, for the admin to compare), then `{done}` or an error. Hanging up cancels |
 | `invite` | `{expires?}`: seconds, 3600 if absent, at most 86 400 | Only on the group's hub, when it can admit devices. First `{invite, expires}`: the invitation's text. Then, for each device that used it and proved it knows the secret, `{joining: {id, name, os, fingerprint}}`, which the client answers with `{"op": "answer", consent}` (`true` admits it); last `{name, done}` or an error. Hanging up cancels the invitation |
-| `mode` | `{name, device?}`: `name` the sync mode, `own`, `shared`, `receive` or `send`; `device`, a name or device ID, for another device (on an admin) | without `device`: `{status, done}`, the mode saved and in effect; with it: `{done}` once that device answered `done` to the command (section 15), or an error with its reason. Only on the admin socket |
-| `mute` | `{device?, for_ms?}`: `device` a name or device ID; `for_ms` from 1 to 2 592 000 000 (30 days), absent for until `unmute` | `{status, done}` or an error. Without `device`, this device's user pauses receiving: the group's copies stay out of its clipboard, as in a mode that does not receive, and its own copies still go out (design.md, "Muting a device"). With `device`, on an admin that is not frozen, mutes that device: sends it a `mute` command (section 15), or mutes this device at once when it names this one. The mute and the pause last across restarts, in `mute.json`. Without `device` on either socket, so that the apps switch it without the administrator; with it only on the admin socket |
-| `unmute` | `{device?}` | `{status, done}` or an error: without `device`, ends the pause; with it, on an admin that is not frozen, sends that device an `unmute` command, or ends this device's own mute at once. So a muted device that is no admin waits for an admin, and a muted admin or root ends its own mute. Without `device` on either socket; with it only on the admin socket |
+| `sync` | `{name, device?, for_ms?}`: `name` `on` or `off`; `device`, a name or device ID, for another device (on an admin); `for_ms`, only with `off` and no `device`, from 1 to 2 592 000 000 (30 days), absent for until turned on | without `device`: `{status, done}`, saved in `sync.json` and in effect, `status.mode` `shared` or `own` and, while off for a time, `status.sync_until_ms` when it turns on again, in Unix milliseconds (design.md, "Sync on and off"); with it: `{done}` once that device answered `done` to the `mode` command (section 15), or an error with its reason. Without `device` on either socket, so that the apps switch it without the administrator; with it only on the admin socket |
+| `mute` | `{device, for_ms?}`: `device` a name or device ID; `for_ms` from 1 to 2 592 000 000 (30 days), absent for until `unmute` | `{status, done}` or an error. On an admin that is not frozen, mutes that device: sends it a `mute` command (section 15), or mutes this device at once when it names this one (design.md, "Muting a device"). The mute lasts across restarts, in `mute.json`. Only on the admin socket |
+| `unmute` | `{device}` | `{status, done}` or an error: on an admin that is not frozen, sends that device an `unmute` command, or ends this device's own mute at once. So a muted device that is no admin waits for an admin, and a muted admin or root ends its own mute. Only on the admin socket |
 | `paste-on` | `{device, method?, enter?, kind?}` + payload = the text | `{done}` once that device answered `done` to the `paste` command this admin signed (section 15), or an error with its reason. The text is cleaned first (design.md, "Remote paste"). Only on the admin socket |
 | `paste-receive` | `{name, enter?, console?, device?, all?}`: `name` `on` or `off` | `{status, done}`: `on` saves the switches of remote paste here, only for this device; `off` turns it off here, or with `device` or `all` on another or every device through `paste-off` commands. Only on the admin socket |
 | `keyboard` | `{name?, keyboard?}` + payload for `type`: `name` `on`, `off`, `pair`, `type` or none | `{status, done}`: `on` saves the Bluetooth keyboard's settings and registers it with BlueZ (Linux only), `off` takes it off, `pair` makes it discoverable for two minutes, `type` types the payload on the connected device and answers once it is typed, none only answers the status. Only on the admin socket |
@@ -2114,8 +2125,8 @@ The keys of the group's WireGuard tunnel for sync away from home ([design.md](de
 `internal/service/tunnel.go`); the tunnel carries the member protocol between Go members
 ("Through the tunnel" below). The phone kits speak the hello's `tunnel_key` and the
 `tunnel` message (through the phones' member in the Rust core: `tunnel_key`, the `tunnel`
-event, `send_tunnel`) and bind the tunnel itself from
-Go (`mobile/cbbtun`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
+event, `send_tunnel`) and run the tunnel itself in
+the Rust core (`ffi/src/tunnel.rs`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
 the offer and hand them to the tunnel. The lite member on Linux takes part as a client, with
 plain WireGuard only: GotaTun's WireGuard and smoltcp's TCP in its process
 (`member/src/tunnel.rs`, `member/src/away.rs`), with AmneziaWG (`member/src/awg.rs`) and VLESS over
@@ -2172,9 +2183,9 @@ XHTTP (`member/src/vless.rs`); it refuses an offer whose `vless` is REALITY and 
   first 96 bits of the ID), so the offer does not carry them.
 - A phone can be the hub while its app is open ([design.md](design.md), "The phone as the
   hub", D-64): its member in the Rust core listens for member connections (`listen`; the
-  tunnel's `mobile/cbbtun` `Hub` leads each connection through the tunnel to that port) and
+  tunnel's hub in the Rust core leads each connection through the tunnel to that port) and
   the app admits clients and answers with the offer by the rules above (`PhoneHub`, from the
-  member's `peer` events); `cbbtun`'s `SetClients` takes the clients it keeps.
+  member's `peer` events); the tunnel's `hub_set_clients` takes the clients it keeps.
 - When records revoke a device (section 10, "Certificates", on the chain it presented), the hub
   MUST forget its key at once.
 - All of this happens inside member TLS, so a device gets into the tunnel only after it met
@@ -2430,10 +2441,10 @@ carries:
 - After the member TLS handshake the hub MUST check that the device ID of the client
   certificate gives the tunnel address the connection came from, and close it otherwise,
   so a device cannot use another device's tunnel key.
-  Note: a phone that is a hub does not check this yet. Its tunnel (`mobile/cbbtun`) hands
+  Note: a phone that is a hub does not check this yet. Its tunnel (`ffi/src/tunnel.rs`) hands
   each connection to the app through a loopback port, which does not say from which tunnel
   peer it came, so such a hub knows the client by its member certificate alone. This is
-  planned for 0.7, with a call in `cbbtun` that names the peer of a loopback connection.
+  planned for 0.7, with a call in the phones' tunnel that names the peer of a loopback connection.
 - A member that keeps hubs' offers runs the other end, with the hub it tries as its only
   peer and a keepalive every 25 s. It dials the hub's tunnel address, TCP 8764, with member
   TLS whenever no hub is connected on the home network, trying the hubs in order and each
@@ -2454,8 +2465,8 @@ carries:
 A device that shares no network with the group joins through the hub's tunnel with a remote
 invitation ([design.md](design.md), "Joining from another network"). Implemented in Go
 (`internal/invite`, `internal/service/invite.go`, `cbb invite`, `cbb pair -invite`) for
-computers, and made and served on a phone that is the group's hub (mobile/cbbtun's
-`Hub.Invite`, the kits' `InvitationWindow`); the phones do not use invitations yet.
+computers, and made and served on a phone that is the group's hub (the Rust tunnel's
+`hub_invite`, the kits' `InvitationWindow`); the phones do not use invitations yet.
 
 ### The invitation
 
@@ -2546,7 +2557,7 @@ the admin cancels it.
 ### On a phone that is the hub
 
 The phone makes the invitation in its app while it is registered with its forwarder; its
-`ep` is the forwarder's endpoint. cbbtun's hub adds the guest peer and joins each
+`ep` is the forwarder's endpoint. The phone's hub adds the guest peer and joins each
 connection through the guest tunnel to a loopback port of the kit's pairing window
 (`InvitationWindow`), and once the window admitted the device, to the member listener, for
 the device's first hello. The window runs the exchange of section 6 as the server, with the
@@ -2661,7 +2672,7 @@ together, and close the connection beyond that; a sender MUST stay below it.
      that the current root signed), an admin that is not frozen (the devices list, section
      10, names it an admin with that key), or a device whose newest record has
      `forward_only`. Go hubs (`internal/forward`) and
-     the phones' hub (`mobile/cbbtun`) do this; any other hub is refused as before.
+     the phones' hub (`ffi/src/tunnel.rs`) do this; any other hub is refused as before.
    - `records` are the group's authority records: the path records (section 6, the Welcome; section 10, "The state"), every record
      that is not a `device` record, and of the `device` records a root signed with its own key
      those of a root's own device, every record of each device a root made an admin, so
@@ -2866,7 +2877,7 @@ or to a log. With `CBB_DEBUG=1` it logs counts each minute.
 The meeting point, on the user's own server or the project's open relay, for a group that has
 no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Go (`internal/relay`,
 `cbb relay`, and on the devices `internal/service/relay.go`), and on the phones through
-`mobile/cbbtun` (`StartRelay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
+the Rust tunnel (`cbb_tunnel_relay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
 tunnel and joins two devices' connections inside the tunnels, and member TLS (section 4)
 runs end to end between the two devices.
 
@@ -2989,7 +3000,7 @@ ID, and a device's pseudonym changes with each period.
    (section 4); the answering one as the server, and it MUST close the connection unless the
    client certificate names the device the call came from. So the relay can join two devices,
    but cannot pose as either.
-   On a phone, cbbtun joins the answered connection to the app's member listener on the
+   On a phone, the relay link joins the answered connection to the app's member listener on the
    loopback address and first tells the app the call's device and the connection's source
    port; the listener serves a connection only when the client certificate names the
    device told for its port, and closes any other.
@@ -3037,7 +3048,7 @@ its authority records.
 ## 15. Commands
 
 An admin orders one member to do something with a **command**: signed like a record (section
-10) and never stored. `mode` sets the receiver's sync mode (design.md, "Sync modes"); `hub`
+10) and never stored. `mode` turns the receiver's sync on (`shared`) or off (`own`; design.md, "Sync on and off"); `hub`
 makes the receiver the group's hub, or a hub of the group as well, or with a stop order makes
 the receiver stop being one (section 11, "Moving the hub", "Several hubs", "Stopping a hub"); `paste` puts a text where
 the receiver's focus is, and `paste-off` turns remote paste off on the receiver (design.md,
@@ -3062,7 +3073,7 @@ signed bodies (Conventions):
 | `id` | string | 128 random bits as 32 lowercase hex characters; IDs compare as byte strings |
 | `time_ms` | integer | when it was signed, milliseconds since the Unix epoch, not negative |
 | `expires_ms` | integer | after `time_ms`, at most 30 000 ms later: from `time_ms` + 1 to `time_ms` + 30 000 |
-| `mode` | string | in a `mode` command: `own`, `shared`, `receive` or `send`; in a `paste` command: `paste` (the clipboard and the paste keys) or `type` (key by key) |
+| `mode` | string | in a `mode` command: `shared` (sync on) or `own` (sync off); in a `paste` command: `paste` (the clipboard and the paste keys) or `type` (key by key) |
 | `enter` | bool | in a `paste` command: press Enter after the text |
 | `kind` | string | in a `paste` command: `text` or `secret` |
 | `text` | string | in a `paste` command: the text, not empty, at most 1 MiB of UTF-8 for `paste` and 4 KiB for `type` |
@@ -3662,7 +3673,7 @@ registers with no server, so it signs none and keeps none. The phones' kits do w
 and pass them on through the phone's member in the Rust core (`send_credentials`, its
 `message` events), and pass the same vectors. A phone registers with a relay
 by them once the members' credential lists its server key (`CredentialStore.registration`,
-cbbtun's `Relay.SetCredentials`, or in Rust `cbb_tunnel_relay_credentials`, member/src/relay.rs,
+`cbb_tunnel_relay_credentials`, member/src/relay.rs,
 with the server certificate of `certs::server_cert_by`); it maps the pseudonyms the relay
 names back to device IDs by the server credentials.
 
@@ -3850,9 +3861,9 @@ frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 | Event `kind` | `text`, `secret`, `media` | 4 |
 | Event `via` | `copy`, `phone`, `universal-clipboard` | 4 |
 | Media part `type` | `image/png`, `image/jpeg`, `text/html` | 4 |
-| Sync mode | `own`, `shared`, `receive`, `send` | 4, 15 |
+| Sync mode | `shared` (sync on), `own` (sync off) | 4, 15 |
 | Key store | `file`, `hardware`, `rootless`, `proven` (records only); proof kinds `android-tee`, `android-strongbox`, `tpm` | 17 |
-| mDNS TXT keys | `v`, `g`, `p`, `r` (`lite`, `phone`) | 3 |
+| mDNS TXT keys | `v`, `g`, `p`, `j`, `f`, `r` (`lite`, `phone`) | 3 |
 | Record `type` | `device`, `revoke`, `root`, `freeze`, `thaw` | 10 |
 | Command `type` | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off`, `away-off` | 15 |
 | Command result `status` | `done`, `refused`, `failed` | 15 |

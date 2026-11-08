@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3f404cb443bd -->
+<!-- source: f88bc63a357c -->
 # Bila programu
 
 Kikundi cha kompyuta hakihitaji programu ya simu: kompyuta inaweza kushikilia kikundi.
@@ -26,7 +26,7 @@ sudo cbb pair
 
 Huonyesha msimbo wa tarakimu sita na kusubiri. Kwenye kompyuta mpya, endesha pia `sudo cbb pair`: kwanza huonyesha msimbo wa QR kwa programu ya simu, ambao unaweza kuupuuza, kisha huuliza msimbo; andika tarakimu hizo sita pale. Kompyuta mpya hujiunga ndani ya sekunde chache.
 
-Kisha washa ushirikiano kwenye kila kompyuta, kama katika [mwanzo wa haraka](quickstart.md#4-share-the-computers-clipboard): `sudo cbb mode shared`.
+Kisha kila kompyuta husawazisha, kama katika [mwanzo wa haraka](quickstart.md#4-copy-on-one-paste-on-another).
 
 ## 3. Usitegemee kompyuta moja
 

@@ -103,6 +103,10 @@ void Join::start(const QString &name, const QString &os, const QByteArray &publi
         return fail({QCoreApplication::translate("Errors", "The phone cannot listen for the other device."),
                      QStringLiteral("join: listen on %1: %2").arg(port).arg(m_server->errorString())});
     connect(m_server, &QTcpServer::newConnection, this, &Join::accept);
+    // Announced while it listens, so that a computer of the group finds it
+    // by the code typed there (docs/protocol.md, section 6).
+    if (!cbb_join_announce(m_join, m_server->serverPort()))
+        Errors::log(QStringLiteral("join: no mDNS announcement"));
     m_code = made.value(QStringLiteral("code")).toString();
     m_qr = made.value(QStringLiteral("qr")).toString();
     m_modules.clear();

@@ -70,44 +70,30 @@ func mutedRow(ctx context.Context, members []*Device, name string, muted bool, t
 	return nil
 }
 
-// muteHere (M8): cbb mute keeps the group's copies out of this device while
-// its own still go out; cbb status says so; it lasts across a restart;
-// cbb unmute ends it; with -for it ends by itself.
-func muteHere(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
-	const p = "fleet/M8-mute/"
-	g := fleetGroup(ctx, r, f, "fleet/M8-mute", 3)
+// syncOffHere (M8): cbb sync off on a device: cbb status says so, it
+// lasts across a restart, cbb copy there still sends, cbb sync on ends it
+// and the group's copies come again, and with -for it ends by itself.
+// The fleet's members are headless, where cbb paste prints the group's
+// text with sync off too, so the cases read cbb status.
+func syncOffHere(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
+	const p = "fleet/M8-sync-off/"
+	g := fleetGroup(ctx, r, f, "fleet/M8-sync-off", 3)
 	if g == nil || len(g.members) < 3 {
 		return
 	}
 	a, b, c := g.members[0], g.members[1], g.members[2]
-	quiet := 10 * time.Second
-	text := func(what string) string { return "cbb-bench " + g.run + " " + what }
-	// sentPast copies what on a, waits for it on c and checks that b,
-	// muted, did not take it.
-	sentPast := func(what string) error {
-		if err := Copy(ctx, a, text(what)); err != nil {
-			return err
-		}
-		if err := arrives(ctx, c, text(what), timeout); err != nil {
-			return err
-		}
-		return notArrives(ctx, b, text(what), quiet)
-	}
-	if r.Do(p+"before", func() error { return syncs(ctx, g, a, b, "before the mute", timeout) }) != nil {
+	if r.Do(p+"before", func() error { return syncs(ctx, g, a, b, "before sync off", timeout) }) != nil {
 		return
 	}
-	if r.Do("fleet/M8-mute", func() error {
-		if err := succeeds(ctx, b, "cbb mute", "", "takes no copies from the group until cbb unmute"); err != nil {
+	if r.Do("fleet/M8-sync-off", func() error {
+		if err := succeeds(ctx, b, "cbb sync off", "", "Sync is off until cbb sync on"); err != nil {
 			return err
 		}
-		if err := succeeds(ctx, b, "cbb status", "", "This device takes no copies from the group until cbb unmute."); err != nil {
+		if err := succeeds(ctx, b, "cbb status", "", "Sync is off until cbb sync on"); err != nil {
 			return err
 		}
-		if err := sentPast("while b is muted"); err != nil {
-			return err
-		}
-		// Its own copies still go out.
-		return syncs(ctx, g, b, c, "from the muted device", timeout)
+		// cbb copy still sends.
+		return syncs(ctx, g, b, c, "cbb copy with sync off", timeout)
 	}) != nil {
 		return
 	}
@@ -118,26 +104,22 @@ func muteHere(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		if err := f.start(ctx, b); err != nil {
 			return err
 		}
-		if err := succeeds(ctx, b, "cbb status", "", "takes no copies from the group"); err != nil {
-			return err
-		}
-		return sentPast("after b restarted")
+		return eventually(ctx, 20*time.Second, func() error { return succeeds(ctx, b, "cbb status", "", "Sync is off") })
 	})
-	r.Do("fleet/M8-unmute", func() error {
-		if err := succeeds(ctx, b, "cbb unmute", "", "takes the group's copies again"); err != nil {
+	r.Do("fleet/M8-sync-on", func() error {
+		if err := succeeds(ctx, b, "cbb sync on", "", "Sync is on"); err != nil {
 			return err
 		}
-		return syncs(ctx, g, a, b, "after cbb unmute", timeout)
+		return syncs(ctx, g, a, b, "after cbb sync on", timeout)
 	})
 	r.Do("fleet/M8-for", func() error {
-		if err := succeeds(ctx, b, "cbb mute -for 8s", "", "takes no copies from the group until"); err != nil {
+		if err := succeeds(ctx, b, "cbb sync off -for 8s", "", "Sync is off until"); err != nil {
 			return err
 		}
-		start := time.Now()
-		if err := sentPast("during cbb mute -for"); err != nil {
+		time.Sleep(10 * time.Second)
+		if err := succeeds(ctx, b, "cbb status", "", "Sync is on"); err != nil {
 			return err
 		}
-		time.Sleep(time.Until(start.Add(10 * time.Second)))
 		return syncs(ctx, g, a, b, "after the time ran out", timeout)
 	})
 }

@@ -602,7 +602,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         if (synchronized(lock) { publisher } != null) return
         val home = listen(n, CoreMember.Listen.HOME) ?: return
-        val p = NsdPublisher(context, g.device, g.tag, home)
+        val p = NsdPublisher.hub(context, g.device, g.tag, home)
         synchronized(lock) { publisher = p }
         p.start()
     }
@@ -913,10 +913,14 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 listener.stop()
                 throw Failure(Failure.Kind.NO_NETWORK)
             }
-            Triple(listener, cert, admin) to JoinCode(JoinCode.newCode(), addrs, Pairing.fingerprint(cert))
+            Triple(listener, cert, admin) to JoinCode(JoinCode.newCode(), addrs, Pairing.fingerprint(cert)) to device
         }
-        val (parts, code) = listening
+        val (parts, code) = listening.first
         val (listener, cert, admin) = parts
+        // Announced while it waits, so that a computer of the group finds
+        // it by the code typed there (docs/protocol.md, section 6).
+        val announced = NsdPublisher(context, listening.second, listener.port, Discovery.joinerTXT(code.fingerprint))
+        announced.start()
         show(code)
         val info = Pairing.Info(PhoneGroup.validName(deviceName), "android", admin?.publicKeyDER, seal = withContext(Dispatchers.IO) { sealKey() })
         val stopped = AtomicBoolean(false)
@@ -930,6 +934,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }
         } finally {
             stop()
+            announced.stop()
         }
         if (joined == null) throw Failure(Failure.Kind.TIMED_OUT)
         withContext(Dispatchers.IO) {
@@ -1356,7 +1361,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         if (!tmp.renameTo(modeFile)) throw IOException("cannot save the sync mode")
         Log.i(TAG, "the sync mode is $mode now")
         // The hellos say it from the next connection, which the node makes at once.
-        if (tell) currentNode?.let { n -> runCatching { n.setMode(mode) } }
+        if (tell) currentNode?.let { n -> runCatching { n.setSync(mode != "own") } }
     }
 
     /**
@@ -1443,7 +1448,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             Log.i(TAG, "${body.by} set the sync mode to $mode")
             onModeChanged?.invoke()
             // The hellos say it once the result has gone back on the connection that brought the command.
-            later { n -> n.setMode(mode) }
+            later { n -> n.setSync(mode != "own") }
             Member.CommandResult(body.id, "done")
         } catch (e: IOException) {
             Log.e(TAG, "cannot save the sync mode", e)
@@ -2085,7 +2090,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         // same TLS as at home, and only while the hub is not found here.
         val a = AwayFromHome(
             g.device,
-            GoTunnels,
+            CoreTunnels,
             load = awayFile::read,
             save = { s -> if (s == null) awayFile.delete() else awayFile.write(s) },
             atHome = ::atHome,
@@ -2098,7 +2103,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         )
         val h = HubOnPhone(
             g.device,
-            GoHubTunnels,
+            CoreHubTunnels,
             load = { hubFile.read()?.let(HubState::decode) },
             save = { s -> if (s == null) hubFile.delete() else hubFile.write(s.encode()) },
             log = { what, e -> Log.w(TAG, what, e) },
@@ -2107,7 +2112,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         // the same TLS as at home, while browsing does not find it here.
         val rl = RelayOnPhone(
             g.device,
-            GoRelayLinks,
+            CoreRelayLinks,
             load = { relayFile.read()?.let(RelaySettings::decode) },
             save = { s -> if (s == null) relayFile.delete() else relayFile.write(s.encode()) },
             dialPeer = { port, peer -> link("relay:$peer", port, peer) },
@@ -2146,7 +2151,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         runCatching {
             n.addRecords(g.records.records)
-            n.setMode(syncMode)
+            n.setSync(syncMode != "own")
             n.setMute(mutedUntilMS)
             n.setTunnelKey(if (isHub) null else a.keys)
             n.setEvidence(ownEvidence())

@@ -107,15 +107,17 @@ object WatchLink {
     fun state(model: AppModel) = WatchState(
         hasGroup = model.phase == AppModel.Phase.HOME,
         group = model.group.groupTag.takeIf { model.phase == AppModel.Phase.HOME },
-        // The phone itself first, as the phone's own list has it; then in the
-        // user's order, a collection's devices one after another.
-        devices = model.devices.filter { it.isSelf }.map { WatchState.Device(it.id, it.name, it.kind.form, true, phone = true) } +
-            model.arranged.flatMap { item ->
+        // In the user's order, as the phone's own list has it, the phone
+        // among them; a collection's devices one after another.
+        devices = model.arranged.flatMap { item ->
             when (item) {
                 is AppModel.Arranged.Device -> listOf(item.device to null)
                 is AppModel.Arranged.Collection -> item.devices.map { it to item.collection.name }
             }
-        }.map { (d, c) -> WatchState.Device(d.id, d.name, d.kind.form, d.online, model.group.watchActions(d.id), d.actions, c) },
+        }.map { (d, c) ->
+            if (d.isSelf) WatchState.Device(d.id, d.name, d.kind.form, true, phone = true, collection = c)
+            else WatchState.Device(d.id, d.name, d.kind.form, d.online, model.group.watchActions(d.id), d.actions, c)
+        },
         away = model.away?.let { a ->
             if (!a.on) {
                 WatchState.Away.OFF

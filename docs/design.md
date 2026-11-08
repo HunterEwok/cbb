@@ -482,7 +482,7 @@ the iPhone's key already sits in the Secure Enclave behind Face ID, so the group
    taken over, a certificate close to expiry that did not renew, the hub unreachable while
    away from home, a remote paste received or refused. Each is a setting.
 2. **Sync away from home.** A switch on the watch turns the phone's own away mode on and off,
-   as the app's switch does (`AwayFromHome`, `cbbtun`).
+   as the app's switch does (`AwayFromHome`, `RustTunnel`).
 3. **Emergency actions** with the watch's own admin key: freeze an admin computer, remove an
    ordinary device, turn remote paste off on a member, turn sync away from home **off** on a
    member. The watch shows what it signs and asks for a tap; the phone only carries the
@@ -546,9 +546,9 @@ iPhone, a double tap where the phone offers one), and follows the rule of every 
 (`LiveGroup.sync` on the iPhone, `SyncRule` on Android):
 
 1. A copy from another device waits for the phone (it is live and the phone has not taken
-   it yet) → it comes to the phone. The button does this in every sync mode; by
-   themselves, in a mode that takes the group's copies, Android and Aurora take such a copy
-   at once and the iPhone when the app comes to the front.
+   it yet) → it comes to the phone. The button does this with sync on or off; by
+   themselves, while sync is on, Android and Aurora take such a copy at once and the iPhone
+   when the app comes to the front.
 2. Otherwise what the phone copied goes to the group, however old, unless it is the group's
    text already or what this phone itself sent or took last: a text the phone sent before
    it shared an image or files stays out, rather than go over that newer copy. A copy whose
@@ -643,7 +643,7 @@ sync away from home, the admins, and remote paste.
   `seal.json`, `tunnel.json`, the entry points, the known networks, the cache of images and
   files, the logs of remote pastes and actions, `attest-status.json`, a group left before
   0.6), turns remote paste and the quick actions off, and restarts in no group, from which
-  `cbb pair` or `cbb new` goes on. The sync mode, the limits, the TVs and the update
+  `cbb pair` or `cbb new` goes on. Sync on or off, the limits, the TVs and the update
   settings stay. The group's root leaves only alone; otherwise it hands the group over
   first. A removed device (`cbb status` says so) and one whose group file is damaged leave
   the same way. The lite member's `cbb leave` does the same through its service, or by
@@ -780,8 +780,7 @@ sync away from home, the admins, and remote paste.
 - **Group state and each member's own clipboard are separate.** The group's current text is
   always the latest event, so all members converge whatever happens to the connections. What
   goes into a member's own clipboard is a local decision:
-  - a live event that becomes the group's current event is written, in a sync mode that
-    takes the group's copies. An event is live for the group's live window after it was
+  - a live event that becomes the group's current event is written while sync is on. An event is live for the group's live window after it was
     copied: one minute unless the root or an admin sets another, from 5 seconds to an hour
     (`cbb incoming`, the phones' Settings; a signed `copies` record, docs/protocol.md
     section 10). The age is counted in durations (the event's age plus the time since it
@@ -800,65 +799,53 @@ sync away from home, the admins, and remote paste.
 - **No echo.** A member does not report a text it wrote into its clipboard as a new copy,
   even when the clipboard reports it up to 10 seconds late.
 
-### Sync modes
+### Sync on and off
 
-Before 0.5 every copy on any member went to the clipboard of every other member within a
-second, so a copy on one computer replaced what was just copied on another. Each device has
-a **sync mode** instead, and a new device starts in its own:
+Every device has one switch, **sync**, on by default (D-55):
 
-| Mode | Its copies go to the group | The group's copies reach its clipboard |
-|---|---|---|
-| **Own** (the default) | no | no; the group's text is still at hand on request (`cbb paste`, the app's button) |
-| **Shared** | yes | yes |
-| **Receive only** | no | yes; for a Pi or a kiosk that only shows what comes |
-| **Send only** | yes | no; for a work computer whose clipboard nobody else should change |
+- **On**: its copies go to the group, and the group's copies reach its clipboard.
+- **Off**: the clipboard is the device's own, as in the operating system without CBB. The
+  group's text is still at hand on request (`cbb paste`, the app's button), and deliberate
+  actions (`cbb copy`, sending from a phone, a paste ordered by an admin) still work.
 
-- The mode decides only what moves between the clipboard and the group. The member stays
-  connected in every mode, so an admin can change its mode from afar, revocations reach it
-  at once, and remote paste works on it. Sync away from home is turned on apart from the
-  mode (D-45).
-- A device changes its own mode (`cbb mode`, the apps' settings). An admin changes the mode
-  of any member with a `mode` command, signed and checked like a `paste` command (see
-  "Remote paste"); the member keeps the mode across restarts and reports it in its hello,
-  so the devices list shows it.
-- Deliberate actions (`cbb copy`, sending from a phone, a paste ordered by an admin) work
-  in every mode.
-- Built: the mode on every member. A computer keeps it in the file `mode` in the service's
-  state directory (`cbb mode`), as does the lite member (`sudo cbb mode`); the phones keep it
-  in the app's storage and set it on their own page. A device that makes or joins a group
-  starts in own. Every member reports its
-  mode in its hello, so the devices list shows it, and takes an admin's signed `mode` command
-  (`cbb mode -on DEVICE`, an admin phone's device page, docs/protocol.md section 15), sent
-  directly to a connected member. On a phone the mode decides what its own automatic paths
-  do: Android's foreground service writes the group's copies to the clipboard only in a mode
-  that receives, and its accessibility service sends copies by itself only in one that sends;
-  the iPhone, which has no copy watching, writes a live group copy to the pasteboard while
-  the app is open in a mode that receives. The buttons work in every mode.
+- The switch decides only what moves between the clipboard and the group. The member stays
+  connected either way, so an admin can turn it on from afar, revocations reach it at once,
+  remote paste works on it, and a hub keeps serving. Sync away from home is a second switch
+  that works only while sync is on (D-45).
+- Each app shows it as the first of two icon buttons on its first screen (a house with
+  signal waves, without them when off; the second, a globe, is sync away from home). One tap
+  turns it off until turned on again; holding it picks a time: 15 minutes, an hour,
+  8 hours. On a computer `cbb sync off [-for 1h]` and `cbb sync on`; no rights are needed,
+  since it changes only this device.
+- An admin turns it on or off on any member with a signed `mode` command (`cbb sync -on
+  DEVICE on|off`, the apps' device page; docs/protocol.md section 15), checked like a
+  `paste` command (see "Remote paste"); that change lasts until turned again.
+- Built: a computer keeps sync off, and until when, in `sync.json` in the service's state
+  directory, as does the lite member; without the file sync is on. Every member reports it
+  in its hello as the mode `shared` (on) or `own` (off), so the devices list shows it. On a
+  phone it decides what the automatic paths do: Android's foreground service writes the
+  group's copies to the clipboard and its accessibility service sends copies by itself only
+  while sync is on; the iPhone, which has no copy watching, writes a live group copy to the
+  pasteboard while the app is open and sync is on.
 
 ### Muting a device
 
 A device that misbehaves with its clipboard (a program that rewrites it over and over, a
 script in a loop) sends a copy to every other device each time and gets in everyone's way.
-Two switches stop that for a while, both apart from the sync mode, which stays as the user
-set it:
+Its own user turns sync off ("Sync on and off"); for the whole group an admin mutes it:
 
-- **Not listening, on the device itself.** One tap on the first screen of every app (and
-  `cbb mute`, `cbb unmute`) keeps the group's copies out of this device's clipboard, as a
-  mode that does not receive does, until tapped again; holding the button picks a time
-  (15 minutes, an hour, 8 hours). The device's own copies still go out. No rights are
-  needed: it changes only this device.
-- **Muted by an admin, for the whole group.** An admin mutes any device of the group, the
-  root too, for a time up to 30 days or until unmuted (`cbb mute -on DEVICE -for 1h`, the
-  apps' device page): a signed `mute` command (docs/protocol.md, section 15) tells the device
-  to send nothing, not even a deliberate copy, until then. Any admin ends it with `unmute`,
-  and the last command counts. The device's own user ends it only where the device is itself
-  an admin or the root. The device says in its hello that it is muted and until when, so
-  every devices list shows it.
+- **Muted by an admin.** An admin mutes any device of the group, the root too, for a time
+  up to 30 days or until unmuted (`cbb mute -on DEVICE -for 1h`, the apps' device page): a
+  signed `mute` command (docs/protocol.md, section 15) tells the device to send nothing, not
+  even a deliberate copy, until then. Any admin ends it with `unmute`, and the last command
+  counts. The device's own user ends it only where the device is itself an admin or the
+  root. The device says in its hello that it is muted and until when, so every devices list
+  shows it.
 
-Both last across restarts (`mute.json` in the state directory) and end by themselves when
-their time has passed. A device that does not take the command, an older or a broken one,
-is removed instead. The member protocol is unchanged: a muted device's copies are not made,
-so nothing needs to be dropped on the way.
+The mute lasts across restarts (`mute.json` in the state directory) and ends by itself when
+its time has passed. A device that does not take the command, an older or a broken one, is
+removed instead. The member protocol is unchanged: a muted device's copies are not made, so
+nothing needs to be dropped on the way.
 
 ### Images and files
 
@@ -920,10 +907,9 @@ application asks for PNG. A copied folder keeps its tree, up to 10 000 entries.
   fits its limit, and writes its clipboard only when every part has arrived and matches its
   hash, so a paste never gives half a file; a newer copy stops the fetch. Progress shows in
   `cbb status` and the apps' notification.
-- Images and files follow the device's sync mode ("Sync modes", D-55) like text: a device
-  fetches only in a mode that takes the group's copies into its clipboard, and offers its
-  own only in a mode that sends them. The hub that serves is the one exception: it fetches
-  to pass copies on, but writes its clipboard only as its mode says.
+- Images and files follow sync on and off ("Sync on and off", D-55) like text: a device
+  fetches by itself and offers its own only while sync is on. The hub that serves is the one
+  exception: it fetches to pass copies on, but writes its clipboard only while sync is on.
 - Android fetches images by itself, as it takes texts; files wait for the button, which
   saves them in Downloads. The iPhone fetches on its button, and an image by itself while the
   app runs; its button saves files in the app's folder in Files. Both phones serve their own
@@ -998,7 +984,7 @@ Away from home, and between subnets that mDNS does not reach (for example a Pi o
 192.168.20.x and the rest of the group on 192.168.0.x), members reach each other through the
 group's own WireGuard tunnel in a star around one member, the hub. Built: the tunnel
 (`internal/tunnel`: the hub and the Go client, with tests that clients cannot reach each
-other; `mobile/cbbtun` on the phones; GotaTun in the lite member on Linux), the exchange of
+other; GotaTun in the lite member on Linux and, through `ffi/`, on the phones), the exchange of
 its keys in the member protocol, and `cbb global`, which turns it on with the consent below
 and makes a computer the hub; the phones as clients and, while their app is open, as the
 hub; remote invitations for computers; the forwarder (`cbb forward`, routing by `mac1`),
@@ -1146,8 +1132,12 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   forwarder over an outgoing connection, as a hub behind carrier-grade NAT does, and keeps
   the registration and its hellos while the app is open. The forwarder finds a hub by its
   key, not its address, so a phone that moves from Wi-Fi to a mobile network stays the same
-  hub. The hub's WireGuard runs in the app's process, in `mobile/cbbtun`, beside the client
-  side.
+  hub. The hub's WireGuard runs in the app's process, in the Rust core's tunnel
+  (`ffi/src/tunnel.rs`), beside the client side: the lite member's tunnel, one for the lite
+  member and every phone, rather than a Go tunnel bound by gomobile, which would keep a
+  second WireGuard, AmneziaWG and VLESS to maintain and Go in both apps' builds (D-87). The
+  phones then reach a forwarder over VLESS with XHTTP only: REALITY needs a browser's
+  ClientHello, which rustls does not give, so it stays on the Go servers.
 - **The clients come quickly.** A phone hub is there for minutes at a time, so its clients
   keep trying it every few seconds while their own app or service runs, instead of backing
   off to 30 s and more; a handshake initiation to the forwarder costs one small packet, and
@@ -1208,7 +1198,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
 
 All built in 0.5, but for what each step names as still to do.
 
-1. Done: the hub's side in `mobile/cbbtun` (`StartHub`, `Register`): the clients' tunnels,
+1. Done: the hub's side in the Rust core's tunnel (`hub_start`, `cbb_tunnel_register`): the clients' tunnels,
    the member port leading to the kit's member listener, and the registration with the
    forwarder and its hellos by the phone's member key, which the forwarder takes when the
    group's records make that key the root's or an admin's (docs/protocol.md, section 13);
@@ -1228,7 +1218,7 @@ All built in 0.5, but for what each step names as still to do.
    tried at least every 5 s instead of up to 30 s, in `cbb`, the lite member and both apps.
    Still to measure on real phones: the battery cost and the forwarder's load.
 5. Done: remote invitations made and served on the phone (step 7 of the order of work in
-   [design.md](design.md#order-of-work)): cbbtun's guest tunnel (`Hub.Invite`), the kits'
+   [design.md](design.md#order-of-work)): the hub's guest tunnel (`hub_invite`), the kits'
    `InvitationWindow`, and in both apps "Invite a device from afar", which shares the file
    and asks the user to confirm the device; tested against `cbb`'s joiner. Still to do:
    using an invitation on a phone or a TV, so that a parent's TV joins.
@@ -1532,12 +1522,11 @@ relay, or a hub.
      headers, never a key that decrypts anything. The hub's hellos to the forwarder are
      masked with a key the forwarder gives every hub, so they show no constant either.
    - The phones keep the settings with the hub's offer and start their tunnel with them
-     (`mobile/cbbtun` takes them as JSON). The lite member's Rust WireGuard does not speak
-     AmneziaWG, so in an obfuscated group it reaches the hub at home only.
+     (`ffi/src/tunnel.rs` takes them as JSON), as the lite member does (`member/src/awg.rs`).
 2. **WireGuard inside VLESS**, between a client and the forwarder, with
-   Xray-core (MPL-2.0) as a Go module in `cbb`, and in the phones' Go tunnel
-   (`mobile/cbbtun`) rather than libXray, so that one framework carries both; VLESS carries
-   the UDP packets itself. The forwarder then has one path for everything, the hub does not
+   Xray-core (MPL-2.0) as a Go module in `cbb`, and in the phones' and the lite member's
+   Rust tunnel (`member/src/vless.rs`, XHTTP only: REALITY stays on the Go servers); VLESS
+   carries the UDP packets itself. The forwarder then has one path for everything, the hub does not
    change, and traffic is always inside our own tunnel. VLESS adds no security of its own and
    the design does not rely on it: the boundary stays the member TLS, then WireGuard.
    - The forwarder's operator picks the transport, and the forwarder tells each registering
@@ -1674,8 +1663,8 @@ only adds to it.
    computed port as a fallback if AmneziaWG needs it; the project's own server.
 6. The blind relay, the user's own or the project's open one (done for computers).
 7. The phones: the in-app tunnel in both kits and apps, interop tests against the Go hub,
-   making and opening remote invitations. Done: the tunnel, `mobile/cbbtun`, bound by
-   gomobile into an AAR and an xcframework; the tunnel offer in both kits; both apps'
+   making and opening remote invitations. Done: the tunnel, in the Rust core's library
+   (`ffi/src/tunnel.rs`) that both apps link; the tunnel offer in both kits; both apps'
    switch, which keeps the hub's offer and reaches the hub through the tunnel while it is not
    found at home; remote invitations made and served on a phone that is the hub. Using an
    invitation on a phone follows.
@@ -1966,7 +1955,7 @@ no secrets and BASIC's lines need Enter.
   bracketed (cmd.exe, sh), which no target can tell, so without the leave for Enter such
   a text is refused on every target. So a paste can at most put text in front of the
   user, not run it.
-- **Any admin turns it off on any member** with a signed command, like the sync mode
+- **Any admin turns it off on any member** with a signed command, like sync on and off
   (D-55), when an admin device is lost: it takes effect at once, needs no consent, and only
   the device's own user turns it on again.
 - **A stolen admin is cut off quickly.** Any other admin, a computer included, freezes it

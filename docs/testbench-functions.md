@@ -247,22 +247,20 @@ line here with every new function, and a case for it in the catalogue.
 | Y.32 | `cbb paste -terminal`, `-lines`, `-secret` | Y35, H3 |
 | Y.33 | A device that joins reads copies from the next one on | Y36 |
 
-## M. Sync modes
+## M. Sync on and off
 
 | ID | Function | Cases |
 |---|---|---|
-| M.1 | `own` | M1, M3 |
-| M.2 | `shared` | M1 |
-| M.3 | `receive` | M1 |
-| M.4 | `send` | M1, M3 |
-| M.5 | Deliberate actions in every mode | M2 |
-| M.6 | The mode kept and reported | M4 |
-| M.7 | `cbb mode -on DEVICE` | M5 |
-| M.8 | The phones' "Sync mode" | M5, A1 |
-| M.9 | New devices in `own`, old ones `shared` | M6 |
-| M.10 | The phones' automatic paths follow the mode | M7 |
-| M.11 | The lite member's mode | M1 |
-| M.12 | `cbb mute` and `cbb unmute` on the device itself | M8 |
+| M.1 | Sync off | M1, M3 |
+| M.2 | Sync on | M1 |
+| M.5 | Deliberate actions with sync on and off | M2 |
+| M.6 | Sync off kept and reported | M4 |
+| M.7 | `cbb sync -on DEVICE` | M5 |
+| M.8 | The phones' sync switch on a device's page | M5, A1 |
+| M.9 | New devices with sync on | M6 |
+| M.10 | The phones' automatic paths follow sync | M7 |
+| M.11 | The lite member's `cbb sync` | M1 |
+| M.12 | `cbb sync off [-for]` and `cbb sync on` on the device itself | M8 |
 | M.13 | An admin mutes a device for the group (`cbb mute -on`, the `mute` and `unmute` commands) | M9 |
 | M.14 | The group's copies setting (`cbb incoming`) | M10 |
 
@@ -408,7 +406,7 @@ line here with every new function, and a case for it in the catalogue.
 | W.42 | Padded lists | W39 |
 | W.43 | The servers keep nothing | W40, S18 |
 | W.44 | The push sender | W41 |
-| W.45 | Phones away: cbbtun and the loopback port | W42 |
+| W.45 | Phones away: the Rust tunnel and the loopback port | W42 |
 | W.46 | Away on Android in the background | W42 |
 | W.47 | A hub that only passes the copies on (`-forward-only`), and `cbb global hub off` | W43 |
 | W.48 | The ways out carry only cbb | W44 |

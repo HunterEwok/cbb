@@ -79,21 +79,21 @@ Commands:
   new                     Create a group with this computer as its root.
   leave [-yes]            Leave the group: delete this device's keys and the group's files,
                           keep the settings; then it can join this group or another one.
-  mode [own|shared|receive|send]
-                          Show or set what moves between this clipboard and the group;
-                          a new device keeps its own.
-  mode -on DEVICE MODE    On an admin: set the sync mode of another device of the group.
-  mute [-for DURATION]    Take no copies from the group here for a while, or until
-                          cbb unmute; this device's own copies still go out.
+  sync [on | off [-for DURATION]]
+                          Show or set whether this clipboard syncs with the group; off
+                          for a while, or until cbb sync on. A new device syncs.
+  sync -on DEVICE on|off  On an admin: turn sync on or off on another device of the group.
   mute -on DEVICE [-for DURATION]
                           On an admin: keep a device's copies from the group for a
                           while, or until another admin's cbb unmute -on.
-  unmute [-on DEVICE]     Take the group's copies here again, or end a device's mute.
+  unmute -on DEVICE       On an admin: end a device's mute.
   config [max-copy|max-copy-away SIZE]
                           Show or set the largest copy of images and files this device
                           sends or fetches, at home (100MiB) and away from home (25MiB).
   pair                    In a group: show a code for a new computer. In none: join one,
                           by the phone's QR code or the code from cbb pair on the group.
+  pair -qr                In a group: admit the new device that shows a code and waits;
+                          type its code, or paste its QR code's text.
   pair -code [address]    Join with the code from cbb pair on the root or an admin.
   pair -invite file       Join from afar with an invitation from cbb invite.
   invite [-for 1h]        Invite a device from afar: run on the group's hub.
@@ -189,8 +189,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdPair(rest, stdin, stdout, stderr)
 	case "invite":
 		return cmdInvite(rest, stdin, stdout, stderr)
-	case "mode":
-		return cmdMode(rest, stdout, stderr)
+	case "sync":
+		return cmdSync(rest, stdout, stderr)
 	case "mute", "unmute":
 		return cmdMute(rest, cmd == "unmute", stdout, stderr)
 	case "config":

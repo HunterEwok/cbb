@@ -149,8 +149,8 @@
         <translation>מצטרף…</translation>
     </message>
     <message>
-        <source>On a phone or a computer of your group, add a device and scan this code. Keep this screen open.</source>
-        <translation>בטלפון או במחשב של הקבוצה שלך, הוסף מכשיר וסרוק את הקוד הזה. השאר את המסך הזה פתוח.</translation>
+        <source>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</source>
+        <translation>בטלפון של הקבוצה, הקש + וסרוק את הקוד הזה. במחשב של הקבוצה, הקש + והקלד את הספרות. השאר את המסך הזה פתוח.</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>
