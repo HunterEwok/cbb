@@ -2134,6 +2134,43 @@ jobs:
             CBB_LITE="$RUNNER_TEMP/cbb-$a" go test ./internal/service -run 'TestLite' -skip "$skip" -v
           done
 
+  # The service's tests (internal/service) against the Rust service that
+  # every release ships: each member is a Rust cbb with cbb-helper beside
+  # it, a phone is phone-on-linux, and they find each other by mDNS.
+  service:
+    name: service tests on the Rust cbb
+    needs: changes
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lite == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the Rust toolchain, swtpm for the keys in a TPM, and Xvfb for an X11 session's clipboard
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends swtpm xvfb xclip
+      - name: the Rust cbb, cbb-helper beside it, and the phone's member on Linux
+        run: |
+          cargo build --locked --release -p cbb-lite
+          cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
+          CGO_ENABLED=0 go build -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
+      - name: go test ./internal/service with every Linux member a Rust cbb
+        run: |
+          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
+          DISPLAY=:5 CBB_TEST_X11=1 \
+            CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_LITE="$PWD/target/release/cbb" \
+            CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" \
+            go test -timeout 50m ./internal/service -v
+
   lite:
     name: lite member (Rust)
     needs: changes
@@ -2776,7 +2813,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gowithcore, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, lite, litemips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gowithcore, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service, lite, litemips, esp32, zxnext, silica, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
