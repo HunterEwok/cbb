@@ -1420,7 +1420,7 @@ int net_cmd(void)
 #pragma dataseg PAGE_13
 
 #define SITE "cbb.tools"
-#define SITE_DIR "/zxnext/"
+#include "site.h" // SITE_DIR, the Makefile's: /zxnext/
 // keys.json and zxnext.json, a line each, which the Pi's cbb checks.
 #define SITE_LIST "SIGNED"
 // Where NextZXOS looks for dot commands first.

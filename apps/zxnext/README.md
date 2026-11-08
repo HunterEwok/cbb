@@ -303,6 +303,9 @@ at its `lib/config`):
 make PI_CBB=cbb   # build/CBB (to C:/DOT), build/CBB.OVL (to /cbb), build/PIBRIDGE and
                   # build/CBB.DRV;
                   # cbb is the Pi's lite member, which CBB installs (pins.sh)
+make PI_CBB=cbb SITE_DIR=/zxn/
+                  # a test build, which installs and updates from cbb.tools/zxn/
+                  # (packaging/zxnext/site.sh lays out its files; rename zxnext/)
 make test         # the frame parser's and SHA-256's tests with the host's C compiler, the driver's
                   # bank in a Z80 emulator against two played UARTs, and .cbb itself on a played
                   # Next (drvtest, with cargo; below)
