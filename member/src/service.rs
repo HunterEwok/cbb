@@ -65,6 +65,8 @@ pub(crate) const NEXT: &str = "next";
 
 /// How long a watcher may take to put a paste in; typing takes TYPE_WAIT
 /// more for each byte, as on a full member.
+/// How long a request waits for a device in a group to start.
+const START_WAIT: Duration = Duration::from_secs(10);
 const INJECT_WAIT: Duration = Duration::from_secs(5);
 const TYPE_WAIT: Duration = Duration::from_millis(5);
 
@@ -655,11 +657,29 @@ fn via_name(v: Via) -> &'static str {
 
 impl Service {
     fn node(&self) -> Result<Arc<Node>> {
-        self.node.read().unwrap().clone().ok_or_else(|| Error::msg("this device is in no group; run cbb pair"))
+        self.started(|| self.node.read().unwrap().clone())
     }
 
     fn away(&self) -> Result<Arc<Away>> {
-        self.away.read().unwrap().clone().ok_or_else(|| Error::msg("this device is in no group; run cbb pair"))
+        self.started(|| self.away.read().unwrap().clone())
+    }
+
+    /// What get returns once the service has started in its group: a
+    /// request that comes while a device in a group is still starting, its
+    /// sockets open first, waits for it rather than hearing that the device
+    /// is in no group.
+    fn started<T>(&self, get: impl Fn() -> Option<T>) -> Result<T> {
+        let deadline = std::time::Instant::now() + START_WAIT;
+        loop {
+            if let Some(v) = get() {
+                return Ok(v);
+            }
+            let in_group = matches!(Identity::load(&self.state_dir), Ok(Some(_)));
+            if !in_group || std::time::Instant::now() >= deadline || STOP.load(Ordering::SeqCst) {
+                return Err(Error::msg("this device is in no group; run cbb pair"));
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 
     /// cbb global: shows sync away from home, or turns it on or off. The
