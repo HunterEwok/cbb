@@ -15,7 +15,7 @@ let package = Package(
     products: [.library(name: "CBBKit", targets: ["CBBKit"])],
     dependencies: [
         // CryptoKit's API, on Linux too; on Apple platforms it uses CryptoKit.
-        .package(url: "https://github.com/apple/swift-crypto.git", "4.0.0"..<"5.0.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", "4.0.0"..<"6.0.0"),
     ],
     targets: [
         // The Rust core's C functions (ffi/include/cbb_core.h).
