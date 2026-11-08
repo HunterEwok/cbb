@@ -38,7 +38,8 @@
 // The ROM's frame counter, 50 a second while interrupts run.
 #define FRAMES_LO (*(volatile uint16_t *)23672)
 
-static uint8_t text[MAX_TEXT];
+// Not static: sha256.asm keeps its scratch in the upper half.
+uint8_t text[MAX_TEXT];
 static char line[200];
 static uint8_t debug;
 
@@ -63,6 +64,8 @@ static const char usage_text[] = "CBB " VERSION "  .cbb COMMAND\n\n"
            "\tremote paste\n"
            "leave\tleave the group\n"
            "uninstall\tremove it all\n"
+           "show [-tape]\tthe group's image\n"
+           "speed\ttest the Pi's line\n"
            "-d ...\terror details\n";
 #pragma constseg rodata_compiler
 
@@ -194,6 +197,7 @@ static int link_fail(uint8_t err)
 #define PASTE_CFG "/cbb/PASTE.CFG"
 // The Pi's cbb: on the card, and where NextPi's shell finds it.
 #define PI_CARD "/cbb/CBBPI.BIN"
+#define PI_GZ_CARD "/cbb/CBBPI.GZ"
 #define PI_DIR "/NextPi/nextpi"
 #define DRV_COUNTERS 1
 #define DRV_SWITCH 2
@@ -201,6 +205,13 @@ static int link_fail(uint8_t err)
 #define DRV_ESP 4
 #define DRV_DROP 5
 #define DRV_CAP 6
+#define DRV_IMAGES 10
+
+// The driver's banks for showing the group's images while the network
+// runs: given (1) or taken back (0), in CBB.OVL's second page (far.asm,
+// far_img_banks()); a Next without the memory shows none.
+static uint8_t img_banks_on;
+extern int far_img_banks(void);
 
 static struct esx_drvapi drv;
 
@@ -328,6 +339,8 @@ static uint8_t drv_uninstall(uint8_t bank)
 #define OVL_FILE "/cbb/CBB.OVL"
 #define OVL_FIRST 19
 #define OVL_CHUNK 512
+// The page of CBB.OVL with pi_check().
+#define OVL_PI 21
 extern uint8_t _z_page_table[];
 #pragma codeseg code_dot
 #pragma constseg code_dot
@@ -410,6 +423,17 @@ static char **far_argv;
 // .cbb pair CODE: the code from cbb pair on a computer of the group.
 static char *pair_code;
 static uint8_t install_update;
+#define FETCH_BANKS 7
+#define FETCH_WINDOW ((uint8_t *)0x6000)
+#define BASIC_MMU3 11
+// fetch()'s banks (FETCH_BANKS below), with the other always-mapped state.
+static uint8_t fetch_bank[FETCH_BANKS], fetch_banks;
+// For pi_check(), from the install's page: the Pi's cbb's SHA-256.
+static const char *pi_check_sha;
+extern int far_pi_check(void);
+// The UART's loops in far.asm: pi_tx() sends n bytes from http_dst on.
+extern uint8_t *http_dst;
+extern void pi_tx(uint16_t n) __z88dk_fastcall;
 // sha_run()'s file, whether it takes the digest, and the digest in hex.
 static const char *sha_path;
 static uint8_t sha_digest;
@@ -453,6 +477,21 @@ static uint8_t secret;
 #pragma bssseg PAGE_19
 #pragma dataseg PAGE_19
 
+// The commands' words, arrays of this page: zcc keeps string literals
+// with the main program's.
+static const char p_paste_fmt[] = "paste -max %u";
+static const char p_longer[] = "longer than -max";
+static const char p_damaged[] = "the text arrived damaged; try again";
+static const char p_crc[] = "CRC-32 mismatch";
+static const char p_no_create[] = "cannot create the file";
+static const char p_no_write[] = "cannot write the file";
+static const char p_saved[] = "%u bytes saved to %s\n";
+static const char p_copy_secret[] = "copy -secret %u %s";
+static const char p_copy[] = "copy %u %s";
+static const char p_sent_secret[] = "%u bytes sent to the group as a secret\n";
+static const char p_sent[] = "%u bytes sent to the group\n";
+static const char p_no_open[] = "cannot open the file";
+
 // Eight lowercase hex digits, as the lite member writes a CRC-32.
 static void hex8(char *out, uint32_t v)
 {
@@ -478,12 +517,12 @@ static int paste(const char *file)
     uint32_t len, crc;
     uint16_t got;
     uint8_t c, err, fh;
-    sprintf(line, "paste -max %u", MAX_TEXT);
+    sprintf(line, p_paste_fmt, MAX_TEXT);
     if (command(line)) return 1;
     if (expect(LINE_TEXT, &len, &crc, ANSWER_SECONDS) != LINE_TEXT) return 1;
     if (len > MAX_TEXT) {
         link_send(3);
-        return fail(too_long, "longer than -max");
+        return fail(too_long, p_longer);
     }
     for (got = 0; got < len; got++) {
         err = link_recv(&c, ANSWER_SECONDS);
@@ -492,20 +531,20 @@ static int paste(const char *file)
     }
     if (expect(LINE_OK, &len, &crc, ANSWER_SECONDS) != LINE_OK) return 1;
     link_prompt();
-    if (crc32_update(0, text, got) != crc) return fail("the text arrived damaged; try again", "CRC-32 mismatch");
+    if (crc32_update(0, text, got) != crc) return fail(p_damaged, p_crc);
     if (!file) {
         show(text, got);
         return 0;
     }
     errno = 0;
     fh = esx_f_open(file, ESX_MODE_W | ESX_MODE_OPEN_CREAT_TRUNC);
-    if (errno) return fail("cannot create the file", file);
+    if (errno) return fail(p_no_create, file);
     if (esx_f_write(fh, text, got) != got) {
         esx_f_close(fh);
-        return fail("cannot write the file", file);
+        return fail(p_no_write, file);
     }
     esx_f_close(fh);
-    printf("%u bytes saved to %s\n", got, file);
+    printf(p_saved, got, file);
     return 0;
 }
 
@@ -515,13 +554,13 @@ static int copy(uint16_t len)
     uint16_t i;
     char crc_hex[9];
     hex8(crc_hex, crc32_update(0, text, len));
-    sprintf(line, secret ? "copy -secret %u %s" : "copy %u %s", len, crc_hex);
+    sprintf(line, secret ? p_copy_secret : p_copy, len, crc_hex);
     if (command(line)) return 1;
     if (expect(LINE_GO, &n, &crc, ANSWER_SECONDS) != LINE_GO) return 1;
     for (i = 0; i < len; i++) link_send(text[i]);
     if (expect(LINE_OK, &n, &crc, ANSWER_SECONDS) != LINE_OK) return 1;
     link_prompt();
-    printf(secret ? "%u bytes sent to the group as a secret\n" : "%u bytes sent to the group\n", len);
+    printf(secret ? p_sent_secret : p_sent, len);
     return 0;
 }
 
@@ -531,7 +570,7 @@ static int copy_file(const char *file)
     uint16_t len;
     errno = 0;
     fh = esx_f_open(file, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
-    if (errno) return fail("cannot open the file", file);
+    if (errno) return fail(p_no_open, file);
     len = esx_f_read(fh, text, MAX_TEXT);
     esx_f_close(fh);
     return copy(len);
@@ -572,6 +611,7 @@ static void via_send(uint8_t c)
 static uint8_t via_recv(uint8_t *c, uint16_t seconds)
 {
     uint16_t start = FRAMES_LO;
+    if (!seconds) seconds = 1;
     for (;;) {
         driver(DRV_CBB_IN, 0);
         if (drv.de & 0x100) {
@@ -716,24 +756,33 @@ static void link_quit(void)
 // overflows the Next's 512-byte buffer. 19200 is 1920 bytes a second.
 #define ESP_SPEED 115200UL
 #define ESP_NET_SPEED 19200UL
-// .cbb install's speed for the site's files: 23K a second, which .cbb at
-// 28 MHz reads as it comes (at 460800 the played Next's UART overflowed);
-// it asks for each chunk, so nothing more than one answer comes at a time.
-#define ESP_FETCH_SPEED 230400UL
+// .cbb install's speed for the site's files: 460800 first, the fastest that
+// held on a real Next's ESP, then a step slower
+// each time the bytes do not come whole (speed_down()), as far as the
+// Next reads them as they come at 28 MHz; it asks for each chunk, so
+// nothing more than one answer comes at a time.
+#define ESP_FETCH_TOP 460800UL
 
-// The speeds the ESP may be at, which esp_answers() tries.
-static const uint32_t esp_speeds[] = {ESP_SPEED, ESP_NET_SPEED, ESP_FETCH_SPEED};
+// The speeds the ESP may be at, which esp_answers() tries: the fetch's
+// is the one it is at now.
+static uint32_t esp_speeds[] = {ESP_SPEED, ESP_NET_SPEED, ESP_FETCH_TOP};
+#define esp_fetch (esp_speeds[2])
+
+// The speed the ESP last answered at, which esp_answers() tries first.
+static uint32_t esp_now;
 
 // Whether the ESP answers AT at speed; leaves it selected. The CR LF first
 // ends whatever an earlier try at the other speed left in its line.
 static uint8_t esp_at(uint32_t speed)
 {
     link_open_esp(speed);
-    while (link_line(line, sizeof line, 1) == LINK_OK) {
-    }
+    link_drain();
     link_send_str("\r\nAT\r\n");
     while (link_line(line, sizeof line, 2) == LINK_OK) {
-        if (strcmp(line, "OK") == 0) return 1;
+        if (strcmp(line, "OK") == 0) {
+            esp_now = speed;
+            return 1;
+        }
     }
     return 0;
 }
@@ -772,9 +821,13 @@ static void esp_escape(uint32_t speed)
 static uint8_t esp_answers(uint32_t speed)
 {
     uint8_t i;
+    uint32_t at = esp_now;
+    // From the speed it last answered at, without a try at the new one.
+    if (at && at != speed && esp_at(at)) goto switch_now;
     if (esp_at(speed)) return 1;
     for (i = 0; i < sizeof esp_speeds / sizeof esp_speeds[0]; i++) {
         if (esp_speeds[i] == speed || !esp_at(esp_speeds[i])) continue;
+    switch_now:
         sprintf(line, "AT+UART_CUR=%lu,8,1,0,0\r\n", speed);
         link_send_str(line);
         // The OK comes at the old speed; then the ESP switches.
@@ -807,6 +860,8 @@ static uint8_t esp_speed(uint32_t speed)
 #pragma constseg PAGE_17
 #pragma bssseg PAGE_17
 #pragma dataseg PAGE_17
+
+
 
 // The short form's defaults: the member's port, and where the phones reach
 // the Pi (the ESP's port, the lite member's own).
@@ -1106,6 +1161,8 @@ static int net_start(int argc, char **argv)
     start_send(" -log /ram/link.log\n");
     if (booting) {
         if (driver(DRV_BOOT, BOOT_GO)) return fail(boot_cannot, boot_call);
+        img_banks_on = 1;
+        far_img_banks();
         if (!quiet) printf(boot_wait);
         return 0;
     }
@@ -1136,6 +1193,8 @@ static int net_start(int argc, char **argv)
         }
     }
     if (driver(DRV_SWITCH, 1)) return fail("the driver did not start", "M_DRVAPI 124 failed");
+    img_banks_on = 1;
+    far_img_banks();
     if (!quiet) printf("The Pi's network runs through\nthe ESP in the background.\n");
     return 0;
 }
@@ -1274,6 +1333,8 @@ int net_pair(void)
 static int net_stop(void)
 {
     uint8_t b = boot_state();
+    img_banks_on = 0;
+    far_img_banks();
     if (b && b <= BOOT_LINK) {
         driver(DRV_SWITCH, 0);
         printf(boot_none);
@@ -1390,7 +1451,7 @@ int net_cmd(void)
 #pragma dataseg PAGE_13
 
 #define SITE "cbb.tools"
-#define SITE_DIR "/zxnext/"
+#include "site.h" // SITE_DIR, the Makefile's: /zxnext/
 // keys.json and zxnext.json, a line each, which the Pi's cbb checks.
 #define SITE_LIST "SIGNED"
 // Where NextZXOS looks for dot commands first.
@@ -1399,6 +1460,9 @@ int net_cmd(void)
 // server waits: the ESP has no flow control, and a card write runs with
 // interrupts off for longer than the UART's buffer lasts.
 #define CHUNK MAX_TEXT
+// fetch() asks for FETCH_BANKS (above) banks' worth at a time, into banks of its
+// own in at $6000 (BASIC's, which nothing runs meanwhile): a seventh of the
+// round trips to the site.
 
 // The ROM's frame counter, 50 a second while interrupts run.
 // The ROM's scroll count: kept high, the screen scrolls without "scroll?".
@@ -1407,7 +1471,9 @@ int net_cmd(void)
 // name: on the server; label: on the screen. size and sha256 are those of
 // the files built with this CBB (pins.h, from the Makefile): whatever the
 // site serves, only they are installed. The Next checks the driver's
-// SHA-256 itself; the Pi's cbb, megabytes, the Pi checks.
+// SHA-256 itself; the Pi's cbb, megabytes, the Pi checks. pi is 1 for the
+// Pi's cbb, 2 when it comes gzipped: size is then the gzipped file's,
+// sha256 still that of what the Pi unpacks.
 struct item {
     const char *name, *label, *card, *part;
     uint32_t size;
@@ -1418,7 +1484,7 @@ struct item {
 static struct item items[] = {
     {"CBB.DRV", "CBB.DRV", "/cbb/CBB.DRV", "/cbb/DRV.PRT", PIN_DRV_SIZE, PIN_DRV_SHA256, 0},
     {"CBB.OVL", "CBB", OVL_FILE, "/cbb/OVL.PRT", PIN_OVL_SIZE, PIN_OVL_SHA256, 0},
-    {"cbb", "SERVICE", PI_CARD, "/cbb/CBBPI.PRT", PIN_PI_SIZE, PIN_PI_SHA256, 1},
+    {"cbb.gz", "SERVICE", PI_GZ_CARD, "/cbb/CBBGZ.PRT", PIN_PIGZ_SIZE, PIN_PI_SHA256, 2},
 };
 #define ITEMS (sizeof items / sizeof items[0])
 // This CBB, as the install's own steps put it in /cbb.
@@ -1428,6 +1494,8 @@ static struct item items[] = {
 // when the site has no such file: trying again does not help then.
 static uint16_t http_status;
 static const char no_file[] = SITE " has no such file; are its files in place?";
+
+extern uint8_t http_rx(uint16_t n) __z88dk_fastcall;
 
 // Asks for size bytes of name from offset on the open connection; 0 with
 // the bytes in text[] when they all came.
@@ -1466,10 +1534,20 @@ static uint8_t http_range(const char *name, uint32_t from, uint16_t size)
     if (status != 206 && !(status == 200 && from == 0)) goto out;
     err = 253;
     if (length != size) goto out;
-    for (; got < size; got++) {
-        err = link_recv(&c, 10);
-        if (err) goto out;
-        text[got] = c;
+    // Once the bytes come, they come without a pause: 251 when two seconds
+    // pass without one, which the Next lost to a speed it cannot read at.
+    // Into the banks, 8K in each.
+    err = 0;
+    for (i = 0; got < size && !err; i++) {
+        ZXN_WRITE_MMU3(fetch_bank[i]);
+        http_dst = FETCH_WINDOW;
+        err = http_rx(size - got < CHUNK ? size - got : CHUNK);
+        got += CHUNK;
+    }
+    ZXN_WRITE_MMU3(BASIC_MMU3);
+    if (err) {
+        err = 251;
+        goto out;
     }
     return 0;
 out:
@@ -1486,14 +1564,16 @@ out:
 #pragma bssseg bss_compiler
 #pragma dataseg data_compiler
 
-// Opens a passthrough connection to the site through the ESP; 0 when open.
+// Opens a passthrough connection to the site through the ESP; 0 when open,
+// 2 when the ESP does not answer at the fetch's speed.
 static const char *const http_cmds[] = {"AT+CIPMODE=0", "AT+CIPCLOSE", "AT+CIPMUX=0", "AT+CIPMODE=1",
                                         "AT+CIPSTART=\"TCP\",\"" SITE "\",80", "AT+CIPSEND"};
 
 static uint8_t http_open(void)
 {
     uint8_t i, c, reset = 0;
-    if (!esp_speed(ESP_FETCH_SPEED)) return 1;
+    // 2: the ESP does not answer at the speed.
+    if (!esp_speed(esp_fetch)) return 2;
 again:
     for (i = 0; i < sizeof http_cmds / sizeof http_cmds[0]; i++) {
         link_send_str(http_cmds[i]);
@@ -1518,7 +1598,7 @@ again:
                 // restarts, at its stock speed.
                 reset = 1;
                 esp_restart();
-                if (!esp_speed(ESP_FETCH_SPEED)) return 1;
+                if (!esp_speed(esp_fetch)) return 1;
                 goto again;
             }
             if (strcmp(line, "ERROR") == 0 || strncmp(line, "FAIL", 4) == 0) return 1;
@@ -1530,7 +1610,7 @@ again:
 // Leaves the passthrough connection: a second of quiet, +++, a second.
 static void http_close(void)
 {
-    esp_escape(ESP_FETCH_SPEED);
+    esp_escape(esp_fetch);
     link_send_str("AT+CIPCLOSE\r\n");
     while (link_line(line, sizeof line, 2) == LINK_OK) {
     }
@@ -1660,7 +1740,8 @@ static uint8_t percent(uint32_t got, uint32_t size)
 // Draws a file's bar, and the numbers of the one under way.
 static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
 {
-    uint16_t secs = (uint16_t)(FRAMES_LO - start) / 50, left;
+    // The frames are 60 a second on a Next set to 60 Hz (NR 0x05 bit 2).
+    uint16_t secs = (uint16_t)(FRAMES_LO - start) / (ZXN_READ_REG(0x05) & 4 ? 60 : 50), left;
     uint32_t rate = secs ? got / secs : 0;
     char speed[8];
     // One bar for more than one file: their sum.
@@ -1751,6 +1832,7 @@ static uint32_t file_crc(const char *path, uint32_t *size)
     return crc;
 }
 
+#pragma codeseg code_compiler
 // The size of a file on the card (0 without it), and with digest 1 its
 // SHA-256 in sha_out. SHA-256 is in the screen's page with sha_run(),
 // whose arguments these are (far.asm, far_sha()).
@@ -1769,14 +1851,43 @@ static uint8_t matches(struct item *it, const char *path)
     return it->pi || strcmp(sha_out, it->sha256) == 0;
 }
 
+// The speeds, a step down: 2M, 921600, 460800, 230400, 115200; 1 when it
+// was the last. The row says the new one.
+static uint8_t speed_down(uint32_t *speed, uint8_t row, const char *label)
+{
+    char s[10];
+    if (*speed <= ESP_SPEED) return 1;
+    *speed = *speed > 921600UL ? 921600UL : *speed >> 1;
+    sprintf(s, "AT %luK", *speed / 1000);
+    file_state(row, label, s);
+    return 0;
+}
+#pragma codeseg PAGE_13
+
 // Fetches one item to its .PRT file, going on from what an earlier try
 // left there, and puts it in place once it is the one built with this CBB;
 // 0 when done.
+// Writes the n bytes http_range() read to the card; 0 when written.
+static uint8_t fetch_write(uint8_t fh, uint16_t n)
+{
+    uint8_t i;
+    uint16_t k;
+    for (i = 0; n; i++) {
+        k = n < CHUNK ? n : CHUNK;
+        ZXN_WRITE_MMU3(fetch_bank[i]);
+        if (esx_f_write(fh, FETCH_WINDOW, k) != k) break;
+        n -= k;
+    }
+    ZXN_WRITE_MMU3(BASIC_MMU3);
+    return n != 0;
+}
+
 static int fetch(struct item *it, uint8_t row)
 {
     uint8_t fh, err, tries = 0;
-    uint16_t n, start = FRAMES_LO;
+    uint16_t n, k, start = FRAMES_LO;
     uint32_t got;
+again:
     // What an earlier try left.
     got = file_sha(it->part, 0);
     if (got > it->size) {
@@ -1789,7 +1900,8 @@ static int fetch(struct item *it, uint8_t row)
     esx_f_seek(fh, got, ESX_SEEK_SET);
     file_state(row, it->label, got ? "GOES ON" : "FETCHING");
     while (got < it->size) {
-        n = it->size - got > CHUNK ? CHUNK : (uint16_t)(it->size - got);
+        k = fetch_banks * CHUNK;
+        n = it->size - got > k ? k : (uint16_t)(it->size - got);
         err = http_range(it->name, got, n);
         if (err == LINK_BREAK) {
             esx_f_close(fh);
@@ -1802,18 +1914,21 @@ static int fetch(struct item *it, uint8_t row)
             return fail(no_file, line);
         }
         if (err) {
-            // The server may have closed the connection: open it again.
-            if (++tries > 5) {
+            // The server may have closed the connection: open it again,
+            // and a step slower when bytes were lost or the same chunk
+            // failed twice.
+            if (++tries > 6) {
                 esx_f_close(fh);
                 file_state(row, it->label, "BROKE OFF");
                 return fail("the download broke off; .cbb install goes on from here", line);
             }
             http_close();
+            if (tries > 1 || err == 251) speed_down(&esp_fetch, row, it->label);
             http_open();
             continue;
         }
         tries = 0;
-        if (esx_f_write(fh, text, n) != n) {
+        if (fetch_write(fh, n)) {
             esx_f_close(fh);
             return fail("cannot write to the card", it->part);
         }
@@ -1822,8 +1937,14 @@ static int fetch(struct item *it, uint8_t row)
     }
     esx_f_close(fh);
     if (!matches(it, it->part)) {
-        file_state(row, it->label, "DAMAGED");
         esx_f_unlink(it->part);
+        // Again from the start, a step slower.
+        http_close();
+        if (!speed_down(&esp_fetch, row, it->label)) {
+            http_open();
+            goto again;
+        }
+        file_state(row, it->label, "DAMAGED");
         return fail("the file arrived damaged; run .cbb install again", it->name);
     }
     // A newer CBB stays by the running one until the end (cbb_swap()).
@@ -1860,16 +1981,21 @@ static uint8_t pi_sha(char *sha)
 // UART: the shell reads exactly its size, then checks its SHA-256 against
 // the one built with this CBB before it takes the place of the old one. The
 // wrapper that NextPi's shell runs is written unless there is one.
+#pragma codeseg code_compiler
 // How long head may wait for the Pi's cbb: twice the time the copy takes
-// at speed (0: 115200), and a minute.
+// at speed (0: 115200), and a minute; above 460800, as at that, since the
+// Next sends no faster than it reads the card.
 static uint32_t pi_seconds(struct item *it, uint32_t speed)
 {
+    if (speed > 460800UL) speed = 460800UL;
     return it->size / ((speed ? speed : 115200UL) / 20) + 60;
 }
 
-// The speed the Pi's cbb goes at, which the Pi's tty takes for the copy
-// only: four times NextPi's usual 115200.
-#define PI_FAST_SPEED 460800UL
+// The speed the Pi's cbb goes at first, which the Pi's tty takes for the
+// copy only; then a step slower each time it does not come whole. Not 2M:
+// there a Pi Zero that unpacks the copy as well loses bytes, and 921600
+// carries about as many a second.
+#define PI_FAST_SPEED 921600UL
 
 // Waits a few frames, for the UART to send what it holds.
 static void wait_frames(uint8_t n)
@@ -1881,15 +2007,26 @@ static void wait_frames(uint8_t n)
         }
     }
 }
+#pragma codeseg PAGE_13
+
+// The Pi Zero starts head only after it says CBBGO, which takes it some
+// 200 ms; bytes sent meanwhile at speed overflow its tty's 4K. Half a
+// second after CBBGO, it reads.
+#define pi_ready() wait_frames(25)
 
 // The row of the Pi's cbb on its way to the Pi, under the files.
 #define SEND_ROW ITEMS
 #define SEND_LABEL "TO PI"
 
-// Sends the Pi's cbb from the card to PI_DIR/cbb.new: at speed, which the
+// Sends the Pi's cbb from the card to PI_DIR/cbb.new, which the Pi unpacks
+// on the way when it comes gzipped: at speed, which the
 // Pi's tty takes for the copy and leaves after, or with speed 0 at the
 // line's own. 0 when sent, 2 when the Pi did not say it was ready (its
 // tty may not take the speed), else 1 with the message shown.
+// pi_send()'s command's ends, in this page: zcc keeps string literals
+// in MAIN.
+static const char ps_save[] = "s=$(stty -g); ";
+static const char ps_end[] = "; timeout 1 cat >/dev/null; printf '\\r\\nCBBEND\\r\\n'; stty $s\n";
 static int pi_send(struct item *it, uint8_t row, uint32_t speed)
 {
     uint8_t fh, err;
@@ -1903,12 +2040,16 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
     // back after either. The second's sleep lets the Next, which takes
     // the speed once the command has left, hear CBBGO at the new one; the
     // CR first ends the line the rest of the echo left, which the Next
-    // hears garbled at that speed.
-    sprintf(line,
-            "s=$(stty -g); stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && timeout %lu head -c %lu >" PI_DIR
-            "/cbb.new; stty $s\n",
-            speed ? speed : 115200UL, pi_seconds(it, speed), it->size);
+    // hears garbled at that speed. The Pi Zero starts head only after
+    // CBBGO: the Next waits for it (pi_ready()).
+    // A second's cat after head takes the filler pi_check() sent beyond
+    // what head wanted, which the shell would read as lines otherwise. In
+    // parts, for line[].
+    link_send_str(ps_save);
+    sprintf(line, "stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && timeout %lu head -c %lu%s >" PI_DIR "/cbb.new",
+            speed ? speed : 115200UL, pi_seconds(it, speed), it->size, it->pi == 2 ? " | gzip -dc" : "");
     link_send_str(line);
+    link_send_str(ps_end);
     if (speed) {
         wait_frames(2);
         link_speed(speed);
@@ -1923,86 +2064,53 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
         }
         if (strcmp(line, "CBBGO") == 0) break;
     }
+    pi_ready();
     while ((n = esx_f_read(fh, text, CHUNK)) > 0) {
-        uint16_t i;
-        for (i = 0; i < n; i++) link_send(text[i]);
+        http_dst = text;
+        pi_tx(n);
         sent += n;
         progress(row, sent, it->size, start);
     }
     esx_f_close(fh);
-    wait_frames(2);
-    link_open();
-    link_prompt();
+    // The line stays at speed for pi_check()'s CBBEND.
     return 0;
 }
 
-// Whether the Pi got the cbb built with this CBB: 0 yes, 3 another file,
-// else 1 with the message shown.
-static int pi_check(struct item *it)
-{
-    // The digest is pins.h's, 64 hex digits, never the site's.
-    link_send_str("cd " PI_DIR " && if ! command -v sha256sum >/dev/null; then rm -f cbb.new; echo CBBNOSHA; "
-                  "elif [ \"$(sha256sum <cbb.new | cut -c1-64)\" = '");
-    link_send_str(it->sha256);
-    link_send_str("' ]; then chmod 755 cbb.new && mv -f cbb.new cbb.bin && echo CBBOK; else rm -f cbb.new; "
-                  "echo CBBERR; fi\n");
-    for (;;) {
-        if (link_line(line, sizeof line, 60)) return fail("the Pi did not answer", "no CBBOK");
-        if (strcmp(line, "CBBNOSHA") == 0) return fail("the Pi has no sha256sum to check its cbb with", 0);
-        if (strcmp(line, "CBBERR") == 0) return 3;
-        if (strcmp(line, "CBBOK") == 0) return 0;
-    }
-}
-
-// The Pi's cbb to the Pi: fast, else at the line's speed, when the Pi's
-// tty does not take the speed or the copy came damaged.
+// The Pi's cbb to the Pi: from 2M a step slower each time the Pi's tty
+// does not take the speed or the copy came damaged.
 static int to_pi(struct item *it, uint8_t row)
 {
     uint8_t err;
     uint16_t start;
+    uint32_t speed = PI_FAST_SPEED;
     if (link_shell()) return pi_silent();
-    err = pi_send(it, row, PI_FAST_SPEED);
-    if (err == 2) {
-        // A tty that took the speed but lost CBBGO keeps head waiting,
-        // until its timeout at the most.
-        file_state(row, SEND_LABEL, "SLOWER");
-        start = FRAMES_LO;
-        while (link_shell()) {
-            if (link_stopped || (uint16_t)(FRAMES_LO - start) / 50 > pi_seconds(it, PI_FAST_SPEED) + 10)
-                return fail("the Pi did not get ready", "no CBBGO");
+    for (;;) {
+        err = pi_send(it, row, speed);
+        if (err == 2) {
+            // A tty that took the speed but lost CBBGO keeps head waiting,
+            // until its timeout at the most.
+            start = FRAMES_LO;
+            while (link_shell()) {
+                if (link_stopped || (uint16_t)(FRAMES_LO - start) / 50 > pi_seconds(it, speed) + 10)
+                    return fail("the Pi did not get ready", "no CBBGO");
+            }
+        } else if (!err) {
+            pi_check_sha = it->sha256;
+            err = far_pi_check();
         }
-    } else if (!err) {
-        err = pi_check(it);
-        if (err == 3) {
-            link_prompt();
-            file_state(row, SEND_LABEL, "SLOWER");
-            err = 2;
+        if (err != 2 && err != 3) break;
+        if (err == 3) link_prompt();
+        if (speed_down(&speed, row, SEND_LABEL)) {
+            if (err == 2) return fail("the Pi did not get ready", "no CBBGO");
+            break;
         }
-    }
-    if (err == 2) {
-        err = pi_send(it, row, 0);
-        if (err == 2) return fail("the Pi did not get ready", "no CBBGO");
-        if (!err) err = pi_check(it);
     }
     if (err == 3) {
         // The card's copy is not the one built with this CBB.
         esx_f_unlink(it->card);
         return fail("the Pi got another file than this CBB's; run .cbb install again", 0);
     }
-    if (err) return 1;
-    link_prompt();
-    // A service of the old cbb, which .cbb net on or a hand started, stops,
-    // so that the next .cbb net on starts the new one.
-    link_send_str(PKILL_SERVICE "\n");
-    link_prompt();
-    // The wrapper keeps the state in the user partition, since NextPi's
-    // root is read-only; an older cbb that is the program itself is kept
-    // as cbb.old.
-    link_send_str("cd " PI_DIR " && [ \"$(head -c2 cbb 2>/dev/null)\" = '#!' ] || { [ -e cbb ] && mv -f cbb cbb.old; "
-                  "printf '#!/bin/sh\\nexport CBB_STATE=" PI_DIR "/cbb-state\\nexec " PI_DIR
-                  "/cbb.bin \"$@\"\\n' >cbb && chmod 755 cbb; }; cd\n");
-    link_prompt();
-    return 0;
+    return err ? 1 : 0;
 }
 
 // .cbb install and .cbb update: the Next's files to /cbb, the Pi's cbb
@@ -2017,6 +2125,8 @@ static int to_pi(struct item *it, uint8_t row)
 static struct item cbb_new = {"CBB", "CBB", 0, 0, 0, 0, 0};
 // It shares CBB.OVL's row, as the CBB part of the install.
 #define CBB_ROW ITEM_ROW(1)
+
+static const char no_banks[] = "no memory free for the download";
 
 static int install_files(uint8_t update)
 {
@@ -2041,8 +2151,16 @@ static int install_files(uint8_t update)
     // .cbb update first fetches the site's signed list, which the Pi's cbb
     // checks (read_list()), then opens the site again for the files.
     if (update && !pi_answers) return pi_silent();
+    // The list, a few hundred bytes, at the ESP's own speed, which never
+    // loses them; the files from 460800 down.
+    if (update) esp_fetch = ESP_SPEED;
     for (list_checked = !update;;) {
-        if (http_open()) {
+        // An ESP that does not answer at a speed, a step slower.
+        while ((err = http_open()) == 2) {
+            http_close();
+            if (speed_down(&esp_fetch, ITEM_ROW(0), items[0].label)) break;
+        }
+        if (err) {
             http_close();
             link_use(LINK_PI);
             if (link_stopped) return fail("stopped; .cbb install goes on from here", 0);
@@ -2051,6 +2169,7 @@ static int install_files(uint8_t update)
         if (list_checked) break;
         err = far_read_list();
         http_close();
+        esp_fetch = ESP_FETCH_TOP;
         link_use(LINK_PI);
         list_checked = 1;
         if (err || (link_shell() && pi_silent()) || far_read_list()) return 1;
@@ -2072,6 +2191,11 @@ static int install_files(uint8_t update)
                 items[i].size = list_isize[i];
                 items[i].sha256 = list_isha[i];
             }
+            // The signed list names the Pi's cbb as it is, not gzipped.
+            pi->name = "cbb";
+            pi->card = PI_CARD;
+            pi->part = "/cbb/CBBPI.PRT";
+            pi->pi = 1;
             cbb_new.part = dot ? DOT_CBB ".NEW" : CBB_CARD ".NEW";
             cbb_new.size = list_isize[LISTED - 1];
             cbb_new.sha256 = list_isha[LISTED - 1];
@@ -2102,11 +2226,19 @@ static int install_files(uint8_t update)
             need[i] = 1;
         }
     }
+    // pi_check(), in CBB.OVL's page, which this CBB's CBB.OVL fills
+    // before a newer one takes its place.
+    if (!need[1]) ovl_load(OVL_PI);
     // Nothing to fetch, nothing to send: .cbb update says so.
     nothing = !newer;
     if (pi_answers && strcmp(pisha, pi->sha256)) nothing = 0;
     for (i = 0; i < ITEMS; i++)
         if (need[i]) nothing = 0;
+    // Banks for the chunks, as many as NextZXOS spares, one at least.
+    for (fetch_banks = 0; fetch_banks < FETCH_BANKS; fetch_banks++) {
+        if ((fetch_bank[fetch_banks] = esx_ide_bank_alloc(ESX_BANKTYPE_RAM)) == NO_BANK) break;
+    }
+    if (!fetch_banks) err = fail(no_banks, 0);
     for (i = 0; i < ITEMS && !err; i++) {
         // A newer CBB first, on one bar with its CBB.OVL.
         if (i == 1 && newer) {
@@ -2119,6 +2251,7 @@ static int install_files(uint8_t update)
         // CBB.DRV, which runs from memory once installed.
         if (i == 0 && need[i]) drv_new = 1;
     }
+    while (fetch_banks) esx_ide_bank_free(ESX_BANKTYPE_RAM, fetch_bank[--fetch_banks]);
     http_close();
     link_use(LINK_PI);
     if (err) return 1;
@@ -2201,6 +2334,8 @@ void usage_run(void)
 // .cbb uninstall, leave and paste-receive are in CBB.OVL's page.
 #pragma codeseg PAGE_19
 #pragma bssseg PAGE_19
+#pragma constseg PAGE_19
+
 // .cbb uninstall: everything .cbb install and .cbb net put anywhere, after
 // a Y: the network and the driver, the Pi's cbb and its state, the files
 // in /cbb and the folder when nothing else is left in it. The phone app
@@ -2211,8 +2346,11 @@ void usage_run(void)
 static const char un_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; cd " PI_DIR " && rm -rf cbb cbb.bin cbb.old cbb.new "
                                 "cbb-state /ram/link.log /ram/cbbjoin; cd; echo CBB$((1))GONE\n";
 // The service stops first, so that cbb leave changes the files itself.
-static const char lv_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; " CBB_LITE " leave -yes; rm -rf /ram/cbbjoin; echo CBB$((1))GONE\n";
-static const char card_names[] = "CBB.DRV\0CBB.OVL\0OVL.PRT\0NET.CFG\0CBBPI.BIN\0DRV.PRT\0CBBPI.PRT\0PASTE.CFG\0CBB\0";
+// The service gets a second to end, so that cbb leave does not hand the
+// leave to it while it goes; the Pi says CBB1KEPT when its keys stay.
+static const char lv_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; sleep 1; " PI_DIR "/cbb leave -yes; rm -rf /ram/cbbjoin; test -e " PI_DIR
+                                "/cbb-state/identity.json && echo CBB$((1))KEPT; echo CBB$((1))GONE\n";
+static const char card_names[] = "CBB.DRV\0CBB.OVL\0OVL.PRT\0NET.CFG\0CBBPI.BIN\0CBBPI.GZ\0DRV.PRT\0CBBPI.PRT\0CBBGZ.PRT\0PASTE.CFG\0CBB\0";
 static const char un_ask[] = "Remove CBB: the network, the\ndriver, the Pi's cbb and its\ngroup, the files in /cbb? y/n\n";
 static const char un_none[] = "Nothing removed.\n";
 static const char un_drv_stays[] = "CBB.DRV stays: .uninstall it.\n";
@@ -2222,7 +2360,8 @@ static const char un_pi_silent[] = "The Pi did not answer: its cbb\nstays in " P
 // .cbb pair joins this group or another one again.
 static const char lv_ask[] = "Leave the group: the Pi forgets\nits keys? y/n\n";
 static const char lv_done[] = "Left. Remove the Next in the app\ntoo; .cbb pair joins again.\n";
-static const char un_pi_gone[] = "CBB1GONE";
+static const char un_pi_gone[] = "CBB1GONE", lv_kept_w[] = "CBB1KEPT";
+static const char lv_kept[] = "the Pi's cbb did not leave:\nits keys stay";
 static const char un_pi_quiet[] = "The Pi did not say it is done.\n";
 static const char un_pi_done[] = "The Pi's cbb is removed.\n";
 static const char un_dir[] = "/cbb/";
@@ -2258,11 +2397,55 @@ int paste_receive(void)
     return 0;
 }
 
+// The driver's banks (bank.asm, call 10): the ones it had go back, and
+// with img_banks_on ten in a row, the first even (Layer 2 takes 16K
+// banks), and one for what the screen showed go to it. NextZXOS gives
+// banks from the top down, so each is usually one under the last; the
+// ones of no use go back. Not static: far_img_banks() (far.asm) calls it.
+#define DRV_BANKS 10
+#define DRV_TRIES 32
+int img_banks_run(void)
+{
+    uint8_t got[DRV_TRIES], n = 0, run = 0, base = 0, b, i;
+    if (driver(DRV_IMAGES, 0)) return 1;
+    b = (uint8_t)drv.de;
+    if (b) {
+        for (i = 0; i < DRV_BANKS; i++) esx_ide_bank_free(ESX_BANKTYPE_RAM, b + i);
+        esx_ide_bank_free(ESX_BANKTYPE_RAM, drv.de >> 8);
+    }
+    if (!img_banks_on) return 0;
+    while (n < DRV_TRIES && (b = esx_ide_bank_alloc(ESX_BANKTYPE_RAM)) != NO_BANK) {
+        got[n] = b;
+        run = n && got[n - 1] == b + 1 ? run + 1 : 1;
+        n++;
+        if (run >= DRV_BANKS && !(b & 1)) {
+            base = b;
+            break;
+        }
+    }
+    // The state's bank: one more, or one of those of no use.
+    b = base ? esx_ide_bank_alloc(ESX_BANKTYPE_RAM) : NO_BANK;
+    for (i = 0; i < n; i++)
+        if (!base || got[i] < base || got[i] >= base + DRV_BANKS) {
+            if (b == NO_BANK && base) b = got[i];
+            else esx_ide_bank_free(ESX_BANKTYPE_RAM, got[i]);
+        }
+    if (!base || b == NO_BANK) {
+        if (base)
+            for (i = 0; i < DRV_BANKS; i++) esx_ide_bank_free(ESX_BANKTYPE_RAM, base + i);
+        return 1;
+    }
+    driver(DRV_IMAGES, (uint16_t)b << 8 | base);
+    return 0;
+}
+
 // Not static: far_uninstall() (far.asm) calls it, for leave too.
 // The network stops, for the Pi's shell.
 static void un_net(void)
 {
     if (net_on()) {
+        img_banks_on = 0;
+        far_img_banks();
         driver(DRV_SWITCH, 0);
         link_quit();
         esp_speed(ESP_SPEED);
@@ -2304,14 +2487,16 @@ int uninstall(void)
                 printf(un_pi_quiet);
                 break;
             }
+            if (strcmp(line, lv_kept_w) == 0) i = 1;
             if (strcmp(line, un_pi_gone) == 0) {
-                printf(un_pi_done);
+                if (!leave) printf(un_pi_done);
                 break;
             }
         }
         link_prompt();
     }
     if (leave) {
+        if (i) return fail(lv_kept, 0);
         printf(lv_done);
         return 0;
     }
@@ -2569,7 +2754,8 @@ uint32_t sha_run(void)
     errno = 0;
     fh = esx_f_open(sha_path, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
     if (errno) return 0;
-    while ((n = esx_f_read(fh, text, CHUNK)) > 0) {
+    // Half of text[] at a time: the other is sha256.asm's.
+    while ((n = esx_f_read(fh, text, MAX_TEXT / 2)) > 0) {
         if (sha_digest) sha256_add(&sha_state, text, n);
         size += n;
     }
@@ -2726,6 +2912,685 @@ static int install(void)
     return err;
 }
 
+// .cbb show and speed, in CBB.OVL's second page (far.asm, far_show()).
+// show: the lite member's `cbb next image` (member/README.md) sends the
+// group's latest image as Layer 2 wants it, a column of 256 pixels after
+// another, then its palette. The bytes go straight into ten 8K banks that
+// are Layer 2's for the moment, while it shows the middle of the screen
+// in grey and the border stripes after every 32 bytes that came, as a
+// screen loads from tape; the colours come last, over the whole screen.
+// A key puts everything back: the registers, Layer 2's second palette,
+// the banks. speed: the line's speeds tried with `cbb next speed`, each
+// checked by its CRC-32.
+static char **far_show_argv;
+static uint8_t far_show_tape;
+extern int far_show(void);
+extern uint8_t rx_block(void);
+extern uint8_t *rx_dst;
+extern uint16_t rx_left;
+extern uint8_t rx_border;
+extern void crc_block(void);
+extern const uint8_t *crc_ptr;
+extern uint16_t crc_len;
+extern uint32_t crc_state;
+extern uint8_t *crc_hi_at;
+extern uint8_t tape_block(void);
+extern uint8_t *tape_dst;
+extern uint16_t tape_len;
+extern uint8_t tape_flag;
+
+#pragma codeseg PAGE_21
+#pragma constseg PAGE_21
+#pragma bssseg PAGE_21
+#pragma dataseg PAGE_21
+
+// After pi_send(), with the line still at its speed: whether the Pi got
+// the cbb built with this CBB, whose SHA-256 is pi_check_sha: 0 yes, 3 a
+// damaged or another file, else 1 with the message shown. Here, in
+// CBB.OVL's second page, for the install's page, which has no room left
+// (install_files() loads it early): not static, as far_pi_check()
+// (far.asm) calls it.
+static const char pc_cmd[] = "cd " PI_DIR " && if ! command -v sha256sum >/dev/null; then rm -f cbb.new; echo CBBNOSHA; "
+                             "elif [ \"$(sha256sum <cbb.new | cut -c1-64)\" = '";
+static const char pc_end[] = "' ]; then chmod 755 cbb.new && mv -f cbb.new cbb.bin && echo CBBOK; else rm -f cbb.new; "
+                             "echo CBBERR; fi\n";
+static const char pc_pkill[] = PKILL_SERVICE "\n";
+static const char pc_wrap[] = "cd " PI_DIR " && [ \"$(head -c2 cbb 2>/dev/null)\" = '#!' ] || { [ -e cbb ] && mv -f cbb cbb.old; "
+                              "printf '#!/bin/sh\\nexport CBB_STATE=" PI_DIR "/cbb-state\\nexec " PI_DIR
+                              "/cbb.bin \"$@\"\\n' >cbb && chmod 755 cbb; }; cd\n";
+static const char pc_silent[] = "the Pi did not answer", pc_no_ok[] = "no CBBOK", pc_nosha_w[] = "CBBNOSHA",
+                  pc_nosha[] = "the Pi has no sha256sum to check its cbb with", pc_err[] = "CBBERR", pc_ok[] = "CBBOK";
+static const char pc_end_w[] = "CBBEND";
+int pi_check(void)
+{
+    uint8_t n, lost = 0;
+    // Bytes lost on the way keep head waiting for more: filler after each
+    // two quiet seconds ends it, and the copy is damaged then. The filler
+    // is spaces: what the Pi's cat after head does not take only puts
+    // spaces before the next command.
+    memset(text, ' ', 4096);
+    for (n = 0; n < 32;) {
+        if (!link_line(line, sizeof line, 2)) {
+            if (strcmp(line, pc_end_w) == 0) break;
+            continue;
+        }
+        http_dst = text;
+        pi_tx(4096);
+        lost = 1;
+        n++;
+    }
+    wait_frames(2);
+    link_open();
+    link_prompt();
+    if (lost) return 3;
+    // The digest is pins.h's, 64 hex digits, never the site's.
+    link_send_str(pc_cmd);
+    link_send_str(pi_check_sha);
+    link_send_str(pc_end);
+    for (;;) {
+        if (link_line(line, sizeof line, 60)) return fail(pc_silent, pc_no_ok);
+        if (strcmp(line, pc_nosha_w) == 0) return fail(pc_nosha, 0);
+        if (strcmp(line, pc_err) == 0) return 3;
+        if (strcmp(line, pc_ok) == 0) break;
+    }
+    link_prompt();
+    // A service of the old cbb, which .cbb net on or a hand started, stops,
+    // so that the next .cbb net on starts the new one.
+    link_send_str(pc_pkill);
+    link_prompt();
+    // The wrapper keeps the state in the user partition, since NextPi's
+    // root is read-only; an older cbb that is the program itself is kept
+    // as cbb.old.
+    link_send_str(pc_wrap);
+    link_prompt();
+    return 0;
+}
+
+
+#define IMG_PIXELS 81920UL
+#define IMG_BANKS 10
+#define IMG_TRIES 32
+#define NR_SEL 0x243B
+#define NR_DATA 0x253B
+#define PORT_L2 0x123B
+#define BORDCR (*(uint8_t *)23624)
+#define WINDOW 0x6000 // MMU3: BASIC's program, which nothing runs meanwhile
+
+static const char s_image[] = "image";
+static const char s_image_tape[] = "image -tape";
+static const char s_tape_stopped[] = "the tape stopped: no sound came from the Pi, or SPACE";
+static const char s_failed[] = "cbb failed";
+static const char s_net_runs[] = "the network runs: .cbb net off first";
+static const char s_cbbi[] = "CBBI ";
+static const char s_cbbs[] = "CBBS ";
+static const char s_memory[] = "no 80K of free memory for the image";
+static const char s_header[] = "the Pi sent no image";
+static const char s_damaged[] = "the image arrived damaged; try again";
+static const char s_crc[] = "CRC-32 mismatch";
+static const char s_speed_fmt[] = "speed %lu %lu";
+static const char s_speed_line[] = "%7lu: %s, %u.%u KB/s\n";
+static const char s_ok[] = "whole";
+static const char s_bad[] = "DAMAGED";
+static const char s_lost[] = "bytes lost";
+static const char s_silent[] = "no answer";
+static const char s_in_fmt[] = "speed-in %lu %lu";
+static const char s_cbbgo[] = "CBBGO";
+static const char s_cbbr[] = "CBBR ";
+static const char s_to_next[] = "Pi to the Next:\n";
+static const char s_to_pi[] = "The Next to the Pi:\n";
+// From the fastest down, to the first that keeps the bytes whole.
+static const uint32_t speeds[] = {2000000UL, 921600UL, 460800UL, 230400UL, 115200UL};
+
+// The ten banks, the first one even, as Layer 2 takes 16K banks.
+static uint8_t img_base;
+static uint8_t img_taken[IMG_TRIES];
+// What Layer 2 showed before: NR 0x12, 0x14, 0x15, 0x16, 0x17, 0x43,
+// 0x6B, 0x70, 0x71, the clip window, port 0x123B, and its second palette.
+static const uint8_t saved_regs[] = {0x12, 0x14, 0x15, 0x16, 0x17, 0x43, 0x6B, 0x70, 0x71};
+static uint8_t saved[sizeof saved_regs];
+static uint8_t saved_clip[4];
+static uint8_t saved_port;
+// The two palettes, two bytes an entry, in a bank of their own, in at
+// WINDOW while they are used (pal_in()).
+static uint8_t img_state;
+#define SAVED_PAL ((uint8_t *)WINDOW)
+#define IMG_PAL ((uint8_t *)(WINDOW + 512))
+static uint8_t img_border;
+// The commands go through the driver while the network runs, as in
+// cmd_run() (CBB.OVL's first page, which this one cannot call).
+static uint8_t img_via;
+
+static void nr(uint8_t r, uint8_t v)
+{
+    z80_outp(NR_SEL, r);
+    z80_outp(NR_DATA, v);
+}
+
+static uint8_t nr_get(uint8_t r)
+{
+    z80_outp(NR_SEL, r);
+    return z80_inp(NR_DATA);
+}
+
+static void img_via_send(uint8_t c)
+{
+    driver(DRV_CBB_OUT, c == 3 ? VIA_STOP << 8 : VIA_BYTE << 8 | c);
+}
+
+static uint8_t img_via_recv(uint8_t *c, uint16_t seconds)
+{
+    uint16_t start = FRAMES_LO;
+    if (!seconds) seconds = 1;
+    for (;;) {
+        driver(DRV_CBB_IN, 0);
+        if (drv.de & 0x100) {
+            *c = (uint8_t)drv.de;
+            return LINK_OK;
+        }
+        if (in_key_pressed(IN_KEY_SCANCODE_SPACE)) {
+            link_stopped = 1;
+            return LINK_BREAK;
+        }
+        if ((uint16_t)(FRAMES_LO - start) / 50 >= seconds) return LINK_TIMEOUT;
+    }
+}
+
+// The line through the driver while the network runs; 1 when it failed.
+static uint8_t img_open(void)
+{
+    img_via = 0;
+    if (!net_on()) return 0;
+    img_via = !driver(DRV_CBB_OUT, VIA_OPEN << 8);
+    if (img_via) {
+        driver(DRV_CBB_OUT, VIA_STOP << 8);
+        link_via_send = img_via_send;
+        link_via_recv = img_via_recv;
+        return 0;
+    }
+    img_via = 2;
+    return far_net_halt();
+}
+
+static int img_close(int err)
+{
+    if (img_via == 1) {
+        link_via_send = 0;
+        link_via_recv = 0;
+        driver(DRV_CBB_OUT, VIA_CLOSE << 8);
+    } else if (img_via == 2) {
+        err |= far_net_restart();
+    }
+    return err;
+}
+
+// A line from the Pi, the border flipping red and cyan with each byte.
+static uint8_t img_line(uint16_t seconds)
+{
+    uint8_t n = 0, c, err;
+    for (;;) {
+        err = link_recv(&c, seconds);
+        if (err) return err;
+        img_border ^= 7;
+        z80_outp(0xFE, img_border);
+        if (c == '\r') break;
+        if (c == '\n' || c == 0) continue;
+        if (n + 1 < sizeof line) line[n++] = c;
+    }
+    line[n] = 0;
+    return LINK_OK;
+}
+
+// Lines until the status line: 0 on CBBOK, 1 when it failed (and said).
+static uint8_t img_status(void)
+{
+    uint32_t a, b;
+    uint8_t err, kind;
+    for (;;) {
+        err = img_line(ANSWER_SECONDS);
+        if (err) return link_fail(err);
+        kind = frame_line(line, &a, &b);
+        if (kind == LINE_OK) return 0;
+        if (kind == LINE_ERR) return fail(line[6] ? line + 7 : s_failed, 0);
+    }
+}
+
+static void banks_free(void)
+{
+    uint8_t i;
+    if (img_base == NO_BANK) return;
+    for (i = 0; i < IMG_BANKS; i++) esx_ide_bank_free(ESX_BANKTYPE_RAM, img_base + i);
+    esx_ide_bank_free(ESX_BANKTYPE_RAM, img_state);
+    img_base = NO_BANK;
+}
+
+// Ten banks in a row from NextZXOS, the first even, and one for the
+// palettes: banks come from the top down, so each one is usually one
+// under the last; the ones of no use go back. 0 when img_base holds them.
+static uint8_t banks_take(void)
+{
+    uint8_t n = 0, run = 0, b, i;
+    img_base = NO_BANK;
+    while (n < IMG_TRIES) {
+        b = esx_ide_bank_alloc(ESX_BANKTYPE_RAM);
+        if (b == NO_BANK) break;
+        img_taken[n] = b;
+        run = n && img_taken[n - 1] == b + 1 ? run + 1 : 1;
+        n++;
+        if (run >= IMG_BANKS && !(b & 1)) {
+            img_base = b;
+            break;
+        }
+    }
+    img_state = img_base == NO_BANK ? NO_BANK : esx_ide_bank_alloc(ESX_BANKTYPE_RAM);
+    for (i = 0; i < n; i++) {
+        b = img_taken[i];
+        if (img_base == NO_BANK || b < img_base || b >= img_base + IMG_BANKS) esx_ide_bank_free(ESX_BANKTYPE_RAM, b);
+    }
+    if (img_state == NO_BANK && img_base != NO_BANK) {
+        for (i = 0; i < IMG_BANKS; i++) esx_ide_bank_free(ESX_BANKTYPE_RAM, img_base + i);
+        img_base = NO_BANK;
+    }
+    return img_base == NO_BANK;
+}
+
+// The palettes' bank in at WINDOW.
+static void pal_in(void)
+{
+    nr(0x53, img_state);
+}
+
+// The bank of the image's byte offset in WINDOW.
+static void bank_in(uint8_t i)
+{
+    nr(0x53, img_base + i);
+}
+
+static void bank_out(void)
+{
+    nr(0x53, 11); // BASIC's: the upper half of bank 5
+}
+
+// Layer 2's clip window, through its index (NR 0x1C bit 0 resets it).
+static void clip_set(uint8_t x1, uint8_t x2, uint8_t y1, uint8_t y2)
+{
+    nr(0x1C, 1);
+    nr(0x18, x1);
+    nr(0x18, x2);
+    nr(0x18, y1);
+    nr(0x18, y2);
+}
+
+static void state_save(void)
+{
+    uint16_t i;
+    for (i = 0; i < sizeof saved_regs; i++) saved[i] = nr_get(saved_regs[i]);
+    // Each read and written back moves the index on.
+    nr(0x1C, 1);
+    for (i = 0; i < 4; i++) {
+        saved_clip[i] = nr_get(0x18);
+        nr(0x18, saved_clip[i]);
+    }
+    saved_port = z80_inp(PORT_L2);
+    nr(0x43, 0x50); // Layer 2's second palette, to read
+    pal_in();
+    for (i = 0; i < 256; i++) {
+        nr(0x40, i);
+        SAVED_PAL[2 * i] = nr_get(0x41);
+        SAVED_PAL[2 * i + 1] = nr_get(0x44);
+    }
+    bank_out();
+}
+
+// Writes Layer 2's second palette, two bytes an entry as NR 0x44 takes them.
+static void pal_write(const uint8_t *p)
+{
+    uint16_t i;
+    nr(0x43, 0x54); // the second palette, written and shown
+    nr(0x40, 0);
+    for (i = 0; i < 512; i++) nr(0x44, p[i]);
+}
+
+static void state_restore(void)
+{
+    uint8_t i;
+    z80_outp(PORT_L2, saved_port);
+    pal_in();
+    pal_write(SAVED_PAL);
+    bank_out();
+    clip_set(saved_clip[0], saved_clip[1], saved_clip[2], saved_clip[3]);
+    for (i = 0; i < sizeof saved_regs; i++) nr(saved_regs[i], saved[i]);
+    zx_border(BORDCR >> 3 & 7);
+}
+
+// Layer 2 on for an image of the mode, its banks clear, shown in grey
+// through the middle of the screen: the border around it stays the ULA's.
+static void layer2_on(uint8_t hi)
+{
+    uint16_t i;
+    uint8_t g;
+    for (i = 0; i < IMG_BANKS; i++) {
+        bank_in(i);
+        memset((void *)WINDOW, 0, 8192);
+    }
+    pal_in();
+    for (i = 0; i < 256; i++) {
+        g = hi ? (i & 15) >> 1 : i >> 5;
+        IMG_PAL[2 * i] = g << 5 | g << 2 | g >> 1;
+        IMG_PAL[2 * i + 1] = g & 1;
+    }
+    pal_write(IMG_PAL);
+    bank_out();
+    nr(0x12, img_base >> 1);
+    nr(0x70, hi ? 0x20 : 0x10);
+    nr(0x16, 0);
+    nr(0x71, 0);
+    nr(0x17, 0);
+    nr(0x14, 0xE3);
+    nr(0x6B, saved[6] & 0x7F);            // no tilemap
+    nr(0x15, (saved[2] & 0xE2) | 0x04); // Layer 2 over the ULA, no sprites
+    clip_set(16, 143, 32, 223);
+    z80_outp(PORT_L2, 0x02);
+}
+
+// The image's pixels into the banks as they come; LINK_OK or the error.
+static uint8_t img_pixels(void)
+{
+    uint8_t i, err, c;
+    uint16_t k;
+    for (i = 0; i < IMG_BANKS; i++) {
+        if (!img_via) {
+            // Straight from the UART into the bank.
+            bank_in(i);
+            rx_dst = (uint8_t *)WINDOW;
+            rx_left = 8192;
+            rx_border = img_border;
+            err = rx_block();
+            img_border = rx_border;
+            bank_out();
+            if (err) return err;
+            continue;
+        }
+        // Through the driver, with BASIC's own MMU3 for its calls.
+        for (k = 0; k < 8192; k++) {
+            err = link_recv(&c, ANSWER_SECONDS);
+            if (err) return err;
+            text[k] = c;
+            if (!(k & 31)) {
+                img_border ^= 7;
+                z80_outp(0xFE, img_border);
+            }
+        }
+        intrinsic_di();
+        bank_in(i);
+        memcpy((void *)WINDOW, text, 8192);
+        bank_out();
+        intrinsic_ei();
+    }
+    return LINK_OK;
+}
+
+// crc_block()'s tables: byte k of each entry in the k-th 256, from a
+// 256-byte boundary, whose page crc_block() takes in its code. They are in
+// text[], which the image through the driver passes through, so each CRC
+// makes them again (a few milliseconds).
+static void crc_table_make(void)
+{
+    uint32_t c;
+    uint16_t n;
+    uint8_t k, *t = (uint8_t *)(((uint16_t)text + 255) & 0xFF00);
+    *crc_hi_at = (uint16_t)t >> 8;
+    for (n = 0; n < 256; n++) {
+        c = n;
+        for (k = 0; k < 8; k++) c = c & 1 ? (c >> 1) ^ 0xEDB88320UL : c >> 1;
+        for (k = 0; k < 4; k++) {
+            t[k * 256 + n] = (uint8_t)c;
+            c >>= 8;
+        }
+    }
+}
+
+static void crc_add_block(const uint8_t *p, uint16_t n)
+{
+    crc_ptr = p;
+    crc_len = n;
+    crc_block();
+}
+
+static uint32_t img_crc(uint16_t pal_bytes)
+{
+    uint8_t i;
+    crc_table_make();
+    crc_state = 0xFFFFFFFFUL;
+    for (i = 0; i < IMG_BANKS; i++) {
+        bank_in(i);
+        crc_add_block((const uint8_t *)WINDOW, 8192);
+    }
+    pal_in();
+    crc_add_block(IMG_PAL, pal_bytes);
+    bank_out();
+    return ~crc_state;
+}
+
+// The pixels and the palette as a tape: the Pi plays them as sound, which
+// NextReg 0xA2 bit 0 hands to EAR, in eleven blocks of the ROM's timings
+// (tape_block()), at 3.5 MHz. 0, or tape_block()'s failure.
+static uint8_t img_tape(uint16_t pal_bytes)
+{
+    uint8_t i, r = 0, a2 = nr_get(0xA2), cpu = nr_get(0x07);
+    nr(0xA2, a2 | 1);
+    nr(0x07, 0);
+    for (i = 0; !r && i <= IMG_BANKS; i++) {
+        tape_flag = i;
+        if (i < IMG_BANKS) {
+            bank_in(i);
+            tape_dst = (uint8_t *)WINDOW;
+            tape_len = 8192;
+        } else {
+            pal_in();
+            tape_dst = IMG_PAL;
+            tape_len = pal_bytes;
+        }
+        r = tape_block();
+    }
+    bank_out();
+    nr(0x07, cpu);
+    nr(0xA2, a2);
+    return r;
+}
+
+static int img_show(uint8_t tape)
+{
+    uint32_t len, crc;
+    uint16_t k, pal_bytes;
+    uint8_t err, hi, c, t = 0;
+    char *e;
+    img_border = INK_RED;
+    if (command(tape ? s_image_tape : s_image)) return 1;
+    for (;;) {
+        err = img_line(60);
+        if (err) return link_fail(err);
+        if (frame_line(line, &len, &crc) == LINE_ERR) {
+            fail(line[6] ? line + 7 : s_failed, 0);
+            link_prompt();
+            return 1;
+        }
+        if (memcmp(line, s_cbbi, 5) == 0) break;
+    }
+    hi = line[5] == 'H';
+    pal_bytes = hi ? 32 : 512;
+    len = strtoul(line + 7, &e, 10);
+    crc = strtoul(e, 0, 16);
+    if ((line[5] != 'L' && !hi) || len != IMG_PIXELS + pal_bytes) {
+        link_send(3);
+        return fail(s_header, line);
+    }
+    if (banks_take()) {
+        link_send(3);
+        return fail(s_memory, 0);
+    }
+    state_save();
+    layer2_on(hi);
+    // Ready: the Pi sends the bytes now, as fast as the line goes.
+    link_send('G');
+    img_border = INK_BLUE;
+    if (tape) {
+        err = 0;
+        t = img_tape(pal_bytes);
+        if (t) link_send(3); // the Pi stops playing, and says CBBOK
+    } else {
+        err = img_pixels();
+        for (k = 0; !err && k < pal_bytes; k++) {
+            err = link_recv(&c, ANSWER_SECONDS);
+            pal_in();
+            IMG_PAL[k] = c;
+        }
+        bank_out();
+    }
+    if (err || img_status()) {
+        state_restore();
+        banks_free();
+        return err ? link_fail(err) : 1;
+    }
+    link_prompt();
+    if (t) {
+        state_restore();
+        banks_free();
+        return fail(t == 1 ? s_tape_stopped : s_damaged, 0);
+    }
+    if (img_crc(pal_bytes) != crc) {
+        state_restore();
+        banks_free();
+        return fail(s_damaged, s_crc);
+    }
+    // The colours, and the whole screen.
+    pal_in();
+    if (hi) memset(IMG_PAL + 32, 0, 480);
+    pal_write(IMG_PAL);
+    bank_out();
+    clip_set(0, 159, 0, 255);
+    in_wait_nokey();
+    in_wait_key();
+    in_wait_nokey();
+    state_restore();
+    banks_free();
+    return 0;
+}
+
+// A few frames, for the UART to send what it holds.
+static void img_wait(void)
+{
+    uint16_t start = FRAMES_LO;
+    while ((uint16_t)(FRAMES_LO - start) < 2) {
+    }
+}
+
+// Each way, each speed from the fastest down, up to the first that keeps
+// the bytes whole: first the Pi sends 80K at it, into the banks, which hold
+// them for the CRC-32; then the Next sends the banks' 80K, and the Pi says
+// how many came and their CRC-32. The line's own speed again after each.
+// Only straight to the Pi.
+static int img_speed(void)
+{
+    uint32_t len, crc;
+    uint16_t start, frames, kbs;
+    uint8_t i, err, s, lost, out;
+    char *e;
+    if (img_via) return fail(s_net_runs, 0);
+    if (banks_take()) return fail(s_memory, 0);
+    for (out = 0; out < 2; out++) {
+        printf(out ? s_to_pi : s_to_next);
+        for (s = 0; s < sizeof speeds / sizeof speeds[0]; s++) {
+            img_border = INK_RED;
+            sprintf(line, out ? s_in_fmt : s_speed_fmt, speeds[s], IMG_PIXELS);
+            if (command(line)) goto end;
+            // The Pi says CBBS at the line's speed, or CBBGO at the new one.
+            if (out) {
+                img_wait();
+                link_speed(speeds[s]);
+            }
+            do {
+                err = img_line(10);
+            } while (!err && memcmp(line, out ? s_cbbgo : s_cbbs, 5) && frame_line(line, &len, &crc) != LINE_ERR);
+            if (out && err) {
+                link_open();
+                if (err == LINK_BREAK) goto end;
+                printf(s_speed_line, speeds[s], s_silent, 0, 0);
+                continue;
+            }
+            if (err || line[3] != 'S' && !out) {
+                if (!err) fail(line[6] ? line + 7 : s_failed, 0);
+                link_prompt();
+                goto end;
+            }
+            if (!out) {
+                e = strchr(line + 5, ' ');
+                len = strtoul(e, &e, 10);
+                crc = strtoul(e, 0, 16);
+                link_speed(speeds[s]);
+            }
+            rx_border = INK_BLUE;
+            start = FRAMES_LO;
+            lost = 0;
+            for (i = 0; i < IMG_BANKS && !lost; i++) {
+                bank_in(i);
+                if (out) {
+                    http_dst = (uint8_t *)WINDOW;
+                    pi_tx(8192);
+                    img_border ^= 7;
+                    z80_outp(0xFE, img_border);
+                } else {
+                    rx_dst = (uint8_t *)WINDOW;
+                    rx_left = 8192;
+                    err = rx_block();
+                    lost = err != LINK_OK;
+                }
+                bank_out();
+            }
+            frames = FRAMES_LO - start;
+            if (out) img_wait();
+            link_open(); // the line's own speed again
+            if (err == LINK_BREAK) goto end;
+            if (out) {
+                do {
+                    err = img_line(ANSWER_SECONDS);
+                } while (!err && memcmp(line, s_cbbr, 5));
+                if (err) goto end;
+                lost = strtoul(line + 5, &e, 10) != IMG_PIXELS;
+                crc = strtoul(e, 0, 16);
+            }
+            // What the Pi still sends of lost bytes ends at its status line.
+            err = img_status();
+            link_prompt();
+            if (err && !lost) goto end;
+            // The time from the first byte waited for, so a little under the line's.
+            kbs = frames ? (uint16_t)(IMG_PIXELS * (ZXN_READ_REG(0x05) & 4 ? 600 : 500) / frames / 1024) : 0;
+            err = !lost && img_crc(0) == crc;
+            printf(s_speed_line, speeds[s], lost ? s_lost : err ? s_ok : s_bad, kbs / 10, kbs % 10);
+            if (err) break;
+        }
+    }
+end:
+    zx_border(BORDCR >> 3 & 7);
+    banks_free();
+    return 0;
+}
+
+// Not static: far_show() (far.asm) calls it.
+int show_run(void)
+{
+    int err;
+    img_base = NO_BANK;
+    if (img_open()) return 1;
+    err = strcmp(far_show_argv[0], "speed") == 0 ? img_speed() : img_show(far_show_tape);
+    zx_border(BORDCR >> 3 & 7);
+    return img_close(err);
+}
+
+#pragma codeseg code_compiler
+#pragma constseg rodata_compiler
+#pragma bssseg bss_compiler
+#pragma dataseg data_compiler
+
 static int run(int argc, char **argv)
 {
     int i = 1;
@@ -2749,6 +3614,12 @@ static int run(int argc, char **argv)
     if ((strcmp(argv[i], "paste") == 0 && argc - i <= 2) || (strcmp(argv[i], "copy") == 0 && argc - i == 2) ||
         (strcmp(argv[i], "text") == 0 && argc - i >= 2)) {
         return far_cmd();
+    }
+    if ((strcmp(argv[i], "show") == 0 || strcmp(argv[i], "speed") == 0) && argc - i == 1
+        || strcmp(argv[i], "show") == 0 && argc - i == 2 && strcmp(argv[i + 1], "-tape") == 0) {
+        far_show_argv = argv + i;
+        far_show_tape = argc - i == 2;
+        return far_show();
     }
     // NextPi has no network but the ESP's.
     if (strcmp(argv[i], "pair") == 0 && argc - i <= 2) {

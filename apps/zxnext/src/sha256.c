@@ -16,6 +16,12 @@
 #pragma dataseg PAGE_15
 #endif
 
+#ifdef __Z88DK
+// The compression in assembly (sha256.asm), with its scratch in text[]'s
+// upper half (sha_run(), cbb.c).
+extern void sha256_compress(struct sha256 *s) __z88dk_fastcall;
+#define compress sha256_compress
+#else
 static const uint32_t k[64] = {
     0x428a2f98UL, 0x71374491UL, 0xb5c0fbcfUL, 0xe9b5dba5UL, 0x3956c25bUL, 0x59f111f1UL, 0x923f82a4UL, 0xab1c5ed5UL,
     0xd807aa98UL, 0x12835b01UL, 0x243185beUL, 0x550c7dc3UL, 0x72be5d74UL, 0x80deb1feUL, 0x9bdc06a7UL, 0xc19bf174UL,
@@ -68,6 +74,7 @@ static void compress(struct sha256 *s)
     }
     for (i = 0; i < 8; i++) s->h[i] += v[i];
 }
+#endif
 
 // At file scope: in a page that holds code and data alike, z88dk would put
 // a function's own static data at the function's address (mapcheck.sh).

@@ -7,11 +7,14 @@
 #
 #   sh packaging/zxnext/site.sh BUILD PI_CBB OUTDIR
 #
-# BUILD is apps/zxnext/build (CBB, CBB.OVL, CBB.DRV), PI_CBB the lite
+# BUILD is apps/zxnext/build (CBB, CBB.OVL, CBB.DRV, CBBPI.GZ), PI_CBB the lite
 # member for the Pi Zero (arm-unknown-linux-musleabihf), the one CBB was
 # built with (make PI_CBB=...). OUTDIR gets
 #
 #   zxnext/CBB, zxnext/CBB.OVL, zxnext/CBB.DRV, zxnext/cbb
+#   zxnext/cbb.gz  the Pi's cbb gzipped, BUILD's CBBPI.GZ, which .cbb install
+#                fetches and the Pi unpacks; .cbb update fetches cbb when
+#                a newer CBB comes, as the signed list names it
 #   zxnext/LIST  a line NAME SIZE CRC32 SHA256 for each. CBB checks its
 #                overlay, the driver and the Pi's cbb against its own
 #                copy of their SHA-256 (apps/zxnext/pins.sh, ovl.sh),
@@ -33,15 +36,16 @@ crc32() {
 }
 
 mkdir -p "$out/zxnext"
-for f in CBB CBB.OVL CBB.DRV; do
+for f in CBB CBB.OVL CBB.DRV CBBPI.GZ; do
     test -s "$build/$f" || { echo "$0: $build/$f is missing" >&2; exit 1; }
     cp "$build/$f" "$out/zxnext/$f"
 done
+mv "$out/zxnext/CBBPI.GZ" "$out/zxnext/cbb.gz"
 test -s "$pi" || { echo "$0: $pi is missing" >&2; exit 1; }
 cp "$pi" "$out/zxnext/cbb"
 
 : >"$out/zxnext/LIST"
-for f in CBB CBB.OVL CBB.DRV cbb; do
+for f in CBB CBB.OVL CBB.DRV cbb cbb.gz; do
     p=$out/zxnext/$f
     size=$(wc -c <"$p" | tr -d ' ')
     sha=$(sha256sum <"$p" | cut -c1-64)
