@@ -351,8 +351,10 @@ func (s *Service) makeHub(ctx context.Context, target, fwd, fwdKey string, addrs
 	switch {
 	case d.Self:
 		return errors.New("-on names this device; cbb global hub makes it a hub here")
-	case d.Role != group.RoleFull:
-		return fmt.Errorf("%s is no computer: a phone is the hub while its app is open (This phone as the hub there), and a lite member or a watch is never one", d.Name)
+	case d.Role == group.RolePhone:
+		return fmt.Errorf("%s is a phone: a phone is the hub while its app is open (This phone as the hub there)", d.Name)
+	case !d.Can(group.CapHub):
+		return fmt.Errorf("%s cannot be a hub: only a member with the cap hub can", d.Name)
 	case forwardOnly && d.Admin:
 		return fmt.Errorf("%s is an admin, a hub that reads the copies; only a computer that is no admin is made one that only passes them on", d.Name)
 	case !forwardOnly && !s.mayHost(group.DeviceID(d.ID)):
@@ -463,8 +465,8 @@ func (s *Service) markForwardOnly(id *group.Identity, nd *node.Node, dev group.D
 		return nil
 	case rec.AdminKey != nil:
 		return fmt.Errorf("%s is an admin; only a computer that is no admin only passes copies on", rec.Name)
-	case rec.Role != group.RoleFull:
-		return fmt.Errorf("%s is no computer; only a computer only passes copies on", rec.Name)
+	case !rec.Can(group.CapHub):
+		return fmt.Errorf("%s cannot be a hub; only a member with the cap hub only passes copies on", rec.Name)
 	case rec.Store == group.StoreRootless:
 		return fmt.Errorf("%s is installed without root, and such a computer is never a hub (D-79)", rec.Name)
 	}
@@ -475,7 +477,7 @@ func (s *Service) markForwardOnly(id *group.Identity, nd *node.Node, dev group.D
 		return fmt.Errorf("%s is the root's own computer, a hub that reads the copies", rec.Name)
 	}
 	s.awaitRecords(id)
-	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(rec.ID), Name: rec.Name, Role: rec.Role,
+	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(rec.ID), Name: rec.Name, Role: rec.Role, Caps: rec.Caps,
 		OS: rec.OS, Key: &rec.Key, Store: rec.Store, Kind: rec.Kind, Proof: rec.Proof, Seal: rec.Seal, ForwardOnly: true})
 	if err != nil {
 		return err

@@ -92,9 +92,9 @@ object Member {
     /** Texts are at most this many bytes of UTF-8. */
     const val MAX_TEXT = 1 shl 20
 
-    /** What kind of member is at the other end: FULL is a computer with the service (Linux, Windows or macOS). */
+    /** What kind of member is at the other end: MEMBER is any device with the service or the firmware, PHONE a phone's app. */
     enum class Role(val wire: String) {
-        FULL("full"), PHONE("phone"), LITE("lite");
+        MEMBER("member"), PHONE("phone");
 
         companion object {
             fun of(s: String): Role? = entries.firstOrNull { it.wire == s }

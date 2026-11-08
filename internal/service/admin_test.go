@@ -101,8 +101,8 @@ func TestComputerAdmin(t *testing.T) {
 	recs := group.NewRecords(g)
 	if _, errs := recs.AddAll([]group.Record{
 		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(phone.ID), Name: "iphone", Role: group.RolePhone, Key: &phk, HoldsRoot: true}, root.Key),
-		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(pi.ID), Name: "pi", Role: group.RoleFull, Key: &pk}, root.Key),
-		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(deck.ID), Name: "deck", Role: group.RoleFull, Key: &dk}, root.Key),
+		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(pi.ID), Name: "pi", Role: group.RoleMember, Caps: group.AllCaps, Key: &pk}, root.Key),
+		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(deck.ID), Name: "deck", Role: group.RoleMember, Caps: group.AllCaps, Key: &dk}, root.Key),
 	}); len(errs) > 0 {
 		t.Fatal(errs)
 	}
@@ -131,7 +131,7 @@ func TestComputerAdmin(t *testing.T) {
 	p.dial(a.addr(), pi)
 	p.send(map[string]any{"t": "admin", "admin_ca": ca.Raw})
 	p.send(map[string]any{"t": "records", "records": []group.Record{
-		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(pi.ID), Name: "pi", Role: group.RoleFull, Key: &pk, Admin: &ak,
+		sign(t, g, group.RecordBody{Type: group.RecordDevice, Device: string(pi.ID), Name: "pi", Role: group.RoleMember, Caps: group.AllCaps, Key: &pk, Admin: &ak,
 			Powers: []string{authority.PowerAdmit, authority.PowerFreeze, authority.PowerHub, authority.PowerRemove, authority.PowerRenew}, Commands: authority.Commands}, root.Key),
 	}})
 	waitFor(t, "the pi keeps its admin CA", func() bool {
@@ -335,7 +335,7 @@ func TestRename(t *testing.T) {
 		waitFor(t, s.name+" takes the new names", func() bool { return listed(s.devices(t)) == "mac pi4 steam deck" })
 	}
 	for _, d := range mac.devices(t) {
-		if d.Name == "steam deck" && (!d.Admin || d.Role != group.RoleFull) || d.Name == "pi4" && !d.Root {
+		if d.Name == "steam deck" && (!d.Admin || d.Role != group.RoleMember) || d.Name == "pi4" && !d.Root {
 			t.Errorf("after the rename: %+v", d)
 		}
 	}

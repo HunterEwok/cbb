@@ -187,11 +187,11 @@ struct DeviceDetailView: View {
     }
 
     /// The house: this phone's own sync, or, on an admin, a connected
-    /// computer's; the phones and lite members turn theirs on themselves.
+    /// member's; the phones turn theirs on themselves.
     @ViewBuilder private func syncCard(_ d: AppModel.Computer) -> some View {
         if d.isSelf || d.mode != nil {
             let on = d.isSelf ? model.syncOff == nil : d.mode != "own"
-            let mayTurn = d.isSelf || (model.isAdmin && d.online && d.role == "full")
+            let mayTurn = d.isSelf || (model.isAdmin && d.online && d.role == "member")
             Toggle(isOn: Binding(get: { on }, set: { new in
                 if d.isSelf { model.turnSync(new) } else { Task { await model.setSync(id, on: new) } }
             })) {
@@ -209,14 +209,14 @@ struct DeviceDetailView: View {
     @ViewBuilder private func iconRow(_ d: AppModel.Computer) -> some View {
         if model.isAdmin {
             HStack(spacing: Tokens.spacingSmall) {
-                // Computers, lite members and Android phones take pastes; iPhones cannot.
-                if !d.isSelf, d.role == "full" || d.role == "lite" || (d.role == "phone" && d.os == "android") {
+                // Members and Android phones take pastes; iPhones cannot.
+                if !d.isSelf, d.role == "member" || (d.role == "phone" && d.os == "android") {
                     Button { pasting = true } label: { IconLabel(symbol: "keyboard", title: Text("Paste")) }
                         .buttonStyle(.plain)
                 }
                 muteIcon(d)
-                // Computers run quick actions; the lite member reboots and restarts.
-                if !d.isSelf, d.online, d.role == "full" || d.role == "lite" {
+                // Members run quick actions.
+                if !d.isSelf, d.online, d.role == "member" {
                     actionMenu(d)
                 }
             }
@@ -235,10 +235,10 @@ struct DeviceDetailView: View {
             if d.canMakeAdmin {
                 Button { promoting = true } label: { Label { Text("Make it an admin") } icon: { Image(systemName: "person.badge.key") } }
             }
-            // An admin computer, or one the root makes an admin first; this
-            // phone is the hub under Settings. A computer that is no admin
-            // can be a hub that only passes the copies on.
-            if !d.isSelf, d.online, !d.throughHub, d.role == "full", !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin || !d.admin {
+            // An admin member that may be a hub, or one the root makes an admin
+            // first; this phone is the hub under Settings. A member that is no
+            // admin can be a hub that only passes the copies on.
+            if !d.isSelf, d.online, !d.throughHub, d.can("hub"), !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin || !d.admin {
                 Button { hubbing = true } label: { Label { Text("Make it a hub") } icon: { Image(systemName: "antenna.radiowaves.left.and.right") } }
             }
             if !d.isSelf {
@@ -299,10 +299,9 @@ struct DeviceDetailView: View {
     private func roleText(_ d: AppModel.Computer) -> Text {
         switch d.role {
         case "phone": Text("Phone app")
-        case "lite": d.rootless ? Text("Lite member, rootless") : Text("Lite member")
         case "watch": Text("Watch")
         // A rootless install is never an admin or a hub (D-79).
-        default: d.rootless ? Text("Full member, rootless") : Text("Full member")
+        default: d.rootless ? Text("Member, rootless") : Text("Member")
         }
     }
 

@@ -189,7 +189,7 @@ func makeWatchCase(t *testing.T, name string) watchCase {
 	holder, m1, m2, laptop, tablet, tv := member(t, pg.root), member(t, pc1), member(t, pc2), member(t, pg.root), member(t, pg.root), member(t, w)
 	rootRole := RolePhone
 	if name == "computer root" {
-		rootRole = RoleFull
+		rootRole = RoleMember
 	}
 	all := []Record{
 		ownRecord(t, pg.root, holder, "root", rootRole),

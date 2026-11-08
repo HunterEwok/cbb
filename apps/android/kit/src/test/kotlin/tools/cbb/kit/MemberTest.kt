@@ -42,7 +42,7 @@ class MemberTest {
             m
         }
         val hello = assertIs<Member.Message.Hello>(decoded[0])
-        assertEquals(Member.Role.FULL, hello.role)
+        assertEquals(Member.Role.MEMBER, hello.role)
         assertEquals("pi", hello.hello.name)
         assertEquals("q83vEjRWeJA=", hello.hello.records)
         // Copies travel sealed: the hello's copy shows its header only, unread.
@@ -140,13 +140,13 @@ class MemberTest {
     fun badMessages() {
         assertFailsWith<Member.WireException> { Member.decode("{".toByteArray()) }
         assertFailsWith<Member.WireException> { Member.decode("""{"t":"hello","role":"toaster","hello":{}}""".toByteArray()) }
-        assertFailsWith<Member.WireException> { Member.decode("""{"t":"hello","role":"full"}""".toByteArray()) }
+        assertFailsWith<Member.WireException> { Member.decode("""{"t":"hello","role":"member"}""".toByteArray()) }
         // An event from a newer version is dropped, not an error.
         assertEquals(Member.Message.Event(null), Member.decode("""{"t":"event","event":{"kind":"image"}}""".toByteArray()))
         assertEquals(Member.Message.Unknown("gift"), Member.decode("""{"t":"gift"}""".toByteArray()))
         // A hello whose current event does not decode has none.
         val h = assertIs<Member.Message.Hello>(
-            Member.decode("""{"t":"hello","role":"full","hello":{"wall_ms":1,"current":{"kind":"image"}}}""".toByteArray()),
+            Member.decode("""{"t":"hello","role":"member","hello":{"wall_ms":1,"current":{"kind":"image"}}}""".toByteArray()),
         )
         assertNull(h.hello.current)
         assertFailsWith<Member.WireException> { Member.length(byteArrayOf(0x00, 0x70, 0x00, 0x01)) }

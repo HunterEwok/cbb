@@ -87,7 +87,7 @@ func TestWriteAwayStates(t *testing.T) {
 func TestGlobalCommand(t *testing.T) {
 	unconfined(t)
 	inGroup := func(a *control.Away) control.Header {
-		return control.Header{Status: &control.Status{Role: "full", OS: "linux", Group: "g", Away: a}}
+		return control.Header{Status: &control.Status{Role: "member", OS: "linux", Group: "g", Away: a}}
 	}
 	lookup := lookupNetIP
 	t.Cleanup(func() { lookupNetIP = lookup })

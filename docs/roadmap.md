@@ -28,7 +28,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     lite member on Linux as clients, remote invitations for computers, the forwarder, the
     blind relay, AmneziaWG and VLESS ([design](design.md#sync-away-from-home)).
 - **16.** Full members, admins and the device's system, in 0.3 and 0.4
-    ([design](design.md#full-members-admins-and-the-operating-system)).
+    ([design](design.md#members-capabilities-admins-and-the-operating-system)).
 - **17.** Every phone joins through its app, with a key of its own, in 0.6 (D-80;
     [design](design.md#group-and-pairing)).
 - **18.** Remote paste, in 0.6 ([design](design.md#remote-paste)).

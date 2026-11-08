@@ -41,11 +41,11 @@ func (w *world) wantHubs(s *authority.State, names ...string) {
 // state with the role full or phone are kept, in the table's order.
 func TestHubsTable(t *testing.T) {
 	w := newWorld(t)
-	w.makeAdmin("C", "full", computerPowers)
-	w.makeAdmin("D", "full", []string{authority.PowerAdmit})
-	w.makeAdmin("E", "full", computerPowers)
-	w.device("root", "pi", "lite", nil, nil, false)
-	w.device("root", "desk", "full", nil, nil, false)
+	w.makeAdmin("C", "member", computerPowers)
+	w.makeAdmin("D", "member", []string{authority.PowerAdmit})
+	w.makeAdmin("E", "member", computerPowers)
+	w.device("root", "pi", "board", nil, nil, false)
+	w.device("root", "desk", "member", nil, nil, false)
 	if s := w.evalAll(nil); s.Hubs != nil {
 		t.Fatalf("hubs without a table: %v", s.Hubs)
 	}

@@ -45,7 +45,7 @@ const markFile = "hlc.mark"
 type Config struct {
 	StateDir string    // identity and clock mark
 	Socket   string    // the control socket; the admin socket is next to it (control.AdminSocketFor)
-	Role     node.Role // every role listens and publishes; a computer is node.Full
+	Role     node.Role // every role listens and publishes; a computer is node.Member
 	// OS is this device's operating system (group.OSLinux, OSWindows or
 	// OSMacOS), shown to the others; a Mac does not admit devices yet.
 	OS string
@@ -525,15 +525,15 @@ func (s *Service) startGroup(id *group.Identity) error {
 	s.setSealer(id, s.sealSecret, s.sealPublic)
 	nd := node.New(node.Config{
 		TakeCopy: s.takeCopy,
-		Content:  s.nodeContent(), Identity: id, Role: s.cfg.Role, Name: s.cfg.Name, OS: s.cfg.OS, Device: s.cfg.Device, Engine: eng, KeyStore: s.keyStore(id), Actions: s.actionsOn,
+		Content:  s.nodeContent(), Identity: id, Role: s.cfg.Role, Caps: capsOf(s.cfg.Role, group.AllCaps), Name: s.cfg.Name, OS: s.cfg.OS, Device: s.cfg.Device, Engine: eng, KeyStore: s.keyStore(id), Actions: s.actionsOn,
 		OnWrite: s.write, OnRelay: s.relayed, Serves: s.serves, OnPeers: s.peersChanged, OnCert: s.certRenewed, OnAdmin: s.becomeAdmin, OnCommand: s.command,
 		Now: s.cfg.now, Logf: s.logf,
 		Records: recordStore{s}, Credentials: credentialStore{s}, Releases: releaseStore{s}, Entries: entriesStore{s}, Allow: s.allow, NoSecrets: s.noSecretsTo,
 		TunnelKey: tunKey, TunnelPSK: tunPSK, OnTunnelKey: s.tunnelKeyOffered, OnTunnel: s.tunnelOffered, SealKey: s.sealPublic,
 		HubShare: s.hubShare, OnHubs: s.hubsShared, OnEvidence: s.evidenceReceived, Evidence: s.ownEvidence(id),
 	})
-	// Every member listens, so that phones and lite members reach it, and
-	// the other full members when it has the lower device ID.
+	// Every member listens, so that phones, the members that do not dial
+	// and the other members with a lower device ID reach it.
 	ln, err := s.cfg.listen()
 	if err != nil {
 		cancel()

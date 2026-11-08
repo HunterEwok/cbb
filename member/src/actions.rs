@@ -186,7 +186,7 @@ pub fn check_own(name: &str, command: &[String]) -> Option<String> {
 pub struct Signer {
     /// The group's root key signed it.
     pub root: bool,
-    /// The device's role, phone, full or watch; empty when no record names it.
+    /// The device's role, phone, member or watch; empty when no record names it.
     pub role: String,
     /// Where its keys live; empty when unknown.
     pub store: String,
@@ -201,7 +201,7 @@ impl Signer {
         }
         match self.role.as_str() {
             "phone" => out.push("phone"),
-            "full" => out.push("computer"),
+            "member" => out.push("computer"),
             "watch" => out.push("watch"),
             _ => {}
         }
@@ -430,7 +430,7 @@ mod tests {
     fn checks_the_signer_as_the_full_member() {
         let on = |name: &str| Action { name: name.into(), on: true, ..Default::default() };
         let phone = Signer { role: "phone".into(), store: "hardware".into(), ..Default::default() };
-        let file_pc = Signer { role: "full".into(), store: "file".into(), ..Default::default() };
+        let file_pc = Signer { role: "member".into(), store: "file".into(), ..Default::default() };
         let root = Signer { root: true, role: "phone".into(), store: "hardware".into() };
         assert!(check(&Action { name: REBOOT.into(), ..Default::default() }, &phone).unwrap().contains("is off"));
         assert_eq!(check(&on(REBOOT), &phone), None);

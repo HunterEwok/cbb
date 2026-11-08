@@ -86,7 +86,7 @@ func answer(c net.Conn, a control.Message) {
 // inGroup answers a status request: in the group g, or in none when g is
 // empty.
 func inGroup(c net.Conn, g string) {
-	answer(c, control.Message{Header: control.Header{Status: &control.Status{Role: "full", OS: "linux", Group: g}, Done: true}})
+	answer(c, control.Message{Header: control.Header{Status: &control.Status{Role: "member", OS: "linux", Group: g}, Done: true}})
 }
 
 func request(t *testing.T, got chan *control.Message) *control.Message {
@@ -235,13 +235,13 @@ func TestStatus(t *testing.T) {
 		st   control.Status
 		want string
 	}{
-		{control.Status{Role: "full", OS: "linux"}, "Run cbb new here to start one"},
-		{control.Status{Role: "full", OS: "macos"}, "Run cbb new here to start one"},
-		{control.Status{Role: "full", OS: "windows", Device: "d1", Group: "g1"}, "Device d1 (Windows, full), group g1"},
-		{control.Status{Role: "full", OS: "macos", Device: "d2", Group: "g1", Removed: true}, "This device was removed from the group"},
-		{control.Status{Role: "full", OS: "linux", Device: "d2", Group: "g1", Frozen: true}, "froze this computer's admin key"},
-		{control.Status{Role: "full", OS: "linux", Device: "d3", Group: "g1", CertEndsMS: time.Now().Add(-time.Hour).UnixMilli()}, "This device's certificate ended on"},
-		{control.Status{Role: "full", OS: "linux", Device: "d3", Group: "g1", CertEndsMS: time.Now().Add(certWarning / 2).UnixMilli()}, "no admin has renewed it"},
+		{control.Status{Role: "member", OS: "linux"}, "Run cbb new here to start one"},
+		{control.Status{Role: "member", OS: "macos"}, "Run cbb new here to start one"},
+		{control.Status{Role: "member", OS: "windows", Device: "d1", Group: "g1"}, "Device d1 (Windows, member), group g1"},
+		{control.Status{Role: "member", OS: "macos", Device: "d2", Group: "g1", Removed: true}, "This device was removed from the group"},
+		{control.Status{Role: "member", OS: "linux", Device: "d2", Group: "g1", Frozen: true}, "froze this computer's admin key"},
+		{control.Status{Role: "member", OS: "linux", Device: "d3", Group: "g1", CertEndsMS: time.Now().Add(-time.Hour).UnixMilli()}, "This device's certificate ended on"},
+		{control.Status{Role: "member", OS: "linux", Device: "d3", Group: "g1", CertEndsMS: time.Now().Add(certWarning / 2).UnixMilli()}, "no admin has renewed it"},
 	} {
 		st := tt.st
 		fakeService(t, control.Message{Header: control.Header{Status: &st, Done: true}})
@@ -305,10 +305,10 @@ func TestWriteDevices(t *testing.T) {
 	now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
 	var b bytes.Buffer
 	writeDevices(&b, []control.Device{
-		{ID: "a1", Name: "pi", Role: "full", OS: "linux", Admin: true, Root: true, Online: true, Self: true, Listed: true, Version: "0.6.1"},
-		{ID: "b2", Name: "mac", Role: "full", OS: "macos", LastSeenMS: now.Add(-5 * time.Minute).UnixMilli(), Listed: true, Version: "0.6.0"},
-		{ID: "c3", Name: "deck", Role: "full", OS: "windows", Admin: true, Online: true, Mode: "own", Hub: true},
-		{ID: "d4", Name: "nas", Role: "full", OS: "linux", Listed: true, ForwardOnly: true, Hub: true},
+		{ID: "a1", Name: "pi", Role: "member", OS: "linux", Admin: true, Root: true, Online: true, Self: true, Listed: true, Version: "0.6.1"},
+		{ID: "b2", Name: "mac", Role: "member", OS: "macos", LastSeenMS: now.Add(-5 * time.Minute).UnixMilli(), Listed: true, Version: "0.6.0"},
+		{ID: "c3", Name: "deck", Role: "member", OS: "windows", Admin: true, Online: true, Mode: "own", Hub: true},
+		{ID: "d4", Name: "nas", Role: "member", OS: "linux", Listed: true, ForwardOnly: true, Hub: true},
 	}, []control.Device{{ID: "c3", SkewMS: 9000}}, "0.6.1", now)
 	out := b.String()
 	for _, want := range []string{"pi (this device)", "online", "5 min ago", "deck *", "not in the devices list yet",
@@ -321,7 +321,7 @@ func TestWriteDevices(t *testing.T) {
 		if strings.Contains(line, "c3") && !strings.Contains(line, "admin        off ") {
 			t.Errorf("deck's line lacks sync off: %q", line)
 		}
-		if strings.Contains(line, "c3") && !strings.Contains(line, "full, hub ") {
+		if strings.Contains(line, "c3") && !strings.Contains(line, "member, hub ") {
 			t.Errorf("deck's line does not say it is a hub: %q", line)
 		}
 		if strings.Contains(line, "d4") && !strings.Contains(line, "hub that only passes copies on") {

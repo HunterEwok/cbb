@@ -130,9 +130,9 @@ fn text(e: Option<Error>) -> String {
 }
 
 #[test]
-fn the_root_admits_a_lite_member() {
+fn the_root_admits_a_member_with_its_caps() {
     let (admitter, mut rs) = root_group();
-    let joiner = Joiner::new("router").unwrap();
+    let joiner = Joiner::new("router").unwrap().as_member("linux", &["hub", "dials"]);
     let code = pair::new_code();
     let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
     let mut adm =
@@ -150,7 +150,8 @@ fn the_root_admits_a_lite_member() {
     let r = device_record(&rs, &admitter, &a, now_ms()).unwrap();
     assert!(rs.add(&r).unwrap());
     let d = rs.devices().into_iter().find(|d| d.id == joiner.id.as_str()).unwrap();
-    assert_eq!((d.role.as_str(), d.name.as_str(), d.admin), ("lite", "router", false));
+    assert_eq!((d.role.as_str(), d.name.as_str(), d.admin), ("member", "router", false));
+    assert_eq!(d.caps, ["dials", "hub"]);
 }
 
 #[test]
@@ -278,6 +279,7 @@ fn a_phone_makes_its_group_and_admits() {
         name: "phone",
         os: "aurora",
         role: "phone",
+        caps: &[],
         member_point: &member_key.public(),
         store: "hardware",
         seal: Vec::new(),

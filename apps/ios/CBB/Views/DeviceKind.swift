@@ -49,7 +49,7 @@ extension AppModel.Computer {
         if let form = device?.form, let k = DeviceKind(rawValue: form) { return k }
         return switch (role, os) {
         case ("phone", _): .phone
-        case ("lite", _): .board
+        case (_, "none"): .board
         case ("watch", _): .watch
         case (_, "macos"): .laptop
         case (_, "ios"), (_, "android"), (_, "aurora"), (_, "sailfish"): .phone

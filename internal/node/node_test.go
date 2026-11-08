@@ -311,7 +311,7 @@ func (r *raw) hello(h clip.Hello) {
 		out.Current = wireOf(*h.Current)
 	}
 	data, _ := json.Marshal(out)
-	r.send(&message{Type: typeHello, Role: Full, Hello: data})
+	r.send(&message{Type: typeHello, Role: Member, Hello: data})
 }
 
 func (r *raw) event(ev clip.Event) {
@@ -365,11 +365,11 @@ func TestCopyReachesTheOtherMember(t *testing.T) {
 		c.Device = group.DeviceInfo{Form: "board", OSVersion: "Debian 13", Version: "bad\x00", MAC: "dc:a6:32:00:00:01"}
 		c.Actions = func() []string { return []string{"lock", "Not A Name", "backup"} }
 	}
-	mac, pi := newMember(t, Full), newMember(t, Full, device)
+	mac, pi := newMember(t, Member), newMember(t, Member, device)
 	link(t, mac, pi)
 	waitPeers(t, mac, 1)
 	waitPeers(t, pi, 1)
-	if p := mac.Peers()[0]; p.ID != pi.id.ID || p.Role != Full ||
+	if p := mac.Peers()[0]; p.ID != pi.id.ID || p.Role != Member ||
 		p.Device != (group.DeviceInfo{Form: "board", OSVersion: "Debian 13", MAC: "dc:a6:32:00:00:01"}) {
 		t.Errorf("the Mac sees %+v", p)
 	}
@@ -394,7 +394,7 @@ func TestCopyReachesTheOtherMember(t *testing.T) {
 }
 
 func TestSecretsKeepTheirKind(t *testing.T) {
-	mac, pi := newMember(t, Full), newMember(t, Full)
+	mac, pi := newMember(t, Member), newMember(t, Member)
 	link(t, mac, pi)
 	waitPeers(t, mac, 1)
 	if _, err := mac.Copied("hunter2", clip.Secret, clip.Copy); err != nil {
@@ -419,7 +419,7 @@ func TestHelloCarriesAnOldTextAfterRejoin(t *testing.T) {
 		t.Run(fmt.Sprintf("rejoin=%v", rejoin), func(t *testing.T) {
 			var c clock
 			c.advance(time.Hour)
-			mac, pi := newMember(t, Full, withUptime(&c)), newMember(t, Full, withUptime(&c))
+			mac, pi := newMember(t, Member, withUptime(&c)), newMember(t, Member, withUptime(&c))
 			if _, err := pi.Copied("copied long ago", clip.Text, clip.Copy); err != nil {
 				t.Fatal(err)
 			}
@@ -438,7 +438,7 @@ func TestHelloCarriesAnOldTextAfterRejoin(t *testing.T) {
 }
 
 func TestRejoinClosesTheConnectionsFirst(t *testing.T) {
-	mac, pi := newMember(t, Full), newMember(t, Full)
+	mac, pi := newMember(t, Member), newMember(t, Member)
 	cd, _ := link(t, mac, pi)
 	waitPeers(t, mac, 1)
 	mac.Rejoin()
@@ -451,7 +451,7 @@ func TestRejoinClosesTheConnectionsFirst(t *testing.T) {
 func TestRejoinHoldsNewConnections(t *testing.T) {
 	// A connection that starts while Rejoin waits for the old ones is
 	// registered only after the engine knows the member was away.
-	mac, pi := newMember(t, Full), newMember(t, Full)
+	mac, pi := newMember(t, Member), newMember(t, Member)
 	link(t, mac, pi)
 	waitPeers(t, mac, 1)
 	mac.mu.Lock()
@@ -476,7 +476,7 @@ func TestRejoinHoldsNewConnections(t *testing.T) {
 
 func TestForwardedOnlyToOthers(t *testing.T) {
 	// An event that comes in on a connection never goes back out on it.
-	pi, mac := newMember(t, Full), newMember(t, Full)
+	pi, mac := newMember(t, Member), newMember(t, Member)
 	r := rawPeer(t, pi, mac)
 	cur := newEvent(mac, "current of the peer")
 	r.hello(clip.Hello{Wall: time.Now().UnixMilli(), Current: &cur})
@@ -494,7 +494,7 @@ func TestQueueTimeIsAddedToTheAge(t *testing.T) {
 	// event waits two minutes.
 	var steps atomic.Int64
 	slow := func() time.Duration { return uptime.Now() + time.Duration(steps.Add(1))*2*time.Minute }
-	mac, pi := newMember(t, Full), newMember(t, Full, withNodeUptime(slow))
+	mac, pi := newMember(t, Member), newMember(t, Member, withNodeUptime(slow))
 	link(t, mac, pi)
 	waitPeers(t, mac, 1)
 	waitPeers(t, pi, 1)
@@ -524,7 +524,7 @@ func TestHelloAfterJoiningTheForwardingSet(t *testing.T) {
 	// Timeout is longer than the test holds it, or mac would drop the
 	// silent connection and the hello would never come (a member would
 	// dial again; this test does not).
-	mac, pi := newMember(t, Full, withTimers(50*time.Millisecond, 10*time.Second)), newMember(t, Full)
+	mac, pi := newMember(t, Member, withTimers(50*time.Millisecond, 10*time.Second)), newMember(t, Member)
 	pi.mu.Lock()
 	locked := true
 	defer func() {
@@ -555,7 +555,7 @@ func TestHelloAfterJoiningTheForwardingSet(t *testing.T) {
 }
 
 func TestSilentPeerIsDropped(t *testing.T) {
-	pi, mac := newMember(t, Full), newMember(t, Full)
+	pi, mac := newMember(t, Member), newMember(t, Member)
 	r := rawPeer(t, pi, mac)
 	r.hello(clip.Hello{Wall: time.Now().UnixMilli()})
 	go func() {
@@ -577,7 +577,7 @@ func TestStalledPeerIsDropped(t *testing.T) {
 	// sealed, which takes a while on a slow machine, so the Timeout is
 	// long and the copies stop once the peer is gone.
 	const timeout = 20 * time.Second
-	pi, mac := newMember(t, Full, withTimers(time.Second, timeout)), newMember(t, Full)
+	pi, mac := newMember(t, Member, withTimers(time.Second, timeout)), newMember(t, Member)
 	r := rawPeer(t, pi, mac)
 	r.hello(clip.Hello{Wall: time.Now().UnixMilli()})
 	waitPeers(t, pi, 1)
@@ -606,7 +606,7 @@ func TestPingCadence(t *testing.T) {
 	// longer, so that a stall of this reader on a busy test machine (the
 	// FreeBSD VM) does not end the connection; the gaps are checked
 	// against three PingEvery below.
-	pi, mac := newMember(t, Full, withTimers(100*time.Millisecond, 2*time.Second)), newMember(t, Full)
+	pi, mac := newMember(t, Member, withTimers(100*time.Millisecond, 2*time.Second)), newMember(t, Member)
 	r := rawPeer(t, pi, mac)
 	r.hello(clip.Hello{Wall: time.Now().UnixMilli()})
 	var last time.Time
@@ -647,7 +647,7 @@ func TestPingCadence(t *testing.T) {
 }
 
 func TestPingsKeepAnIdleConnection(t *testing.T) {
-	mac, pi := newMember(t, Full), newMember(t, Full)
+	mac, pi := newMember(t, Member), newMember(t, Member)
 	cd, sd := link(t, mac, pi)
 	waitPeers(t, mac, 1)
 	select {
@@ -660,7 +660,7 @@ func TestPingsKeepAnIdleConnection(t *testing.T) {
 }
 
 func TestByeEndsTheConnectionAtOnce(t *testing.T) {
-	mac, pi := newMember(t, Full), newMember(t, Full)
+	mac, pi := newMember(t, Member), newMember(t, Member)
 	cd, sd := link(t, mac, pi)
 	waitPeers(t, pi, 1)
 	// The peer shows in Peers once its hello is read, a moment before the
@@ -694,7 +694,7 @@ func TestByeEndsTheConnectionAtOnce(t *testing.T) {
 func TestQueuedEventsGoOutBeforeTheGoodbye(t *testing.T) {
 	// The raw peer answers no pings while the copies are made, and sealing
 	// them takes a while on a slow machine, so the Timeout is long.
-	pi, mac := newMember(t, Full, withTimers(time.Second, 10*time.Second)), newMember(t, Full)
+	pi, mac := newMember(t, Member, withTimers(time.Second, 10*time.Second)), newMember(t, Member)
 	r := rawPeer(t, pi, mac)
 	r.hello(clip.Hello{Wall: time.Now().UnixMilli()})
 	waitPeers(t, pi, 1)
@@ -723,7 +723,7 @@ func TestQueuedEventsGoOutBeforeTheGoodbye(t *testing.T) {
 }
 
 func TestCancelEndsServe(t *testing.T) {
-	mac, pi := newMember(t, Full), newMember(t, Full)
+	mac, pi := newMember(t, Member), newMember(t, Member)
 	ctx, cancel := context.WithCancel(context.Background())
 	cd, _ := linkCtx(t, ctx, mac, pi)
 	waitPeers(t, mac, 1)
@@ -732,7 +732,7 @@ func TestCancelEndsServe(t *testing.T) {
 }
 
 func TestOnPeers(t *testing.T) {
-	mac, pi := newMember(t, Full), newMember(t, Full)
+	mac, pi := newMember(t, Member), newMember(t, Member)
 	_, sd := link(t, mac, pi)
 	got := func(want int) {
 		t.Helper()
@@ -755,7 +755,7 @@ func TestOnPeers(t *testing.T) {
 }
 
 func TestReconnectReplacesTheOldConnection(t *testing.T) {
-	mac, pi := newMember(t, Full), newMember(t, Full)
+	mac, pi := newMember(t, Member), newMember(t, Member)
 	cd1, _ := link(t, mac, pi)
 	waitPeers(t, pi, 1)
 	link(t, mac, pi)
@@ -768,7 +768,7 @@ func TestReconnectReplacesTheOldConnection(t *testing.T) {
 }
 
 func TestTheConnectionTheLowerIDDialedStays(t *testing.T) {
-	a, b := newMember(t, Full), newMember(t, Full)
+	a, b := newMember(t, Member), newMember(t, Member)
 	low, high := a, b
 	if b.id.ID < a.id.ID {
 		low, high = b, a
@@ -794,7 +794,7 @@ func TestTheConnectionTheLowerIDDialedStays(t *testing.T) {
 
 	// The other way round, the connection the lower ID dials replaces one
 	// the higher ID dialed.
-	c, d := newMember(t, Full), newMember(t, Full)
+	c, d := newMember(t, Member), newMember(t, Member)
 	low, high = c, d
 	if d.id.ID < c.id.ID {
 		low, high = d, c
@@ -806,7 +806,7 @@ func TestTheConnectionTheLowerIDDialedStays(t *testing.T) {
 }
 
 func TestBadFirstMessage(t *testing.T) {
-	pi, mac := newMember(t, Full), newMember(t, Full)
+	pi, mac := newMember(t, Member), newMember(t, Member)
 	r := rawPeer(t, pi, mac)
 	r.event(newEvent(mac, "sneaky"))
 	if err := wait(t, r.done, "Serve to refuse"); err == nil {
@@ -820,7 +820,7 @@ func TestBadFirstMessage(t *testing.T) {
 func TestBadEventsAreDropped(t *testing.T) {
 	// Events this member cannot use, as a buggy or newer member might send
 	// them, are dropped, and the connection goes on.
-	pi, mac := newMember(t, Full), newMember(t, Full)
+	pi, mac := newMember(t, Member), newMember(t, Member)
 	r := rawPeer(t, pi, mac)
 	r.hello(clip.Hello{Wall: time.Now().UnixMilli()})
 	r.send(&message{Type: typeEvent, Event: json.RawMessage(`{"id":"x","kind":"pdf","via":"telepathy"}`)})
@@ -833,15 +833,15 @@ func TestBadEventsAreDropped(t *testing.T) {
 func TestHelloWithAnUnreadableCurrent(t *testing.T) {
 	// A hello whose current event does not decode counts as one without a
 	// current event.
-	pi, mac := newMember(t, Full), newMember(t, Full)
+	pi, mac := newMember(t, Member), newMember(t, Member)
 	r := rawPeer(t, pi, mac)
-	r.send(&message{Type: typeHello, Role: Full, Hello: json.RawMessage(`{"wall_ms":1,"current":{"kind":"pdf"}}`)})
+	r.send(&message{Type: typeHello, Role: Member, Hello: json.RawMessage(`{"wall_ms":1,"current":{"kind":"pdf"}}`)})
 	r.event(newEvent(mac, "after an odd hello"))
 	waitWrite(t, pi, "after an odd hello")
 }
 
 func TestConnectingToItself(t *testing.T) {
-	pi := newMember(t, Full)
+	pi := newMember(t, Member)
 	a, b := socketPair(t)
 	go pi.Serve(context.Background(), tls.Server(b, pi.ServerTLS()))
 	err := pi.Serve(context.Background(), tls.Client(a, pi.id.ClientTLS(pi.id.ID, group.TLSOptions{})))
@@ -851,7 +851,7 @@ func TestConnectingToItself(t *testing.T) {
 }
 
 func TestClosedNodeRefuses(t *testing.T) {
-	mac, pi := newMember(t, Full), newMember(t, Full)
+	mac, pi := newMember(t, Member), newMember(t, Member)
 	pi.Close()
 	cd, sd := link(t, mac, pi)
 	if err := wait(t, sd, "the closed node"); err == nil {
@@ -888,7 +888,7 @@ func TestAddAge(t *testing.T) {
 
 func TestConverges(t *testing.T) {
 	// Many copies from both sides end with both members on the same event.
-	mac, pi := newMember(t, Full), newMember(t, Full)
+	mac, pi := newMember(t, Member), newMember(t, Member)
 	link(t, mac, pi)
 	waitPeers(t, mac, 1)
 	waitPeers(t, pi, 1)
@@ -925,7 +925,7 @@ func TestRenewPeer(t *testing.T) {
 	// A Linux member that holds the group CA key, with its clock 18
 	// months ahead, finds the Mac's certificate due and sends a renewed
 	// one; the Mac takes it.
-	pi := newMember(t, Full, func(_ *clip.Config, nc *Config) {
+	pi := newMember(t, Member, func(_ *clip.Config, nc *Config) {
 		nc.Now = func() time.Time { return time.Now().AddDate(1, 6, 0) }
 	})
 	piID := *pi.id
@@ -933,7 +933,7 @@ func TestRenewPeer(t *testing.T) {
 	pi.SetIdentity(&piID)
 	got := make(chan *group.Identity, 2)
 	var mac *member
-	mac = newMember(t, Full, func(_ *clip.Config, nc *Config) {
+	mac = newMember(t, Member, func(_ *clip.Config, nc *Config) {
 		nc.OnCert = func(der, _ []byte) error {
 			next, err := mac.id.WithCert(der)
 			if err == nil {
@@ -969,7 +969,7 @@ func TestAdminKeyAndAdminCA(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := make(chan []byte, 1)
-	pi := newMember(t, Full, func(_ *clip.Config, nc *Config) {
+	pi := newMember(t, Member, func(_ *clip.Config, nc *Config) {
 		nc.OnAdmin = func(der []byte) error {
 			got <- der
 			return nil
@@ -1021,15 +1021,15 @@ func TestAdminKeyAndAdminCA(t *testing.T) {
 func TestRoles(t *testing.T) {
 	// A phone app and a lite member connect like a Mac and show their
 	// role; an unknown role is refused.
-	for _, role := range []Role{Phone, Lite} {
-		pi, other := newMember(t, Full), newMember(t, role)
+	for _, role := range []Role{Phone, Member} {
+		pi, other := newMember(t, Member), newMember(t, role)
 		link(t, other, pi)
 		waitPeers(t, pi, 1)
 		if got := pi.Peers()[0].Role; got != role {
 			t.Errorf("the peer's role is %q, want %q", got, role)
 		}
 	}
-	pi, mac := newMember(t, Full), newMember(t, Full)
+	pi, mac := newMember(t, Member), newMember(t, Member)
 	r := rawPeer(t, pi, mac)
 	r.send(&message{Type: typeHello, Role: "robot", Hello: json.RawMessage(`{"wall_ms":0}`)})
 	if err := wait(t, r.done, "Serve to refuse"); err == nil {
@@ -1119,7 +1119,7 @@ func TestRecordsSpread(t *testing.T) {
 	stores := []*recordStore{newRecordStore(), newRecordStore(), newRecordStore()}
 	var ms []*member
 	for _, st := range stores {
-		m := newMember(t, Full, withRecords(st))
+		m := newMember(t, Member, withRecords(st))
 		st.node = func() *Node { return m.Node }
 		ms = append(ms, m)
 	}
@@ -1130,14 +1130,14 @@ func TestRecordsSpread(t *testing.T) {
 	var devs []group.Record
 	for _, m := range ms {
 		key := group.KeyHashOf(m.id.Cert)
-		devs = append(devs, a.record(t, group.RecordBody{Type: group.RecordDevice, Device: string(m.id.ID), Name: "m", Role: group.RoleFull, Key: &key}))
+		devs = append(devs, a.record(t, group.RecordBody{Type: group.RecordDevice, Device: string(m.id.ID), Name: "m", Role: group.RoleMember, Caps: group.AllCaps, Key: &key}))
 	}
 	for _, st := range stores {
 		st.Add("", devs)
 		<-st.added
 	}
 	other := group.KeyHash{1}
-	dev := a.record(t, group.RecordBody{Type: group.RecordDevice, Device: string(group.NewDeviceID()), Name: "d", Role: group.RoleFull, Key: &other})
+	dev := a.record(t, group.RecordBody{Type: group.RecordDevice, Device: string(group.NewDeviceID()), Name: "d", Role: group.RoleMember, Caps: group.AllCaps, Key: &other})
 	stores[0].Add("", []group.Record{dev})
 	<-stores[0].added
 
@@ -1223,7 +1223,7 @@ func TestTunnelKeyAndOffer(t *testing.T) {
 	other := TunnelOffer{HubKey: bytes.Repeat([]byte{6}, 32), PSK: bytes.Repeat([]byte{5}, 32), Endpoints: []string{"192.0.2.6:8764"},
 		Hub: "cccccccccccccccccccccccccccccccc"}
 	share := HubShare{Serving: true, Offer: &TunnelOffer{HubKey: offer.HubKey, Endpoints: offer.Endpoints}}
-	hub := newMember(t, Full, func(_ *clip.Config, nc *Config) {
+	hub := newMember(t, Member, func(_ *clip.Config, nc *Config) {
 		nc.TunnelKey = bytes.Repeat([]byte{3}, 32)
 		nc.OnTunnelKey = func(peer group.DeviceID, chain []*x509.Certificate, key, psk []byte) []TunnelOffer {
 			keys <- offered{peer, chain, key, psk}
@@ -1231,7 +1231,7 @@ func TestTunnelKeyAndOffer(t *testing.T) {
 		}
 		nc.HubShare = func(group.DeviceID) *HubShare { return &share }
 	})
-	mac := newMember(t, Full, func(_ *clip.Config, nc *Config) {
+	mac := newMember(t, Member, func(_ *clip.Config, nc *Config) {
 		nc.TunnelKey, nc.TunnelPSK = bytes.Repeat([]byte{4}, 32), bytes.Repeat([]byte{5}, 32)
 		nc.OnTunnelKey = func(group.DeviceID, []*x509.Certificate, []byte, []byte) []TunnelOffer { return nil }
 		nc.OnTunnel = func(id group.DeviceID, _ []*x509.Certificate, o TunnelOffer) error {
@@ -1297,7 +1297,7 @@ func TestTunnelKeyAndOffer(t *testing.T) {
 // and that a hello without one asks nothing of OnTunnelKey.
 func TestNoTunnelKey(t *testing.T) {
 	called := make(chan struct{}, 1)
-	pi := newMember(t, Full, func(_ *clip.Config, nc *Config) {
+	pi := newMember(t, Member, func(_ *clip.Config, nc *Config) {
 		nc.OnTunnelKey = func(group.DeviceID, []*x509.Certificate, []byte, []byte) []TunnelOffer {
 			called <- struct{}{}
 			return nil
@@ -1329,7 +1329,7 @@ func TestCommandsPassThroughAMember(t *testing.T) {
 			}
 		}
 	}
-	a, hub, b := newMember(t, Full, on("a")), newMember(t, Full, on("hub")), newMember(t, Full, on("b"))
+	a, hub, b := newMember(t, Member, on("a")), newMember(t, Member, on("hub")), newMember(t, Member, on("b"))
 	link(t, a, hub)
 	link(t, b, hub)
 	waitPeers(t, hub, 2)
@@ -1429,7 +1429,7 @@ func TestReleaseSpreads(t *testing.T) {
 	stores := []*releaseStore{newReleaseStore(), newReleaseStore(), newReleaseStore()}
 	var ms []*member
 	for _, st := range stores {
-		ms = append(ms, newMember(t, Full, withReleases(st)))
+		ms = append(ms, newMember(t, Member, withReleases(st)))
 	}
 	a, b, c := ms[0], ms[1], ms[2]
 	stores[0].Add("", *releaseSet(t, 3))
@@ -1473,7 +1473,7 @@ func TestReleaseSpreads(t *testing.T) {
 func TestRecordsOnlyLetIn(t *testing.T) {
 	var listed atomic.Bool
 	st := newRecordStore()
-	a := newMember(t, Full, withRecords(st), func(_ *clip.Config, nc *Config) {
+	a := newMember(t, Member, withRecords(st), func(_ *clip.Config, nc *Config) {
 		nc.Allow = func(group.DeviceID, []*x509.Certificate) error {
 			if listed.Load() {
 				return nil
@@ -1484,7 +1484,7 @@ func TestRecordsOnlyLetIn(t *testing.T) {
 	st.node = func() *Node { return a.Node }
 	// b does not list a either, so both keep the connection for records.
 	bst := newRecordStore()
-	b := newMember(t, Full, withRecords(bst), func(_ *clip.Config, nc *Config) {
+	b := newMember(t, Member, withRecords(bst), func(_ *clip.Config, nc *Config) {
 		nc.Allow = func(group.DeviceID, []*x509.Certificate) error { return group.ErrNotListed }
 	})
 	bst.node = func() *Node { return b.Node }
@@ -1508,10 +1508,10 @@ func TestRecordsOnlyLetIn(t *testing.T) {
 func TestNoSecretsSendsTheMark(t *testing.T) {
 	var stopped atomic.Bool
 	stopped.Store(true)
-	mac := newMember(t, Full, func(_ *clip.Config, nc *Config) {
+	mac := newMember(t, Member, func(_ *clip.Config, nc *Config) {
 		nc.NoSecrets = func(group.DeviceID) bool { return stopped.Load() }
 	})
-	pi := newMember(t, Full)
+	pi := newMember(t, Member)
 	link(t, mac, pi)
 	waitPeers(t, mac, 1)
 	if _, err := mac.Copied("hunter2", clip.Secret, clip.Copy); err != nil {
@@ -1534,7 +1534,7 @@ func TestNoSecretsSendsTheMark(t *testing.T) {
 func TestReachTellsPhonesWhoIsConnected(t *testing.T) {
 	// The hub tells a phone the other members it is connected to, and
 	// again when that changes; a computer gets none.
-	hub, pi := newMember(t, Full, withTimers(50*time.Millisecond, 5*time.Second)), newMember(t, Lite)
+	hub, pi := newMember(t, Member, withTimers(50*time.Millisecond, 5*time.Second)), newMember(t, Member)
 	piDone, _ := link(t, pi, hub)
 	waitPeers(t, hub, 1)
 	reaches := func(r *raw, d time.Duration) [][]group.DeviceID {
@@ -1551,7 +1551,7 @@ func TestReachTellsPhonesWhoIsConnected(t *testing.T) {
 	if got := reaches(phone, 150*time.Millisecond); len(got) != 1 || !slices.Equal(got[0], []group.DeviceID{pi.id.ID}) {
 		t.Fatalf("the phone got reach %v, want once [%s]", got, pi.id.ID)
 	}
-	macID := newMember(t, Full)
+	macID := newMember(t, Member)
 	mac := rawPeer(t, hub, macID)
 	mac.hello(clip.Hello{})
 	if got := reaches(mac, 150*time.Millisecond); len(got) != 0 {

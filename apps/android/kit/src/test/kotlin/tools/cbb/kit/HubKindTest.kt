@@ -28,7 +28,7 @@ class HubKindTest {
         val sa = secret()
         val g = PhoneGroup.create(ca, ka.publicKeyDER, now, seal = Core.sealPublic(sa))
         val pc = SyncEngine.newID()
-        g.record(pc, "pi", "full", Records.keyHash(kb.publicKeyDER), ca, now, os = "linux", store = Records.FILE, seal = Core.sealPublic(secret()))
+        g.record(pc, "pi", "member", Records.keyHash(kb.publicKeyDER), ca, now, os = "linux", store = Records.FILE, seal = Core.sealPublic(secret()), caps = Records.CAPS)
         assertFalse(g.records.mayHost(pc))
         val engine = SyncEngine(g.device, HybridClock())
         val e = engine.local("before", Member.Kind.TEXT)

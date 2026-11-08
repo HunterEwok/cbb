@@ -93,7 +93,7 @@ func startService(t *testing.T) string {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- service.Run(ctx, service.Config{StateDir: dir, Socket: socket, Role: node.Full, OS: group.OSLinux, Name: "pi",
+		done <- service.Run(ctx, service.Config{StateDir: dir, Socket: socket, Role: node.Member, OS: group.OSLinux, Name: "pi",
 			Discover: func(service.DiscoveryConfig) (service.Discovery, error) { return noDiscovery{}, nil }})
 	}()
 	t.Cleanup(func() { cancel(); <-done })

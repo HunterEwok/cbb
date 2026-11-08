@@ -202,11 +202,19 @@ func recordKinds() []genKind {
 		bad("in base64url", `"`+base64.URLEncoding.EncodeToString(bytes.Repeat([]byte{0xfb}, 1216))+`"`),
 	}
 	device := kind("device",
-		with("device", genMember{"device", genDev}, genMember{"name", `"Laptop"`}, genMember{"role", `"full"`},
-			genMember{"os", `"linux"`}, genMember{"key", hash}, genMember{"admin", nine}),
+		with("device", genMember{"device", genDev}, genMember{"name", `"Laptop"`}, genMember{"role", `"member"`},
+			genMember{"caps", `["admin","dials","hub"]`}, genMember{"os", `"linux"`}, genMember{"key", hash}, genMember{"admin", nine}),
 		genField{"device", jString, true, devID},
 		genField{"name", jString, true, name},
-		genField{"role", jString, true, genEnum([]string{"full", "phone", "lite", "watch"}, "linux", "mac", "iphone", "server", "", "Full")},
+		// The valid body is an admin member, so a phone's or a watch's
+		// role, which has no caps, makes it invalid, as does a member
+		// without the cap admin.
+		genField{"role", jString, true, genEnum([]string{"member"}, "phone", "watch", "full", "lite", "linux", "server", "", "Member")},
+		genField{"caps", jArray, true, []genValue{
+			ok("admin", `["admin"]`), ok("admin and hub", `["admin","hub"]`), ok("all three", `["admin","dials","hub"]`),
+			bad("empty", `[]`), bad("without admin", `["dials","hub"]`), bad("not sorted", `["hub","admin"]`),
+			bad("twice", `["admin","admin"]`), bad("unknown", `["admin","relay"]`), bad("of a number", `[1]`),
+		}},
 		genField{"os", jString, false, genEnum([]string{"linux", "windows", "macos", "ios", "android", "watchos", "wearos", "none"}, "", "beos", "Linux", "mac", "iphone")},
 		genField{"key", jString, true, genHashValues()},
 		genField{"admin", jString, false, genHashValues()},

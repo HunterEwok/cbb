@@ -77,8 +77,11 @@ pub struct Config {
 pub struct DeviceView {
     pub id: String,
     pub name: String,
-    /// `full`, `phone`, `lite` or `watch`.
+    /// `member`, `phone` or `watch`.
     pub role: String,
+    /// What a member can do, from its record, or from its hello while no
+    /// record lists it.
+    pub caps: Vec<String>,
     /// Its system, from its hello when it is connected, else its record's;
     /// empty when neither tells.
     pub os: String,
@@ -186,6 +189,7 @@ impl Member {
         let node = Node::new(ident, &cfg.name, engine.clone(), records, cfg.state_dir, cfg.on_write, log.clone())
             .presenting(Presence {
                 role: "phone".into(),
+                caps: Vec::new(),
                 name: cfg.name,
                 os: cfg.os,
                 key_store: cfg.key_store,
@@ -616,6 +620,7 @@ impl Member {
                     id: d.id,
                     name: d.name,
                     role: d.role,
+                    caps: d.caps,
                 }
             })
             .collect();
@@ -629,6 +634,7 @@ impl Member {
                     mac: p.device.mac.clone(),
                     name: p.name,
                     role: p.role,
+                    caps: p.caps,
                     os: p.os,
                     online: true,
                     ..Default::default()

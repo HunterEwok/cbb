@@ -63,7 +63,7 @@ final class MemberTests: XCTestCase {
             XCTAssertEqual(mine, goFrame.value as! NSDictionary)
         }
         guard case let .hello(role, h) = decoded[0] else { return XCTFail("frame 0 is \(decoded[0])") }
-        XCTAssertEqual(role, .full)
+        XCTAssertEqual(role, .member)
         XCTAssertEqual(h.name, "pi")
         XCTAssertEqual(h.records, "q83vEjRWeJA=")
         // Copies travel sealed: the hello's copy shows its header only, unread.
@@ -189,12 +189,12 @@ final class MemberTests: XCTestCase {
     func testBadMessages() {
         XCTAssertThrowsError(try Member.decode(body: Data("{".utf8)))
         XCTAssertThrowsError(try Member.decode(body: Data(#"{"t":"hello","role":"toaster","hello":{}}"#.utf8)))
-        XCTAssertThrowsError(try Member.decode(body: Data(#"{"t":"hello","role":"full"}"#.utf8)))
+        XCTAssertThrowsError(try Member.decode(body: Data(#"{"t":"hello","role":"member"}"#.utf8)))
         // An event from a newer version is dropped, not an error.
         XCTAssertEqual(try Member.decode(body: Data(#"{"t":"event","event":{"kind":"image"}}"#.utf8)), .event(nil))
         XCTAssertEqual(try Member.decode(body: Data(#"{"t":"gift"}"#.utf8)), .unknown("gift"))
         // A hello whose current event does not decode has none.
-        guard case let .hello(_, h) = try! Member.decode(body: Data(#"{"t":"hello","role":"full","hello":{"wall_ms":1,"current":{"kind":"image"}}}"#.utf8)) else {
+        guard case let .hello(_, h) = try! Member.decode(body: Data(#"{"t":"hello","role":"member","hello":{"wall_ms":1,"current":{"kind":"image"}}}"#.utf8)) else {
             return XCTFail()
         }
         XCTAssertNil(h.current)

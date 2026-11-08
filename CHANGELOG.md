@@ -1455,6 +1455,17 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The roles `full` and `lite` are one role, `member`, with capabilities (D-89; docs/protocol.md
+  section 4, "Capabilities"): `admin` (it can hold an admin key), `dials` (it dials other
+  members) and `hub` (it may be chosen as the hub), in its hello (`caps`), its device record
+  and its pairing Info. Of two members that dial, the lower device ID dials and the other
+  does after 30 s; a member that does not dial publishes `r=listen` in place of `r=lite`, and
+  every member dials it. Computers, Raspberry Pis and routers have all three; the Rust `cbb`
+  takes `-caps` (all three by default, `admin,dials` for the ZX Next's Pi), and an ESP32 has
+  none. The apps show "Member" and decide what a device can do from its capabilities. Groups
+  set up during development whose records name `full` or `lite` are set up again: no release
+  carried those records. The ZX Next's `.cbb net on` looks for a computer past the members
+  with `r=listen`, as it did past `r=lite`.
 - The Android and iPhone apps put one received image or video, and an image the button
   fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
   Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).

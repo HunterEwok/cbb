@@ -73,7 +73,7 @@ func writeCopyChecks(t *testing.T, path string) {
 	var recs []Record
 	device := func(id *Identity, name string, ms int64, sealKey []byte, forwardOnly bool) {
 		key := KeyHashOf(id.Cert)
-		r, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(root), TimeMS: ms, Device: string(id.ID), Name: name, Role: RoleFull,
+		r, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(root), TimeMS: ms, Device: string(id.ID), Name: name, Role: RoleMember, Caps: AllCaps,
 			Key: &key, Seal: sealKey, ForwardOnly: forwardOnly, HoldsRoot: id == admin}, admin.GroupCA.Key)
 		if err != nil {
 			t.Fatal(err)

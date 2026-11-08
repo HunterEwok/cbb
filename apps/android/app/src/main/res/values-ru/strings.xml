@@ -218,10 +218,8 @@
     <string name="reason_set_mode">Изменить режим синхронизации компьютера</string>
     <string name="error_command_refused">Компьютер отказался.</string>
     <string name="error_no_answer">Компьютер не ответил. Возможно, он не в сети или на нём старая версия CBB.</string>
-    <string name="role_full">Полный участник</string>
-    <string name="role_full_rootless">Полный участник, rootless</string>
-    <string name="role_lite">Лёгкий участник</string>
-    <string name="role_lite_rootless">Лёгкий участник, rootless</string>
+    <string name="role_member">Участник</string>
+    <string name="role_member_rootless">Участник, rootless</string>
     <string name="role_phone">Приложение на телефоне</string>
     <string name="kind_laptop">Ноутбук</string>
     <string name="kind_desktop">Компьютер</string>
