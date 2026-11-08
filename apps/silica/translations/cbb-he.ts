@@ -924,6 +924,10 @@
         <source>%1 files</source>
         <translation>%1 קבצים</translation>
     </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>הודבק מ־%1</translation>
+    </message>
 </context>
 <context>
     <name>ArrangePage</name>
@@ -1148,6 +1152,46 @@
     <message>
         <source>Type the clipboard</source>
         <translation>הקלדת הלוח</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>הדבקה מרחוק</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>לאפשר למנהלי הקבוצה להדביק שם</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>מנהל הקבוצה מקליד אז טקסט דרך הטלפון הזה במכשיר שהוא מחובר אליו, מהאפליקציה שלו או עם cbb paste. הטלפון מראה מי הדביק ושומר יומן של ההדבקות האחרונות בלי הטקסט שלהן.</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>לאפשר להדבקה ללחוץ Enter</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>גם טקסט עם מעבר שורה צריך את זה: המקלדת מקלידה מעבר שורה כ־Enter.</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>הדבקות אחרונות</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>(לא מאומת)</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>%1 בתים</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>נדחה</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>נכשל</translation>
     </message>
 </context>
 </TS>

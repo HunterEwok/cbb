@@ -924,6 +924,10 @@
         <source>%1 files</source>
         <translation>faili %1</translation>
     </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>Imebandikwa kutoka %1</translation>
+    </message>
 </context>
 <context>
     <name>ArrangePage</name>
@@ -1148,6 +1152,46 @@
     <message>
         <source>Type the clipboard</source>
         <translation>Andika ubao wa kunakili</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>Kubandika kwa mbali</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>Ruhusu wasimamizi wa kikundi kubandika huko</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>Kisha msimamizi wa kikundi huandika maandishi kupitia simu hii kwenye kifaa kilichounganishwa nayo, kutoka programu yake au kwa cbb paste. Simu hii huonyesha aliyebandika, na huweka kumbukumbu ya ubandikaji wa mwisho bila maandishi yake.</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>Ruhusu ubandikaji kubonyeza Enter</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>Maandishi yenye mstari mpya yanahitaji pia: kibodi huandika mstari mpya kama Enter.</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>Ubandikaji wa mwisho</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>(haijathibitishwa)</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>baiti %1</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>imekataliwa</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>imeshindwa</translation>
     </message>
 </context>
 </TS>

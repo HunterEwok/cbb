@@ -924,6 +924,10 @@
         <source>%1 files</source>
         <translation>ملفات: %1</translation>
     </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>تم اللصق من %1</translation>
+    </message>
 </context>
 <context>
     <name>ArrangePage</name>
@@ -1148,6 +1152,46 @@
     <message>
         <source>Type the clipboard</source>
         <translation>اكتب محتوى الحافظة</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>اللصق عن بُعد</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>السماح لمشرفي المجموعة باللصق هناك</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>عندها يكتب مشرف المجموعة نصًا عبر هذا الهاتف على الجهاز المتصل به، من تطبيقه أو باستخدام cbb paste. يعرض هذا الهاتف من قام باللصق، ويحتفظ بسجل لآخر عمليات اللصق دون نصها.</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>السماح للصق بالضغط على Enter</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>يحتاجه أيضًا النص الذي فيه سطر جديد: تكتب لوحة المفاتيح السطر الجديد على أنه Enter.</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>آخر عمليات اللصق</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>(غير موثّق)</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>%1 بايت</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>مرفوض</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>فشل</translation>
     </message>
 </context>
 </TS>

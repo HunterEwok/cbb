@@ -924,6 +924,10 @@
         <source>%1 files</source>
         <translation>%1 फ़ाइलें</translation>
     </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>%1 से पेस्ट किया गया</translation>
+    </message>
 </context>
 <context>
     <name>ArrangePage</name>
@@ -1148,6 +1152,46 @@
     <message>
         <source>Type the clipboard</source>
         <translation>क्लिपबोर्ड टाइप करें</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>रिमोट पेस्ट</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>समूह के एडमिन को वहाँ पेस्ट करने दें</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>तब समूह का कोई एडमिन इस फ़ोन के ज़रिए उस डिवाइस पर टेक्स्ट टाइप करता है जिससे यह जुड़ा है, अपने ऐप से या cbb paste से। यह फ़ोन दिखाता है कि किसने पेस्ट किया, और पिछले पेस्ट का लॉग उनके टेक्स्ट के बिना रखता है।</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>पेस्ट को Enter दबाने दें</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>लाइन ब्रेक वाले टेक्स्ट को भी इसकी ज़रूरत है: कीबोर्ड लाइन ब्रेक को Enter की तरह टाइप करता है।</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>पिछले पेस्ट</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>(असत्यापित)</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>%1 बाइट</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>अस्वीकृत</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>विफल</translation>
     </message>
 </context>
 </TS>

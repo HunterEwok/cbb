@@ -924,6 +924,10 @@
         <source>%1 files</source>
         <translation>%1 个文件</translation>
     </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>来自 %1 的粘贴</translation>
+    </message>
 </context>
 <context>
     <name>ArrangePage</name>
@@ -1148,6 +1152,46 @@
     <message>
         <source>Type the clipboard</source>
         <translation>输入剪贴板内容</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>远程粘贴</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>允许群组的管理员在那里粘贴</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>群组的管理员随后可以通过这部手机，在它所连接的设备上输入文本，可从自己的应用或用 cbb paste。这部手机会显示是谁粘贴的，并保留最近粘贴的记录，不含其文本。</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>允许粘贴按下回车键</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>含换行的文本也需要它：键盘会把换行输入为回车键。</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>最近的粘贴</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>（未验证）</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>%1 字节</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>已拒绝</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>失败</translation>
     </message>
 </context>
 </TS>

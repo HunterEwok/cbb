@@ -662,9 +662,15 @@ call (`cbb_core::keyboard`). Settings, Bluetooth keyboard has the switch, **Make
 visible** (two minutes, as "CBB keyboard"), the device's layout, the speed (10, 20 or 40) and
 **Type the clipboard**; the main page's pull-down menu types the clipboard too while a device
 is connected. Aurora's own pairing dialog asks about a new device, so the app has no agent.
-Remote pastes are not typed there yet: the Aurora app takes no remote paste. Not yet tried on
-the phone: whether the store's check takes the `Bluetooth` permission for a regular app, and
-whether the sandbox lets BlueZ call the app's objects.
+It is also the Aurora app's remote paste target (`src/pastereceiver.cpp`), since Aurora lets
+no app put keys into another one: with **Let the group's admins paste there** on, on the same
+page, an admin's `paste` command is typed on the connected device. The member passes the
+command to the app, which checks and opens it through the node (`check_command`, the
+paste's text cleaned as the computers clean it), keeps the replay cache, the limits per
+sender (one a second, 30 a minute) and the log of the last pastes without their text, and
+refuses a text with a line break unless **Let a paste press Enter** is on; `paste-off`
+turns the switch off. The package manager takes the `Bluetooth` permission for a regular
+app; not yet tried on the phone: whether the sandbox lets BlueZ call the app's objects.
 
 ## A computer as a TV's remote
 

@@ -22,7 +22,10 @@ All notable changes to cbb are documented in this file. The format follows
 - The Aurora app can be a Bluetooth keyboard: as the Linux computer, it registers the HID over
   GATT service with the phone's BlueZ, and types the clipboard into a TV, a tablet or a
   computer paired with it, in the device's layout (US or Russian) and at 10, 20 or 40
-  characters a second. The reports come from the core's new `keyboard` call.
+  characters a second. The reports come from the core's new `keyboard` call. It takes remote
+  pastes too, typed there once the phone's user turned remote paste on (Aurora lets no app type
+  into another); the phone's member checks and opens a command for the app with the new
+  member call `check_command`.
 - The Aurora app puts one received image in Pictures/CBB and one video in Videos/CBB, an album
   in the gallery; other files still go to Downloads/CBB.
 - A new device shows a code, and a computer of the group types it: a device that listens to
