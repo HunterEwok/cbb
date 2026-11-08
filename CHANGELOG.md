@@ -21,6 +21,8 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb sync -on DEVICE`, `cbb action -on DEVICE NAME`, `cbb action off -on DEVICE|-all` and
   `cbb paste-receive off -on DEVICE|-all` act on other devices from an admin, and `cbb sync`
   says until when sync is off as the Go cbb does.
+  `cbb keyboard` and `cbb remote` (the Bluetooth keyboard and a TV's remote) work from the
+  Rust cbb too.
   `cbb mute` and `cbb unmute` go through the administrator's socket, as in the Go service, and
   a command that does not reach a device names why.
 - The Go service's tests run on the Rust service (`CBB_TEST_RUST_SERVICE` names its

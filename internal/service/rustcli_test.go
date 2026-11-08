@@ -67,6 +67,10 @@ func TestRustCommandLine(t *testing.T) {
 	want("now waits 48h on each member", "takeover", "-delay", "48h")
 	misuse("takeover", "-delay")
 
+	want("This device is the remote of no TV", "remote")
+	misuse("remote", "-tv", "x", "add", "10.0.0.5")
+	misuse("keyboard", "off", "-rate", "20")
+
 	deck := startService(t, &h, "deck")
 	misuse("pair", "-now")
 	pair := exec.Command(bin, "-state", pi.dir, "-socket", pi.socket, "pair")

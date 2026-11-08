@@ -28,6 +28,7 @@ mod control;
 mod copies;
 pub mod credentials;
 mod device;
+mod devices_cli;
 pub mod discovery;
 pub mod entries;
 pub mod error;
@@ -240,6 +241,8 @@ pub fn main() {
                 "pair" if in_group(&g) => admit_cli::pair(&g, rest),
                 "pair" => join(&g, rest, false),
                 "invite" => admit_cli::invite(&g, rest),
+                "keyboard" => devices_cli::keyboard(&g, rest),
+                "remote" => devices_cli::remote(&g, rest),
                 "next" => std::process::exit(next::run(&g, rest)),
                 "service" => cmd_service(&g, rest),
                 "agent" if rest.is_empty() => agent::run(&g.socket),
