@@ -5,11 +5,6 @@
     <string name="full_name" translatable="false">Copy Beyond Borders</string>
     <string name="send_launcher" translatable="false">cbb send</string>
     <string name="tagline">One clipboard for this phone and your computers.</string>
-    <string name="welcome_title">This phone is ready</string>
-    <string name="welcome_body">It made its own secret key, which never leaves it and lets your devices recognise this phone. Now connect a device: tap Connect a new device and scan the QR code it shows.</string>
-    <string name="connect_device">Connect a new device</string>
-    <string name="connect_hint">On a computer, run cbb pair and scan the code it shows.</string>
-    <string name="join_other">I already use CBB on another phone</string>
     <string name="settings">Settings</string>
     <string name="close">Close</string>
     <string name="back">Back</string>
@@ -18,7 +13,6 @@
     <string name="remove">Remove</string>
     <string name="language">Language</string>
     <string name="language_system">System</string>
-    <string name="theme">Theme</string>
     <string name="theme_system">System</string>
     <string name="theme_material">Material You</string>
     <string name="theme_light">Light</string>
@@ -30,14 +24,7 @@
     <string name="join_qr_label">QR code to join the group</string>
     <string name="join_tv">Join a phone\'s group</string>
     <string name="join_tv_hint">This TV joins the group of your phone: it shows a QR code, and the phone scans it.</string>
-    <string name="join_computer">My group was made on a computer</string>
-    <string name="join_computer_title">Join a computer\'s group</string>
-    <string name="join_computer_hint">On the computer that created the group, run cbb pair -admin, then type the six-digit code it shows. Keep this phone on the same network.</string>
-    <string name="join_computer_code">Code</string>
-    <string name="join_computer_go">Join</string>
-    <string name="join_computer_searching">Looking for the computer…</string>
     <string name="join_hint_tv">On your phone, open CBB, tap + and scan this code. Keep this screen open.</string>
-    <string name="send_or_fetch">Send or fetch</string>
     <string name="sent">Sent to the computers.</string>
     <string name="fetched">Fetched from the computers.</string>
     <string name="nothing_new">Nothing new to send or fetch.</string>
@@ -62,8 +49,7 @@
     <string name="remove_body">It will no longer sync with your devices. To add it again, scan its QR code again.</string>
     <string name="remove_root_body">It made the group. This phone takes the group over with a new key, and the other devices follow it.</string>
     <string name="removed">Removed. The other devices refuse it from now on.</string>
-    <string name="not_admin_note">Only an admin phone can add or remove devices.</string>
-    <string name="lost_phone_note">Lost a phone? Make a second phone an admin: on it, tap I already use CBB on another phone, then scan its code here with +.</string>
+    <string name="lost_phone_note">Make a second phone an admin: on it, tap Join a group, then scan its code here with + and make it an admin.</string>
     <string name="add_device">Add a device</string>
     <string name="scan_hint">Point the camera at the QR code of cbb pair, or at the one your other phone shows.</string>
     <string name="paste_hint">Paste the text of the QR code of cbb pair.</string>
@@ -106,8 +92,6 @@
     <string name="error_no_window">No computer is waiting for a phone. Run cbb pair -admin on the computer that created the group, then try again.</string>
     <string name="error_two_windows">Two computers are waiting for a device at once. Close cbb pair on one of them, then try again.</string>
     <string name="error_needs_root">This computer did not open its window for a phone. Run cbb pair -admin on the computer that created the group.</string>
-    <string name="error_join_wrong_code">The code did not match. Check the code on the computer\'s screen and type it again.</string>
-    <string name="error_join_computer">The computer\'s group could not be joined. Run cbb pair -admin on it again.</string>
     <string name="error_no_screen_lock">Set a screen lock on this phone first: the group\'s keys need it.</string>
     <string name="error_not_authenticated">The fingerprint, face or screen lock was not confirmed, so nothing changed.</string>
     <string name="error_no_biometric">Add a fingerprint or face on this phone first: on Android 10 the group\'s keys need one.</string>
@@ -150,6 +134,11 @@
     <string name="share_allowed_none">None: the phone asks every app.</string>
     <string name="share_forget">Ask every app again</string>
     <string name="tile_label">Send clipboard</string>
+    <string name="tile_sync_on">Sync is on</string>
+    <string name="tile_sync_off">Sync is off</string>
+    <string name="tile_on">On</string>
+    <string name="tile_off">Off</string>
+    <string name="tile_no_group">Not in a group</string>
     <string name="accessibility_label">Send my copies by themselves</string>
     <string name="accessibility_description">Notices when you copy text, then reads the clipboard for a moment and sends the text to your computers. With remote paste on, it puts an admin\'s text into the text field that has the focus. It reads nothing else on the screen.</string>
     <string name="auto_send_body">Android lets an app read the clipboard only while it is in front. Turn CBB on in Accessibility, and what you copy goes to your computers without a tap; Android then says \"CBB pasted from your clipboard\" each time. Without it, use the Send clipboard tile, the notification\'s Send button, or Share.</string>
@@ -185,10 +174,7 @@
     <string name="hub_home_background">This phone is the hub, in the background too.</string>
     <string name="away_title">Away from home</string>
     <string name="away_body">When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group\'s keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone\'s tunnel key.</string>
-    <string name="away_switch">Sync away from home</string>
-    <string name="away_off">Off</string>
     <string name="away_waiting">Waiting for the hub: open the app at home once, near a computer of the group.</string>
-    <string name="away_at_home">At home: syncing directly.</string>
     <string name="away_connecting">Connecting to the hub through the tunnel…</string>
     <string name="away_connected">Connected to the hub through the tunnel.</string>
     <string name="away_connected_to">Connected to the hub %1$s through the tunnel.</string>
@@ -213,7 +199,6 @@
     <string name="reason_rename">Rename a device</string>
     <string name="widget_description">One tap sends what this phone copied to your computers.</string>
     <string name="cbb_name" translatable="false">CBB</string>
-    <string name="color">Colour</string>
     <string name="color_terminal">Terminal</string>
     <string name="color_midnight">Midnight</string>
     <string name="color_amber">Amber</string>
@@ -228,25 +213,12 @@
     <string name="layout_tiles">Tiles</string>
     <string name="layout_list">List</string>
     <string name="layout_orbit">Orbit</string>
-    <string name="view_now">View: %1$s</string>
     <string name="online_count">%1$d of %2$d online</string>
     <string name="root">root</string>
     <string name="type">Type</string>
-    <string name="operating_system">Operating system</string>
     <string name="mac_address">MAC address</string>
     <string name="hidden_by_system">hidden by the system</string>
     <string name="role">Role</string>
-    <string name="in_the_group">In the group</string>
-    <string name="sync_mode">Sync mode</string>
-    <string name="mode_own">Own clipboard</string>
-    <string name="mode_shared">Shared</string>
-    <string name="mode_receive">Receive only</string>
-    <string name="mode_send">Send only</string>
-    <string name="mode_own_note">Its copies stay on it and the group\'s do not come; sending or fetching by hand still works.</string>
-    <string name="mode_shared_note">Its copies go to the group, and the group\'s come to it.</string>
-    <string name="mode_receive_note">The group\'s copies come to it; its own stay on it.</string>
-    <string name="mode_send_note">Its copies go to the group; the group\'s do not come.</string>
-    <string name="mode_set">The sync mode is set.</string>
     <string name="reason_set_mode">Change a computer\'s sync mode</string>
     <string name="error_command_refused">The computer refused.</string>
     <string name="error_no_answer">The computer did not answer. It may be offline, or run an older version of CBB.</string>
@@ -469,7 +441,6 @@
     <string name="handed_body">The computer that held the group handed it to this phone. Take it to make this phone the group\'s root; the computer stays in the group.</string>
     <string name="handed_take">Take the group</string>
     <string name="handed_taken">This phone is the group\'s root now. The other devices hear of it as soon as they connect.</string>
-    <string name="restore">I have the group\'s recovery sheet</string>
     <string name="restore_title">Restore the group</string>
     <string name="restore_hint">Point the camera at the QR code on the recovery sheet. Keep this phone on the network of a computer of the group. This phone becomes the group\'s root when the group\'s waiting time ends, unless the old phone cancels it.</string>
     <string name="restore_go">Restore</string>
@@ -558,8 +529,6 @@
     <string name="error_root_leaves">This phone holds the group\'s root, and the group has other devices. Remove them first, or let an admin phone take the group over.</string>
     <string name="reason_mute">Mute a device</string>
     <string name="reason_unmute">Unmute a device</string>
-    <string name="pause_on">This phone takes no copies from the group for now.</string>
-    <string name="pause_off">This phone takes copies from the group again.</string>
     <string name="mute_done">The device is muted: its copies stay its own.</string>
     <string name="unmute_done">The device is unmuted.</string>
     <string name="error_muted">An admin muted this phone, so its copies stay on it.</string>
@@ -569,11 +538,6 @@
     <string name="pause_hour">For an hour</string>
     <string name="pause_eight">For 8 hours</string>
     <string name="pause_ever">Until I turn it on</string>
-    <string name="pause_taking">Taking copies from the group</string>
-    <string name="pause_not_taking">Not taking copies from the group</string>
-    <string name="pause_not_taking_until">Not taking copies until %1$s</string>
-    <string name="pause_turn_off">take no copies from the group</string>
-    <string name="pause_turn_on">take copies from the group again</string>
     <string name="pause_for_a_time">pick for how long</string>
     <string name="muted_mark">muted</string>
     <string name="muted_until">Muted until %1$s</string>
@@ -582,4 +546,35 @@
     <string name="unmute">Unmute</string>
     <string name="mute_note">Its copies then reach no device of the group; it still takes theirs.</string>
     <string name="mute_ever">Until an admin unmutes it</string>
+    <!-- Two buttons (docs/apps.md): Start, Home's switches and menus, Settings' tips -->
+    <string name="create_group">Create a group</string>
+    <string name="join_group">Join a group</string>
+    <string name="restore_link">Restore with the recovery key</string>
+    <string name="sync_on">Sync is on</string>
+    <string name="sync_off">Sync is off</string>
+    <string name="sync_off_until">Sync is off until %1$s</string>
+    <string name="sync_turn_off">turn sync off</string>
+    <string name="sync_turn_on">turn sync on</string>
+    <string name="sync_turned_on">Sync is on.</string>
+    <string name="sync_turned_off">Sync is off: nothing goes out or comes in.</string>
+    <string name="away_is_on">Everywhere is on</string>
+    <string name="away_is_off">Everywhere is off</string>
+    <string name="away_waits">Everywhere waits while sync is off</string>
+    <string name="away_turn_on">turn Everywhere on</string>
+    <string name="away_turn_off">turn Everywhere off</string>
+    <string name="away_ask_title">Turn Everywhere on?</string>
+    <string name="turn_on">Turn on</string>
+    <string name="scan_code">Scan a code</string>
+    <string name="invite_send">Send an invitation</string>
+    <string name="invite_on_hub">An invitation is made on the group\'s hub. On a computer that is the hub, run cbb invite and send the file it makes through a channel you trust; on the new device, run cbb pair -invite with that file.</string>
+    <string name="more">More</string>
+    <string name="view_next">Show as %1$s</string>
+    <string name="lost_phone_title">Lost phone?</string>
+    <string name="send_copy">Send what I copied</string>
+    <string name="close_tip">Close the tip</string>
+    <string name="appearance">Appearance</string>
+    <string name="advanced_settings">Advanced settings</string>
+    <string name="sync">Sync</string>
+    <string name="badge_hub">hub</string>
+    <string name="device_id">Device ID</string>
 </resources>

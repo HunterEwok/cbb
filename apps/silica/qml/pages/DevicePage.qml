@@ -5,9 +5,10 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "devices.js" as Devices
 
-// A device's page (docs/apps.md, "Screens", Devices): its summary, brought
-// up to date while the page is open, and for an admin the device's actions,
-// each confirmed before the admin key signs it.
+// A device's card (docs/apps.md, "Screens", Devices): its marks, one line,
+// the house, the rest under More, brought up to date while the page is
+// open; for an admin the device's actions in the pull-down menu, each
+// confirmed before the admin key signs it.
 Page {
     id: page
     property var device
@@ -103,18 +104,35 @@ Page {
 
             PageHeader {
                 title: Devices.name(page.device)
-                description: Devices.mark(page.device)
+                description: [Devices.mark(page.device), page.device.self ? "" : Devices.status(page.device)].filter(function(s) { return s !== "" }).join(" · ")
             }
 
-            DetailItem { label: qsTr("Type"); value: Devices.kind(page.device) }
-            DetailItem {
-                visible: value !== ""
-                label: qsTr("System")
-                value: Devices.system(page.device)
+            // One line: its system and its CBB version.
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                text: Devices.line(page.device)
+                color: Theme.highlightColor
+                truncationMode: TruncationMode.Fade
             }
-            DetailItem { label: qsTr("In the group"); value: Devices.role(page.device) }
-            DetailItem { label: qsTr("Status"); value: Devices.status(page.device) }
-            DetailItem { label: qsTr("Device ID"); value: page.device.device }
+
+            // The house (docs/apps.md, Devices): this phone's sync, or for an
+            // admin another device's, through a mode command it signs.
+            TextSwitch {
+                visible: page.device.self ? app.member.running : page.acts && page.device.sync !== ""
+                text: qsTr("Sync")
+                description: page.device.self ? (app.member.paused ? qsTr("Sync is off") : qsTr("Sync is on"))
+                                              : (page.device.sync === "on" ? qsTr("Sync is on") : qsTr("Sync is off"))
+                automaticCheck: false
+                checked: page.device.self ? !app.member.paused : page.device.sync === "on"
+                onClicked: {
+                    if (page.device.self)
+                        app.member.paused ? app.member.resume() : app.member.pause(0)
+                    else
+                        app.manage(checked ? "sync_off" : "sync_on", page.device.device)
+                }
+            }
+
             DetailItem {
                 visible: page.device.root && app.claimState !== ""
                 label: qsTr("Taking the group over")
@@ -122,6 +140,29 @@ Page {
                        ? qsTr("Waiting, %1 h left").arg(Math.ceil(app.claimLeftMs / 3600000))
                        : app.claimState === "none" ? qsTr("Waiting for the group to get the claim")
                        : qsTr("In dispute: the group's root answered the claim")
+            }
+
+            // The rest under More.
+            ExpandingSectionGroup {
+                ExpandingSection {
+                    title: qsTr("More")
+                    content.sourceComponent: Column {
+                        width: parent.width
+                        DetailItem { label: qsTr("Type"); value: Devices.kind(page.device) }
+                        DetailItem { label: qsTr("In the group"); value: Devices.role(page.device) }
+                        DetailItem {
+                            visible: value !== ""
+                            label: qsTr("System version")
+                            value: page.device.os_version || ""
+                        }
+                        DetailItem {
+                            visible: value !== ""
+                            label: qsTr("MAC address")
+                            value: page.device.mac || ""
+                        }
+                        DetailItem { label: qsTr("Device ID"); value: page.device.device }
+                    }
+                }
             }
         }
         VerticalScrollDecorator {}

@@ -590,7 +590,7 @@ func joinByQR(stdin io.Reader, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	defer c.Close()
-	fmt.Fprintln(stdout, "In the CBB app, tap \"Connect a new device\" and scan this:")
+	fmt.Fprintln(stdout, "On a phone of the group, tap + in the CBB app, then Scan a code, and scan this:")
 	fmt.Fprintln(stdout)
 	if err := writeQR(stdout, text); err != nil {
 		return fail(stderr, err)

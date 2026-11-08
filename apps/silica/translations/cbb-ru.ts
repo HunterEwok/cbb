@@ -204,86 +204,6 @@
         <translation>Проверить ключ снова</translation>
     </message>
     <message>
-        <source>Join a group</source>
-        <translation>Войти в группу</translation>
-    </message>
-    <message>
-        <source>Last copy</source>
-        <translation>Последняя копия</translation>
-    </message>
-    <message>
-        <source>Leave the group</source>
-        <translation>Выйти из группы</translation>
-    </message>
-    <message>
-        <source>Leaving the group</source>
-        <translation>Выход из группы</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>Войти в группу как админ</translation>
-    </message>
-    <message>
-        <source>For 15 minutes</source>
-        <translation>На 15 минут</translation>
-    </message>
-    <message>
-        <source>For an hour</source>
-        <translation>На час</translation>
-    </message>
-    <message>
-        <source>For 8 hours</source>
-        <translation>На 8 часов</translation>
-    </message>
-    <message>
-        <source>Until I turn it on</source>
-        <translation>Пока не включу</translation>
-    </message>
-    <message>
-        <source>Taking copies</source>
-        <translation>Копии принимаются</translation>
-    </message>
-    <message>
-        <source>Not taking copies until %1</source>
-        <translation>Копии не принимаются до %1</translation>
-    </message>
-    <message>
-        <source>Not taking copies</source>
-        <translation>Копии не принимаются</translation>
-    </message>
-    <message>
-        <source>Tap to take no copies from the group, or again; hold it for a time</source>
-        <translation>Нажмите, чтобы не принимать копии группы или снова принимать; удерживайте, чтобы выбрать время</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
-        <translation>Админ заглушил этот телефон до %1: его копии не доходят до группы.</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
-        <translation>Админ заглушил этот телефон: его копии не доходят до группы, пока админ не включит его.</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>В группе</translation>
-    </message>
-    <message>
-        <source>Admin</source>
-        <translation>Админ</translation>
-    </message>
-    <message>
-        <source>Member</source>
-        <translation>Участник</translation>
-    </message>
-    <message>
-        <source>The phone has no key yet. Pull down to check it again.</source>
-        <translation>У телефона ещё нет ключа. Потяните вниз, чтобы проверить снова.</translation>
-    </message>
-    <message>
-        <source>Devices</source>
-        <translation>Устройства</translation>
-    </message>
-    <message>
         <source>Settings</source>
         <translation>Настройки</translation>
     </message>
@@ -296,36 +216,120 @@
         <translation>Показывать устройства списком</translation>
     </message>
     <message>
-        <source>Add a device</source>
-        <translation>Добавить устройство</translation>
+        <source>Scan a code</source>
+        <translation>Сканировать код</translation>
     </message>
     <message>
-        <source>Make a group</source>
+        <source>Create a group</source>
         <translation>Создать группу</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>Выход из группы и удаление её корневого ключа</translation>
+        <source>Join a group</source>
+        <translation>Войти в группу</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one or make one.</source>
-        <translation>Телефон пока не в группе. Потяните вниз, чтобы вступить в группу или создать её.</translation>
+        <source>Join a group as an admin</source>
+        <translation>Войти в группу как админ</translation>
     </message>
     <message>
-        <source>Root</source>
-        <translation>Корень</translation>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>У телефона ещё нет ключа. Потяните вниз, чтобы проверить снова.</translation>
     </message>
     <message>
-        <source>Sync the clipboard</source>
-        <translation>Синхронизировать буфер обмена</translation>
+        <source>%1 of %2 online</source>
+        <translation>В сети %1 из %2</translation>
     </message>
     <message>
-        <source>Sync</source>
-        <translation>Синхронизировать</translation>
+        <source>Sync is on</source>
+        <translation>Синхронизация включена</translation>
     </message>
     <message>
-        <source>Fetching…</source>
-        <translation>Получение…</translation>
+        <source>Sync is off until %1</source>
+        <translation>Синхронизация выключена до %1</translation>
+    </message>
+    <message>
+        <source>Sync is off</source>
+        <translation>Синхронизация выключена</translation>
+    </message>
+    <message>
+        <source>Everywhere is off</source>
+        <translation>«Везде» выключено</translation>
+    </message>
+    <message>
+        <source>Everywhere waits while sync is off</source>
+        <translation>«Везде» ждёт, пока синхронизация выключена</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>Дома: синхронизация напрямую.</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>Подключение к хабу через туннель…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>Подключено к хабу %1 через туннель.</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>Подключено к хабу через туннель.</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>Ждём хаб: один раз откройте приложение дома, рядом с компьютером группы.</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>Выключить синхронизацию</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>Включить синхронизацию</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere off</source>
+        <translation>Выключить «Везде»</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere on</source>
+        <translation>Включить «Везде»</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>Админ заглушил этот телефон до %1: его копии не доходят до группы.</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>Админ заглушил этот телефон: его копии не доходят до группы, пока админ не включит его.</translation>
+    </message>
+    <message>
+        <source>Lost phone?</source>
+        <translation>Потеряли телефон?</translation>
+    </message>
+    <message>
+        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
+        <translation>Сделайте второй телефон админом: на нём нажмите «Войти в группу как админ», затем отсканируйте его код здесь через «Сканировать код». Нажмите, чтобы закрыть.</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>Устройства</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>Выключить на 15 минут</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>Выключить на час</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>Выключить на 8 часов</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>Выключить, пока не включу</translation>
     </message>
 </context>
 <context>
@@ -355,32 +359,20 @@
         <translation>Спор: корень группы ответил на заявку</translation>
     </message>
     <message>
-        <source>System</source>
-        <translation>Система</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>В группе</translation>
-    </message>
-    <message>
-        <source>Type</source>
-        <translation>Тип</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>Состояние</translation>
-    </message>
-    <message>
-        <source>Device ID</source>
-        <translation>ID устройства</translation>
-    </message>
-    <message>
         <source>Remove</source>
         <translation>Удалить</translation>
     </message>
     <message>
         <source>Removing %1</source>
         <translation>Удаление: %1</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>Сделать админом</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>%1 становится админом</translation>
     </message>
     <message>
         <source>Unfreeze</source>
@@ -399,24 +391,52 @@
         <translation>Заглушить до отмены</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>Заглушить на час</translation>
-    </message>
-    <message>
         <source>Muting %1</source>
         <translation>Заглушение: %1</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Заглушить на час</translation>
     </message>
     <message>
         <source>Rename</source>
         <translation>Переименовать</translation>
     </message>
     <message>
-        <source>Make an admin</source>
-        <translation>Сделать админом</translation>
+        <source>Sync</source>
+        <translation>Синхронизация</translation>
     </message>
     <message>
-        <source>Making %1 an admin</source>
-        <translation>%1 становится админом</translation>
+        <source>Sync is off</source>
+        <translation>Синхронизация выключена</translation>
+    </message>
+    <message>
+        <source>Sync is on</source>
+        <translation>Синхронизация включена</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>Подробнее</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>Тип</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>В группе</translation>
+    </message>
+    <message>
+        <source>System version</source>
+        <translation>Версия системы</translation>
+    </message>
+    <message>
+        <source>MAC address</source>
+        <translation>MAC-адрес</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>ID устройства</translation>
     </message>
 </context>
 <context>
@@ -470,6 +490,42 @@
         <translation>Показывает саму ошибку под каждым сообщением об ошибке</translation>
     </message>
     <message>
+        <source>Notifications</source>
+        <translation>Уведомления</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>Устройства вступают или уходят</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>Устройство становится админом</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>Устройство замораживают или размораживают</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>Другой телефон забирает группу</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Группа</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>Выйти из группы</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>Выход из группы и удаление её корневого ключа</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>Выход из группы</translation>
+    </message>
+    <message>
         <source>About</source>
         <translation>О приложении</translation>
     </message>
@@ -510,64 +566,8 @@
         <translation>Отпечаток ключа</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>Группа</translation>
-    </message>
-    <message>
         <source>Device</source>
         <translation>Устройство</translation>
-    </message>
-    <message>
-        <source>Notifications</source>
-        <translation>Уведомления</translation>
-    </message>
-    <message>
-        <source>Devices join or leave</source>
-        <translation>Устройства вступают или уходят</translation>
-    </message>
-    <message>
-        <source>A device becomes an admin</source>
-        <translation>Устройство становится админом</translation>
-    </message>
-    <message>
-        <source>A device is frozen or unfrozen</source>
-        <translation>Устройство замораживают или размораживают</translation>
-    </message>
-    <message>
-        <source>Another phone takes the group over</source>
-        <translation>Другой телефон забирает группу</translation>
-    </message>
-    <message>
-        <source>Away from home</source>
-        <translation>Вне дома</translation>
-    </message>
-    <message>
-        <source>Sync away from home</source>
-        <translation>Синхронизировать вне дома</translation>
-    </message>
-    <message>
-        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
-        <translation>Когда телефон не в домашней сети, он синхронизируется через туннель WireGuard вашего собственного хаба: компьютера группы, настроенного командой cbb global hub. Его порт доступен из интернета, но только через WireGuard с ключами группы. Хаб ответит этому телефону, когда тот в следующий раз подключится дома. Больше никуда ничего не уходит, а без туннеля нет и соединения. При выключении телефон забывает свой ключ туннеля.</translation>
-    </message>
-    <message>
-        <source>At home: syncing directly.</source>
-        <translation>Дома: синхронизация напрямую.</translation>
-    </message>
-    <message>
-        <source>Connecting to the hub through the tunnel…</source>
-        <translation>Подключение к хабу через туннель…</translation>
-    </message>
-    <message>
-        <source>Connected to the hub %1 through the tunnel.</source>
-        <translation>Подключено к хабу %1 через туннель.</translation>
-    </message>
-    <message>
-        <source>Connected to the hub through the tunnel.</source>
-        <translation>Подключено к хабу через туннель.</translation>
-    </message>
-    <message>
-        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
-        <translation>Ждём хаб: один раз откройте приложение дома, рядом с компьютером группы.</translation>
     </message>
 </context>
 <context>
@@ -746,8 +746,8 @@
         <translation>Заглушён</translation>
     </message>
     <message>
-        <source>Paused</source>
-        <translation>На паузе</translation>
+        <source>Sync is off</source>
+        <translation>Синхронизация выключена</translation>
     </message>
     <message>
         <source>Looking for devices</source>
@@ -1192,6 +1192,21 @@
     <message>
         <source>failed</source>
         <translation>не удалось</translation>
+    </message>
+</context>
+<context>
+    <name>AwayDialog</name>
+    <message>
+        <source>Turn Everywhere on?</source>
+        <translation>Включить «Везде»?</translation>
+    </message>
+    <message>
+        <source>Turn on</source>
+        <translation>Включить</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>Когда телефон не в домашней сети, он синхронизируется через туннель WireGuard вашего собственного хаба: компьютера группы, настроенного командой cbb global hub. Его порт доступен из интернета, но только через WireGuard с ключами группы. Хаб ответит этому телефону, когда тот в следующий раз подключится дома. Больше никуда ничего не уходит, а без туннеля нет и соединения. При выключении телефон забывает свой ключ туннеля.</translation>
     </message>
 </context>
 </TS>

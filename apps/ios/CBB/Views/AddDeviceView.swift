@@ -30,7 +30,7 @@ struct AddDeviceView: View {
                         Text("Point the camera at the QR code on the recovery sheet. Keep this phone on the network of a computer of the group. This phone becomes the group's root when the group's waiting time ends, unless the old phone cancels it.")
                             .multilineTextAlignment(.center)
                     } else {
-                        Text("Point the camera at the QR code of cbb pair, or at the one your other phone shows.")
+                        Text("Point the camera at the QR code the new device shows.")
                             .multilineTextAlignment(.center)
                     }
                 } else {

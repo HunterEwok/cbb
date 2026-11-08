@@ -94,6 +94,14 @@ pub struct DeviceView {
     /// The group's records list it; a connected member they do not list
     /// yet is shown too.
     pub listed: bool,
+    /// Its sync, from its hello's mode: `on` (shared), `off` (own) or empty
+    /// while it is not connected or sent another mode.
+    pub sync: String,
+    /// The CBB version, system version and MAC address its hello names;
+    /// empty when it is not connected or named none.
+    pub version: String,
+    pub os_version: String,
+    pub mac: String,
 }
 
 /// A running member of a phone's app.
@@ -595,6 +603,10 @@ impl Member {
                 let peer = peers.iter().find(|p| p.id.as_str() == d.id);
                 DeviceView {
                     os: peer.filter(|p| !p.os.is_empty()).map_or(d.os.clone(), |p| p.os.clone()),
+                    sync: peer.map(|p| sync_of(&p.mode)).unwrap_or_default(),
+                    version: peer.map(|p| p.device.version.clone()).unwrap_or_default(),
+                    os_version: peer.map(|p| p.device.os_version.clone()).unwrap_or_default(),
+                    mac: peer.map(|p| p.device.mac.clone()).unwrap_or_default(),
                     online: peer.is_some(),
                     this: d.id == me,
                     root: root.as_deref() == Some(d.id.as_str()),
@@ -611,6 +623,10 @@ impl Member {
             if !out.iter().any(|d| d.id == p.id.as_str()) {
                 out.push(DeviceView {
                     id: p.id.to_string(),
+                    sync: sync_of(&p.mode),
+                    version: p.device.version.clone(),
+                    os_version: p.device.os_version.clone(),
+                    mac: p.device.mac.clone(),
                     name: p.name,
                     role: p.role,
                     os: p.os,
@@ -886,5 +902,31 @@ impl Commands {
             node.reconnect();
         });
         Ok(())
+    }
+}
+
+/// A hello's mode as the device's house: `on` for shared, `off` for own,
+/// empty for another mode or none.
+fn sync_of(mode: &str) -> String {
+    match mode {
+        "shared" => "on",
+        "own" => "off",
+        _ => "",
+    }
+    .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sync_of;
+
+    /// A device's house reads its hello's mode: shared is on, own is off,
+    /// and the old modes show nothing.
+    #[test]
+    fn house_from_mode() {
+        assert_eq!(sync_of("shared"), "on");
+        assert_eq!(sync_of("own"), "off");
+        assert_eq!(sync_of("receive"), "");
+        assert_eq!(sync_of(""), "");
     }
 }

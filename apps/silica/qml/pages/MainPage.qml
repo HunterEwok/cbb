@@ -21,52 +21,16 @@ Page {
         onTriggered: app.member.sendClipboard()
     }
 
-    RemorsePopup { id: remorse }
-
     SilicaFlickable {
         anchors.fill: parent
         contentHeight: column.height
 
         PullDownMenu {
             MenuItem {
-                visible: app.group === "" && app.keyLevel !== "none"
-                text: qsTr("Join a group")
-                onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"))
-            }
-            MenuItem {
-                visible: app.group === "" && app.keyLevel !== "none"
-                text: qsTr("Join a group as an admin")
-                onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"), { admin: true })
-            }
-            MenuItem {
-                visible: app.group === "" && app.keyLevel !== "none"
-                text: qsTr("Make a group")
-                enabled: !app.busy
-                onClicked: pageStack.push(Qt.resolvedUrl("NewGroupPage.qml"))
-            }
-            MenuItem {
-                visible: app.group !== ""
-                text: qsTr("Leave the group")
-                // The root's key goes with it: the group then has no root
-                // until an admin phone takes it over.
-                onClicked: remorse.execute(app.root ? qsTr("Leaving the group and deleting its root key")
-                                                    : qsTr("Leaving the group"), function() { app.leave() })
-            }
-            MenuItem {
-                visible: app.admin && app.member.running
-                text: qsTr("Add a device")
-                onClicked: pageStack.push(Qt.resolvedUrl("AddDevicePage.qml"))
-            }
-            MenuItem {
                 visible: app.keyboard.state === "connected"
                 text: qsTr("Type the clipboard on %1").arg(app.keyboard.host !== "" ? app.keyboard.host : qsTr("the keyboard's device"))
                 enabled: !app.keyboard.typing
                 onClicked: app.keyboard.typeClipboard()
-            }
-            MenuItem {
-                visible: app.member.running
-                text: qsTr("Sync the clipboard")
-                onClicked: app.member.button()
             }
             MenuItem {
                 visible: app.keyLevel === "none"
@@ -93,6 +57,11 @@ Page {
                 text: app.deviceList ? qsTr("Show the devices as tiles") : qsTr("Show the devices as a list")
                 onClicked: app.deviceList = !app.deviceList
             }
+            MenuItem {
+                visible: app.admin && app.member.running
+                text: qsTr("Scan a code")
+                onClicked: pageStack.push(Qt.resolvedUrl("AddDevicePage.qml"))
+            }
         }
 
         Column {
@@ -100,52 +69,146 @@ Page {
             width: parent.width
             spacing: Theme.paddingMedium
 
-            PageHeader { title: "CBB" }
+            PageHeader {
+                visible: app.group !== ""
+                title: "CBB"
+            }
 
-            // The quick switch (design.md, "Muting a device"): a tap keeps
-            // the group's copies out of the clipboard, or takes them again;
-            // a long press picks for how long. The phone's own copies still
-            // go out.
-            ListItem {
-                id: takeCopies
+            // Start (docs/apps.md, Start): the name, then make a group or
+            // join one; the settings and the language are in the pull-down
+            // menu, as in every Silica app.
+            Column {
+                visible: app.group === ""
+                width: parent.width
+                spacing: Theme.paddingLarge
+
+                Item { width: 1; height: Theme.itemSizeLarge }
+                Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "CBB"
+                    font.pixelSize: Theme.fontSizeHuge * 1.5
+                    font.bold: true
+                    color: Theme.highlightColor
+                }
+                Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Copy Beyond Borders"
+                    color: Theme.secondaryHighlightColor
+                }
+                Item { width: 1; height: Theme.paddingLarge }
+                Button {
+                    visible: app.keyLevel !== "none"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    preferredWidth: Theme.buttonWidthLarge
+                    text: qsTr("Create a group")
+                    enabled: !app.busy
+                    onClicked: pageStack.push(Qt.resolvedUrl("NewGroupPage.qml"))
+                }
+                Button {
+                    visible: app.keyLevel !== "none"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    preferredWidth: Theme.buttonWidthLarge
+                    text: qsTr("Join a group")
+                    onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"))
+                }
+                Button {
+                    visible: app.keyLevel !== "none"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    preferredWidth: Theme.buttonWidthLarge
+                    text: qsTr("Join a group as an admin")
+                    onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"), { admin: true })
+                }
+                Label {
+                    visible: app.keyLevel === "none" && !app.busy
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    horizontalAlignment: Text.AlignHCenter
+                    text: qsTr("The phone has no key yet. Pull down to check it again.")
+                    wrapMode: Text.Wrap
+                    color: Theme.highlightColor
+                }
+            }
+
+            // Home's top (docs/apps.md, Home): how many devices are online,
+            // and the two switches. The house: a tap turns sync off or on, a
+            // long press picks for how long it stays off. The globe:
+            // Everywhere, after its consent; it waits while sync is off.
+            Item {
+                id: summary
                 visible: app.member.running
-                contentHeight: Theme.itemSizeMedium
-                onClicked: app.member.paused ? app.member.resume() : app.member.pause(0)
-                menu: ContextMenu {
-                    MenuItem { text: qsTr("For 15 minutes"); onClicked: app.member.pause(15) }
-                    MenuItem { text: qsTr("For an hour"); onClicked: app.member.pause(60) }
-                    MenuItem { text: qsTr("For 8 hours"); onClicked: app.member.pause(8 * 60) }
-                    MenuItem { text: qsTr("Until I turn it on"); onClicked: app.member.pause(0) }
-                }
-                Switch {
-                    id: takeSwitch
-                    anchors.verticalCenter: parent.verticalCenter
-                    x: Theme.horizontalPageMargin - Theme.paddingLarge
-                    automaticCheck: false
-                    checked: !app.member.paused
-                    onClicked: app.member.paused ? app.member.resume() : app.member.pause(0)
-                    onPressAndHold: takeCopies.openMenu()
-                }
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                height: Math.max(house.height, words.height)
+
                 Column {
+                    id: words
+                    anchors.left: parent.left
+                    anchors.right: house.left
+                    anchors.rightMargin: Theme.paddingMedium
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.left: takeSwitch.right
-                    anchors.right: parent.right
-                    anchors.rightMargin: Theme.horizontalPageMargin
                     Label {
                         width: parent.width
-                        text: !app.member.paused ? qsTr("Taking copies")
-                            : app.member.pausedUntil.getTime() > 0
-                                ? qsTr("Not taking copies until %1").arg(Qt.formatTime(app.member.pausedUntil, "hh:mm"))
-                                : qsTr("Not taking copies")
-                        color: takeCopies.highlighted ? Theme.highlightColor : Theme.primaryColor
+                        text: qsTr("%1 of %2 online").arg(app.member.devices.filter(function(d) { return d.online }).length)
+                                                     .arg(app.member.devices.length)
+                        color: Theme.highlightColor
                         truncationMode: TruncationMode.Fade
                     }
                     Label {
                         width: parent.width
-                        text: qsTr("Tap to take no copies from the group, or again; hold it for a time")
+                        text: !app.member.paused ? qsTr("Sync is on")
+                            : app.member.pausedUntil.getTime() > 0
+                              ? qsTr("Sync is off until %1").arg(Qt.formatTime(app.member.pausedUntil, "hh:mm"))
+                              : qsTr("Sync is off")
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.secondaryHighlightColor
+                        wrapMode: Text.Wrap
+                    }
+                    Label {
+                        width: parent.width
+                        text: !app.member.awayOn ? qsTr("Everywhere is off")
+                            : app.member.paused ? qsTr("Everywhere waits while sync is off")
+                            : app.member.awayStatus === "home" ? qsTr("At home: syncing directly.")
+                            : app.member.awayStatus === "connecting" ? qsTr("Connecting to the hub through the tunnel…")
+                            : app.member.awayStatus === "connected"
+                              ? (app.member.awayHub !== "" ? qsTr("Connected to the hub %1 through the tunnel.").arg(app.member.awayHub)
+                                                           : qsTr("Connected to the hub through the tunnel."))
+                            : qsTr("Waiting for the hub: open the app at home once, near a computer of the group.")
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
                         wrapMode: Text.Wrap
+                    }
+                    Label {
+                        visible: app.member.awayError !== ""
+                        width: parent.width
+                        text: app.member.awayError
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.errorColor
+                        wrapMode: Text.Wrap
+                    }
+                }
+                SwitchFace {
+                    id: house
+                    anchors.right: globe.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    glyph: "house"
+                    on: !app.member.paused
+                    action: on ? qsTr("Turn sync off") : qsTr("Turn sync on")
+                    onClicked: app.member.paused ? app.member.resume() : app.member.pause(0)
+                    onPressAndHold: if (!app.member.paused) syncMenu.open(summary)
+                }
+                SwitchFace {
+                    id: globe
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    glyph: "globe"
+                    on: app.member.awayOn
+                    enabled: app.member.awayOn || !app.member.paused
+                    action: on ? qsTr("Turn Everywhere off") : qsTr("Turn Everywhere on")
+                    onClicked: {
+                        if (app.member.awayOn)
+                            app.member.setAway(false)
+                        else
+                            pageStack.push(Qt.resolvedUrl("AwayDialog.qml")).accepted.connect(function() { app.member.setAway(true) })
                     }
                 }
             }
@@ -164,35 +227,36 @@ Page {
 
             AlertsCard {}
 
-            // The one button (docs/design.md, "The one button"): a copy from
-            // another device that waits comes to the phone; otherwise what the
-            // phone copied goes to the group.
-            Button {
-                visible: app.member.running
-                anchors.horizontalCenter: parent.horizontalCenter
-                enabled: !app.member.fetching
-                text: app.member.fetching ? qsTr("Fetching…") : qsTr("Sync")
-                onClicked: app.member.button()
-            }
-
-            Label {
-                visible: app.group === "" && !app.busy
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                text: app.keyLevel === "none" ? qsTr("The phone has no key yet. Pull down to check it again.")
-                                              : qsTr("The phone is in no group yet. Pull down to join one or make one.")
-                wrapMode: Text.Wrap
-                color: Theme.highlightColor
-            }
-            DetailItem {
-                visible: app.group !== ""
-                label: qsTr("In the group")
-                value: app.root ? qsTr("Root") : app.admin ? qsTr("Admin") : qsTr("Member")
-            }
-            DetailItem {
-                visible: app.member.last !== ""
-                label: qsTr("Last copy")
-                value: app.member.last
+            // "Lost phone?" on the group's only admin: how a second phone
+            // becomes one. Closed once, it stays closed.
+            BackgroundItem {
+                id: lost
+                property bool closed: app.tipClosed("lostPhone")
+                visible: !closed && app.admin && app.member.running
+                         && app.member.devices.filter(function(d) { return d.admin }).length === 1
+                height: visible ? lostWords.height + 2 * Theme.paddingMedium : 0
+                onClicked: {
+                    app.closeTip("lostPhone")
+                    closed = true
+                }
+                Column {
+                    id: lostWords
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+                    Label {
+                        width: parent.width
+                        text: qsTr("Lost phone?")
+                        color: Theme.highlightColor
+                    }
+                    Label {
+                        width: parent.width
+                        text: qsTr("Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.")
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                        wrapMode: Text.Wrap
+                    }
+                }
             }
 
             // The group's devices (docs/apps.md, "Screens", Home), as tiles
@@ -233,6 +297,14 @@ Page {
                 color: Theme.errorColor
                 font.pixelSize: Theme.fontSizeSmall
             }
+        }
+        // The house's times, opened under Home's top by a long press.
+        ContextMenu {
+            id: syncMenu
+            MenuItem { text: qsTr("Off for 15 minutes"); onClicked: app.member.pause(15) }
+            MenuItem { text: qsTr("Off for an hour"); onClicked: app.member.pause(60) }
+            MenuItem { text: qsTr("Off for 8 hours"); onClicked: app.member.pause(8 * 60) }
+            MenuItem { text: qsTr("Off until I turn it on"); onClicked: app.member.pause(0) }
         }
         VerticalScrollDecorator {}
     }

@@ -174,25 +174,6 @@ void Member::stop()
     emit changed();
 }
 
-void Member::button()
-{
-    if (!m_member || m_fetch)
-        return;
-    Failure failure;
-    const QJsonObject copy = call(m_member, QStringLiteral("waiting"), QJsonObject(), &failure)
-                                 .value(QStringLiteral("copy"))
-                                 .toObject();
-    if (!failure.isNull()) {
-        m_error = Errors::shown(failure);
-        emit changed();
-        return;
-    }
-    if (!copy.isEmpty())
-        take(copy);
-    else
-        sendClipboard();
-}
-
 void Member::sendClipboard()
 {
     // A muted phone's copies stay its own; the main page says so.
@@ -427,9 +408,8 @@ void Member::event(const QByteArray &json)
         command(e.value(QStringLiteral("token")).toDouble(), e.value(QStringLiteral("from")).toString(),
                 e.value(QStringLiteral("command")).toObject());
     } else if (type == QStringLiteral("copy")) {
-        // Images or files from another device come by themselves while the
-        // phone takes the group's copies, as texts do through write; the
-        // button takes them otherwise.
+        // Images or files from another device come by themselves while
+        // sync is on, as texts do through write.
         const QJsonObject copy = e.value(QStringLiteral("copy")).toObject();
         if (copy.value(QStringLiteral("kind")).toString() == QStringLiteral("media") && !m_paused)
             take(copy);

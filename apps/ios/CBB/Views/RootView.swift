@@ -17,12 +17,12 @@ struct RootView: View {
             switch model.phase {
             case .start: StartView()
             case .joining: JoinView()
-            case .joiningComputer: JoinComputerView()
             case .home: HomeView()
             }
         }
         .environment(\.palette, palette)
         .environment(\.locale, language.locale ?? .autoupdatingCurrent)
+        .environment(\.layoutDirection, language.layoutDirection)
         .tint(palette.accent)
         .foregroundStyle(palette.text)
         .preferredColorScheme(appearance.scheme)

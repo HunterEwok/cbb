@@ -7,7 +7,16 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -60,10 +69,11 @@ internal fun DeviceDetail(model: AppModel, id: String, close: (() -> Unit)? = nu
     LaunchedEffect(d == null) { if (d == null) back() }
     if (d == null) return
     val content: @Composable ColumnScope.() -> Unit = {
-        Header(d, close)
-        Summary(d)
-        Actions(model, d)
+        Header(model, d, close)
+        SyncCard(model, d)
+        IconRow(model, d)
         model.message?.let { NoteText(it, dim = true) }
+        More(d)
     }
     if (close == null) {
         Page(d.name, back, content)
@@ -76,14 +86,22 @@ internal fun DeviceDetail(model: AppModel, id: String, close: (() -> Unit)? = nu
     }
 }
 
+/**
+ * The card's head (docs/apps.md, Devices): the icon, the name, the online
+ * dot and the badges (root, admin, hub), one line "system · CBB version",
+ * and on an admin phone ⋯ with what changes the device in the group.
+ */
 @Composable
-private fun Header(d: LiveGroup.Device, close: (() -> Unit)?) {
+private fun Header(model: AppModel, d: LiveGroup.Device, close: (() -> Unit)?) {
     val palette = LocalPalette.current
     Row(verticalAlignment = Alignment.Top) {
         DeviceIcon(d, 64.dp)
-        Column(Modifier.weight(1f).padding(horizontal = Tokens.spacingMedium).semantics(mergeDescendants = true) {}) {
+        Column(
+            Modifier.weight(1f).padding(horizontal = Tokens.spacingMedium).semantics(mergeDescendants = true) {},
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             Text(d.name, style = MaterialTheme.typography.titleLarge, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, maxLines = 2)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OnlineDot(d.online)
                 Text(
                     stringResource(
@@ -94,12 +112,181 @@ private fun Header(d: LiveGroup.Device, close: (() -> Unit)?) {
                         },
                     ),
                     color = if (d.online) palette.accent else palette.textDim,
-                    modifier = Modifier.padding(start = 6.dp),
                 )
+                for (b in badges(d)) Badge(stringResource(b))
             }
+            val line = listOfNotNull(d.systemWithVersion, d.device?.version?.let { "CBB $it" }).joinToString(" · ")
+            if (line.isNotEmpty()) Text(line, style = MaterialTheme.typography.bodySmall, color = palette.textDim)
         }
+        if (model.isAdmin) DeviceMenu(model, d)
         if (close != null) IconText("✕", stringResource(R.string.close), onClick = close)
     }
+}
+
+/** The badges after the online dot. */
+private fun badges(d: LiveGroup.Device): List<Int> = buildList {
+    if (d.isRoot) add(R.string.root) else if (d.admin) add(R.string.admin)
+    if (d.hub != null) add(R.string.badge_hub)
+    if (d.frozen) add(R.string.frozen)
+}
+
+@Composable
+private fun Badge(text: String) {
+    val palette = LocalPalette.current
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = palette.accent,
+        modifier = Modifier.border(1.dp, palette.accent, RoundedCornerShape(50)).padding(horizontal = 6.dp, vertical = 1.dp),
+    )
+}
+
+/** ⋯: rename, unfreeze, make it an admin, make it the hub, remove; each asks first where it should. */
+@Composable
+private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
+    val scope = rememberCoroutineScope()
+    var open by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf(false) }
+    var promoting by remember { mutableStateOf(false) }
+    var thawing by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
+    var hubbing by remember { mutableStateOf(false) }
+    Box {
+        IconText("⋯", stringResource(R.string.more)) { open = true }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            fun item(title: Int, danger: Boolean = false, act: () -> Unit) = @Composable {
+                DropdownMenuItem(
+                    text = { Text(stringResource(title), color = if (danger) LocalPalette.current.danger else Color.Unspecified) },
+                    onClick = {
+                        open = false
+                        act()
+                    },
+                )
+            }
+            item(R.string.rename) { renaming = true }()
+            if (d.frozen) item(R.string.unfreeze) { thawing = true }()
+            if (d.canMakeAdmin) item(R.string.make_admin) { promoting = true }()
+            // An admin computer, or one the root makes an admin first; this phone is the hub under Settings.
+            // A computer that is no admin can be a hub that only passes the copies on.
+            if (!d.isSelf && d.online && !d.throughHub && d.role == "full" && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
+                item(R.string.make_hub) { hubbing = true }()
+            }
+            if (!d.isSelf) item(R.string.remove, danger = true) { removing = true }()
+        }
+    }
+    if (removing) {
+        Confirm(
+            title = stringResource(R.string.remove_title, d.name),
+            body = stringResource(if (d.isRoot) R.string.remove_root_body else R.string.remove_body),
+            action = stringResource(R.string.remove),
+            dismiss = { removing = false },
+        ) { scope.launch { model.remove(d.id) } }
+    }
+    if (promoting) {
+        Confirm(
+            title = stringResource(R.string.make_admin_title, d.name),
+            body = if (d.keysInFile && model.keyLevel != KitRecords.LEVEL_FILES) {
+                stringResource(R.string.make_admin_body) + " " + stringResource(R.string.make_admin_files_body)
+            } else {
+                stringResource(if (d.keysInFile) R.string.make_admin_body else R.string.make_admin_hardware_body)
+            },
+            action = stringResource(R.string.make_admin),
+            dismiss = { promoting = false },
+        ) { scope.launch { model.makeAdmin(d.id) } }
+    }
+    if (hubbing) HubChoice(d, dismiss = { hubbing = false }) { forwardOnly -> scope.launch { model.makeHub(d.id, forwardOnly) } }
+    if (renaming) Rename(d, dismiss = { renaming = false }) { name -> scope.launch { model.rename(d.id, name) } }
+    if (thawing) {
+        Confirm(
+            title = stringResource(R.string.unfreeze_title, d.name),
+            body = stringResource(R.string.unfreeze_body),
+            action = stringResource(R.string.unfreeze),
+            dismiss = { thawing = false },
+        ) { scope.launch { model.unfreeze(d.id) } }
+    }
+}
+
+/**
+ * The house for this device: this phone's own sync, or on an admin phone
+ * another device's, turned with a command while it is online.
+ */
+@Composable
+private fun SyncCard(model: AppModel, d: LiveGroup.Device) {
+    val scope = rememberCoroutineScope()
+    val on = if (d.isSelf) model.syncOff == null else d.mode != "own"
+    if (!d.isSelf && (!model.isAdmin || d.mode == null)) return
+    val enabled = d.isSelf || d.online
+    Row(
+        Modifier.fillMaxWidth().card().toggleable(value = on, enabled = enabled, role = Role.Switch) { v ->
+            scope.launch { if (d.isSelf) model.turnSync(v) else model.setSync(d.id, v) }
+        }.padding(Tokens.spacingMedium),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Tokens.spacingMedium),
+    ) {
+        SwitchGlyph("house", if (on) LocalPalette.current.accent else LocalPalette.current.textDim, 24.dp)
+        Text(stringResource(R.string.sync), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+        androidx.compose.material3.Switch(checked = on, onCheckedChange = null, enabled = enabled)
+    }
+}
+
+/** The icons: paste on it, mute or unmute it, its quick actions; each only where it applies. */
+@Composable
+private fun IconRow(model: AppModel, d: LiveGroup.Device) {
+    if (!model.isAdmin) return
+    val scope = rememberCoroutineScope()
+    var pasting by remember { mutableStateOf(false) }
+    var acting by remember { mutableStateOf(false) }
+    var muting by remember { mutableStateOf(false) }
+    Row(horizontalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
+        // Computers, lite members and Android phones take pastes; iPhones cannot.
+        if (!d.isSelf && (d.role == "full" || d.role == "lite" || (d.role == "phone" && d.os == "android"))) {
+            IconLabel("⌨", stringResource(R.string.paste_on_it)) { pasting = true }
+        }
+        // An admin mutes any device for the whole group, or ends its mute (docs/design.md, "Muting a device").
+        if (d.muted != null) {
+            IconLabel("🔊", stringResource(R.string.unmute)) { scope.launch { model.setMuted(d.id, false) } }
+        } else {
+            IconLabel("🔇", stringResource(R.string.mute)) { muting = true }
+        }
+        // Computers run quick actions; the lite member reboots and restarts.
+        if (!d.isSelf && d.online && (d.role == "full" || d.role == "lite")) {
+            IconLabel("⚡", stringResource(R.string.quick_actions)) { acting = true }
+        }
+    }
+    if (muting) MuteChoice(dismiss = { muting = false }) { ms -> scope.launch { model.setMuted(d.id, true, ms) } }
+    if (pasting) PasteOn(model, d, dismiss = { pasting = false })
+    if (acting) QuickActions(model, d, dismiss = { acting = false })
+}
+
+/** An icon with its name under it, as one button. */
+@Composable
+private fun IconLabel(symbol: String, title: String, onClick: () -> Unit) {
+    val palette = LocalPalette.current
+    Column(
+        Modifier.width(80.dp).clip(RoundedCornerShape(Tokens.radiusCard)).focusRing().clickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = Tokens.spacingSmall).semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(Modifier.size(44.dp).clip(CircleShape).background(palette.surface), contentAlignment = Alignment.Center) {
+            Text(symbol, style = MaterialTheme.typography.titleMedium, color = palette.accent)
+        }
+        Text(title, style = MaterialTheme.typography.labelSmall, color = palette.text, textAlign = TextAlign.Center, maxLines = 2)
+    }
+}
+
+/** More: the rest of what the group knows of it, the MAC address and the ID among it. */
+@Composable
+private fun More(d: LiveGroup.Device) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val palette = LocalPalette.current
+    Text(
+        (if (open) "▾ " else "▸ ") + stringResource(R.string.more),
+        color = palette.accent,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).focusRing().toggleable(value = open, role = Role.Button) { open = it }
+            .padding(vertical = Tokens.spacingSmall),
+    )
+    if (open) Summary(d)
 }
 
 /** A row of the summary: what it is, and its value. */
@@ -111,8 +298,6 @@ private fun Summary(d: LiveGroup.Device) {
     val palette = LocalPalette.current
     val lines = buildList {
         add(Line(stringResource(R.string.type), stringResource(d.kind.title)))
-        d.systemWithVersion?.let { add(Line(stringResource(R.string.operating_system), it)) }
-        d.device?.version?.let { add(Line(stringResource(R.string.cbb_name), it, mono = true)) }
         val mac = d.device?.mac
         if (mac != null) {
             add(Line(stringResource(R.string.mac_address), mac, mono = true))
@@ -124,9 +309,8 @@ private fun Summary(d: LiveGroup.Device) {
         d.muted?.let { m ->
             add(Line(stringResource(R.string.copies), m.until?.let { stringResource(R.string.muted_until, shortTime(it, date = true)) } ?: stringResource(R.string.muted_until_unmuted)))
         }
-        d.standing?.let { add(Line(stringResource(R.string.in_the_group), stringResource(it))) }
         d.hub?.let { add(Line(stringResource(R.string.away_title), stringResource(if (it == LiveGroup.HubMark.IN_USE) R.string.group_hub_in_use else R.string.group_hub))) }
-        d.mode?.let { m -> modeTitle(m)?.let { add(Line(stringResource(R.string.sync_mode), stringResource(it))) } }
+        add(Line(stringResource(R.string.device_id), d.id, mono = true))
     }
     Column(Modifier.fillMaxWidth().card()) {
         lines.forEachIndexed { i, line ->
@@ -154,24 +338,6 @@ private fun roleTitle(role: String, rootless: Boolean) = when (role) {
     "lite" -> if (rootless) R.string.role_lite_rootless else R.string.role_lite
     "watch" -> R.string.kind_watch
     else -> if (rootless) R.string.role_full_rootless else R.string.role_full
-}
-
-/** The sync modes, in the order the apps show them (docs/design.md, Sync modes). */
-private val modes = listOf("own", "shared", "receive", "send")
-
-private fun modeTitle(mode: String) = when (mode) {
-    "own" -> R.string.mode_own
-    "shared" -> R.string.mode_shared
-    "receive" -> R.string.mode_receive
-    "send" -> R.string.mode_send
-    else -> null
-}
-
-private fun modeNote(mode: String) = when (mode) {
-    "own" -> R.string.mode_own_note
-    "shared" -> R.string.mode_shared_note
-    "receive" -> R.string.mode_receive_note
-    else -> R.string.mode_send_note
 }
 
 /**
@@ -207,107 +373,6 @@ private fun HubChoice(d: LiveGroup.Device, dismiss: () -> Unit, choose: (forward
         titleContentColor = palette.text,
         textContentColor = palette.textDim,
     )
-}
-
-/** The actions an admin phone has for it; a phone that is no admin has only its own sync mode. */
-@Composable
-private fun Actions(model: AppModel, d: LiveGroup.Device) {
-    val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    var removing by remember { mutableStateOf(false) }
-    var promoting by remember { mutableStateOf(false) }
-    var thawing by remember { mutableStateOf(false) }
-    var renaming by remember { mutableStateOf(false) }
-    var choosingMode by remember { mutableStateOf(false) }
-    var pasting by remember { mutableStateOf(false) }
-    var acting by remember { mutableStateOf(false) }
-    var hubbing by remember { mutableStateOf(false) }
-    var muting by remember { mutableStateOf(false) }
-    if (choosingMode) ModeChoice(d, dismiss = { choosingMode = false }) { mode -> scope.launch { model.setMode(d.id, mode) } }
-    // Every phone sets its own sync mode; an admin sets any other device's.
-    if (!model.isAdmin) {
-        if (d.isSelf) {
-            Column(Modifier.fillMaxWidth().card()) { Action("⇄", stringResource(R.string.sync_mode)) { choosingMode = true } }
-        } else {
-            Text(stringResource(R.string.not_admin_note), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
-        }
-        return
-    }
-    Column(Modifier.fillMaxWidth().card()) {
-        Action("✎", stringResource(R.string.rename)) { renaming = true }
-        if (d.frozen) {
-            HorizontalDivider(color = palette.line)
-            Action("❄", stringResource(R.string.unfreeze)) { thawing = true }
-        }
-        if (d.canMakeAdmin) {
-            HorizontalDivider(color = palette.line)
-            Action("★", stringResource(R.string.make_admin)) { promoting = true }
-        }
-        // An admin computer, or one the root makes an admin first; this phone is the hub under Settings.
-        // A computer that is no admin can be a hub that only passes the copies on.
-        if (!d.isSelf && d.online && !d.throughHub && d.role == "full" && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
-            HorizontalDivider(color = palette.line)
-            Action("⌁", stringResource(R.string.make_hub)) { hubbing = true }
-        }
-        if (d.isSelf || d.online) {
-            HorizontalDivider(color = palette.line)
-            Action("⇄", stringResource(R.string.sync_mode)) { choosingMode = true }
-        }
-        // Computers, lite members and Android phones take pastes; iPhones cannot.
-        if (!d.isSelf && (d.role == "full" || d.role == "lite" || (d.role == "phone" && d.os == "android"))) {
-            HorizontalDivider(color = palette.line)
-            Action("⌨", stringResource(R.string.paste_on_it)) { pasting = true }
-        }
-        // Computers run quick actions; the lite member reboots and restarts.
-        if (!d.isSelf && d.online && (d.role == "full" || d.role == "lite")) {
-            HorizontalDivider(color = palette.line)
-            Action("⚡", stringResource(R.string.quick_actions)) { acting = true }
-        }
-        // An admin mutes any device for the whole group, or ends its mute (docs/design.md, "Muting a device").
-        HorizontalDivider(color = palette.line)
-        if (d.muted != null) {
-            Action("🔊", stringResource(R.string.unmute)) { scope.launch { model.setMuted(d.id, false) } }
-        } else {
-            Action("🔇", stringResource(R.string.mute), danger = true) { muting = true }
-        }
-        if (!d.isSelf) {
-            HorizontalDivider(color = palette.line)
-            Action("✕", stringResource(R.string.remove), danger = true) { removing = true }
-        }
-    }
-    if (muting) MuteChoice(dismiss = { muting = false }) { ms -> scope.launch { model.setMuted(d.id, true, ms) } }
-    if (removing) {
-        Confirm(
-            title = stringResource(R.string.remove_title, d.name),
-            body = stringResource(if (d.isRoot) R.string.remove_root_body else R.string.remove_body),
-            action = stringResource(R.string.remove),
-            dismiss = { removing = false },
-        ) { scope.launch { model.remove(d.id) } }
-    }
-    if (promoting) {
-        Confirm(
-            title = stringResource(R.string.make_admin_title, d.name),
-            body = if (d.keysInFile && model.keyLevel != KitRecords.LEVEL_FILES) {
-                stringResource(R.string.make_admin_body) + " " + stringResource(R.string.make_admin_files_body)
-            } else {
-                stringResource(if (d.keysInFile) R.string.make_admin_body else R.string.make_admin_hardware_body)
-            },
-            action = stringResource(R.string.make_admin),
-            dismiss = { promoting = false },
-        ) { scope.launch { model.makeAdmin(d.id) } }
-    }
-    if (hubbing) HubChoice(d, dismiss = { hubbing = false }) { forwardOnly -> scope.launch { model.makeHub(d.id, forwardOnly) } }
-    if (pasting) PasteOn(model, d, dismiss = { pasting = false })
-    if (acting) QuickActions(model, d, dismiss = { acting = false })
-    if (renaming) Rename(d, dismiss = { renaming = false }) { name -> scope.launch { model.rename(d.id, name) } }
-    if (thawing) {
-        Confirm(
-            title = stringResource(R.string.unfreeze_title, d.name),
-            body = stringResource(R.string.unfreeze_body),
-            action = stringResource(R.string.unfreeze),
-            dismiss = { thawing = false },
-        ) { scope.launch { model.unfreeze(d.id) } }
-    }
 }
 
 /**
@@ -510,50 +575,4 @@ private fun MuteChoice(dismiss: () -> Unit, choose: (Long) -> Unit) {
         titleContentColor = palette.text,
         textContentColor = palette.textDim,
     )
-}
-
-/** The sync modes to pick from, the device's own marked. */
-@Composable
-private fun ModeChoice(d: LiveGroup.Device, dismiss: () -> Unit, choose: (String) -> Unit) {
-    val palette = LocalPalette.current
-    AlertDialog(
-        onDismissRequest = dismiss,
-        title = { Text(stringResource(R.string.sync_mode)) },
-        text = {
-            Column {
-                for (m in modes) {
-                    Row(
-                        Modifier.fillMaxWidth().heightIn(min = 48.dp).focusRing().clickable(role = Role.Button) {
-                            dismiss()
-                            choose(m)
-                        },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(if (m == d.mode) "✓" else "", color = palette.accent, modifier = Modifier.width(24.dp))
-                        Column(Modifier.padding(start = Tokens.spacingMedium, top = Tokens.spacingSmall, bottom = Tokens.spacingSmall)) {
-                            Text(stringResource(modeTitle(m)!!), color = palette.text)
-                            Text(stringResource(modeNote(m)), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = dismiss) { Text(stringResource(R.string.cancel)) } },
-        containerColor = palette.surface,
-        titleContentColor = palette.text,
-        textContentColor = palette.textDim,
-    )
-}
-
-@Composable
-private fun Action(symbol: String, title: String, danger: Boolean = false, perform: () -> Unit) {
-    val palette = LocalPalette.current
-    val color = if (danger) palette.danger else palette.accent
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).focusRing().clickable(role = Role.Button, onClick = perform).padding(horizontal = Tokens.spacingMedium),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(symbol, color = color, modifier = Modifier.width(24.dp))
-        Text(title, color = color, modifier = Modifier.padding(start = Tokens.spacingMedium))
-    }
 }

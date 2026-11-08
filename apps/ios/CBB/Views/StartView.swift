@@ -2,9 +2,10 @@
 
 import SwiftUI
 
-/// No group yet: what CBB does, the note that this phone is ready
-/// (once), connecting a device, and joining the group of a phone that
-/// already uses CBB. Colour and language are a tap away.
+/// No group yet: settings and the language at the top, the name, and the
+/// three ways in: Create a group (this phone becomes its root and adds a
+/// device at once), Join a group (this phone shows its QR code and six
+/// digits), and the recovery key, small (docs/apps.md, Start).
 struct StartView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
@@ -16,17 +17,17 @@ struct StartView: View {
     var body: some View {
         VStack(spacing: Tokens.spacingLarge) {
             HStack {
-                if LanguageChoice.offeredOnStart(preferred: Locale.preferredLanguages, localizations: Bundle.main.localizations) {
-                    // Here the system's language has no translation and the
-                    // app shows English, so English is the one chosen.
-                    Picker(selection: Binding { language == .system ? .en : language } set: { language = $0 }) {
-                        ForEach(LanguageChoice.translations) { Text(verbatim: $0.title).tag($0) }
-                    } label: {
-                        Text("Language")
-                    }
-                    .pickerStyle(.menu)
-                    .glassCard(cornerRadius: 22)
+                Menu {
+                    Picker(selection: $language) {
+                        ForEach(LanguageChoice.allCases) { Text(verbatim: $0.title).tag($0) }
+                    } label: { Text("Language") }
+                } label: {
+                    Image(systemName: "globe")
+                        .font(.title3)
+                        .foregroundStyle(palette.text)
+                        .glassCircle()
                 }
+                .accessibilityLabel(Text("Language"))
                 Spacer()
                 Button { settings = true } label: {
                     Image(systemName: "gearshape")
@@ -46,32 +47,16 @@ struct StartView: View {
             Text("One clipboard for this phone and your computers.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(palette.textDim)
-            if model.welcome {
-                WelcomeCard()
-            }
             Spacer()
-            VStack(spacing: Tokens.spacingSmall) {
-                Button("Connect a new device") {
-                    model.dismissWelcome()
-                    adding = true
-                }
+            Button { adding = true } label: { Text("Create a group") }
                 .buttonStyle(AccentButtonStyle())
-                Text("On a computer, run cbb pair and scan the code it shows.")
-                    .font(.footnote)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(palette.textDim)
-            }
-            Button("I already use CBB on another phone") { model.startJoining() }
+            Button { model.startJoining() } label: { Text("Join a group") }
                 .buttonStyle(GlassButtonStyle())
-            Button("Join as an admin") { model.startJoining(admin: true) }
+            Button { model.startJoining(admin: true) } label: { Text("Join as an admin") }
                 .buttonStyle(GlassButtonStyle())
-            Button("My group was made on a computer") { model.startJoiningComputer() }
-                .buttonStyle(GlassButtonStyle())
-            Button("I have the group's recovery sheet") {
-                model.dismissWelcome()
-                restoring = true
-            }
-            .buttonStyle(GlassButtonStyle())
+            Button { restoring = true } label: { Text("Restore with the recovery key") }
+                .font(.footnote)
+                .foregroundStyle(palette.textDim)
         }
         .padding(Tokens.spacingLarge)
         .task { model.prepare() }
@@ -88,32 +73,3 @@ struct StartView: View {
     }
 }
 
-/// Said once, at the first launch: this phone has its own key now, and the
-/// next step is to connect a device.
-struct WelcomeCard: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
-            HStack(alignment: .firstTextBaseline) {
-                Label {
-                    Text("This phone is ready").font(.headline)
-                } icon: {
-                    Image(systemName: "checkmark.shield.fill").foregroundStyle(palette.accent)
-                }
-                Spacer()
-                Button { model.dismissWelcome() } label: {
-                    Image(systemName: "xmark").foregroundStyle(palette.textDim)
-                }
-                .accessibilityLabel(Text("Close"))
-            }
-            Text("It made its own secret key, which never leaves it and lets your devices recognise this phone. Now connect a device: tap Connect a new device and scan the QR code it shows.")
-                .font(.subheadline)
-                .foregroundStyle(palette.textDim)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(Tokens.spacingMedium)
-        .glassCard()
-    }
-}

@@ -26,16 +26,17 @@ enum DeviceLayout: String, CaseIterable, Identifiable {
 }
 
 /// The one window: the group's devices as tiles, a list or orbits around
-/// this Mac, a device's details beside them, and send and fetch at the
-/// bottom (docs/apps.md, The Mac app).
+/// this Mac, a device's details beside them, and in the header where the
+/// group stands with the two switches, sync (the house) and Everywhere (the
+/// globe; docs/apps.md, The Mac app).
 struct MainView: View {
     @EnvironmentObject private var model: MacModel
     @Environment(\.palette) private var palette
     @AppStorage("deviceLayout") private var layout = DeviceLayout.tiles.rawValue
     @State private var selected: String?
     @State private var adding = false
-    @State private var turningAwayOn = false
     @State private var leaving = false
+    @State private var recovering = false
     @StateObject private var arrange = ArrangeState()
     @State private var query = ""
     @State private var filter: DeviceFilter?
@@ -63,21 +64,16 @@ struct MainView: View {
                         }
                     }
                 } else if !model.inGroup {
-                    Notice(symbol: "person.3", title: "This Mac is in no group yet", text: Text("Show a QR code here and scan it with the phone app, or make a group of computers with cbb new.")) {
-                        Button { Task { await model.joinPhone() } } label: { Text("Join a phone's group") }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(model.busy || model.joining)
-                        // The bar with the message is hidden out of a group:
-                        // a join that failed says why here.
-                        if let message = model.message {
-                            Text(verbatim: message).foregroundStyle(palette.textDim).multilineTextAlignment(.center).textSelection(.enabled)
-                        }
-                    }
+                    StartView(recovering: $recovering)
                 } else {
-                    summary
+                    header
+                    UpdateCard()
                     GroupAlerts()
                     devices
-                    syncBar
+                    if let message = model.message {
+                        Text(verbatim: message).font(.callout).foregroundStyle(palette.textDim).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
             .padding(Tokens.spacingLarge)
@@ -91,30 +87,36 @@ struct MainView: View {
         .background(AppBackground())
         .animation(.snappy, value: selected)
         .toolbar {
-            ToolbarItem {
-                Picker(selection: $layout) {
-                    ForEach(DeviceLayout.allCases) { l in
-                        Label(l.title, systemImage: l.symbol).tag(l.rawValue)
-                    }
-                } label: { Text("Layout") }
-                .pickerStyle(.segmented)
+            if model.inGroup {
+                ToolbarItem {
+                    Picker(selection: $layout) {
+                        ForEach(DeviceLayout.allCases) { l in
+                            Label(l.title, systemImage: l.symbol).tag(l.rawValue)
+                        }
+                    } label: { Text("Layout") }
+                    .pickerStyle(.segmented)
+                }
+                ToolbarItem {
+                    Menu {
+                        Button { arrange.on.toggle() } label: { arrange.on ? Text("Done arranging") : Text("Arrange devices") }
+                            .disabled(searching)
+                        if model.arrangement?.items.isEmpty == false {
+                            Button { model.arrange(.reset) } label: { Text("Back to the group's order") }
+                        }
+                    } label: { Label("Arrange devices", systemImage: "square.grid.3x3.square") }
+                    .disabled(model.arrangement == nil)
+                }
+                ToolbarItem {
+                    Button { adding = true } label: { Label("Add a device", systemImage: "plus") }
+                }
             }
             ToolbarItem {
-                Menu {
-                    Button { arrange.on.toggle() } label: { arrange.on ? Text("Done arranging") : Text("Arrange devices") }
-                        .disabled(searching)
-                    if model.arrangement?.items.isEmpty == false {
-                        Button { model.arrange(.reset) } label: { Text("Back to the group's order") }
-                    }
-                } label: { Label("Arrange devices", systemImage: "square.grid.3x3.square") }
-                .disabled(model.arrangement == nil)
-            }
-            ToolbarItem {
-                Button { adding = true } label: { Label("Add a device", systemImage: "plus") }
+                SettingsLink { Label("Settings", systemImage: "gearshape") }
             }
         }
         .sheet(isPresented: $adding) { AddDeviceSheet().modifier(Themed()) }
         .sheet(isPresented: Binding(get: { model.joining }, set: { if !$0 { model.cancelJoin() } })) { JoinSheet().modifier(Themed()) }
+        .sheet(isPresented: $recovering) { RecoverySheet().modifier(Themed()) }
         .modifier(ArrangePrompts())
         .environmentObject(arrange)
         // Arrange mode is off while a search or a filter is on.
@@ -122,9 +124,9 @@ struct MainView: View {
         .task { model.start() }
     }
 
-    /// The group in a line: how many devices are online, and sync away
-    /// from home.
-    private var summary: some View {
+    /// The group in a line, how many devices are online, with the two
+    /// switches.
+    private var header: some View {
         // This Mac counts too, online as it is the one in front of the user.
         let online = model.devices.filter { $0.online || $0.isSelf }.count
         return HStack(spacing: Tokens.spacingMedium) {
@@ -133,18 +135,7 @@ struct MainView: View {
                 Text(verbatim: model.status?.group ?? "").font(.system(.caption, design: .monospaced)).foregroundStyle(palette.textDim)
             }
             Spacer()
-            AwayBadge(away: model.status?.away)
-            Toggle(isOn: Binding(get: { model.awayOn }, set: { on in
-                if on { turningAwayOn = true } else { Task { await model.setAway(false) } }
-            })) { Text("Away from home") }
-                .toggleStyle(.switch)
-                .disabled(model.busy)
-        }
-        .alert(Text("Turn sync away from home on?"), isPresented: $turningAwayOn) {
-            Button { Task { await model.setAway(true) } } label: { Text("Turn on") }
-            Button(role: .cancel) {} label: { Text("Cancel") }
-        } message: {
-            Text("This Mac then reaches the group's hub from the internet through the group's own WireGuard tunnel, the clipboard encrypted end to end. Its keys are files: keep FileVault on, keep the service's folder out of unencrypted backups, and remove the Mac at once if it is lost.")
+            SyncSwitches()
         }
     }
 
@@ -188,9 +179,7 @@ struct MainView: View {
                     .glassTile(cornerRadius: Tokens.radiusCard)
                 }
             case .orbit:
-                OrbitView(devices: list, selected: selected, busy: model.busy) { selected = $0 } sync: {
-                    Task { await model.send() }
-                }
+                OrbitView(devices: list, me: model.this, selected: selected) { selected = $0 }
             }
         }
     }
@@ -202,53 +191,9 @@ struct MainView: View {
                 && (filter != .online || d.online) && (filter != .attention || d.frozen)
         }
     }
-
-    private var syncBar: some View {
-        VStack(spacing: Tokens.spacingSmall) {
-            HStack(spacing: Tokens.spacingMedium) {
-                Button { Task { await model.send() } } label: { Label("Send the clipboard", systemImage: "arrow.up.circle") }
-                    .buttonStyle(AccentButtonStyle())
-                Button { Task { await model.fetch() } } label: { Label("Fetch", systemImage: "arrow.down.circle") }
-                    .buttonStyle(GlassButtonStyle())
-                    .frame(maxWidth: 200)
-                listen
-            }
-            .disabled(model.busy)
-            if let message = model.message {
-                Text(verbatim: message).font(.callout).foregroundStyle(palette.textDim).textSelection(.enabled)
-            }
-        }
-    }
-
-    /// The quick switch for sync: a click turns it off or on again, its menu
-    /// turns it off for a time (docs/design.md, "Sync on and off").
-    private var listen: some View {
-        Menu {
-            ForEach(PauseTime.allCases) { t in
-                Button { Task { await model.turnSync(false, forMS: t.ms) } } label: { Text(t.title) }
-            }
-        } label: {
-            if model.syncOff {
-                Label(Self.syncOffTitle(until: model.syncOffUntil), systemImage: "speaker.slash")
-            } else {
-                Label("Sync on", systemImage: "speaker.wave.2")
-            }
-        } primaryAction: {
-            Task { await model.turnSync(model.syncOff) }
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .foregroundStyle(model.syncOff ? palette.danger : palette.text)
-        .help(Text("Click to turn sync off or on; open the menu for a time"))
-    }
-
-    static func syncOffTitle(until: Date?) -> String {
-        guard let until else { return String(localized: "Sync off") }
-        return String(localized: "Sync off until \(until.formatted(date: .omitted, time: .shortened))")
-    }
 }
 
-/// How long the quick switch keeps sync off.
+/// How long the house keeps sync off, and a mute lasts.
 enum PauseTime: Int64, CaseIterable, Identifiable {
     case quarter = 900_000
     case hour = 3_600_000

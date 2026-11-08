@@ -96,6 +96,10 @@ public:
     bool deviceList() const;
     // The language's name in itself (Russian's in Russian), for Settings.
     Q_INVOKABLE QString languageName(const QString &code) const;
+    // Whether the user closed a tip or a card that is shown until closed
+    // once (docs/apps.md, Settings: tips instead of long texts), and closing it.
+    Q_INVOKABLE bool tipClosed(const QString &name) const;
+    Q_INVOKABLE void closeTip(const QString &name);
     void setDeviceList(bool on);
 
     // Finds or makes the phone's key, off the GUI thread.

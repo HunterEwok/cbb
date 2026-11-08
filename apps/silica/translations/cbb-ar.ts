@@ -204,86 +204,6 @@
         <translation>افحص المفتاح مجددًا</translation>
     </message>
     <message>
-        <source>Join a group</source>
-        <translation>الانضمام إلى مجموعة</translation>
-    </message>
-    <message>
-        <source>Last copy</source>
-        <translation>آخر نسخة</translation>
-    </message>
-    <message>
-        <source>Leave the group</source>
-        <translation>مغادرة المجموعة</translation>
-    </message>
-    <message>
-        <source>Leaving the group</source>
-        <translation>جارٍ مغادرة المجموعة</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>الانضمام إلى مجموعة كمشرف</translation>
-    </message>
-    <message>
-        <source>For 15 minutes</source>
-        <translation>لمدة 15 دقيقة</translation>
-    </message>
-    <message>
-        <source>For an hour</source>
-        <translation>لمدة ساعة</translation>
-    </message>
-    <message>
-        <source>For 8 hours</source>
-        <translation>لمدة 8 ساعات</translation>
-    </message>
-    <message>
-        <source>Until I turn it on</source>
-        <translation>حتى أشغّله</translation>
-    </message>
-    <message>
-        <source>Taking copies</source>
-        <translation>يستقبل النسخ</translation>
-    </message>
-    <message>
-        <source>Not taking copies until %1</source>
-        <translation>لا يستقبل النسخ حتى %1</translation>
-    </message>
-    <message>
-        <source>Not taking copies</source>
-        <translation>لا يستقبل النسخ</translation>
-    </message>
-    <message>
-        <source>Tap to take no copies from the group, or again; hold it for a time</source>
-        <translation>انقر لإيقاف استقبال نسخ المجموعة أو لاستئنافه؛ اضغط مطولًا لاختيار مدة</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
-        <translation>كتم مشرف هذا الهاتف حتى %1: لا تصل نسخه إلى المجموعة.</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
-        <translation>كتم مشرف هذا الهاتف: لا تصل نسخه إلى المجموعة حتى يلغي مشرف الكتم.</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>في المجموعة</translation>
-    </message>
-    <message>
-        <source>Admin</source>
-        <translation>مشرف</translation>
-    </message>
-    <message>
-        <source>Member</source>
-        <translation>عضو</translation>
-    </message>
-    <message>
-        <source>The phone has no key yet. Pull down to check it again.</source>
-        <translation>لا يملك الهاتف مفتاحًا بعد. اسحب للأسفل للتحقق مرة أخرى.</translation>
-    </message>
-    <message>
-        <source>Devices</source>
-        <translation>الأجهزة</translation>
-    </message>
-    <message>
         <source>Settings</source>
         <translation>الإعدادات</translation>
     </message>
@@ -296,36 +216,120 @@
         <translation>عرض الأجهزة كقائمة</translation>
     </message>
     <message>
-        <source>Add a device</source>
-        <translation>إضافة جهاز</translation>
+        <source>Scan a code</source>
+        <translation>مسح رمز</translation>
     </message>
     <message>
-        <source>Make a group</source>
+        <source>Create a group</source>
         <translation>إنشاء مجموعة</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>مغادرة المجموعة وحذف مفتاح جذرها</translation>
+        <source>Join a group</source>
+        <translation>الانضمام إلى مجموعة</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one or make one.</source>
-        <translation>الهاتف ليس في أي مجموعة بعد. اسحب للأسفل للانضمام إلى مجموعة أو إنشاء واحدة.</translation>
+        <source>Join a group as an admin</source>
+        <translation>الانضمام إلى مجموعة كمشرف</translation>
     </message>
     <message>
-        <source>Root</source>
-        <translation>الجذر</translation>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>لا يملك الهاتف مفتاحًا بعد. اسحب للأسفل للتحقق مرة أخرى.</translation>
     </message>
     <message>
-        <source>Sync the clipboard</source>
-        <translation>مزامنة الحافظة</translation>
+        <source>%1 of %2 online</source>
+        <translation>%1 من %2 متصل</translation>
     </message>
     <message>
-        <source>Sync</source>
-        <translation>مزامنة</translation>
+        <source>Sync is on</source>
+        <translation>المزامنة تعمل</translation>
     </message>
     <message>
-        <source>Fetching…</source>
-        <translation>جارٍ الجلب…</translation>
+        <source>Sync is off until %1</source>
+        <translation>المزامنة متوقفة حتى %1</translation>
+    </message>
+    <message>
+        <source>Sync is off</source>
+        <translation>المزامنة متوقفة</translation>
+    </message>
+    <message>
+        <source>Everywhere is off</source>
+        <translation>«في كل مكان» متوقف</translation>
+    </message>
+    <message>
+        <source>Everywhere waits while sync is off</source>
+        <translation>«في كل مكان» ينتظر ما دامت المزامنة متوقفة</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>في المنزل: تتم المزامنة مباشرة.</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>جارٍ الاتصال بالمحور عبر النفق…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>متصل بالمحور %1 عبر النفق.</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>متصل بالمحور عبر النفق.</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>بانتظار المحور: افتح التطبيق مرة واحدة في المنزل، بالقرب من حاسوب من المجموعة.</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>إيقاف المزامنة</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>تشغيل المزامنة</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere off</source>
+        <translation>إيقاف «في كل مكان»</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere on</source>
+        <translation>تشغيل «في كل مكان»</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>كتم مشرف هذا الهاتف حتى %1: لا تصل نسخه إلى المجموعة.</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>كتم مشرف هذا الهاتف: لا تصل نسخه إلى المجموعة حتى يلغي مشرف الكتم.</translation>
+    </message>
+    <message>
+        <source>Lost phone?</source>
+        <translation>هل فقدت هاتفك؟</translation>
+    </message>
+    <message>
+        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
+        <translation>اجعل هاتفًا ثانيًا مشرفًا: اضغط عليه «الانضمام إلى مجموعة كمشرف»، ثم امسح رمزه هنا عبر «مسح رمز». اضغط للإغلاق.</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>الأجهزة</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>إيقاف لمدة 15 دقيقة</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>إيقاف لمدة ساعة</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>إيقاف لمدة 8 ساعات</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>إيقاف حتى أشغّلها</translation>
     </message>
 </context>
 <context>
@@ -355,32 +359,20 @@
         <translation>متنازع عليه: ردّ جذر المجموعة على الطلب</translation>
     </message>
     <message>
-        <source>System</source>
-        <translation>النظام</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>في المجموعة</translation>
-    </message>
-    <message>
-        <source>Type</source>
-        <translation>النوع</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>الحالة</translation>
-    </message>
-    <message>
-        <source>Device ID</source>
-        <translation>معرّف الجهاز</translation>
-    </message>
-    <message>
         <source>Remove</source>
         <translation>إزالة</translation>
     </message>
     <message>
         <source>Removing %1</source>
         <translation>جارٍ إزالة %1</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>اجعله مشرفًا</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>جارٍ جعل %1 مشرفًا</translation>
     </message>
     <message>
         <source>Unfreeze</source>
@@ -399,24 +391,52 @@
         <translation>كتم حتى الإلغاء</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>كتم لمدة ساعة</translation>
-    </message>
-    <message>
         <source>Muting %1</source>
         <translation>جارٍ كتم %1</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>كتم لمدة ساعة</translation>
     </message>
     <message>
         <source>Rename</source>
         <translation>إعادة تسمية</translation>
     </message>
     <message>
-        <source>Make an admin</source>
-        <translation>اجعله مشرفًا</translation>
+        <source>Sync</source>
+        <translation>المزامنة</translation>
     </message>
     <message>
-        <source>Making %1 an admin</source>
-        <translation>جارٍ جعل %1 مشرفًا</translation>
+        <source>Sync is off</source>
+        <translation>المزامنة متوقفة</translation>
+    </message>
+    <message>
+        <source>Sync is on</source>
+        <translation>المزامنة تعمل</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>المزيد</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>النوع</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>في المجموعة</translation>
+    </message>
+    <message>
+        <source>System version</source>
+        <translation>إصدار النظام</translation>
+    </message>
+    <message>
+        <source>MAC address</source>
+        <translation>عنوان MAC</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>معرّف الجهاز</translation>
     </message>
 </context>
 <context>
@@ -470,6 +490,42 @@
         <translation>يضع الخطأ نفسه تحت كل رسالة خطأ</translation>
     </message>
     <message>
+        <source>Notifications</source>
+        <translation>الإشعارات</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>انضمام الأجهزة أو مغادرتها</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>يصبح جهاز مشرفًا</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>تجميد جهاز أو إلغاء تجميده</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>هاتف آخر يستولي على المجموعة</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>المجموعة</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>مغادرة المجموعة</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>مغادرة المجموعة وحذف مفتاح جذرها</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>جارٍ مغادرة المجموعة</translation>
+    </message>
+    <message>
         <source>About</source>
         <translation>حول</translation>
     </message>
@@ -510,64 +566,8 @@
         <translation>بصمة المفتاح</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>المجموعة</translation>
-    </message>
-    <message>
         <source>Device</source>
         <translation>الجهاز</translation>
-    </message>
-    <message>
-        <source>Notifications</source>
-        <translation>الإشعارات</translation>
-    </message>
-    <message>
-        <source>Devices join or leave</source>
-        <translation>انضمام الأجهزة أو مغادرتها</translation>
-    </message>
-    <message>
-        <source>A device becomes an admin</source>
-        <translation>يصبح جهاز مشرفًا</translation>
-    </message>
-    <message>
-        <source>A device is frozen or unfrozen</source>
-        <translation>تجميد جهاز أو إلغاء تجميده</translation>
-    </message>
-    <message>
-        <source>Another phone takes the group over</source>
-        <translation>هاتف آخر يستولي على المجموعة</translation>
-    </message>
-    <message>
-        <source>Away from home</source>
-        <translation>بعيدًا عن المنزل</translation>
-    </message>
-    <message>
-        <source>Sync away from home</source>
-        <translation>المزامنة بعيدًا عن المنزل</translation>
-    </message>
-    <message>
-        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
-        <translation>عندما لا يكون الهاتف على الشبكة المنزلية، يُزامن عبر نفق WireGuard الخاص بالمحور الخاص بك، وهو حاسوب من المجموعة مُعدّ باستخدام cbb global hub؛ منفذه متاح من الإنترنت، ولكن فقط عبر WireGuard بمفاتيح المجموعة. يردّ المحور على هذا الهاتف في المرة التالية التي يتصل فيها في المنزل. لا يذهب شيء إلى أي مكان آخر، ومن دون النفق لا يوجد اتصال. إيقافه يجعل هذا الهاتف ينسى مفتاح النفق الخاص به.</translation>
-    </message>
-    <message>
-        <source>At home: syncing directly.</source>
-        <translation>في المنزل: تتم المزامنة مباشرة.</translation>
-    </message>
-    <message>
-        <source>Connecting to the hub through the tunnel…</source>
-        <translation>جارٍ الاتصال بالمحور عبر النفق…</translation>
-    </message>
-    <message>
-        <source>Connected to the hub %1 through the tunnel.</source>
-        <translation>متصل بالمحور %1 عبر النفق.</translation>
-    </message>
-    <message>
-        <source>Connected to the hub through the tunnel.</source>
-        <translation>متصل بالمحور عبر النفق.</translation>
-    </message>
-    <message>
-        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
-        <translation>بانتظار المحور: افتح التطبيق مرة واحدة في المنزل، بالقرب من حاسوب من المجموعة.</translation>
     </message>
 </context>
 <context>
@@ -746,8 +746,8 @@
         <translation>مكتوم</translation>
     </message>
     <message>
-        <source>Paused</source>
-        <translation>متوقف مؤقتًا</translation>
+        <source>Sync is off</source>
+        <translation>المزامنة متوقفة</translation>
     </message>
     <message>
         <source>Looking for devices</source>
@@ -1192,6 +1192,21 @@
     <message>
         <source>failed</source>
         <translation>فشل</translation>
+    </message>
+</context>
+<context>
+    <name>AwayDialog</name>
+    <message>
+        <source>Turn Everywhere on?</source>
+        <translation>تشغيل «في كل مكان»؟</translation>
+    </message>
+    <message>
+        <source>Turn on</source>
+        <translation>تشغيل</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>عندما لا يكون الهاتف على الشبكة المنزلية، يُزامن عبر نفق WireGuard الخاص بالمحور الخاص بك، وهو حاسوب من المجموعة مُعدّ باستخدام cbb global hub؛ منفذه متاح من الإنترنت، ولكن فقط عبر WireGuard بمفاتيح المجموعة. يردّ المحور على هذا الهاتف في المرة التالية التي يتصل فيها في المنزل. لا يذهب شيء إلى أي مكان آخر، ومن دون النفق لا يوجد اتصال. إيقافه يجعل هذا الهاتف ينسى مفتاح النفق الخاص به.</translation>
     </message>
 </context>
 </TS>

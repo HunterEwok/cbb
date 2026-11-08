@@ -4,13 +4,11 @@ import SwiftUI
 
 /// The devices around this phone, on one or two orbits, for the big
 /// screens: an iPad and the inner screen of a foldable iPhone. This phone
-/// is the centre and its button syncs; a device opens its details.
+/// is the centre; a device, this phone too, opens its details.
 struct OrbitView: View {
     let devices: [AppModel.Computer]
     let selected: AppModel.Computer.ID?
-    let busy: Bool
     let select: (AppModel.Computer.ID) -> Void
-    let sync: () -> Void
     @Environment(\.palette) private var palette
 
     /// How many devices the inner orbit holds before the outer one starts.
@@ -44,22 +42,23 @@ struct OrbitView: View {
         }
     }
 
-    /// This phone: the button that sends or fetches.
-    private var centre: some View {
-        Button(action: sync) {
-            VStack(spacing: 6) {
-                Image(systemName: "arrow.up.arrow.down").font(.title.weight(.semibold))
-                Text("Send or fetch").font(.footnote.weight(.semibold)).multilineTextAlignment(.center)
+    /// This phone, which opens its own details.
+    @ViewBuilder private var centre: some View {
+        if let me = devices.first(where: \.isSelf) {
+            Button { select(me.id) } label: {
+                VStack(spacing: 6) {
+                    DeviceIcon(device: me, size: 44)
+                    Text("This phone").font(.footnote.weight(.semibold)).multilineTextAlignment(.center)
+                }
+                .foregroundStyle(palette.onAccent)
+                .frame(width: 128, height: 128)
+                .background(palette.accent, in: Circle())
+                .overlay(Circle().stroke(me.id == selected ? palette.text : palette.soft, lineWidth: me.id == selected ? 3 : 12).padding(-6))
             }
-            .foregroundStyle(palette.onAccent)
-            .frame(width: 128, height: 128)
-            .background(palette.accent, in: Circle())
-            .overlay(Circle().stroke(palette.soft, lineWidth: 12).padding(-6))
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(verbatim: me.name))
+            .accessibilityValue(Text("This phone"))
         }
-        .buttonStyle(.plain)
-        .disabled(busy)
-        .opacity(busy ? 0.6 : 1)
-        .sensoryFeedback(.impact, trigger: busy)
     }
 
     /// Where count devices sit: evenly on the inner orbit from the top, the

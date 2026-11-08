@@ -3,100 +3,460 @@
   "strings": {
     "The computers did not fetch it within a minute. Try again, or send fewer files.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تجلبه الحواسيب خلال دقيقة. حاول مرة أخرى، أو أرسل ملفات أقل."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los ordenadores no lo obtuvieron en un minuto. Vuelve a intentarlo o envía menos archivos."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המחשבים לא הביאו את זה בתוך דקה. נסו שוב, או שלחו פחות קבצים."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कंप्यूटरों ने इसे एक मिनट में नहीं लाया। दोबारा कोशिश करें, या कम फ़ाइलें भेजें।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Компьютеры не забрали это за минуту. Повторите или отправьте меньше файлов."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kompyuta hazikuileta ndani ya dakika moja. Jaribu tena, au tuma faili chache."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电脑在一分钟内未获取。请重试，或少发送一些文件。"
           }
         }
       }
     },
     "What you shared is larger than 50 MB, more than Share can carry. Send less at a time.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما شاركته أكبر من 50 ميغابايت، أكثر مما تستطيع المشاركة حمله. أرسل أقل في كل مرة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que compartiste ocupa más de 50 MB, más de lo que Compartir puede llevar. Envía menos cada vez."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מה ששיתפתם גדול מ-50MB, יותר ממה ששיתוף יכול לשאת. שלחו פחות בכל פעם."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपने जो साझा किया वह 50 MB से बड़ा है, साझा करें जितना ले जा सकता है उससे ज़्यादा। एक बार में कम भेजें।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Это больше 50 МБ, столько «Поделиться» не унесёт. Отправьте меньше за раз."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ulichoshiriki ni kikubwa kuliko MB 50, zaidi ya kile Shiriki inachoweza kubeba. Tuma kidogo kwa wakati mmoja."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你分享的内容超过 50 MB，超出了“分享”能携带的大小。请每次少发送一些。"
           }
         }
       }
     },
     "Done": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hecho"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "סיום"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हो गया"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Готово"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imekamilika"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
           }
         }
       }
     },
     "No computer of your group answered. Are they on, and is this phone on the home network?": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يستجب أي حاسوب من مجموعتك. هل هي مشغّلة، وهل هذا الهاتف على الشبكة المنزلية؟"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No respondió ningún ordenador de tu grupo. ¿Están encendidos y este teléfono está en la red de casa?"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אף מחשב בקבוצה שלכם לא ענה. האם הם דולקים, והאם הטלפון הזה ברשת הביתית?"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपके समूह के किसी कंप्यूटर ने जवाब नहीं दिया। क्या वे चालू हैं, और क्या यह फ़ोन घर के नेटवर्क पर है?"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Ни один компьютер группы не ответил. Они включены, и телефон в домашней сети?"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hakuna kompyuta ya kikundi chako iliyojibu. Je, zimewashwa, na simu hii iko kwenye mtandao wa nyumbani?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你群组中的电脑都没有响应。它们是否已开机，这部手机是否在家庭网络中？"
           }
         }
       }
     },
     "Open CBB once, then share again.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "افتح CBB مرة واحدة، ثم شارك مرة أخرى."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre CBB una vez y vuelve a compartir."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פתחו את CBB פעם אחת, ואז שתפו שוב."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक बार CBB खोलें, फिर दोबारा साझा करें।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Откройте CBB один раз и поделитесь снова."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fungua CBB mara moja, kisha ushiriki tena."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先打开一次 CBB，然后再次分享。"
           }
         }
       }
     },
     "Sending failed.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل الإرسال."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo enviar."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "השליחה נכשלה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "भेजना विफल रहा।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Отправить не удалось."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kutuma kumeshindwa."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送失败。"
           }
         }
       }
     },
     "Sending to your computers…": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ الإرسال إلى حواسيبك…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviando a tus ordenadores…"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שולח למחשבים שלכם…"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपके कंप्यूटरों पर भेजा जा रहा है…"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Отправка на ваши компьютеры…"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inatuma kwenye kompyuta zako…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在发送到你的电脑…"
           }
         }
       }
     },
     "Sent to your computers.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُرسل إلى حواسيبك."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado a tus ordenadores."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "נשלח למחשבים שלכם."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपके कंप्यूटरों पर भेजा गया।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Отправлено на ваши компьютеры."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imetumwa kwenye kompyuta zako."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已发送到你的电脑。"
           }
         }
       }
     },
     "There is no text to send.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يوجد نص للإرسال."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay texto que enviar."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אין טקסט לשליחה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "भेजने के लिए कोई टेक्स्ट नहीं है।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Нечего отправлять: нет текста."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hakuna maandishi ya kutuma."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有要发送的文本。"
           }
         }
       }
     },
     "This phone is in no group yet: open CBB to make one or join one.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الهاتف ليس في أي مجموعة بعد: افتح CBB لإنشاء مجموعة أو الانضمام إليها."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este teléfono aún no está en ningún grupo: abre CBB para crear uno o unirte a uno."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הטלפון הזה עדיין לא בשום קבוצה: פתחו את CBB כדי ליצור קבוצה או להצטרף לאחת."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह फ़ोन अभी किसी समूह में नहीं है: समूह बनाने या उससे जुड़ने के लिए CBB खोलें।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Этот телефон ещё не в группе: откройте CBB, чтобы создать группу или вступить в неё."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Simu hii bado haiko kwenye kikundi chochote: fungua CBB ili kuunda au kujiunga na kikundi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这部手机还不在任何群组中：打开 CBB 创建或加入群组。"
           }
         }
       }

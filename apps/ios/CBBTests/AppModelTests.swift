@@ -119,12 +119,11 @@ final class AppModelTests: XCTestCase {
         func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { .sent(to: []) }
         var refreshed = 0
         func refresh() async { refreshed += 1 }
-        var devices: [AppModel.Computer] { computers + [.init(id: "me", name: "iPhone", online: true, role: "phone", isSelf: true, paused: paused)] }
-        var paused: AppModel.Hold?
-        func pauseReceiving(forMS: Int64) throws {
-            paused = AppModel.Hold(ms: forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0)
+        var devices: [AppModel.Computer] { computers + [.init(id: "me", name: "iPhone", online: true, role: "phone", isSelf: true, syncOff: syncOff)] }
+        var syncOff: AppModel.Hold?
+        func setSync(_ on: Bool, forMS: Int64) throws {
+            syncOff = on ? nil : AppModel.Hold(ms: forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0)
         }
-        func resumeReceiving() throws { paused = nil }
         func setMuted(_ id: String, _ on: Bool, forMS: Int64) async throws {
             guard isAdmin else { throw PhoneGroup.Failure.notAdmin }
             if let i = computers.firstIndex(where: { $0.id == id }) {
@@ -188,21 +187,25 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(m.devices.first { $0.id == "a" }?.name, "living room")
     }
 
-    /// The quick switch pauses taking copies for a time or until it is
-    /// turned on again; an admin mutes a device and unmutes it; a mute or
-    /// pause that ended holds no more.
+    /// The house turns sync off for a time or until it is turned on again,
+    /// and on, and the control in Control Center shows it; an admin mutes a
+    /// device and unmutes it; a mute that ended holds no more.
     func testPauseAndMute() async {
         let g = FakeGroup()
         g.computers = [.init(id: "a", name: "pi", online: true)]
+        g.hasGroup = true
         let m = AppModel(group: g)
-        XCTAssertNil(m.pause)
-        m.pauseReceiving(forMS: PauseTime.hour.ms)
-        XCTAssertEqual(m.pause?.until?.timeIntervalSinceNow ?? 0, 3600, accuracy: 60)
-        m.pauseReceiving(forMS: PauseTime.ever.ms)
-        XCTAssertNotNil(m.pause)
-        XCTAssertNil(m.pause?.until)
-        m.pauseReceiving(forMS: nil)
-        XCTAssertNil(m.pause)
+        XCTAssertNil(m.syncOff)
+        m.turnSync(false, forMS: PauseTime.hour.ms)
+        XCTAssertEqual(m.syncOff?.until?.timeIntervalSinceNow ?? 0, 3600, accuracy: 60)
+        m.turnSync(false, forMS: PauseTime.ever.ms)
+        XCTAssertNotNil(m.syncOff)
+        XCTAssertNil(m.syncOff?.until)
+        // The house in Control Center follows it.
+        XCTAssertEqual(SyncSwitch.isOn, false)
+        m.turnSync(true)
+        XCTAssertNil(m.syncOff)
+        XCTAssertEqual(SyncSwitch.isOn, true)
         await m.setMuted("a", true, forMS: PauseTime.quarter.ms)
         XCTAssertNotNil(m.devices.first { $0.id == "a" }?.muted?.until)
         await m.setMuted("a", false)
@@ -214,7 +217,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(AppModel.Hold(ms: 1_000))
         XCTAssertNil(AppModel.Hold(ms: nil))
         XCTAssertEqual(AppModel.Hold(ms: 0), AppModel.Hold(until: nil))
-        XCTAssertEqual(AppModel.describe(CoreMember.Failure.muted, details: false, log: false), "An admin muted this phone, so its copies stay on it.")
+        XCTAssertEqual(AppModel.describe(CoreMember.Failure.muted, details: false, log: false), String(localized: "An admin muted this phone, so its copies stay on it.", bundle: .app))
     }
 
     func testMakeAdmin() async {
@@ -373,47 +376,42 @@ final class AppModelTests: XCTestCase {
         return UserDefaults(suiteName: name)!
     }
 
+    /// The phone's own key is made once, at the first launch without a
+    /// group.
     func testWelcomeOnce() {
         let defaults = freshDefaults()
         let g = FakeGroup()
-        let m = AppModel(group: g, defaults: defaults)
-        m.prepare()
-        XCTAssertTrue(m.welcome)
+        AppModel(group: g, defaults: defaults).prepare()
         XCTAssertEqual(g.prepared, 1)
-        m.dismissWelcome()
-        XCTAssertFalse(m.welcome)
-        let again = AppModel(group: g, defaults: defaults)
-        again.prepare()
-        XCTAssertFalse(again.welcome, "the note shows only at the first launch")
-        XCTAssertEqual(g.prepared, 1)
+        AppModel(group: g, defaults: defaults).prepare()
+        XCTAssertEqual(g.prepared, 1, "the key is made only at the first launch")
     }
 
     func testNoWelcomeWithAGroup() {
         let g = FakeGroup()
         g.hasGroup = true
-        let m = AppModel(group: g, defaults: freshDefaults())
-        m.prepare()
-        XCTAssertFalse(m.welcome)
+        AppModel(group: g, defaults: freshDefaults()).prepare()
         XCTAssertEqual(g.prepared, 0)
     }
 
+    /// Joining from Start keeps the key the first launch made; it is not made again.
     func testJoiningEndsTheWelcome() {
         let defaults = freshDefaults()
-        let m = AppModel(group: FakeGroup(), defaults: defaults)
+        let g = FakeGroup()
+        let m = AppModel(group: g, defaults: defaults)
         m.prepare()
         m.startJoining()
-        XCTAssertFalse(m.welcome)
-        XCTAssertTrue(defaults.bool(forKey: AppModel.welcomedKey))
+        XCTAssertEqual(m.phase, .joining)
+        AppModel(group: g, defaults: defaults).prepare()
+        XCTAssertEqual(g.prepared, 1)
     }
 
+    /// Start's language menu offers the system's language first and every translation.
     func testLanguageOfferedOnStart() {
-        let ours = ["Base", "en", "ru"]
-        XCTAssertFalse(LanguageChoice.offeredOnStart(preferred: ["en-GB", "de"], localizations: ours))
-        XCTAssertFalse(LanguageChoice.offeredOnStart(preferred: ["ru-RU"], localizations: ours))
-        XCTAssertTrue(LanguageChoice.offeredOnStart(preferred: ["de-DE", "en"], localizations: ours),
-                      "German is not translated, so the app shows English and offers the choice")
-        XCTAssertTrue(LanguageChoice.offeredOnStart(preferred: ["pt_BR"], localizations: ours))
-        XCTAssertFalse(LanguageChoice.offeredOnStart(preferred: [], localizations: ours))
+        XCTAssertEqual(LanguageChoice.allCases.first, .system)
+        XCTAssertEqual(Set(LanguageChoice.translations), Set(LanguageChoice.allCases.filter { $0 != .system }))
+        XCTAssertTrue(LanguageChoice.translations.contains(.en))
+        XCTAssertTrue(LanguageChoice.translations.contains(.ru))
     }
 
     func testLanguageChoice() {
@@ -448,6 +446,7 @@ final class AppModelTests: XCTestCase {
         s.hasGroup = true
         s.devices = [.init(id: "a", name: "deck", symbol: "gamecontroller", online: true)]
         s.away = .connected
+        s.sync = false
         s.events = ["deck joined the group."]
         s.group = "tag"
         XCTAssertEqual(WatchState(s.data), s)

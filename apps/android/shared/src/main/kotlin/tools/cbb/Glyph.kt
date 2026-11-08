@@ -57,3 +57,29 @@ fun FormGlyph(form: String, color: Color, size: Dp) {
         }
     }
 }
+
+/**
+ * The two switches' outlines on the same grid (docs/apps.md, Home): "house"
+ * for sync on this device, "globe" for Everywhere, sync away from home.
+ */
+@Composable
+fun SwitchGlyph(name: String, color: Color, size: Dp) {
+    Canvas(Modifier.size(size)) {
+        val u = this.size.minDimension / 24f
+        val stroke = Stroke(width = 1.8f * u, cap = StrokeCap.Round)
+        fun line(x1: Float, y1: Float, x2: Float, y2: Float) = drawLine(color, Offset(x1 * u, y1 * u), Offset(x2 * u, y2 * u), stroke.width, StrokeCap.Round)
+        when (name) {
+            "house" -> {
+                line(3f, 11.5f, 12f, 3.5f); line(12f, 3.5f, 21f, 11.5f)
+                line(5.5f, 9.5f, 5.5f, 20.5f); line(18.5f, 9.5f, 18.5f, 20.5f); line(5.5f, 20.5f, 18.5f, 20.5f)
+                line(10f, 20.5f, 10f, 15f); line(10f, 15f, 14f, 15f); line(14f, 15f, 14f, 20.5f)
+            }
+            else -> {
+                drawCircle(color, 9f * u, Offset(12f * u, 12f * u), style = stroke)
+                drawOval(color, Offset(8f * u, 3f * u), Size(8f * u, 18f * u), style = stroke)
+                line(3f, 12f, 21f, 12f)
+                line(4.5f, 7.5f, 19.5f, 7.5f); line(4.5f, 16.5f, 19.5f, 16.5f)
+            }
+        }
+    }
+}

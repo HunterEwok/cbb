@@ -89,10 +89,6 @@ public:
                const QString &osVersion);
     void stop();
 
-    // The one button (docs/design.md, "The one button"): a copy from
-    // another device that waits for the phone comes to it; otherwise what
-    // the phone copied goes to the group (sendClipboard).
-    Q_INVOKABLE void button();
     // Sends the clipboard's text or image when the core's rule says so:
     // neither the group's copy nor what this phone sent or took last.
     Q_INVOKABLE void sendClipboard();
