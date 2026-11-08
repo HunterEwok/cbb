@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -662,6 +663,25 @@ func TestConcurrentPairs(t *testing.T) {
 	// The window is published once.
 	id := a.status(t).Device
 	waitFor(t, "p=1 published", func() bool { return slices.Contains(h.txtOf(id), "p=1") })
+}
+
+// TestNoGroupSaysItsPort: out of a group the service says the member port
+// it was given, the one its firewall rule opens, so that cbb pair waits for
+// the phone there (OpenWrt's init script passes the port in
+// /etc/config/cbb).
+func TestNoGroupSaysItsPort(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := portOf(t, ln.Addr().String())
+	ln.Close()
+	dir := t.TempDir()
+	var h hub
+	s := startIn(t, &h, &testService{name: "router", dir: dir, os: group.OSLinux, port: port})
+	if st := s.status(t); st.Group != "" || st.Port != port {
+		t.Fatalf("status in no group: group %q, port %d; want port %d", st.Group, st.Port, port)
+	}
 }
 
 func TestJoinFindsTheWindow(t *testing.T) {

@@ -221,9 +221,10 @@ Rarely needed:
                           (as for pair; its device record decides); -user: started as root, open the mDNS sockets, then run as
                           this user (FreeBSD's rc script).
   agent                   Link this desktop's clipboard to the service (started at sign-in).
-  paste-helper tmux|console
+  paste-helper tmux|console|uinput
                           Take remote pastes into tmux (started by cbb.conf)
-                          or the Linux text console (the cbb-console unit).
+                          or the Linux text console (the cbb-console unit), or press
+                          their keys for the desktop (uinput, the cbb-uinput unit).
   next paste|copy|pair    The same for the ZX Spectrum Next's .cbb dot command, in frames
                           its Z80 reads (member/README.md).
 
@@ -421,7 +422,7 @@ fn member_port() -> u16 {
 /// in its frames, and so do the log lines, as `CBB#` lines it skips.
 /// cbb pair's usage in no group.
 const PAIR_USE: &str =
-    "cbb pair [-code [ADDRESS:PORT] | -invite FILE | -app FILE] [-full] [-name NAME] [-port PORT] [-addr ADDRESS]";
+    "cbb pair [-code [ADDRESS:PORT] | -invite FILE | -app FILE] [-caps LIST] [-name NAME] [-port PORT] [-addr ADDRESS]";
 
 fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut name = host_name();

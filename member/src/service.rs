@@ -366,6 +366,10 @@ pub fn run(cfg: Config) -> Result<()> {
     if !only.is_empty() {
         log(&format!("cbb: the member port and mDNS work only on {} (CBB_INTERFACES)", only.join(", ")));
     }
+    // Out of a group the member port is the one cbb pair waits on for the
+    // phone (its firewall rule opens it, OpenWrt's init script passes it),
+    // so the status says it until the service listens there itself.
+    *svc.port.lock().unwrap() = cfg.port;
     let admin_socket = control::admin_socket(&cfg.socket);
     for (ln, admin) in [(listen(&cfg.socket, false)?, false), (listen(&admin_socket, true)?, true)] {
         let svc = svc.clone();
@@ -2318,6 +2322,7 @@ impl Service {
                             keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
                             tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
                             left_old_group: self.left_old,
+                            port: self.port.lock().unwrap().map_or(0, i64::from),
                             ..Default::default()
                         };
                         return Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()));
