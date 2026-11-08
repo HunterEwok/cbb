@@ -71,6 +71,8 @@ targets:
         NSLocalNetworkUsageDescription: CBB finds your computers on the home network and keeps their clipboard in sync with this phone.
         NSCameraUsageDescription: CBB scans the QR code a computer shows, to add it to your group.
         NSFaceIDUsageDescription: CBB asks for Face ID before it signs with your group's key, to add or remove a device.
+        # A received image or video goes to Photos (App/Gallery.swift), which the app never reads.
+        NSPhotoLibraryAddUsageDescription: CBB adds an image or video your computer sent to Photos.
         # The recovery key on a YubiKey (App/YubiKeyNfc.swift): Core NFC selects its PIV application.
         NFCReaderUsageDescription: CBB puts your group's recovery key on a YubiKey, and restores the group with it.
         com.apple.developer.nfc.readersession.iso7816.select-identifiers: [A000000308]
