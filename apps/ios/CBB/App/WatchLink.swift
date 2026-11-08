@@ -116,6 +116,7 @@ final class WatchLink: NSObject {
             case .off, .waitingForHub: return .waiting
             }
         }
+        s.sync = s.hasGroup ? model.syncOff == nil : nil
         s.events = Notifier.shared.recent
         s.color = UserDefaults.standard.string(forKey: AccentChoice.key) ?? Tokens.colors[0].name
         return s
@@ -164,7 +165,8 @@ extension WatchLink: WCSessionDelegate {
         session.activate()
     }
 
-    /// The watch's away switch: the same as the one in Settings.
+    /// The watch's two switches, the same as Home's: the house (sync) and
+    /// the globe (away from home); and the emergency actions.
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
         nonisolated(unsafe) let reply = replyHandler
         if let d = message[WatchState.askKey] as? Data {
@@ -173,6 +175,14 @@ extension WatchLink: WCSessionDelegate {
         }
         if let d = message[WatchState.signedKey] as? Data {
             Task { @MainActor in reply(await Self.deliver(d)) }
+            return
+        }
+        if let on = message[WatchState.syncKey] as? Bool {
+            Task { @MainActor in
+                let model = AppModel.shared
+                model.turnSync(on)
+                reply(Self.state(model).data)
+            }
             return
         }
         guard let on = message[WatchState.awayKey] as? Bool else { return replyHandler([:]) }

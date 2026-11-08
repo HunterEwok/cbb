@@ -350,7 +350,7 @@ final class LiveGroup: GroupController {
                   device: $0.id == g.device ? Self.ownDevice : infos[$0.id], mode: $0.id == g.device ? modeBox.mode : modes[$0.id],
                   actions: actions[$0.id] ?? [], mayHub: g.records.mayHost($0.id), forwardOnly: $0.forwardOnly,
                   muted: AppModel.Hold(ms: $0.id == g.device ? modeBox.mutedUntilMS : mutes[$0.id]),
-                  paused: $0.id == g.device ? AppModel.Hold(ms: modeBox.pausedUntilMS) : nil)
+                  syncOff: $0.id == g.device && modeBox.mode == "own" ? AppModel.Hold(ms: modeBox.syncOffUntilMS ?? 0) : nil)
         }
     }
 
@@ -1069,17 +1069,12 @@ final class LiveGroup: GroupController {
         if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
     }
 
-    /// Keeps the group's copies out of this phone's clipboard for forMS
-    /// milliseconds, 0 for until it takes them again (design.md, "Muting a
-    /// device"); its own copies still go out. Needs no rights.
-    func pauseReceiving(forMS: Int64) throws {
-        try modeBox.setPause(forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0)
-        groupChanged()
-    }
-
-    /// Takes the group's copies again.
-    func resumeReceiving() throws {
-        try modeBox.setPause(nil)
+    /// Turns sync on this phone on, or off for forMS milliseconds, 0 for
+    /// until turned on again (design.md, "Sync on and off"): off, the
+    /// clipboard is this phone's own, both ways. Needs no rights.
+    func setSync(_ on: Bool, forMS: Int64) throws {
+        try modeBox.setSync(on: on, untilMS: !on && forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0)
+        try? node?.setSync(on: on, forMS: on ? 0 : forMS)
         groupChanged()
     }
 
@@ -1411,7 +1406,7 @@ final class LiveGroup: GroupController {
                                         seal: try SealKey.secret(), cert: g.memberCert, issuer: g.memberIssuer, groupCA: g.groupCA,
                                         roots: g.trusted)) { try signer.signature(digest: $0) }
         try node.addRecords(g.records.records)
-        try node.setSync(on: modeBox.mode != "own")
+        try node.setSync(on: modeBox.mode != "own", forMS: modeBox.syncOffUntilMS.map { max(1, $0 - Int64(Date().timeIntervalSince1970 * 1000)) } ?? 0)
         if let muted = modeBox.mutedUntilMS { try node.setMute(untilMS: muted) }
         let box = RecordBox(groupCA: g.groupCA, set: g.records)
         let credentials = CredentialBox(url: credentialsURL, group: g)
@@ -1657,7 +1652,7 @@ final class LiveGroup: GroupController {
     private func handled(_ e: CoreMember.Event) {
         switch e {
         case let .copy(c):
-            guard let node, let g = state, c.origin != g.device, Member.receives(modeBox.mode), modeBox.pausedUntilMS == nil,
+            guard let node, let g = state, c.origin != g.device, Member.receives(modeBox.mode),
                   (try? node.waiting())?.id == c.id else { return }
             Task {
                 do {
@@ -2171,11 +2166,16 @@ final class LiveGroup: GroupController {
 
         init(url: URL) { self.url = url }
 
-        /// The sync mode: own, shared, receive or send.
+        /// The sync mode: shared (sync on) or own (sync off); own turned off
+        /// for a time reads as shared once the time is over.
         var mode: String {
             lock.withLock {
                 let m = (try? String(contentsOf: url, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
-                return m.flatMap { Member.modes.contains($0) ? $0 : nil } ?? "own"
+                let mode = m.flatMap { Member.modes.contains($0) ? $0 : nil } ?? "shared"
+                if mode == "own", let until = readMute().sync, until > 0, until <= Int64(Date().timeIntervalSince1970 * 1000) {
+                    return "shared"
+                }
+                return mode
             }
         }
 
@@ -2185,10 +2185,10 @@ final class LiveGroup: GroupController {
             try lock.withLock { try Data((mode + "\n").utf8).write(to: url, options: .atomic) }
         }
 
-        /// An admin's mute of this phone and its user's pause of receiving,
-        /// as Go's service keeps them in mute.json: until when in Unix
-        /// milliseconds, 0 for until it is lifted.
-        private struct MuteFile: Codable { var mute: Int64?, pause: Int64? }
+        /// An admin's mute of this phone and until when its user turned sync
+        /// off, as Go's service keeps them in mute.json: until when in Unix
+        /// milliseconds, 0 for until it is lifted or turned on.
+        private struct MuteFile: Codable { var mute: Int64?, sync: Int64? }
         private var muteURL: URL { url.deletingLastPathComponent().appendingPathComponent("mute.json") }
 
         private func readMute() -> MuteFile {
@@ -2212,17 +2212,25 @@ final class LiveGroup: GroupController {
         /// Until when an admin muted this phone, 0 for until an admin
         /// unmutes it; nil while it is not muted.
         var mutedUntilMS: Int64? { lock.withLock { Self.holding(readMute().mute) } }
-        /// Until when this phone takes no copies from the group, 0 for until
-        /// its user turns them on again; nil while it takes them.
-        var pausedUntilMS: Int64? { lock.withLock { Self.holding(readMute().pause) } }
+        /// Until when sync is off on this phone, in Unix milliseconds; nil
+        /// while it is on or off until turned on again.
+        var syncOffUntilMS: Int64? {
+            guard mode == "own" else { return nil }
+            return lock.withLock { readMute().sync.flatMap { $0 > 0 ? $0 : nil } }
+        }
 
         func setMute(_ until: Int64?) throws { try writeMute { $0.mute = until } }
-        func setPause(_ until: Int64?) throws { try writeMute { $0.pause = until } }
 
-        /// Gives a phone that just made or joined a group the sync mode of a
-        /// new device, own, unless it has one from an earlier group.
+        /// Turns sync on, or off until untilMS (0 for until turned on again).
+        func setSync(on: Bool, untilMS: Int64 = 0) throws {
+            try set(on ? "shared" : "own")
+            try writeMute { $0.sync = on ? nil : untilMS }
+        }
+
+        /// Gives a phone that just made or joined a group sync on, as a new
+        /// device has it, unless it has its own choice from an earlier group.
         func newDevice() throws {
-            if !FileManager.default.fileExists(atPath: url.path) { try set("own") }
+            if !FileManager.default.fileExists(atPath: url.path) { try set("shared") }
         }
 
         /// What a command that was taken changes beyond its result: the new
@@ -2458,11 +2466,9 @@ final class LiveGroup: GroupController {
     /// The copy from another device that waits for this phone, by the
     /// core's rule (docs/design.md, "The one button"): younger than the
     /// group's live window and not yet taken; for what the app takes by
-    /// itself (byItself), also in a sync mode that takes the group's copies
-    /// and while the user has not paused them, while the button works in
-    /// every mode.
+    /// itself (byItself), also while sync is on.
     private func pending(_ node: CoreMember, byItself: Bool) -> CoreMember.Copy? {
-        guard !byItself || Member.receives(modeBox.mode) && modeBox.pausedUntilMS == nil else { return nil }
+        guard !byItself || Member.receives(modeBox.mode) else { return nil }
         return try? node.waiting()
     }
 

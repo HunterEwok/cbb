@@ -21,20 +21,6 @@ enum LanguageChoice: String, CaseIterable, Identifiable {
         defaults.string(forKey: key).flatMap(LanguageChoice.init(rawValue:)) ?? .system
     }
 
-    /// Whether the Start screen offers the language: only when the app has
-    /// no translation for the language the system prefers (it shows English
-    /// then). Settings always offers it.
-    static func offeredOnStart(preferred: [String], localizations: [String]) -> Bool {
-        guard let first = preferred.first else { return false }
-        let supported = Set(localizations.filter { $0 != "Base" }.map(languageCode))
-        return !supported.contains(languageCode(first))
-    }
-
-    /// "pt" from "pt-BR" or "pt_BR".
-    private static func languageCode(_ id: String) -> String {
-        Locale(identifier: id).language.languageCode?.identifier ?? id
-    }
-
     /// The locale the views use, nil for System.
     var locale: Locale? { self == .system ? nil : Locale(identifier: rawValue) }
 

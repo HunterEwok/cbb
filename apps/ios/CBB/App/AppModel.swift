@@ -82,11 +82,9 @@ protocol GroupController: AnyObject {
     func rename(_ id: String, to name: String) async throws
     /// Sets the sync mode of a connected computer; only an admin phone does.
     func setMode(_ id: String, to mode: String) async throws
-    /// Keeps the group's copies out of this phone for forMS milliseconds, 0
-    /// for until resumeReceiving; its own copies still go out.
-    func pauseReceiving(forMS: Int64) throws
-    /// Takes the group's copies again.
-    func resumeReceiving() throws
+    /// Turns sync on this phone on, or off for forMS milliseconds, 0 for
+    /// until turned on again; needs no rights.
+    func setSync(_ on: Bool, forMS: Int64) throws
     /// Mutes a device for the group for forMS milliseconds, 0 for until it
     /// is unmuted, or unmutes it; only an admin phone does.
     func setMuted(_ id: String, _ on: Bool, forMS: Int64) async throws
@@ -183,8 +181,7 @@ extension GroupController {
     func restoreWithCard(pin: String) async throws { throw PendingGroup.Failure.notReady }
     func rename(_ id: String, to name: String) async throws {}
     func setMode(_ id: String, to mode: String) async throws {}
-    func pauseReceiving(forMS: Int64) throws {}
-    func resumeReceiving() throws {}
+    func setSync(_ on: Bool, forMS: Int64) throws {}
     func setMuted(_ id: String, _ on: Bool, forMS: Int64) async throws {}
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws {}
     func runAction(_ id: String, name: String) async throws {}
@@ -216,7 +213,7 @@ final class AppModel: ObservableObject {
     /// too.
     static let shared = AppModel(group: LiveGroup(), notifies: true)
 
-    enum Phase: Equatable { case start, joining, joiningComputer, home }
+    enum Phase: Equatable { case start, joining, home }
 
     /// A device of the group: a computer, or this phone.
     struct Computer: Identifiable, Equatable {
@@ -263,12 +260,13 @@ final class AppModel: ObservableObject {
         /// An admin muted it: its copies stay its own (design.md, "Muting a
         /// device"). This phone's own, or what a connected device's hello says.
         var muted: Hold?
-        /// This phone takes no copies from the group for now; only on its
-        /// own entry.
-        var paused: Hold?
+        /// Sync is off on this phone, until when or until turned on; only on
+        /// its own entry.
+        var syncOff: Hold?
     }
 
-    /// A mute or a pause that holds: until when, nil for until it is lifted.
+    /// A mute or sync turned off that holds: until when, nil for until it is
+    /// lifted.
     struct Hold: Equatable {
         var until: Date?
 
@@ -285,8 +283,8 @@ final class AppModel: ObservableObject {
         init(until: Date?) { self.until = until }
     }
 
-    /// This phone's pause of the group's copies; nil while it takes them.
-    var pause: Hold? { devices.first(where: \.isSelf)?.paused }
+    /// Sync turned off on this phone; nil while it is on.
+    var syncOff: Hold? { devices.first(where: \.isSelf)?.syncOff }
 
     /// What the phone's clipboard holds, as the paste button or Shortcuts
     /// hands it to the app: a text, or an image.
@@ -576,46 +574,6 @@ final class AppModel: ObservableObject {
         joinCode = nil
     }
 
-    /// Opens the screen that joins a computer's group with the code cbb
-    /// pair shows.
-    func startJoiningComputer() {
-        dismissWelcome()
-        message = nil
-        phase = .joiningComputer
-    }
-
-    /// Joins a computer's group with the code the user typed from cbb pair
-    /// on the group's root, then goes Home. A wrong code may be typed again:
-    /// the computer's window takes three attempts.
-    func joinComputer(code: String) async {
-        busy = true
-        message = nil
-        defer { busy = false }
-        do {
-            try await group.joinComputer(code: code)
-            computers = group.computers
-            devices = group.devices
-            isAdmin = group.isAdmin
-            phase = .home
-        } catch is CancellationError {
-        } catch {
-            message = Self.describe(error, summary: Self.joinSummary(error))
-        }
-    }
-
-    /// What joining a computer's group says about a failure of the
-    /// exchange; nil for the others, which say what they always do.
-    private static func joinSummary(_ error: Error) -> String? {
-        let f = (error as? PairingJoiner.Spent)?.underlying as? PairingJoiner.Failure ?? error as? PairingJoiner.Failure
-        if case .refused(.wrongCode)? = f {
-            return String(localized: "The code did not match. Check the code on the computer's screen and type it again.", bundle: .app)
-        }
-        if f != nil || error is PairingJoiner.Spent {
-            return String(localized: "The computer's group could not be joined. Run cbb pair -admin on it again.", bundle: .app)
-        }
-        return nil
-    }
-
     /// Restores the group with the recovery key from the sheet's QR code,
     /// on a phone without a group: the claim goes out, the app goes Home,
     /// and Home shows the time left until this phone becomes the root.
@@ -726,6 +684,56 @@ final class AppModel: ObservableObject {
     private func feel(_ kind: UINotificationFeedbackGenerator.FeedbackType) {
         guard UIApplication.shared.applicationState == .active else { return }
         UINotificationFeedbackGenerator().notificationOccurred(kind)
+    }
+
+    /// Whether the app reads the clipboard by itself as it comes to the
+    /// front: the user chose so on the paste note (PasteNote), "allow", or
+    /// not, "later"; nil before the note was shown.
+    static let pasteChoiceKey = "PasteChoice"
+    var readsClipboard: Bool { UserDefaults.standard.string(forKey: Self.pasteChoiceKey) == "allow" }
+
+    /// iOS refused the app the clipboard, or the user chose not to let the
+    /// app read it: Home offers the system's paste button instead.
+    @Published private(set) var pasteRefused = false
+
+    /// Sends what was copied as the app comes to the front, while sync is on
+    /// and the user let the app read the clipboard; a copy from another
+    /// device that waits comes in first. Says only what it did.
+    func sendOnOpen() async {
+        guard group.hasGroup, syncOff == nil else { return }
+        guard readsClipboard else {
+            pasteRefused = UserDefaults.standard.string(forKey: Self.pasteChoiceKey) != nil
+            return
+        }
+        do {
+            let result = try await group.sync(board: nil)
+            pasteRefused = false
+            if result != .nothingNew {
+                message = Self.said(result)
+                if let message { Island.flash(message) }
+            }
+        } catch is LiveGroup.ClipboardUnreadable {
+            pasteRefused = true
+        } catch {
+            // No device connected yet, or the like: the next opening tries again.
+        }
+        computers = group.computers
+    }
+
+    /// Asks iOS for the clipboard once, so that Settings, CBB lists "Paste
+    /// from Other Apps", then opens Settings there.
+    func askForClipboard() async {
+        UserDefaults.standard.set("allow", forKey: Self.pasteChoiceKey)
+        _ = await Task.detached { UIPasteboard.general.hasStrings ? UIPasteboard.general.string : nil }.value
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            await UIApplication.shared.open(url)
+        }
+    }
+
+    /// The user chose not to let the app read the clipboard for now.
+    func declineClipboard() {
+        UserDefaults.standard.set("later", forKey: Self.pasteChoiceKey)
+        pasteRefused = true
     }
 
     /// Takes the copy from another device that waits for this phone, as
@@ -1104,11 +1112,11 @@ final class AppModel: ObservableObject {
         devices = group.devices
     }
 
-    /// Sets the sync mode of a connected computer.
-    func setMode(_ id: String, to mode: String) async {
+    /// Turns sync on or off on a connected computer, as an admin.
+    func setSync(_ id: String, on: Bool) async {
         do {
-            try await group.setMode(id, to: mode)
-            message = String(localized: "The sync mode is set.", bundle: .app)
+            try await group.setMode(id, to: on ? "shared" : "own")
+            message = String(localized: "Sync is set.", bundle: .app)
         } catch {
             message = Self.describe(error)
         }
@@ -1116,14 +1124,14 @@ final class AppModel: ObservableObject {
         devices = group.devices
     }
 
-    /// Keeps the group's copies out of this phone for forMS milliseconds,
-    /// 0 for until the user takes them again; nil takes them again now.
-    func pauseReceiving(forMS: Int64?) {
+    /// Turns sync on this phone on, or off for forMS milliseconds, 0 for
+    /// until turned on again (design.md, "Sync on and off").
+    func turnSync(_ on: Bool, forMS: Int64 = 0) {
         do {
-            if let forMS { try group.pauseReceiving(forMS: forMS) } else { try group.resumeReceiving() }
-            message = forMS == nil
-                ? String(localized: "This phone takes copies from the group again.", bundle: .app)
-                : String(localized: "This phone takes no copies from the group for now.", bundle: .app)
+            try group.setSync(on, forMS: forMS)
+            message = on
+                ? String(localized: "Sync is on: copies go to the group and come from it.", bundle: .app)
+                : String(localized: "Sync is off: the clipboard is this phone's own.", bundle: .app)
         } catch {
             message = Self.describe(error)
         }

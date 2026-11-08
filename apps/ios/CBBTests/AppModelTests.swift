@@ -119,12 +119,11 @@ final class AppModelTests: XCTestCase {
         func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { .sent(to: []) }
         var refreshed = 0
         func refresh() async { refreshed += 1 }
-        var devices: [AppModel.Computer] { computers + [.init(id: "me", name: "iPhone", online: true, role: "phone", isSelf: true, paused: paused)] }
-        var paused: AppModel.Hold?
-        func pauseReceiving(forMS: Int64) throws {
-            paused = AppModel.Hold(ms: forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0)
+        var devices: [AppModel.Computer] { computers + [.init(id: "me", name: "iPhone", online: true, role: "phone", isSelf: true, syncOff: syncOff)] }
+        var syncOff: AppModel.Hold?
+        func setSync(_ on: Bool, forMS: Int64) throws {
+            syncOff = on ? nil : AppModel.Hold(ms: forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0)
         }
-        func resumeReceiving() throws { paused = nil }
         func setMuted(_ id: String, _ on: Bool, forMS: Int64) async throws {
             guard isAdmin else { throw PhoneGroup.Failure.notAdmin }
             if let i = computers.firstIndex(where: { $0.id == id }) {
@@ -188,21 +187,21 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(m.devices.first { $0.id == "a" }?.name, "living room")
     }
 
-    /// The quick switch pauses taking copies for a time or until it is
-    /// turned on again; an admin mutes a device and unmutes it; a mute or
-    /// pause that ended holds no more.
-    func testPauseAndMute() async {
+    /// The house turns sync off for a time or until it is turned on again,
+    /// and on; an admin mutes a device and unmutes it; a mute that ended
+    /// holds no more.
+    func testSyncOffAndMute() async {
         let g = FakeGroup()
         g.computers = [.init(id: "a", name: "pi", online: true)]
         let m = AppModel(group: g)
-        XCTAssertNil(m.pause)
-        m.pauseReceiving(forMS: PauseTime.hour.ms)
-        XCTAssertEqual(m.pause?.until?.timeIntervalSinceNow ?? 0, 3600, accuracy: 60)
-        m.pauseReceiving(forMS: PauseTime.ever.ms)
-        XCTAssertNotNil(m.pause)
-        XCTAssertNil(m.pause?.until)
-        m.pauseReceiving(forMS: nil)
-        XCTAssertNil(m.pause)
+        XCTAssertNil(m.syncOff)
+        m.turnSync(false, forMS: PauseTime.hour.ms)
+        XCTAssertEqual(m.syncOff?.until?.timeIntervalSinceNow ?? 0, 3600, accuracy: 60)
+        m.turnSync(false, forMS: PauseTime.ever.ms)
+        XCTAssertNotNil(m.syncOff)
+        XCTAssertNil(m.syncOff?.until)
+        m.turnSync(true)
+        XCTAssertNil(m.syncOff)
         await m.setMuted("a", true, forMS: PauseTime.quarter.ms)
         XCTAssertNotNil(m.devices.first { $0.id == "a" }?.muted?.until)
         await m.setMuted("a", false)
@@ -406,16 +405,6 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(defaults.bool(forKey: AppModel.welcomedKey))
     }
 
-    func testLanguageOfferedOnStart() {
-        let ours = ["Base", "en", "ru"]
-        XCTAssertFalse(LanguageChoice.offeredOnStart(preferred: ["en-GB", "de"], localizations: ours))
-        XCTAssertFalse(LanguageChoice.offeredOnStart(preferred: ["ru-RU"], localizations: ours))
-        XCTAssertTrue(LanguageChoice.offeredOnStart(preferred: ["de-DE", "en"], localizations: ours),
-                      "German is not translated, so the app shows English and offers the choice")
-        XCTAssertTrue(LanguageChoice.offeredOnStart(preferred: ["pt_BR"], localizations: ours))
-        XCTAssertFalse(LanguageChoice.offeredOnStart(preferred: [], localizations: ours))
-    }
-
     func testLanguageChoice() {
         let defaults = freshDefaults()
         XCTAssertEqual(LanguageChoice.current(defaults), .system)
@@ -448,6 +437,7 @@ final class AppModelTests: XCTestCase {
         s.hasGroup = true
         s.devices = [.init(id: "a", name: "deck", symbol: "gamecontroller", online: true)]
         s.away = .connected
+        s.sync = false
         s.events = ["deck joined the group."]
         s.group = "tag"
         XCTAssertEqual(WatchState(s.data), s)

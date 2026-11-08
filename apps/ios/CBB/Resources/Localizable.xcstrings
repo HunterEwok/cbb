@@ -4833,6 +4833,476 @@
           }
         }
       }
+    },
+    "Scan a code": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отсканировать код"
+          }
+        }
+      }
+    },
+    "Send an invitation": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправить приглашение"
+          }
+        }
+      }
+    },
+    "Send what you copied": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправить скопированное"
+          }
+        }
+      }
+    },
+    "Lost a phone?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Потеряли телефон?"
+          }
+        }
+      }
+    },
+    "Make a second phone an admin: on it, tap Join a group, then scan its code here with +.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделайте второй телефон админом: на нём нажмите «Войти в группу», затем отсканируйте его код здесь кнопкой +."
+          }
+        }
+      }
+    },
+    "Turn Everywhere on?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включить «Везде»?"
+          }
+        }
+      }
+    },
+    "Turn on": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включить"
+          }
+        }
+      }
+    },
+    "When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, encrypted end to end. Nothing goes anywhere else.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Когда телефон не в домашней сети, он синхронизируется через туннель WireGuard вашего собственного хаба, со сквозным шифрованием. Больше никуда ничего не уходит."
+          }
+        }
+      }
+    },
+    "Sync is on": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация включена"
+          }
+        }
+      }
+    },
+    "Tap to turn sync off or on; touch and hold for a time": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нажмите, чтобы выключить или включить синхронизацию; удерживайте, чтобы выбрать время"
+          }
+        }
+      }
+    },
+    "Everywhere is on": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Везде» включено"
+          }
+        }
+      }
+    },
+    "Everywhere waits while sync is off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Везде» ждёт, пока синхронизация выключена"
+          }
+        }
+      }
+    },
+    "Everywhere is off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Везде» выключено"
+          }
+        }
+      }
+    },
+    "Sync off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация выключена"
+          }
+        }
+      }
+    },
+    "Sync off until %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация выключена до %@"
+          }
+        }
+      }
+    },
+    "Sync is on: copies go to the group and come from it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация включена: копии уходят в группу и приходят из неё."
+          }
+        }
+      }
+    },
+    "Sync is off: the clipboard is this phone's own.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация выключена: буфер обмена — только этого телефона."
+          }
+        }
+      }
+    },
+    "Sync is set.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация настроена."
+          }
+        }
+      }
+    },
+    "Sync": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация"
+          }
+        }
+      }
+    },
+    "More": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подробнее"
+          }
+        }
+      }
+    },
+    "Device ID": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID устройства"
+          }
+        }
+      }
+    },
+    "Send what you copy by itself": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скопированное уходит само"
+          }
+        }
+      }
+    },
+    "Copy something, open CBB, and it goes to your other devices. In Settings, CBB, set Paste from Other Apps to Allow, so that iOS does not ask each time.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скопируйте что-нибудь, откройте CBB — и оно уйдёт на другие устройства. В Настройках → CBB выберите «Вставка из других приложений: Разрешить», чтобы iOS не спрашивала каждый раз."
+          }
+        }
+      }
+    },
+    "Allow in Settings": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разрешить в Настройках"
+          }
+        }
+      }
+    },
+    "Later": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Позже"
+          }
+        }
+      }
+    },
+    "The invitation is open until %@. Share its file only with the person who joins.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приглашение открыто до %@. Отправьте его файл только тому, кто входит."
+          }
+        }
+      }
+    },
+    "Its owner joins with cbb pair -invite. It works once, for an hour, while this app is open.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Владелец входит командой cbb pair -invite. Оно действует один раз, час, пока приложение открыто."
+          }
+        }
+      }
+    },
+    "On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На хабе группы выполните cbb invite и отправьте получившийся файл по надёжному каналу. На новом устройстве выполните cbb pair -invite с этим файлом."
+          }
+        }
+      }
+    },
+    "Create a group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создать группу"
+          }
+        }
+      }
+    },
+    "Restore with the recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Восстановить ключом восстановления"
+          }
+        }
+      }
+    },
+    "Point the camera at the QR code the new device shows.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Наведите камеру на QR-код, который показывает новое устройство."
+          }
+        }
+      }
+    },
+    "Advanced settings": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расширенные настройки"
+          }
+        }
+      }
+    },
+    "Security level": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Уровень безопасности"
+          }
+        }
+      }
+    },
+    "Root, admins, hubs": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Корень, админы, хабы"
+          }
+        }
+      }
+    },
+    "Group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Группа"
+          }
+        }
+      }
+    },
+    "Copy lifetime": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Время жизни копии"
+          }
+        }
+      }
+    },
+    "Away from home: hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вне дома: хаб"
+          }
+        }
+      }
+    },
+    "Tunnel disguise": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Маскировка туннеля"
+          }
+        }
+      }
+    },
+    "Off: the globe on Home turns it on.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выключено: включается глобусом на главном экране."
+          }
+        }
+      }
+    },
+    "The phone as the hub": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон как хаб"
+          }
+        }
+      }
+    },
+    "While the app is open, the other devices at home connect to this phone, and with a forwarder from afar too. The forwarder passes only encrypted packets.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока приложение открыто, другие устройства дома подключаются к этому телефону, а с пересылателем — и издалека. Пересылатель передаёт только зашифрованные пакеты."
+          }
+        }
+      }
+    },
+    "For a group without a hub: the devices meet at a relay. It cannot read the clipboard, but it sees which devices are online and talk to each other.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для группы без хаба: устройства встречаются на ретрансляторе. Он не может прочитать буфер, но видит, какие устройства в сети и общаются между собой."
+          }
+        }
+      }
+    },
+    "How long a copy from another device goes into the clipboard after it arrives.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сколько времени копия с другого устройства попадает в буфер после прихода."
+          }
+        }
+      }
+    },
+    "Which devices may be admins and hubs. Keys in hardware never leave the device; a key in a file can be copied.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Какие устройства могут быть админами и хабами. Ключи в железе не покидают устройство; ключ в файле можно скопировать."
+          }
+        }
+      }
+    },
+    "The watch as an admin": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Часы как админ"
+          }
+        }
+      }
+    },
+    "It can freeze an admin computer and turn remote paste and quick actions off. Open CBB on the watch first.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Они могут заморозить компьютер-админ и выключить удалённую вставку и быстрые действия. Сначала откройте CBB на часах."
+          }
+        }
+      }
+    },
+    "Everywhere": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Везде"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

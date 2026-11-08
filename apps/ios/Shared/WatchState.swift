@@ -54,6 +54,8 @@ struct WatchState: Codable, Equatable {
     var devices: [Device] = []
     /// nil without a group.
     var away: Away?
+    /// Whether sync is on on the phone; nil without a group.
+    var sync: Bool?
     /// The latest events, newest first.
     var events: [String] = []
     /// The phone's colour, by its name in Tokens.colors.
@@ -62,6 +64,8 @@ struct WatchState: Codable, Equatable {
     static let key = "state"
     /// The message that turns the phone's sync away from home on or off.
     static let awayKey = "away"
+    /// The message that turns the phone's sync on or off.
+    static let syncKey = "sync"
 
     /// The root phone's ask that the watch make its admin key (docs/protocol.md,
     /// section 10, "Watches"); the watch answers with requestKey, a KeyRequest,
