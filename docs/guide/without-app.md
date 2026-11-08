@@ -30,8 +30,7 @@ It shows a six-digit code and waits. On the new computer, also `sudo cbb pair`: 
 QR code for the phone app first, which you can ignore, and asks for the code; type the six
 digits there. The new computer joins within seconds.
 
-Then turn on sharing on each computer, as in the [quick start](quickstart.md#4-share-the-computers-clipboard):
-`sudo cbb mode shared`.
+Each computer then syncs, as in the [quick start](quickstart.md#4-copy-on-one-paste-on-another).
 
 ## 3. Do not depend on one computer
 

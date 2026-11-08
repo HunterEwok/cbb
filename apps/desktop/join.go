@@ -11,10 +11,13 @@ import (
 	"time"
 
 	"rsc.io/qr"
+
+	"github.com/HunterEwok/cbb/internal/phone"
 )
 
-// Joining a phone's group from the window: the window shows the QR code the
-// phone scans. Joining changes the group, so cbb pair -app runs as the
+// Joining a group from the window: the window shows the QR code a phone of
+// the group scans and the six digits a computer of the group types (cbb
+// pair -qr there). Joining changes the group, so cbb pair -app runs as the
 // administrator (admin.go) and writes the code's text into a file the app
 // made, which the app reads while cbb waits; removing the file cancels.
 
@@ -25,6 +28,9 @@ type Join struct {
 	// Image is the QR code as a data: URL of a PNG, Text what it says.
 	Image string `json:"image,omitempty"`
 	Text  string `json:"text,omitempty"`
+	// Code is the six digits the QR code holds, which a computer of the
+	// group types to admit this one, in two groups of three.
+	Code string `json:"code,omitempty"`
 	// Ends is when the wait ends, in Unix milliseconds.
 	Ends int64 `json:"ends,omitempty"`
 	Port int   `json:"port,omitempty"`
@@ -37,13 +43,15 @@ type appJoin struct {
 	Port    int    `json:"port"`
 }
 
-// JoinPhone joins the phone's group that scans the code; it returns when
-// the join ends, while the window asks JoinState for the code.
-func (d *Desk) JoinPhone() {
+// JoinGroup joins the group of the device that admits this one by its
+// code; it returns when the join ends, while the window asks JoinState for
+// the code.
+func (d *Desk) JoinGroup() {
 	f, err := os.CreateTemp("", "cbb-join-*.json")
 	if err != nil {
+		msg := d.describe(err) // describe takes d.mu
 		d.mu.Lock()
-		d.message = d.describe(err)
+		d.message = msg
 		d.mu.Unlock()
 		return
 	}
@@ -101,6 +109,9 @@ func (d *Desk) JoinState() Join {
 	code.Scale = 8
 	j.Image = "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG())
 	j.Text, j.Port = a.QR, a.Port
+	if jc, ok := phone.ParseJoinQR(a.QR); ok && len(jc.Code) == 6 {
+		j.Code = jc.Code[:3] + " " + jc.Code[3:]
+	}
 	j.Ends = time.Now().Add(time.Duration(a.Expires) * time.Second).UnixMilli()
 	d.mu.Lock()
 	if d.joinPath == path {

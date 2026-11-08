@@ -37,9 +37,9 @@ turn sync away from home on.
 - **Leave the service's sandbox as it is.** The systemd unit runs the service as its own
   user without capabilities (`NoNewPrivileges`, `ProtectSystem=strict`, restricted address
   families and system calls). A drop-in that loosens it removes a defence.
-- **Use a sync mode.** A device that only shows copies, such as a TV or a shared computer,
-  takes `receive` (`sudo cbb mode receive`), so its own copies never reach the group; a
-  device whose clipboard should stay its own keeps `own`, the default.
+- **Turn sync off where it is not wanted.** A shared computer whose clipboard should stay
+  its own runs `cbb sync off`; its copies then never reach the group, and an admin turns it
+  back with `cbb sync -on DEVICE on`.
 - **Mark secrets.** A password manager's copies, and `cbb copy -secret`, live only in memory
   and are gone after 60 seconds.
 

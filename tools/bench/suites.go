@@ -460,8 +460,17 @@ func shareClipboard(ctx context.Context, d *Device) error { return setMode(ctx, 
 
 // setMode sets the device's sync mode, which is on the admin socket.
 func setMode(ctx context.Context, d *Device, mode string) error {
-	_, err := Run(ctx, d, adminCmd(d)+" mode "+mode, "")
+	_, err := Run(ctx, d, adminCmd(d)+" sync "+syncWord(mode), "")
 	return noSudo(d, err)
+}
+
+// syncWord is what cbb sync takes for a sync mode: on for shared, off for
+// own (docs/design.md, "Sync on and off").
+func syncWord(mode string) string {
+	if mode == "own" {
+		return "off"
+	}
+	return "on"
 }
 
 // adminCmd runs cbb for a command that changes the group. Such commands go

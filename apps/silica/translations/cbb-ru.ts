@@ -149,8 +149,8 @@
         <translation>Вход…</translation>
     </message>
     <message>
-        <source>On a phone or a computer of your group, add a device and scan this code. Keep this screen open.</source>
-        <translation>На телефоне или компьютере вашей группы добавьте устройство и отсканируйте этот код. Не закрывайте этот экран.</translation>
+        <source>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</source>
+        <translation>На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте этот экран.</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>

@@ -41,7 +41,7 @@ func TestLeaveVersion1Group(t *testing.T) {
 	// A group of 0.5: its files move, the settings stay.
 	write(group.RecordsFileName, "\n [ ]")
 	write(group.CredentialsFileName, "{}")
-	write(modeFile, "own")
+	write(syncFile, `{"off":true}`)
 	left, err := leaveVersion1Group(dir)
 	if !left || err != nil {
 		t.Fatalf("a group of 0.5: %v %v", left, err)
@@ -51,8 +51,8 @@ func TestLeaveVersion1Group(t *testing.T) {
 			t.Errorf("%s did not move", name)
 		}
 	}
-	if !exists(filepath.Join(dir, modeFile)) {
-		t.Error("the sync mode moved")
+	if !exists(filepath.Join(dir, syncFile)) {
+		t.Error("sync off moved")
 	}
 	if _, err := group.Load(dir); err != group.ErrNoGroup {
 		t.Errorf("the device is still in a group: %v", err)

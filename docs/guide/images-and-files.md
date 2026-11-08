@@ -18,7 +18,7 @@ nothing is deleted anywhere.
 ## How it travels
 
 The copy itself stays on the device where it was made. The others learn that there is a new
-copy, with its size, and those whose sync mode takes the group's copies fetch it at once
+copy, with its size, and those with sync on fetch it at once
 from that device, or from another that has it, over the same encrypted connections as the
 text.
 

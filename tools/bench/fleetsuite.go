@@ -51,7 +51,7 @@ func FleetSuite(ctx context.Context, r *Report, cbb string, size int, timeout ti
 		{"G33-admins-at-once", func() { concurrentAdmins(ctx, r, f, timeout) }},
 		{"S24-stolen-admin", func() { stolenAdmin(ctx, r, f, timeout) }},
 		{"M4-mode-kept", func() { modeKept(ctx, r, f, timeout) }},
-		{"M8-mute", func() { muteHere(ctx, r, f, timeout) }},
+		{"M8-sync-off", func() { syncOffHere(ctx, r, f, timeout) }},
 		{"M9-admin-mute", func() { muteByAdmin(ctx, r, f, timeout) }},
 		{"M10-incoming", func() { incoming(ctx, r, f, timeout) }},
 		{"G4-paths", func() { joinPaths(ctx, r, f, timeout) }},
@@ -305,12 +305,12 @@ func roles(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	fails(ctx, r, p+"G21-admin-makes-no-admin", admin, errorCase{cmd: "cbb admin -allow-file-key " + m1.Name, want: []string{"only the group's root"}})
 	fails(ctx, r, p+"G21-admin-keeps-root", admin, errorCase{cmd: "cbb remove " + root.Name, want: []string{"holds the group's root", "takeover"}})
 	fails(ctx, r, p+"G21-member-removes-none", m1, errorCase{cmd: "cbb remove " + m2.Name, want: []string{"admin"}})
-	fails(ctx, r, p+"M5-member-sets-no-mode", m1, errorCase{cmd: "cbb mode -on " + m2.Name + " receive", want: []string{"only an admin"}})
+	fails(ctx, r, p+"M5-member-sets-no-mode", m1, errorCase{cmd: "cbb sync -on " + m2.Name + " off", want: []string{"only an admin"}})
 	r.Do(p+"M5-mode-on", func() error {
-		if err := succeeds(ctx, root, "cbb mode -on "+m2.Name+" receive", "", "receive"); err != nil {
+		if err := succeeds(ctx, root, "cbb sync -on "+m2.Name+" off", "", "Sync is off"); err != nil {
 			return err
 		}
-		return succeeds(ctx, m2, "cbb mode", "", "receive")
+		return succeeds(ctx, m2, "cbb sync", "", "Sync is off")
 	})
 	r.Do(p+"G21-admin-admits", func() error {
 		d, err := f.Add(ctx)
@@ -364,7 +364,7 @@ func roles(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		// Back in the group: the root reaches it again within the
 		// fallback dial.
 		return eventually(ctx, 45*time.Second, func() error {
-			_, err := Run(ctx, root, "cbb mode -on "+admin.Name+" shared", "")
+			_, err := Run(ctx, root, "cbb sync -on "+admin.Name+" on", "")
 			return err
 		})
 	})
@@ -624,7 +624,7 @@ func modes(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		if _, err := pairOne(ctx, g.hub, d); err != nil {
 			return err
 		}
-		return succeeds(ctx, d, "cbb mode", "", "own")
+		return succeeds(ctx, d, "cbb sync", "", "Sync is off")
 	})
 	if d == nil {
 		return

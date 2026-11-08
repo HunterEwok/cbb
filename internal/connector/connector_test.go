@@ -117,8 +117,6 @@ func startService(t *testing.T) string {
 		t.Fatal(err)
 	}
 	c.Close()
-	// A new device keeps its own clipboard; these tests watch it sync.
-	do(t, socket, control.Header{Op: control.OpMode, Name: "shared"}, "")
 	return socket
 }
 

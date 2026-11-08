@@ -283,6 +283,20 @@ pub unsafe extern "C" fn cbb_join_finish(j: *mut join::Join, saved: i32, answer_
     to_c(j.finish(saved != 0), answer_len)
 }
 
+/// Announces the joiner by mDNS while the app listens on `port`, until it
+/// is freed; returns 1 when it announced, 0 when mDNS is not at hand.
+///
+/// # Safety
+///
+/// As `cbb_join_accept`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_join_announce(j: *mut join::Join, port: u16) -> i32 {
+    // SAFETY: as the function's contract says.
+    let Some(j) = (unsafe { j.as_mut() }) else { return 0 };
+    i32::from(j.announce(port))
+}
+
 /// Frees a joiner; null does nothing.
 ///
 /// # Safety
