@@ -760,7 +760,7 @@ mod tests {
         assert_eq!(reports, [vec![0, 0, 4, 0, 0, 0, 0, 0], vec![0; 8], vec![2, 0, 4, 0, 0, 0, 0, 0], vec![0; 8]]);
         assert_eq!(ok["ok"]["untypeable"], "");
         assert_eq!(b64(&ok["ok"]["map"]), crate::keyboard::DESCRIPTOR);
-        let no = ask("keyboard", serde_json::json!({"layout": "ru", "text": "aбb a"}));
+        let no = ask("keyboard", serde_json::json!({"layout": "ru", "text": "a\u{0431}b a"}));
         assert_eq!(no["ok"]["untypeable"], "ab");
         assert!(no["ok"]["reports"].as_array().unwrap().is_empty());
         assert_eq!(code(&ask("keyboard", serde_json::json!({"layout": "dvorak"}))), Code::Request as u64);
