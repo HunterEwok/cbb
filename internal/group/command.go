@@ -90,6 +90,11 @@ const (
 	PasteByTyping    = "type"
 )
 
+// PasteMedia is the kind of a paste command that pastes a copy of images or
+// files of the group: its text is the copy's event ID (docs/protocol.md,
+// section 15), and only the paste keys put it in.
+const PasteMedia = "media"
+
 // The longest text of a paste command, in bytes of UTF-8: typing is slow,
 // so it takes less.
 const (
@@ -645,8 +650,12 @@ func (b *CommandBody) checkPaste() error {
 	switch {
 	case b.Hub != nil:
 		return errors.New("group: a paste command carries a hub order")
-	case b.Kind != "text" && b.Kind != "secret":
-		return fmt.Errorf("group: a paste command's kind %q is not text or secret", b.Kind)
+	case b.Kind == PasteMedia && b.Mode != PasteByClipboard:
+		return errors.New("group: a paste command of images or files is not typed")
+	case b.Kind == PasteMedia && (len(b.Text) != 32 || strings.Trim(b.Text, "0123456789abcdef") != ""):
+		return errors.New("group: a paste command of images or files names no copy")
+	case b.Kind != "text" && b.Kind != "secret" && b.Kind != PasteMedia:
+		return fmt.Errorf("group: a paste command's kind %q is not text, secret or media", b.Kind)
 	case b.Text == "":
 		return errors.New("group: a paste command has no text")
 	case len(b.Text) > limit:

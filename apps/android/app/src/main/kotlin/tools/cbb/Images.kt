@@ -30,9 +30,9 @@ object Images {
 
     const val DIR = "received"
 
-    private val TYPES = listOf("image/png", "image/jpeg")
+    private val TYPES = listOf("image/gif", "image/png", "image/jpeg")
 
-    /** The image part of a media event, PNG before JPEG, or null for files and other data. */
+    /** The image part of a media event, GIF before PNG before JPEG, or null for files and other data. */
     fun part(m: Media.Manifest?): Media.Part? {
         if (m == null || m.isFiles) return null
         return TYPES.firstNotNullOfOrNull { t -> m.parts.firstOrNull { it.type == t && it.sha256 != null } }
@@ -48,7 +48,7 @@ object Images {
      */
     fun fetch(context: Context, node: CoreMember, e: CoreMember.Copy, part: Media.Part): File {
         val dir = File(context.cacheDir, DIR).apply { mkdirs() }
-        val f = File(dir, "copy-${e.id}.${if (part.type == "image/png") "png" else "jpg"}")
+        val f = File(dir, "copy-${e.id}.${extension(part.type.orEmpty())}")
         if (f.length() == part.size && f.exists()) return f
         val tmp = File(dir, f.name + ".part")
         try {
@@ -64,14 +64,28 @@ object Images {
         return f
     }
 
+    /** The file extension of an image type the group carries. */
+    fun extension(type: String): String = when (type) {
+        "image/png" -> "png"
+        "image/gif" -> "gif"
+        else -> "jpg"
+    }
+
+    /** The image type of a file extension that extension gives. */
+    fun type(extension: String): String = when (extension) {
+        "png" -> "image/png"
+        "gif" -> "image/gif"
+        else -> "image/jpeg"
+    }
+
     /** An image the phone copied, as the group carries it. */
     class Copied(val type: String, val bytes: ByteArray) {
         val key: String get() = Images.key(MessageDigest.getInstance("SHA-256").digest(bytes))
     }
 
     /**
-     * The image of type in stream, as PNG or JPEG: other formats (WebP,
-     * HEIC, GIF's first frame) are converted to PNG. Null when it is too
+     * The image of type in stream, as PNG, JPEG or GIF (animated too):
+     * other formats (WebP, HEIC) are converted to PNG. Null when it is too
      * large or not an image.
      */
     fun read(type: String, stream: InputStream): Copied? {

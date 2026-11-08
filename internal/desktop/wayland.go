@@ -53,7 +53,7 @@ const (
 var textTypes = []string{"text/plain;charset=utf-8", "UTF8_STRING", "text/plain", "STRING", "TEXT"}
 
 // imageTypes are the image types the group carries, the best first.
-var imageTypes = []string{clip.TypePNG, clip.TypeJPEG}
+var imageTypes = []string{clip.TypeGIF, clip.TypePNG, clip.TypeJPEG}
 
 // secretType is the type KDE's password managers add to a secret; any
 // value counts.
@@ -403,7 +403,8 @@ func (w *Wayland) Write(text string, secret bool) error {
 // WriteImage sets the clipboard and the primary selection to the image,
 // with its text, if any.
 func (w *Wayland) WriteImage(img connector.Image, text string) error {
-	return w.write(connector.Item{Text: text, Image: &img}, map[string][]byte{img.Type: img.Data}, []string{img.Type})
+	forms, order := connector.ImageForms(img)
+	return w.write(connector.Item{Text: text, Image: &img}, forms, order)
 }
 
 // WriteHTML sets the clipboard and the primary selection to formatted

@@ -71,10 +71,11 @@ pub struct Command {
     /// In a paste command: press Enter after the text.
     #[serde(default)]
     pub enter: bool,
-    /// In a paste command: `text` or `secret`.
+    /// In a paste command: `text`, `secret` or `media`.
     #[serde(rename = "kind", default)]
     pub paste_kind: String,
-    /// In a paste command: the text.
+    /// In a paste command: the text; in one of kind `media`, the event ID
+    /// of the group's copy of images or files it pastes.
     #[serde(default)]
     pub text: String,
     /// In an action command: the name of the action, which the receiver
@@ -383,8 +384,17 @@ impl Command {
         if hub {
             return Err(Error::msg("a paste command carries a hub order"));
         }
-        if self.paste_kind != "text" && self.paste_kind != "secret" {
-            return Err(Error::msg("a paste command's kind is not text or secret"));
+        if self.paste_kind == "media" {
+            // Its text is the event ID of a copy of images or files of the
+            // group, which only the paste keys put in.
+            if self.mode != "paste" {
+                return Err(Error::msg("a paste command of images or files is not typed"));
+            }
+            if !certs::is_id(&self.text) {
+                return Err(Error::msg("a paste command of images or files names no copy"));
+            }
+        } else if self.paste_kind != "text" && self.paste_kind != "secret" {
+            return Err(Error::msg("a paste command's kind is not text, secret or media"));
         }
         if self.text.is_empty() {
             return Err(Error::msg("a paste command has no text"));
