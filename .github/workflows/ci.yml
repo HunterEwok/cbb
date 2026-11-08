@@ -587,9 +587,10 @@ jobs:
   upgrade:
     name: upgrade from the last release
     needs: changes
-    if: needs.changes.outputs.core == 'true'
+    # The Rust service (member/) takes over from the Go one here too.
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lite == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -621,6 +622,18 @@ jobs:
           CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$new" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
       - name: members of the release update one at a time and keep syncing (tools/e2e/upgrade.sh)
         run: sh tools/e2e/upgrade.sh "$RUNNER_TEMP/old/member/cbb" "$RUNNER_TEMP/cbb"
+      - name: the computers move from the Go service to the Rust one on the same state
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          v=$("$RUNNER_TEMP/cbb" version | sed -n 's/^[a-z]* v\([0-9][0-9.]*\).*/\1/p')
+          next="${v%.*}.$((${v##*.} + 1))"
+          mkdir -p "$RUNNER_TEMP/rust"
+          CBB_VERSION=$next cargo build --locked --release -p cbb-lite
+          cp target/release/cbb "$RUNNER_TEMP/rust/cbb"
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$next" \
+            -o "$RUNNER_TEMP/rust/cbb-helper" ./cmd/cbb-helper
+          sh tools/e2e/upgrade.sh "$RUNNER_TEMP/cbb" "$RUNNER_TEMP/rust/cbb" "$RUNNER_TEMP/cbb"
 
   avahi:
     name: mdns with avahi

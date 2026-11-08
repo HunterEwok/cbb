@@ -11,7 +11,9 @@ All notable changes to cbb are documented in this file. The format follows
   and the Go cbb's commands against its socket, in CI's e2e job: the Rust service
   answers status in no group, and joins with a code (`join`: the member whose pairing
   window is announced by mDNS, or the address given, or it listens, announced, for a
-  computer that types the code it shows).
+  computer that types the code it shows). CI's upgrade job moves three members of a
+  group from the Go service to the Rust one, one at a time on the same state, and they
+  keep their group and keep syncing (tools/e2e/upgrade.sh with the Go cbb's commands).
 - The release archives carry `cbb-helper` beside `cbb`, and the installers (Linux, rootless,
   macOS, FreeBSD, Windows, Homebrew) install it there, owned by root where `cbb` is, and
   remove it again; CI checks that each archive and installer has it. OpenWrt and the
