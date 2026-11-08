@@ -72,8 +72,13 @@ impl Away {
         if lifetime > MAX_LIFETIME {
             return Err(Error::msg("an invitation is valid for 24h0m0s at most"));
         }
-        let mut secret = vec![0u8; cbb_core::invite::MIN_SECRET];
-        getrandom::fill(&mut secret).map_err(|_| Error::msg("cannot make a secret: the system has no randomness"))?;
+        // Drawn as returned values rather than filled in place.
+        let mut secret = Vec::with_capacity(cbb_core::invite::MIN_SECRET + 8);
+        while secret.len() < cbb_core::invite::MIN_SECRET {
+            let r = getrandom::u64().map_err(|_| Error::msg("cannot make a secret: the system has no randomness"))?;
+            secret.extend_from_slice(&r.to_le_bytes());
+        }
+        secret.truncate(cbb_core::invite::MIN_SECRET);
         let guest_key = crate::tunnel::key32(&crate::tunnel::new_key()?)?;
         let guest_psk = crate::tunnel::key32(&crate::tunnel::new_key()?)?;
         let guest_public = crate::tunnel::key32(&crate::tunnel::public_of(&guest_key))?;
