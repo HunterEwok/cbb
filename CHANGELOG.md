@@ -1766,6 +1766,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The lite member fetches a copy's images or files once when two requests want them at the
+  same time (`cbb paste -o` while the copy is fetched in the background); the second waited on
+  chunks the first had taken and could fail.
 - A lite member away from home reaches a hub that answers only one of its ways, as over VLESS
   when its UDP port is blocked: a tunnel link that ended before the hub answered left the next
   one to start at the same dead endpoint, and a dial gave up just as a link moved on to the
