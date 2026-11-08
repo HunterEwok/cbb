@@ -63,7 +63,16 @@ pub fn leave_version1_group(dir: &Path) -> Result<bool> {
     let to = dir.join(OLD_GROUP_DIR);
     std::fs::create_dir_all(&to).context(format!("cannot create {}", to.display()))?;
     // tunnel.json: the tunnel module is only in builds with it.
-    for name in [crate::identity::FILE_NAME, crate::sealkey::FILE_NAME, "tunnel.json", FILE_NAME] {
+    // The files of a group as Go's oldGroupFiles lists them, and tunnel.json.
+    for name in [
+        crate::identity::FILE_NAME,
+        "credentials.json",
+        "server-keys.json",
+        crate::sealkey::FILE_NAME,
+        "signed.json",
+        "tunnel.json",
+        FILE_NAME,
+    ] {
         match std::fs::rename(dir.join(name), to.join(name)) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}

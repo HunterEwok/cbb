@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
+	"github.com/HunterEwok/cbb/internal/peripheral"
 	"github.com/HunterEwok/cbb/internal/tvremote/androidtv/atvtest"
 	appletvtest "github.com/HunterEwok/cbb/internal/tvremote/appletv/atvtest"
 )
@@ -72,7 +73,7 @@ func TestRemote(t *testing.T) {
 	if _, err := deck.do(t, control.Header{Op: control.OpRemote, Name: "pastes", Device: "fake tv", Value: "on"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if p := deck.status(t).Paste; !slices.Contains(p.Targets, targetTV) {
+	if p := deck.status(t).Paste; !slices.Contains(p.Targets, peripheral.TargetTV) {
 		t.Errorf("the paste targets: %v", p.Targets)
 	}
 	paste := func(text string) error {
@@ -100,7 +101,7 @@ func TestRemote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(m.Status.TVs) != 0 || slices.Contains(m.Status.Paste.Targets, targetTV) {
+	if len(m.Status.TVs) != 0 || slices.Contains(m.Status.Paste.Targets, peripheral.TargetTV) {
 		t.Errorf("after remove: %+v, %v", m.Status.TVs, m.Status.Paste.Targets)
 	}
 }
@@ -181,8 +182,10 @@ func TestRemoteAppleTV(t *testing.T) {
 func TestRemoteAppleTVName(t *testing.T) {
 	for _, announced := range []string{"Den TV", ""} {
 		tv := appletvtest.New(t)
-		defer func(f func(context.Context, string) string) { appleTVName = f }(appleTVName)
-		appleTVName = func(context.Context, string) string { return announced }
+		defer func(f func(context.Context, string) string) { peripheral.AppleTVName = f }(peripheral.AppleTVName)
+		peripheral.AppleTVName = func(context.Context, string) string { return announced }
+		// cbb-helper beside the Rust service stands in the same way.
+		t.Setenv("CBB_TEST_APPLETV_NAME", announced)
 		var h hub
 		deck := startService(t, &h, "deck")
 		if _, err := deck.do(t, control.Header{Op: control.OpRemote, Name: "add", Address: tv.Addr(), Value: "appletv"}, ""); err != nil {

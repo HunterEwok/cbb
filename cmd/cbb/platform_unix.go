@@ -32,9 +32,6 @@ func runService(stderr io.Writer, run func(context.Context, func(string, ...any)
 	return 0
 }
 
-// firstAgent reports that no other agent runs; launchd starts only one.
-func firstAgent() bool { return true }
-
 func defaultStateDir() string {
 	if d := os.Getenv("STATE_DIRECTORY"); d != "" { // set by systemd
 		return d

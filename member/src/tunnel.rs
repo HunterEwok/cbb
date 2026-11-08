@@ -11,7 +11,6 @@
 use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::net::{Ipv6Addr, Shutdown, SocketAddr, TcpListener, TcpStream, UdpSocket};
-use std::os::fd::AsRawFd;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -33,6 +32,7 @@ use smoltcp::wire::{HardwareAddress, IpAddress, IpCidr};
 use crate::certs::{DeviceId, b64};
 use crate::error::{Context, Error, Result};
 use crate::files;
+use crate::sys;
 use crate::wire::TunnelOffer;
 
 /// The tunnel state's file in the state directory.
@@ -245,6 +245,23 @@ impl State {
         Ok(State { version: 1, group: String::new(), key: key.to_vec(), psk: random_key()?, ..State::empty() })
     }
 
+    /// The state of a device that meets its group at the relay r, as Go's
+    /// away relay makes it: its own keys and nothing of a hub's.
+    pub fn meeting_at(&self, r: Forwarder) -> State {
+        let [key_sealed_for, _, _] = self.sealed_for.clone();
+        State {
+            group: self.group.clone(),
+            key: self.key.clone(),
+            key_tpm: self.key_tpm.clone(),
+            key_se: self.key_se.clone(),
+            psk: self.psk.clone(),
+            keys_in_file: self.keys_in_file,
+            relay: Some(r),
+            sealed_for: [key_sealed_for, Vec::new(), Vec::new()],
+            ..State::empty()
+        }
+    }
+
     fn empty() -> State {
         State {
             version: 1,
@@ -408,10 +425,15 @@ impl State {
         PublicKey::from(&self.secret()).as_bytes().to_vec()
     }
 
+    /// The device's own private key, with which it registers with its
+    /// relay.
+    pub fn private_key(&self) -> Result<[u8; 32]> {
+        key32(&self.key)
+    }
+
     /// The key the hub serves its clients with: the period's, else its own.
-    pub fn serving_key(&self) -> [u8; 32] {
-        let k = if self.serving.len() == 32 { &self.serving } else { &self.key };
-        k.as_slice().try_into().unwrap_or([0; 32])
+    pub fn serving_key(&self) -> Result<[u8; 32]> {
+        key32(if self.serving.len() == 32 { &self.serving } else { &self.key })
     }
 
     /// The public key of the hub's next period, empty for none.
@@ -578,6 +600,38 @@ impl State {
         gone
     }
 
+    /// Brings the hub's key for its clients up to the period tagged period
+    /// (docs/protocol.md, section 11, "The hub's key"), as Go's
+    /// State.Rotate: a period it has no key for yet gets the next key, which
+    /// the hub serves with from now_ms + ahead_ms on, and once that time
+    /// came the next key is the one it serves with. It returns whether the
+    /// state must be saved and the offers given again, and whether the hub
+    /// must start again with the new key.
+    pub fn rotate(&mut self, period: &str, now_ms: i64, ahead_ms: i64) -> Result<(bool, bool)> {
+        if !self.is_hub {
+            return Ok((false, false));
+        }
+        let (mut changed, mut switched) = (false, false);
+        if !self.next.is_empty() && now_ms >= self.next_at_ms {
+            self.serving = std::mem::take(&mut self.next);
+            self.serving_tpm = self.next_tpm.take();
+            self.serving_se = self.next_se.take();
+            self.sealed_for[1] = std::mem::take(&mut self.sealed_for[2]);
+            self.serving_for = std::mem::take(&mut self.next_for);
+            self.next_at_ms = 0;
+            (changed, switched) = (true, true);
+        }
+        if period.is_empty() || period == self.serving_for || period == self.next_for {
+            return Ok((changed, switched));
+        }
+        self.next = random_key().map_err(|e| e.context("making the hub's key for the new period"))?;
+        (self.next_tpm, self.next_se) = (None, None);
+        self.sealed_for[2] = Vec::new();
+        self.next_for = period.to_string();
+        self.next_at_ms = now_ms.saturating_add(ahead_ms);
+        Ok((true, switched))
+    }
+
     /// Forgets the hub's keys for the server credentials' periods, once
     /// it is no hub.
     pub fn clear_periods(&mut self) {
@@ -603,13 +657,19 @@ impl State {
     }
 }
 
+/// A key of 32 bytes, or an error for a damaged one: a key is never
+/// replaced by zeros.
+pub(crate) fn key32(k: &[u8]) -> Result<[u8; 32]> {
+    k.try_into().map_err(|_| Error::msg("the tunnel's key is damaged: it is not 32 bytes"))
+}
+
 /// The public key of a private key.
 pub fn public_key_of(key: &[u8; 32]) -> Vec<u8> {
     public_of(key)
 }
 
 /// The public key of a private key, empty for none.
-fn public_of(key: &[u8]) -> Vec<u8> {
+pub(crate) fn public_of(key: &[u8]) -> Vec<u8> {
     match <[u8; 32]>::try_from(key) {
         Ok(k) => PublicKey::from(&StaticSecret::from(k)).as_bytes().to_vec(),
         Err(_) => Vec::new(),
@@ -637,6 +697,13 @@ pub fn new_vless_id() -> String {
     crate::vless::random_uuid()
 }
 
+/// A random port of the dynamic range, where a link's connections start.
+fn first_port() -> u16 {
+    let mut b = [0u8; 2];
+    let _ = getrandom::fill(&mut b);
+    49152 + u16::from_le_bytes(b) % (u16::MAX - 49152)
+}
+
 /// 32 random bytes, for a key.
 fn random_key() -> Result<Vec<u8>> {
     let mut key = vec![0u8; 32];
@@ -646,11 +713,11 @@ fn random_key() -> Result<Vec<u8>> {
 
 /// Checks the offer of the hub `from` and returns what this member keeps of
 /// it: with AmneziaWG's settings (src/awg.rs) and the way over VLESS with
-/// XHTTP (src/vless.rs), if it has them. REALITY is refused, as rustls
-/// cannot make a browser's ClientHello.
+/// XHTTP (src/vless.rs), if it has them. REALITY, as rustls cannot make a
+/// browser's ClientHello, only when cbb-helper makes that way.
 pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
     if let Some(v) = &o.vless {
-        cbb_core::vless::Link::from_offer(v)?;
+        crate::vless::check_offer(v)?;
     }
     if let Some(v) = &o.obfuscation {
         crate::awg::Obfuscation::from_offer(v)?;
@@ -935,7 +1002,11 @@ impl Pump {
             sockets: SocketSet::new(Vec::new()),
             bridges: Vec::new(),
             peer,
-            next_port: 49152,
+            // A random first port: a link that starts again, as after a
+            // restart or when the hub moved, would otherwise reuse the ports
+            // of the last one, whose connections the hub's TCP may still
+            // hold, and its SYNs would go unanswered.
+            next_port: first_port(),
             answered,
             log,
             said: false,
@@ -1169,24 +1240,11 @@ impl Pump {
     fn wait(&mut self) {
         let delay = self.iface.poll_delay(now(), &self.sockets).map(|d| Duration::from_micros(d.total_micros()));
         let timeout = delay.map_or(MAX_POLL, |d| d.min(MAX_POLL));
-        let mut fds = vec![
-            libc::pollfd { fd: self.udp.as_raw_fd(), events: libc::POLLIN, revents: 0 },
-            libc::pollfd { fd: self.ln.as_raw_fd(), events: libc::POLLIN, revents: 0 },
-        ];
+        let mut socks = vec![(sys::raw(&self.udp), true, false), (sys::raw(&self.ln), true, false)];
         for b in &self.bridges {
-            let mut events = 0;
-            if !b.local_eof && b.up.len() < TCP_BUFFER {
-                events |= libc::POLLIN;
-            }
-            if !b.down.is_empty() {
-                events |= libc::POLLOUT;
-            }
-            fds.push(libc::pollfd { fd: b.local.as_raw_fd(), events, revents: 0 });
+            socks.push((sys::raw(&b.local), !b.local_eof && b.up.len() < TCP_BUFFER, !b.down.is_empty()));
         }
-        // SAFETY: fds is a valid array of pollfd of the given length.
-        unsafe {
-            libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout.as_millis() as libc::c_int);
-        }
+        sys::poll(&socks, timeout);
     }
 }
 
@@ -1266,8 +1324,7 @@ fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
     // the host's byte order, the port in network order.
     let hex = |a: std::net::SocketAddrV4| format!("{:08X}:{:04X}", u32::from_ne_bytes(a.ip().octets()), a.port());
     let (local, remote) = (hex(from), hex(to));
-    // SAFETY: geteuid has no preconditions.
-    let me = unsafe { libc::geteuid() };
+    let me = sys::euid();
     table.lines().skip(1).any(|l| {
         let f: Vec<&str> = l.split_whitespace().collect();
         f.len() > 7 && f[1] == local && f[2] == remote && f[7].parse::<u32>().ok() == Some(me)
@@ -1297,6 +1354,25 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// The hub's key for each period, as Go's TestRotate: the next key
+    /// comes with a new period and takes over once its time came.
+    #[test]
+    fn rotates_the_hubs_key() {
+        let mut st = State::new("g").unwrap();
+        assert_eq!(st.rotate("p1", 0, 10).unwrap(), (false, false), "no hub, no keys");
+        st.is_hub = true;
+        assert_eq!(st.rotate("", 0, 10).unwrap(), (false, false));
+        assert_eq!(st.rotate("p1", 0, 10).unwrap(), (true, false));
+        let next = st.next_public();
+        assert!(next.len() == 32 && st.next_for == "p1" && st.serving.is_empty());
+        assert_eq!(st.rotate("p1", 5, 10).unwrap(), (false, false), "not yet");
+        assert_eq!(st.rotate("p1", 10, 10).unwrap(), (true, true));
+        assert_eq!((public_of(&st.serving), st.serving_for.as_str(), st.next.is_empty()), (next, "p1", true));
+        assert_eq!(st.rotate("p1", 20, 10).unwrap(), (false, false));
+        assert_eq!(st.rotate("p2", 20, 10).unwrap(), (true, false));
+        assert_eq!((st.next_for.as_str(), st.next_at_ms, st.serving_for.as_str()), ("p2", 30, "p1"));
+    }
+
     #[test]
     fn local_port_takes_its_own_user() {
         let ln = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1313,8 +1389,7 @@ mod tests {
             SocketAddr::V4(a) => format!("{:08X}:{:04X}", u32::from_ne_bytes(a.ip().octets()), a.port()),
             _ => unreachable!(),
         };
-        // SAFETY: geteuid has no preconditions.
-        let other = unsafe { libc::geteuid() } + 1;
+        let other = sys::euid() + 1;
         let line = |uid: u32| {
             format!(
                 "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n   0: {} {} 01 00000000:00000000 00:00000000 00000000 {uid:5} 0 1 1\n",
@@ -1395,8 +1470,11 @@ mod tests {
         let back = State::load(&dir).unwrap().unwrap();
         assert_eq!(back.public_key(), st.public_key());
         assert_eq!(back.group, "abc");
-        use std::os::unix::fs::PermissionsExt;
-        assert_eq!(std::fs::metadata(dir.join(FILE_NAME)).unwrap().permissions().mode() & 0o777, 0o600);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(dir.join(FILE_NAME)).unwrap().permissions().mode() & 0o777, 0o600);
+        }
         State::remove(&dir).unwrap();
         assert!(State::load(&dir).unwrap().is_none());
         std::fs::remove_dir_all(&dir).unwrap();

@@ -165,6 +165,16 @@ func TestMedia(t *testing.T) {
 	}
 	sum := sha256.Sum256(png.data)
 	waitFor(t, "beta fetched the image", func() bool {
+		if rustService() != "" {
+			// The Rust service keeps the sealed blob, under its own hash.
+			es, _ := os.ReadDir(filepath.Join(b.dir, contentDir))
+			for _, e := range es {
+				if fi, err := e.Info(); err == nil && !strings.HasSuffix(e.Name(), ".part") && fi.Size() >= int64(len(png.data)) {
+					return true
+				}
+			}
+			return false
+		}
 		_, err := os.Stat(filepath.Join(b.dir, contentDir, hex.EncodeToString(sum[:])))
 		return err == nil
 	})

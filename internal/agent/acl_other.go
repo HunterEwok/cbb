@@ -3,7 +3,7 @@
 
 //go:build !windows
 
-package main
+package agent
 
 // letServiceQuery is needed on Windows only, where the service runs as an
 // account of its own.

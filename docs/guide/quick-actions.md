@@ -9,14 +9,14 @@ it only if its own user turned that action on there.
 
 | Action | What it does | Where |
 |---|---|---|
-| `lock` | locks the screen | computers |
-| `sleep` | puts the computer to sleep | computers |
+| `lock` | locks the screen | computers, the lite member |
+| `sleep` | puts the computer to sleep | computers, the lite member |
 | `reboot` | restarts the computer a minute later | computers, the lite member |
-| `shutdown` | shuts the computer down a minute later | computers |
+| `shutdown` | shuts the computer down a minute later | computers, the lite member |
 | `cancel-shutdown` | cancels a pending reboot or shutdown | computers, the lite member |
 | `restart` | restarts the Copy Beyond Borders service | computers, the lite member |
 | `keyboard-layout` | switches the layout its [Bluetooth keyboard](keyboards-and-tvs.md) types in to the next one, after you switch the device's own | Linux computers with the keyboard on |
-| your own | runs a program you chose, as the user signed in | computers |
+| your own | runs a program you chose, as the user signed in | computers, the lite member with CBB's agent |
 
 A minute's warning before a reboot or a shutdown gives anyone at the computer time to save
 their work or run `cancel-shutdown`. Windows also warns the users signed in.

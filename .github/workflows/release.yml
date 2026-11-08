@@ -91,8 +91,22 @@ jobs:
           else
             go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           fi
-          for f in "$RUNNER_TEMP"/cbb "$RUNNER_TEMP"/cbb.exe "$RUNNER_TEMP"/cbbw.exe; do
+          # cbb-helper, the Go helper the Rust cbb starts as its child, with the
+          # same version: a release cbb takes only a helper of its own release.
+          # The routers' builds (mips) go without it, like the lite member there.
+          case $GOARCH in
+          mips | mipsle) ;;
+          *)
+            exe=; if [ "$GOOS" = windows ]; then exe=.exe; fi
+            go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb-helper$exe" ./cmd/cbb-helper
+            ;;
+          esac
+          for f in "$RUNNER_TEMP"/cbb "$RUNNER_TEMP"/cbb.exe "$RUNNER_TEMP"/cbbw.exe "$RUNNER_TEMP"/cbb-helper "$RUNNER_TEMP"/cbb-helper.exe; do
             [ ! -f "$f" ] || go version -m "$f" | grep -q -- '-tags=cbbwasm'
+          done
+          # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.
+          for f in "$RUNNER_TEMP"/cbb-helper "$RUNNER_TEMP"/cbb-helper.exe; do
+            [ ! -f "$f" ] || grep -aqF -- "$GITHUB_REF_NAME" "$f"
           done
       - name: the tray app for Linux
         if: matrix.tray
@@ -121,7 +135,7 @@ jobs:
           cert="$RUNNER_TEMP/cert.pfx" pass="$RUNNER_TEMP/cert.pass"
           (umask 077 && printf '%s' "$CERT_BASE64" | base64 -d >"$cert" && printf '%s' "$CERT_PASSWORD" >"$pass")
           trap 'rm -f "$cert" "$pass"' EXIT
-          for f in cbb.exe cbbw.exe cbb-desktop.exe; do
+          for f in cbb.exe cbbw.exe cbb-desktop.exe cbb-helper.exe; do
             osslsigncode sign -pkcs12 "$cert" -readpass "$pass" -h sha256 \
               -n cbb -i https://github.com/HunterEwok/cbb \
               -ts http://timestamp.digicert.com \
@@ -147,13 +161,16 @@ jobs:
           if [ -z "$P12" ] || [ -z "$ASC_KEY" ]; then
             echo "::warning::no CBB_APPLE_DEVID_APP_P12 or CBB_ASC_KEY in the secrets; cbb for macOS is not signed with the Developer ID"
             sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb"
+            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-helper"
             exit 0
           fi
           sh packaging/macos/keychain.sh create "$RUNNER_TEMP/signing"
           trap 'sh packaging/macos/keychain.sh delete "$RUNNER_TEMP/signing"' EXIT
           id=$(sh packaging/macos/keychain.sh import "$RUNNER_TEMP/signing" "Developer ID Application" U2ZJ8F2JCJ)
-          sh packaging/macos/sign.sh "$id" "$RUNNER_TEMP/cbb"
-          sh packaging/macos/notarize.sh "$RUNNER_TEMP/cbb"
+          for f in cbb cbb-helper; do
+            sh packaging/macos/sign.sh "$id" "$RUNNER_TEMP/$f"
+            sh packaging/macos/notarize.sh "$RUNNER_TEMP/$f"
+          done
       - name: archive
         run: |
           bin=$RUNNER_TEMP/cbb
@@ -192,8 +209,11 @@ jobs:
           done
           # Each slice keeps the signature (and notarization) of its own build.
           lipo -create arm64/cbb/cbb amd64/cbb/cbb -output "$RUNNER_TEMP/cbb"
-          codesign --verify --strict --verbose=2 "$RUNNER_TEMP/cbb"
-          "$RUNNER_TEMP/cbb" version
+          lipo -create arm64/cbb/cbb-helper amd64/cbb/cbb-helper -output "$RUNNER_TEMP/cbb-helper"
+          for f in cbb cbb-helper; do
+            codesign --verify --strict --verbose=2 "$RUNNER_TEMP/$f"
+            "$RUNNER_TEMP/$f" version
+          done
       - name: build CBB.app for Apple silicon and Intel
         working-directory: apps/macos
         run: |

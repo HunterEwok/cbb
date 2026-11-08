@@ -22,7 +22,7 @@ path = "src/main.rs"
 default = ["tunnel"]
 # Sync away from home. GotaTun needs 64-bit atomics, which 32-bit MIPS lacks,
 # so the MIPS builds leave it out (docs/roadmap.md, item 37).
-tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp", "dep:blake2", "dep:chacha20", "dep:chacha20poly1305", "dep:base64", "dep:hmac"]
+tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp", "dep:blake2", "dep:chacha20", "dep:chacha20poly1305", "dep:base64"]
 
 [dependencies]
 cbb-core = { path = "../core", features = ["std", "tls"] }
@@ -40,6 +40,11 @@ sha2 = "0.11"
 # JPEG, in pure Rust.
 png = "0.18.1"
 zune-jpeg = { version = "0.5.15", default-features = false, features = ["std"] }
+# Keys in a Mac's Secure Enclave (src/sekey.rs): checking the enclave's
+# signatures and sealing secrets as Go's internal/sekey does.
+p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "ecdh"] }
+hkdf = "0.13"
+aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
 # WireGuard for sync away from home: GotaTun's noise protocol, sans I/O, with
 # the ring stand-in below; smoltcp is the TCP inside the tunnel.
 gotatun = { version = "0.10.2", default-features = false, features = ["ring"], optional = true }
@@ -49,13 +54,18 @@ getrandom = { version = "0.4", features = ["std"] }
 # already brings.
 blake2 = { version = "0.10.6", optional = true }
 chacha20 = { version = "0.10.2", optional = true }
-hmac = { version = "0.13", optional = true }
+hmac = "0.13"
 chacha20poly1305 = { version = "0.10.1", optional = true }
 base64 = { version = "0.23.1", optional = true }
 # The way over VLESS (src/vless.rs): rustls with the core's provider, and
 # its standard library's connections and system time.
 rustls = { version = "0.23.46", default-features = false, features = ["std"], optional = true }
 smoltcp = { version = "0.13.1", default-features = false, features = ["std", "medium-ip", "proto-ipv6", "socket-tcp"], optional = true }
+
+# AF_UNIX sockets, the socket's access list, the process's user and the
+# service's control on Windows (src/sys).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_NetworkManagement_NetManagement", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_RemoteDesktop", "Win32_System_Services", "Win32_System_SystemInformation", "Win32_System_Com", "Win32_System_Console", "Win32_System_Threading", "Win32_System_Time", "Win32_UI_Shell"] }
 
 [dev-dependencies]
 # Signs the releases the update tests check.
