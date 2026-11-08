@@ -252,7 +252,7 @@ func adminComputer(t *testing.T, root *CA, cert *x509.Certificate, name string, 
 	t.Helper()
 	key := KeyHashOf(cert)
 	r, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(root.Cert), TimeMS: nextTime(),
-		Device: string(DeviceID(cert.Subject.CommonName)), Name: name, Role: RoleFull, OS: OSLinux, Key: &key, Admin: &admin,
+		Device: string(DeviceID(cert.Subject.CommonName)), Name: name, Role: RoleMember, Caps: AllCaps, OS: OSLinux, Key: &key, Admin: &admin,
 		Powers: computerPowers(takeover), Commands: authority.Commands}, root.Key)
 	if err != nil {
 		t.Fatal(err)
@@ -351,7 +351,7 @@ func ownRecord(t *testing.T, root *CA, cert *x509.Certificate, name, r string) R
 // removing that admin, and that in a phone's group an admin computer's
 // claim counts for nothing.
 func TestComputerTakeover(t *testing.T) {
-	for _, rootRole := range []string{RoleFull, RolePhone} {
+	for _, rootRole := range []string{RoleMember, RolePhone} {
 		pg := newPhoneGroup(t)
 		g, pc := pg.root.Cert, pg.a
 		pcChain, pcKey, rootKey := []*x509.Certificate{pc.Cert}, KeyHashOf(pc.Cert), KeyHashOf(g)
@@ -360,7 +360,7 @@ func TestComputerTakeover(t *testing.T) {
 		s := NewRecords(g)
 		for _, r := range []Record{
 			ownRecord(t, pg.root, holder, "root", rootRole),
-			adminComputer(t, pg.root, pcCert, "pc", pcKey, rootRole == RoleFull),
+			adminComputer(t, pg.root, pcCert, "pc", pcKey, rootRole == RoleMember),
 			deviceRecord(t, g, pg.root, nil, laptop, "laptop", 2),
 			claimRecord(t, g, pc, pcChain, next.Cert),
 		} {
@@ -417,7 +417,7 @@ func TestStayingTakeover(t *testing.T) {
 	laptopChain := []*x509.Certificate{laptop, pc2.Cert}
 	s := NewRecords(g)
 	for _, r := range []Record{
-		ownRecord(t, pg.root, holder, "root", RoleFull),
+		ownRecord(t, pg.root, holder, "root", RoleMember),
 		adminComputer(t, pg.root, pcCert, "pc", pcKey, true),
 		adminComputer(t, pg.root, pc2Cert, "pc2", pc2Key, true),
 		deviceRecord(t, g, pc2, []*x509.Certificate{pc2.Cert}, laptop, "laptop", 2),

@@ -4049,48 +4049,48 @@
         }
       }
     },
-    "Full member": {
+    "Member": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عضو كامل"
+            "value": "عضو"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Miembro completo"
+            "value": "Miembro"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "חבר מלא"
+            "value": "חבר"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "पूर्ण सदस्य"
+            "value": "सदस्य"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Полный участник"
+            "value": "Участник"
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mwanachama kamili"
+            "value": "Mwanachama"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "完整成员"
+            "value": "成员"
           }
         }
       }
@@ -4689,52 +4689,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "列表"
-          }
-        }
-      }
-    },
-    "Lite member": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عضو خفيف"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Miembro ligero"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "חבר קל"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "लाइट सदस्य"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Лёгкий участник"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mwanachama mwepesi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "轻量成员"
           }
         }
       }
@@ -10811,48 +10765,48 @@
         }
       }
     },
-    "A lite member is never a hub.": {
+    "This device is never a hub.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "العضو الخفيف لا يكون محورًا أبدًا."
+            "value": "هذا الجهاز لا يكون محورًا أبدًا."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un miembro ligero nunca es un hub."
+            "value": "Este dispositivo nunca es un hub."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "חבר קל אף פעם אינו רכזת."
+            "value": "מכשיר זה אף פעם אינו רכזת."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "हल्का सदस्य कभी हब नहीं होता।"
+            "value": "यह डिवाइस कभी हब नहीं होता।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Лёгкий участник не бывает хабом."
+            "value": "Это устройство не бывает хабом."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mwanachama mwepesi kamwe si kitovu."
+            "value": "Kifaa hiki kamwe si kitovu."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "轻量成员从不担任中心节点。"
+            "value": "此设备从不担任中心节点。"
           }
         }
       }

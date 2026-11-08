@@ -178,3 +178,8 @@ cmd/cbb/qr_test.go TestEntriesString D-88: cmd/cbb is gone; global_cli.rs entrie
 cmd/cbb/stop_test.go TestStopLines D-88: cmd/cbb is gone; member/tests/cli_commands.rs stop_lines checks the Rust cbb's lines and status_text.rs durations its roughly
 internal/service/control_windows_test.go TestOwnDirMovesLinksAside D-88: the Go service's control sockets are gone; member/src/sys/acl_windows.rs own_dir_moves_links_aside checks the Rust service's
 internal/service/control_windows_test.go TestControlMovesNamesAside D-88: the Go service's control sockets are gone; member/src/sys/acl_windows.rs control_moves_names_aside checks the Rust service's
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt liteMember D-89: the role lite is gone; memberWithoutAdmin checks a member admitted with its caps
+core/src/admit/tests.rs the_root_admits_a_lite_member D-89: the role lite is gone; the_root_admits_a_member_with_its_caps checks a member's caps
+internal/pair/pair_test.go TestPairLite D-89: the role lite is gone; TestPairCaps checks the caps a joiner offers
+internal/service/lite_test.go TestLiteNotDialed D-89: members without dials are dialed now; TestListenDialed checks it
+member/src/discovery.rs lite_role D-89: TXT r=lite is gone; txt_roles checks r=listen and r=phone

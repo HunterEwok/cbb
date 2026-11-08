@@ -182,9 +182,9 @@ pub struct Config {
     /// Where the tunnel sends its packets instead of the hub's addresses: a
     /// local UDP port that leads to the hub, such as `cbb next link -udp`.
     pub tunnel_via: Option<SocketAddr>,
-    /// It runs as a computer's service, a full member that may become an
-    /// admin, even before its own device record arrives.
-    pub full: bool,
+    /// What this member says it can do in its hellos (cbb_core::authority::
+    /// CAPS) until its own device record names its caps.
+    pub caps: Vec<String>,
 }
 
 struct Service {
@@ -226,9 +226,8 @@ struct Service {
     helper: Option<Arc<crate::helper::Helper>>,
     /// This device's name, for the group it makes with cbb new.
     name: String,
-    /// Whether it is a computer's service (Config::full), for the role a
-    /// join asks for.
-    full: bool,
+    /// What a join says this member can do (Config::caps).
+    caps: Vec<String>,
     /// The device left a group made before 0.6 at this start, which status
     /// says while it is in no group, as Go's leftOld.
     left_old: bool,
@@ -338,7 +337,7 @@ pub fn run(cfg: Config) -> Result<()> {
         log: log.clone(),
         helper: crate::helper::shared(),
         name: cfg.name.clone(),
-        full: cfg.full,
+        caps: cfg.caps.clone(),
         left_old,
         broken: Mutex::new(None),
         creating: Mutex::new(()),
@@ -421,7 +420,7 @@ pub fn run(cfg: Config) -> Result<()> {
     let tag = ident.tag();
     let away =
         Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()).via(cfg.tunnel_via));
-    let presence = presence_of(&ident, &records, &cfg.name, cfg.full);
+    let presence = presence_of(&ident, &records, &cfg.name, &cfg.caps);
     // The blobs of the copies are a cache that a service starts empty, as
     // Go's: the group's current copy is fetched again when it is pasted.
     crate::content::empty(&cfg.state_dir, &|s| log(s));
@@ -469,8 +468,8 @@ pub fn run(cfg: Config) -> Result<()> {
     away.set_credentials(creds.clone());
     // A computer that is no admin offers an admin key for the root to
     // certify, and keeps the admin CA the root sends for it.
-    let full = node.role() == "full";
-    if full {
+    let (may_admin, may_hub) = (node.can(cbb_core::authority::CAP_ADMIN), node.can(cbb_core::authority::CAP_HUB));
+    if may_admin {
         match crate::admin::admin_key_offer(&cfg.state_dir, &node.identity()) {
             Ok(offer) => node.offer_admin_key(offer),
             Err(e) => log(&format!("cbb: making the admin key: {}", e.for_log())),
@@ -492,17 +491,14 @@ pub fn run(cfg: Config) -> Result<()> {
                 attest.received(&node, from, e);
                 return;
             }
-            if !full {
-                return;
-            }
-            if let Some(der) = m.admin_ca.as_deref().filter(|_| m.kind == "admin")
+            if let Some(der) = m.admin_ca.as_deref().filter(|_| may_admin && m.kind == "admin")
                 && let Err(e) = crate::admin::become_admin(&dir, &node, der)
             {
                 log(&format!("cbb: the admin CA from {from}: {}", e.for_log()));
             }
             // What another of the group's hubs shares (docs/protocol.md,
             // section 11, "Several hubs").
-            if let (Some(v), "hubs") = (m.hubs.as_ref(), m.kind.as_str()) {
+            if let (Some(v), "hubs", true) = (m.hubs.as_ref(), m.kind.as_str(), may_hub) {
                 away.hubs_shared(&node, from, &node.chain_of(from), v);
             }
         }));
@@ -535,7 +531,7 @@ pub fn run(cfg: Config) -> Result<()> {
             Some(node) => {
                 // The root records what the hello says about the device,
                 // as Go's ensureListed, away from the connection's thread.
-                if matches!(peer.role.as_str(), "full" | "lite") {
+                if peer.role == cbb_core::authority::ROLE_MEMBER {
                     let (node, dir, peer, log) = (node.clone(), dir.clone(), peer.clone(), log.clone());
                     std::thread::spawn(move || {
                         if let Err(e) = (crate::admin::Admin { node: &node, dir: &dir }).list_from_hello(&peer) {
@@ -676,12 +672,17 @@ fn claim_states(node: &Node) -> String {
     st.claims.iter().map(|c| format!("{}={} ", cbb_core::certs::hex(&c.record.0), c.state)).collect()
 }
 
-fn presence_of(ident: &Identity, records: &Records, name: &str, computer: bool) -> crate::node::Presence {
-    let full = computer || records.devices().iter().any(|d| d.id == ident.id.as_str() && d.role == "full");
+/// How this member presents itself in its hellos: as a member with the
+/// caps its own device record names, or those it was started with while
+/// no record names it. Its keys are in the hardware when cbb-helper holds
+/// the device key.
+fn presence_of(ident: &Identity, records: &Records, name: &str, caps: &[String]) -> crate::node::Presence {
+    let own = records.devices().into_iter().find(|d| d.id == ident.id.as_str());
     crate::node::Presence {
-        role: if full { "full" } else { "lite" }.into(),
+        role: "member".into(),
+        caps: own.map(|d| d.caps).unwrap_or_else(|| caps.to_vec()),
         name: name.to_string(),
-        os: if full { crate::admin::os_name() } else { "linux" }.into(),
+        os: crate::admin::os_name().into(),
         key_store: if ident.external.is_some() {
             "hardware"
         } else if crate::rootless::is() {
@@ -2295,8 +2296,8 @@ impl Service {
             "version" => Ok(control::reply(
                 Header {
                     status: Some(Status {
-                        role: "lite".into(),
-                        os: "linux".into(),
+                        role: "member".into(),
+                        os: crate::admin::os_name().into(),
                         version: VERSION.into(),
                         ..Default::default()
                     }),
@@ -2673,10 +2674,9 @@ impl Service {
             String::new()
         };
         let _one = self.creating.try_lock().map_err(|_| Error::msg("a join or a pairing is already running here"))?;
-        let (mut joiner, save) = crate::joiner(&self.state_dir, &self.name)?;
-        if self.full {
-            joiner = joiner.as_computer(crate::admin::os_name());
-        }
+        let (joiner, save) = crate::joiner(&self.state_dir, &self.name)?;
+        let joiner =
+            joiner.as_member(crate::admin::os_name(), &self.caps.iter().map(String::as_str).collect::<Vec<_>>());
         let log = self.log.clone();
         let id = if !h.invite.is_empty() {
             // A remote invitation, as Go's joinInvite: sync away from home
@@ -2851,7 +2851,7 @@ impl Service {
         let status = Status {
             device: ident.id.to_string(),
             group: ident.tag(),
-            role: "full".into(),
+            role: "member".into(),
             os: crate::admin::os_name().into(),
             version: VERSION.into(),
             key_level: if ident.external.is_some() { "hardware" } else { "files" }.into(),
@@ -3271,6 +3271,7 @@ fn devices(node: &Node, hubs: &[String]) -> Vec<Device> {
                 id: d.id,
                 name: d.name,
                 role: d.role,
+                caps: d.caps,
                 ..Default::default()
             })
         })
@@ -3280,6 +3281,7 @@ fn devices(node: &Node, hubs: &[String]) -> Vec<Device> {
             id: me.clone(),
             name: node.name().into(),
             role: node.role().into(),
+            caps: node.caps().to_vec(),
             os: node.os().into(),
             store: crate::admin::own_store(&ident).into(),
             ..Default::default()
@@ -3291,6 +3293,7 @@ fn devices(node: &Node, hubs: &[String]) -> Vec<Device> {
                 id: p.id.to_string(),
                 name: p.name.clone(),
                 role: p.role.clone(),
+                caps: p.caps.clone(),
                 os: p.os.clone(),
                 store: p.key_store.clone(),
                 ..Default::default()

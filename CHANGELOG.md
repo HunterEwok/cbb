@@ -165,7 +165,7 @@ All notable changes to cbb are documented in this file. The format follows
   window with a code, which a computer joins as it joins a Go root (`TestLiteRootWindow`). It
   also sets the takeover delay and how long an incoming copy stays live, hands the group to
   an admin, and mutes and unmutes a device (`cbb takeover -delay`, `incoming`, `handover`,
-  `mute -on`, `unmute -on`). Started with `-full`, and joined with `cbb pair -full`, it is a
+  `mute -on`, `unmute -on`). With the capability `admin` (`-caps`, on by default), it is a
   computer's service in a Go computer's group: it offers an admin key, becomes an admin when
   the root makes it one, and takes the group over from a lost root with `cbb takeover`,
   becoming the root once the claim takes effect and giving the other admins admin CAs from
@@ -1494,6 +1494,16 @@ All notable changes to cbb are documented in this file. The format follows
   service. The Docker image carries the Rust `cbb` with the Go programs beside it, and the
   systemd units of `cbb-forward` and `cbb-relay` run those programs, which the Homebrew
   formula installs too.
+- The roles `full` and `lite` are one role, `member`, with capabilities (D-89; docs/protocol.md
+  section 4, "Capabilities"): `admin` (it can hold an admin key), `dials` (it dials other
+  members) and `hub` (it may be chosen as the hub), in its hello (`caps`), its device record
+  and its pairing Info. Of two members that dial, the lower device ID dials and the other
+  does after 30 s; a member that does not dial publishes `r=listen` in place of `r=lite`, and
+  every member dials it. Computers, Raspberry Pis and routers have all three; the Rust `cbb`
+  takes `-caps` (all three by default, `admin,dials` for the ZX Next's Pi), and an ESP32 has
+  none. The apps show "Member" and decide what a device can do from its capabilities. Groups
+  set up during development whose records name `full` or `lite` are set up again: no release
+  carried those records.
 - The Android and iPhone apps put one received image or video, and an image the button
   fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
   Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).

@@ -127,8 +127,10 @@ pub fn claim_state(rs: &Records, new_root: &[u8]) -> Option<ClaimState> {
 /// filling what it leaves empty.
 pub struct Own<'a> {
     pub name: &'a str,
-    /// `phone` or `full`.
+    /// `member` or `phone`.
     pub role: &'a str,
+    /// A member's capabilities (`admin`, `dials`, `hub`), none for a phone.
+    pub caps: &'a [String],
     pub os: &'a str,
     pub store: &'a str,
     /// Its key for sealed messages, empty for none.
@@ -198,6 +200,7 @@ pub fn finish(rs: &Records, s: &Signer, member_point: &[u8], own: &Own, now_ms: 
         Some(d) => {
             me.name = d.name.clone();
             me.role = d.role.clone();
+            me.caps = d.caps.clone();
             me.os = if d.os.is_empty() { own.os.into() } else { d.os.clone() };
             me.store = if d.store.is_empty() { own.store.into() } else { d.store.clone() };
             me.hardware = d.kind.clone();
@@ -210,6 +213,7 @@ pub fn finish(rs: &Records, s: &Signer, member_point: &[u8], own: &Own, now_ms: 
             }
             me.name = own.name.into();
             me.role = own.role.into();
+            me.caps = own.caps.to_vec();
             me.os = own.os.into();
             me.store = own.store.into();
             me.seal = own.seal.to_vec();
@@ -225,6 +229,7 @@ pub fn finish(rs: &Records, s: &Signer, member_point: &[u8], own: &Own, now_ms: 
             b.device = d.id.clone();
             b.name = d.name.clone();
             b.role = d.role.clone();
+            b.caps = d.caps.clone();
             b.os = d.os.clone();
             b.key = Some(Hash(d.key));
             b.admin = Some(Hash(a));
@@ -338,6 +343,7 @@ pub fn renew_admin_ca(rs: &Records, s: &Signer, device: &str, point: &[u8], now_
             device: d.id.clone(),
             name: d.name.clone(),
             role: d.role.clone(),
+            caps: d.caps.clone(),
             os: d.os.clone(),
             key: Some(Hash(d.key)),
             admin: Some(Hash(key)),

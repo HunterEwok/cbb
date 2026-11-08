@@ -89,7 +89,7 @@ func startService(t *testing.T) string {
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "c.sock")
-	cmd := exec.Command(bin, "-state", dir, "-socket", socket, "service", "-name", "pi", "-no-mdns", "-no-listen", "-full")
+	cmd := exec.Command(bin, "-state", dir, "-socket", socket, "service", "-name", "pi", "-no-mdns", "-no-listen")
 	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)

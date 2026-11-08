@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -120,6 +121,19 @@ type testService struct {
 }
 
 // logged reports whether the service logged a line that contains part.
+// count returns how many of the service's log lines hold part.
+func (s *testService) count(part string) int {
+	s.logMu.Lock()
+	defer s.logMu.Unlock()
+	n := 0
+	for _, l := range s.lines {
+		if strings.Contains(l, part) {
+			n++
+		}
+	}
+	return n
+}
+
 func (s *testService) logged(part string) bool {
 	s.logMu.Lock()
 	defer s.logMu.Unlock()
@@ -457,7 +471,7 @@ func TestOneConnectionBetweenTwo(t *testing.T) {
 	for i := range now {
 		now[i].SkewMS = 0
 	}
-	if len(now) != 1 || now[0] != since {
+	if len(now) != 1 || !reflect.DeepEqual(now[0], since) {
 		t.Errorf("the connection changed: %+v, then %+v", since, now)
 	}
 }
@@ -837,7 +851,7 @@ func listBox(t *testing.T, dir string, admin *group.Identity, dev group.DeviceID
 		adminCA = chain[0]
 	}
 	r, err := recs.Sign(group.RecordBody{Type: group.RecordDevice, TimeMS: time.Now().UnixMilli(), Device: string(dev), Name: "box",
-		Role: group.RoleFull, OS: group.OSLinux, Key: &key}, ca.Key, adminCA)
+		Role: group.RoleMember, Caps: group.AllCaps, OS: group.OSLinux, Key: &key}, ca.Key, adminCA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -927,7 +941,7 @@ func TestDevicesAndRevoke(t *testing.T) {
 	}
 	waitFor(t, "the laptop connects to both", func() bool { return len(laptop.status(t).Peers) == 2 })
 	for _, d := range laptop.devices(t) {
-		if d.Admin || d.Root != (d.Name == "pi") || !d.Online || d.Role != "full" {
+		if d.Admin || d.Root != (d.Name == "pi") || !d.Online || d.Role != "member" {
 			t.Errorf("on the laptop: %+v", d)
 		}
 		if d.Self != (d.Name == "laptop") {
@@ -1526,12 +1540,12 @@ func TestPairingAcrossARenewal(t *testing.T) {
 	}
 }
 
-// startRust runs s on the Rust service as a computer's (-full), on a port
+// startRust runs s on the Rust service as a computer's, on a port
 // of its own, which addr reads from its log once it is in a group.
 func startRust(t *testing.T, bin string, s *testService) *testService {
 	t.Helper()
 	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir(), fmt.Sprintf("CBB_TEST_RENEW_EVERY=%d", renewEvery.Milliseconds()), fmt.Sprintf("CBB_HUB_KEY_AHEAD=%d", int64(hubKeyAhead.Seconds()))}, s.env...)
-	r := startLiteEnv(t, bin, s.dir, env, "-full", "-port", strconv.Itoa(s.port), "-name", s.name)
+	r := startLiteEnv(t, bin, s.dir, env, "-port", strconv.Itoa(s.port), "-name", s.name)
 	r.name, r.os, r.rust, r.env, r.port = s.name, s.os, true, s.env, s.port
 	// It ends with an error after cbb leave or an admin's restart, for
 	// systemd to start it again.

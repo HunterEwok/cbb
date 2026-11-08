@@ -2,11 +2,11 @@
 // Copyright (C) 2026 HunterEwok
 
 //! Finding the members and dialing them, and taking the connections of
-//! those that dial this one (docs/protocol.md, sections 3 and 4). A lite
-//! member publishes itself with `r=lite`, a computer with the service as a
-//! full member without it, and either listens on the member port, so
-//! that phones reach it without a computer; it dials the full members, and
-//! the lite members whose device ID is greater than its own.
+//! those that dial this one (docs/protocol.md, sections 3 and 4). A member
+//! that does not dial publishes itself with `r=listen`, one that dials
+//! without it, and either listens on the member port, so that phones reach
+//! it without a computer; a member that dials dials those with `r=listen`
+//! and, of the others, those whose device ID is greater than its own.
 //! Members can also be given by address, for a network where multicast
 //! does not reach.
 
@@ -159,8 +159,8 @@ fn elsewhere(me: &DeviceId) -> bool {
 }
 
 const MAX_WAIT: Duration = Duration::from_secs(30);
-/// How long a full member waits for one with a lower device ID to dial it
-/// before it dials that one itself, as Go's fallbackDial.
+/// How long a member that dials waits for one with a lower device ID to
+/// dial it before it dials that one itself, as Go's fallbackDial.
 const FALLBACK: Duration = Duration::from_secs(30);
 
 /// The fallback test's wait, in milliseconds from CBB_TEST_FALLBACK, as
@@ -191,8 +191,9 @@ fn dial_loop(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>) {
     dial_loop_as(node, addrs, peer, false)
 }
 
-/// As dial_loop; later, for a full member with a lower device ID, which
-/// dials this one: it dials only once no connection to it has been up for
+/// As dial_loop; later, for a member that dials with a lower device ID,
+/// which dials this one (docs/protocol.md, section 4, "Who dials whom"):
+/// it dials only once no connection to it has been up for
 /// FALLBACK, a firewall may stop that member's dials, or at once on
 /// Node::redial, as Go's later dialer.
 fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bool) {
@@ -272,7 +273,7 @@ fn next_wait(last: Duration, up: bool, again: bool) -> Duration {
 
 /// Listens on the member port, on all addresses, for the members that dial
 /// this one; only home network addresses may connect. It returns the port,
-/// or None when it cannot listen: the lite member then only dials.
+/// or None when it cannot listen: the member then only dials.
 pub fn listen(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<u16> {
     listen_until(node, port, false, None, Arc::new(AtomicBool::new(false)), log)
 }
@@ -470,7 +471,7 @@ pub fn start(
 }
 
 /// Starts dialing as a phone does: it publishes nothing and listens on no
-/// port, so it dials every member that browsing finds, lite members too,
+/// port, so it dials every member that browsing finds, those with `r=listen` too,
 /// whatever their device IDs.
 pub fn start_as_phone(node: Arc<Node>, tag: String, log: Arc<dyn Fn(&str) + Send + Sync>) {
     std::thread::spawn(move || {
@@ -514,11 +515,12 @@ fn browse(
             }
         });
     }
-    // A computer with the service publishes itself as a full member does,
-    // without a role.
-    let full = node.role() == "full";
-    // The protocol version, the group tag, the role, and p=1 while a
-    // pairing window is open, which a joiner looks for.
+    // A member that dials publishes itself without a role; one that does
+    // not says so, and every other member dials it.
+    let dials = node.can(cbb_core::authority::CAP_DIALS);
+    // The protocol version, the group tag, r=listen on a member that does
+    // not dial, and p=1 while a pairing window is open, which a joiner
+    // looks for.
     // With known networks (a computer's service), only the addresses of
     // the interfaces on them are published, or every address while a
     // pairing window is open, as Go's responder with Publish; None for all.
@@ -559,8 +561,8 @@ fn browse(
         // records, which mdns-sd takes for another device's and renames this
         // one ("ID (2)"), which nobody finds by its ID.
         let mut txt = vec![("v", "1"), ("g", tag)];
-        if !full {
-            txt.push(("r", "lite"));
+        if !dials && !as_phone {
+            txt.push(("r", "listen"));
         }
         if window {
             txt.push(("p", "1"));
@@ -615,19 +617,11 @@ fn browse(
                 if away {
                     continue;
                 }
-                // Members of another group, or of a replaced CA, are ignored;
-                // of two lite members the one with the lower ID dials; a
-                // phone dials them all.
+                // Members of another group, or of a replaced CA, are ignored.
                 let r = info.get_property_val_str("r");
-                if id == me || info.get_property_val_str("g") != Some(tag) || (lite(r) && id < me && !as_phone) {
+                if id == me || info.get_property_val_str("g") != Some(tag) {
                     continue;
                 }
-                // As Go's full members: the lite members dial this one, and
-                // of two full members the one with the lower ID dials.
-                if full && lite(r) {
-                    continue;
-                }
-                let later = full && id < me;
                 // A phone that is the hub publishes itself while its app is
                 // open; it dials this member, as every phone does.
                 if phone(r) {
@@ -636,6 +630,14 @@ fn browse(
                     }
                     continue;
                 }
+                // A phone dials every member, and a member that dials
+                // every member that does not; of two members that dial, the
+                // lower ID dials, and the other later. A member that does
+                // not dial waits.
+                if !as_phone && !dials {
+                    continue;
+                }
+                let later = !as_phone && !listens_only(r) && id < me;
                 let addrs = order(info.get_addresses().iter().map(|ip| match ip {
                     mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
                         SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, v6.scope_id().index))
@@ -683,10 +685,11 @@ fn browse(
     Ok(())
 }
 
-/// Reports whether a TXT `r` value names a lite member; keys and values
-/// are compared without regard to case.
-fn lite(r: Option<&str>) -> bool {
-    r.is_some_and(|v| v.eq_ignore_ascii_case("lite"))
+/// Reports whether a TXT `r` value names a member that does not dial,
+/// which every other member dials; keys and values are compared without
+/// regard to case.
+fn listens_only(r: Option<&str>) -> bool {
+    r.is_some_and(|v| v.eq_ignore_ascii_case("listen"))
 }
 
 /// Reports whether a TXT `r` value names a phone, the group's hub while its
@@ -764,10 +767,15 @@ mod tests {
     }
 
     #[test]
-    fn lite_role() {
-        assert!(lite(Some("lite")) && lite(Some("LITE")));
-        assert!(phone(Some("phone")) && phone(Some("Phone")) && !phone(Some("lite")) && !phone(None));
-        assert!(!lite(None) && !lite(Some("linux")) && !lite(Some("")));
+    fn txt_roles() {
+        assert!(
+            listens_only(Some("listen"))
+                && listens_only(Some("LISTEN"))
+                && !listens_only(Some("lite"))
+                && !listens_only(None)
+        );
+        assert!(phone(Some("phone")) && phone(Some("Phone")) && !phone(Some("listen")) && !phone(None));
+        assert!(!listens_only(Some("linux")) && !listens_only(Some("")));
     }
 
     #[test]

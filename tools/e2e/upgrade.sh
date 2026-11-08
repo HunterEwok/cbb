@@ -10,7 +10,7 @@
 #   sh tools/e2e/upgrade.sh path/to/old/cbb path/to/new/cbb
 #
 # A version with cbb-helper beside its cbb, the Rust cbb (member/) of 0.6
-# on, runs as a computer's (-full) with the helper.
+# on, runs as a computer's with the helper.
 #
 # From 0.6 on, the group must survive: the same group and devices, copies
 # both ways between an updated member and those not yet updated, then
@@ -68,16 +68,15 @@ eventually() {
 # start runs a member on a version, with its state in its own volume.
 # The commands run the member's own binary.
 start() { # member, binary
-	flags='' mounts="-v $2:/cb/cbb:ro -v $2:/cb/cli:ro"
+	mounts="-v $2:/cb/cbb:ro -v $2:/cb/cli:ro"
 	# The Rust cbb with its helper beside it is a computer's.
 	if [ -f "$(dirname "$2")/cbb-helper" ]; then
-		flags=-full
 		mounts="$mounts -v $(dirname "$2")/cbb-helper:/cb/cbb-helper:ro"
 	fi
-	# shellcheck disable=SC2086 # several flags
+	# shellcheck disable=SC2086 # several mounts
 	docker run -d --name "$run-$1" --hostname "host-$1" --network "$net" \
 		-e CBB_SOCKET=/s/c.sock -v "$run-$1:/s" $mounts "$image" \
-		/cb/cbb service $flags -state /s -socket /s/c.sock >/dev/null
+		/cb/cbb service -state /s -socket /s/c.sock >/dev/null
 	eventually "$1 starts" cb "$1" status
 }
 

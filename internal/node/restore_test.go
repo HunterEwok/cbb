@@ -34,7 +34,7 @@ func (r *recordStore) GroupCA() *x509.Certificate {
 func restoreFixture(t *testing.T) (*member, *recordStore, *ecdsa.PrivateKey, *x509.Certificate) {
 	t.Helper()
 	st := newRecordStore()
-	server := newMember(t, Full, withRecords(st))
+	server := newMember(t, Member, withRecords(st))
 	st.node = func() *Node { return server.Node }
 	key, err := group.NewKey()
 	if err != nil {
@@ -47,7 +47,7 @@ func restoreFixture(t *testing.T) (*member, *recordStore, *ecdsa.PrivateKey, *x5
 	dev := group.KeyHashOf(server.id.Cert)
 	k := group.KeyHashOf(ca)
 	st.Add("", []group.Record{
-		server.record(t, group.RecordBody{Type: group.RecordDevice, Device: string(server.id.ID), Name: "pi", Role: group.RoleFull, Key: &dev}),
+		server.record(t, group.RecordBody{Type: group.RecordDevice, Device: string(server.id.ID), Name: "pi", Role: group.RoleMember, Caps: group.AllCaps, Key: &dev}),
 		server.record(t, group.RecordBody{Type: group.RecordRecovery, Admin: &k, Cert: ca.Raw}),
 	})
 	if n := <-st.added; n != 2 {

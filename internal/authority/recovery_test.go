@@ -39,7 +39,7 @@ func TestRecoveryKey(t *testing.T) {
 	}
 
 	// It admits no device and signs no settings.
-	d := w.device("K", "laptop", "full", nil, nil, false)
+	d := w.device("K", "laptop", "member", nil, nil, false)
 	st := w.sign("K's settings", "K", authority.Body{Type: authority.TypeSettings, TakeoverDelayMS: ptr(int64(0))}, nil)
 	s = w.evalAll(nil)
 	if findDevice(s, w.ids["laptop"]) != nil || ignoredWhy(s, d.ID()) != authority.WhyPower || ignoredWhy(s, st.ID()) != authority.WhyPower {

@@ -13,7 +13,7 @@ final class RecordsTests: XCTestCase {
         let pc = Member.newID()
         let cert = try GroupCertificates.member(device: pc, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: ca, now: now)
         g.computers.append(.init(device: pc, name: "pi", os: "linux", cert: cert, admitted: now))
-        _ = try g.record(device: pc, name: "pi", role: "full", key: Records.keyHash(cert: cert), caSigner: ca, now: now)
+        _ = try g.record(device: pc, name: "pi", role: "member", caps: Records.caps, key: Records.keyHash(cert: cert), caSigner: ca, now: now)
         return (g, ca, pc)
     }
 
@@ -38,7 +38,7 @@ final class RecordsTests: XCTestCase {
         var (g, ca, pc) = try makeGroup()
         let second = try GroupCertificates.member(device: pc, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: ca,
                                                   now: Date().addingTimeInterval(1))
-        _ = try g.record(device: pc, name: "pi", role: "full", key: Records.keyHash(cert: second), caSigner: ca, now: Date().addingTimeInterval(1))
+        _ = try g.record(device: pc, name: "pi", role: "member", caps: Records.caps, key: Records.keyHash(cert: second), caSigner: ca, now: Date().addingTimeInterval(1))
         XCTAssertTrue(g.records.knows(pc))
         XCTAssertEqual(g.devices.first { $0.id == pc }?.keys.count, 2)
         _ = try g.revoke(device: pc, caSigner: ca, now: Date())

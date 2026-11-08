@@ -22,11 +22,11 @@ func joinFull(t *testing.T, bin string, root *testService) string {
 	c, code := openWindow(t, root)
 	defer c.Close()
 	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", root.addr())
+	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", root.addr())
 	join.Stdin = strings.NewReader(code + "\n")
 	join.Stderr = testWriter{t, "rust join: ", nil}
 	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair -full: %v; %s", err, out)
+		t.Fatalf("cbb pair: %v; %s", err, out)
 	}
 	if m, err := c.Receive(); err != nil || m.Name != "rust" {
 		t.Fatalf("pair on %s ended with %+v, %v", root.name, m, err)
@@ -46,7 +46,7 @@ func TestLiteAdminCommands(t *testing.T) {
 	deck := startEnv(t, &h, "deck", runner.env())
 	pairWith(t, desk, deck)
 	dir := joinFull(t, bin, desk)
-	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", deck.addr())
+	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", deck.addr())
 	waitFor(t, "the Rust member connected to both", func() bool {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 2

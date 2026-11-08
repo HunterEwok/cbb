@@ -214,10 +214,8 @@
     <string name="reason_set_mode">שינוי מצב הסנכרון של מחשב</string>
     <string name="error_command_refused">המחשב סירב.</string>
     <string name="error_no_answer">המחשב לא ענה. ייתכן שהוא לא מחובר, או מריץ גרסה ישנה יותר של CBB.</string>
-    <string name="role_full">חבר מלא</string>
-    <string name="role_full_rootless">חבר מלא, ללא root</string>
-    <string name="role_lite">חבר קל</string>
-    <string name="role_lite_rootless">חבר קל, ללא root</string>
+    <string name="role_member">חבר</string>
+    <string name="role_member_rootless">חבר, ללא root</string>
     <string name="role_phone">יישום הטלפון</string>
     <string name="kind_laptop">מחשב נייד</string>
     <string name="kind_desktop">מחשב</string>

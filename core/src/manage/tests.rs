@@ -120,7 +120,8 @@ fn group() -> Group {
         Body {
             device: laptop.clone(),
             name: "laptop".into(),
-            role: "full".into(),
+            role: "member".into(),
+            caps: authority::CAPS.iter().map(|c| (*c).into()).collect(),
             os: "linux".into(),
             key: Some(Hash(certs::random_bytes())),
             seal: crate::seal::public_key(&laptop_seal).unwrap(),
@@ -191,7 +192,7 @@ fn an_admin_phone_signs_with_its_admin_ca() {
             time_ms: now_ms(),
             device: tv.clone(),
             name: "tv".into(),
-            role: "lite".into(),
+            role: "member".into(),
             key: Some(Hash(certs::random_bytes())),
             ..Default::default()
         })
@@ -352,7 +353,7 @@ fn the_root_ends_two_histories_from_the_card() {
                 time_ms: now_ms(),
                 device: DeviceId::random().to_string(),
                 name: name.into(),
-                role: "lite".into(),
+                role: "member".into(),
                 key: Some(Hash(certs::random_bytes())),
                 ..Default::default()
             })

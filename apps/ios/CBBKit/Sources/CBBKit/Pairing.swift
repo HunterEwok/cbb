@@ -77,21 +77,18 @@ public enum Pairing {
         /// `Info.adminProofMessage` of this connection's session ID, which
         /// proves the phone holds the key; it comes with adminKey.
         public var adminProof: Data?
-        /// `Info.lite` for a lite member, which only dials and never holds
-        /// CA keys; nil for a full device.
-        public var role: String?
+        /// What a member can do, sorted (Records.caps), which its device
+        /// record names; nil from a phone and from a member that can do none.
+        public var caps: [String]?
         /// The joiner's public key for sealed messages, which the phone
         /// that admits it puts in its device record (docs/protocol.md,
         /// section 15).
         public var seal: Data?
 
-        /// The role of a lite member.
-        public static let lite = "lite"
+        enum CodingKeys: String, CodingKey { case name, os, adminKey = "admin_key", adminProof = "admin_proof", caps, seal }
 
-        enum CodingKeys: String, CodingKey { case name, os, adminKey = "admin_key", adminProof = "admin_proof", role, seal }
-
-        public init(name: String, os: String, adminKey: Data? = nil, role: String? = nil, seal: Data? = nil) {
-            (self.name, self.os, self.adminKey, self.role, self.seal) = (name, os, adminKey, role, seal)
+        public init(name: String, os: String, adminKey: Data? = nil, caps: [String] = [], seal: Data? = nil) {
+            (self.name, self.os, self.adminKey, self.caps, self.seal) = (name, os, adminKey, caps.isEmpty ? nil : caps, seal)
         }
 
         /// What the admin key signs to prove the phone holds it: the label,
@@ -123,9 +120,6 @@ public enum Pairing {
         /// Android phone, which joins as a phone and may become an admin.
         public var isPhone: Bool { ["ios", "android", "aurora", "sailfish"].contains(os) }
 
-        /// Checks it as the member does: a known OS, a printable name of 1
-        /// to 64 bytes, a known role, and an admin key only from a phone, a
-        /// P-256 one.
         /// Whether a name may hold s, as Go's unicode.IsPrint says: a
         /// letter, mark, number, punctuation, symbol or the ASCII space; no
         /// control, format, private-use, unassigned or other space.
@@ -144,10 +138,14 @@ public enum Pairing {
             }
         }
 
+        /// Checks it as the member does: a known OS, a printable name of 1
+        /// to 64 bytes, known caps, sorted, none from a phone, and an admin
+        /// key only from a phone, a P-256 one.
         public var isValid: Bool {
-            guard ["linux", "windows", "macos", "ios", "android", "aurora", "sailfish"].contains(os) || (os == "none" && role == Self.lite), !name.isEmpty, name.utf8.count <= 64,
-                  name.unicodeScalars.allSatisfy(Self.printable),
-                  role == nil || role == Self.lite else { return false }
+            guard ["linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "none"].contains(os), !name.isEmpty, name.utf8.count <= 64,
+                  name.unicodeScalars.allSatisfy(Self.printable) else { return false }
+            let c = caps ?? []
+            guard c.allSatisfy(Records.caps.contains), zip(c, c.dropFirst()).allSatisfy({ $0 < $1 }), !(isPhone && !c.isEmpty) else { return false }
             if let seal, seal.count != Self.sealKeySize { return false }
             guard (adminKey == nil) == (adminProof == nil) else { return false }
             guard let adminKey else { return true }

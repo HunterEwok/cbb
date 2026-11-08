@@ -29,7 +29,7 @@ func TestLiteRelease(t *testing.T) {
 	var h hub
 	desk := startEnv(t, &h, "desk", signer.rootsEnv(t))
 	dir := joinFull(t, bin, desk)
-	args := []string{"-no-mdns", "-full", "-no-listen", "-peer", desk.addr()}
+	args := []string{"-no-mdns", "-no-listen", "-peer", desk.addr()}
 	rust := startLiteEnv(t, bin, dir, env, args...)
 	status := func() *control.Status {
 		m, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
@@ -80,7 +80,7 @@ func TestLiteReleaseArchives(t *testing.T) {
 	var h hub
 	desk := startEnv(t, &h, "desk", signer.rootsEnv(t))
 	dir := joinFull(t, bin, desk)
-	rust := startLiteEnv(t, bin, dir, env, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr())
+	rust := startLiteEnv(t, bin, dir, env, "-no-mdns", "-no-listen", "-peer", desk.addr())
 	waitFor(t, "the Rust member connected", func() bool {
 		m, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && m.Status != nil && len(m.Status.Peers) == 1

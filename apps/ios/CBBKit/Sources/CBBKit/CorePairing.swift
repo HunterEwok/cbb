@@ -234,9 +234,9 @@ public enum CorePairing {
         }
     }
 
-    /// A device the core admitted: its ID, name, system, role ("full",
-    /// "lite" or "phone"), whether it became an admin, and whether it said
-    /// it stored its identity.
+    /// A device the core admitted: its ID, name, system, role ("member" or
+    /// "phone"), whether it became an admin, and whether it said it stored
+    /// its identity.
     public struct Admitted: Equatable, Sendable {
         public var device: String
         public var name: String
@@ -329,7 +329,7 @@ public enum CorePairing {
             }
             if let failed { throw failed }
             guard let d = device else { throw Failure("the device was not admitted") }
-            return Admitted(device: d.device ?? "", name: d.name ?? "", os: d.os ?? "", role: d.role ?? "full", admin: d.admin ?? false,
+            return Admitted(device: d.device ?? "", name: d.name ?? "", os: d.os ?? "", role: d.role ?? "member", admin: d.admin ?? false,
                             confirmed: confirmed)
         }
 

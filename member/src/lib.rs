@@ -187,8 +187,8 @@ Commands:
   pair [-name name] [-port port] [-addr host[:port]]...
                           In no group: join one by the phone's QR code, shown here (-addr:
                           where the phone reaches this device, when the code would name
-                          the wrong addresses); -full joins as a computer that may become
-                          an admin.
+                          the wrong addresses); -caps joins as a member that can do a
+                          comma-separated subset of admin,dials,hub (by default all three).
   pair [-admin]           In a group, on its root or an admin: show a code for a new
                           computer, or with -admin for a phone that becomes an admin.
   pair -qr [-admin]       In a group: admit the new device that shows a code and waits;
@@ -213,11 +213,12 @@ Rarely needed:
   install [options]       Windows, after winget: install the service from this copy
                           (the options of install.ps1, such as -Express).
   service [-name name] [-port port] [-peer host:port]... [-no-mdns] [-no-listen]
-          [-tunnel-via host:port] [-full] [-user name]
+          [-tunnel-via host:port] [-caps list] [-user name]
                           Run the service (started by systemd, procd, launchd, an rc script
                           or Windows); -tunnel-via sends the tunnel's packets to a local UDP
                           port that leads to the hub (cbb next link -udp on the ZX Spectrum
-                          Next); -user: started as root, open the mDNS sockets, then run as
+                          Next); -caps: what this member says it can do in its hellos
+                          (as for pair; its device record decides); -user: started as root, open the mDNS sockets, then run as
                           this user (FreeBSD's rc script).
   agent                   Link this desktop's clipboard to the service (started at sign-in).
   paste-helper tmux|console
@@ -372,7 +373,7 @@ pub(crate) fn flag(a: &str) -> Option<&str> {
 fn host_name() -> String {
     let name = sys::host_name();
     let name: String = name.split('.').next().unwrap_or("").chars().take(64).collect();
-    if records::valid_name(&name) { name } else { "lite".into() }
+    if records::valid_name(&name) { name } else { "member".into() }
 }
 
 pub(crate) fn resolve(s: &str) -> Result<SocketAddr> {
@@ -385,6 +386,30 @@ pub(crate) fn resolve(s: &str) -> Result<SocketAddr> {
 /// host:port, with brackets around an IPv6 host.
 fn join_host_port(host: &str, port: u16) -> String {
     if host.contains(':') && !host.starts_with('[') { format!("[{host}]:{port}") } else { format!("{host}:{port}") }
+}
+
+/// What a member can do unless told otherwise: everything on a computer,
+/// a Raspberry Pi or a router; the Pi inside a ZX Spectrum Next, which is
+/// on only while the Next is and reaches the network through it, is never
+/// a hub (docs/protocol.md, section 4, "Capabilities").
+fn default_caps(for_next: bool) -> Vec<String> {
+    let all = cbb_core::authority::CAPS.iter();
+    all.filter(|c| !for_next || **c != cbb_core::authority::CAP_HUB).map(|c| (*c).to_string()).collect()
+}
+
+/// Reads -caps: names of cbb_core::authority::CAPS joined by commas, or
+/// none for an empty list; sorted, each once.
+fn parse_caps(list: &str) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    for c in list.split(',').map(str::trim).filter(|c| !c.is_empty() && *c != "none") {
+        if !cbb_core::authority::CAPS.contains(&c) {
+            return Err(Error::msg(format!("-caps: {c:?} is none of admin, dials and hub")));
+        }
+        out.push(c.to_string());
+    }
+    out.sort();
+    out.dedup();
+    Ok(out)
 }
 
 /// The member port: 8764, or CBB_PORT.
@@ -406,18 +431,14 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut port = service_port(g).unwrap_or_else(member_port);
     let mut addrs = Vec::new();
     let mut code_addr = None;
+    let mut caps = default_caps(for_next);
     let mut invite = None;
     let mut app = None;
-    let mut full = false;
     let mut i = 0;
     while i < args.len() {
         let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(tr!("{} needs a value", args[i])));
         match flag(&args[i]) {
-            Some("full") if !for_next => {
-                full = true;
-                i += 1;
-                continue;
-            }
+            Some("caps") if !for_next => caps = parse_caps(&next()?)?,
             Some("name") => name = next()?,
             Some("port") => port = next()?.parse().context("the port is a number")?,
             Some("addr") => addrs.push(next()?),
@@ -470,10 +491,8 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         Some(path) => Some(invite_consent(&path)?),
         None => None,
     };
-    let (mut joiner, save) = joiner(&g.state, &name)?;
-    if full {
-        joiner = joiner.as_computer(admin::os_name());
-    }
+    let (joiner, save) = joiner(&g.state, &name)?;
+    let joiner = joiner.as_member(admin::os_name(), &caps.iter().map(String::as_str).collect::<Vec<_>>());
     let save = &*save;
     let id = match invite {
         Some((path, text)) => {
@@ -746,7 +765,7 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
         mdns: true,
         port: Some(member_port()),
         tunnel_via: None,
-        full: false,
+        caps: default_caps(false),
     };
     let mut run_user = None;
     let mut i = 0;
@@ -772,11 +791,7 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
                 i += 1;
                 continue;
             }
-            Some("full") => {
-                cfg.full = true;
-                i += 1;
-                continue;
-            }
+            Some("caps") => cfg.caps = parse_caps(&next()?)?,
             _ => return Err(Error::msg(format!("unknown argument {:?}; see cbb help", args[i]))),
         }
         i += 2;
