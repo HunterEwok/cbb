@@ -23,7 +23,7 @@ pub fn installed_program() -> Result<PathBuf> {
         return Ok(PathBuf::from(p));
     }
     let exe = std::env::current_exe().context("cannot find this program")?;
-    Ok(fs::canonicalize(&exe).unwrap_or(exe))
+    Ok(crate::files::real_path(&exe))
 }
 
 /// The architecture as the release's archives name it: what build.sh

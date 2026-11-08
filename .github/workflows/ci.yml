@@ -1160,7 +1160,7 @@ jobs:
     needs: [changes, build]
     if: needs.changes.outputs.core == 'true'
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         shell: pwsh
@@ -1414,19 +1414,28 @@ jobs:
         env:
           CBB_ERROR_DETAILS: "1"
         run: |
+          # The Rust cbb and cbbw.exe of release v, and beside them the Go
+          # helper of the same release, which cbb updates from its system's
+          # archive with and which a release cbb requires.
           function build($v) {
             $dir = Join-Path $env:RUNNER_TEMP "v$v\cbb"
             New-Item -ItemType Directory -Force "$dir\packaging" | Out-Null
+            $env:CBB_VERSION = $v
+            $env:CBB_ARCH = 'amd64'
+            cargo build --locked -p cbb-lite --features windowless --target-dir "$env:RUNNER_TEMP\target"
+            if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
+            Copy-Item "$env:RUNNER_TEMP\target\debug\cbb.exe", "$env:RUNNER_TEMP\target\debug\cbbw.exe" $dir
             $ld = "-X github.com/HunterEwok/cbb/internal/version.Version=v$v"
-            go build -trimpath -ldflags $ld -o "$dir\cbb.exe" ./cmd/cbb
-            if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
-            go build -trimpath -ldflags "$ld -H=windowsgui" -o "$dir\cbbw.exe" ./cmd/cbb
+            go build -trimpath -ldflags $ld -o "$dir\cbb-helper.exe" ./cmd/cbb-helper
             if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
             Copy-Item -Recurse packaging\windows "$dir\packaging\"
             return $dir
           }
+          rustup toolchain install stable --profile minimal
+          rustup default stable
           $old = build '0.6.0'
           $new = build '0.6.1'
+          Remove-Item Env:CBB_VERSION, Env:CBB_ARCH
           powershell -NoProfile -ExecutionPolicy Bypass -File "$old\packaging\windows\install.ps1" -AutoUpdate off -NoFirewall
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $cbb = "$env:ProgramFiles\cbb\cbb.exe"
@@ -1444,7 +1453,7 @@ jobs:
           & $cbb update
           if ($LASTEXITCODE -ne 0) { throw 'cbb update failed' }
           $v = & $cbb version | Out-String
-          if ($v -notmatch ' v0\.6\.1 ') { throw "after the update: $v" }
+          if ($v -notmatch '^cbb 0\.6\.1 ') { throw "after the update: $v" }
           if ((Get-Service cbb).Status -ne 'Running') { throw 'the service does not run' }
           $out = & $cbb update | Out-String
           if ($out -notmatch 'newest release') { throw "a second cbb update: $out" }

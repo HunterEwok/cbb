@@ -63,7 +63,7 @@ pub(crate) fn install(args: &[String]) -> Result<()> {
         std::process::exit(2);
     }
     let exe = std::env::current_exe().map_err(|e| Error::msg(format!("cannot find this program: {e}")))?;
-    let exe = std::fs::canonicalize(&exe).unwrap_or(exe);
+    let exe = crate::files::real_path(&exe);
     let script = exe.with_file_name("packaging").join("windows").join("install.ps1");
     if !script.is_file() {
         return Err(Error::msg(format!(
