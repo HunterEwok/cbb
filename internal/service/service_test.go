@@ -360,6 +360,19 @@ func (s *testService) logf(t *testing.T, f string, a ...any) {
 }
 
 // logged reports whether the service logged a line that contains part.
+// count returns how many of the service's log lines hold part.
+func (s *testService) count(part string) int {
+	s.logMu.Lock()
+	defer s.logMu.Unlock()
+	n := 0
+	for _, l := range s.lines {
+		if strings.Contains(l, part) {
+			n++
+		}
+	}
+	return n
+}
+
 func (s *testService) logged(part string) bool {
 	s.logMu.Lock()
 	defer s.logMu.Unlock()
@@ -717,8 +730,12 @@ func TestOneConnectionBetweenTwo(t *testing.T) {
 	if n := low.accepted.Load() - pairing[low]; n != 0 {
 		t.Errorf("the member with the lower ID accepted %d member connections", n)
 	}
-	if n := high.accepted.Load() - pairing[high]; n != 1 {
-		t.Errorf("the member with the higher ID accepted %d member connections, want 1", n)
+	// A first connection that met records not yet counting the joiner's
+	// device (a slow machine) exchanges records only, and the lower ID dials
+	// again once they let it in: one more connection, from the same side.
+	again := int32(low.count("it connects again as a member") + high.count("it connects again as a member"))
+	if n := high.accepted.Load() - pairing[high]; n != 1+again {
+		t.Errorf("the member with the higher ID accepted %d member connections, want %d", n, 1+again)
 	}
 	// The skew comes from the hello, which the engine may take only after
 	// the peer shows in the status: it is no sign of a new connection.
