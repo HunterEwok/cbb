@@ -624,6 +624,19 @@ pub fn new_key() -> Result<Vec<u8>> {
     random_key()
 }
 
+/// New AmneziaWG settings for a group whose hub is a phone, as the offers
+/// carry them (ffi/).
+pub fn new_obfuscation() -> Result<serde_json::Value> {
+    Ok(crate::awg::Obfuscation::random()?.to_value())
+}
+
+/// A new VLESS user ID for a group whose clients reach a phone's hub only
+/// over VLESS, a random UUID as internal/tunnel's NewVLESSID makes it
+/// (ffi/).
+pub fn new_vless_id() -> String {
+    crate::vless::random_uuid()
+}
+
 /// 32 random bytes, for a key.
 fn random_key() -> Result<Vec<u8>> {
     let mut key = vec![0u8; 32];
@@ -686,6 +699,10 @@ pub struct Link {
     _vless: Option<crate::vless::Client>,
     stop: Arc<AtomicBool>,
     answered: Arc<AtomicBool>,
+    /// The endpoint the app asked for, which the pump's thread takes.
+    wanted: Arc<Mutex<Option<SocketAddr>>>,
+    /// The hub is reached over VLESS alone, which has only the one way.
+    vless_only: bool,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -716,10 +733,8 @@ impl Link {
             Some(v) => Some(crate::vless::Client::start(v, log.clone())?),
             None => None,
         };
-        let mut endpoints = match (&vless, &hub.obfuscation) {
-            (Some(_), None) => Vec::new(),
-            _ => hub.endpoints.clone(),
-        };
+        let vless_only = vless.is_some() && hub.obfuscation.is_none();
+        let mut endpoints = if vless_only { Vec::new() } else { hub.endpoints.clone() };
         let vless_at = vless.as_ref().map(|v| v.addr());
         if let Some(at) = vless_at {
             if VLESS_FIRST.lock().unwrap().contains(&hub.device) {
@@ -751,14 +766,26 @@ impl Link {
         );
         let stop = Arc::new(AtomicBool::new(false));
         let answered = Arc::new(AtomicBool::new(false));
+        let wanted = Arc::new(Mutex::new(None));
         let mut pump = Pump::new(tunn, limiter, endpoints, ln, own, peer, answered.clone(), log)?;
         pump.awg = awg;
         pump.vless = vless_at.map(|at| (hub.device.clone(), at));
+        pump.wanted = wanted.clone();
         let thread = {
             let stop = stop.clone();
             std::thread::spawn(move || pump.run(&stop))
         };
-        Ok(Link { port, _vless: vless, stop, answered, thread: Some(thread) })
+        Ok(Link { port, _vless: vless, stop, answered, wanted, vless_only, thread: Some(thread) })
+    }
+
+    /// Points the link at another of the hub's endpoints, for example when
+    /// the one in use does not answer; one the offer did not name is tried
+    /// with them. Over VLESS alone there is only
+    /// the one way, and it does nothing.
+    pub fn set_endpoint(&self, at: SocketAddr) {
+        if !self.vless_only {
+            *self.wanted.lock().unwrap() = Some(at);
+        }
     }
 
     /// The local port that leads to the hub's member port.
@@ -860,6 +887,8 @@ struct Pump {
     awg: Option<crate::awg::Awg>,
     /// The hub and the local address of its way over VLESS, if it has one.
     vless: Option<(String, SocketAddr)>,
+    /// The endpoint the app asked for (Link::set_endpoint).
+    wanted: Arc<Mutex<Option<SocketAddr>>>,
 }
 
 /// A UDP socket of the endpoint's family.
@@ -912,6 +941,7 @@ impl Pump {
             said: false,
             awg: None,
             vless: None,
+            wanted: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -938,6 +968,17 @@ impl Pump {
         busy |= self.receive();
         if let Ok(Some(p)) = self.tunn.update_timers() {
             self.send(Packet::from(p).as_ref());
+        }
+        let wanted = self.wanted.lock().unwrap().take();
+        if let Some(at) = wanted {
+            let i = match self.endpoints.iter().position(|e| *e == at) {
+                Some(i) => i,
+                None => {
+                    self.endpoints.push(at);
+                    self.endpoints.len() - 1
+                }
+            };
+            self.use_endpoint(i);
         }
         self.next_endpoint();
         busy |= self.bridge();
@@ -987,10 +1028,16 @@ impl Pump {
         if self.tunn.has_active_session() || self.endpoints.len() < 2 || self.since.elapsed() < ENDPOINT_WAIT {
             return;
         }
-        self.current = (self.current + 1) % self.endpoints.len();
+        self.use_endpoint((self.current + 1) % self.endpoints.len());
+    }
+
+    /// Sends to the endpoint i from now on, starting with a handshake.
+    fn use_endpoint(&mut self, i: usize) {
+        let was = self.endpoints[self.current];
+        self.current = i;
         self.since = Instant::now();
         let ep = self.endpoints[self.current];
-        if self.endpoints[(self.current + self.endpoints.len() - 1) % self.endpoints.len()].is_ipv4() != ep.is_ipv4() {
+        if was.is_ipv4() != ep.is_ipv4() {
             match udp_for(&ep) {
                 Ok(s) => self.udp = s,
                 Err(e) => (self.log)(&format!("cbb: {}", e.for_log())),
@@ -1407,6 +1454,38 @@ mod tests {
         let n = u.len() as u16;
         u[4..6].copy_from_slice(&n.to_be_bytes());
         ip6(src, dst, 17, u, 6)
+    }
+
+    /// The app points a link at an endpoint the offer did not name, and
+    /// the handshake goes there at once.
+    #[test]
+    fn link_takes_the_endpoint_it_is_given() {
+        let st = State::new("g").unwrap();
+        let me = DeviceId::parse("0123456789abcdef0123456789abcdef").unwrap();
+        let first = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let other = UdpSocket::bind("127.0.0.1:0").unwrap();
+        other.set_read_timeout(Some(Duration::from_millis(100))).unwrap();
+        let hub = Hub {
+            device: "fedcba9876543210fedcba9876543210".into(),
+            key: public_of(&random_key().unwrap()),
+            psk: st.psk.clone(),
+            endpoints: vec![first.local_addr().unwrap()],
+            next: vec![],
+            obfuscation: None,
+            vless: None,
+        };
+        let link = Link::start(&st, &hub, &me, Arc::new(|_: &str| {})).unwrap();
+        link.set_endpoint(other.local_addr().unwrap());
+        let mut buf = [0u8; 2048];
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let mut got = None;
+        while got.is_none() && Instant::now() < deadline {
+            if let Ok((n, _)) = other.recv_from(&mut buf) {
+                got = Some(n);
+            }
+        }
+        assert_eq!(got, Some(148), "a handshake initiation at the endpoint given");
+        assert_eq!(buf[0], 1);
     }
 
     /// The hub, or anyone holding its key, sends TCP and UDP through the

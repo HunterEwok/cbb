@@ -48,7 +48,7 @@ public final class EntriesFile: @unchecked Sendable {
     }
 
     /// The ways in over VLESS the list names for the forwarder name
-    /// (host:port), as cbbtun's Hub.SetProjectWays takes them.
+    /// (host:port), as the hub's setProjectWays takes them.
     public func ways(for name: String) -> [Releases.EntryVLESS] { current?.forwarder(name)?.vless ?? [] }
 
     public var order: (keys: UInt64, seq: UInt64)? {

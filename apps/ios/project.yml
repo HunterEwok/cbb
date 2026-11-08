@@ -41,10 +41,6 @@ targets:
       - target: Widgets
       # The Apple Watch app, in the app's Watch folder.
       - target: Watch
-      # The tunnel for sync away from home, a static framework bound by gomobile:
-      # ../../mobile/cbbtun/bind.sh ios Cbbtun.xcframework (not committed).
-      - framework: Cbbtun.xcframework
-        embed: false
       - sdk: libresolv.tbd
     info:
       path: CBB/Info.plist

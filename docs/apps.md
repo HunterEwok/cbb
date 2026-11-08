@@ -143,10 +143,10 @@ they look, so both apps are built to the same plan.
    connecting; connected through the tunnel. Turning it off forgets the phone's tunnel key.
    On Android the WireGuard key sits in the app's files, encrypted with a Keystore key that
    needs no unlock, so the foreground service syncs away from home as it does at home; the
-   tunnel runs in the app's process (`mobile/cbbtun`) and opens a loopback port that the kit
+   tunnel runs in the app's process (the Rust core's, `ffi/src/tunnel.rs`) and opens a loopback port that the kit
    dials with its own member TLS, checking that the peer is the hub. On the iPhone the key
    and the hub's offer sit in the keychain, readable after the first unlock and on this
-   device only; the same tunnel (`Cbbtun.xcframework`) runs while the app does, and the
+   device only; the same tunnel (in the core's library) runs while the app does, and the
    kit's `AwayFromHome` drives it in both the app and its tests. When the group's hub is
    obfuscated, its offer carries the AmneziaWG settings, and when it has its clients come
    over VLESS, the way there; both apps keep them with the offer and give them to the
@@ -159,8 +159,8 @@ they look, so both apps are built to the same plan.
    phone is on is one of the hub's home networks, with "This is my home network" when it
    is not; the forwarder's address and key, as `cbb forward` prints them; how the hub's
    tunnel hides (WireGuard, AmneziaWG, or VLESS to a forwarder that takes it, which comes
-   with AmneziaWG: the phone makes the AmneziaWG settings and the VLESS user ID with cbbtun's `NewObfuscation` and
-   `NewVLESSID` and keeps them while that choice stays, and the clients get them the next
+   with AmneziaWG: the phone makes the AmneziaWG settings and the VLESS user ID with the tunnel's `new_obfuscation` and
+   `new_vless_id` and keeps them while that choice stays, and the clients get them the next
    time they meet the hub at home); and on Android
    "Keep the hub running in the background", which lets the foreground service keep it.
    The switch stays in Settings, and the phone's own page in the device list has no "Make it
@@ -173,7 +173,7 @@ they look, so both apps are built to the same plan.
    away state (Android: a file sealed by a Keystore key; iPhone: the keychain). The phone's
    member in the Rust core listens on the member port (`listen`), the kits' `PhoneHub`
    answers the clients' tunnel keys from the member's `peer` events, the Android app's
-   `HubOnPhone` and the Swift kit's `HubOnPhone` drive cbbtun's hub, the tunnel's connections
+   `HubOnPhone` and the Swift kit's `HubOnPhone` drive the tunnel's hub, the tunnel's connections
    come to a member port on the loopback address, and on a home network the hub takes members
    on a port on every address, which it publishes with `r=phone` (docs/protocol.md, section 3). While the hub is registered, "Invite a
    device from afar" makes a remote invitation for an hour (docs/protocol.md, section 12):
@@ -892,12 +892,8 @@ its updates to either. That needs the build to be reproducible:
 
 - the version in the source, `apps/android/version.properties`, which the release pull
   request moves on with `CHANGELOG.md` (`tools/repocheck` checks the two agree);
-- the tunnel's library built with one NDK, `cbb.ndk` in `apps/android/gradle.properties`,
-  and the Go of go.mod's `toolchain` line, with `-trimpath`, no VCS stamp and from one
-  path, `/tmp/cbbtun-bind`, a link to the checkout (gomobile's go.mod names the module's
-  directory, which goes into the library's build info);
-- the Rust core's libraries (`ffi/`) built with the same NDK and the Rust of `cbb.rust`
-  there, with the paths of the checkout and of cargo's sources written as fixed names
+- the Rust core's libraries (`ffi/`, with the tunnel) built with one NDK, `cbb.ndk` in
+  `apps/android/gradle.properties`, and the Rust of `cbb.rust` there, with the paths of the checkout and of cargo's sources written as fixed names
   (`ffi/bind.sh`);
 - no dependency block (`dependenciesInfo`) and no commit details (`vcsInfo`) in the APK.
 
