@@ -45,6 +45,18 @@ F_KEYS          equ     'K'
 F_QUIT          equ     'Q'
 F_CBB_OUT       equ     'C'     ; .cbb's bytes for the Pi's shell
 F_CBB_IN        equ     'c'     ; the answers for .cbb
+F_IMAGE         equ     'I'     ; an image waits on the Pi
+F_IMAGE_GO      equ     'i'     ; the program is frozen: send it
+F_IMAGE_HEAD    equ     'J'     ; its mode and sum; its bytes follow, raw
+
+NR_SELECT       equ     $243B
+NR_DATA         equ     $253B
+NR_MMU6         equ     $56
+PORT_L2         equ     $123B
+BORDCR          equ     23624   ; the border's colour in bits 3-5
+WINDOW          equ     $C000   ; MMU6, where the image's banks go in turn
+IMG_PAL         equ     $FE00   ; 512 bytes: the image's palette
+IMG_BANKS       equ     10
 
 ESP_CHUNK       equ     48      ; the ESP's bytes in one frame to the Pi
 HELLO_TICKS     equ     50      ; a hello every second
@@ -92,7 +104,10 @@ LINK_TICKS      equ     1000    ; twenty seconds for the link to answer
 ; answers in E, with D = 1, or D = 0 for none yet; B = 9 the start in
 ; the background: D = 0 empties the line, D = 1 adds the byte E to it,
 ; D = 2 starts (the driver must be off), D = 3 gives its state in E
-; (0 none, B_PROMPT..B_ON); call 2 ends it. Carry set for an unknown call.
+; (0 none, B_PROMPT..B_ON); call 2 ends it; B = 10 the banks for showing
+; images (img_show): E the first of ten in a row, even, D one more for
+; what the screen showed, E = 0 for none; the ones before come back in D
+; and E. Carry set for an unknown call.
 api:
         ld      a,b
         cp      1
@@ -238,7 +253,7 @@ api8:
         ret
 api9:
         cp      9
-        jp      nz,api_bad
+        jp      nz,api10
         ld      a,d
         and     a
         jr      nz,a9_add
@@ -280,6 +295,15 @@ a9_state:
         ld      e,a
         ld      d,0
         and     a
+        ret
+api10:
+        cp      10
+        jr      nz,api_bad
+        ld      hl,(img_base)   ; L = the first bank, H = the state's
+        ld      (img_base),de
+        ex      de,hl
+        xor     a
+        ld      (img_want),a
         ret
 api_bad:
         scf
@@ -341,6 +365,9 @@ im:
         in      a,(c)
         ld      (saved_sel),a
         call    from_pi
+        ld      a,(img_want)
+        and     a
+        call    nz,img_show
         call    to_esp
         call    from_esp
         call    cbb_flush
@@ -550,6 +577,10 @@ fp_read:
         ld      (hl),e
         ld      a,e
         call    decode
+        ld      a,(img_want)
+        ld      hl,img_head
+        or      (hl)
+        ret     nz              ; an image first (img_show)
         jr      fp_loop
 
 ; Carry when HL, a ring's free bytes, is under a frame's data.
@@ -713,7 +744,7 @@ dt_cbb:
         ; CBB_RING + (cbb_tent & 1023) = E; kept only while .cbb's ring
         ; is open (dt_sum), whose room from_pi checked then.
         cp      F_CBB_IN
-        jr      nz,dt_count
+        jr      nz,dt_head
         ld      hl,(cbb_tent)
         push    hl
         ld      a,h
@@ -724,6 +755,22 @@ dt_cbb:
         pop     hl
         inc     hl
         ld      (cbb_tent),hl
+        jr      dt_count
+dt_head:
+        cp      F_IMAGE_HEAD
+        jr      nz,dt_count
+        ld      a,(dlen)        ; its first three bytes, at jbuf
+        ld      hl,dcnt
+        sub     (hl)
+        cp      3
+        jr      nc,dt_count
+        ld      hl,jbuf
+        add     a,l
+        ld      l,a
+        jr      nc,dt_jb
+        inc     h
+dt_jb:
+        ld      (hl),e
 dt_count:
         ld      hl,dcnt
         dec     (hl)
@@ -768,6 +815,19 @@ dt_c:
         ld      (cbb_tail),hl
         ret
 dt_q:
+        cp      F_IMAGE
+        jr      nz,dt_j
+        ld      a,(img_base)
+        and     a
+        ret     z               ; no banks: no image
+        ld      (img_want),a
+        ret
+dt_j:
+        cp      F_IMAGE_HEAD
+        jr      nz,dt_quit
+        ld      (img_head),a
+        ret
+dt_quit:
         cp      F_QUIT
         ret     nz
         xor     a
@@ -975,8 +1035,495 @@ keys:
         ret
 
 hello_text:
-        defm    "cbb.drv 0.2"
+        defm    "cbb.drv 0.3"
 hello_end:
+
+; ---------------------------------------------------------------------------
+; An image from the Pi, over the program in front, which stays frozen in
+; this interrupt until a key: what Layer 2 showed is kept in the state's
+; bank and put back after. The Pi sends the image after F_IMAGE_GO: a head
+; frame, then the 81920 bytes of pixels in Layer 2's order and the
+; palette, raw, which go into the ten banks as they come, each column
+; showing at once and the border flipping with each column that came.
+img_show:
+        xor     a
+        ld      (img_want),a
+        ld      (img_head),a
+        ld      a,NR_MMU6
+        call    nr_get
+        ld      (sv_mmu6),a
+        ld      a,F_IMAGE_GO
+        ld      b,0
+        call    frame
+        ; The head, while the ESP's bytes go on as usual.
+        ld      d,4
+is_wait:
+        ld      hl,0
+is_wait2:
+        push    de
+        push    hl
+        call    from_pi
+        pop     hl
+        pop     de
+        ld      a,(img_head)
+        and     a
+        jr      nz,is_head
+        push    de
+        push    hl
+        call    to_esp
+        call    ack             ; the Pi's window, for what waits before it
+        pop     hl
+        pop     de
+        dec     hl
+        ld      a,h
+        or      l
+        jr      nz,is_wait2
+        dec     d
+        jr      nz,is_wait
+        ret                     ; no head: the Pi gave up
+is_head:
+        xor     a
+        ld      (img_head),a
+        call    state_bank
+        call    l2_save
+        call    l2_on
+        ; The pixels, bank by bank; HL' would be quicker, but the
+        ; alternates are the program's: the sum goes on the stack's top.
+        ld      bc,PORT_SELECT
+        ld      a,SEL_PI
+        out     (c),a
+        ld      hl,0
+        push    hl              ; the sum
+        ld      a,(img_base)
+        ld      d,a             ; D: the bank
+        ld      e,IMG_BANKS
+is_bank:
+        ld      a,d
+        call    mmu6
+        ld      hl,WINDOW
+is_byte:
+        call    raw_byte
+        jr      c,is_fail
+        ld      (hl),a
+        ex      (sp),hl
+        add     a,l
+        ld      l,a
+        jr      nc,is_nc
+        inc     h
+is_nc:
+        ex      (sp),hl
+        inc     l
+        jr      nz,is_byte
+        ; A column came: the border flips, blue and yellow.
+        ld      a,h
+        and     1
+        ld      c,a
+        add     a,a
+        add     a,a
+        add     a,c
+        inc     a
+        out     ($FE),a
+        inc     h
+        ld      a,h
+        cp      (WINDOW >> 8) + $20
+        jr      nz,is_byte
+        inc     d
+        dec     e
+        jr      nz,is_bank
+        ; The palette: 32 bytes for 16 colours, 512 for 256.
+        ld      hl,IMG_PAL
+        ld      bc,512
+        ld      a,(jbuf)
+        cp      'H'
+        jr      nz,is_pal
+        ld      c,32
+        ld      b,0
+is_pal:
+        call    raw_byte
+        jr      c,is_fail
+        ld      (hl),a
+        inc     hl
+        ex      (sp),hl
+        add     a,l
+        ld      l,a
+        jr      nc,is_nc2
+        inc     h
+is_nc2:
+        ex      (sp),hl
+        dec     bc
+        ld      a,b
+        or      c
+        jr      nz,is_pal
+        pop     hl              ; the sum
+        ld      de,(jbuf+1)
+        and     a
+        sbc     hl,de
+        jr      nz,is_bad
+        ; The colours and the whole screen, until a key.
+        ld      a,(jbuf)
+        cp      'H'
+        jr      nz,is_colours
+        ld      hl,IMG_PAL+32   ; colours 16 to 255 black
+        ld      de,IMG_PAL+33
+        ld      bc,479
+        ld      (hl),0
+        ldir
+is_colours:
+        ld      hl,IMG_PAL
+        call    pal_write
+        ld      hl,clip_all
+        call    clip_set
+        call    key_wait
+        jr      is_end
+is_fail:
+        pop     hl
+is_bad:
+        ; Damaged or cut short: the screen as it was, a red flash.
+        ld      a,2
+        out     ($FE),a
+is_end:
+        call    state_bank
+        call    l2_restore
+        ld      a,(sv_mmu6)
+        call    mmu6
+        ld      a,(BORDCR)
+        rrca
+        rrca
+        rrca
+        and     7
+        out     ($FE),a
+        ret
+
+; A raw byte from the Pi in A, or carry when none came for a while.
+; Keeps BC, DE and HL.
+raw_byte:
+        push    bc
+        push    de
+        ld      bc,PORT_STATUS
+        in      a,(c)
+        bit     ST_RX,a
+        jr      nz,rb_got       ; at once, mostly
+        push    hl
+        ld      h,16
+        ld      de,0
+rb_wait:
+        in      a,(c)
+        bit     ST_RX,a
+        jr      nz,rb_late
+        dec     de
+        ld      a,d
+        or      e
+        jr      nz,rb_wait
+        dec     h
+        jr      nz,rb_wait
+        pop     hl
+        pop     de
+        pop     bc
+        scf
+        ret
+rb_late:
+        pop     hl
+rb_got:
+        inc     b               ; PORT_DATA
+        in      a,(c)
+        pop     de
+        pop     bc
+        and     a
+        ret
+
+; Waits for the keys up, a key, the keys up again; the border blinks.
+key_wait:
+        call    kw_up
+kw_down:
+        call    kw_blink
+        call    keys_now
+        jr      z,kw_down
+kw_up:
+        call    keys_now
+        jr      nz,kw_up
+        ret
+keys_now:
+        xor     a
+        in      a,($FE)
+        cpl
+        and     $1F
+        ret
+kw_blink:
+        ld      hl,(blink)
+        inc     hl
+        ld      (blink),hl
+        ld      a,h
+        and     $10
+        rrca
+        rrca
+        or      1               ; blue and cyan in turn
+        out     ($FE),a
+        ret
+
+; The state's bank in at WINDOW.
+state_bank:
+        ld      a,(img_state)
+; Bank A in at WINDOW.
+mmu6:
+        push    de
+        ld      e,a
+        ld      a,NR_MMU6
+        call    nr_put
+        pop     de
+        ret
+
+; Next register A in A.
+nr_get:
+        push    bc
+        ld      bc,NR_SELECT
+        out     (c),a
+        inc     b
+        in      a,(c)
+        pop     bc
+        ret
+
+; Next register A = E.
+nr_put:
+        push    bc
+        ld      bc,NR_SELECT
+        out     (c),a
+        inc     b
+        out     (c),e
+        pop     bc
+        ret
+
+; The registers Layer 2's show changes, kept in the state's bank.
+l2_regs:
+        defb    $12, $14, $15, $16, $17, $43, $6B, $70, $71
+L2_REGS         equ     9
+SV_REGS         equ     WINDOW          ; the registers' values
+SV_CLIP         equ     WINDOW + 16     ; the clip window's four
+SV_PORT         equ     WINDOW + 20     ; port $123B
+SV_PAL          equ     WINDOW + 32     ; Layer 2's second palette
+clip_all:
+        defb    0, 159, 0, 255
+clip_mid:
+        defb    16, 143, 32, 223
+
+l2_save:
+        ld      hl,l2_regs
+        ld      de,SV_REGS
+        ld      b,L2_REGS
+ls_reg:
+        ld      a,(hl)
+        call    nr_get
+        ld      (de),a
+        inc     hl
+        inc     de
+        djnz    ls_reg
+        ; Each read of the clip window, written back, moves its index on.
+        ld      a,$1C
+        ld      e,1
+        call    nr_put
+        ld      hl,SV_CLIP
+        ld      b,4
+ls_clip:
+        ld      a,$18
+        call    nr_get
+        ld      (hl),a
+        ld      e,a
+        ld      a,$18
+        call    nr_put
+        inc     hl
+        djnz    ls_clip
+        ld      bc,PORT_L2
+        in      a,(c)
+        ld      (SV_PORT),a
+        ld      a,$43
+        ld      e,$50           ; Layer 2's second palette, to read
+        call    nr_put
+        ld      hl,SV_PAL
+        ld      d,0
+ls_pal:
+        ld      a,$40
+        ld      e,d
+        call    nr_put
+        ld      a,$41
+        call    nr_get
+        ld      (hl),a
+        inc     hl
+        ld      a,$44
+        call    nr_get
+        ld      (hl),a
+        inc     hl
+        inc     d
+        jr      nz,ls_pal
+        ret
+
+l2_restore:
+        ld      a,(SV_PORT)
+        ld      bc,PORT_L2
+        out     (c),a
+        ld      hl,SV_PAL
+        call    pal_write
+        ld      hl,SV_CLIP
+        call    clip_set
+        ld      hl,l2_regs
+        ld      de,SV_REGS
+        ld      b,L2_REGS
+lr_reg:
+        push    de
+        ld      a,(de)
+        ld      e,a
+        ld      a,(hl)
+        call    nr_put
+        pop     de
+        inc     hl
+        inc     de
+        djnz    lr_reg
+        ret
+
+; Layer 2's second palette, written and shown, from the 512 bytes at HL,
+; two an entry as register $44 takes them.
+pal_write:
+        ld      a,$43
+        ld      e,$54
+        call    nr_put
+        ld      a,$40
+        ld      e,0
+        call    nr_put
+        ld      bc,NR_SELECT
+        ld      a,$44
+        out     (c),a
+        inc     b
+        ld      d,0
+pw_loop:
+        ld      a,(hl)
+        out     (c),a
+        inc     hl
+        ld      a,(hl)
+        out     (c),a
+        inc     hl
+        dec     d
+        jr      nz,pw_loop
+        ret
+
+; The clip window from the four bytes at HL (register $1C bit 0 resets
+; its index).
+clip_set:
+        ld      a,$1C
+        ld      e,1
+        call    nr_put
+        ld      b,4
+cs_loop:
+        ld      e,(hl)
+        ld      a,$18
+        call    nr_put
+        inc     hl
+        djnz    cs_loop
+        ret
+
+; Layer 2 on for the image's mode, its banks clear, in grey through the
+; middle of the screen, the border around it the ULA's.
+l2_on:
+        ld      a,(img_base)
+        ld      d,a
+        ld      b,IMG_BANKS
+lo_clear:
+        push    bc
+        ld      a,d
+        call    mmu6
+        ld      hl,WINDOW
+        ld      de,WINDOW+1
+        ld      bc,$1FFF
+        ld      (hl),0
+        ldir
+        pop     bc
+        ld      a,(img_base)
+        add     a,IMG_BANKS
+        sub     b
+        inc     a
+        ld      d,a
+        djnz    lo_clear
+        ; The grey palette: 8 greys over 256 entries, or 16 entries.
+        ld      hl,IMG_PAL
+        ld      c,0
+lo_grey:
+        ld      a,(jbuf)
+        cp      'H'
+        ld      a,c
+        jr      nz,lo_lo
+        and     15
+        rrca                    ; (i & 15) >> 1, in bits 0-2
+        and     7
+        jr      lo_g
+lo_lo:
+        rlca
+        rlca
+        rlca
+        and     7               ; i >> 5
+lo_g:
+        ld      b,a             ; g
+        rrca
+        rrca
+        rrca
+        and     $E0             ; g << 5
+        ld      e,a
+        ld      a,b
+        add     a,a
+        add     a,a             ; g << 2
+        or      e
+        ld      e,a
+        ld      a,b
+        srl     a               ; g >> 1
+        or      e
+        ld      (hl),a
+        inc     hl
+        ld      a,b
+        and     1
+        ld      (hl),a
+        inc     hl
+        inc     c
+        jr      nz,lo_grey
+        ld      hl,IMG_PAL
+        call    pal_write
+        call    state_bank      ; the registers kept, for their other bits
+        ld      a,(img_base)
+        rrca                    ; the 16K bank
+        and     $7F
+        ld      e,a
+        ld      a,$12
+        call    nr_put
+        ld      a,(jbuf)
+        cp      'H'
+        ld      e,$10
+        jr      nz,lo_res
+        ld      e,$20
+lo_res:
+        ld      a,$70
+        call    nr_put
+        ld      e,0
+        ld      a,$16
+        call    nr_put
+        ld      a,$71
+        call    nr_put
+        ld      a,$17
+        call    nr_put
+        ld      e,$E3
+        ld      a,$14
+        call    nr_put
+        ld      a,(SV_REGS+6)   ; no tilemap
+        and     $7F
+        ld      e,a
+        ld      a,$6B
+        call    nr_put
+        ld      a,(SV_REGS+2)   ; Layer 2 over the ULA, no sprites
+        and     $E2
+        or      $04
+        ld      e,a
+        ld      a,$15
+        call    nr_put
+        ld      hl,clip_mid
+        call    clip_set
+        ld      a,2
+        ld      bc,PORT_L2
+        out     (c),a
+        ret
 
 ; The state.
 enabled:        defb    0
@@ -1015,4 +1562,11 @@ bmatch:         defb    0       ; bytes of the awaited text seen
 bpoke:          defb    0
 bquiet:         defb    0
 btick:          defw    0
+img_base:       defb    0       ; the image's first bank (call 10), 0 none
+img_state:      defb    0       ; the bank for what the screen showed
+img_want:       defb    0       ; an image waits (F_IMAGE)
+img_head:       defb    0       ; its head came (F_IMAGE_HEAD)
+jbuf:           defs    3, 0    ; the head: the mode, the sum
+sv_mmu6:        defb    0
+blink:          defw    0
 code_end:

@@ -537,6 +537,16 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     `link_reaches_nothing_from_the_tunnel`); the forwarder's `FuzzForwardWire` sends a
     packet only to an endpoint it knows. The check of cbb.tools is written down in
     docs/maintaining.md, "Ways out carry only cbb", and was run on 2026-11-07.
+- **62.** **Planned for 0.7 (the owner, 2026-11-08).** Sound and files on the ZX Spectrum Next,
+    after the group's images (`.cbb show`, 0.6):
+    - `.cbb play`: the group's latest sound. The Pi decodes it (MP3, AAC, WAV) and plays it
+      into the Next's mixer over I2S, if NextPi's audio path allows it; else it sends 8-bit
+      samples over the UART to the Next's DACs (about 11 kHz mono at 115200 baud).
+    - `.cbb get`: the group's latest files saved on the SD card, with 8.3 names (about a
+      minute and a half a megabyte at 115200 baud); `-run` starts a `.nex`, `.tap`, `.tzx`,
+      `.sna` or `.z80` at once, so a game sent from the phone runs on the Next.
+    - `.cbb snap`: the Next's screen (ULA or Layer 2) to the group as a PNG, which the Pi
+      makes.
 
 ## Devices that are hard to type into
 

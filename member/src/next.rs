@@ -17,7 +17,7 @@ use cbb_core::clip;
 use crate::error::{Context, Error, Result};
 use crate::{Global, control, request};
 
-const USAGE: &str = "usage: cbb next paste [-max bytes] | copy [-secret] <len> <crc32> | check-list <file> | pair [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
+const USAGE: &str = "usage: cbb next paste [-max bytes] | image [-mode auto|lo|hi] [-tape] | speed <baud> <bytes> | speed-in <baud> <bytes> | copy [-secret] <len> <crc32> | check-list <file> | pair [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
 
 /// How long copy waits for the next byte from the Next.
 const READ_TIMEOUT_DECISECONDS: u8 = 100;
@@ -28,6 +28,11 @@ pub fn run(g: &Global, args: &[String]) -> i32 {
     let res = match args.first().map(String::as_str) {
         Some("paste") => paste(g, &args[1..]),
         Some("copy") => copy(g, &args[1..]),
+        Some("image") => image(g, &args[1..]),
+        #[cfg(unix)]
+        Some("speed") => speed(&args[1..]),
+        #[cfg(unix)]
+        Some("speed-in") => speed_in(&args[1..]),
         Some("check-list") => check_list(&args[1..], &mut std::io::stdout()),
         Some("pair") => crate::join(g, &args[1..], true),
         // The link answers in frames, not in a status line.
@@ -122,6 +127,354 @@ fn paste(g: &Global, args: &[String]) -> Result<()> {
     let mut out = std::io::stdout();
     out.write_all(&frame(text)).context("cannot write the text")?;
     Ok(())
+}
+
+/// Writes the latest image for Layer 2 (crate::nextimage): `CBBI <mode>
+/// <len> <crc32>` CR, with mode L (320×256, 256 colours) or H (640×256,
+/// 16); once the Next sends a byte, len bytes, the pixels and the
+/// palette, then CR.
+fn image(g: &Global, args: &[String]) -> Result<()> {
+    use crate::nextimage::{self, Mode};
+    let (mut mode, mut tape, mut i) = (None, false, 0);
+    while i < args.len() {
+        match crate::flag(&args[i]) {
+            Some("tape") => tape = true,
+            Some("mode") => {
+                mode = match args.get(i + 1).map(String::as_str) {
+                    Some("auto") => None,
+                    Some("lo") => Some(Mode::Lo),
+                    Some("hi") => Some(Mode::Hi),
+                    _ => return Err(Error::msg(USAGE)),
+                };
+                i += 1;
+            }
+            _ => return Err(Error::msg(USAGE)),
+        }
+        i += 1;
+    }
+    let (kind, data) = latest_image(g)?;
+    let img = nextimage::decode(&kind, &data)?;
+    let f = nextimage::convert(&img, mode);
+    let bytes = f.bytes();
+    // Raw both ways: the pixels as they are, and the Next's go unechoed.
+    let _raw = RawTerminal::new(READ_TIMEOUT_DECISECONDS, true);
+    let mut out = std::io::stdout();
+    out.write_all(format!("CBBI {} {} {:08x}\r", f.mode.letter(), bytes.len(), crc32(&bytes)).as_bytes())
+        .and_then(|_| out.flush())
+        .context("cannot answer the Next")?;
+    // The Next makes room for the image first: then it sends a byte.
+    let mut go = [0u8];
+    loop {
+        match std::io::stdin().read(&mut go) {
+            Ok(0) => return Err(Error::msg("the Next did not ask for the image")),
+            Ok(_) => break,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(Error::with("cannot read from the Next", e)),
+        }
+    }
+    if tape {
+        play_tape(&bytes)?;
+        out.write_all(b"\r").and_then(|_| out.flush()).context("cannot answer the Next")?;
+        return Ok(());
+    }
+    out.write_all(&bytes)
+        .and_then(|_| out.write_all(b"\r"))
+        .and_then(|_| out.flush())
+        .context("cannot write the image")?;
+    Ok(())
+}
+
+/// The ROM's tape timings, in T-states at 3.5 MHz: the pilot's halves and
+/// how many in a data block, the sync's two, and a bit's two halves.
+const TAPE_PILOT: u32 = 2168;
+const TAPE_PILOT_HALVES: usize = 3223;
+const TAPE_SYNC: [u32; 2] = [667, 735];
+const TAPE_ZERO: u32 = 855;
+const TAPE_ONE: u32 = 1710;
+/// The sound's rate, and the silence between blocks, in samples.
+const TAPE_RATE: u64 = 44_100;
+const TAPE_GAP: usize = 22_050;
+
+/// The halves of a tape block as the ROM saves one: the pilot, the sync,
+/// the flag byte, the data and the XOR of all, each bit two halves, high
+/// bit first.
+pub fn tape_block(flag: u8, data: &[u8]) -> Vec<u32> {
+    let mut h = vec![TAPE_PILOT; TAPE_PILOT_HALVES];
+    h.extend(TAPE_SYNC);
+    let sum = data.iter().fold(flag, |s, &b| s ^ b);
+    for b in std::iter::once(flag).chain(data.iter().copied()).chain(std::iter::once(sum)) {
+        for bit in (0..8).rev() {
+            let t = if b >> bit & 1 == 1 { TAPE_ONE } else { TAPE_ZERO };
+            h.extend([t, t]);
+        }
+    }
+    h
+}
+
+/// The sound of halves, a square wave in 16-bit stereo samples; level and
+/// what is left of a sample (T-states times the rate) carry on.
+struct TapeSound {
+    high: bool,
+    t: u64,
+}
+
+impl TapeSound {
+    fn add(&mut self, halves: &[u32], out: &mut Vec<u8>) {
+        for &h in halves {
+            // T-states times the rate: samples until this half ends.
+            self.t += h as u64 * TAPE_RATE;
+            let n = self.t / 3_500_000;
+            self.t -= n * 3_500_000;
+            let v: i16 = if self.high { 20_000 } else { -20_000 };
+            for _ in 0..n {
+                out.extend(v.to_le_bytes());
+                out.extend(v.to_le_bytes());
+            }
+            self.high = !self.high;
+        }
+    }
+}
+
+/// `.cbb show -tape`: the image as a tape in eleven blocks, each of the
+/// Next's 8K banks with its index as the flag and the palette last,
+/// played through the Pi's sound, which the Next hands to EAR (NextReg
+/// 0xA2 bit 0); a byte 3 from the Next stops it. About 8 minutes.
+fn play_tape(bytes: &[u8]) -> Result<()> {
+    let mut player = std::process::Command::new("aplay")
+        .args(["-q", "-t", "raw", "-f", "S16_LE", "-c", "2", "-r", "44100", "-"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .context("the Pi cannot play sound (aplay)")?;
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    {
+        let stop = stop.clone();
+        std::thread::spawn(move || {
+            let mut b = [0u8];
+            while let Ok(1) = std::io::stdin().read(&mut b) {
+                if b[0] == 3 {
+                    stop.store(true, std::sync::atomic::Ordering::SeqCst);
+                    return;
+                }
+            }
+        });
+    }
+    let mut pipe = player.stdin.take().ok_or_else(|| Error::msg("the Pi cannot play sound"))?;
+    let mut sound = TapeSound { high: false, t: 0 };
+    // Half a second first, for the Next to start listening.
+    let mut buf = vec![0u8; TAPE_GAP * 4];
+    let res = (|| -> Result<()> {
+        for (i, block) in bytes.chunks(8192).enumerate() {
+            let halves = tape_block(i as u8, block);
+            for part in halves.chunks(4096) {
+                if stop.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(());
+                }
+                sound.add(part, &mut buf);
+                pipe.write_all(&buf).context("the Pi's sound stopped")?;
+                buf.clear();
+            }
+            let v: i16 = if sound.high { 20_000 } else { -20_000 };
+            for _ in 0..TAPE_GAP {
+                buf.extend(v.to_le_bytes());
+                buf.extend(v.to_le_bytes());
+            }
+        }
+        pipe.write_all(&buf).context("the Pi's sound stopped")?;
+        Ok(())
+    })();
+    drop(pipe);
+    if stop.load(std::sync::atomic::Ordering::SeqCst) {
+        let _ = player.kill();
+    }
+    let _ = player.wait();
+    res
+}
+
+/// The speeds `cbb next speed` takes, as termios names them: the Pi's
+/// Linux has them all, other systems (where the crate builds for the
+/// phones) only the common two; none without termios.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+const SPEEDS: [(u32, libc::speed_t); 9] = [
+    (115_200, libc::B115200),
+    (230_400, libc::B230400),
+    (460_800, libc::B460800),
+    (576_000, libc::B576000),
+    (921_600, libc::B921600),
+    (1_000_000, libc::B1000000),
+    (1_152_000, libc::B1152000),
+    (1_500_000, libc::B1500000),
+    (2_000_000, libc::B2000000),
+];
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
+const SPEEDS: [(u32, libc::speed_t); 2] = [(115_200, libc::B115200), (230_400, libc::B230400)];
+
+#[cfg(unix)]
+/// `.cbb speed`'s test of the line (apps/zxnext): `CBBS <baud> <bytes>
+/// <crc32>` CR at the line's own speed, then, after half a second, bytes
+/// of a fixed pseudo-random sequence at baud, then half a second later
+/// the line's own speed again and the status line.
+fn speed(args: &[String]) -> Result<()> {
+    let (baud, b, n) = speed_args(args)?;
+    let data = speed_bytes(n);
+    let mut out = std::io::stdout();
+    let _raw = RawTerminal::new(1, true);
+    out.write_all(format!("CBBS {baud} {n} {:08x}\r", crc32(&data)).as_bytes())
+        .and_then(|_| out.flush())
+        .context("cannot answer the Next")?;
+    let _speed = LineSpeed::set(b)?;
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    out.write_all(&data).and_then(|_| out.flush()).context("cannot send to the Next")?;
+    // SAFETY: tcdrain only waits for the output of fd 1.
+    unsafe {
+        libc::tcdrain(1);
+    }
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    Ok(())
+}
+
+#[cfg(unix)]
+/// `.cbb speed`'s test of the other way: the line goes to baud, and half a
+/// second later `CBBGO` at it; then up to bytes from the Next, until a
+/// second passes without one; then the line's own speed again, half a
+/// second, and `CBBR <bytes got> <crc32>` before the status line.
+fn speed_in(args: &[String]) -> Result<()> {
+    let (_, b, n) = speed_args(args)?;
+    let mut data = vec![0u8; n];
+    let mut got = 0;
+    {
+        let _raw = RawTerminal::new(10, true);
+        let _speed = LineSpeed::set(b)?;
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let mut out = std::io::stdout();
+        out.write_all(b"\r\nCBBGO\r\n").and_then(|_| out.flush()).context("cannot answer the Next")?;
+        let mut stdin = std::io::stdin();
+        while got < n {
+            match stdin.read(&mut data[got..]) {
+                Ok(0) => break,
+                Ok(k) => got += k,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(Error::with("cannot read from the Next", e)),
+            }
+        }
+    }
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let mut out = std::io::stdout();
+    out.write_all(format!("CBBR {got} {:08x}\r", crc32(&data[..got])).as_bytes())
+        .and_then(|_| out.flush())
+        .context("cannot answer the Next")
+}
+
+#[cfg(unix)]
+/// The speed, as a number and as termios names it, and the length of a
+/// speed test.
+fn speed_args(args: &[String]) -> Result<(u32, libc::speed_t, usize)> {
+    let [baud, n] = args else { return Err(Error::msg(USAGE)) };
+    let baud: u32 = baud.parse().context("the speed is a number")?;
+    let n: usize = n.parse().context("the length is a number")?;
+    let &(_, b) = SPEEDS.iter().find(|s| s.0 == baud).ok_or_else(|| Error::msg("the Pi's line takes no such speed"))?;
+    if n > 1 << 20 {
+        return Err(Error::msg("at most 1 MiB"));
+    }
+    Ok((baud, b, n))
+}
+
+#[cfg(unix)]
+/// The bytes of the speed test: xorshift32 from 1, the low byte of each.
+pub fn speed_bytes(n: usize) -> Vec<u8> {
+    let mut x: u32 = 1;
+    (0..n)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            x as u8
+        })
+        .collect()
+}
+
+#[cfg(unix)]
+/// The terminal's speed for a while, then its own again.
+struct LineSpeed(Option<libc::termios>);
+
+#[cfg(unix)]
+impl LineSpeed {
+    fn set(b: libc::speed_t) -> Result<LineSpeed> {
+        // SAFETY: tcgetattr, cfset*speed and tcsetattr only read and write
+        // the termios struct passed to them.
+        unsafe {
+            let mut old: libc::termios = std::mem::zeroed();
+            if libc::isatty(1) != 1 || libc::tcgetattr(1, &mut old) != 0 {
+                return Ok(LineSpeed(None));
+            }
+            let mut t = old;
+            libc::cfsetispeed(&mut t, b);
+            libc::cfsetospeed(&mut t, b);
+            if libc::tcsetattr(1, libc::TCSADRAIN, &t) != 0 {
+                return Err(Error::msg("the Pi's line takes no such speed"));
+            }
+            Ok(LineSpeed(Some(old)))
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for LineSpeed {
+    fn drop(&mut self) {
+        if let Some(old) = &self.0 {
+            // SAFETY: as in set.
+            unsafe {
+                libc::tcsetattr(1, libc::TCSADRAIN, old);
+            }
+        }
+    }
+}
+
+/// The type and bytes of the first PNG or JPEG of the latest copy of
+/// images or files, which the service gives with paste-media.
+pub(crate) fn latest_image(g: &Global) -> Result<(String, Vec<u8>)> {
+    let conn = crate::connect(g)?;
+    let mut w = conn.try_clone().context("cannot reach the service")?;
+    control::write(
+        &mut w,
+        &control::Message::new(control::Header { op: "paste-media".into(), ..Default::default() }, Vec::new()),
+    )?;
+    let mut r = control::Reader::new(conn);
+    let mut next = || -> Result<control::Message> {
+        let m = r.read()?.ok_or_else(|| Error::msg("the service closed the connection"))?;
+        crate::check(m)
+    };
+    next()?;
+    let mut found: Option<(String, Vec<u8>)> = None;
+    loop {
+        let m = next()?;
+        if m.header.done {
+            break;
+        }
+        let p = m.header.part.ok_or_else(|| Error::msg("the copy's parts did not come as said"))?;
+        let take = found.is_none() && (p.kind == "image/png" || p.kind == "image/jpeg");
+        if take && p.size as usize > crate::nextimage::MAX_FILE {
+            return Err(Error::msg("the image is larger than 48 MiB"));
+        }
+        let mut data = Vec::new();
+        let mut left = if p.dir { 0 } else { p.size.max(0) };
+        while left > 0 {
+            let d = next()?;
+            let n = d.payload.len() as i64;
+            if n == 0 || n > left {
+                return Err(Error::msg("the copy's parts did not come as said"));
+            }
+            if take {
+                data.extend_from_slice(&d.payload);
+            }
+            left -= n;
+        }
+        if take {
+            found = Some((p.kind, data));
+        }
+    }
+    found.ok_or_else(|| Error::msg("the latest copy has no PNG or JPEG image"))
 }
 
 /// The frame of a text for the Next.
@@ -325,6 +678,39 @@ impl Drop for RawTerminal {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A tape block: 3223 pilot halves, the sync, then flag, data and XOR,
+    /// two equal halves a bit; its sound keeps to 44.1 kHz without drift.
+    #[test]
+    fn tape_blocks_as_the_rom_saves_them() {
+        let h = tape_block(7, &[0x80, 0x01]);
+        assert_eq!(h.len(), 3223 + 2 + 4 * 16);
+        assert!(h[..3223].iter().all(|&t| t == 2168));
+        assert_eq!(&h[3223..3225], &[667, 735]);
+        let bits: Vec<u8> = h[3225..]
+            .chunks(2)
+            .map(|p| {
+                assert_eq!(p[0], p[1]);
+                (p[0] == 1710) as u8
+            })
+            .collect();
+        let bytes: Vec<u8> = bits.chunks(8).map(|b| b.iter().fold(0, |a, &x| a << 1 | x)).collect();
+        assert_eq!(bytes, [7, 0x80, 0x01, 7 ^ 0x80 ^ 0x01]);
+        let mut out = Vec::new();
+        let mut s = TapeSound { high: false, t: 0 };
+        s.add(&vec![3500; 1000], &mut out); // a second in all
+        assert!((44_099..=44_100).contains(&(out.len() / 4)), "{}", out.len() / 4);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn speed_bytes_are_fixed() {
+        // xorshift32 from 1: every byte value turns up, as a test of a
+        // line should.
+        assert_eq!(speed_bytes(4), [0x21, 0x01, 0xC5, 0x4F]);
+        let b = speed_bytes(81920);
+        assert!((0..=255u8).all(|v| b.contains(&v)));
+    }
 
     #[test]
     fn crc32_check_value() {

@@ -47,6 +47,7 @@ mod logfile;
 mod mute;
 pub mod networks;
 mod next;
+mod nextimage;
 #[cfg(unix)]
 mod nextlink;
 pub mod node;
@@ -667,7 +668,7 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
 
 /// Connects to the service's control socket, which only the members of the
 /// cbb group may use.
-fn connect(g: &Global) -> Result<UnixStream> {
+pub(crate) fn connect(g: &Global) -> Result<UnixStream> {
     match UnixStream::connect(&g.socket) {
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             Err(Error::msg("no permission to use the CBB service; add your user to the cbb group and log in again"))
@@ -712,7 +713,7 @@ pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Messa
     check(answer)
 }
 
-fn check(m: control::Message) -> Result<control::Message> {
+pub(crate) fn check(m: control::Message) -> Result<control::Message> {
     if m.header.error.is_empty() {
         return Ok(m);
     }

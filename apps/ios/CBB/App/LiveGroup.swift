@@ -49,8 +49,10 @@ final class LiveGroup: GroupController {
     /// takes, as for cbb pair (docs/protocol.md, section 6).
     static let joinWindow: TimeInterval = 300
     /// How long admitting a device may take once its connection is up:
-    /// a computer that stops answering mid-pairing fails then.
-    static let pairingDeadline: Duration = .seconds(30)
+    /// a computer that stops answering mid-pairing fails then. Two minutes,
+    /// as a slow member takes its time: a ZX Next gets the group's records
+    /// through its ESP at about 2K a second, and confirms only after them.
+    static let pairingDeadline: Duration = .seconds(120)
     /// How long a device that does not take the connection yet is dialed
     /// again, every dialPause: one scanned the moment it shows its QR code
     /// may not listen yet (the ZX Next's network starts a moment later).
