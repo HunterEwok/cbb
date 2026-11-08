@@ -3,13 +3,13 @@
 
 //go:build !windows
 
-package main
+package agent
 
 import (
 	"github.com/HunterEwok/cbb/internal/connector"
 	"github.com/HunterEwok/cbb/internal/pasteboard"
 )
 
-// agentTarget is the agent's remote paste target: none on the Mac, where
+// target is the agent's remote paste target: none on the Mac, where
 // the Mac app, which holds the Accessibility permission, is the target.
-func agentTarget(*pasteboard.Watch) connector.Target { return nil }
+func target(*pasteboard.Watch) connector.Target { return nil }

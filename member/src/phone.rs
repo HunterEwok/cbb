@@ -112,7 +112,7 @@ pub struct Member {
     tunnels: Arc<RwLock<Option<OnTunnel>>>,
     away: Arc<Away>,
     /// The admins given a new admin CA, by device, with the root it is from.
-    admin_cas: Mutex<HashMap<String, [u8; 32]>>,
+    admin_cas: Mutex<std::collections::BTreeMap<String, [u8; 32]>>,
 }
 
 /// What a member port a phone opens is for.
@@ -160,9 +160,14 @@ impl Member {
         ));
         let tag = ident.tag();
         let away = Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()));
-        let device =
-            DeviceInfo { form: "phone".into(), os_version: cfg.os_version, version: cfg.version, mac: String::new() }
-                .cleaned();
+        let device = DeviceInfo {
+            form: "phone".into(),
+            os_version: cfg.os_version,
+            version: cfg.version,
+            mac: String::new(),
+            archive: String::new(),
+        }
+        .cleaned();
         if let Err(e) = mute::load(&cfg.state_dir, &engine) {
             log(&format!("cbb: the mute: {}; not muted", e.for_log()));
         }
@@ -226,7 +231,7 @@ impl Member {
             others,
             tunnels,
             away,
-            admin_cas: Mutex::new(HashMap::new()),
+            admin_cas: Mutex::new(std::collections::BTreeMap::new()),
         })
     }
 

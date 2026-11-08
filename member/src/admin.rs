@@ -13,7 +13,6 @@
 //! The rules and the messages are Go's (internal/service), which stays the
 //! reference.
 
-use std::collections::HashMap;
 use std::io::{Read as _, Write as _};
 use std::net::{SocketAddr, TcpStream};
 use std::path::Path;
@@ -44,7 +43,7 @@ pub struct Signing {
 }
 
 impl Signing {
-    fn hash(&self) -> Hash {
+    pub fn hash(&self) -> Hash {
         Hash(self.ca.key_hash())
     }
 }
@@ -285,6 +284,10 @@ pub fn become_admin(dir: &Path, node: &Node, der: &[u8]) -> Result<()> {
 /// (cbb_core::takeover::finish). A claim that was cancelled or became void is dropped.
 /// It returns whether this device became the root.
 pub fn finish_takeover(dir: &Path, node: &Node, name: &str) -> Result<bool> {
+    // The claim's check and cbb takeover may finish at once; one does, and
+    // the other then finds no claim.
+    static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
     let f = admin_file(dir)?;
     let (Some(claim), Some(claim_key)) = (f.claim.as_deref(), f.claim_key.as_deref()) else { return Ok(false) };
     let claim_cert = Cert::parse(claim)?;
@@ -321,13 +324,20 @@ pub fn finish_takeover(dir: &Path, node: &Node, name: &str) -> Result<bool> {
     Ok(false)
 }
 
+/// The root each admin got its admin CA from, by device: from cbb admin
+/// (make_admin) or renew_admin_cas, so neither gives a second one. One
+/// service runs in a process.
+static ADMIN_CAS_SENT: Mutex<std::collections::BTreeMap<String, [u8; 32]>> =
+    Mutex::new(std::collections::BTreeMap::new());
+
 /// On the group's root, gives each connected admin computer whose admin
 /// CA is from an earlier root, as after a takeover, a new admin CA for the
 /// same key from this root, as Go's renewAdminCAs: the records name the
 /// key, so they stay, and a takeover by that admin later hangs under this
 /// root. The key comes from the admin CA in its chain, or from its hello.
-/// sent remembers, by device, the root each got one from.
-pub fn renew_admin_cas(dir: &Path, node: &Node, sent: &Mutex<HashMap<String, [u8; 32]>>) {
+/// ADMIN_CAS_SENT remembers, by device, the root each got one from.
+pub fn renew_admin_cas(dir: &Path, node: &Node) {
+    let sent = &ADMIN_CAS_SENT;
     let ident = node.identity();
     let Ok(Some(s)) = signer(dir, &ident) else { return };
     if !s.root {
@@ -376,6 +386,12 @@ pub fn find_device(node: &Node, target: &str) -> Result<Device> {
 
 const NOT_ADMIN: &str =
     "only an admin can change the devices list: the group's root, an admin it made (cbb admin), or an admin phone";
+const NOT_COMMANDER: &str = "only an admin pastes on another device, runs its actions or turns either off: the group's root, an admin it made (cbb admin), or an admin phone";
+/// How long a command takes to reach its device and come back, besides
+/// the work it orders, as Go's commandOn.
+const COMMAND_SLACK: Duration = Duration::from_secs(5);
+/// How long a quick action may take on its device, as Go's actionWait.
+pub const ACTION_WAIT: Duration = Duration::from_secs(20);
 const FROZEN: &str = "another admin froze this computer's admin key: it changes nothing until the group's root or an admin phone unfreezes it";
 
 /// A computer admin's powers: those of Go's computerAdminPowers.
@@ -446,22 +462,37 @@ impl Admin<'_> {
         Ok(r)
     }
 
+    /// Signs body as the next record of s, as sign does: for records signed
+    /// again (signed.rs).
+    pub fn sign_body(&self, s: &Signing, b: Body) -> Result<Record> {
+        self.sign(s, b)
+    }
+
     /// Removes the device target names from the group, as Go's revoke:
     /// every key it had goes, its admin key among them. It returns its name.
     pub fn revoke(&self, target: &str) -> Result<String> {
         let d = find_device(self.node, target)?;
         let s = self.signing()?;
         let root = self.root_device();
+        // The root an admin took the group over from removes that admin,
+        // which undoes the takeover (docs/protocol.md, section 10).
+        let undo = {
+            let ident = self.node.identity();
+            let own: Vec<cbb_core::certs::Cert> =
+                std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
+            self.node.records().lock().unwrap().taken_over(&own).filter(|(dev, _)| *dev == d.id)
+        };
+        let undoing = undo.is_some();
         if d.id == self.me() {
             return Err(Error::msg("a device cannot remove itself; run cbb remove on another member"));
         }
-        if d.id == root && d.role == "phone" {
+        if d.id == root && !undoing && d.role == "phone" {
             return Err(Error::msg(format!(
                 "{} holds the group's root; remove it on another admin phone, which takes the group over",
                 d.name
             )));
         }
-        if d.id == root {
+        if d.id == root && !undoing {
             return Err(Error::msg(format!(
                 "{0} holds the group's root; run cbb takeover {0} on an admin, which takes the group over and removes it",
                 d.name
@@ -475,6 +506,7 @@ impl Admin<'_> {
         }
         let mut keys: Vec<Hash> = d.keys.iter().copied().map(Hash).collect();
         keys.extend(d.admin_key.map(Hash));
+        keys.extend(undo.map(|(_, ca)| Hash(ca)));
         if keys.is_empty() {
             return Err(Error::msg(format!("the key of {} is unknown", d.id)));
         }
@@ -527,6 +559,53 @@ impl Admin<'_> {
         )?;
         self.node.logf(&format!("cbb: renamed {} ({}) to {name}", d.name, d.id));
         Ok(d.name)
+    }
+
+    /// Records what a peer's hello says about its device, as Go's
+    /// ensureListed on the group's root: a computer whose record names no
+    /// system or another one, or that its record has in a file while its
+    /// hello says hardware, and a computer or lite member whose hello says
+    /// it is a rootless install (D-79), which is then no admin. Nothing is
+    /// signed when the record already says it, or on a member that is not
+    /// the root.
+    pub fn list_from_hello(&self, peer: &crate::node::Peer) -> Result<()> {
+        let Some(d) = self.node.devices().into_iter().find(|d| d.id == peer.id.as_str()) else {
+            return Ok(());
+        };
+        let new_os = !peer.os.is_empty() && d.os != peer.os;
+        let rootless = peer.key_store == "rootless" && d.store != "rootless";
+        let new_store = d.store == "file" && peer.key_store == "hardware" || rootless;
+        let changed = d.role == "full" && (new_os || new_store) || d.role == "lite" && rootless;
+        if !changed || self.root_device() != self.me() {
+            return Ok(());
+        }
+        let s = self.signing()?;
+        if !s.root {
+            return Ok(());
+        }
+        let mut b = Body {
+            kind: authority::TYPE_DEVICE.into(),
+            device: d.id.clone(),
+            name: d.name.clone(),
+            role: d.role.clone(),
+            os: if new_os { peer.os.clone() } else { d.os.clone() },
+            key: Some(Hash(d.key)),
+            admin: d.admin_key.map(Hash),
+            powers: d.powers.clone(),
+            commands: d.commands.clone(),
+            store: if new_store { peer.key_store.clone() } else { d.store.clone() },
+            hardware: d.kind.clone(),
+            proof: d.proof.clone(),
+            seal: d.seal.clone(),
+            forward_only: d.forward_only,
+            ..Default::default()
+        };
+        if rootless {
+            (b.admin, b.hardware, b.proof, b.powers, b.commands) =
+                (None, String::new(), String::new(), Vec::new(), Vec::new());
+        }
+        self.sign(&s, b)?;
+        Ok(())
     }
 
     /// Freezes (on) or unfreezes the admin computer target names, as Go's
@@ -614,11 +693,14 @@ impl Admin<'_> {
     /// its name.
     pub fn make_admin(&self, target: &str, allow_file_key: bool) -> Result<String> {
         let d = find_device(self.node, target)?;
-        let s = self.signing()?;
-        if !s.root {
-            return Err(Error::msg(
+        let root_only = || {
+            Error::msg(
                 "only the group's root makes admins: run cbb admin on the computer that created the group, or use \"Make it an admin\" on the root phone",
-            ));
+            )
+        };
+        let s = self.signing().map_err(|_| root_only())?;
+        if !s.root {
+            return Err(root_only());
         }
         if d.id == self.me() {
             return Err(Error::msg("this device is the group's root, which is more than an admin"));
@@ -669,7 +751,19 @@ impl Admin<'_> {
             identity::sign_external(&*s.key, tbs)
         })?;
         let admin = Hash(Cert::parse(&ca)?.key_hash());
-        self.sign(
+        // Its connection still shows no admin CA, and its hello the admin
+        // key: renew_admin_cas, which may run as soon as the record below is
+        // in the set, must not give it a second one, as in Go. Noted before
+        // signing, and undone if it never gets this one.
+        let before = ADMIN_CAS_SENT.lock().unwrap().insert(d.id.clone(), s.ca.key_hash());
+        let undo = || {
+            let mut sent = ADMIN_CAS_SENT.lock().unwrap();
+            match before {
+                Some(b) => sent.insert(d.id.clone(), b),
+                None => sent.remove(&d.id),
+            };
+        };
+        let signed = self.sign(
             &s,
             Body {
                 kind: authority::TYPE_DEVICE.into(),
@@ -685,8 +779,13 @@ impl Admin<'_> {
                 seal: d.seal.clone(),
                 ..Default::default()
             },
-        )?;
+        );
+        if let Err(e) = signed {
+            undo();
+            return Err(e);
+        }
         if !self.node.send_to(&peer.id, cbb_core::wire::admin(&ca)) {
+            undo();
             return Err(Error::msg(format!(
                 "{} left before it got its admin CA; it is listed as an admin, so run cbb admin again when it is back",
                 d.name
@@ -709,18 +808,12 @@ impl Admin<'_> {
         if !authority::KEY_LEVELS.contains(&level) {
             return Err(Error::msg("the key level is proven, hardware or files"));
         }
-        let s = self.signing()?;
+        let root_only = || Error::msg("only the group's root sets the key level");
+        let s = self.signing().map_err(|_| root_only())?;
         if !s.root {
-            return Err(Error::msg("only the group's root sets the key level"));
+            return Err(root_only());
         }
-        let ident = self.node.identity();
-        let own = if ident.external.is_some() {
-            "hardware"
-        } else if crate::rootless::is() {
-            "rootless"
-        } else {
-            "file"
-        };
+        let own = own_store(&self.node.identity());
         level_allows(level, own, "this device, the group's root,", "", true)?;
         let delay = self.current_delay(&s.hash());
         self.sign(
@@ -832,7 +925,10 @@ impl Admin<'_> {
         let order = if on { cbb_core::manage::Order::Mute(for_ms) } else { cbb_core::manage::Order::Unmute };
         let r =
             cbb_core::manage::order(&self.node.records().lock().unwrap(), &signer, &d.id, &order, uptime::wall_ms())?;
-        let res = self.node.command(&r, Duration::from_secs(5)).map_err(|e| e.context(d.name.clone()))?;
+        let res = self.node.command(&r, Duration::from_secs(5)).map_err(|e| {
+            let m = format!("{}: {}", d.name, e.message());
+            e.context(m)
+        })?;
         if res.status != "done" {
             return Err(Error::msg(format!("{} {} it: {}", d.name, res.status, res.reason)));
         }
@@ -869,18 +965,72 @@ impl Admin<'_> {
 
     /// Turns sync on or off on the device target names with a mode command
     /// (Go's `cbb sync -on DEVICE`); this device's own sync is the
-    /// service's, without -on.
-    pub fn sync_on(&self, target: &str, on: bool) -> Result<String> {
+    /// service's, without -on: None when target names this device, as Go's
+    /// setSyncOn turns its own sync then.
+    pub fn sync_on(&self, target: &str, on: bool) -> Result<Option<String>> {
         let d = find_device(self.node, target)?;
         if d.id == self.me() {
-            return Err(Error::msg("-on names this device; cbb sync on or off without -on turns it here"));
+            return Ok(None);
         }
         self.order_command(
             &d,
             cbb_core::manage::Order::Sync(on),
             "only an admin turns another device's sync on or off: the group's root, an admin it made (cbb admin), or an admin phone",
         )?;
-        Ok(d.name)
+        Ok(Some(d.name))
+    }
+
+    /// Has the device target names put text where its focus is, as Go's
+    /// sendPaste: mode `paste` or `type`, kind `text` or `secret`; wait is
+    /// how long its paste target may take.
+    pub fn paste_on(&self, target: &str, o: cbb_core::manage::Order, wait: Duration) -> Result<()> {
+        let d = find_device(self.node, target)?;
+        if d.id == self.me() {
+            return Err(Error::msg("remote paste is for another device; this one is where you type"));
+        }
+        self.order_command_for(&d, o, NOT_COMMANDER, COMMAND_SLACK + wait).map(|_| ())
+    }
+
+    /// Has the device target names run its quick action name, as Go's
+    /// runActionOn.
+    pub fn action_on(&self, target: &str, name: &str) -> Result<()> {
+        if !cbb_core::command::valid_action_name(name) {
+            return Err(Error::msg(format!("{name:?} is not an action's name")));
+        }
+        let d = find_device(self.node, target)?;
+        if d.id == self.me() {
+            return Err(Error::msg("an action runs on another device; here, do it yourself"));
+        }
+        let o = cbb_core::manage::Order::Action(name.into());
+        self.order_command_for(&d, o, NOT_COMMANDER, COMMAND_SLACK + ACTION_WAIT).map(|_| ())
+    }
+
+    /// Turns remote paste (paste true) or every quick action off on the
+    /// device target names, or with all on every device of the group, as
+    /// Go's setReceive and actionsOffOn. off_here turns it off on this
+    /// device, where the target is this one.
+    pub fn off_on(&self, target: &str, all: bool, paste: bool, off_here: &dyn Fn() -> Result<()>) -> Result<()> {
+        let me = self.me();
+        let targets: Vec<Device> = if all {
+            self.node.devices().into_iter().filter(|d| d.id != me).collect()
+        } else {
+            vec![find_device(self.node, target)?]
+        };
+        if all || targets.iter().any(|d| d.id == me) {
+            off_here()?;
+        }
+        let o = || if paste { cbb_core::manage::Order::PasteOff } else { cbb_core::manage::Order::ActionsOff };
+        let failed: Vec<String> = targets
+            .iter()
+            .filter(|d| d.id != me)
+            .filter_map(|d| self.order_command_for(d, o(), NOT_COMMANDER, COMMAND_SLACK).err())
+            .map(|e| e.message().to_string())
+            .collect();
+        if !failed.is_empty() {
+            let what = if paste { "remote paste" } else { "the quick actions" };
+            return Err(Error::msg(format!("{what} may still be on: {}", failed.join("; "))));
+        }
+        Ok(())
     }
 
     /// Signs the device d a record with forward_only unless its newest has
@@ -981,6 +1131,17 @@ impl Admin<'_> {
         o: cbb_core::manage::Order,
         not_admin: &str,
     ) -> Result<crate::wire::CommandResult> {
+        self.order_command_for(d, o, not_admin, Duration::from_secs(20))
+    }
+
+    /// order_command, waiting up to wait for the result.
+    fn order_command_for(
+        &self,
+        d: &Device,
+        o: cbb_core::manage::Order,
+        not_admin: &str,
+        wait: Duration,
+    ) -> Result<crate::wire::CommandResult> {
         let s = self.signing().map_err(|_| Error::msg(not_admin))?;
         if !s.root && self.node.records().lock().unwrap().frozen(&s.ca.key_hash()) {
             return Err(Error::msg(FROZEN));
@@ -988,10 +1149,7 @@ impl Admin<'_> {
         let me = self.me();
         let signer = cbb_core::manage::Signer { ca: &s.ca, key: &*s.key, me: &me };
         let r = cbb_core::manage::order(&self.node.records().lock().unwrap(), &signer, &d.id, &o, uptime::wall_ms())?;
-        let res = self
-            .node
-            .command(&r, Duration::from_secs(20))
-            .map_err(|e| Error::msg(format!("{}: {}", d.name, e.message())))?;
+        let res = self.node.command(&r, wait).map_err(|e| Error::msg(format!("{}: {}", d.name, e.message())))?;
         if res.status != "done" {
             return Err(Error::msg(format!("{} {} it: {}", d.name, res.status, res.reason)));
         }
@@ -1052,6 +1210,11 @@ impl Admin<'_> {
             ));
         }
         self.claim_with(s, How::From(&d.id), &format!("from its root {} ({})", d.name, d.id))?;
+        // With no wait the claim takes effect at once, as on Go's service.
+        self.node.settle();
+        if let Err(e) = finish_takeover(self.dir, self.node, self.node.name()) {
+            self.node.logf(&format!("cbb: taking the group over: {}", e.for_log()));
+        }
         Ok(d.name)
     }
 
@@ -1285,9 +1448,13 @@ impl Admin<'_> {
                     }
                     return Ok(name);
                 }
+                admit::Outcome::Confirm(_) => return Err(Error::msg("a QR code's pairing asks no admin")),
                 admit::Outcome::Failed { error, wrong_code } => {
                     return Err(if wrong_code {
-                        Error::with("the pairing failed", cbb_core::pair::Refusal::WrongCode)
+                        Error::with(
+                            format!("pair: {}", cbb_core::pair::Refusal::WrongCode),
+                            cbb_core::pair::Refusal::WrongCode,
+                        )
                     } else {
                         error
                     });
@@ -1367,6 +1534,17 @@ fn level_allows(level: &str, store: &str, name: &str, hint: &str, consent: bool)
         _ => return Ok(()),
     };
     Err(Error::msg(msg))
+}
+
+/// Where this device keeps its member key: hardware, rootless or file.
+pub(crate) fn own_store(ident: &crate::identity::Identity) -> &'static str {
+    if ident.external.is_some() {
+        "hardware"
+    } else if crate::rootless::is() {
+        "rootless"
+    } else {
+        "file"
+    }
 }
 
 #[cfg(test)]

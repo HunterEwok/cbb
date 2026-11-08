@@ -40,15 +40,39 @@ pub struct Store {
     /// How far the peers read each blob, by its SHA-256: a phone's share
     /// stays until a computer fetched what it shared.
     served: Mutex<HashMap<Vec<u8>, u64>>,
+    /// The largest blob served through the group's tunnel: a hub's limit
+    /// away from home caps its whole star, as Go's serves.
+    away: Mutex<u64>,
 }
 
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+/// Empties the blobs' folder in state_dir, as a service does when it starts.
+pub fn empty(state_dir: &Path, log: &dyn Fn(&str)) {
+    match fs::remove_dir_all(state_dir.join("content")) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            log(&format!("cbb: emptying the cache of the copies' images and files: {e}"))
+        }
+        _ => {}
+    }
+}
+
 impl Store {
     pub fn open(state_dir: &Path) -> Store {
-        Store { dir: state_dir.join("content"), served: Mutex::new(HashMap::new()) }
+        Store { dir: state_dir.join("content"), served: Mutex::new(HashMap::new()), away: Mutex::new(u64::MAX) }
+    }
+
+    /// Sets the largest blob served through the group's tunnel.
+    pub fn set_away_limit(&self, n: u64) {
+        *self.away.lock().unwrap() = n;
+    }
+
+    /// Whether the blob sum is served to a peer through the group's tunnel:
+    /// only one held within the limit away from home.
+    pub fn serves_away(&self, sum: &[u8]) -> bool {
+        self.held(sum).is_some_and(|n| n <= *self.away.lock().unwrap())
     }
 
     fn path(&self, sum: &[u8]) -> PathBuf {
@@ -294,7 +318,7 @@ fn manifest_size(m: &Manifest, path: &str, kind: &str) -> u64 {
 }
 
 /// A file's size and SHA-256.
-fn file_sum(path: &Path) -> Result<(u64, [u8; 32])> {
+pub fn file_sum(path: &Path) -> Result<(u64, [u8; 32])> {
     let mut f = File::open(path).context(format!("read {}", path.display()))?;
     let mut h = Sha256::new();
     let mut buf = vec![0u8; 1 << 16];

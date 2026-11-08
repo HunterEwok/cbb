@@ -102,6 +102,7 @@ fn run(
         to_joiner = step.send;
         match step.outcome {
             Outcome::Admitted(a) => admitted = Some(*a),
+            Outcome::Confirm(_) => panic!("a code's window asks no admin"),
             Outcome::Done { confirmed: c } => {
                 confirmed = c;
                 break;
@@ -213,18 +214,18 @@ fn refusals() {
     // A wrong code: the joiner learns nothing, and the member hears why.
     let (admitter, rs) = root_group();
     let joiner = Joiner::new("router").unwrap();
-    let mut joining = Attempt::listening(&joiner, "111111", &clock()).unwrap();
+    let (code, wrong) = two_codes();
+    let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
     let mut adm =
-        Admission::dial(admitter.clone(), GroupView::of(&rs), "222222", &joiner.fingerprint(), &clock()).unwrap();
+        Admission::dial(admitter.clone(), GroupView::of(&rs), &wrong, &joiner.fingerprint(), &clock()).unwrap();
     let (admitted, joined, member_err, joiner_err, _) = run(&mut adm, &mut joining);
     assert!(admitted.is_none() && joined.is_none() && joiner_err.is_some());
     assert!(text(member_err).contains(Refusal::WrongCode.message()));
 
     // Another device than the QR code's.
-    let mut joining = Attempt::listening(&joiner, "111111", &clock()).unwrap();
+    let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
     let other = Joiner::new("other").unwrap();
-    let mut adm =
-        Admission::dial(admitter.clone(), GroupView::of(&rs), "111111", &other.fingerprint(), &clock()).unwrap();
+    let mut adm = Admission::dial(admitter.clone(), GroupView::of(&rs), &code, &other.fingerprint(), &clock()).unwrap();
     let (admitted, _, member_err, _, _) = run(&mut adm, &mut joining);
     assert!(admitted.is_none());
     assert!(text(member_err).contains("not the one in the QR code"));
@@ -232,8 +233,8 @@ fn refusals() {
     // A device ID in the group already.
     let mut view = GroupView::of(&rs);
     view.devices.insert(joiner.id.to_string());
-    let mut joining = Attempt::listening(&joiner, "111111", &clock()).unwrap();
-    let mut adm = Admission::dial(admitter.clone(), view, "111111", &joiner.fingerprint(), &clock()).unwrap();
+    let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
+    let mut adm = Admission::dial(admitter.clone(), view, &code, &joiner.fingerprint(), &clock()).unwrap();
     let (admitted, _, member_err, joiner_err, _) = run(&mut adm, &mut joining);
     assert!(admitted.is_none());
     assert!(text(member_err).contains(Refusal::Taken.message()));
@@ -241,8 +242,8 @@ fn refusals() {
 
     // A phone that asks to be an admin in a window that makes none.
     let phone = Joiner::with_key("phone", "aurora", soft()).unwrap().offering_admin_key(soft()).unwrap();
-    let mut joining = Attempt::listening(&phone, "111111", &clock()).unwrap();
-    let mut adm = Admission::dial(admitter, GroupView::of(&rs), "111111", &phone.fingerprint(), &clock()).unwrap();
+    let mut joining = Attempt::listening(&phone, &code, &clock()).unwrap();
+    let mut adm = Admission::dial(admitter, GroupView::of(&rs), &code, &phone.fingerprint(), &clock()).unwrap();
     let (admitted, joined, member_err, _, _) = run(&mut adm, &mut joining);
     assert!(admitted.is_none() && joined.is_none());
     assert!(text(member_err).contains("add it as an admin"));
@@ -329,6 +330,20 @@ fn dial_window(
     joiner: &Joiner,
     code: &str,
 ) -> (Option<Admitted>, Result<Identity>, Option<Error>, bool) {
+    let (a, j, e, started, _) = dial_with(adm, joiner, code.as_bytes(), None);
+    (a, j, e, started)
+}
+
+/// dial_window with a remote invitation's secret in place of a code when
+/// answer is set: the admin's answer to the confirmation it is asked,
+/// which the last value returns.
+fn dial_with(
+    adm: &mut Admission,
+    joiner: &Joiner,
+    password: &[u8],
+    answer: Option<bool>,
+) -> (Option<Admitted>, Result<Identity>, Option<Error>, bool, Option<Request>) {
+    let mut asked = None;
     let (cfg, exporter) = tls::pair_client(&joiner.cert, &joiner.key, &clock()).unwrap();
     let mut client = Session::client(Arc::new(cfg), tls::server_name(None)).unwrap();
     let (mut admitted, mut member_err) = (None, None);
@@ -338,10 +353,18 @@ fn dial_window(
     let mut frames = 0;
     let mut to_member = client.take_outgoing();
     for _ in 0..32 {
-        let step = adm.feed(&to_member, now_ms());
+        let mut step = adm.feed(&to_member, now_ms());
+        if let Outcome::Confirm(r) = &step.outcome {
+            asked = Some(r.clone());
+            if !step.send.is_empty() {
+                client.feed(&step.send).unwrap();
+            }
+            step = adm.answer(answer.expect("a window with a code asks no admin"), now_ms());
+        }
         match step.outcome {
             Outcome::Admitted(a) => admitted = Some(*a),
             Outcome::Failed { error, .. } => member_err = Some(error),
+            Outcome::Confirm(_) => panic!("asked twice"),
             Outcome::Done { .. } | Outcome::Pending => {}
         }
         if !step.send.is_empty() {
@@ -351,7 +374,10 @@ fn dial_window(
             let mut sid = [0u8; 32];
             exporter.export(EXPORTER_LABEL, &[], &mut sid).unwrap();
             let member_der = client.peer_certificates().unwrap()[0].to_vec();
-            let (e, first) = joiner.start(code, &member_der, &sid, false).unwrap();
+            let (e, first) = match answer {
+                Some(_) => joiner.start_secret(password, &member_der, &sid).unwrap(),
+                None => joiner.start(core::str::from_utf8(password).unwrap(), &member_der, &sid, false).unwrap(),
+            };
             client.write(&first).unwrap();
             ex = Some(e);
         }
@@ -388,7 +414,7 @@ fn dial_window(
         }
     }
     let joined = joined.unwrap_or_else(|| Err(Error::msg("the joiner did not finish")));
-    (admitted, joined, member_err, adm.started())
+    (admitted, joined, member_err, adm.started(), asked)
 }
 
 fn window(admitter: &Admitter, rs: &Records, code: &str) -> Admission {
@@ -416,9 +442,78 @@ fn a_joiner_dials_the_window() {
     // A wrong code: the joiner did not get the member's tag, and the
     // attempt counts.
     let other = Joiner::new("other").unwrap();
-    let mut adm = window(&admitter, &rs, "111111");
-    let (admitted, joined, member_err, started) = dial_window(&mut adm, &other, "222222");
+    let (code, wrong) = two_codes();
+    let mut adm = window(&admitter, &rs, &code);
+    let (admitted, joined, member_err, started) = dial_window(&mut adm, &other, &wrong);
     assert!(admitted.is_none() && started);
     assert!(text(member_err).contains(Refusal::WrongCode.message()));
     assert!(text(joined.err()).contains(Refusal::WrongCode.message()));
+}
+
+/// Two different pairing codes, drawn at run time rather than written as
+/// literals, which CodeQL would take for hard-coded passwords.
+fn two_codes() -> (String, String) {
+    let code = pair::new_code();
+    let wrong = loop {
+        let c = pair::new_code();
+        if c != code {
+            break c;
+        }
+    };
+    (code, wrong)
+}
+
+/// A random invitation secret, as the hub makes one.
+fn random_secret() -> [u8; pair::MIN_SECRET] {
+    // Each byte from the system's randomness, with no constant mixed in,
+    // which CodeQL would take for a hard-coded secret.
+    core::array::from_fn(|_| getrandom::u32().unwrap().to_le_bytes()[0])
+}
+
+/// A remote invitation's window, as Go's TestInvitation: the joiner proves
+/// the secret, the admin is asked about it with its fingerprint, and only
+/// a yes admits it; a no tells the joiner that the admin declined.
+#[test]
+fn an_invitation_asks_the_admin() {
+    let (admitter, rs) = root_group();
+    let secret = random_secret();
+    let secret_window = |rs: &Records| {
+        let (cfg, exporter) =
+            tls::member_or_pair_server(&admitter.identity, Arc::new(|_: &[Cert]| None), &clock()).unwrap();
+        let session = Session::server(Arc::new(cfg)).unwrap();
+        Admission::accept_secret(admitter.clone(), GroupView::of(rs), &secret, session, exporter).unwrap()
+    };
+    let joiner = Joiner::new("laptop").unwrap();
+    let mut adm = secret_window(&rs);
+    let (admitted, joined, member_err, _, asked) = dial_with(&mut adm, &joiner, &secret, Some(true));
+    assert!(member_err.is_none(), "{member_err:?}");
+    let r = asked.unwrap();
+    assert_eq!((r.device, r.name.as_str(), r.fingerprint), (joiner.id.clone(), "laptop", joiner.fingerprint()));
+    assert_eq!(admitted.unwrap().device, joined.unwrap().id);
+
+    let other = Joiner::new("other").unwrap();
+    let mut adm = secret_window(&rs);
+    let (admitted, joined, member_err, _, asked) = dial_with(&mut adm, &other, &secret, Some(false));
+    assert!(asked.is_some() && admitted.is_none());
+    assert!(text(member_err).contains(Refusal::Declined.message()));
+    assert!(text(joined.err()).contains(Refusal::Declined.message()));
+
+    // A wrong secret asks nobody.
+    let mut adm = secret_window(&rs);
+    let (admitted, _, member_err, _, asked) = dial_with(&mut adm, &other, &random_secret(), Some(true));
+    assert!(asked.is_none() && admitted.is_none());
+    assert!(text(member_err).contains(Refusal::WrongCode.message()));
+    assert!(
+        Admission::accept_secret(
+            admitter.clone(),
+            GroupView::of(&rs),
+            &random_secret()[..8],
+            Session::server(Arc::new(
+                tls::member_or_pair_server(&admitter.identity, Arc::new(|_: &[Cert]| None), &clock()).unwrap().0
+            ))
+            .unwrap(),
+            tls::member_or_pair_server(&admitter.identity, Arc::new(|_: &[Cert]| None), &clock()).unwrap().1,
+        )
+        .is_err()
+    );
 }

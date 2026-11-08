@@ -119,6 +119,10 @@ pub struct Header {
     pub expires: i64,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub address: String,
+    /// In join: wait for a member to dial this device, rather than dial
+    /// the member whose code it was given.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub listen: bool,
     /// In away hub: the UDP port (0 for the member port), the forwarder and
     /// its key, AmneziaWG, VLESS, and to keep the hub's settings where the
     /// message gives none; in away hub-off, to stop the group's only hub.
@@ -128,6 +132,11 @@ pub struct Header {
     pub forwarder: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub forwarder_key: String,
+    /// away relay: the relay's address, with its key's pin or `default`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub relay: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub relay_key: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub obfuscate: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -141,6 +150,38 @@ pub struct Header {
     /// In hubs: the table of main hubs, names or device IDs in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<String>,
+    /// In an inject to a desktop session, the grant its desktop connector
+    /// hands the uinput helper, which asks with keys whether it may press
+    /// the paste's keys.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub keys: String,
+    /// In keyboard on: the keyboard's settings, as Go's control.Keyboard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyboard: Option<serde_json::Value>,
+    /// In a watch: the watcher runs the quick actions in its user's
+    /// session (CBB's agent), which the service hands it with act.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub act: bool,
+    /// In an act: the program and arguments of the user's own action;
+    /// empty for a preset.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub command: Vec<String>,
+    /// The text of a remote invitation: made by invite, used by join.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub invite: String,
+    /// In invite: a device to confirm, before it is admitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joining: Option<Joining>,
+}
+
+/// A device that used a remote invitation, for the admin to confirm, as
+/// Go's control.Joining.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct Joining {
+    pub id: String,
+    pub name: String,
+    pub os: String,
+    pub fingerprint: String,
 }
 
 /// A part of a copy of images or files on the socket, as Go's
@@ -163,6 +204,9 @@ pub struct Part {
 pub struct Media {
     pub max_copy: i64,
     pub max_copy_away: i64,
+    /// Why the last copy's images or files were not fetched, as Go's.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub failed: String,
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -178,6 +222,10 @@ fn is_zero_us(n: &usize) -> bool {
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Status {
     pub device: String,
+    /// The interfaces on networks this device has not met its group on,
+    /// where it does not publish itself (cbb network makes them known).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub quiet: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub group: String,
     pub role: String,
@@ -186,6 +234,10 @@ pub struct Status {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub peers: Vec<Device>,
     pub version: String,
+    /// The device left a group made before 0.6 when it started, and is in
+    /// no group now (Go's LeftOldGroup).
+    #[serde(default, skip_serializing_if = "core::ops::Not::not")]
+    pub left_old_group: bool,
     /// The sync mode: shared (sync on) or own (sync off); empty when in no
     /// group. While sync is off, sync_until_ms is when it turns on again,
     /// in Unix milliseconds, 0 for until cbb sync on.
@@ -205,6 +257,19 @@ pub struct Status {
     /// Remote paste on this device; None when in no group.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paste: Option<Paste>,
+    /// The Bluetooth keyboard, as Go's control.Keyboard, which cbb-helper
+    /// gives; None where it was never turned on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyboard: Option<serde_json::Value>,
+    /// The newest signed release the group passed around, and that
+    /// version again in update when this device runs an older one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub release: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub update: String,
+    /// The TVs this device is the remote of, as Go's control.TV.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tvs: Vec<serde_json::Value>,
     /// This device's quick actions, the presets in their order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub actions: Vec<Action>,
@@ -217,6 +282,12 @@ pub struct Status {
     /// cbb leave.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub removed: bool,
+    /// The records freeze this admin computer's admin key, as Go's.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub frozen: bool,
+    /// The admin that took the group over from this root, as Go's.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub taken_over_by: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media: Option<Media>,
     /// The group's key level: which keys may be its root, an admin or a hub.
@@ -229,6 +300,38 @@ pub struct Status {
     /// How long a copy from another device stays live after it arrives.
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub incoming_ms: i64,
+    /// The claims to take the group over that wait or stop the group.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub claims: Vec<Claim>,
+    /// The conflicts that stop the group until its root decides.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflicts: Vec<Conflict>,
+    /// How many records of a later version this member keeps.
+    #[serde(default, skip_serializing_if = "is_zero_u")]
+    pub newer: usize,
+}
+
+/// A claim to take the group over, as Go's control.Claim: who claims it
+/// (a device's name, or the key hash), pending, competing or disputed, and
+/// how long a pending one still waits.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Claim {
+    pub by: String,
+    pub state: String,
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub left_ms: i64,
+}
+
+/// A conflict of the group's records, as Go's control.Conflict: admins,
+/// claims or two_histories, and the signers' devices.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Conflict {
+    pub kind: String,
+    pub devices: Vec<String>,
+}
+
+fn is_zero_u(n: &usize) -> bool {
+    *n == 0
 }
 
 /// A quick action as the device's user set it, with the names of the Go
@@ -242,7 +345,7 @@ pub struct Action {
     pub by: Vec<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub any_key: bool,
-    /// The program of a user's own action, which only a full member has.
+    /// The program and arguments of a user's own action.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub command: Vec<String>,
 }
@@ -293,6 +396,10 @@ pub struct Away {
     /// On the hub, its forwarder; None without one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub forwarder: Option<Forwarder>,
+    /// On a device that meets the others at a relay, its link to it; None
+    /// without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay: Option<Relay>,
     /// What went wrong last, for the user.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,
@@ -318,6 +425,24 @@ pub struct Forwarder {
     pub detail: String,
 }
 
+/// A device's link to its blind relay, as Go's control.Relay.
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct Relay {
+    #[serde(default)]
+    pub endpoint: String,
+    /// Registered, with its tunnel.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub connected: bool,
+    /// The other devices of the group on the relay.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub online: Vec<String>,
+    /// Why it is not connected, and the underlying error.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub detail: String,
+}
+
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Device {
     pub id: String,
@@ -327,20 +452,59 @@ pub struct Device {
     pub role: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub os: String,
+    /// Where its keys live: file, hardware, proven or rootless; empty when
+    /// the member does not say.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub store: String,
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub skew_ms: i64,
+    /// What its hello says about its device; empty when it says nothing or
+    /// is not connected.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub form: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub os_version: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub version: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub mac: String,
+    /// Its sync mode, as its hello says.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub mode: String,
+    /// An admin muted it, until muted_until_ms (Unix milliseconds; 0 for
+    /// until an admin unmutes it).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub muted: bool,
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub muted_until_ms: i64,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub admin: bool,
     /// It holds the group's root.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub root: bool,
+    /// An admin computer another admin froze.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub frozen: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub online: bool,
+    /// When this member last saw it connected, Unix milliseconds.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub last_seen_ms: i64,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[serde(rename = "self")]
     pub this: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub listed: bool,
+    /// The records let it be a hub.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub may_hub: bool,
+    /// A hub that only passes the copies on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub forward_only: bool,
+    /// One of the group's hubs, as this device knows: itself while it is a
+    /// hub, or a hub whose offer it keeps.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hub: bool,
 }
 
 /// A header and its payload.
@@ -414,6 +578,12 @@ pub fn reply(header: Header, payload: Vec<u8>) -> Message {
     Message::new(Header { op: "reply".into(), done: true, ..header }, payload)
 }
 
+/// An answer to a request that more answers follow: op reply, not done.
+#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+pub fn partial(header: Header) -> Message {
+    Message::new(Header { op: "reply".into(), done: false, ..header }, Vec::new())
+}
+
 /// A failed request.
 pub fn failure(e: &Error) -> Message {
     reply(Header { error: e.message().to_string(), details: e.details(), ..Default::default() }, Vec::new())
@@ -444,14 +614,32 @@ pub fn is_admin(op: &str) -> bool {
             | "write"
             | "inject"
             | "injected"
-            // This device's own pause of receiving (design.md, "Muting a
-            // device"); the lite member mutes no other device.
-            | "mute"
-            | "unmute"
+            | "act"
+            | "acted"
+            // The signed release cbb update fetched, for the group, and the
+            // one held.
+            | "release"
+            | "release-get"
+            | "release-held"
+            | "entries"
+            | "entries-get"
+            // The uinput helper, as root, through the socket's group; the
+            // service checks that it is root.
+            | "keys"
     )
+}
+
+/// Whether the service takes the request h only on its admin socket, as
+/// Go's NeedsAdmin: is_admin of its operation, except turning this device's
+/// own sync on or off, which changes nothing for the group (design.md,
+/// "Sync on or off").
+pub fn needs_admin(h: &Header) -> bool {
+    !(h.op == "sync" && h.device.is_empty()) && is_admin(&h.op)
 }
 
 /// The admin socket next to the control socket at `socket`.
 pub fn admin_socket(socket: &std::path::Path) -> std::path::PathBuf {
-    socket.with_file_name("admin.sock")
+    // On Windows it sits in a folder of its own, whose access list lets
+    // only the service and the administrators in (Go's adminSocketName).
+    if cfg!(windows) { socket.with_file_name("admin").join("admin.sock") } else { socket.with_file_name("admin.sock") }
 }

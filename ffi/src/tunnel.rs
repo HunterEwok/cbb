@@ -735,6 +735,7 @@ fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
             vless_id: req.vless_id,
             records: records.clone(),
             send: r.hub.sender(),
+            credential: None,
             ways: r.ways.clone(),
             learned: r.learned.clone(),
         };

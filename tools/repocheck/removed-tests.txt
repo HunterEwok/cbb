@@ -52,6 +52,10 @@ apps/android/kit/src/test/kotlin/tools/cbb/kit/DiscoveryTest.kt dialFailuresBack
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt aCopyWaits D-86: the button's rule is the Rust member's now (waiting), tested in lite and by TestFFIMember
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt theButton D-86: the button's rule is the Rust member's now (sends), tested in lite and by TestFFIMember
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt theButtonKeepsWhatThePhoneSent D-86: the button's rule is the Rust member's now (sends, took), tested in lite and by TestFFIMember
+internal/service/typelater_test.go TestTypeLater D-88: moved with typing later into internal/peripheral, which cbb-helper serves; same name there
+internal/service/typelater_test.go TestTVPasteStopsWhenNotAllowed D-88: moved with typing later into internal/peripheral, which cbb-helper serves; same name there
+internal/helper/keys_test.go TestCardSign D-88: the Rust service signs with the YubiKey itself (member/src/piv.rs, tests signs and wrong_pin); cbb-helper's card-sign is gone
+cmd/cbb/agent_unix_test.go TestLockAgent D-88: moved with the agent into internal/agent, which cbb-helper serves; same name there
 mobile/cbbtun/cbbtun_test.go TestThroughTunnel D-87: the Go phone tunnel is gone; TestRustPhoneTunnel runs the Rust one against the Go hub
 mobile/cbbtun/cbbtun_test.go TestThroughObfuscatedTunnel D-87: the Go phone tunnel is gone; TestRustPhoneTunnel runs the Rust one with AmneziaWG
 mobile/cbbtun/cbbtun_test.go TestThroughVLESS D-87: the Go phone tunnel is gone; TestRustPhoneTunnel runs the Rust one over VLESS with XHTTP

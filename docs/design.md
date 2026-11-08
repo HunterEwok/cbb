@@ -167,6 +167,14 @@ ends, the Go service described below is still the computers' member.
   which goes to `cbb`'s log. No socket or pipe has a name, so no other process can ask the
   helper for anything, and above all for a signature with a device's key. Started by hand,
   on a terminal or with arguments, the helper refuses to run.
+- **Checked before it starts.** The helper signs with the device's keys, so `cbb` trusts
+  it no less than itself: on Unix the program, its links followed, and its folder belong
+  to root, to `cbb`'s user or to the owner of `cbb`'s own program, and neither group nor
+  others may write to them (`cbb`'s own folder counts as trusted); on Windows the
+  installer's Program Files folder stands for that. The helper gets only the environment
+  it needs: the variables that start with `CBB_` and a short list for Go, PC/SC, D-Bus
+  and Windows. A release of `cbb` takes only the helper of the same release, which its
+  hello names; a build that is not a release takes any.
 - **Messages.** The control socket's: a JSON header on one line, then `len` bytes of
   payload (docs/protocol.md, section 8). A request carries a `seq` of `cbb`'s own; the
   helper answers it with op `reply`, the same `seq` and `done`, or with `error` and, in
@@ -184,11 +192,38 @@ ends, the Go service described below is still the computers' member.
   where the key would go into a file, which `cbb` then makes itself. `identity.json` keeps
   the blob as the Go member's file does (`key_tpm`, `key_se`); `key-public` loads it by the
   blob and `key-sign` signs a SHA-256 digest with it, so `cbb`'s handshakes, copies and
-  records are signed in the hardware and the key never leaves it. `card-sign` signs with a
-  key on a YubiKey, found by its certificate's key hash, after its PIN. `seal` and `unseal`
+  records are signed in the hardware and the key never leaves it. `seal` and `unseal`
   seal a secret with the TPM or the Secure Enclave as Go's `group.Sealer` does: `cbb` keeps
   the key for sealed messages (`seal.json`) and the tunnel's keys (`tunnel.json`, with the
-  hub's fields Go writes) sealed in the same fields as the Go member.
+  hub's fields Go writes) sealed in the same fields as the Go member. On a Mac, which has no
+  TPM, `cbb` does all of this with the Secure Enclave itself (`member/src/sekey.rs`, through
+  Security.framework, the same blobs and the same sealed format as Go's `internal/sekey`,
+  checked against `testdata/interop/go-sekey-seal.json`), so there the helper holds no key.
+  A YubiKey `cbb` reads itself on every system (`member/src/piv.rs`, Go's `internal/piv`
+  translated, through pcscd's socket on Linux, PCSC.framework on a Mac and winscard on
+  Windows): it finds the slot by its certificate's key hash, takes the PIN and signs.
+- **The keyboard and the TVs.** `keyboard`, `remote`, `peripheral-status`,
+  `peripheral-paste`, `peripheral-stop` and `keyboard-layout` run Go's `internal/peripheral`,
+  the code the Go service runs too, with the state folder and the device's name in each
+  request: the helper keeps the Bluetooth keyboard on BlueZ and a TV pairing between requests,
+  and `cbb` asks it only once the keyboard or a TV was set up there (`keyboard`, `tvs.json`).
+  A remote paste goes to the keyboard's host or the TV the user sends pastes to before the
+  watchers; one typed after its answer stops when remote paste goes off, which the helper
+  reads in the same folder, or when `cbb`'s records no longer take its command, when `cbb`
+  sends `peripheral-stop` (`TestLitePeripherals`).
+- **The way over VLESS inside REALITY.** rustls makes no browser's ClientHello, so for a
+  hub that offers REALITY `cbb` asks `vless-dial` with the hub's VLESS settings: the helper
+  runs Go's `internal/vless` client and answers with the way's ID and a local UDP port, to
+  which `cbb`'s tunnel sends its WireGuard packets; `vless-close` with the ID ends the way.
+  The way over XHTTP `cbb` makes itself (`member/src/vless.rs`).
+- **The agent.** `cbb agent`, which the user's session starts, links that session's clipboard
+  with the service: it starts its own `cbb-helper`, with the session's whole environment (its
+  display and D-Bus), and asks it `agent` with the service's socket. The helper runs the Go
+  agent (`internal/agent`: Wayland and X11, the Mac's and Windows' pasteboard, Windows' remote
+  paste target, the session's quick actions), a client of the control socket as the Go `cbb
+  agent` is, and answers when it ends; the end of its input ends it, so it ends with the
+  agent (`TestLiteAgent`). On Windows and a Mac the agent logs to its own file, as the Go
+  agent does.
 - **The clients' operations.** The Rust service already takes what the command line and the
   desktops' agents ask on the control socket: `status`, `devices`, `config` (the largest
   copy, `limits` in its state), `copy` and `paste`, the watchers' `watch`, `clipboard`,
@@ -224,7 +259,7 @@ ends, the Go service described below is still the computers' member.
   each connected admin whose admin CA is from an earlier root a new one for the same key, as
   Go's `renewAdminCAs` (`TestLiteTakeover`). Any
   member claims the group the same way with the recovery key (`recovery`): the sheet's key,
-  or with `yubikey` the card's, which cbb-helper's `card-sign` uses after the PIN, signs the
+  or with `yubikey` the card's, which `cbb` signs with after the PIN (`member/src/piv.rs`), signs the
   claim under the recovery key's admin CA from the records or the sheet (`TestLiteRecovery`).
 - **The hub.** On an admin whose key level allows it, `hub` makes the Rust service the
   group's hub as Go's `cbb global hub` does: the state in `tunnel.json` becomes a hub's
@@ -256,14 +291,56 @@ ends, the Go service described below is still the computers' member.
   pins this release knows) registers while it serves through the phones' `forward.rs`: its
   member certificate with the roots, the group's records as the proof that it is the root or
   an admin, and hellos from its WireGuard port; status shows the registration as Go's
-  `forwarder` (`TestLiteHubForwarder`). An admin signs the `hubs` record of main hubs as Go's
+  `forwarder` (`TestLiteHubForwarder`). With `-vless` it registers the group's VLESS user ID
+  (kept in `tunnel.json`'s forwarder, as Go's), keeps the forwarder's VLESS settings once the
+  registration returns them (`vless_learned`, Go's `vlessLearnedLocked`) and has the members
+  connect again for the offer with them; VLESS brings AmneziaWG (`TestLiteHubVLESS`). An admin signs the `hubs` record of main hubs as Go's
   `setHubs` and sends `away-off` (`manage::Order::AwayOff`) to another device. `hub -on
   DEVICE -forward-only` on an admin that admitted the device signs its record with
   `forward_only` first (`Admin::mark_forward_only`); such a Rust member takes the hub command
   without being an admin once that record is in, seals no copies (`node::FORWARD_ONLY`) and
-  refuses paste and action commands (`TestLiteForwardOnly`). The pins of a newer
-  `keys.json`, the server credentials and the hub's key periods, VLESS, the relay and
-  invitations are still Go's.
+  refuses paste and action commands (`TestLiteForwardOnly`).
+- **The server credentials.** `credentials.rs` keeps the group's credentials as Go's
+  `credentials.go`: the core's `credential::Store` (Go's `group.Credentials`, the same rules
+  of what counts) in `credentials.json`, the keys for the servers in `server-keys.json` (in
+  the TPM or the Secure Enclave through cbb-helper where it can put them there, as Go's
+  `ServerKeys`). Every peer gets them in a `credentials` message after its hello; new ones a
+  peer sends are kept and passed on. When the records or the credentials change, and twice a
+  day, the service brings them up to date as Go's `refreshCredential`: the root starts a
+  period when the one kept is due or a member that sent its server key left; every member
+  signs its server key for the period; the root signs the hubs' and the members'
+  credentials with the period key when their lists are stale, and an admin that the hubs'
+  credential lists signs the members' credential (`credential::sign` and the `*_body`
+  functions, the key behind a callback).
+- **The relay.** `relay` meets the group at a blind relay as Go's `away relay`: with the
+  user's consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
+  the project's, whose pins are the newest `keys.json`'s for `cbb.tools:8765` or the built-in
+  ones). The run loop keeps the phones' link (`relay.rs`) running in place of the hubs
+  (`away/meet.rs`): it registers with the member certificate and the records, or once the
+  members' credential lists the device's server key with the credentials (Go's
+  `relayCredentials`), and registers again when they change. A connection the relay brings
+  to dial is dialed through its loopback port; a call comes to a loopback port of its own,
+  where the node serves it only when the certificate names the device the relay said calls.
+  Status shows the link as Go's `relay` (`TestLiteRelay`, `TestLiteRelayRoot`). When the
+  project's relay fails, the device fetches the newest `keys.json` and `entries.json` through
+  the mirror at the relay's address (at most every ten minutes) and, unless the relay showed
+  a key it does not know, moves to the next address `entries.json` or DNS gives, keeping it in
+  `tunnel.json` (`TestLiteRelayProject`). A Rust hub registers with its forwarder with the
+  period's hubs' credential once it lists the hub's server key (Go's `hubCredentials`),
+  showing the server key's certificate in place of its member certificate and the records,
+  and registers again at once when a newer one comes; it serves its clients with a key of
+  its own for each period, which its offers carry ahead of time (Go's `rotateHubKey`,
+  `TestLiteHubCredential`). A Rust hub makes remote invitations as Go's does
+  (`member/src/away/invite.rs`): a guest key and preshared key in the invitation, a guest
+  peer in the hub, and a pairing window on the invitation's secret whose admin confirms the
+  device (`Joining`, `answer`); the hub's connections from a guest go to a loopback port of
+  their own, where only the window's pairing and then the admitted device's member
+  connection are served, and the guest goes once the hub answered that device's key, two
+  minutes after it was admitted at most (`TestLiteInvite`). The Rust member joins with an
+  invitation (`cbb pair -invite`) through the guest tunnel, turns sync away from home on with
+  the join, and keeps the invitation in `invite-guest` until its service has offered its own
+  key to the hub through the guest tunnel and the hub's offer came, ten minutes at most
+  (`TestLiteJoinInvite`).
 
 ### Linux components
 
@@ -567,7 +644,9 @@ permission to paste.
   with cgo.
 - Targets: `linux/amd64`, `linux/arm64`, `linux/arm` with ARMv7 and ARMv6, `darwin/arm64`,
   `darwin/amd64`, `windows/amd64` and `windows/arm64` (`cbb.exe`, and `cbbw.exe` linked with
-  `-H windowsgui` for the agent). The tray app (`apps/desktop`) goes in the Windows archives
+  `-H windowsgui` for the agent). Every archive but the routers' (`mips`, `mipsle`) carries
+  `cbb-helper`, the Go helper cbb starts as its child, built with the same version, since a
+  release cbb takes only a helper of its own release. The tray app (`apps/desktop`) goes in the Windows archives
   and, built with cgo on a runner of each architecture for GTK 4 and WebKitGTK, in the
   `linux/amd64` and `linux/arm64` archives.
 - The Raspberry Pi Zero W (ARMv6) cannot run Ubuntu; it runs Raspberry Pi OS. Copy Beyond Borders
@@ -709,8 +788,10 @@ sync away from home, the admins, and remote paste.
   comes up there the network is known. `cbb status` names the interfaces where it keeps
   quiet; `sudo cbb network` takes the current networks as known, for a home with a new
   router where every member keeps quiet. A pairing window takes connections on any network
-  while it is open. The lite member publishes itself everywhere: it runs on boards that stay
-  at home.
+  while it is open. The Rust service keeps the same list in the same file
+  (`member/src/networks.rs`, its network IDs checked against Go's), so a computer moving to
+  it keeps its known networks; the lite member on a board, which stays at home, takes the
+  networks it is on as known at its first start in a group. A phone's member keeps no list.
 - **The interface list.** A router or a gateway is on the internet side and the home side
   at once, and its internet side may even carry a private address (double NAT). So the
   service can be limited to some interfaces by name (`CBB_INTERFACES`, which the router's
@@ -2110,8 +2191,10 @@ with a signed command, and the member logs every action it runs and who asked.
 
 #### Where
 
-Linux, Mac and Windows run actions; lite members run the presets reboot and restart the
-service (the ESP32 restarts); the phones send only, since iOS runs nothing for another
+Linux, Mac and Windows run actions, the Rust service as the Go one: the presets of the system
+through logind on Linux, and the user's own and, on a Mac and Windows, every preset through
+CBB's agent in the user's session (the watch with `act`, answered with `acted`); the ESP32
+restarts; the phones send only, since iOS runs nothing for another
 device and Android would need more rights than the app should hold.
 
 #### Steps

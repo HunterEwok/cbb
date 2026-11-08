@@ -139,10 +139,7 @@ fn verdict(v: Option<Verdict>, taken: Option<(String, KeyHash)>) -> Vec<u8> {
     let mut m = Map::new();
     if let (Some(_), Some((dev, admin))) = (&v, taken) {
         m.insert("verdict".into(), Value::from("taken_over"));
-        m.insert(
-            "why".into(),
-            Value::from("the group was taken over from this root; its connection carries records only"),
-        );
+        m.insert("why".into(), Value::from(Verdict::TakenOver.why()));
         m.insert("claimant".into(), claimant(&dev, &admin));
         return json(Value::Object(m));
     }
@@ -157,6 +154,11 @@ fn verdict(v: Option<Verdict>, taken: Option<(String, KeyHash)>) -> Vec<u8> {
         Some(Verdict::Stopped) => {
             m.insert("verdict".into(), Value::from("stopped"));
             m.insert("why".into(), Value::from(Verdict::Stopped.why()));
+        }
+        // Records::refused never says it; taken above gives the claimant.
+        Some(Verdict::TakenOver) => {
+            m.insert("verdict".into(), Value::from("taken_over"));
+            m.insert("why".into(), Value::from(Verdict::TakenOver.why()));
         }
         Some(Verdict::Refused(why)) => {
             m.insert("verdict".into(), Value::from("refused"));

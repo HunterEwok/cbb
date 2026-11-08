@@ -6,7 +6,7 @@
 //! sent, the new root's records and certificate once it took effect, and
 //! the admins' CAs renewed under the new root.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 
 use cbb_core::certs::{self, Cert};
@@ -64,7 +64,7 @@ pub fn become_root(node: &Node, f: &takeover::Finished) -> Result<()> {
 /// same key from this root, as Go's renewAdminCAs. The key comes from the
 /// admin CA in its chain, or from its hello. sent remembers, by device, the
 /// root each got one from. It returns how many it gave.
-pub fn renew_admin_cas(node: &Node, s: &Signer, sent: &Mutex<HashMap<String, [u8; 32]>>) -> usize {
+pub fn renew_admin_cas(node: &Node, s: &Signer, sent: &Mutex<BTreeMap<String, [u8; 32]>>) -> usize {
     let root = s.ca.key_hash();
     let chains: HashMap<String, Vec<Cert>> =
         node.peer_chains().into_iter().map(|(id, c)| (id.to_string(), c)).collect();

@@ -134,12 +134,14 @@ private fun memberTLS(host: String, port: Int, peer: String) {
     val list = kotlinx.serialization.json.Json.parseToJsonElement(field("records").decodeToString()) as kotlinx.serialization.json.JsonArray
     records.addAll(list.map { Member.Record.fromJson(it as kotlinx.serialization.json.JsonObject) }, ca)
     val me = CertificateInfo(cert).commonName ?: fail("no device ID")
-    // The phone's member in the Rust core, as the app runs it, dialing the Go member.
+    // The phone's member in the Rust core, as the app runs it: it takes the
+    // records first and only then the Go member's address, as the Swift tool
+    // does; a dial before the records would carry records only.
     val dir = kotlin.io.path.createTempDirectory("cbb-interop").toFile()
     val changes = LinkedBlockingQueue<CoreMember.Copy>()
     val node = CoreMember.start(
         CoreMember.Start(dir, "Android", "android", device = me, publicKey = key.publicKeyDER, seal = secret, cert = cert, groupCA = ca,
-            roots = listOf(ca), peers = listOf("$host:$port")),
+            roots = listOf(ca)),
         key::signDigest,
     ) { e ->
         when (e) {
@@ -149,6 +151,7 @@ private fun memberTLS(host: String, port: Int, peer: String) {
         }
     }
     node.addRecords(records.records)
+    node.found("go", listOf("$host:$port"), peer)
     val deadline = System.nanoTime() + 15_000_000_000L
     while (node.peers().none { it.device == peer }) {
         if (System.nanoTime() > deadline) fail("no hello within 15 s")
