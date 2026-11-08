@@ -333,9 +333,10 @@ jobs:
         # Pi Zero W.
         env:
           CGO_ENABLED: "0"
-        run: sh .github/build-targets.sh "$RUNNER_TEMP/core-notices" "$RUNNER_TEMP" \
-          linux/amd64 linux/arm64 linux/arm/7 linux/arm/6 linux/mips linux/mipsle \
-          freebsd/amd64/vet freebsd/arm64 windows/amd64/vet windows/arm64
+        run: |
+          sh .github/build-targets.sh "$RUNNER_TEMP/core-notices" "$RUNNER_TEMP" \
+            linux/amd64 linux/arm64 linux/arm/7 linux/arm/6 linux/mips linux/mipsle \
+            freebsd/amd64/vet freebsd/arm64 windows/amd64/vet windows/arm64
       - name: keep the Windows archive for the installer test
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
