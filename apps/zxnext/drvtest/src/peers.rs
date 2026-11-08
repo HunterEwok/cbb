@@ -481,6 +481,8 @@ pub struct Pi {
     pub fast: bool,
     /// Whether the Pi's cbb-state holds an identity: it is in a group.
     pub in_group: bool,
+    /// Whether cbb leave keeps the keys, as one that reads other state.
+    pub leave_keeps: bool,
     /// Whether the Pi's cbb has check-list: an older one has not.
     pub checks_lists: bool,
     baud: u32,
@@ -548,6 +550,7 @@ impl Pi {
             answers: true,
             fast: true,
             in_group: false,
+            leave_keeps: false,
             checks_lists: true,
             baud: 115_200,
             pending_baud: None,
@@ -604,7 +607,7 @@ impl Pi {
         if cmd.contains("sha256sum /NextPi/nextpi/cbb.bin") {
             let s = self.cbb_sha.clone().unwrap_or_else(|| "none".into());
             self.say(now + 50_000, &format!("CBBS {s}\r\n"));
-            return self.prompt(now + 50_000);
+            return self.prompt(now + 1_050_000);
         }
         if let Some(rest) = cmd.strip_prefix("s=$(stty -g); stty ") {
             // Without a speed, the line keeps its own.
@@ -776,11 +779,13 @@ impl Pi {
             self.say(now + 20_000, s);
             return self.prompt(now + 20_000);
         }
-        if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; cbb leave -yes; ")
+        if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; sleep 1; /NextPi/nextpi/cbb leave -yes; ")
             && cmd.ends_with("echo CBB$((1))GONE")
         {
-            self.in_group = false;
-            self.say(now + 50_000, "CBB1GONE\r\n");
+            // A leave that keeps the keys says so (leave_keeps).
+            self.in_group = self.leave_keeps;
+            let kept = if self.leave_keeps { "CBB1KEPT\r\n" } else { "" };
+            self.say(now + 1_050_000, &format!("{kept}CBB1GONE\r\n"));
             return self.prompt(now + 50_000);
         }
         if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; cd /NextPi/nextpi && rm -rf ")

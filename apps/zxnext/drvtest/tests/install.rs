@@ -905,6 +905,25 @@ fn leaves_the_group_after_y() {
 }
 
 #[test]
+fn says_when_the_pi_keeps_its_group() {
+    let Some(kit) = kit("leavekept") else { return };
+    let (card, mut pi) = installed(&kit, "leavekept");
+    pi.in_group = true;
+    pi.leave_keeps = true;
+    let y = vec![Key {
+        from: 3_000_000,
+        until: 3_400_000,
+        row: 0xDF,
+        bit: 4,
+    }];
+    let run = run_on(&kit, &card, "leave", Esp::new(kit.site.clone()), pi, y);
+    let s = run.hw.screen_text();
+    assert!(s.contains("did not leave") && !s.contains("Left."), "{s}");
+    assert!(!s.contains("is removed"), "{s}");
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
 fn says_when_there_is_no_group_to_leave() {
     let Some(kit) = kit("leavenone") else { return };
     let (card, pi) = installed(&kit, "leavenone");

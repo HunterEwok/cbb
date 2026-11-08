@@ -2346,7 +2346,10 @@ void usage_run(void)
 static const char un_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; cd " PI_DIR " && rm -rf cbb cbb.bin cbb.old cbb.new "
                                 "cbb-state /ram/link.log /ram/cbbjoin; cd; echo CBB$((1))GONE\n";
 // The service stops first, so that cbb leave changes the files itself.
-static const char lv_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; " CBB_LITE " leave -yes; rm -rf /ram/cbbjoin; echo CBB$((1))GONE\n";
+// The service gets a second to end, so that cbb leave does not hand the
+// leave to it while it goes; the Pi says CBB1KEPT when its keys stay.
+static const char lv_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; sleep 1; " PI_DIR "/cbb leave -yes; rm -rf /ram/cbbjoin; test -e " PI_DIR
+                                "/cbb-state/identity.json && echo CBB$((1))KEPT; echo CBB$((1))GONE\n";
 static const char card_names[] = "CBB.DRV\0CBB.OVL\0OVL.PRT\0NET.CFG\0CBBPI.BIN\0CBBPI.GZ\0DRV.PRT\0CBBPI.PRT\0CBBGZ.PRT\0PASTE.CFG\0CBB\0";
 static const char un_ask[] = "Remove CBB: the network, the\ndriver, the Pi's cbb and its\ngroup, the files in /cbb? y/n\n";
 static const char un_none[] = "Nothing removed.\n";
@@ -2357,7 +2360,8 @@ static const char un_pi_silent[] = "The Pi did not answer: its cbb\nstays in " P
 // .cbb pair joins this group or another one again.
 static const char lv_ask[] = "Leave the group: the Pi forgets\nits keys? y/n\n";
 static const char lv_done[] = "Left. Remove the Next in the app\ntoo; .cbb pair joins again.\n";
-static const char un_pi_gone[] = "CBB1GONE";
+static const char un_pi_gone[] = "CBB1GONE", lv_kept_w[] = "CBB1KEPT";
+static const char lv_kept[] = "the Pi's cbb did not leave:\nits keys stay";
 static const char un_pi_quiet[] = "The Pi did not say it is done.\n";
 static const char un_pi_done[] = "The Pi's cbb is removed.\n";
 static const char un_dir[] = "/cbb/";
@@ -2483,14 +2487,16 @@ int uninstall(void)
                 printf(un_pi_quiet);
                 break;
             }
+            if (strcmp(line, lv_kept_w) == 0) i = 1;
             if (strcmp(line, un_pi_gone) == 0) {
-                printf(un_pi_done);
+                if (!leave) printf(un_pi_done);
                 break;
             }
         }
         link_prompt();
     }
     if (leave) {
+        if (i) return fail(lv_kept, 0);
         printf(lv_done);
         return 0;
     }
