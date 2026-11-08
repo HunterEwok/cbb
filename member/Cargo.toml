@@ -52,10 +52,10 @@ bytes = { version = "1", optional = true }
 getrandom = { version = "0.4", features = ["std"] }
 # AmneziaWG around GotaTun's messages (src/awg.rs), with the crates GotaTun
 # already brings.
-blake2 = { version = "0.10.6", optional = true }
+blake2 = { version = "0.11.0", optional = true }
 chacha20 = { version = "0.10.2", optional = true }
 hmac = "0.13"
-chacha20poly1305 = { version = "0.10.1", optional = true }
+chacha20poly1305 = { version = "0.11.0", optional = true }
 base64 = { version = "0.23.1", optional = true }
 # The way over VLESS (src/vless.rs): rustls with the core's provider, and
 # its standard library's connections and system time.
