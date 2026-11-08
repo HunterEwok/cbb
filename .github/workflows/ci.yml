@@ -432,7 +432,7 @@ jobs:
         run: >-
           go test -timeout 20m -exec "$(command -v qemu-mips-static || command -v qemu-mips)" ./internal/clip ./internal/control ./internal/group
           ./internal/hlc ./internal/mdns ./internal/netguard ./internal/openwrt
-          ./internal/pair ./internal/sysinfo ./internal/tunnel ./internal/uptime
+          ./internal/sysinfo ./internal/tunnel ./internal/uptime
           ./internal/vless </dev/null
 
   freebsd:
@@ -1536,13 +1536,13 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Go reads the Swift phone's member frames
+      - name: the core and Go read what the Swift phone wrote
         if: runner.os == 'Linux'
         run: |
           # swift test just wrote testdata/interop/swift-member.json, and to
           # interop-out the records it signed, a certificate it renewed and
           # what an admin phone makes.
-          go test ./internal/node -run TestSwiftMemberFrames -v
+          cargo test --locked -p cbb-core --lib vectors::swift_member_frames
           CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
       - name: swift test
         if: runner.os == 'macOS'

@@ -183,3 +183,106 @@ core/src/admit/tests.rs the_root_admits_a_lite_member D-89: the role lite is gon
 internal/pair/pair_test.go TestPairLite D-89: the role lite is gone; TestPairCaps checks the caps a joiner offers
 internal/service/lite_test.go TestLiteNotDialed D-89: members without dials are dialed now; TestListenDialed checks it
 member/src/discovery.rs lite_role D-89: TXT r=lite is gone; txt_roles checks r=listen and r=phone
+internal/node/content_test.go TestContentTransfer D-88: the Go member protocol is gone; the Rust cbb fetches parts by hash from the start or an offset while texts flow, which TestMedia, TestMediaAway and TestFFIMember run and content.rs a_continued_fetch_is_kept checks
+internal/node/content_test.go TestChunkFrames D-88: the Go member protocol is gone; the chunk frames of testdata/interop/content.json are checked by the core (copy/tests.rs vectors) and both kits
+internal/node/content_test.go TestDecodeChunkLength D-88: the Go member protocol is gone; the Rust cbb's frames carry their length as a u32 (core wire), and the kits and the core read content.json's chunks
+internal/node/content_test.go TestFetchStall D-88: the Go fetcher is gone; the Rust cbb's fetch gives up on a silent peer by its read timeout, and TestMedia fetches again after a member restarts
+internal/node/content_test.go TestCancelsOfOtherParts D-88: the Go server of parts is gone; the bench's forge fetch cases (O15) check the Rust cbb's limits on gets and cancels
+internal/node/interop_test.go TestMemberInteropVectors D-88: the Go member protocol is gone; testdata/interop/member.json stays as fixed vectors, which vectors.rs member_frames and both kits check
+internal/node/interop_test.go TestMemberCertVectors D-88: the Go member protocol is gone; member-certs.json stays as fixed vectors, which vectors.rs member_certs and both kits check
+internal/node/interop_test.go TestSwiftMemberFrames D-88: vectors.rs swift_member_frames reads the frames CBBKit writes as a member, in CI's phone kit job after swift test
+internal/node/interop_test.go TestContentInteropVectors D-88: the Go member protocol is gone; content.json stays as fixed vectors, which copy/tests.rs vectors and both kits check
+internal/node/linger_test.go TestLingerKeepsWhatWasSent D-88: the Go connection's linger is gone; the Rust cbb sends its goodbye and closes after the writer drains, which TestOneConnectionBetweenTwo and the service tests' goodbyes exercise
+internal/node/node_test.go TestCopyReachesTheOtherMember D-88: the Go member protocol is gone; TestThreeMembers and TestLiteMember send copies between Rust services
+internal/node/node_test.go TestSecretsKeepTheirKind D-88: the Go member protocol is gone; secrets travel sealed with their kind in the core (copy/tests.rs), and TestRemotePaste and TestLiteMember send them between Rust services
+internal/node/node_test.go TestHelloCarriesAnOldTextAfterRejoin D-88: the Go engine's hello is gone; the core's engine puts the current copy in the hello (clip), which TestWatcherGetsAMissedWrite runs
+internal/node/node_test.go TestRejoinClosesTheConnectionsFirst D-88: the Go node's rejoin is gone; the Rust cbb restarts its node on a new group, which TestLeave and TestLiteLeave run
+internal/node/node_test.go TestRejoinHoldsNewConnections D-88: the Go node's rejoin is gone; TestLeave and TestLiteLeave run leaving and joining again on the Rust cbb
+internal/node/node_test.go TestForwardedOnlyToOthers D-88: the Go member protocol is gone; the Rust node forwards an event to the members other than its sender, which TestThreeMembers checks with one copy reaching every clipboard
+internal/node/node_test.go TestQueueTimeIsAddedToTheAge D-88: the Go queue is gone; the Rust node adds the time queued to a copy's age (node.rs add_age), which TestIncomingWindow relies on
+internal/node/node_test.go TestHelloAfterJoiningTheForwardingSet D-88: the Go node is gone; the Rust node puts a connection in the forwarding set before its hello (node.rs run), which TestWatcherGetsAMissedWrite runs
+internal/node/node_test.go TestSilentPeerIsDropped D-88: the Go node is gone; the Rust node's read timeout drops a silent peer, and the service tests' reconnects after a stop exercise it
+internal/node/node_test.go TestStalledPeerIsDropped D-88: the Go node is gone; the Rust node's write timeout and bounded queue drop a stalled peer
+internal/node/node_test.go TestPingCadence D-88: the Go node's pings are gone; the Rust node pings an idle connection, which TestControlIdleConnection and the long service tests keep up
+internal/node/node_test.go TestPingsKeepAnIdleConnection D-88: the Go node's pings are gone; the Rust services stay connected through idle stretches in TestRenewal and TestLiteHub
+internal/node/node_test.go TestByeEndsTheConnectionAtOnce D-88: the Go node is gone; the Rust cbb's goodbye ends a connection, which the service tests log as "said goodbye"
+internal/node/node_test.go TestQueuedEventsGoOutBeforeTheGoodbye D-88: the Go node is gone; the Rust node's writer sends what is queued before its goodbye
+internal/node/node_test.go TestCancelEndsServe D-88: the Go node's Serve is gone; stopping the Rust service ends its connections, which every service test does
+internal/node/node_test.go TestOnPeers D-88: the Go node's callback is gone; the Rust cbb's status lists its peers, which the service tests read
+internal/node/node_test.go TestReconnectReplacesTheOldConnection D-88: the Go node is gone; node.rs a_tunnel_replaces_a_connection_at_home and TestRestartWithANewPort check the Rust node's replacing
+internal/node/node_test.go TestTheConnectionTheLowerIDDialedStays D-88: the Go node is gone; TestOneConnectionBetweenTwo checks the Rust services' one connection
+internal/node/node_test.go TestBadFirstMessage D-88: the Go member protocol is gone; the bench's forge fuzz cases send the Rust cbb broken first frames
+internal/node/node_test.go TestBadEventsAreDropped D-88: the Go member protocol is gone; the core refuses copies that do not verify (copy/tests.rs), and the forge's fuzz cases send them to the Rust cbb
+internal/node/node_test.go TestHelloWithAnUnreadableCurrent D-88: the Go member protocol is gone; the core decodes a hello's current copy strictly (wire, copy/tests.rs content_is_read_strictly)
+internal/node/node_test.go TestConnectingToItself D-88: the Go node is gone; the Rust cbb skips its own announcement (discovery.rs), and every service test runs several members on one host
+internal/node/node_test.go TestClosedNodeRefuses D-88: the Go node is gone; a stopping Rust service refuses connections (node.rs run: "the service is stopping")
+internal/node/node_test.go TestQueueFullCloses D-88: the Go node's queue is gone; the Rust node's bounded queue closes a connection that does not keep up
+internal/node/node_test.go TestAddAge D-88: the Go node is gone; the Rust node's add_age saturates as Go's did
+internal/node/node_test.go TestConverges D-88: the Go member protocol is gone; TestThreeMembers and TestWatcherGetsAMissedWrite check that the Rust services converge on the newest copy
+internal/node/node_test.go TestRenewPeer D-88: the Go node is gone; TestRenewal and TestPairingAcrossARenewal check the Rust cbb's renewals of peers
+internal/node/node_test.go TestAdminKeyAndAdminCA D-88: the Go node is gone; TestComputerAdmin and TestThreeMembers check the Rust cbb's admin key offer and the admin CA from the root
+internal/node/node_test.go TestRoles D-88: the Go roles are gone with D-89; the core's wire::known_role and the service tests' device lists check the Rust cbb's
+internal/node/node_test.go TestRecordsSpread D-88: the Go node is gone; TestDevicesAndRevoke and TestThreeMembers check that the Rust services pass records on and a revocation reaches the device
+internal/node/node_test.go TestChunkRecords D-88: the Go node is gone; the Rust node sends records in chunks (node.rs), and TestRecovery's and TestTakeover's groups pass many records
+internal/node/node_test.go TestTunnelKeyAndOffer D-88: the Go node is gone; TestTunnelKeys and TestAwayFromHome check the Rust cbb's tunnel keys and offers in hellos
+internal/node/node_test.go TestNoTunnelKey D-88: the Go node is gone; TestTunnelOffByDefault checks that the Rust cbb sends no tunnel key while sync away from home is off
+internal/node/node_test.go TestCommandsPassThroughAMember D-88: the Go node is gone; TestLiteHubCommands and TestRemote check commands passed on by a Rust service, node.rs a_refused_command_keeps_its_id its result
+internal/node/node_test.go TestReleaseSpreads D-88: the Go node is gone; internal/service TestReleaseSpreads checks the same chain between Rust services
+internal/node/node_test.go TestRecordsOnlyLetIn D-88: the Go node is gone; TestPairingAcrossARenewal and TestJoinByShownCode let a device in after a records-only connection on the Rust cbb
+internal/node/node_test.go TestNoSecretsSendsTheMark D-88: the Go node is gone; the core sends a secret's mark to a peer the records stop secrets to (copy/tests.rs a_mark_still_verifies), and vectors.rs stop_exchange checks the stop
+internal/node/node_test.go TestReachTellsPhonesWhoIsConnected D-88: the Go node is gone; TestFFIPhoneAway checks the reach the Rust hub tells the phones
+internal/node/reason_test.go TestCleanReason D-88: the Go node is gone; the Rust cbb cleans a command's reason before it shows it (node.rs, service.rs)
+internal/node/reason_test.go TestResultReasonCleaned D-88: the Go node is gone; the Rust cbb's results carry plain short reasons, which TestRemote and TestLiteAdminCommands read
+internal/node/restore_test.go TestRecordsOnlyHelloCarriesGroupCA D-88: core/src/wire.rs group_ca_in_a_hello checks the hello, and internal/service TestSwiftRestoresWithRecoveryKey needs the Rust cbb to send it
+internal/node/restore_test.go TestSwiftRestoresWithRecoveryKey D-88: internal/service TestSwiftRestoresWithRecoveryKey runs the same tool against the Rust cbb
+internal/node/swift_test.go TestSwiftMemberTLS D-88: internal/service TestSwiftMemberTLS runs the same tool against the Rust cbb
+internal/pair/interop_test.go TestInteropVectors D-88: the Go pairing is gone; testdata/interop/pairing.json stays as fixed vectors, which vectors.rs pairing, core/src/pair.rs and both kits check
+internal/pair/invite_test.go TestSecretConfirmed D-88: the Go pairing is gone; admit/tests.rs an_invitation_asks_the_admin and TestLiteInvite check an invitation's admin confirming on the Rust cbb
+internal/pair/invite_test.go TestSecretDeclined D-88: admit/tests.rs an_invitation_asks_the_admin and TestInviteDeclined check a declined device on the Rust cbb
+internal/pair/invite_test.go TestWrongSecret D-88: admit/tests.rs an_invitation_asks_the_admin checks a wrong secret in the core's admission
+internal/pair/invite_test.go TestCloseWhileConfirming D-88: the Go window is gone; the Rust cbb's invitation window ends with cbb invite, which TestInvite and TestLiteInvite run
+internal/pair/invite_test.go TestShortSecret D-88: the Go pairing is gone; invite.rs vectors check invitations' secrets against invites.json in the core
+internal/pair/pair_test.go TestPairMac D-88: the Go pairing is gone; a Mac runs the same Rust cbb, whose pairing TestPairingWindow and TestJoinByShownCode check
+internal/pair/pair_test.go TestPairCaps D-88: admit/tests.rs the_root_admits_a_member_with_its_caps checks the caps a joiner offers in the core's admission
+internal/pair/pair_test.go TestPairLinux D-88: the Go pairing is gone; TestPairingWindow and TestLinuxMemberWithoutCAKeys check the Rust cbb's
+internal/pair/pair_test.go TestPairInARootGroup D-88: TestLinuxMemberWithoutCAKeys checks that a member joining the Rust cbb gets no CA keys
+internal/pair/pair_test.go TestWrongCode D-88: internal/service TestWrongCode and admit/tests.rs a_wrong_code_tells_the_admin check the Rust cbb's
+internal/pair/pair_test.go TestWrongCodeThenRight D-88: internal/service TestWrongCode checks a right code after a wrong one on the Rust cbb
+internal/pair/pair_test.go TestExpiry D-88: the Go window is gone; TestJoinAClosedWindow checks the Rust cbb's window once it ended
+internal/pair/pair_test.go TestExpiryTimer D-88: the Go window's timer is gone; the Rust cbb's window ends at its expiry (window.rs), which TestJoinAClosedWindow relies on
+internal/pair/pair_test.go TestExpiryDuringAnAttempt D-88: the Go window is gone; the core's admission bounds an attempt by its own time (admit), which the Rust window keeps
+internal/pair/pair_test.go TestClose D-88: TestJoinAClosedWindow checks joining the Rust cbb's closed window
+internal/pair/pair_test.go TestCloseAfterTheWelcome D-88: the Go window is gone; the Rust cbb's window ends with the join it admitted, which TestPairingWindow checks
+internal/pair/pair_test.go TestSaveFailure D-88: the Go joiner is gone; the Rust joiner saves the records before the identity (pair.rs Save), which TestLeaveDamaged and TestBrokenIdentity check from the other side
+internal/pair/pair_test.go TestBusy D-88: TestConcurrentPairs checks the Rust cbb's window with two joiners at once
+internal/pair/pair_test.go TestRelay D-88: the exchange binds CPace to the TLS exporter in the core (pair, tls exporter_matches_rustls), and the bench's forge relay case checks that a relayed join fails on the Rust cbb
+internal/pair/pair_test.go TestBinding D-88: the core binds the exchange to the TLS exporter (tls exporter_matches_rustls, exporter_needs_a_handshake), and the forge's relay case checks it on the Rust cbb
+internal/pair/pair_test.go TestFakeMember D-88: the Go joiner is gone; admit/tests.rs refusals and a_joiner_dials_the_window check the core's joiner against a window that does not know the code
+internal/pair/pair_test.go TestWhatTheMemberSends D-88: the Go window is gone; vectors.rs pairing checks the Welcome's fields, TestLinuxMemberWithoutCAKeys what the Rust cbb sends
+internal/pair/pair_test.go TestServerTLSRejects D-88: the Go window's TLS is gone; core/src/tls wrong_protocol_fails and a_refused_client_certificate_fails_without_a_panic check the Rust cbb's
+internal/pair/pair_test.go TestJoinerChecksTheWelcome D-88: admit/tests.rs refusals check the core joiner's checks of the Welcome
+internal/pair/pair_test.go TestErrorCodes D-88: the Go pairing is gone; the core's Refusal codes are checked by admit/tests.rs refusals and pairing.json
+internal/pair/pair_test.go TestCodes D-88: core/src/pair.rs codes checks the Rust cbb's codes
+internal/pair/pair_test.go TestInfo D-88: the Go pairing is gone; vectors.rs pairing checks the Info against pairing.json
+internal/pair/pair_test.go TestOpenNeedsCAKeys D-88: the Go window is gone; the Rust cbb opens a window only on the root or an admin, which TestPairingWindow and TestLiteAdminCommands check
+internal/pair/pair_test.go TestDialAListeningJoiner D-88: TestJoinByShownCode, TestFFIJoinerAdmin and TestEmbassyJoiner check the Rust cbb admitting a joiner that listens
+internal/pair/pair_test.go TestDialChecksTheFingerprint D-88: internal/service TestSwiftAdmitsComputer's another certificate case and the bench's G17 fp case check the fingerprint against the Rust cbb
+internal/pair/pair_test.go TestListeningJoinerRevealsNothing D-88: the Rust joiner that listens has the member confirm the code first (pair.rs accept), which TestSwiftAdmitsComputer's wrong code case checks
+internal/pair/pair_test.go TestWelcomeWithoutCAKeys D-88: TestLinuxMemberWithoutCAKeys checks that the Rust cbb's Welcome carries no CA keys
+internal/pair/pair_test.go TestJoinerTakesAnAdminWelcome D-88: admit/tests.rs an_admin_admits_with_its_admin_ca and TestFFIJoinerAdmin check a Welcome from an admin
+internal/pair/pair_test.go TestJoinerTakesAWelcomeAfterAHandover D-88: TestRootHandover and TestLiteTakeover check joining a group handed to a new root with the Rust cbb
+internal/pair/pair_test.go TestComputerAdminAdmits D-88: TestComputerAdmin and admit/tests.rs an_admin_admits_with_its_admin_ca check a computer admin's window on the Rust cbb
+internal/pair/pair_test.go TestTakenID D-88: admit/tests.rs refusals check a joiner whose device ID the group holds, in the core's admission
+internal/pair/pair_test.go TestIdleAttemptsFromOneAddress D-88: the Go window's accounting is gone; the Rust window takes one attempt at a time with its own timeout (window.rs)
+internal/pair/pair_test.go TestJoinerRefusesKeysFromARoot D-88: admit/tests.rs refusals check that the core's joiner takes no CA keys from a Welcome
+internal/pair/pair_test.go TestMacRefusesCAKeys D-88: a Mac runs the same Rust joiner, whose refusal of CA keys admit/tests.rs refusals check
+internal/pair/phone_test.go TestPhoneJoinsTheRoot D-88: admit/tests.rs the_root_makes_a_phone_an_admin and internal/service TestSwiftJoinsComputerRoot check a phone joining the Rust root
+internal/pair/phone_test.go TestPhoneAdminNeedsTheWindow D-88: the Rust root's window admits a phone that asks to be an admin only with -admin, which TestSwiftJoinsComputerRoot opens and admit/tests.rs refusals check
+internal/pair/phone_test.go TestPhoneNeedsTheRoot D-88: the rule that only the root admits an admin phone is the core's (admit/tests.rs refusals), which every member runs
+internal/pair/phone_test.go TestPhoneMemberThroughAdmin D-88: TestFFIJoinerAdmin admits the Aurora app as a member through the Rust cbb
+internal/pair/phone_test.go TestPhoneInfo D-88: vectors.rs pairing checks a phone's Info against pairing.json
+internal/pair/phone_test.go TestPhoneAdminProof D-88: admit/tests.rs the_root_makes_a_phone_an_admin checks the admin key's proof for the connection in the core
+internal/pair/swift_test.go TestSwiftMemberAdmitsGoJoiner D-88: it exchanged certificates over plain TCP; internal/service TestSwiftAdmitsComputer runs the same pairing over real TLS against the Rust cbb
+internal/pair/swift_test.go TestSwiftMemberAdmitsGoJoinerTLS D-88: internal/service TestSwiftAdmitsComputer runs the same tool against the Rust cbb
+internal/pair/swift_test.go TestSwiftHubAdmitsInvitedGoJoiner D-88: the Rust cbb joins with an invitation only through the hub's guest tunnel (TestLiteInvite); the core's admission of an invitation is what the phones run, checked by admit/tests.rs an_invitation_asks_the_admin
+internal/pair/swift_test.go TestSwiftJoinsComputerRoot D-88: internal/service TestSwiftJoinsComputerRoot runs the same tool against the Rust cbb
