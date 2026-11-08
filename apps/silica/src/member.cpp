@@ -13,6 +13,7 @@
 #include <QClipboard>
 #include <QCryptographicHash>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QMimeData>
 #include <QMimeDatabase>
@@ -347,14 +348,37 @@ void Member::take(const QJsonObject &copy)
         call(m_member, QStringLiteral("took"), QJsonObject{{QStringLiteral("id"), id}}, &f);
         int files = 0;
         QString image;
+        QString single, singleType;
         for (const QJsonValue &v : parts) {
             const QJsonObject p = v.toObject();
             if (p.value(QStringLiteral("dir")).toBool())
                 continue;
             ++files;
             const QString type = p.value(QStringLiteral("type")).toString();
+            single = p.value(QStringLiteral("file")).toString();
+            singleType = type;
             if (type == QStringLiteral("image/png") || type == QStringLiteral("image/jpeg"))
-                image = p.value(QStringLiteral("file")).toString();
+                image = single;
+        }
+        // One image or video goes to Pictures/CBB or Videos/CBB, where the
+        // gallery shows it as an album, as Telegram does; other files stay
+        // in their folder in Downloads/CBB.
+        QString where = folder;
+        const bool picture = singleType.startsWith(QStringLiteral("image/"));
+        if (files == 1 && (picture || singleType.startsWith(QStringLiteral("video/")))) {
+            const QString base = QStandardPaths::writableLocation(picture ? QStandardPaths::PicturesLocation
+                                                                            : QStandardPaths::MoviesLocation);
+            const QDir to(QDir(base.isEmpty() ? QDir::homePath() : base).filePath(QStringLiteral("CBB")));
+            const QString name = QFileInfo(folder).fileName() + QLatin1Char('.') + QFileInfo(single).suffix();
+            if (to.mkpath(QStringLiteral(".")) && QFile::rename(single, to.filePath(name))) {
+                QDir(folder).removeRecursively();
+                if (!image.isEmpty())
+                    image = to.filePath(name);
+                where = to.path();
+            } else {
+                Errors::log(QStringLiteral("member: the file stays in ") + folder + QStringLiteral(": ") + to.path() +
+                            QStringLiteral(" is not writable"));
+            }
         }
         // One image goes into the clipboard as well, and stays out of the
         // phone's next sending.
@@ -371,8 +395,10 @@ void Member::take(const QJsonObject &copy)
         }
         m_error.clear();
         m_last = files == 1 && !image.isEmpty() ? tr("An image") : tr("%1 files in Downloads").arg(files);
+        if (files == 1 && where != folder && image.isEmpty())
+            m_last = tr("A video");
         Errors::log(QStringLiteral("member: saved %1 files of the group's copy").arg(files));
-        emit saved(folder, files);
+        emit saved(where, files);
         emit changed();
     });
     t->start();

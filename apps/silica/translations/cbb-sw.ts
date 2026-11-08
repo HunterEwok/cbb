@@ -878,6 +878,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>Video</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>Picha</translation>
     </message>
@@ -904,6 +908,10 @@
 </context>
 <context>
     <name>Notifier</name>
+    <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>%1 kutoka kikundi iko kwenye matunzio</translation>
+    </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>Imehifadhi %1 kutoka kikundi kwenye Vipakuliwa</translation>

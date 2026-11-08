@@ -878,6 +878,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>סרטון</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>תמונה</translation>
     </message>
@@ -904,6 +908,10 @@
 </context>
 <context>
     <name>Notifier</name>
+    <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>%1 מהקבוצה נמצא בגלריה</translation>
+    </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>נשמר %1 מהקבוצה בהורדות</translation>

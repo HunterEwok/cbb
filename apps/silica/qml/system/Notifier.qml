@@ -19,7 +19,11 @@ Item {
     Connections {
         target: app.member
         onSaved: {
-            note.body = qsTr("Saved %1 from the group in Downloads").arg(count === 1 ? qsTr("a file") : qsTr("%1 files").arg(count))
+            // One image or video goes to Pictures/CBB or Videos/CBB, the
+            // gallery's album; other files to a folder in Downloads/CBB.
+            note.body = /\/CBB$/.test(folder)
+                ? qsTr("%1 from the group is in the gallery").arg(app.member.last)
+                : qsTr("Saved %1 from the group in Downloads").arg(count === 1 ? qsTr("a file") : qsTr("%1 files").arg(count))
             note.previewBody = note.body
             note.replacesId = 0
             note.publish()

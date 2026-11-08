@@ -257,9 +257,11 @@ or resume. A text shared to CBB from the system's share menu (`ShareProvider`, t
 entry's `X-Share Method text`) goes to the group as the phone's copy, and so do images and
 files (`X-Share Method files`, up to 50 MB together). The main page's Sync button, its
 pull-down menu and the cover follow the one button's rule (docs/design.md) through the core's
-`waiting`, `sends` and `took`; images and files from another device are fetched into
-Downloads/CBB by themselves while the phone takes the group's copies (one image goes into the
-clipboard too), with a notification, which is why the app asks for the user's folders.
+`waiting`, `sends` and `took`; images and files from another device are fetched by
+themselves while the phone takes the group's copies, with a notification, which is why the app
+asks for the user's folders: one image goes to Pictures/CBB (and into the clipboard) and one
+video to Videos/CBB, where the gallery shows them as an album, as Telegram does; other files
+go to a folder of their own in Downloads/CBB.
 
 ## Apple Watch
 

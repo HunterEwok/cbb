@@ -878,6 +878,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>一段视频</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>一张图片</translation>
     </message>
@@ -904,6 +908,10 @@
 </context>
 <context>
     <name>Notifier</name>
+    <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>来自群组的%1已存入图库</translation>
+    </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>已将群组的 %1 保存到“下载”</translation>

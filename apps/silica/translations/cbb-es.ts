@@ -878,6 +878,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>Un vídeo</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>Una imagen</translation>
     </message>
@@ -904,6 +908,10 @@
 </context>
 <context>
     <name>Notifier</name>
+    <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>%1 del grupo está en la galería</translation>
+    </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>Se guardó %1 del grupo en Descargas</translation>

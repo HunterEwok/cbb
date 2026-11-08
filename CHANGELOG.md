@@ -23,6 +23,8 @@ All notable changes to cbb are documented in this file. The format follows
   GATT service with the phone's BlueZ, and types the clipboard into a TV, a tablet or a
   computer paired with it, in the device's layout (US or Russian) and at 10, 20 or 40
   characters a second. The reports come from the core's new `keyboard` call.
+- The Aurora app puts one received image in Pictures/CBB and one video in Videos/CBB, an album
+  in the gallery; other files still go to Downloads/CBB.
 - `cbb-helper`, the Go helper of the Rust program `cbb` (docs/design.md, "The service and its
   helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
   its hello and starts it again when it stops. It does nothing else yet; the steps that make

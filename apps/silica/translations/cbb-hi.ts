@@ -878,6 +878,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>एक वीडियो</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>एक छवि</translation>
     </message>
@@ -904,6 +908,10 @@
 </context>
 <context>
     <name>Notifier</name>
+    <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>समूह से %1 गैलरी में है</translation>
+    </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>समूह से %1 डाउनलोड में सहेजा गया</translation>
