@@ -304,8 +304,7 @@ ends, the Go service described below is still the computers' member.
 - **The server credentials.** `credentials.rs` keeps the group's credentials as Go's
   `credentials.go`: the core's `credential::Store` (Go's `group.Credentials`, the same rules
   of what counts) in `credentials.json`, the keys for the servers in `server-keys.json` (in
-  the TPM or the Secure Enclave through cbb-helper where it can put them there, as Go's
-  `ServerKeys`). Every peer gets them in a `credentials` message after its hello; new ones a
+  the TPM or the Secure Enclave through cbb-helper where it can put them there). Every peer gets them in a `credentials` message after its hello; new ones a
   peer sends are kept and passed on. When the records or the credentials change, and twice a
   day, the service brings them up to date as Go's `refreshCredential`: the root starts a
   period when the one kept is due or a member that sent its server key left; every member

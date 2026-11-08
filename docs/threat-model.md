@@ -61,9 +61,9 @@ of service, **E**levation of privilege.
 
 | # | Boundary | STRIDE | Threat | Defence | Where |
 |---|---|---|---|---|---|
-| 1 | home network | I | someone on the LAN reads the traffic | TLS 1.3 on every connection; no plain-text protocol | `internal/node`, `core/src/tls` |
-| 2 | home network | S | a device poses as a member, for example by answering mDNS | mutual TLS: members dial discovered addresses and check the peer's certificate against the group's CAs, the device records and the revocations | `internal/group`, `internal/node` |
-| 3 | home network | S | someone guesses or intercepts a pairing code | CPace inside TLS, bound to the TLS exporter: one online guess per attempt, three per window of 5 minutes, no offline attack; the code never on the command line | `internal/pair`, `core/src/pair` |
+| 1 | home network | I | someone on the LAN reads the traffic | TLS 1.3 on every connection; no plain-text protocol | `core/src/tls`, `member/src/node.rs` |
+| 2 | home network | S | a device poses as a member, for example by answering mDNS | mutual TLS: members dial discovered addresses and check the peer's certificate against the group's CAs, the device records and the revocations | `core/src/tls`, `core/src/group.rs` |
+| 3 | home network | S | someone guesses or intercepts a pairing code | CPace inside TLS, bound to the TLS exporter: one online guess per attempt, three per window of 5 minutes, no offline attack; the code never on the command line | `core/src/pair.rs`, `core/src/admit` |
 | 4 | home network | S | a man in the middle during a phone's QR pairing | the QR code carries the pairing code, which the phone spends on CPace inside TLS as in threat 3, so a device in the middle learns nothing it can use | the kits' `Pairing*` |
 | 5 | home network | D | a flood of connections or mDNS packets | limits on handshakes, mDNS cache entries and peers; the member port drops other addresses | `internal/service`, `internal/mdns` |
 | 6 | internet | I, T | someone on the way reads or changes the traffic away from home | the member TLS inside the group's WireGuard tunnel, a preshared key per client, chunk frames padded to 16 KiB; **open**: padding text frames and cover traffic | `internal/tunnel` |
