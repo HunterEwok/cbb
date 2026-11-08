@@ -121,19 +121,6 @@ type testService struct {
 }
 
 // logged reports whether the service logged a line that contains part.
-// count returns how many of the service's log lines hold part.
-func (s *testService) count(part string) int {
-	s.logMu.Lock()
-	defer s.logMu.Unlock()
-	n := 0
-	for _, l := range s.lines {
-		if strings.Contains(l, part) {
-			n++
-		}
-	}
-	return n
-}
-
 func (s *testService) logged(part string) bool {
 	s.logMu.Lock()
 	defer s.logMu.Unlock()

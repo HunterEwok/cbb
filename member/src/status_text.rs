@@ -560,9 +560,9 @@ mod tests {
         write_devices(&mut w, &devs, &peers, "0.6.0", 1_000 + 3 * 3_600_000);
         assert_eq!(
             w,
-            "NAME              SYSTEM  VERSION      ROLE   ADMIN  KEYS       SYNC       SEEN     CLOCK                       ID\n\
-             pi (this device)  Linux   0.6.0        full   root   hardware   on         online   off by -7s; check its time  aa\n\
-             phone *           iOS     0.5.0 (old)  phone         in a file  off muted  3 h ago                              bb\n\
+            "NAME              SYSTEM  VERSION      ROLE    ADMIN  KEYS       SYNC       SEEN     CLOCK                       ID\n\
+             pi (this device)  Linux   0.6.0        member  root   hardware   on         online   off by -7s; check its time  aa\n\
+             phone *           iOS     0.5.0 (old)  phone          in a file  off muted  3 h ago                              bb\n\
              * not in the devices list yet; the group's root adds it when they meet.\n\
              (old): below CBB 0.6.0, the newest release the group passed around; update it.\n"
         );
@@ -583,8 +583,8 @@ mod tests {
         let mut w = String::new();
         write_devices(&mut w, &[d("deck", true, false), d("nas", true, true), d("pi", false, false)], &[], "0.6.0", 0);
         let line = |id: &str| w.lines().find(|l| l.starts_with(id)).unwrap_or_default().to_string();
-        assert!(line("deck").contains("full, hub "), "{w}");
-        assert!(line("nas").contains("full, hub that only passes copies on"), "{w}");
+        assert!(line("deck").contains("member, hub "), "{w}");
+        assert!(line("nas").contains("member, hub that only passes copies on"), "{w}");
         assert!(!line("pi").contains("hub"), "{w}");
     }
 
