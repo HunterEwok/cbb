@@ -10,7 +10,7 @@ import "devices.js" as Devices
 // as a list (the setting deviceList), on the main page and a collection's
 // page. A tap opens a device or a collection; a long press opens the
 // changes of the arrangement for it, and among the tiles a long press then
-// a drag carries the tile over the others (Arrange.drop). In the list a
+// a drag carries the tile over the others. In the list a
 // collection is a section: its header, then its devices.
 Column {
     id: items
@@ -25,11 +25,32 @@ Column {
         })
     }
 
-    // The tile being dragged and the one under the finger, as indexes of
-    // level, -1 when none.
-    property int dragFrom: -1
-    property int dragOver: -1
+    // A drag among the tiles, as on the iPhone: the tile itself follows the
+    // finger, lifted, the others make way as it passes over them, and a
+    // device held over the middle of a collection goes into it. shown holds
+    // the indexes of level in the order the tiles show now.
+    property int dragFrom: -1   // the index in level of the dragged item
+    property int dragPos: -1    // where it shows now, in shown
+    property int dragInto: -1   // the collection it goes into, in shown
     property bool dragMoved: false
+    property real grabX: 0
+    property real grabY: 0
+
+    ListModel { id: shown }
+
+    function rebuild() {
+        shown.clear()
+        if (app.deviceList)
+            return
+        for (var i = 0; i < level.length; i++)
+            shown.append({ idx: i })
+    }
+    onLevelChanged: if (dragFrom < 0) rebuild()
+    Component.onCompleted: rebuild()
+    Connections {
+        target: app
+        onSettingsChanged: if (items.dragFrom < 0) items.rebuild()
+    }
 
     function tileAt(x, y) {
         for (var i = 0; i < tileRepeater.count; i++) {
@@ -39,41 +60,104 @@ Column {
         }
         return -1
     }
-    function dragStart(at) {
+    function dragStart(at, tile, mouse) {
+        var pos = -1
+        for (var i = 0; i < shown.count; i++)
+            if (shown.get(i).idx === at)
+                pos = i
+        if (pos < 0)
+            return
         dragFrom = at
-        dragOver = at
+        dragPos = pos
+        dragInto = -1
         dragMoved = false
+        grabX = mouse.x
+        grabY = mouse.y
+        var p = tile.mapToItem(tileBox, 0, 0)
+        ghost.x = p.x
+        ghost.y = p.y
     }
     function dragMove(tile, mouse) {
-        if (dragFrom < 0)
+        if (dragFrom < 0 || settle.running)
             return
-        var p = tile.mapToItem(tiles, mouse.x, mouse.y)
-        ghost.x = tiles.x + p.x - ghost.width / 2
-        ghost.y = p.y - ghost.height / 2
-        var over = tileAt(p.x, p.y)
-        if (over !== dragFrom)
-            dragMoved = true
-        if (over >= 0)
-            dragOver = over
-    }
-    function dragEnd(dropped) {
-        var from = dragFrom, to = dragOver, moved = dragMoved
-        dragFrom = -1
-        dragOver = -1
-        if (from < 0 || !dropped)
+        var p = tile.mapToItem(tileBox, mouse.x, mouse.y)
+        ghost.x = p.x - grabX
+        ghost.y = p.y - grabY
+        dragMoved = true
+        // The others are still moving out of the way.
+        if (shifting.running)
             return
-        if (!moved) {
-            items.arrange(items.level, from, items.level[from].kind === "device" ? items.inCollection : "")
+        var f = tile.mapToItem(tiles, mouse.x, mouse.y)
+        var over = tileAt(f.x, f.y)
+        if (over < 0 || over === dragPos) {
+            dragInto = -1
             return
         }
-        var op = Arrange.drop(items.level, from, to)
+        var t = tileRepeater.itemAt(over)
+        var target = items.level[shown.get(over).idx]
+        if (target.kind === "collection" && items.level[dragFrom].kind === "device") {
+            // The middle of a collection takes the device; its edges make way.
+            var cx = Math.abs(f.x - (t.x + t.width / 2)) < t.width / 4
+            var cy = Math.abs(f.y - (t.y + t.height / 2)) < t.height / 4
+            if (cx && cy) {
+                dragInto = over
+                return
+            }
+        }
+        dragInto = -1
+        shown.move(dragPos, over, 1)
+        dragPos = over
+        shifting.restart()
+    }
+    function dragEnd(dropped) {
+        if (dragFrom < 0)
+            return
+        if (!dropped) {
+            finish()
+            return
+        }
+        if (!dragMoved) {
+            var at = dragFrom
+            finish()
+            items.arrange(items.level, at, items.level[at].kind === "device" ? items.inCollection : "")
+            return
+        }
+        // Settles into its place, or into the collection, then changes.
+        var slot = tileRepeater.itemAt(dragInto >= 0 ? dragInto : dragPos)
+        var p = slot.mapToItem(tileBox, 0, 0)
+        settleX.to = p.x
+        settleY.to = p.y
+        settleScale.to = dragInto >= 0 ? 0.4 : 1
+        settle.start()
+    }
+    function finish() {
+        var from = dragFrom, pos = dragPos, into = dragInto, moved = dragMoved
+        dragFrom = -1
+        dragPos = -1
+        dragInto = -1
+        dragMoved = false
+        if (!moved || from < 0)
+            return
+        var item = items.level[from]
+        var op = null
+        if (into >= 0) {
+            op = { op: "into", device: item.device.device, collection: items.level[shown.get(into).idx].id }
+        } else if (pos !== from) {
+            op = pos + 1 < shown.count
+                    ? { op: "move", item: Arrange.ref(item), before: Arrange.ref(items.level[shown.get(pos + 1).idx]) }
+                    : { op: "move", item: Arrange.ref(item) }
+        }
         if (op)
             app.arrange(op)
+        else
+            rebuild()
     }
+    Timer { id: shifting; interval: 220 }
 
     width: parent.width
 
     Item {
+        id: tileBox
         visible: !app.deviceList
         width: parent.width
         height: tiles.height
@@ -85,22 +169,27 @@ Column {
             // Tiles at least as wide as on the other phones, two in a row on
             // a phone held upright, so their words fit.
             property int perRow: Math.max(2, Math.floor(width / (Theme.itemSizeExtraLarge * 2.2)))
+            // The others make way as the dragged tile passes.
+            move: Transition {
+                NumberAnimation { properties: "x,y"; duration: 200; easing.type: Easing.OutCubic }
+            }
             Repeater {
                 id: tileRepeater
-                model: !app.deviceList ? items.level : []
+                model: shown
                 Loader {
                     width: tiles.width / tiles.perRow
-                    sourceComponent: modelData.kind === "device" ? deviceTile : collectionTile
-                    property var entry: modelData
-                    property int at: index
-                    opacity: items.dragFrom === at ? 0.3 : 1
-                    // Where the dragged tile goes.
+                    readonly property var entry: items.level[model.idx]
+                    readonly property int at: model.idx
+                    sourceComponent: entry && entry.kind === "collection" ? collectionTile : deviceTile
+                    // The dragged tile's place stays empty under it.
+                    opacity: items.dragFrom === at ? 0 : 1
+                    // A collection that takes the dragged device.
                     Rectangle {
-                        visible: items.dragMoved && items.dragOver === at && items.dragFrom !== at
+                        visible: items.dragInto === index
                         anchors.fill: parent
                         anchors.margins: Theme.paddingSmall
                         radius: Theme.paddingSmall
-                        color: "transparent"
+                        color: Theme.rgba(Theme.highlightBackgroundColor, 0.2)
                         border.width: 2
                         border.color: Theme.highlightColor
                     }
@@ -112,8 +201,9 @@ Column {
             DeviceTile {
                 id: dt
                 device: entry.device
-                preventStealing: items.dragFrom === at
-                onPressAndHold: items.dragStart(at)
+                enabled: at >= 0
+                preventStealing: items.dragFrom === at && at >= 0
+                onPressAndHold: items.dragStart(at, dt, mouse)
                 onPositionChanged: items.dragMove(dt, mouse)
                 onReleased: items.dragEnd(true)
                 onCanceled: items.dragEnd(false)
@@ -124,31 +214,41 @@ Column {
             CollectionTile {
                 id: ct
                 collection: entry
-                preventStealing: items.dragFrom === at
-                onPressAndHold: items.dragStart(at)
+                enabled: at >= 0
+                preventStealing: items.dragFrom === at && at >= 0
+                onPressAndHold: items.dragStart(at, ct, mouse)
                 onPositionChanged: items.dragMove(ct, mouse)
                 onReleased: items.dragEnd(true)
                 onCanceled: items.dragEnd(false)
             }
         }
 
-        // The dragged tile's name under the finger.
-        Rectangle {
+        // The dragged tile itself, lifted above the others.
+        Loader {
             id: ghost
-            visible: items.dragFrom >= 0 && items.dragMoved
+            visible: items.dragFrom >= 0
             z: 10
-            width: tiles.width / tiles.perRow - 2 * Theme.paddingMedium
-            height: Theme.itemSizeSmall
-            radius: Theme.paddingSmall
-            color: Theme.rgba(Theme.highlightBackgroundColor, 0.9)
-            Label {
-                anchors.centerIn: parent
-                width: parent.width - 2 * Theme.paddingSmall
-                horizontalAlignment: Text.AlignHCenter
-                truncationMode: TruncationMode.Fade
-                text: items.dragFrom < 0 || items.dragFrom >= items.level.length ? ""
-                      : items.level[items.dragFrom].kind === "device" ? Devices.name(items.level[items.dragFrom].device)
-                      : items.level[items.dragFrom].name
+            width: tiles.width / tiles.perRow
+            scale: 1.08
+            opacity: 0.95
+            readonly property var entry: items.dragFrom >= 0 ? items.level[items.dragFrom] : null
+            readonly property int at: -1
+            sourceComponent: entry === null ? null : entry.kind === "collection" ? collectionTile : deviceTile
+            Rectangle {
+                z: -1
+                anchors.fill: parent
+                radius: Theme.paddingSmall
+                color: Theme.rgba(Theme.highlightBackgroundColor, 0.25)
+            }
+        }
+        ParallelAnimation {
+            id: settle
+            NumberAnimation { id: settleX; target: ghost; property: "x"; duration: 180; easing.type: Easing.OutCubic }
+            NumberAnimation { id: settleY; target: ghost; property: "y"; duration: 180; easing.type: Easing.OutCubic }
+            NumberAnimation { id: settleScale; target: ghost; property: "scale"; duration: 180; easing.type: Easing.OutCubic }
+            onStopped: {
+                ghost.scale = 1.08
+                items.finish()
             }
         }
     }

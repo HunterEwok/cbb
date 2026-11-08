@@ -62,18 +62,3 @@ function find(view, id) {
 function online(devices) {
     return devices.filter(function(d) { return d.online || d.self }).length
 }
-
-// The change a drag of level[from] dropped on level[to] makes, as on
-// Android: a device dropped on a collection goes into it, any other item
-// takes the place of the one it is dropped on. null when nothing changes.
-function drop(level, from, to) {
-    var item = level[from], target = level[to]
-    if (from === to)
-        return null
-    if (target.kind === "collection" && item.kind === "device")
-        return { op: "into", device: item.device.device, collection: target.id }
-    if (to < from)
-        return { op: "move", item: ref(item), before: ref(target) }
-    return to + 1 < level.length ? { op: "move", item: ref(item), before: ref(level[to + 1]) }
-                                 : { op: "move", item: ref(item) }
-}
