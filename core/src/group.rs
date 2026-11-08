@@ -604,6 +604,13 @@ impl Records {
             .and_then(|(_, b)| b.key.map(|k| (st.root_device.clone(), k.0)))
     }
 
+    /// Whether the device `dev` with the member key `key` holds the group's
+    /// root: the root's own device by its key, which is not revoked. Only
+    /// it sends a member a TPM credential to open.
+    pub fn is_root_member(&self, dev: &str, key: &KeyHash) -> bool {
+        self.root_member().is_some_and(|(id, k)| id == dev && k == *key) && !self.revoked(key)
+    }
+
     /// Whether the device `dev` with the verified chain (leaf first) is the
     /// group's root or an admin, as Go's adminPeer: an admin CA of its own
     /// under a root on the path that a device record that counts names and
@@ -623,10 +630,7 @@ impl Records {
                 && !self.frozen(&k);
         }
         let key = leaf.key_hash();
-        if self.root_member().is_some_and(|(id, k)| id == dev && k == key) && !self.revoked(&key) {
-            return true;
-        }
-        self.devices().iter().any(|d| d.id == dev && d.key == key && d.admin)
+        self.is_root_member(dev, &key) || self.devices().iter().any(|d| d.id == dev && d.key == key && d.admin)
     }
 
     /// Whether the device `dev` may be the group's hub by the records
@@ -1164,6 +1168,26 @@ mod tests {
             n += 1;
         }
         assert!(n >= 5, "only {n} cases compared");
+    }
+
+    /// Only the root's own device, by its key, counts as the root's member:
+    /// not another device, not another key, nor its key once revoked.
+    #[test]
+    fn root_member_by_device_and_key() {
+        let mut n = 0;
+        for c in cases() {
+            let rs: Vec<Record> = serde_json::from_value(c["records"].clone()).unwrap();
+            let s = set_of(&c, &rs);
+            let Some((id, k)) = s.root_member() else { continue };
+            let name = c["name"].as_str().unwrap();
+            assert_eq!(s.is_root_member(&id, &k), !s.revoked(&k), "{name}");
+            let mut other = k;
+            other[0] ^= 1;
+            assert!(!s.is_root_member(&id, &other), "{name}: another key");
+            assert!(!s.is_root_member("0123456789abcdef0123456789abcdef", &k), "{name}: another device");
+            n += 1;
+        }
+        assert!(n >= 1, "no vector names the root's member");
     }
 
     /// The seq and prev the set gives a key's next record, and whether the

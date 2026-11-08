@@ -477,12 +477,19 @@ pub fn run(cfg: Config) -> Result<()> {
         }
     }
     {
+        let attest = crate::evidence::Attestations::new(&cfg.state_dir);
+        attest.send_own(&node);
+        attest.status_loop(Arc::downgrade(&node));
         let (dir, n, log, away, creds) =
             (cfg.state_dir.clone(), Arc::downgrade(&node), log.clone(), away.clone(), creds.clone());
         node.on_message(Box::new(move |from, m| {
             let Some(node) = n.upgrade() else { return };
             if let (Some(v), "credentials") = (m.credentials.as_ref(), m.kind.as_str()) {
                 creds.received(&node, from, v);
+                return;
+            }
+            if let (Some(e), "evidence") = (m.evidence.as_ref(), m.kind.as_str()) {
+                attest.received(&node, from, e);
                 return;
             }
             if !full {
@@ -979,16 +986,8 @@ impl Service {
                     .into(),
             );
         }
-        {
-            let mut seen = self.commands.lock().unwrap();
-            seen.retain(|_, exp| *exp > now);
-            if seen.contains_key(&body.id) {
-                return refused(&body.id, "this command was carried out already".into());
-            }
-            if seen.len() >= MAX_COMMANDS {
-                return refused(&body.id, "too many commands; try again in a minute".into());
-            }
-            seen.insert(body.id.clone(), body.expires_ms);
+        if let Err(why) = remember_command(&mut self.commands.lock().unwrap(), &body.id, body.expires_ms, now) {
+            return refused(&body.id, why.into());
         }
         match body.kind.as_str() {
             "paste" | "action" if node.forward_only() => {
@@ -1522,17 +1521,7 @@ impl Service {
             (targets, console)
         };
         if targets.is_empty() {
-            res.reason = if console && !set.console {
-                "only a text console is here, and its user did not allow consoles (sudo cbb paste-receive on -console)"
-            } else if cfg!(target_os = "macos") {
-                // Only the app pastes on a Mac, as Go's: macOS lets an app
-                // press keys once its user allowed it in Accessibility, and
-                // the service and its agent are not apps.
-                "a Mac pastes through the CBB app, and it is not open here; its user opens it and allows it in System Settings, Privacy & Security, Accessibility"
-            } else {
-                "nothing on this device can paste: no tmux or console helper of CBB, nor cbb next link, runs here"
-            }
-            .into();
+            res.reason = no_target(console, set.console, cfg!(target_os = "macos")).into();
             return res;
         }
         // Only the user at the screen takes them, and a secret only where
@@ -3351,6 +3340,36 @@ fn paste_takers<T>(
     if out.is_empty() { Err(why) } else { Ok(out) }
 }
 
+/// Why nothing pastes here: only a console its user did not allow, a Mac
+/// without the app, or no paste target at all.
+fn no_target(console_here: bool, consoles_allowed: bool, macos: bool) -> &'static str {
+    if console_here && !consoles_allowed {
+        "only a text console is here, and its user did not allow consoles (sudo cbb paste-receive on -console)"
+    } else if macos {
+        // Only the app pastes on a Mac, as Go's: macOS lets an app press
+        // keys once its user allowed it in Accessibility, and the service
+        // and its agent are not apps.
+        "a Mac pastes through the CBB app, and it is not open here; its user opens it and allows it in System Settings, Privacy & Security, Accessibility"
+    } else {
+        "nothing on this device can paste: no tmux or console helper of CBB, nor cbb next link, runs here"
+    }
+}
+
+/// Remembers the command id until it expires at expires_ms, so it is
+/// carried out once; refuses one seen before, and a new one while
+/// MAX_COMMANDS that have not expired are held.
+fn remember_command(seen: &mut HashMap<String, i64>, id: &str, expires_ms: i64, now: i64) -> Result<(), &'static str> {
+    seen.retain(|_, exp| *exp > now);
+    if seen.contains_key(id) {
+        return Err("this command was carried out already");
+    }
+    if seen.len() >= MAX_COMMANDS {
+        return Err("too many commands; try again in a minute");
+    }
+    seen.insert(id.to_string(), expires_ms);
+    Ok(())
+}
+
 /// The agents that run the quick actions: only those of the user at the
 /// screen, as Go's sessionRunner, never where the system cannot tell.
 fn act_takers<T>(
@@ -3456,7 +3475,32 @@ mod tests {
 
     #[cfg(unix)]
     use super::ControlUsers;
-    use super::{MAX_CONTROL_PER_USER, accept_control};
+    use super::{MAX_COMMANDS, MAX_CONTROL_PER_USER, accept_control, remember_command};
+
+    /// Without the app a Mac says that it pastes through it; a console its
+    /// user did not allow is named as such.
+    #[test]
+    fn why_nothing_pastes() {
+        assert!(super::no_target(false, false, true).contains("a Mac pastes through the CBB app"));
+        assert!(super::no_target(true, false, true).contains("did not allow consoles"));
+        assert!(super::no_target(false, false, false).contains("nothing on this device can paste"));
+        assert!(super::no_target(true, true, false).contains("nothing on this device can paste"));
+    }
+
+    /// A command is carried out once, until it expires; the commands held
+    /// are bounded, and an expired one makes room.
+    #[test]
+    fn a_command_is_carried_out_once() {
+        let mut seen = std::collections::HashMap::new();
+        assert!(remember_command(&mut seen, "c1", 2000, 1000).is_ok());
+        assert!(remember_command(&mut seen, "c1", 2000, 1500).unwrap_err().contains("already"));
+        for i in 1..MAX_COMMANDS {
+            assert!(remember_command(&mut seen, &format!("d{i}"), 5000, 1500).is_ok());
+        }
+        assert!(remember_command(&mut seen, "one-more", 5000, 1500).unwrap_err().contains("too many"));
+        // c1 expired: it makes room.
+        assert!(remember_command(&mut seen, "one-more", 5000, 2500).is_ok());
+    }
     use crate::sys::{UnixListener, UnixStream};
     use std::io::Read;
     use std::time::Duration;

@@ -438,8 +438,9 @@ impl Away {
         self.serving.lock().unwrap().take();
     }
 
-    /// The hub's side of status.
-    pub(super) fn hub_status(&self, st: &State, a: &mut control::Away, standby: bool) {
+    /// The hub's side of status; entries_held tells whether this device
+    /// holds signed entry points that have not expired.
+    pub(super) fn hub_status(&self, st: &State, a: &mut control::Away, standby: bool, entries_held: bool) {
         a.hub = true;
         a.standby = standby;
         a.port = i64::from(if st.listen_port == 0 { MEMBER_PORT } else { st.listen_port });
@@ -451,11 +452,16 @@ impl Away {
             Some(f) => {
                 let r = f.report.lock().unwrap().clone();
                 let detail = r.error.unwrap_or_default();
+                // The project's forwarder does not answer and this device
+                // holds no entry points that have not expired, as Go's
+                // entriesStale: a new list may be what it needs.
+                let project = st.forwarder.as_ref().is_some_and(|f| f.project);
                 Some(control::Forwarder {
                     endpoint: f.endpoint.to_string(),
                     registered: r.registered,
                     seen: r.seen.unwrap_or_default(),
                     error: forwarder_problem(&detail),
+                    entries_stale: entries_stale(project, !detail.is_empty(), entries_held),
                     detail,
                 })
             }
@@ -571,6 +577,13 @@ pub(super) fn hub_addrs(addrs: &[String], forwarder: bool) -> Result<Vec<SocketA
     Ok(out)
 }
 
+/// Whether a hub that could not register with its forwarder (failed)
+/// should be told its list of entry points is out of date: the forwarder
+/// is the project's and this device holds no list that has not expired.
+fn entries_stale(project: bool, failed: bool, entries_held: bool) -> bool {
+    failed && project && !entries_held
+}
+
 /// The hub's forwarder that a request or a hub command gives, as Go's
 /// hubAddrs reads it: its address and its key's pin, or `default` for the
 /// project's forwarder, whose pins this release knows; None for none.
@@ -660,4 +673,37 @@ fn hub_key_ahead() -> Duration {
         let s = std::env::var("CBB_HUB_KEY_AHEAD").ok().and_then(|v| v.parse().ok()).unwrap_or(3 * 24 * 3600);
         Duration::from_secs(s)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The project's forwarder: the command line sends its resolved address
+    /// and "default", and the hub takes the first pin it knows; a pin of it
+    /// marks it the same way, and another forwarder's does not (Go's
+    /// TestHubAddrsProjectForwarder).
+    #[test]
+    fn the_project_s_forwarder() {
+        let f = forwarder_of("198.51.100.20:8764", PROJECT_KEY).unwrap().unwrap();
+        assert!(f.project && f.pin == PROJECT_PINS[0] && f.endpoint.to_string() == "198.51.100.20:8764");
+        let f = forwarder_of("198.51.100.20:8764", PROJECT_PINS[0]).unwrap().unwrap();
+        assert!(f.project);
+        let other = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=";
+        let f = forwarder_of("198.51.100.9:8764", other).unwrap().unwrap();
+        assert!(!f.project && f.pin == other);
+        assert!(forwarder_of("", PROJECT_KEY).is_err(), "the project's key without an address");
+        assert!(forwarder_of("", "").unwrap().is_none());
+    }
+
+    /// A hub of the project's forwarder that does not register is told the
+    /// list is out of date only while it holds none that has not expired
+    /// (Go's TestEntriesStale).
+    #[test]
+    fn entries_out_of_date() {
+        assert!(entries_stale(true, true, false));
+        assert!(!entries_stale(true, false, false), "registered");
+        assert!(!entries_stale(false, true, false), "a forwarder of its own");
+        assert!(!entries_stale(true, true, true), "with entry points held");
+    }
 }

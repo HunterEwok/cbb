@@ -5,14 +5,13 @@ package service
 
 import (
 	"crypto/x509"
-	"strings"
+	"encoding/pem"
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/group/grouptest"
-	"github.com/HunterEwok/cbb/internal/node"
 	"github.com/HunterEwok/cbb/internal/tpmkey"
 	"github.com/HunterEwok/cbb/internal/tpmkey/tpmtest"
 )
@@ -26,11 +25,8 @@ func TestTPMEvidence(t *testing.T) {
 	roots := tpmtest.ProvisionEK(t)
 	group.ReopenTPM()
 	t.Cleanup(group.ReopenTPM)
-	tpmRoots = roots
-	t.Cleanup(func() { tpmRoots = nil })
-
 	var h hub
-	pi := startService(t, &h, "pi")
+	pi := startEnv(t, &h, "pi", "CBB_TEST_TPM_ROOTS="+rootsFile(t, roots))
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	id, err := group.Load(deck.dir)
@@ -58,11 +54,8 @@ func TestTPMEvidenceUnknownMaker(t *testing.T) {
 	tpmtest.ProvisionEK(t)
 	group.ReopenTPM()
 	t.Cleanup(group.ReopenTPM)
-	tpmRoots = tpmtest.OtherRoots(t)
-	t.Cleanup(func() { tpmRoots = nil })
-
 	var h hub
-	pi := startService(t, &h, "pi")
+	pi := startEnv(t, &h, "pi", "CBB_TEST_TPM_ROOTS="+rootsFile(t, tpmtest.OtherRoots(t)))
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	if id, err := group.Load(deck.dir); err != nil {
@@ -78,59 +71,6 @@ func TestTPMEvidenceUnknownMaker(t *testing.T) {
 		}
 		return false
 	})
-}
-
-// TestTPMCredentialOnlyFromRoot checks that a device takes TPM credentials
-// to open only from the group's root, by its key, one at a time.
-func TestTPMCredentialOnlyFromRoot(t *testing.T) {
-	now := time.Now()
-	root, err := group.Create(now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	recs := group.NewRecords(root.GroupCA.Cert)
-	key := group.KeyHashOf(root.Cert)
-	r := grouptest.Sign(t, group.RecordBody{Type: group.RecordDevice, Group: group.Tag(root.GroupCA.Cert), Device: string(root.ID),
-		Name: "pi", Role: group.RoleFull, Key: &key, HoldsRoot: true, TimeMS: now.UnixMilli()}, root.GroupCA.Key)
-	if _, errs := recs.AddAll([]group.Record{r}); len(errs) > 0 {
-		t.Fatal(errs)
-	}
-	other, err := group.NewKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	dev := group.NewDeviceID()
-	member, err := root.GroupCA.IssueMember(dev, &other.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := &Service{records: recs}
-	cred := node.Evidence{Format: node.EvidenceTPMCredential, Key: node.EvidenceMember}
-	notRoot := "not the group's root"
-	for name, c := range map[string]struct {
-		peer group.DeviceID
-		cert *x509.Certificate
-	}{
-		"a member":                 {dev, member},
-		"a member named the root":  {root.ID, member},
-		"the root's key elsewhere": {dev, root.Cert},
-	} {
-		if err := s.tpmCredential(c.peer, c.cert, cred); err == nil || !strings.Contains(err.Error(), notRoot) {
-			t.Errorf("%s: %v", name, err)
-		}
-	}
-	// The root gets as far as the TPM, which this device has none of here.
-	if err := s.tpmCredential(root.ID, root.Cert, cred); err == nil || strings.Contains(err.Error(), notRoot) {
-		t.Errorf("the root: %v", err)
-	}
-	s.tpmOpening.Lock()
-	if err := s.tpmCredential(root.ID, root.Cert, cred); err == nil || !strings.Contains(err.Error(), "opens another") {
-		t.Errorf("while the TPM opens one: %v", err)
-	}
-	s.tpmOpening.Unlock()
-	if err := (&Service{}).tpmCredential(root.ID, root.Cert, cred); err == nil || !strings.Contains(err.Error(), notRoot) {
-		t.Errorf("in no group: %v", err)
-	}
 }
 
 // TestRootInTPMCountsAsFiles checks that a computer root whose member key
@@ -155,7 +95,7 @@ func TestRootInTPMCountsAsFiles(t *testing.T) {
 	if _, ok := id.Key.(*tpmkey.Key); !ok {
 		t.Fatal("the root's member key is not in the TPM")
 	}
-	if m.Status == nil || m.Status.KeyLevel != LevelFiles {
+	if m.Status == nil || m.Status.KeyLevel != "files" {
 		t.Fatalf("the new group's key level: %+v", m.Status)
 	}
 	for _, d := range pi.devices(t) {
@@ -163,7 +103,21 @@ func TestRootInTPMCountsAsFiles(t *testing.T) {
 			t.Errorf("the root's keys are listed as %s", d.Store)
 		}
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpKeyLevel, Value: LevelHardware}, ""); err == nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpKeyLevel, Value: "hardware"}, ""); err == nil {
 		t.Error("a root with its CA key in a file set the level hardware")
 	}
+}
+
+// rootsFile writes the certificates to a PEM file for the helper to read.
+func rootsFile(t *testing.T, certs []*x509.Certificate) string {
+	t.Helper()
+	var b []byte
+	for _, c := range certs {
+		b = append(b, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: c.Raw})...)
+	}
+	f := filepath.Join(t.TempDir(), "tpm-roots.pem")
+	if err := os.WriteFile(f, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return f
 }

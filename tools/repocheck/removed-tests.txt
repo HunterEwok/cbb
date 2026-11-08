@@ -71,3 +71,108 @@ mobile/cbbtun/onlycbb_test.go TestPhoneHubReachesOnlyTheMemberListener D-87: the
 mobile/cbbtun/relay_test.go TestPhoneAtRelay D-87: the Go relay link is gone; TestRustPhoneRelay runs the Rust one against the Go relay
 mobile/cbbtun/relay_test.go TestPhoneAtRelayWithCredentials D-87: the Go relay link is gone; TestRustPhoneRelayCredentials runs the Rust one with the server credentials
 mobile/cbbtun/relay_test.go TestRelayBadArguments D-87: the Go relay link is gone; ffi's bad_arguments checks the Rust one
+internal/service/service_test.go TestWatcherKeepsTheNewestWrite D-88: the Go service's watcher queue is gone; the Rust service's watchers keep the newest write (member/src/service.rs) and TestWatcherGetsAMissedWrite runs against it
+internal/service/service_test.go TestMac D-88: it ran the Go service as a Mac with a device ID of its own; the Rust cbb runs the same member on a Mac, and TestThreeMembers checks that a member that is no admin admits nobody and that copies go both ways
+internal/service/service_test.go TestMacCreatesAGroup D-88: it ran the Go service as a Mac; a Mac runs the same Rust cbb as any computer, whose making a group, admitting and making an admin TestThreeMembers checks
+internal/service/service_test.go TestDiscoveryFails D-88: it gave the Go service a discovery that fails to start; the Rust cbb's mDNS has no such seam, and its failure to browse is an error of the operation (member/src/discovery.rs)
+internal/service/service_test.go TestSleepDetector D-88: the Go service's sleep detector is gone; the Rust service's dial loops dial again once a connection broke (member/src/discovery.rs)
+internal/service/service_test.go TestAcceptSurvivesErrors D-88: the Go service's accept loop is gone; the Rust listener goes on after a failed accept (member/src/discovery.rs, listen_until)
+internal/service/service_test.go TestListenPreferring D-88: the Go service took any free port when 8764 was taken; the Rust cbb keeps its port, says it cannot listen, and syncs by dialing until the port is free
+internal/service/service_test.go TestRecordsTheSystem D-88: it restarted the Go service as Windows; records_the_system_from_a_hello in member/src/admin.rs checks the same on the Rust cbb
+internal/service/socket_limits_test.go TestControlUsers D-88: the Go service's count of control connections is gone; the Rust cbb's ControlUsers has the same test in member/src/service.rs
+internal/service/socket_limits_test.go TestControlUsersOnTheSocket D-88: control_socket_bounds_each_user in member/src/service.rs checks the limit per user on the Rust cbb's socket
+internal/service/peer_test.go TestPasteTargetUser D-88: paste_goes_to_the_user_at_the_screen in member/src/service.rs checks which targets take a paste on the Rust cbb
+internal/service/peer_test.go TestActionsAgentUser D-88: actions_go_to_the_agent_at_the_screen in member/src/service.rs checks which agents run the actions on the Rust cbb
+internal/service/peer_test.go TestKeysGrant D-88: keys_only_under_a_grant in member/src/service.rs checks the uinput helper's grants on the Rust cbb
+internal/service/peer_test.go TestConnPeer D-88: reads_its_own_user in member/src/peer.rs checks that the Rust cbb names the user at the other end of a control connection
+internal/service/atscreen_logind_test.go TestAtScreenIn D-88: takes_only_the_user_at_the_screen and ssh_alone_is_not_at_the_screen in member/src/peer.rs check logind's sessions on the Rust cbb
+internal/service/quietlog_test.go TestPeerEnded D-88: the Go service's log filter is gone; the Rust cbb logs how each connection ended (member/src/node.rs)
+internal/service/quietlog_test.go TestLogRepeat D-88: the Go service's log filter of repeated lines is gone with it
+internal/service/ports_test.go TestPorts D-88: the Go service read cbb.env itself; systemd hands that file to the Rust cbb as its environment, which reads CBB_PORT (member/src/lib.rs), and the e2e runs it on a set port
+internal/service/ports_test.go TestHomeCGNAT D-88: the Go service read cbb.env itself; the Rust cbb's firewall rules take CBB_HOME_CGNAT from the service's environment, tested in member/src/awaynet.rs
+internal/service/interfaces_test.go TestInterfacesSetting D-88: the Go service read cbb.env itself; the Rust cbb reads CBB_INTERFACES from its environment, parses_the_list in member/src/interfaces.rs
+internal/service/interfaces_test.go TestOnLink D-88: only_the_listed_devices in member/src/interfaces.rs checks the same on the Rust cbb
+internal/service/networks_test.go TestKnownNetworks D-88: the Go service's known networks are gone; the Rust cbb's networks.rs learns_and_binds_the_gateway checks learning, the gateway binding and the list across a restart
+internal/service/networks_test.go TestKnownNetworksAtUpdate D-88: the Go service's known networks are gone; networks.rs a_member_without_a_list_knows_where_it_is checks the Rust cbb
+internal/service/networks_test.go TestKnownNetworksLinkLocal D-88: Go's addresses carried the interface as a zone; Rust's IpAddr has none, so a link-local address is the interface's own as it is
+internal/service/admin_test.go TestAdminPeerNeedsARealAdminCA D-88: it asked the Go service's adminPeer; the Rust cbb asks the core, whose an_admin_peer_needs_a_real_admin_ca (core/src/manage/tests.rs) checks the same chains
+internal/service/admin_test.go TestLevelAllows D-88: it asked the Go service's levelAllows; admin.rs levels_as_go checks the Rust cbb's, and TestKeyLevelSetting and TestAdminOfFileKeys run against it
+internal/service/recovery_test.go TestRecoveryWithCard D-88: it gave the Go service a card opener with a pivtest card; the Rust cbb reads the YubiKey itself, whose signing piv.rs's tests check with a fake card, and TestRecovery checks the claim
+internal/service/recovery_test.go TestRecoveryCertUnderARoot D-88: it asked the Go service's recoveryCert; admin.rs recovery_cert_under_a_root checks the Rust cbb's
+internal/service/actions_test.go TestQuickActionsInSession D-88: it told the Go service on Linux to run the presets in the agent, as on a Mac and Windows; the Rust cbb hands them to the agent only there, which service.rs actions_go_to_the_agent_at_the_screen checks, and TestOwnActions runs an action through the agent
+internal/service/forwarder_test.go TestHubAddrsProjectForwarder D-88: it asked the Go service's hubAddrs; serve.rs the_project_s_forwarder checks the Rust cbb's forwarder_of
+internal/service/keyboard_test.go TestKeyboardElsewhere D-88: it ran the Go service as a Mac; the Rust cbb hands the keyboard to cbb-helper with its system, and internal/helper's TestKeyboardElsewhere checks the refusal on a Mac and on Windows
+internal/service/tunnel_test.go TestNearOnlyForAWhile D-88: it asked the Go service's nearLocked; node.rs near_only_for_a_while checks the Rust cbb's NEAR_GRACE
+internal/service/tunnel_test.go TestHubWait D-88: it asked the Go service's hubWait; away.rs a_phone_hub_is_tried_often checks the Rust cbb's
+internal/service/tunnel_test.go TestHubsToTry D-88: it asked the Go service's hubsToTry; tunnel.rs hubs_to_try_in_the_group_s_order checks the Rust cbb's
+internal/service/hubs_test.go TestDialAnyFollowsTheHub D-88: it timed the Go service's dialAny, which raced a tunnel client per way in windows; the Rust cbb starts one link per hub key, keeps the one the hub answers (away.rs, KEYS_WAIT) and dials through it, which TestHubKeyRotation, TestAwayThroughForwarder and TestAwayObfuscated run
+internal/service/content_test.go TestLeftPartsSwept D-88: it swept the Go service's content store; the Rust cbb keeps the newest blobs and drops a day-old leftover, which content.rs prune_keeps_the_newest checks
+internal/service/content_test.go TestReplacedPartsSweptWithoutNextCopy D-88: it timed the Go service's sweep of a replaced part; content.rs prune_keeps_the_newest checks the Rust cbb's cache
+internal/service/media_test.go TestContentStore D-88: it asked the Go service's content store; content.rs a_continued_fetch_is_kept and prune_keeps_the_newest check the Rust cbb's
+internal/service/media_test.go TestSizes D-88: it asked the Go service's parseSize and SizeText; copies.rs sizes checks the Rust cbb's
+internal/service/entries_test.go TestProjectVLESS D-88: it asked the Go service's projectVLESS; forward.rs ways_in_over_vless checks the Rust cbb's ways in, from the entry points or built in
+internal/service/entries_test.go TestEntriesStale D-88: it asked the Go service's entriesStale; serve.rs entries_out_of_date checks the Rust cbb's
+internal/service/evidence_tpm_test.go TestTPMCredentialOnlyFromRoot D-88: it asked the Go service's tpmCredential; group.rs root_member_by_device_and_key checks who the Rust cbb takes a credential from, evidence.rs one_opening_at_a_time that the TPM opens one at a time, and TestTPMEvidence runs the exchange
+internal/service/oldgroup_test.go TestLeaveVersion1Group D-88: it asked the Go service's leaveVersion1Group; records.rs leaves_a_group_of_0_5 checks the Rust cbb's, and TestUpgrade starts it on a group made before 0.4
+internal/service/sync_test.go TestCommandRefused D-88: it called the Go service's command; service.rs a_command_is_carried_out_once checks the Rust cbb's replay cache, the vectors of v2-commands.json (vectors.rs) its verify_command and clip.rs the modes, and TestAdminTurnsSync runs commands between services
+internal/service/paste_test.go TestPasteOnMacNeedsTheApp D-88: it ran the Go service as a Mac; the Rust cbb is built for its system, and service.rs why_nothing_pastes checks what a Mac without the app answers
+cmd/cbb/admin_commands_test.go TestDeviceCommands D-88: cmd/cbb is gone; member/tests/cli_commands.rs device_commands runs the Rust cbb's same cases against a fake service
+cmd/cbb/admin_commands_test.go TestSyncAndNetwork D-88: cmd/cbb is gone; member/tests/cli_commands.rs sync_and_network runs the Rust cbb's same cases
+cmd/cbb/admin_commands_test.go TestSyncLine D-88: cmd/cbb is gone; member/tests/cli_commands.rs status_lines checks the Rust cbb's sync line in cbb status
+cmd/cbb/admin_commands_test.go TestQuietLine D-88: cmd/cbb is gone; member/tests/cli_commands.rs status_lines checks the Rust cbb's quiet line, also in no group
+cmd/cbb/admin_commands_test.go TestActionCommands D-88: cmd/cbb is gone; member/tests/cli_commands.rs action_commands runs the Rust cbb's same cases
+cmd/cbb/admin_commands_test.go TestActionLine D-88: cmd/cbb is gone; member/tests/cli_commands.rs action_lines checks each line of the Rust cbb's cbb action
+cmd/cbb/admin_commands_test.go TestOnActions D-88: cmd/cbb is gone; lib.rs only_the_actions_that_are_on checks the Rust cbb's
+cmd/cbb/awaynet_test.go TestGrantFor D-88: cmd/cbb is gone; awaynet.rs grant_from_status checks the Rust cbb's
+cmd/cbb/awaynet_test.go TestAwayNet D-88: cmd/cbb is gone; awaynet.rs systemd_drop_in checks the Rust cbb's drop-in and systemctl calls
+cmd/cbb/awaynet_test.go TestAwayNetNeedsRoot D-88: cmd/cbb is gone; awaynet.rs systemd_needs_root checks the Rust cbb's
+cmd/cbb/awaynet_test.go TestAwayNetNotConfined D-88: cmd/cbb is gone; awaynet.rs systemd_needs_root checks that without the installer's unit nothing is confined
+cmd/cbb/awaynet_test.go TestBlocked D-88: cmd/cbb is gone; awaynet.rs blocked_ranges checks the Rust cbb's ranges, with and without CGNAT
+cmd/cbb/awaynet_test.go TestAwayNetWindows D-88: cmd/cbb is gone; awaynet.rs windows_rules checks the Rust cbb's firewall rules and the key that keeps them
+cmd/cbb/awaynet_test.go TestResolveAddrPort D-88: cmd/cbb is gone; global_cli.rs addresses checks the Rust cbb's
+cmd/cbb/commands_test.go TestCopy D-88: cmd/cbb is gone; member/tests/cli_commands.rs copy runs the Rust cbb's same cases
+cmd/cbb/commands_test.go TestPairWithACode D-88: cmd/cbb is gone; member/tests/cli_commands.rs pair_with_a_code runs the Rust cbb's cases (with an address, it joins itself)
+cmd/cbb/commands_test.go TestNew D-88: cmd/cbb is gone; member/tests/cli_commands.rs new_group checks the Rust cbb's
+cmd/cbb/commands_test.go TestPairInAGroup D-88: cmd/cbb is gone; member/tests/cli_commands.rs pair_in_a_group checks the Rust cbb's window, code and address
+cmd/cbb/commands_test.go TestPairTypedWhileWaiting D-88: the Rust cbb listens for the phone itself and reads no code meanwhile; cbb pair -code joins by a code (member/tests/cli_commands.rs pair_with_a_code)
+cmd/cbb/commands_test.go TestStatus D-88: cmd/cbb is gone; member/tests/cli_commands.rs status_lines checks the Rust cbb's same lines
+cmd/cbb/commands_test.go TestPasteWriteError D-88: cmd/cbb is gone; member/tests/cli_commands.rs paste_write_error pastes the Rust cbb's text to /dev/full
+cmd/cbb/commands_test.go TestPairWithThePhone D-88: cmd/cbb is gone; member/tests/cli_commands.rs pair_shows_the_phone_a_code checks the Rust cbb's QR code and link, and TestLiteMember joins by it
+cmd/cbb/commands_test.go TestWriteDevices D-88: cmd/cbb is gone; status_text.rs devices_table and hubs_in_the_table check the Rust cbb's table
+cmd/cbb/commands_test.go TestWriteAway D-88: cmd/cbb is gone; member/tests/cli_commands.rs away_states checks the Rust cbb's away lines, the details only in debug mode
+cmd/cbb/commands_test.go TestTakeover D-88: cmd/cbb is gone; member/tests/cli_commands.rs device_commands has the Rust cbb's takeover cases
+cmd/cbb/commands_test.go TestTerminalText D-88: cmd/cbb is gone; lib.rs terminal_text_is_safe has the same cases for the Rust cbb
+cmd/cbb/commands_test.go TestPasteTerminal D-88: cmd/cbb is gone; member/tests/cli_commands.rs paste_terminal runs the Rust cbb's same cases
+cmd/cbb/commands_test.go TestFailDetails D-88: cmd/cbb is gone; member/tests/cli_commands.rs fail_details checks that CBB_DEBUG shows and hides the Rust cbb's details
+cmd/cbb/commands_test.go TestCertLine D-88: cmd/cbb is gone; member/tests/cli_commands.rs status_lines checks the Rust cbb's certificate lines, none with a year left
+cmd/cbb/commands_test.go TestPasteReceiveFlags D-88: cmd/cbb is gone; member/tests/cli_commands.rs paste_receive_flags runs the Rust cbb's same cases
+cmd/cbb/device_targets_test.go TestRemoteCommand D-88: cmd/cbb is gone; member/tests/cli_commands.rs remote_commands runs the Rust cbb's same cases
+cmd/cbb/device_targets_test.go TestKeyboardCommand D-88: cmd/cbb is gone; member/tests/cli_commands.rs keyboard_commands runs the Rust cbb's same cases
+cmd/cbb/device_targets_test.go TestKeyboardLine D-88: cmd/cbb is gone; member/tests/cli_commands.rs keyboard_commands checks the Rust cbb's problem and visible lines
+cmd/cbb/device_targets_test.go TestPasteOnCommand D-88: cmd/cbb is gone; member/tests/cli_commands.rs paste_on_another_device runs the Rust cbb's same cases
+cmd/cbb/global_cmd_test.go TestWriteAwayStates D-88: cmd/cbb is gone; member/tests/cli_commands.rs away_states runs the Rust cbb's same states
+cmd/cbb/global_cmd_test.go TestGlobalCommand D-88: cmd/cbb is gone; member/tests/cli_commands.rs global_commands runs the Rust cbb's cases that need no DNS, global_cli.rs project_servers the project's servers
+cmd/cbb/hubport_test.go TestSyncHubPort D-88: cmd/cbb is gone; hubport.rs opens_asks_and_closes checks the Rust cbb's
+cmd/cbb/hubport_test.go TestWriteUnreached D-88: cmd/cbb is gone; status_text.rs unreached checks the Rust cbb's
+cmd/cbb/invite_cmd_test.go TestInvite D-88: cmd/cbb is gone; member/tests/cli_commands.rs invite checks the Rust cbb's file, answers and the file's end
+cmd/cbb/invite_cmd_test.go TestInviteRefusals D-88: cmd/cbb is gone; member/tests/cli_commands.rs invite_refusals runs the Rust cbb's same cases
+cmd/cbb/invite_cmd_test.go TestConfigCommand D-88: cmd/cbb is gone; member/tests/cli_commands.rs config_command runs the Rust cbb's same cases
+cmd/cbb/invite_cmd_test.go TestServerKeys D-88: cbb relay and cbb forward run cbb-relay and cbb-forward; internal/relay and internal/forward TestCommandKeys check their keys
+cmd/cbb/invite_cmd_test.go TestForwardXHTTPPath D-88: cbb forward runs cbb-forward; internal/forward TestXHTTPPathKept checks its path and transports
+cmd/cbb/invite_cmd_test.go TestPortOf D-88: the relay's own program has it; internal/relay TestPortOf has the same cases
+cmd/cbb/invite_cmd_test.go TestUpdateUsage D-88: cmd/cbb is gone; member/tests/cli_commands.rs update_usage runs the Rust cbb's cases (it has no -to)
+cmd/cbb/invite_test.go TestPairInvite D-88: the Rust cbb joins with an invitation itself; TestLiteInvite joins through a hub's tunnel with it
+cmd/cbb/invite_test.go TestGlobalOffAway D-88: cmd/cbb is gone; member/tests/cli_commands.rs global_off_away runs the Rust cbb's same cases
+cmd/cbb/joinapp_test.go TestPairForApp D-88: cmd/cbb is gone; member/tests/cli_commands.rs pair_for_an_app checks the Rust cbb's file, its cancel and its refusals
+cmd/cbb/joinapp_test.go TestOpenAppFile D-88: cmd/cbb is gone; member/tests/cli_commands.rs pair_for_an_app refuses a missing file, a folder and a link for the Rust cbb
+cmd/cbb/logfile_test.go TestLogFile D-88: cmd/cbb is gone; logfile.rs every_line_has_the_time and a_full_log_moves_aside check the Rust cbb's log
+cmd/cbb/logfile_test.go TestLogFileOpened D-88: cmd/cbb is gone; logfile.rs a_full_log_moves_aside checks that each file it opens is handed on
+cmd/cbb/main_test.go TestRun D-88: cmd/cbb is gone; member/tests/cli_commands.rs run_basics runs the Rust cbb's same cases
+cmd/cbb/media_cmd_test.go TestCopyFiles D-88: cmd/cbb is gone; member/tests/cli_commands.rs copy_files runs the Rust cbb's same cases
+cmd/cbb/media_cmd_test.go TestMediaType D-88: cmd/cbb is gone; media_cli.rs types_and_names checks the Rust cbb's
+cmd/cbb/media_cmd_test.go TestPasteFiles D-88: cmd/cbb is gone; member/tests/cli_commands.rs paste_files runs the Rust cbb's same cases
+cmd/cbb/media_cmd_test.go TestWriteMedia D-88: cmd/cbb is gone; member/tests/cli_commands.rs media_lines checks the Rust cbb's line of a copy not fetched (the Rust service reports no fetch's progress)
+cmd/cbb/pairqr_test.go TestReadQRText D-88: cmd/cbb is gone; member/tests/cli_commands.rs pair_reads_the_qr_text checks the Rust cbb's
+cmd/cbb/qr_test.go TestWriteQR D-88: cmd/cbb is gone; lib.rs qr_reads_back reads the Rust cbb's modules back
+cmd/cbb/qr_test.go TestEntriesString D-88: cmd/cbb is gone; global_cli.rs entries_round_trip checks the Rust cbb's, with the same bad strings
+cmd/cbb/stop_test.go TestStopLines D-88: cmd/cbb is gone; member/tests/cli_commands.rs stop_lines checks the Rust cbb's lines and status_text.rs durations its roughly

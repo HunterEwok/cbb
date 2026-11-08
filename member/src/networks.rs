@@ -518,4 +518,34 @@ mod tests {
         assert!(n.published().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// A device in a group that has no list yet takes the networks it is on
+    /// as known and saves them; a device in no group does not (Go's
+    /// TestKnownNetworksAtUpdate).
+    #[test]
+    fn a_member_without_a_list_knows_where_it_is() {
+        let ifc = Interface { index: 2, name: "eth0".into(), prefixes: vec![p("10.0.0.5/24")] };
+        let at: IpAddr = "10.0.0.5".parse().unwrap();
+        for in_group in [false, true] {
+            let dir = std::env::temp_dir().join(format!("cbb-networks-update-{}-{in_group}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            let i = ifc.clone();
+            let n = Networks::load_with(
+                &dir,
+                in_group,
+                Arc::new(|_: &str| {}),
+                Arc::new(move || vec![i.clone()]),
+                Box::new(|| HashMap::from([(2, "aa:bb:cc:dd:ee:01".to_string())])),
+            );
+            // Learnt in the background.
+            let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while in_group && !dir.join(FILE).exists() && std::time::Instant::now() < end {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            assert_eq!(n.knows(at), in_group, "in a group: {in_group}");
+            assert_eq!(dir.join(FILE).exists(), in_group, "the list saved, in a group: {in_group}");
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
 }

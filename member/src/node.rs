@@ -600,7 +600,7 @@ impl Node {
     /// group's tag, so past that only a connection to it counts.
     #[cfg_attr(not(feature = "tunnel"), allow(dead_code))] // used by sync away from home
     pub fn at_home(&self, id: &DeviceId) -> bool {
-        self.home.lock().unwrap().get(id).is_some_and(|at| uptime::now().saturating_sub(*at) < NEAR_GRACE)
+        near(self.home.lock().unwrap().get(id).copied(), uptime::now())
     }
 
     pub fn identity(&self) -> Arc<Identity> {
@@ -2481,7 +2481,7 @@ fn replaces(addr: &SocketAddr, up: &SocketAddr) -> bool {
 }
 
 /// A peer as its hello presents it, with what is not valid left out.
-fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool) -> Peer {
+pub(crate) fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool) -> Peer {
     let valid = |s: &str, ok: &[&str]| if ok.contains(&s) { s.to_string() } else { String::new() };
     Peer {
         id: id.clone(),
@@ -2563,6 +2563,13 @@ fn remember_found(home: &mut HashMap<DeviceId, Duration>, id: &DeviceId, here: b
     }
 }
 
+/// Reports whether a device found by discovery at `found` (uptime) still
+/// counts as on the home network at `now`.
+#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+fn near(found: Option<Duration>, now: Duration) -> bool {
+    found.is_some_and(|at| now.saturating_sub(at) < NEAR_GRACE)
+}
+
 /// How long a copy from another device stays live, as the records set it;
 /// zero when they set nothing (the engine's default, a minute).
 fn live_window(records: &Records) -> Duration {
@@ -2615,6 +2622,20 @@ mod tests {
         let rec = |body: &[u8]| crate::records::Record { body: body.to_vec(), sig: Vec::new(), chain: Vec::new() };
         assert_eq!(super::command_id(&rec(br#"{"type":"mode","to":"aa","id":"c1","expires_ms":5}"#)), "c1");
         assert_eq!(super::command_id(&rec(b"not json")), "");
+    }
+
+    /// An announcement alone keeps a device "on this network" only for
+    /// NEAR_GRACE: anyone can announce a hub's name and the group's tag on a
+    /// foreign network.
+    #[test]
+    fn near_only_for_a_while() {
+        let now = Duration::from_secs(1000);
+        assert!(super::near(Some(now), now), "a device just found does not count as near");
+        assert!(
+            !super::near(Some(now - super::NEAR_GRACE - Duration::from_secs(1)), now),
+            "a device found long ago without a connection still counts as near"
+        );
+        assert!(!super::near(None, now), "a device never found counts as near");
     }
 
     #[test]

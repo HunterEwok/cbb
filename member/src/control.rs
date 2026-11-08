@@ -433,6 +433,11 @@ pub struct Forwarder {
     /// Where the forwarder reaches the hub's port.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub seen: String,
+    /// The project's forwarder does not answer and this device holds no
+    /// signed entry points that have not expired, so a new list may be what
+    /// it needs (docs/protocol.md, section 16).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub entries_stale: bool,
     /// Why the hub is not registered, and the underlying error.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,

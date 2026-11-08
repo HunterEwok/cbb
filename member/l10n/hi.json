@@ -1,6 +1,5 @@
 {
  "{} needs a value": "{} को एक मान चाहिए",
- "unknown argument {}; see cbb help": "अज्ञात आर्ग्युमेंट {}; cbb help देखें",
  "Pairing code: ": "पेयरिंग कोड: ",
  "On a phone of the group, tap + in the CBB app, then Scan a code, and scan this:": "समूह के किसी फ़ोन पर CBB ऐप में + टैप करें, फिर “कोड स्कैन करें”, और इसे स्कैन करें:",
  "Or paste this into the app: {}": "या इसे ऐप में पेस्ट करें: {}",

@@ -13,6 +13,10 @@ use crate::control::{Away, Device, Media, Status};
 /// certificate was not renewed, as Go's certWarning.
 const CERT_WARNING_MS: i64 = 30 * 24 * 3600 * 1000;
 
+/// What a hub of the project's forwarder is told when its entry points
+/// may be out of date, as Go's entriesStale.
+const ENTRIES_STALE: &str = "The list of the project's entry points is out of date, and the forwarder does not answer on the ways this device knows. Update CBB on a computer of the group (sudo cbb update), or import a new list there (cbb global entries import); the group passes it on.";
+
 /// The whole status, as Go's writeStatus; now_ms is the wall clock.
 pub fn write_status(st: &Status, devs: &[Device], now_ms: i64, limit: &str) -> String {
     let mut w = String::new();
@@ -300,6 +304,9 @@ pub fn write_away(w: &mut String, a: Option<&Away>, limit: &str) {
                 let _ = writeln!(w, "  Not registered with the forwarder at {}: {}.", f.endpoint, f.error);
                 detail(w, &f.detail);
             }
+            if f.entries_stale {
+                let _ = writeln!(w, "  {ENTRIES_STALE}");
+            }
         }
     } else if let Some(r) = &a.relay {
         if r.connected && a.through {
@@ -559,6 +566,26 @@ mod tests {
              * not in the devices list yet; the group's root adds it when they meet.\n\
              (old): below CBB 0.6.0, the newest release the group passed around; update it.\n"
         );
+    }
+
+    #[test]
+    fn hubs_in_the_table() {
+        let d = |id: &str, hub, forward_only| Device {
+            id: id.into(),
+            name: id.into(),
+            os: "linux".into(),
+            role: "full".into(),
+            listed: true,
+            hub,
+            forward_only,
+            ..Default::default()
+        };
+        let mut w = String::new();
+        write_devices(&mut w, &[d("deck", true, false), d("nas", true, true), d("pi", false, false)], &[], "0.6.0", 0);
+        let line = |id: &str| w.lines().find(|l| l.starts_with(id)).unwrap_or_default().to_string();
+        assert!(line("deck").contains("full, hub "), "{w}");
+        assert!(line("nas").contains("full, hub that only passes copies on"), "{w}");
+        assert!(!line("pi").contains("hub"), "{w}");
     }
 
     #[test]

@@ -155,6 +155,10 @@ func (f *Fleet) containerOf(ctx context.Context, bin, net string, run, env []str
 		"--network", net, "--label", "cbbbench=fleet",
 		"--cap-add", "NET_ADMIN",
 		"-v", bin + ":/usr/local/bin/cbb:ro"}
+	// cbb-helper, the Go helper the Rust cbb starts, beside it when built.
+	if helper := filepath.Join(filepath.Dir(bin), "cbb-helper"); fileExists(helper) {
+		args = append(args, "-v", helper+":/usr/local/bin/cbb-helper:ro")
+	}
 	if fleetCoverDir != "" {
 		args = append(args, "-v", fleetCoverDir+":/cover", "-e", "GOCOVERDIR=/cover")
 	}
@@ -296,3 +300,9 @@ func fleetIPOn(ctx context.Context, d *Device, net string) (string, error) {
 // fleetKill kills a member's service as a crash would; its stand-in
 // service manager starts it again.
 const fleetKill = `for p in /proc/[0-9]*; do [ "$(cat $p/comm 2>/dev/null)" = cbb ] && tr '\0' ' ' <$p/cmdline | grep -q 'cbb service' && kill -KILL ${p#/proc/}; done; true`
+
+// fileExists reports whether path is a file.
+func fileExists(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && !fi.IsDir()
+}

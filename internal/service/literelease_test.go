@@ -25,10 +25,9 @@ func writeRoots(t *testing.T, signer *releaseSigner) []string {
 func TestLiteRelease(t *testing.T) {
 	bin := liteBin(t)
 	signer := newReleaseSigner(t)
-	roots := signer.roots(t)
 	env := writeRoots(t, signer)
 	var h hub
-	desk := startEnv(t, &h, "desk", func(c *Config) { c.ReleaseRoots = roots }, signer.rootsEnv(t))
+	desk := startEnv(t, &h, "desk", signer.rootsEnv(t))
 	dir := joinFull(t, bin, desk)
 	args := []string{"-no-mdns", "-full", "-no-listen", "-peer", desk.addr()}
 	rust := startLiteEnv(t, bin, dir, env, args...)
@@ -79,7 +78,7 @@ func TestLiteReleaseArchives(t *testing.T) {
 	signer := newReleaseSigner(t)
 	env := writeRoots(t, signer)
 	var h hub
-	desk := startEnv(t, &h, "desk", func(c *Config) { c.ReleaseRoots = signer.roots(t) }, signer.rootsEnv(t))
+	desk := startEnv(t, &h, "desk", signer.rootsEnv(t))
 	dir := joinFull(t, bin, desk)
 	rust := startLiteEnv(t, bin, dir, env, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr())
 	waitFor(t, "the Rust member connected", func() bool {

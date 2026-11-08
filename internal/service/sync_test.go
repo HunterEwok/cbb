@@ -4,7 +4,6 @@
 package service
 
 import (
-	"crypto"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,11 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/hlc"
-	"github.com/HunterEwok/cbb/internal/node"
 )
 
 func TestSyncOnOff(t *testing.T) {
@@ -91,22 +86,19 @@ func TestSyncOnOff(t *testing.T) {
 // TestSyncOffForAWhileTurnsOn restarts a device whose time off passed
 // meanwhile: sync is on again.
 func TestSyncOffForAWhileTurnsOn(t *testing.T) {
-	dir := t.TempDir()
-	e := clip.New(clip.Config{Self: "a", Clock: hlc.NewClock(nil, hlc.Timestamp{}, nil)})
-	e.SetSync(false, time.Now().Add(-time.Minute))
+	var h hub
+	s := startService(t, &h, "pi")
+	if _, err := s.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+		t.Fatal(err)
+	}
+	s.stop()
 	data := fmt.Sprintf(`{"off":true,"until_ms":%d}`, time.Now().Add(-time.Minute).UnixMilli())
-	if err := os.WriteFile(filepath.Join(dir, syncFile), []byte(data), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(s.dir, syncFile), []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	f := clip.New(clip.Config{Self: "a", Clock: hlc.NewClock(nil, hlc.Timestamp{}, nil)})
-	if err := loadSync(dir, f); err != nil {
-		t.Fatal(err)
-	}
-	if on, _ := f.Sync(); !on {
-		t.Error("sync off whose time passed is still off")
-	}
-	if on, _ := e.Sync(); !on {
-		t.Error("the engine kept sync off past its time")
+	s = restartService(t, &h, s)
+	if m := s.status(t).Mode; m != "shared" {
+		t.Errorf("sync off whose time passed is still off: mode %q", m)
 	}
 }
 
@@ -143,53 +135,5 @@ func TestAdminTurnsSync(t *testing.T) {
 	if _, err := a.do(t, control.Header{Op: control.OpSync, Device: "beta", Name: "on"}, ""); err == nil ||
 		!strings.Contains(err.Error(), "not connected") && !strings.Contains(err.Error(), "closed before it answered") {
 		t.Errorf("sync on for a device that is off: %v", err)
-	}
-}
-
-// TestCommandRefused checks the receiving side: a command is carried out
-// once, and one for another device or signed by no admin is refused.
-func TestCommandRefused(t *testing.T) {
-	root, err := group.Create(time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := t.TempDir()
-	srv := &Service{cfg: Config{StateDir: dir, now: time.Now}, logf: t.Logf, id: root,
-		records: group.NewRecords(root.GroupCA.Cert), eng: clip.New(clip.Config{Self: string(root.ID), Clock: hlc.NewClock(nil, hlc.Timestamp{}, nil)})}
-	ca, chain := root.Signer()
-	now := time.Now()
-	sign := func(to group.DeviceID, mode string, key crypto.Signer) group.Record {
-		c, err := group.SignCommand(group.CommandBody{Type: group.CommandMode, Group: group.Tag(root.GroupCA.Cert), By: root.ID, To: to,
-			ID: group.NewCommandID(), TimeMS: now.UnixMilli(), ExpiresMS: now.Add(group.CommandLifetime).UnixMilli(), Mode: mode}, key, chain...)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return c
-	}
-	good := sign(root.ID, "own", ca.Key)
-	if r := srv.command(root.ID, good); r.Status != node.ResultDone || srv.eng.Mode() != clip.Own {
-		t.Fatalf("a good command: %+v, mode %v", r, srv.eng.Mode())
-	}
-	saved := clip.New(clip.Config{Self: string(root.ID), Clock: hlc.NewClock(nil, hlc.Timestamp{}, nil)})
-	if err := loadSync(dir, saved); err != nil || saved.Mode() != clip.Own {
-		t.Errorf("the sync saved: %v, %v", saved.Mode(), err)
-	}
-	if r := srv.command(root.ID, good); r.Status != node.ResultRefused || !strings.Contains(r.Reason, "already") {
-		t.Errorf("the same command again: %+v", r)
-	}
-	if r := srv.command(root.ID, sign(group.NewDeviceID(), "shared", ca.Key)); r.Status != node.ResultRefused {
-		t.Errorf("a command for another device: %+v", r)
-	}
-	other, _ := group.NewKey()
-	if r := srv.command(root.ID, sign(root.ID, "shared", other)); r.Status != node.ResultRefused {
-		t.Errorf("a command nobody in the group signed: %+v", r)
-	}
-	for _, mode := range []string{"everything", "receive", "send"} {
-		if r := srv.command(root.ID, sign(root.ID, mode, ca.Key)); r.Status != node.ResultRefused || r.ID == "" {
-			t.Errorf("an unknown mode %q: %+v", mode, r)
-		}
-	}
-	if srv.eng.Mode() != clip.Own {
-		t.Errorf("a refused command changed the mode to %v", srv.eng.Mode())
 	}
 }

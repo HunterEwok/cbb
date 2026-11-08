@@ -14,7 +14,6 @@ import (
 	"hash/crc32"
 	"io"
 	"net"
-	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,23 +35,26 @@ import (
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
 
-// publishLite puts a lite member on the fake network, as the real one
-// publishes itself: TXT r=lite, at 127.0.0.1 and port.
-func publishLite(h *hub, id, tag string, port int) {
-	h.mu.Lock()
-	if h.ghosts == nil {
-		h.ghosts = map[string]mdns.Peer{}
+// publishLite publishes a lite member by mDNS, as the real one publishes
+// itself: TXT r=lite, at this computer's addresses and port, until the end
+// of the test.
+func publishLite(t *testing.T, id, tag string, port int) {
+	t.Helper()
+	r, err := mdns.New(mdns.Config{ID: id, Port: uint16(port), TXT: []string{"v=1", "g=" + tag, "r=lite"}})
+	if err != nil {
+		t.Fatal(err)
 	}
-	h.ghosts[id] = mdns.Peer{ID: id, Port: uint16(port), TXT: []string{"v=1", "g=" + tag, "r=lite"},
-		Addrs: []netip.Addr{netip.MustParseAddr("127.0.0.1")}}
-	h.mu.Unlock()
-	h.update()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { r.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
 }
 
 // TestLiteNotDialed: the full members, a Mac too, leave a lite member they
 // find to dial them, whatever the device IDs.
 func TestLiteNotDialed(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	// On every address: the services dial the addresses mDNS publishes.
+	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +75,8 @@ func TestLiteNotDialed(t *testing.T) {
 	laptop := startService(t, &h, "laptop")
 	pairWith(t, pi, laptop) // the group exists from here
 	// The greatest device ID: a full member would dial a full member with it.
-	publishLite(&h, strings.Repeat("f", 32), pi.status(t).Group, ln.Addr().(*net.TCPAddr).Port)
+	publishLite(t, strings.Repeat("f", 32), pi.status(t).Group, ln.Addr().(*net.TCPAddr).Port)
+	waitFor(t, "the lite member is published", func() bool { _, ok := h.found(strings.Repeat("f", 32)); return ok })
 	time.Sleep(2 * time.Second)
 	if n := dialed.Load(); n != 0 {
 		t.Fatalf("the full members dialed the lite member %d times", n)
@@ -363,14 +366,14 @@ func TestFFIJoiner(t *testing.T) {
 	pi.port = portOf(t, pi.addr())
 	pi.stop()
 	clock := newTestClock(t, 548*24*time.Hour)
-	pi.cfg, pi.env = func(c *Config) { c.now = clock.now }, []string{clock.env()}
+	pi.env = []string{clock.env()}
 	pi = restartService(t, &h, pi)
 	der, err := base64.StdEncoding.DecodeString(next("IDENTITY "))
 	if err != nil {
 		t.Fatal(err)
 	}
 	renewed, err := x509.ParseCertificate(der)
-	if err != nil || renewed.NotAfter.Before(clock.now()) {
+	if err != nil || renewed.NotAfter.Before(time.Now().Add(548*24*time.Hour)) {
 		t.Fatalf("the phone kept no renewed certificate: %v", err)
 	}
 }
@@ -1138,7 +1141,6 @@ func TestLiteMember(t *testing.T) {
 
 	// The lite member dials the desk as it dials every full member; with the
 	// other computers off the two still sync.
-	publishLite(&h, st.Device, st.Group, port)
 	waitFor(t, "the desk connected to all three", func() bool { return len(desk.status(t).Peers) == 3 })
 	pi.stop()
 	laptop.stop()

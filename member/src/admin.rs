@@ -826,6 +826,60 @@ impl Admin<'_> {
         Ok(())
     }
 
+    /// Records on the group's root what an attestation of the member key
+    /// key of the device peer showed, when its device record says otherwise,
+    /// as Go's recordEvidence (docs/protocol.md, section 17, "Evidence"). A
+    /// revoked chain changes only a record that says proven. It returns
+    /// the log line of a record it signed.
+    pub fn record_evidence(
+        &self,
+        peer: &str,
+        key: &cbb_core::certs::KeyHash,
+        p: &crate::evidence::Proven,
+    ) -> Result<Option<String>> {
+        if self.root_device() != self.me() {
+            return Ok(None);
+        }
+        let Some(d) = self.node.devices().into_iter().find(|d| d.id == peer) else { return Ok(None) };
+        if d.key != *key {
+            return Ok(None); // not listed yet; it sends the evidence again when it next connects
+        }
+        let mut kind = p.kind.clone();
+        if p.kind.is_empty() && p.store == "hardware" {
+            // Revoked: only a record that says proven changes.
+            if d.store != "proven" {
+                return Ok(None);
+            }
+            kind = d.kind.clone();
+        } else if d.store == p.store && d.kind == p.kind {
+            return Ok(None);
+        }
+        let s = self.signing()?;
+        if !s.root {
+            return Ok(None);
+        }
+        let b = Body {
+            kind: authority::TYPE_DEVICE.into(),
+            device: d.id.clone(),
+            name: d.name.clone(),
+            role: d.role.clone(),
+            os: d.os.clone(),
+            key: Some(Hash(d.key)),
+            admin: d.admin_key.map(Hash),
+            powers: d.powers.clone(),
+            commands: d.commands.clone(),
+            store: p.store.clone(),
+            hardware: kind.clone(),
+            proof: p.proof.clone(),
+            seal: d.seal.clone(),
+            forward_only: d.forward_only,
+            ..Default::default()
+        };
+        self.sign(&s, b).map_err(|e| e.context("recording what its attestation proves"))?;
+        let why = if p.why.is_empty() { String::new() } else { format!(": {}", p.why) };
+        Ok(Some(format!("cbb: the attestation of {} ({}) shows its keys {} ({kind}){why}", d.name, d.id, p.store)))
+    }
+
     /// Freezes (on) or unfreezes the admin computer target names, as Go's
     /// freeze. It returns its name.
     pub fn freeze(&self, target: &str, on: bool) -> Result<String> {
@@ -1494,20 +1548,11 @@ impl Admin<'_> {
             Some(_) => {}
         }
         let roots = rs.roots();
-        let under = |der: &[u8]| {
-            Cert::parse(der).ok().filter(|c| c.key_hash() == admin && roots.iter().any(|r| c.signed_by(r)))
-        };
-        if let Some(c) = sheet.and_then(under) {
+        if let Some(c) = sheet.and_then(|der| under_a_root(der, &roots, admin)) {
             return Ok(c);
         }
-        let kept = rs
-            .all()
-            .iter()
-            .filter_map(|r| Body::parse(&r.body).ok())
-            .filter(|b| b.kind == authority::TYPE_RECOVERY && b.admin == Some(Hash(admin)))
-            .filter_map(|b| under(&b.cert).map(|c| (b.time_ms, c)))
-            .max_by_key(|(t, _)| *t)
-            .map(|(_, c)| c);
+        let bodies: Vec<Body> = rs.all().iter().filter_map(|r| Body::parse(&r.body).ok()).collect();
+        let kept = recovery_cert(&bodies, &roots, admin);
         // Else the sheet's, as Go's: the members check the claim's chain.
         match (kept, sheet) {
             (Some(c), _) => Ok(c),
@@ -1742,6 +1787,24 @@ pub(crate) fn keys_allowed() -> Result<()> {
     Ok(())
 }
 
+/// The admin CA der when it is for the key admin and a root of the group
+/// issued it.
+fn under_a_root(der: &[u8], roots: &[Cert], admin: [u8; 32]) -> Option<Cert> {
+    Cert::parse(der).ok().filter(|c| c.key_hash() == admin && roots.iter().any(|r| c.signed_by(r)))
+}
+
+/// The admin CA of the recovery key admin that the newest recovery record
+/// among bodies carries under a root of the group: a newer record whose CA
+/// no root issued counts for nothing and does not replace it.
+fn recovery_cert(bodies: &[Body], roots: &[Cert], admin: [u8; 32]) -> Option<Cert> {
+    bodies
+        .iter()
+        .filter(|b| b.kind == authority::TYPE_RECOVERY && b.admin == Some(Hash(admin)))
+        .filter_map(|b| under_a_root(&b.cert, roots, admin).map(|c| (b.time_ms, c)))
+        .max_by_key(|(t, _)| *t)
+        .map(|(_, c)| c)
+}
+
 const NO_RECOVERY_KEY: &str = "the group has no recovery key: the root phone has not made one, or removed it";
 
 const NOT_ADMITTER: &str = "this device is in a group already (cbb status lists it); only the group's root or an admin adds devices, and this device is neither";
@@ -1794,6 +1857,49 @@ mod tests {
         assert!(level_allows("files", "rootless", "a", "", true).is_err());
     }
 
+    /// The recovery key's admin CA comes only from a recovery record whose
+    /// CA a root of the group issued, as Go's TestRecoveryCertUnderARoot.
+    #[test]
+    fn recovery_cert_under_a_root() {
+        use p256::ecdsa::signature::Signer as _;
+        use p256::ecdsa::{Signature, SigningKey, VerifyingKey};
+        let key = || {
+            let k = SigningKey::from_bytes(&cbb_core::certs::random_bytes::<32>().into()).unwrap();
+            let p = VerifyingKey::from(&k).to_sec1_point(false).as_bytes().to_vec();
+            (k, p)
+        };
+        let signer = |k: &SigningKey| {
+            let k = k.clone();
+            move |b: &[u8]| -> cbb_core::error::Result<Vec<u8>> {
+                let s: Signature = k.sign(b);
+                Ok(s.to_der().as_bytes().to_vec())
+            }
+        };
+        let now = uptime::wall_ms() / 1000;
+        let (rk, rp) = key();
+        let root = Cert::parse(&cbb_core::issue::root_ca(&rp, now, &mut signer(&rk)).unwrap()).unwrap();
+        let (sk, sp) = key();
+        let stranger = Cert::parse(&cbb_core::issue::root_ca(&sp, now, &mut signer(&sk)).unwrap()).unwrap();
+        let (_, ap) = key();
+        let dev = cbb_core::certs::DeviceId::random();
+        let good = cbb_core::issue::admin_ca(&dev, &ap, &root, now, &mut signer(&rk)).unwrap();
+        let bad = cbb_core::issue::admin_ca(&dev, &ap, &stranger, now, &mut signer(&sk)).unwrap();
+        let admin = Cert::parse(&good).unwrap().key_hash();
+        assert_eq!(Cert::parse(&bad).unwrap().key_hash(), admin);
+        let rec = |cert: &[u8], ms: i64| Body {
+            kind: authority::TYPE_RECOVERY.into(),
+            admin: Some(Hash(admin)),
+            cert: cert.to_vec(),
+            time_ms: ms,
+            ..Default::default()
+        };
+        let roots = [root];
+        let got = recovery_cert(&[rec(&good, 1000), rec(&bad, 2000)], &roots, admin).unwrap();
+        assert_eq!(got.der, good, "the admin CA came from a record whose CA no root of the group issued");
+        assert!(under_a_root(&bad, &roots, admin).is_none());
+        assert!(under_a_root(&good, &roots, admin).is_some());
+    }
+
     #[test]
     fn durations_as_go_prints_them() {
         for (ms, want) in
@@ -1825,6 +1931,41 @@ mod tests {
         let me = rs.devices().into_iter().find(|d| d.id == ident.id.as_str()).unwrap();
         assert_eq!((me.role.as_str(), me.name.as_str(), me.store.as_str()), ("full", "desk", "file"));
         assert!(new_group(&dir, "desk").err().expect("a second group").to_string().contains("already in a group"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// As Go's TestRecordsTheSystem: the root records a computer's system
+    /// from its hello when its record names another, as for a Windows PC
+    /// that joined as a Linux member; a hello that says the same signs
+    /// nothing.
+    #[test]
+    fn records_the_system_from_a_hello() {
+        let dir = std::env::temp_dir().join(format!("cbb-admin-os-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        new_group(&dir, "desk").unwrap();
+        let ident = Identity::load(&dir).unwrap().unwrap();
+        let rs = records::Records::load(&dir, &ident.group_ca).unwrap();
+        let engine = Arc::new(crate::clip::Engine::new(
+            ident.id.as_str(),
+            crate::service::clock(&dir),
+            Box::new(uptime::wall_ms),
+            Box::new(uptime::now),
+        ));
+        let id = ident.id.clone();
+        let node = Node::new(ident, "desk", engine, rs, dir.clone(), Box::new(|_| {}), Arc::new(|_: &str| {}));
+        let os = |n: &Node| n.devices().into_iter().find(|d| d.id == id.as_str()).map(|d| d.os).unwrap();
+        let hello = |os: &str| {
+            let body = cbb_core::wire::HelloBody { os: os.into(), ..Default::default() };
+            crate::node::peer_of(&id, "full", &body, false)
+        };
+        let admin = Admin { node: &node, dir: &dir };
+        let before = node.records().lock().unwrap().all().len();
+        admin.list_from_hello(&hello(&os(&node))).unwrap();
+        assert_eq!(node.records().lock().unwrap().all().len(), before, "a hello with the same system signed a record");
+        let other = if os(&node) == "windows" { "linux" } else { "windows" };
+        admin.list_from_hello(&hello(other)).unwrap();
+        assert_eq!(os(&node), other);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

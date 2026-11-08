@@ -108,9 +108,9 @@ as the service's user: `sudo -u cbb cbb pair`. Install and use are in
 
 | Command | What it does |
 |---|---|
-| `cbb pair [-name NAME] [-port PORT] [-addr HOST[:PORT]]...` | Joins a group by QR code, scanned by the phone app. `-addr` names where the phone reaches this device, when the QR code would name the wrong addresses. |
+| `cbb pair [-name NAME] [-port PORT] [-addr HOST[:PORT]]... [-full]` | Joins a group by QR code, scanned by the phone app. `-addr` names where the phone reaches this device, when the QR code would name the wrong addresses; `-full` joins as a computer, which may become an admin. |
 | `cbb pair -code HOST:PORT` | Joins with the code from `cbb pair` on the group's root or an admin. |
-| `cbb service [-name NAME] [-port PORT] [-peer HOST:PORT]... [-no-mdns] [-no-listen] [-tunnel-via HOST:PORT]` | Runs the service (systemd or procd), as `cbb service` does on a full member. `-peer` names a full member on the home network to dial, for networks without mDNS; `-no-mdns` turns mDNS off; `-no-listen` closes the member port, so the device only dials. |
+| `cbb service [-name NAME] [-port PORT] [-peer HOST:PORT]... [-no-mdns] [-no-listen] [-tunnel-via HOST:PORT] [-full]` | Runs the service (systemd or procd), as `cbb service` does on a full member. `-peer` names a full member on the home network to dial, for networks without mDNS; `-no-mdns` turns mDNS off; `-no-listen` closes the member port, so the device only dials; `-full` presents the device to the group as a computer. |
 | `cbb global [on\|off]` | Shows sync away from home, or turns it on (after the warning about keys in files, typing yes) or off here. Once on, the device meets the group's hub at home, keeps its offer, and away from home reaches it through the group's WireGuard tunnel; a hub that hides its tunnel (`-obfuscate`, `-vless`) keeps the lite member at home. |
 | `cbb leave [-yes]` | Leaves the group, as on a full member: through the service, or by itself when the service does not run. |
 | `cbb copy [-secret]` | Sends standard input to the group. |

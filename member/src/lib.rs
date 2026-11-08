@@ -36,6 +36,7 @@ mod devices_cli;
 pub mod discovery;
 pub mod entries;
 pub mod error;
+mod evidence;
 pub mod files;
 #[cfg(feature = "tunnel")]
 pub mod forward;
@@ -381,12 +382,17 @@ fn member_port() -> u16 {
 
 /// Joins a group. For the Next (for_next), the QR code and the outcome come
 /// in its frames, and so do the log lines, as `CBB#` lines it skips.
+/// cbb pair's usage in no group.
+const PAIR_USE: &str =
+    "cbb pair [-code [ADDRESS:PORT] | -invite FILE | -app FILE] [-full] [-name NAME] [-port PORT] [-addr ADDRESS]";
+
 fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut name = host_name();
     let mut port = member_port();
     let mut addrs = Vec::new();
     let mut code_addr = None;
     let mut invite = None;
+    let mut app = None;
     let mut full = false;
     let mut i = 0;
     while i < args.len() {
@@ -411,10 +417,23 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                 }
             },
             Some("invite") if !for_next => invite = Some(next()?),
-            _ => return Err(Error::msg(tr!("unknown argument {}; see cbb help", format!("{:?}", args[i])))),
+            Some("app") if !for_next => app = Some(next()?),
+            _ => return Err(cli::usage(PAIR_USE)),
         }
         i += 2;
     }
+    // The code comes from standard input, never from the command line, and
+    // an invitation brings its own way in.
+    if [invite.is_some(), code_addr.is_some(), app.is_some()].iter().filter(|b| **b).count() > 1 {
+        return Err(cli::usage(PAIR_USE));
+    }
+    // For a desktop app, which runs cbb as the administrator and sees what
+    // it prints only once it ends: the app's own file, opened before
+    // anything else, gets the QR code's text.
+    let app_file = match &app {
+        Some(path) => Some(std::sync::Mutex::new(Some(open_app_file(path)?))),
+        None => None,
+    };
     if invite.is_none() && code_addr.as_deref() == Some("") {
         // As Go's joinWithCode: the service joins, by the window that mDNS
         // finds, and keeps the identity it gets. With an address, cbb joins
@@ -477,6 +496,15 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                 addrs.into_iter().map(|a| if resolve(&a).is_ok() { a } else { join_host_port(&a, bound) }).collect();
             let code = pair::new_code();
             let shown = |text: &str| {
+                if let (Some(file), Some(path)) = (&app_file, &app) {
+                    let f = file.lock().unwrap_or_else(|e| e.into_inner()).take();
+                    if let Err(e) = f.map_or(Ok(()), |f| write_app_join(f, text, bound)) {
+                        eprintln!("cbb: writing {path}: {}", e.for_user());
+                        std::process::exit(1);
+                    }
+                    watch_app_file(path.clone());
+                    return;
+                }
                 if for_next {
                     let frame = next::qr_frame(text);
                     let mut out = std::io::stdout();
@@ -522,6 +550,61 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         println!("{}", tr!("Joined the group {} as {}.", id.tag(), id.id));
     }
     Ok(())
+}
+
+/// Opens the desktop app's file for cbb pair -app once, at the start: a
+/// regular file, the one the path named when cbb looked, and never one that
+/// a link put in its place since leads to, since cbb runs as the
+/// administrator and the file's folder may be the user's.
+fn open_app_file(path: &str) -> Result<std::fs::File> {
+    let before = std::fs::symlink_metadata(path).context(format!("cannot open {path}"))?;
+    if !before.file_type().is_file() {
+        return Err(Error::msg(format!("{path} is not a regular file")));
+    }
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut o, libc::O_NOFOLLOW);
+    // FILE_FLAG_OPEN_REPARSE_POINT: a link opens as itself, not its target.
+    #[cfg(windows)]
+    std::os::windows::fs::OpenOptionsExt::custom_flags(&mut o, 0x0020_0000);
+    let f = o.open(path).context(format!("cannot open {path}"))?;
+    let opened = f.metadata().context(format!("cannot open {path}"))?;
+    #[cfg(unix)]
+    let same = {
+        use std::os::unix::fs::MetadataExt;
+        (before.dev(), before.ino()) == (opened.dev(), opened.ino())
+    };
+    #[cfg(not(unix))]
+    let same = true;
+    if !opened.file_type().is_file() || !same {
+        return Err(Error::msg(format!("{path} changed while cbb opened it")));
+    }
+    Ok(f)
+}
+
+/// Writes what cbb pair -app hands the app, one line of JSON: the QR code's
+/// text, how long the wait lasts, and the member port the phone dials.
+fn write_app_join(mut f: std::fs::File, text: &str, port: u16) -> Result<()> {
+    let line = serde_json::json!({"qr": text, "expires": pair::LIFETIME.as_secs(), "port": port});
+    f.set_len(0)
+        .and_then(|_| f.write_all(format!("{line}\n").as_bytes()))
+        .and_then(|_| f.sync_all())
+        .context("cannot write the code")
+}
+
+/// Ends cbb pair -app once the app removes its file: the app closed its
+/// window, and the wait for the phone ends with it.
+fn watch_app_file(path: String) {
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_millis(200));
+            if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
+                eprintln!("cbb: cancelled");
+                std::process::exit(1);
+            }
+        }
+    });
 }
 
 /// Reads a remote invitation's file for cbb pair -invite and asks the user
@@ -882,7 +965,10 @@ fn cmd_paste(g: &Global, args: &[String]) -> Result<()> {
         }
         out = text.into_bytes();
     }
-    std::io::stdout().write_all(&out).context("cannot write the text")?;
+    // Flushed here: a full disk fails the paste rather than lose the text
+    // quietly at exit.
+    let mut stdout = std::io::stdout();
+    stdout.write_all(&out).and_then(|_| stdout.flush()).context("cannot write the text")?;
     Ok(())
 }
 
@@ -1060,23 +1146,29 @@ pub(crate) fn go_duration_ms(s: &str) -> Option<i64> {
 
 fn cmd_paste_receive(g: &Global, args: &[String]) -> Result<()> {
     const USE: &str = "cbb paste-receive [on [-enter] [-console] [-no-lock-check] | off [-on DEVICE | -all]]";
+    // As on Go's flag package, the flags may come before on or off too.
     let mut h = control::Header { op: "status".into(), ..Default::default() };
-    let mut it = args.iter().enumerate();
-    while let Some((i, a)) = it.next() {
-        match (i, a.as_str(), flag(a)) {
-            (0, "on" | "off", _) => {
+    let (mut on_flags, mut off_flags) = (false, false);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match (a.as_str(), flag(a)) {
+            ("on" | "off", _) if h.name.is_empty() => {
                 h.op = "paste-receive".into();
                 h.name = a.clone();
             }
-            (1.., _, Some("enter")) if h.name == "on" => h.enter = true,
-            (1.., _, Some("console")) if h.name == "on" => h.console = true,
-            (1.., _, Some("no-lock-check")) if h.name == "on" => h.no_lock_check = true,
-            (1.., _, Some("on")) if h.name == "off" => {
-                h.device = it.next().map(|(_, d)| d.clone()).ok_or_else(|| cli::usage(USE))?;
+            (_, Some("enter")) => (h.enter, on_flags) = (true, true),
+            (_, Some("console")) => (h.console, on_flags) = (true, true),
+            (_, Some("no-lock-check")) => (h.no_lock_check, on_flags) = (true, true),
+            (_, Some("on")) => {
+                h.device = it.next().cloned().ok_or_else(|| cli::usage(USE))?;
+                off_flags = true;
             }
-            (1.., _, Some("all")) if h.name == "off" => h.all = true,
+            (_, Some("all")) => (h.all, off_flags) = (true, true),
             _ => return Err(cli::usage(USE)),
         }
+    }
+    if on_flags && h.name != "on" || off_flags && h.name != "off" {
+        return Err(cli::usage(USE));
     }
     if h.all && !h.device.is_empty() {
         return Err(cli::usage(USE));
@@ -1143,7 +1235,11 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
                 g,
                 &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()),
             )?;
-            let st = m.header.status.ok_or_else(|| Error::msg("this device is in no group"))?;
+            let st = m
+                .header
+                .status
+                .filter(|s| !s.group.is_empty())
+                .ok_or_else(|| Error::msg("this device is in no group"))?;
             for a in &st.actions {
                 println!("{:<16} {}", a.name, action_line(a));
             }
@@ -1249,9 +1345,12 @@ fn grant(m: &control::Message) -> Result<()> {
     if rootless::is() {
         return Ok(());
     }
-    let on: Vec<String> =
-        m.header.status.iter().flat_map(|s| &s.actions).filter(|a| a.on).map(|a| a.name.clone()).collect();
-    actions::grant(std::path::Path::new("/"), &on).map(|_| ())
+    actions::grant(std::path::Path::new("/"), &on_actions(m.header.status.as_ref())).map(|_| ())
+}
+
+/// The names of the actions a status says are on.
+fn on_actions(st: Option<&control::Status>) -> Vec<String> {
+    st.iter().flat_map(|s| &s.actions).filter(|a| a.on).map(|a| a.name.clone()).collect()
 }
 
 fn is_root() -> bool {
@@ -1260,14 +1359,15 @@ fn is_root() -> bool {
 
 /// How an action stands and who may run it, as on a full member.
 fn action_line(a: &control::Action) -> String {
+    let run = if a.command.is_empty() { String::new() } else { format!(": {}", a.command.join(" ")) };
     if !a.on {
-        return "off".into();
+        return format!("off{run}");
     }
     let mut who = if a.by.is_empty() { "every admin".to_string() } else { a.by.join(", ") };
     if actions::hardware_by_default(&a.name) && !a.any_key {
         who += ", keys in hardware only";
     }
-    format!("on, for {who}")
+    format!("on, for {who}{run}")
 }
 
 /// What turning a on lets the group's admins do, and the rights it grants
@@ -1369,6 +1469,13 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
     let modes = [check || timer, auto.is_some(), mirror.is_some(), method.is_some()].iter().filter(|b| **b).count();
     if modes > 1 || (check && timer) {
         return Err(Error::msg(USAGE));
+    }
+    // Refused before anything on the system is looked at.
+    if auto.as_deref().is_some_and(|a| !["", "on", "off"].contains(&a)) {
+        return Err(Error::msg("usage: cbb update -auto [on|off]"));
+    }
+    if method.as_deref().is_some_and(|m| !["get", "brew", "winget", "docker", "package"].contains(&m)) {
+        return Err(Error::msg("usage: cbb update -installed-by get|brew|winget|docker|package"));
     }
     // A rootless install's user owns its files and updates it.
     let root = is_root() || rootless::is();
@@ -1722,7 +1829,18 @@ fn core_version() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{core_version, hint, terminal_text};
+    use super::{control, core_version, hint, on_actions, qr, terminal_text};
+
+    #[test]
+    fn only_the_actions_that_are_on() {
+        assert!(on_actions(None).is_empty());
+        let a = |name: &str, on| control::Action { name: name.into(), on, ..Default::default() };
+        let st = control::Status {
+            actions: vec![a("lock", true), a("sleep", false), a("reboot", true)],
+            ..Default::default()
+        };
+        assert_eq!(on_actions(Some(&st)), ["lock", "reboot"]);
+    }
 
     /// Without systemd (NextPi), the hint names cbb service, not systemctl.
     #[test]
@@ -1744,6 +1862,35 @@ mod tests {
             )),
             "{line}"
         );
+    }
+
+    #[test]
+    fn qr_reads_back() {
+        // Two modules a line, a quiet zone of two on each side: read the
+        // modules back from the colors and compare.
+        let url = "http://192.168.1.20:8766/";
+        let out = qr(url);
+        let code = qrcode::QrCode::with_error_correction_level(url, qrcode::EcLevel::M).unwrap();
+        let size = code.width() as i32;
+        let lines: Vec<&str> = out.trim_end_matches('\n').split('\n').collect();
+        assert_eq!(lines.len() as i32, (size + 4 + 1) / 2);
+        for (i, line) in lines.iter().enumerate() {
+            let cells: Vec<&str> = line.split("\x1b[").skip(1).collect();
+            let cells = &cells[..cells.len() - 1]; // the reset
+            assert_eq!(cells.len() as i32, size + 4, "line {i}");
+            for (x, cell) in cells.iter().enumerate() {
+                let colors: Vec<&str> = cell.trim_end_matches("m▀").split(';').collect();
+                for (half, y) in [2 * i as i32, 2 * i as i32 + 1].into_iter().enumerate() {
+                    let (mx, my) = (x as i32 - 2, y - 2);
+                    let want = mx >= 0
+                        && my >= 0
+                        && mx < size
+                        && my < size
+                        && code[(mx as usize, my as usize)] == qrcode::Color::Dark;
+                    assert_eq!(colors[half] == "30" || colors[half] == "40", want, "module {mx},{my}");
+                }
+            }
+        }
     }
 
     #[test]

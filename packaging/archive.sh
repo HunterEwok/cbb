@@ -20,8 +20,7 @@
 # beside cbb, where the Rust cbb looks for it (docs/design.md, "The service
 # and its helper"); so do cbb-forward and cbb-relay, the servers that cbb
 # forward and cbb relay run. Each Go program packed adds its modules' notices.
-# The binary is the Rust cbb in a release; a Go cbb (go version reads it)
-# adds the modules of cmd/cbb. With RUST_NOTICES naming a file, the notices
+# The binary is the Rust cbb. With RUST_NOTICES naming a file, the notices
 # of the Rust cbb's crates (member/packaging/notices.sh TARGET) come first.
 # With CORE_NOTICES naming a file, the notices of the Rust core's crates
 # (member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm)
@@ -111,7 +110,6 @@ for server in cbb-forward cbb-relay; do
 done
 # The Go programs packed, by their folders, for their modules' notices.
 goprograms=
-if go version "$bin" >/dev/null 2>&1; then goprograms=cmd/cbb; fi
 [ -z "$helper" ] || goprograms="$goprograms cmd/cbb-helper"
 for server in $servers; do goprograms="$goprograms cmd/$server"; done
 [ -z "$desktop" ] || goprograms="$goprograms apps/desktop"

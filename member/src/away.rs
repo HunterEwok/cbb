@@ -326,7 +326,8 @@ impl Away {
         // A hub waiting as the client of a hub above shows that hub.
         let standby = st.is_hub && self.serving.lock().unwrap().is_none();
         if st.is_hub {
-            self.hub_status(st, &mut a, standby);
+            let entries_held = node.entries().current(crate::uptime::wall_ms()).is_some();
+            self.hub_status(st, &mut a, standby, entries_held);
         }
         if let Some(h) = using
             .as_deref()

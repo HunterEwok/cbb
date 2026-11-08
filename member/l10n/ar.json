@@ -1,6 +1,5 @@
 {
  "{} needs a value": "يحتاج {} إلى قيمة",
- "unknown argument {}; see cbb help": "وسيط غير معروف {}؛ انظر cbb help",
  "Pairing code: ": "رمز الاقتران: ",
  "On a phone of the group, tap + in the CBB app, then Scan a code, and scan this:": "على هاتف في المجموعة، اضغط + في تطبيق CBB، ثم «مسح رمز»، وامسح هذا:",
  "Or paste this into the app: {}": "أو الصق هذا في التطبيق: {}",

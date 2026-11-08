@@ -706,8 +706,9 @@ mod tests {
         let s = entries_string(&set).unwrap();
         assert!(s.starts_with(ENTRIES_PREFIX));
         assert_eq!(parse_entries(&format!("  {s}\n")).unwrap(), set);
-        assert!(parse_entries("cbb-entries:!!").is_err());
-        assert!(parse_entries("entries").is_err());
+        for bad in ["", "entries", &format!("entries:{s}"), "cbb-entries:!!", "cbb-entries:e30x"] {
+            assert!(parse_entries(bad).is_err(), "{bad:?} was taken");
+        }
         assert_eq!(utc_date(0), "1970-01-01");
         assert_eq!(utc_date(1_793_404_800_000), "2026-10-31");
     }

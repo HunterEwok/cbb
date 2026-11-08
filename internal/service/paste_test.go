@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/remotepaste"
 )
 
@@ -133,22 +132,6 @@ func TestRemotePaste(t *testing.T) {
 	// A member that is not an admin sends none.
 	if _, err := deck.do(t, control.Header{Op: control.OpPasteOn, Device: "pi"}, "ls"); err == nil || !strings.Contains(err.Error(), "only an admin") {
 		t.Errorf("deck pasted on pi: %v", err)
-	}
-}
-
-// TestPasteOnMacNeedsTheApp: without the app, a Mac says that it pastes
-// through it.
-func TestPasteOnMacNeedsTheApp(t *testing.T) {
-	var h hub
-	pi := startService(t, &h, "pi")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
-	pairWith(t, pi, mac)
-	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
-	if _, err := mac.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "mac"}, "ls"); err == nil || !strings.Contains(err.Error(), "a Mac pastes through the CBB app") {
-		t.Errorf("a paste on a Mac without the app: %v", err)
 	}
 }
 
@@ -288,7 +271,7 @@ func TestCommandSignedBeforeStart(t *testing.T) {
 	clock := newTestClock(t, time.Minute) // deck starts a minute "later"
 	var h hub
 	pi := startService(t, &h, "pi")
-	deck := startEnv(t, &h, "deck", func(c *Config) { c.now = clock.now }, clock.env())
+	deck := startEnv(t, &h, "deck", clock.env())
 	clock.set(t, 0)
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })

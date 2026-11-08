@@ -48,19 +48,15 @@ func adminOn(t *testing.T, cli string, root *testService, name string) {
 	}
 }
 
-// goCLI builds the Go command line for the tests that run it against the
-// Rust service.
-func goCLI(t *testing.T) string {
+// cbbCLI is the command line the tests run against the services: the Rust
+// cbb's, which CBB_TEST_RUST_SERVICE names.
+func cbbCLI(t *testing.T) string {
 	t.Helper()
-	// Where the tests run the Rust service, its command line too.
-	if bin := rustService(); bin != "" {
-		return bin
+	bin := rustService()
+	if bin == "" {
+		t.Skip("CBB_TEST_RUST_SERVICE is not set: the command line is the Rust cbb's")
 	}
-	cli := filepath.Join(t.TempDir(), "cbb")
-	if out, err := exec.Command("go", "build", "-o", cli, "github.com/HunterEwok/cbb/cmd/cbb").CombinedOutput(); err != nil {
-		t.Fatalf("go build cbb: %v\n%s", err, out)
-	}
-	return cli
+	return bin
 }
 
 // runCLI runs the command line cli against the service at socket, with
@@ -89,7 +85,7 @@ func TestLiteRoot(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	dir := t.TempDir()
 	root := startLite(t, bin, dir, "-no-mdns")
 	cbb := func(stdin string, args ...string) (string, error) {
@@ -260,7 +256,7 @@ func TestLiteRootWindow(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	free, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -387,7 +383,7 @@ func TestLiteTakeover(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
 	laptop := startService(t, &h, "laptop")
@@ -508,7 +504,7 @@ func TestLiteRecovery(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
 	laptop := startService(t, &h, "laptop")
@@ -600,7 +596,7 @@ func TestLiteHub(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
 	laptop := startService(t, &h, "laptop")
@@ -698,7 +694,7 @@ func TestLiteHubs(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
 	laptop := startService(t, &h, "laptop")
@@ -804,7 +800,7 @@ func TestLiteHubCommands(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
 	laptop := startService(t, &h, "laptop")
@@ -940,7 +936,7 @@ func TestLiteHubForwarder(t *testing.T) {
 		<-served
 	}()
 
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
 	laptop := startService(t, &h, "laptop")
@@ -1026,7 +1022,7 @@ func TestLiteHubCredential(t *testing.T) {
 		<-served
 	}()
 
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
 	laptop := startService(t, &h, "laptop")
@@ -1104,7 +1100,7 @@ func TestLiteForwardOnly(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
 	// A device's record from the root counts before an admin's, so the
@@ -1228,7 +1224,7 @@ func TestLiteHubVLESS(t *testing.T) {
 		<-served
 	}()
 
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
 	c, code := openWindow(t, desk)
@@ -1351,7 +1347,7 @@ func TestLiteNetwork(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	root := startLite(t, bin, t.TempDir(), "-no-mdns", "-no-listen")
 	if out, err := runCLI(cli, root.socket, "", "new"); err != nil {
 		t.Fatalf("cbb new: %v\n%s", err, out)
@@ -1482,7 +1478,7 @@ func TestLiteRelayRoot(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	dir := t.TempDir()
 	root := startLite(t, bin, dir, "-no-mdns")
 	if out, err := runCLI(cli, root.socket, "", "new"); err != nil {
@@ -1561,7 +1557,7 @@ func TestLiteRelayProject(t *testing.T) {
 	}
 	signer := newReleaseSigner(t)
 	var h hub
-	pi := startEnv(t, &h, "pi", func(c *Config) { c.ReleaseRoots = signer.roots(t) }, signer.rootsEnv(t))
+	pi := startEnv(t, &h, "pi", signer.rootsEnv(t))
 	dir := joinLite(t, bin, pi)
 	pemFile := filepath.Join(t.TempDir(), "roots.pem")
 	if err := os.WriteFile(pemFile, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.roots(t)[0]}), 0o644); err != nil {

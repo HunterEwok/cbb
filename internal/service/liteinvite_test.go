@@ -37,7 +37,7 @@ func liteBin(t *testing.T) string {
 // admin declined, then reaches the hub through the tunnel with its own key.
 func TestLiteInvite(t *testing.T) {
 	bin := liteBin(t)
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
 	c, code := openWindow(t, desk)

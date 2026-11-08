@@ -1,6 +1,5 @@
 {
  "{} needs a value": "{} 需要一个值",
- "unknown argument {}; see cbb help": "未知参数 {}；见 cbb help",
  "Pairing code: ": "配对代码：",
  "On a phone of the group, tap + in the CBB app, then Scan a code, and scan this:": "在群组中的一部手机上，打开 CBB 应用点按 +，再点按“扫描代码”，扫描下面的码：",
  "Or paste this into the app: {}": "或把这段内容粘贴到应用中：{}",

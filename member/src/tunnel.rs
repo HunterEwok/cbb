@@ -839,6 +839,11 @@ impl Link {
         };
         let vless_only = vless.is_some() && hub.obfuscation.is_none();
         let mut endpoints = if vless_only { Vec::new() } else { hub.endpoints.clone() };
+        // In tests, CBB_TEST_DEAD_UDP stands for a network that lets no UDP
+        // through: the hub's addresses become one that never answers.
+        if let Some(dead) = std::env::var("CBB_TEST_DEAD_UDP").ok().and_then(|v| v.parse::<SocketAddr>().ok()) {
+            endpoints.iter_mut().for_each(|e| *e = dead);
+        }
         let vless_at = vless.as_ref().map(|v| v.addr());
         if let Some(at) = vless_at {
             if VLESS_FIRST.lock().unwrap().contains(&hub.device) {
@@ -1393,6 +1398,36 @@ mod tests {
 
     /// The hub's key for each period, as Go's TestRotate: the next key
     /// comes with a new period and takes over once its time came.
+    /// The hubs a member tries, in the group's order: all it keeps offers
+    /// of, or on a hub those above it; never a device outside the order,
+    /// itself or one without an address; a hub with a key for the next
+    /// period once more with that key (Go's TestHubsToTry).
+    #[test]
+    fn hubs_to_try_in_the_group_s_order() {
+        let hub = |d: &str, eps: bool| Hub {
+            device: d.into(),
+            key: vec![1; 32],
+            psk: vec![0; 32],
+            endpoints: if eps { vec!["192.0.2.1:8764".parse().unwrap()] } else { Vec::new() },
+            next: Vec::new(),
+            obfuscation: None,
+            vless: None,
+        };
+        let mut st = State::new("g").unwrap();
+        st.hubs = vec![hub("pi", true), hub("stranger", true), hub("phone", true), hub("mac", false)];
+        let order: Vec<String> = ["phone", "mac", "pi"].iter().map(|s| s.to_string()).collect();
+        let devs = |hs: Vec<Hub>| hs.into_iter().map(|h| h.device).collect::<Vec<_>>();
+        assert_eq!(devs(st.hubs_above(&order, "deck")), ["phone", "pi"], "a client");
+        st.is_hub = true;
+        assert_eq!(devs(st.hubs_above(&order, "pi")), ["phone"], "the lowest hub");
+        assert!(st.hubs_above(&order, "phone").is_empty(), "the first hub");
+        st.is_hub = false;
+        st.hubs[2].next = vec![2; 32];
+        let got = st.hubs_above(&order, "deck");
+        assert_eq!(devs(got.clone()), ["phone", "phone", "pi"]);
+        assert_eq!((got[0].key.clone(), got[1].key.clone()), (vec![1; 32], vec![2; 32]));
+    }
+
     #[test]
     fn rotates_the_hubs_key() {
         let mut st = State::new("g").unwrap();

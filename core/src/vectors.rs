@@ -886,8 +886,6 @@ fn strict_wrong(v: &Value) -> Vec<String> {
 
 /// The server credentials and release files of strict-files.json, which
 /// Go's TestStrictGeneratedFiles writes from the tables of docs/protocol.md.
-/// The lite member reads no attest-status.json, the only kind it leaves to
-/// the others.
 #[test]
 fn strict_files() {
     let v = vectors("strict-files.json");
@@ -904,11 +902,11 @@ fn strict_files() {
             let kind = c["kind"].as_str().unwrap();
             let got = match (section, kind) {
                 ("credentials", _) => crate::credential::Body::parse(&body).map(|_| ()).map_err(|e| e.to_string()),
-                (_, "attest-status") => continue,
                 _ if body.len() > crate::release::MAX_BODY => Err("too large".to_string()),
                 (_, "keys") => crate::release::decode_keys(&body).map(|_| ()).map_err(|e| e.to_string()),
                 (_, "release") => crate::release::decode_release(&body).map(|_| ()).map_err(|e| e.to_string()),
                 (_, "channel") => crate::release::decode_channel(&body).map(|_| ()).map_err(|e| e.to_string()),
+                (_, "attest-status") => crate::release::decode_status(&body).map(|_| ()).map_err(|e| e.to_string()),
                 _ => panic!("unknown kind {kind}"),
             };
             if got.is_ok() != c["valid"].as_bool().unwrap() {

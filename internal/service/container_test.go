@@ -16,9 +16,8 @@ import (
 // cannot be the hub; the user's CBB_KEYS_IN_FILE=yes allows all of it.
 func TestContainerHoldsNoKeys(t *testing.T) {
 	var h hub
-	inContainer := func(c *Config) { c.Container = true }
-	nas := startEnv(t, &h, "nas", inContainer, "CBB_CONTAINER=docker")
-	if _, err := nas.do(t, control.Header{Op: control.OpNew}, ""); err == nil || !strings.Contains(err.Error(), "container") || !strings.Contains(err.Error(), keysInFileEnv+"=yes") {
+	nas := startEnv(t, &h, "nas", "CBB_CONTAINER=docker")
+	if _, err := nas.do(t, control.Header{Op: control.OpNew}, ""); err == nil || !strings.Contains(err.Error(), "container") || !strings.Contains(err.Error(), "CBB_KEYS_IN_FILE=yes") {
 		t.Fatalf("cbb new in a container: %v", err)
 	}
 
@@ -42,7 +41,7 @@ func TestContainerHoldsNoKeys(t *testing.T) {
 	}
 
 	// Allowed, the same container takes an admin key and becomes an admin.
-	allowed := startEnv(t, &h, "nas2", func(c *Config) { c.Container, c.KeysInFile = true, true }, "CBB_CONTAINER=docker", keysInFileEnv+"=yes")
+	allowed := startEnv(t, &h, "nas2", "CBB_CONTAINER=docker", "CBB_KEYS_IN_FILE=yes")
 	pairWith(t, pi, allowed)
 	makeAdmin(t, pi, allowed)
 }
@@ -53,8 +52,7 @@ func TestContainerHoldsNoKeys(t *testing.T) {
 // cannot be the hub; nothing allows any of it.
 func TestRootlessHoldsNoKeys(t *testing.T) {
 	var h hub
-	rootless := func(c *Config) { c.Rootless, c.KeysInFile = true, true }
-	box := startEnv(t, &h, "box", rootless, "CBB_ROOTLESS=1", keysInFileEnv+"=yes")
+	box := startEnv(t, &h, "box", "CBB_ROOTLESS=1", "CBB_KEYS_IN_FILE=yes")
 	if _, err := box.do(t, control.Header{Op: control.OpNew}, ""); err == nil || !strings.Contains(err.Error(), "without root") {
 		t.Fatalf("cbb new rootless: %v", err)
 	}
