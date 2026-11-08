@@ -1438,6 +1438,16 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program
   without a console window. `cbb version` names the lite member only when no `cbb-helper` is
   beside `cbb`.
+- The Rust `cbb update` updates every system the release builds for: it downloads the archive
+  of its system (the lite member's only when no `cbb-helper` is beside `cbb`), runs that
+  system's installer, puts the helper and the servers back with `cbb` when the new release
+  does not start, checks on Windows that the new programs carry the installed ones'
+  Authenticode signer and runs from a copy outside Program Files, and its daily timer is
+  launchd on a Mac, cron on FreeBSD and a scheduled task on Windows.
+- The Rust service refuses the group's keys in a container unless `CBB_KEYS_IN_FILE=yes`, as
+  the Go service does, and `cbb pair -code` without an address hands the code to the running
+  service. The Docker image carries the Rust `cbb` with the Go programs beside it, and the
+  systemd units of `cbb-forward` and `cbb-relay` run those programs.
 - The Android and iPhone apps put one received image or video, and an image the button
   fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
   Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).
@@ -1863,6 +1873,8 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The Rust service fetches a file or a release archive once when two requests want it at the
+  same time; the second waited on chunks the first had taken and could fail.
 - The Rust service no longer renames itself in mDNS ("ID (2)") when its pairing window
   opens or closes, which kept the other members from finding it: the registration is
   updated in place rather than taken back and made again.

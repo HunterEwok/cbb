@@ -605,15 +605,16 @@ jobs:
           cache: false # a release builds from scratch
       - name: the software bills of materials (tools/sbom, docs/maintaining.md)
         # The Go programs' modules from the programs themselves; the crates of
-        # the lite member and of the phones' Rust core on their targets; the
-        # Swift kit's packages. The Android apps' came with their APKs.
+        # cbb (the Rust program, also the lite member's) and of the phones'
+        # Rust core on their targets; the Swift kit's packages. The Android
+        # apps' came with their APKs.
         run: |
           go run ./tools/sbom go -o dist/sbom-go.cdx.json -version "$GITHUB_REF_NAME" \
             dist/cbb-linux-*.tar.gz dist/cbb-darwin-*.tar.gz \
             dist/cbb-freebsd-*.tar.gz dist/cbb-windows-*.zip
           go run ./tools/sbom cargo -o dist/sbom-lite.cdx.json -version "$GITHUB_REF_NAME" -manifest Cargo.toml \
             -package cbb-lite \
-            -target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,arm-unknown-linux-musleabihf,mips-unknown-linux-musl,mipsel-unknown-linux-musl
+            -target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,armv7-unknown-linux-musleabihf,arm-unknown-linux-musleabihf,mips-unknown-linux-musl,mipsel-unknown-linux-musl,x86_64-unknown-freebsd,aarch64-unknown-freebsd,x86_64-apple-darwin,aarch64-apple-darwin,x86_64-pc-windows-gnu,aarch64-pc-windows-gnullvm
           go run ./tools/sbom cargo -o dist/sbom-phone-core.cdx.json -version "$GITHUB_REF_NAME" -manifest Cargo.toml \
             -package cbb-ffi \
             -target aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android

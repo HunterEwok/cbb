@@ -204,6 +204,11 @@ pub struct Node {
     /// The release archive each peer's hello says it updates from, which
     /// a hub fetches for them.
     archives: Mutex<HashMap<DeviceId, String>>,
+    /// One fetch of a blob at a time, by its SHA-256: a second one (cbb
+    /// paste -o while the copy is fetched in the background) waits for the
+    /// first, then finds the blob held, as both would write one file and
+    /// the peer's chunks go to one sink.
+    fetching: Mutex<HashMap<[u8; 32], Arc<Mutex<()>>>>,
     /// Keeps the identity when it changes (a renewed certificate, a new
     /// root), where identity.json cannot: a phone's app whose key is
     /// outside the core keeps its own file.
@@ -407,6 +412,7 @@ impl Node {
             entries,
             releases,
             archives: Mutex::new(HashMap::new()),
+            fetching: Mutex::new(HashMap::new()),
             keep_identity: None,
             paused: AtomicBool::new(false),
             kick: (Mutex::new(0), Condvar::new()),
@@ -842,6 +848,11 @@ impl Node {
         if store.held(&sum) == Some(size) {
             return Ok(());
         }
+        let lock = self.fetch_lock(&sum);
+        let _one = lock.lock().unwrap_or_else(|e| e.into_inner());
+        if store.held(&sum) == Some(size) {
+            return Ok(());
+        }
         let mut peers: Vec<Arc<Conn>> = self
             .conns
             .lock()
@@ -880,6 +891,11 @@ impl Node {
         let sum: [u8; 32] = releases::unhex(sha)
             .and_then(|b| b.try_into().ok())
             .ok_or_else(|| Error::msg(format!("{sha:?} is not a SHA-256")))?;
+        let lock = self.fetch_lock(&sum);
+        let _one = lock.lock().unwrap_or_else(|e| e.into_inner());
+        if self.releases.held(sha, now).is_some() {
+            return Ok(());
+        }
         let size = u64::try_from(a.size).map_err(|_| Error::msg("the archive has no size"))?;
         let part = self.releases.files_dir()?.join(format!(".part-{sha}"));
         let peers: Vec<Arc<Conn>> = self
@@ -910,6 +926,14 @@ impl Node {
 
     /// Fetches the blob sum from one peer into the partial file at path,
     /// continuing from what it holds.
+    /// The lock that keeps fetches of the blob sum one at a time; it is
+    /// dropped from the table when no fetch holds or waits for it.
+    fn fetch_lock(&self, sum: &[u8; 32]) -> Arc<Mutex<()>> {
+        let mut m = self.fetching.lock().unwrap();
+        m.retain(|_, l| Arc::strong_count(l) > 1);
+        Arc::clone(m.entry(*sum).or_default())
+    }
+
     fn fetch_from(&self, c: &Arc<Conn>, path: &std::path::Path, sum: &[u8; 32], size: u64) -> Result<()> {
         use std::io::{Seek, Write};
         if let Some(dir) = path.parent() {
@@ -954,10 +978,13 @@ impl Node {
                 }
                 Ok(Piece::Chunk(_)) => {}
                 Ok(Piece::Missing) => break Err(Error::msg("it does not hold the blob")),
-                Err(_) => {
+                Err(mpsc::RecvTimeoutError::Timeout) => {
                     if last.elapsed() >= FETCH_IDLE {
                         break Err(Error::msg("no chunk came for 15 s"));
                     }
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    break Err(Error::msg("another fetch took the blob's chunks"));
                 }
             }
         };

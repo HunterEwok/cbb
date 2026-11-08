@@ -43,6 +43,11 @@ windows/arm64) target=aarch64-pc-windows-gnullvm tool=zigbuild features=windowle
 	exit 2
 	;;
 esac
+# The architecture as the release's archives name it, which cbb update
+# downloads for (member/src/update_os.rs).
+CBB_ARCH=${1#*/}
+case $CBB_ARCH in arm/*) CBB_ARCH=armv${CBB_ARCH#arm/} ;; esac
+export CBB_ARCH
 if [ -n "$std" ]; then
 	rustup toolchain install "$toolchain" --profile minimal --component rust-src >&2
 else

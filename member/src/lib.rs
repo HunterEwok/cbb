@@ -82,6 +82,7 @@ pub mod tls;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
 mod update;
+mod update_os;
 pub mod uptime;
 #[cfg(feature = "tunnel")]
 pub mod vless;
@@ -396,11 +397,37 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
             Some("name") => name = next()?,
             Some("port") => port = next()?.parse().context("the port is a number")?,
             Some("addr") => addrs.push(next()?),
-            Some("code") if !for_next => code_addr = Some(next()?),
+            // -code [address:port], as Go's: the code from standard input,
+            // the address of the window when mDNS cannot find it.
+            Some("code") if !for_next => match args.get(i + 1).filter(|a| !a.starts_with('-') && a.contains(':')) {
+                Some(a) => code_addr = Some(a.clone()),
+                None => {
+                    code_addr = Some(String::new());
+                    i += 1;
+                    continue;
+                }
+            },
             Some("invite") if !for_next => invite = Some(next()?),
             _ => return Err(Error::msg(format!("unknown argument {:?}; see cbb help", args[i]))),
         }
         i += 2;
+    }
+    if invite.is_none() && code_addr.as_deref() == Some("") {
+        // As Go's joinWithCode: the service joins, by the window that mDNS
+        // finds, and keeps the identity it gets. With an address, cbb joins
+        // itself, into its state folder, before its service starts.
+        use std::io::IsTerminal;
+        if std::io::stdin().is_terminal() {
+            print!("Pairing code: ");
+            std::io::stdout().flush().ok();
+        }
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line).context("cannot read the code")?;
+        let code = pair::normalize_code(line.trim())?;
+        let h = control::Header { op: "join".into(), code, ..Default::default() };
+        request(g, &control::Message::new(h, Vec::new()))?;
+        println!("Joined the group.");
+        return Ok(());
     }
     let invite = match invite {
         Some(path) => Some(invite_consent(&path)?),
@@ -411,8 +438,8 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         joiner = joiner.as_computer(admin::os_name());
     }
     let save = &*save;
-    let id = match (invite, code_addr) {
-        (Some((path, text)), _) => {
+    let id = match invite {
+        Some((path, text)) => {
             let shown = |fp: &str| {
                 println!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp));
                 println!("Whoever invited you sees it on the hub and admits this device if it matches.");
@@ -425,7 +452,8 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
             let _ = std::fs::remove_file(&path);
             id
         }
-        (None, Some(a)) => {
+        None if code_addr.is_some() => {
+            let a = code_addr.unwrap_or_default();
             print!("Pairing code: ");
             std::io::stdout().flush().ok();
             let mut line = String::new();
@@ -435,7 +463,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                 .context(format!("cannot connect to {a}"))?;
             pair::join(&joiner, sock, &code, save)?
         }
-        (None, None) => {
+        None => {
             let ln = TcpListener::bind(("::", port))
                 .or_else(|_| TcpListener::bind(("0.0.0.0", port)))
                 .or_else(|_| TcpListener::bind(("0.0.0.0", 0)))
@@ -1336,10 +1364,12 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
     }
     // A rootless install's user owns its files and updates it.
     let root = is_root() || rootless::is();
-    let need_root = || Err(Error::msg("run it with sudo"));
+    let need_root = || {
+        Err(Error::msg(if cfg!(windows) { "run it in a terminal opened as administrator" } else { "run it with sudo" }))
+    };
     let (dir, work) = update::paths();
     let mut st = if root { update::load_state(&dir)? } else { update::State::default() };
-    let exe = std::env::current_exe().context("cannot find this program")?;
+    let exe = update_os::installed_program()?;
     if let Some(m) = method {
         if !["get", "brew", "winget", "docker", "package"].contains(&m.as_str()) {
             return Err(Error::msg("-installed-by takes get, brew, winget, docker or package"));
@@ -1414,6 +1444,11 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
     if !check && !root {
         return need_root();
     }
+    // install.ps1 stops every program in Program Files\cbb, this one too:
+    // the update runs from a copy outside it.
+    if cfg!(windows) && !check && std::env::var_os("CBB_UPDATE_FROM").is_none() {
+        return update_os::update_from_copy(&dir, &exe, args);
+    }
 
     // The timer logs to update.log, each line stamped.
     let log_file = if timer {
@@ -1446,8 +1481,9 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
             }
             None => (update::ROOTS.iter().map(|r| r.to_vec()).collect(), update::Source::defaults(&st.mirror)?),
         };
-        let archive = update::archive_name()
-            .ok_or_else(|| Error::msg(format!("there is no lite member's release for {}", std::env::consts::ARCH)))?;
+        let archive = update_os::archive_name(&exe).ok_or_else(|| {
+            Error::msg(format!("the release has no archive for {}/{}", std::env::consts::OS, std::env::consts::ARCH))
+        })?;
         let status = || -> Result<String> {
             let m = request(
                 g,
@@ -1466,7 +1502,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
             sources,
             installed: service::VERSION.into(),
             archive,
-            program: exe.clone(),
+            programs: update_os::programs(&exe),
             now_ms: update::now_ms(),
             install: &update::install,
             healthy: &healthy,
@@ -1504,7 +1540,8 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
                 }
             }
             _ if check => {
-                log(&format!("CBB {} is available; this device runs {v}. To install it: sudo cbb update", r.version))
+                let how = if cfg!(windows) { "cbb update, as administrator" } else { "sudo cbb update" };
+                log(&format!("CBB {} is available; this device runs {v}. To install it: {how}", r.version))
             }
             _ if v == "dev" => {
                 return Err(Error::msg(format!(

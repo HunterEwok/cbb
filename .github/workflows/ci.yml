@@ -2634,18 +2634,25 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: go build for each platform of the image
+      - name: cbb and the Go programs beside it for each platform of the image
         env:
           CGO_ENABLED: "0"
           GOOS: linux
         run: |
-          GOARCH=amd64 go build -trimpath -o "$RUNNER_TEMP/cbb-amd64" ./cmd/cbb
-          GOARCH=arm64 go build -trimpath -o "$RUNNER_TEMP/cbb-arm64" ./cmd/cbb
-          GOARCH=arm GOARM=7 go build -trimpath -o "$RUNNER_TEMP/cbb-armv7" ./cmd/cbb
+          rustup toolchain install stable --profile minimal
+          for name in amd64 arm64 armv7; do
+            t=$name goarch=$name goarm=
+            if [ "$name" = armv7 ]; then t=arm/7 goarch=arm goarm=7; fi
+            mkdir -p "$RUNNER_TEMP/$name"
+            cp "$(sh member/packaging/build.sh "linux/$t")/cbb" "$RUNNER_TEMP/$name/cbb"
+            for p in cbb-helper cbb-forward cbb-relay; do
+              GOARCH=$goarch GOARM=$goarm go build -trimpath -o "$RUNNER_TEMP/$name/$p" "./cmd/$p"
+            done
+          done
       - name: the image for every platform
         run: |
           ctx="$RUNNER_TEMP/image"
-          sh packaging/docker/context.sh "$ctx" amd64="$RUNNER_TEMP/cbb-amd64" arm64="$RUNNER_TEMP/cbb-arm64" armv7="$RUNNER_TEMP/cbb-armv7"
+          sh packaging/docker/context.sh "$ctx" amd64="$RUNNER_TEMP/amd64/cbb" arm64="$RUNNER_TEMP/arm64/cbb" armv7="$RUNNER_TEMP/armv7/cbb"
           docker build -t cbb:ci "$ctx"
           for p in linux/arm64 linux/arm/v7; do
             docker build --platform "$p" -t "cbb:ci-$(echo "$p" | tr / -)" "$ctx"

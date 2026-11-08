@@ -111,6 +111,7 @@ pub fn new_group(dir: &Path, name: &str) -> Result<(Identity, String)> {
     if Identity::load(dir)?.is_some() {
         return Err(Error::msg("this device is already in a group; cbb status shows it"));
     }
+    keys_allowed()?;
     let root_pkcs8 = identity::new_key()?;
     let root = FileKey::new(&root_pkcs8)?;
     let (external, why) = keys::new_device_key();
@@ -207,6 +208,12 @@ pub fn admin_key_offer(dir: &Path, ident: &Identity) -> Result<Option<Vec<u8>>> 
             );
             return Ok(None);
         }
+        None if keys_allowed().is_err() => {
+            service::log_line(&format!(
+                "cbb: this device runs in a container, so it offers no admin key and cannot be made an admin; set {KEYS_IN_FILE_ENV}=yes in its environment to allow it"
+            ));
+            return Ok(None);
+        }
         None => {
             let mut fields = serde_json::Map::new();
             let (hw, why) = keys::new_device_key();
@@ -248,6 +255,7 @@ pub fn become_admin(dir: &Path, node: &Node, der: &[u8]) -> Result<()> {
     if f.admin_ca.as_deref() == Some(der) {
         return Ok(());
     }
+    keys_allowed()?;
     let key = admin_key(&f)?.ok_or_else(|| Error::msg("this device has no admin key to be an admin with"))?;
     let ca = Cert::parse(der).map_err(|e| e.context("the admin CA"))?;
     let ident = node.identity();
@@ -1061,6 +1069,7 @@ impl Admin<'_> {
     /// handOver: a handover record names its admin key, so that its claim
     /// takes effect at once. It returns the admin's name.
     pub fn hand_over(&self, target: &str) -> Result<String> {
+        keys_allowed()?;
         let d = find_device(self.node, target)?;
         let s = self.signing().ok().filter(|s| s.root);
         let s = s.ok_or_else(|| Error::msg("only the group's root hands the group over"))?;
@@ -1338,11 +1347,7 @@ impl Admin<'_> {
     /// The claim takes effect after the group's delay unless the root
     /// cancels it (finish_takeover). It returns the root's name.
     pub fn take_over(&self, target: &str) -> Result<String> {
-        if crate::rootless::is() {
-            return Err(Error::msg(
-                "this device is installed without root, so every program of its user can read its keys; such a device never holds the group's keys (D-79)",
-            ));
-        }
+        keys_allowed()?;
         let d = find_device(self.node, target)?;
         let ident = self.node.identity();
         let f = admin_file(self.dir)?;
@@ -1428,11 +1433,7 @@ impl Admin<'_> {
     /// Why this device cannot claim the group with its recovery key, if it
     /// cannot.
     fn can_recover(&self) -> Result<()> {
-        if crate::rootless::is() {
-            return Err(Error::msg(
-                "this device is installed without root, so every program of its user can read its keys; such a device never holds the group's keys (D-79)",
-            ));
-        }
+        keys_allowed()?;
         if self.signing().is_ok_and(|s| s.root) {
             return Err(Error::msg("this device is the group's root already"));
         }
@@ -1681,6 +1682,32 @@ pub fn may_be_hub(dir: &Path, node: &Node) -> Result<()> {
     };
     let level = node.records().lock().unwrap().state().key_level;
     level_allows(if level.is_empty() { "hardware" } else { &level }, store, "this device", "", true)
+}
+
+/// The image sets CBB_CONTAINER (packaging/docker/Dockerfile). A container
+/// keeps its keys in a file in its volume, which whoever copies the volume
+/// has, so it holds no key that admits or removes devices: it is never the
+/// group's root and takes no admin key, unless the user allowed it with
+/// CBB_KEYS_IN_FILE=yes after reading why not, as Go's keysAllowed.
+const CONTAINER_ENV: &str = "CBB_CONTAINER";
+const KEYS_IN_FILE_ENV: &str = "CBB_KEYS_IN_FILE";
+
+/// Why this device may not hold a key that admits devices (the group's
+/// root's, an admin's, a recovery claim's): a rootless install never, a
+/// container only with its user's consent.
+pub(crate) fn keys_allowed() -> Result<()> {
+    if crate::rootless::is() {
+        return Err(Error::msg(
+            "this device is installed without root, so every program of its user can read its keys; such a device never holds the group's keys (D-79)",
+        ));
+    }
+    let container = std::env::var_os(CONTAINER_ENV).is_some_and(|v| !v.is_empty());
+    if container && std::env::var(KEYS_IN_FILE_ENV).as_deref() != Ok("yes") {
+        return Err(Error::msg(format!(
+            "this device runs in a container, whose keys are in a file in its volume, where anyone who copies the volume has them; the group's root and admins belong on the devices you hold, so make the group or the admin there. To allow it here anyway, set {KEYS_IN_FILE_ENV}=yes in the container's environment"
+        )));
+    }
+    Ok(())
 }
 
 const NO_RECOVERY_KEY: &str = "the group has no recovery key: the root phone has not made one, or removed it";
