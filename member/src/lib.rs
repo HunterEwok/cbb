@@ -887,40 +887,48 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
 
 /// Shows sync, or turns it on or off here, as cbb sync on a full member.
 fn cmd_sync(g: &Global, args: &[String]) -> Result<()> {
-    let usage = || Error::msg("usage: cbb sync [on | off [-for DURATION]]");
-    let mut h = control::Header { op: "sync".into(), ..Default::default() };
+    const USE: &str = "cbb sync [on | off [-for DURATION]]\n       cbb sync -on DEVICE on|off";
+    let (mut on, mut for_ms, mut word) = (String::new(), 0, None);
     let mut it = args.iter();
-    match it.next().map(String::as_str) {
-        None => h.op = "status".into(),
-        Some(n @ ("on" | "off")) => h.name = n.into(),
-        Some(_) => return Err(usage()),
-    }
     while let Some(a) = it.next() {
         match flag(a) {
-            Some("for") if h.name == "off" => {
-                let d = it.next().ok_or_else(usage)?;
-                h.for_ms = parse_duration_ms(d).ok_or_else(|| Error::msg(format!("-for: {d:?} is no duration")))?;
-                if h.for_ms == 0 {
-                    return Err(Error::msg("-for is from 1ms to 720h"));
+            Some("on") => on = it.next().cloned().ok_or_else(|| cli::usage(USE))?,
+            Some("for") => {
+                let d = it.next().ok_or_else(|| cli::usage(USE))?;
+                for_ms = go_duration_ms(d).ok_or_else(|| cli::usage(USE))?;
+                if for_ms == 0 || for_ms > mute::MAX_MS {
+                    return Err(cli::usage(format!("-for is from 1ms to {}", cli::go_duration(mute::MAX_MS))));
                 }
             }
-            _ => return Err(usage()),
+            None if word.is_none() && (a == "on" || a == "off") => word = Some(a.clone()),
+            _ => return Err(cli::usage(USE)),
         }
     }
-    if h.op == "sync" {
-        request(g, &control::Message::new(h, Vec::new()))?;
+    if !on.is_empty() && word.is_none() {
+        return Err(cli::usage(USE));
+    }
+    if for_ms != 0 && (word.as_deref() != Some("off") || !on.is_empty()) {
+        return Err(cli::usage("-for goes with cbb sync off on this device"));
+    }
+    let h = match &word {
+        Some(w) => {
+            control::Header { op: "sync".into(), name: w.clone(), device: on.clone(), for_ms, ..Default::default() }
+        }
+        None => control::Header { op: "status".into(), ..Default::default() },
+    };
+    request(g, &control::Message::new(h, Vec::new()))?;
+    if let Some(w) = word.as_ref().filter(|_| !on.is_empty()) {
+        println!("Sync is {w} on {on} now.");
+        return Ok(());
     }
     let m =
         request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))?;
     let st = m.header.status.unwrap_or_default();
-    println!("{}", sync_line(&st.mode, st.sync_until_ms));
+    if st.group.is_empty() {
+        return Err(Error::msg("this device is in no group; run cbb new here to start one, or cbb pair to join one"));
+    }
+    println!("{}", status_text::sync_line(&st));
     Ok(())
-}
-
-/// Reads a duration as Go writes one, such as 90s, 15m, 1h or 1h30m, in
-/// milliseconds, for a mute.
-fn parse_duration_ms(s: &str) -> Option<i64> {
-    go_duration_ms(s).filter(|ms| *ms <= mute::MAX_MS)
 }
 
 /// The tunnel address of a device (docs/protocol.md, section 11):
@@ -966,24 +974,11 @@ pub(crate) fn go_duration_ms(s: &str) -> Option<i64> {
     Some(total)
 }
 
-/// What sync on or off means, as cbb sync on a full member says it.
-fn sync_line(mode: &str, until_ms: i64) -> String {
-    match mode {
-        "shared" => "Sync is on: copies here go to the group, and the group's copies come here.".into(),
-        "own" if until_ms > 0 => format!(
-            "Sync is off for {} min more: the clipboard is this device's own; cbb paste prints the group's text, and cbb copy sends to the group.",
-            ((until_ms - uptime::wall_ms()).max(0) + 59_999) / 60_000
-        ),
-        "own" => "Sync is off until cbb sync on: the clipboard is this device's own; cbb paste prints the group's text, and cbb copy sends to the group.".into(),
-        "" => "This lite member's service does not know sync on and off yet; update it.".into(),
-        m => format!("Sync mode {m}."),
-    }
-}
-
 fn cmd_paste_receive(g: &Global, args: &[String]) -> Result<()> {
-    let usage = || Error::msg("usage: cbb paste-receive [on [-enter] [-console] [-no-lock-check] | off]");
+    const USE: &str = "cbb paste-receive [on [-enter] [-console] [-no-lock-check] | off [-on DEVICE | -all]]";
     let mut h = control::Header { op: "status".into(), ..Default::default() };
-    for (i, a) in args.iter().enumerate() {
+    let mut it = args.iter().enumerate();
+    while let Some((i, a)) = it.next() {
         match (i, a.as_str(), flag(a)) {
             (0, "on" | "off", _) => {
                 h.op = "paste-receive".into();
@@ -992,15 +987,31 @@ fn cmd_paste_receive(g: &Global, args: &[String]) -> Result<()> {
             (1.., _, Some("enter")) if h.name == "on" => h.enter = true,
             (1.., _, Some("console")) if h.name == "on" => h.console = true,
             (1.., _, Some("no-lock-check")) if h.name == "on" => h.no_lock_check = true,
-            _ => return Err(usage()),
+            (1.., _, Some("on")) if h.name == "off" => {
+                h.device = it.next().map(|(_, d)| d.clone()).ok_or_else(|| cli::usage(USE))?;
+            }
+            (1.., _, Some("all")) if h.name == "off" => h.all = true,
+            _ => return Err(cli::usage(USE)),
         }
+    }
+    if h.all && !h.device.is_empty() {
+        return Err(cli::usage(USE));
     }
     if h.console && rootless::is() {
         return Err(Error::msg(
             "text consoles need the console helper, which runs as root; this device is installed without root, so remote paste reaches tmux only",
         ));
     }
+    let (all, device) = (h.all, h.device.clone());
     let m = request(g, &control::Message::new(h, Vec::new()))?;
+    if all {
+        println!("Remote paste is off on every device of the group.");
+        return Ok(());
+    }
+    if !device.is_empty() {
+        println!("Remote paste is off on {device}.");
+        return Ok(());
+    }
     let p = m.header.status.and_then(|s| s.paste).ok_or_else(|| Error::msg("this device is in no group"))?;
     println!("{}", paste_line(&p));
     Ok(())
@@ -1026,7 +1037,9 @@ fn paste_line(p: &control::Paste) -> String {
         line.to_string()
     };
     if p.targets.is_empty() {
-        return format!("{line} Nothing here can paste yet: the tmux and console helpers do it.");
+        return format!(
+            "{line} Nothing here can paste yet: the desktop connector, the Mac app or the tmux and console helpers do it."
+        );
     }
     line
 }
@@ -1050,6 +1063,25 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             for a in &st.actions {
                 println!("{:<16} {}", a.name, action_line(a));
             }
+            return Ok(());
+        }
+        [v, a, d] if v == "off" && flag(a) == Some("on") => {
+            let h = control::Header { op: "actions-off".into(), device: d.clone(), ..Default::default() };
+            request(g, &control::Message::new(h, Vec::new()))?;
+            println!("The quick actions are off on {d}.");
+            return Ok(());
+        }
+        [v, a] if v == "off" && flag(a) == Some("all") => {
+            let h = control::Header { op: "actions-off".into(), all: true, ..Default::default() };
+            request(g, &control::Message::new(h, Vec::new()))?;
+            println!("The quick actions are off on every device of the group.");
+            return Ok(());
+        }
+        [a, d, name] if flag(a) == Some("on") && flag(name).is_none() => {
+            let h =
+                control::Header { op: "action-on".into(), device: d.clone(), name: name.clone(), ..Default::default() };
+            request(g, &control::Message::new(h, Vec::new()))?;
+            println!("{d} ran {name}.");
             return Ok(());
         }
         [v] if v == "off" => {

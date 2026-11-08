@@ -125,6 +125,14 @@ func TestRustCommandLine(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(out, "report.txt")); err != nil || string(b) != "the quarter's numbers" {
 		t.Fatalf("the saved file: %q, %v", b, err)
 	}
+	want("Sync is off on desk now.", "sync", "-on", "desk", "off")
+	waitFor(t, "desk's sync is off", func() bool { return deck.status(t).Mode == "own" })
+	want("Sync is on on desk now.", "sync", "-on", "desk", "on")
+	misuse("sync", "-on", "desk", "off", "-for", "1h")
+	want("Remote paste is off on desk.", "paste-receive", "off", "-on", "desk")
+	want("The quick actions are off on desk.", "action", "off", "-on", "desk")
+	want("Sync is off until cbb sync on", "sync", "off")
+	want("Sync is on: copies here go to the group", "sync", "on")
 	want("Removed desk from the group", "remove", "desk")
 	misuse("remove")
 }
