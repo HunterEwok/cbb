@@ -2785,8 +2785,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         /** How long a member that browsing finds counts as at home without a connection to it. */
         private const val NEAR_GRACE_MS = 30_000L
 
-        /** How long admitting a device may take once it is dialed: a computer that stops answering mid-pairing fails then. */
-        const val PAIRING_DEADLINE_MS = 30_000L
+        /**
+         * How long admitting a device may take once it is dialed: a computer that stops answering mid-pairing fails then.
+         * Two minutes, as a slow member takes its time: a ZX Next gets the group's records through its ESP at about 2K a
+         * second, and confirms only after them.
+         */
+        const val PAIRING_DEADLINE_MS = 120_000L
 
         /** How long, and how often, admit dials a device that does not take the connection yet. */
         const val DIAL_RETRY_MS = 20_000L

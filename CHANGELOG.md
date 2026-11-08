@@ -17,14 +17,16 @@ All notable changes to cbb are documented in this file. The format follows
   to the first speed that brings them whole; the Next's UART divisor is rounded, not cut.
   The Next checks the files' SHA-256 in assembly, some five times faster than in C.
   `.cbb leave` gives the Pi's service a second to end first, calls the Pi's `cbb` by its
-  path, and says when the Pi keeps its keys instead of saying it left. The install
-  fetches the Pi's `cbb` gzipped (`cbb.gz`, under half the bytes), which the Pi unpacks, and
-  asks the site for 56K at a time instead of 8K. `.cbb net on` no longer waits out a second
+  path, and says when the Pi keeps its keys instead of saying it left.
+  The install fetches the Pi's `cbb` gzipped (`cbb.gz`, under half the bytes), which the Pi
+  unpacks, and asks the site for 56K at a time instead of 8K. `.cbb net on` no longer waits out a second
   of silence after each step.
   `.cbb show -tape` loads it as a real tape instead, from the Pi's sound through EAR, with
   the cassette's stripes on the border (some 8 minutes).
   While the network runs, the driver shows each new image of the group by itself over the
   program in front, which it freezes until a key and then gives its screen back.
+- The iPhone and Android apps give a device two minutes to join instead of 30 seconds, so a
+  slow one (the ZX Next, which gets the group's records through its ESP) confirms in time.
 - A new device shows a code, and a computer of the group types it: a device that listens to
   join announces itself by mDNS (TXT `j=1` and its fingerprint, docs/protocol.md sections 3
   and 6), and `cbb pair -qr` takes the six digits as well as the QR code's text, finds the
