@@ -44,6 +44,8 @@ type Desk struct {
 	problem  string
 	message  string
 	busy     bool
+	// acting holds the action running now; the next one waits for it.
+	acting sync.Mutex
 
 	// joinPath is the file of the join running now (join.go), "" when
 	// none; joinCancelled whether the window cancelled it.
@@ -427,13 +429,13 @@ func (d *Desk) adminWith(args []string, input, done string) {
 	})
 }
 
-// act runs one action at a time, then reads the service again.
+// act runs one action at a time, then reads the service again: an action
+// asked for while another runs waits for it, so a quick second click is not
+// lost.
 func (d *Desk) act(work func() (string, error)) {
+	d.acting.Lock()
+	defer d.acting.Unlock()
 	d.mu.Lock()
-	if d.busy {
-		d.mu.Unlock()
-		return
-	}
 	d.busy = true
 	d.mu.Unlock()
 	msg, err := work()
