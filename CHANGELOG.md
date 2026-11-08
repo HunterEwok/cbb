@@ -1750,6 +1750,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A hub whose hellos go to its forwarder over VLESS registers again when the forwarder sees
+  none of them for 20 seconds. The local way carries the hellos in one flow, and a flow whose
+  first request over XHTTP got no answer carried nothing for as long as the hub kept sending.
 - A file or an image from the group reaches a phone whose Downloads has no `CBB` folder yet:
   the member makes the folder, where it failed with "No such file or directory" on Aurora.
 - When a joining phone refused the code an admin typed, the admin's side of the core's
