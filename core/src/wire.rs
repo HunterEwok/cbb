@@ -254,6 +254,23 @@ pub struct DeviceInfo {
     pub version: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub mac: String,
+    /// The release archive this device updates from with cbb update
+    /// (cbb-linux-arm64.tar.gz), for its group's hub to fetch (section 16).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub archive: String,
+}
+
+/// Whether name is a release archive's, as packaging/archive.sh makes
+/// them: cbb and two or three dash-separated words of up to 16 lowercase
+/// letters and digits, then .tar.gz or .zip.
+pub fn archive_name_valid(name: &str) -> bool {
+    let Some(stem) = name.strip_suffix(".tar.gz").or_else(|| name.strip_suffix(".zip")) else { return false };
+    let Some(rest) = stem.strip_prefix("cbb-") else { return false };
+    let words: Vec<&str> = rest.split('-').collect();
+    (2..=3).contains(&words.len())
+        && words
+            .iter()
+            .all(|w| (1..=16).contains(&w.len()) && w.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()))
 }
 
 /// The forms a device may name, for its icon.
@@ -278,6 +295,7 @@ impl DeviceInfo {
             os_version: short(&self.os_version),
             version: short(&self.version),
             mac: if mac_ok { self.mac.clone() } else { String::new() },
+            archive: if archive_name_valid(&self.archive) { self.archive.clone() } else { String::new() },
         }
     }
 
@@ -525,7 +543,29 @@ pub fn frame_len(head: [u8; 4], max: usize) -> Result<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CommandResult, decode};
+    use super::{CommandResult, DeviceInfo, archive_name_valid, decode};
+
+    /// A hello's archive is kept only when it is named as
+    /// packaging/archive.sh names them, as Go's archivePattern.
+    #[test]
+    fn archive_names() {
+        for ok in ["cbb-linux-arm64.tar.gz", "cbb-windows-amd64.zip", "cbb-lite-linux-mipsle.tar.gz"] {
+            assert!(archive_name_valid(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "cbb.tar.gz",
+            "cbb-linux.tar.gz",
+            "cbb-a-b-c-d.tar.gz",
+            "cbb-Linux-arm64.zip",
+            "cbb-linux-arm64.tgz",
+            "../cbb-linux-arm64.zip",
+        ] {
+            assert!(!archive_name_valid(bad), "{bad}");
+        }
+        let d = DeviceInfo { archive: "cbb-linux-arm64.tar.gz/..".into(), ..Default::default() };
+        assert!(d.cleaned().archive.is_empty());
+    }
 
     /// A hub command's result keeps the new hub's offer, so a phone that
     /// passes it back, and its app, read it (section 11, "Moving the hub").

@@ -130,6 +130,52 @@ impl Releases {
         self.dir.join(FILES_DIR).join(sha)
     }
 
+    /// The size of the archive sha of the release held when this member
+    /// holds it whole; only those are served.
+    pub fn held(&self, sha: &str, now_ms: i64) -> Option<u64> {
+        let a = self.file(sha, now_ms)?;
+        let size = u64::try_from(a.size).ok()?;
+        std::fs::metadata(self.path_of(sha)).ok().filter(|m| m.is_file() && m.len() == size).map(|_| size)
+    }
+
+    /// Reads up to len bytes of the archive whose SHA-256 is sum from
+    /// offset, for a peer; None when it is not held whole.
+    pub fn read(&self, sum: &[u8], offset: u64, len: usize, now_ms: i64) -> Option<Vec<u8>> {
+        use std::io::{Read, Seek, SeekFrom};
+        let sha = hex(sum);
+        let size = self.held(&sha, now_ms)?;
+        if offset >= size {
+            return Some(Vec::new());
+        }
+        let mut f = std::fs::File::open(self.path_of(&sha)).ok()?;
+        f.seek(SeekFrom::Start(offset)).ok()?;
+        let mut out = vec![0u8; len.min(usize::try_from(size - offset).unwrap_or(usize::MAX))];
+        f.read_exact(&mut out).ok()?;
+        Some(out)
+    }
+
+    /// Takes the archive at tmp, whole, as the archive sha of the release
+    /// held: it must be listed, of the listed size and match the hash.
+    pub fn keep_file(&self, sha: &str, tmp: &Path, now_ms: i64) -> Result<()> {
+        let a = self.file(sha, now_ms).ok_or_else(|| Error::msg("the release this device holds lists no such file"))?;
+        let (size, sum) = crate::content::file_sum(tmp).map_err(|e| e.context("cannot read the archive"))?;
+        if i64::try_from(size).ok() != Some(a.size) {
+            return Err(Error::msg(format!("{} is {size} bytes, not as said", a.name)));
+        }
+        if hex(&sum) != sha {
+            return Err(Error::msg(format!("{} does not match the signed release.json", a.name)));
+        }
+        std::fs::rename(tmp, self.path_of(sha)).map_err(|e| Error::with("cannot keep the archive", e))
+    }
+
+    /// The folder of the archives, made when it is not there.
+    pub fn files_dir(&self) -> Result<PathBuf> {
+        let dir = self.dir.join(FILES_DIR);
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| Error::with("cannot make the folder of the release's archives", e))?;
+        Ok(dir)
+    }
+
     /// Takes a release when it checks out and is newer than the one held,
     /// keeps it in the file and reports whether it did; the archives of
     /// the older one go.
@@ -163,6 +209,19 @@ impl Releases {
             }
         }
     }
+}
+
+/// sum in lowercase hex.
+pub fn hex(sum: &[u8]) -> String {
+    sum.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The bytes of s in hex, lowercase or not; None when it is not hex.
+pub fn unhex(s: &str) -> Option<Vec<u8>> {
+    if !s.len().is_multiple_of(2) || !s.is_ascii() {
+        return None;
+    }
+    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok()).collect()
 }
 
 /// Whether this device should install the release v: it is above this

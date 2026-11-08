@@ -60,6 +60,8 @@ const RECORDS_CHUNK: usize = 1 << 20;
 const MIN_RATE: usize = 16 << 10;
 /// The most gets a peer may have waiting on a connection.
 const MAX_GETS: usize = 64;
+/// The most peers whose release archive a member keeps.
+const MAX_ARCHIVES: usize = 256;
 /// How far ahead a fetch asks, and how long it waits for a chunk.
 const FETCH_AHEAD: u64 = 4 << 20;
 const FETCH_IDLE: Duration = Duration::from_secs(15);
@@ -197,6 +199,9 @@ pub struct Node {
     entries: Arc<Entries>,
     /// The newest signed release the group passed around (section 16).
     releases: Arc<Releases>,
+    /// The release archive each peer's hello says it updates from, which
+    /// a hub fetches for them.
+    archives: Mutex<HashMap<DeviceId, String>>,
     /// Keeps the identity when it changes (a renewed certificate, a new
     /// root), where identity.json cannot: a phone's app whose key is
     /// outside the core keeps its own file.
@@ -394,6 +399,7 @@ impl Node {
             home: Mutex::new(HashMap::new()),
             entries,
             releases,
+            archives: Mutex::new(HashMap::new()),
             keep_identity: None,
             paused: AtomicBool::new(false),
             kick: (Mutex::new(0), Condvar::new()),
@@ -511,6 +517,14 @@ impl Node {
 
     pub fn releases(&self) -> &Releases {
         &self.releases
+    }
+
+    /// The release archives the peers seen update from.
+    pub fn archives(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.archives.lock().unwrap().values().cloned().collect();
+        out.sort();
+        out.dedup();
+        out
     }
 
     /// The group's records.
@@ -788,7 +802,7 @@ impl Node {
         peers.sort_by_key(|c| c.id.as_str() != ev.origin);
         let mut last = Error::msg("no member that serves images or files is connected");
         for c in peers {
-            match self.fetch_from(&c, store, &sum, size) {
+            match self.fetch_from(&c, &store.partial(&sum), &sum, size) {
                 Ok(()) => return store.finish(&sum, size),
                 Err(e) => {
                     self.logf(&format!("cbb: fetching a copy's content from {}: {}", c.id, e.for_log()));
@@ -799,15 +813,57 @@ impl Node {
         Err(last)
     }
 
-    /// Fetches the blob sum from one peer into the store's partial file,
+    /// Fetches the archive sha of the release held from the connected peers
+    /// that serve content, unless this member holds it whole, as Go's
+    /// fetchReleaseFile.
+    pub fn fetch_release_file(&self, sha: &str) -> Result<()> {
+        let now = uptime::wall_ms();
+        let a = self
+            .releases
+            .file(sha, now)
+            .ok_or_else(|| Error::msg("the release this device holds lists no such file"))?;
+        if self.releases.held(sha, now).is_some() {
+            return Ok(());
+        }
+        let sum: [u8; 32] = releases::unhex(sha)
+            .and_then(|b| b.try_into().ok())
+            .ok_or_else(|| Error::msg(format!("{sha:?} is not a SHA-256")))?;
+        let size = u64::try_from(a.size).map_err(|_| Error::msg("the archive has no size"))?;
+        let part = self.releases.files_dir()?.join(format!(".part-{sha}"));
+        let peers: Vec<Arc<Conn>> = self
+            .conns
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|c| !c.records_only)
+            .filter(|c| c.peer.lock().unwrap().as_ref().is_some_and(|p| p.features.iter().any(|f| f == "media")))
+            .cloned()
+            .collect();
+        let mut last = Error::msg("no member that serves files is connected");
+        for c in peers {
+            let _ = std::fs::remove_file(&part);
+            let res = self.fetch_from(&c, &part, &sum, size).and_then(|()| self.releases.keep_file(sha, &part, now));
+            match res {
+                Ok(()) => {
+                    let name = c.peer.lock().unwrap().as_ref().map(|p| p.name.clone()).unwrap_or_default();
+                    self.logf(&format!("cbb: fetched {} from {name} for cbb update", a.name));
+                    return Ok(());
+                }
+                Err(e) => last = e.context(format!("from {}", c.id)),
+            }
+        }
+        let _ = std::fs::remove_file(&part);
+        Err(last)
+    }
+
+    /// Fetches the blob sum from one peer into the partial file at path,
     /// continuing from what it holds.
-    fn fetch_from(&self, c: &Arc<Conn>, store: &Store, sum: &[u8; 32], size: u64) -> Result<()> {
+    fn fetch_from(&self, c: &Arc<Conn>, path: &std::path::Path, sum: &[u8; 32], size: u64) -> Result<()> {
         use std::io::{Seek, Write};
-        let path = store.partial(sum);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).context("make the folder of the copies' content")?;
         }
-        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&path).context("keep a fetch")?;
+        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(path).context("keep a fetch")?;
         let mut have = f.metadata().map(|m| m.len()).unwrap_or(0);
         if have > size {
             f.set_len(0).context("keep a fetch")?;
@@ -843,7 +899,7 @@ impl Node {
                     idle = Duration::ZERO;
                 }
                 Ok(Piece::Chunk(_)) => {}
-                Ok(Piece::Missing) => break Err(Error::msg("it does not hold the copy's content")),
+                Ok(Piece::Missing) => break Err(Error::msg("it does not hold the blob")),
                 Err(_) => {
                     idle += Duration::from_secs(1);
                     if idle >= FETCH_IDLE {
@@ -1529,6 +1585,12 @@ impl Node {
                 if let Some(f) = self.on_peer.read().unwrap().as_ref() {
                     f(&peer);
                 }
+                if !c.records_only && !peer.device.archive.is_empty() {
+                    let mut a = self.archives.lock().unwrap();
+                    if a.len() < MAX_ARCHIVES || a.contains_key(&c.id) {
+                        a.insert(c.id.clone(), peer.device.archive.clone());
+                    }
+                }
                 // A peer that holds older entry points, or none, gets ours
                 // (docs/protocol.md, section 16, "Entry points").
                 let now = uptime::wall_ms();
@@ -2066,7 +2128,7 @@ fn writer(
             Err(TryRecvError::Empty) => {}
         }
         if let Some(store) = content
-            && let Some(frame) = next_piece(c, store)
+            && let Some(frame) = next_piece(c, store, releases)
         {
             if !write_frame(&frame) {
                 return;
@@ -2094,11 +2156,14 @@ fn writer(
 /// The next chunk frame of the gets a connection's peer asked for, or the
 /// frame of the missing message for a blob this member does not hold;
 /// None when no get waits.
-fn next_piece(c: &Conn, store: &Store) -> Option<Vec<u8>> {
+fn next_piece(c: &Conn, store: &Store, releases: &Releases) -> Option<Vec<u8>> {
     let mut gets = c.gets.lock().unwrap();
     let g = gets.front_mut()?;
     let want = usize::try_from(g.length).unwrap_or(0).min(wire::MAX_CHUNK_DATA);
-    match store.read(&g.sha256, g.offset as u64, want) {
+    let read = store
+        .read(&g.sha256, g.offset as u64, want)
+        .or_else(|| releases.read(&g.sha256, g.offset as u64, want, uptime::wall_ms()));
+    match read {
         Some(data) if !data.is_empty() => {
             let sum: [u8; 32] = g.sha256.clone().try_into().ok()?;
             let ch = wire::Chunk { sha256: sum, offset: g.offset as u64, data };

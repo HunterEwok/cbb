@@ -19,6 +19,7 @@ pub fn own() -> &'static DeviceInfo {
             os_version: fs::read_to_string("/etc/os-release").map(|s| os_release(&s)).unwrap_or_default(),
             version: env!("CARGO_PKG_VERSION").into(),
             mac: mac(),
+            archive: crate::update::archive_name().unwrap_or_default(),
         }
         .cleaned()
     })

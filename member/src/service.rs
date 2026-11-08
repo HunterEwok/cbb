@@ -68,6 +68,9 @@ const TYPING_CHECK: Duration = Duration::from_millis(500);
 
 /// How long a watcher may take to put a paste in; typing takes TYPE_WAIT
 /// more for each byte, as on a full member.
+/// The most archives a hub asks cbb update for at a time.
+const MAX_WANTED: usize = 16;
+
 /// How long a request waits for a device in a group to start.
 const START_WAIT: Duration = Duration::from_secs(10);
 const INJECT_WAIT: Duration = Duration::from_secs(5);
@@ -1760,6 +1763,28 @@ impl Service {
             }
             return;
         }
+        if m.header.op == "release-file" {
+            let answer = match self.receive_release_file(&m, &mut r) {
+                Ok(()) => control::reply(Header::default(), Vec::new()),
+                Err(e) => {
+                    (self.log)(&format!("cbb: release-file: {}", e.for_log()));
+                    if let Ok(c) = out.try_clone() {
+                        let _ = c.set_read_timeout(Some(Duration::from_secs(5)));
+                    }
+                    while let Ok(Some(_)) = r.read() {}
+                    control::failure(&e)
+                }
+            };
+            let _ = control::write(&mut out, &answer);
+            return;
+        }
+        if m.header.op == "release-get" {
+            if let Err(e) = self.send_release_file(&m.header.value, &mut out) {
+                (self.log)(&format!("cbb: release-get: {}", e.for_log()));
+                let _ = control::write(&mut out, &control::failure(&e));
+            }
+            return;
+        }
         if m.header.op == "paste-media" {
             if let Err(e) = self.paste_media(&mut out) {
                 let _ = control::write(&mut out, &control::failure(&e));
@@ -1818,6 +1843,89 @@ impl Service {
         let sent = parts.and_then(|parts| copies::send(out, &ev.text, &parts));
         let _ = std::fs::remove_dir_all(&dir);
         sent
+    }
+
+    /// Takes an archive of the release held from cbb update, which
+    /// installed it (Go's receiveReleaseFile): Value its SHA-256 and Part
+    /// its size, its bytes in data messages; it must be listed, whole and
+    /// match its hash.
+    fn receive_release_file(&self, m: &Message, r: &mut control::Reader<UnixStream>) -> Result<()> {
+        use std::io::Write;
+        let node = self.node()?;
+        let releases = node.releases();
+        let sha = m.header.value.to_ascii_lowercase();
+        let now = uptime::wall_ms();
+        let a =
+            releases.file(&sha, now).ok_or_else(|| Error::msg("the release this device holds lists no such file"))?;
+        if m.header.part.as_ref().map(|p| p.size) != Some(a.size) {
+            return Err(Error::msg(format!("{} is {} bytes, not as said", a.name, a.size)));
+        }
+        let tmp = releases.files_dir()?.join(format!(".part-{}", files::random_name()));
+        let res = (|| {
+            let mut f = std::fs::File::create(&tmp).context("cannot keep the archive")?;
+            let mut got: i64 = 0;
+            while got < a.size {
+                let d = r.read()?.filter(|d| d.header.op == "data" && !d.payload.is_empty());
+                let d = d.filter(|d| i64::try_from(d.payload.len()).is_ok_and(|n| n <= a.size - got));
+                let d = d.ok_or_else(|| Error::msg(format!("the bytes of {} did not come as said", a.name)))?;
+                f.write_all(&d.payload).context("cannot keep the archive")?;
+                got += d.payload.len() as i64;
+            }
+            drop(f);
+            releases.keep_file(&sha, &tmp, now)
+        })();
+        let _ = std::fs::remove_file(&tmp);
+        res
+    }
+
+    /// Answers release-get (Go's sendReleaseFile): the archive of the
+    /// release held whose SHA-256 is sha, from this member or its peers, as
+    /// a part and its bytes, then done.
+    fn send_release_file(&self, sha: &str, out: &mut UnixStream) -> Result<()> {
+        use std::io::Read;
+        let node = self.node()?;
+        let sha = sha.to_ascii_lowercase();
+        node.fetch_release_file(&sha)?;
+        let path = node.releases().path_of(&sha);
+        let mut f = std::fs::File::open(&path).context("the file left this device")?;
+        let size =
+            node.releases().held(&sha, uptime::wall_ms()).ok_or_else(|| Error::msg("the file left this device"))?;
+        let reply = |h: Header, payload: Vec<u8>| Message::new(Header { op: "reply".into(), ..h }, payload);
+        let part = control::Part { size: size as i64, ..Default::default() };
+        control::write(out, &reply(Header { part: Some(part), ..Default::default() }, Vec::new()))?;
+        let mut buf = vec![0; 1 << 20];
+        let mut sent = 0u64;
+        while sent < size {
+            let n = f.read(&mut buf).context("cannot read the archive")?;
+            if n == 0 {
+                return Err(Error::msg("the archive changed its size"));
+            }
+            sent += n as u64;
+            control::write(out, &reply(Header::default(), buf[..n].to_vec()))?;
+        }
+        control::write(out, &reply(Header { done: true, ..Default::default() }, Vec::new()))
+    }
+
+    /// On a hub, the archives of the release held that the group's members
+    /// update from and this device does not hold whole, at most
+    /// MAX_WANTED, for its cbb update to download (Go's
+    /// wantedReleaseFiles); elsewhere none.
+    fn wanted_release_files(&self) -> Result<Option<Vec<String>>> {
+        let node = self.node()?;
+        if !self.away()?.is_hub() {
+            return Ok(None);
+        }
+        let now = uptime::wall_ms();
+        let names = node.archives();
+        let wanted: Vec<String> = node
+            .releases()
+            .files(now)
+            .into_iter()
+            .filter(|a| names.contains(&a.name) && node.releases().held(&a.sha256, now).is_none())
+            .map(|a| a.name)
+            .take(MAX_WANTED)
+            .collect();
+        Ok(Some(wanted).filter(|w| !w.is_empty()))
     }
 
     /// The folder for the parts of copies on their way, in the state
@@ -2037,6 +2145,10 @@ impl Service {
                     serde_json::from_slice(&m.payload).map_err(|e| Error::with("the request carries no release", e))?;
                 self.node()?.put_release(&set)?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
+            "release-want" => {
+                let data = serde_json::to_vec(&self.wanted_release_files()?).context("cannot encode the files")?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, data))
             }
             "release-held" => {
                 let set = self
