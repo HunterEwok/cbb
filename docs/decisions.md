@@ -2,7 +2,7 @@
 # Architecture decisions
 
 For engineers. Every decision that shapes Copy Beyond Borders, numbered once and never
-renumbered: the code, the changelog and the other documents cite them as D-1 to D-89. The
+renumbered: the code, the changelog and the other documents cite them as D-1 to D-87. The
 reasons and the details of each are in the [design](design.md) and the
 [protocol](protocol.md); this page is the register.
 
