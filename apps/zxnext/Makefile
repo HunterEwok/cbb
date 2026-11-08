@@ -17,19 +17,34 @@ ASM ?= z88dk-z80asm
 CC ?= cc
 CARGO ?= cargo
 PI_CBB ?=
+# The site's folder .cbb install and update fetch from; another one for a
+# test build (make SITE_DIR=/zxn/).
+SITE_DIR ?= /zxnext/
 SRC := src/cbb.c src/link.c src/frame.c src/sha256.c
 
 all: build/CBB build/PIBRIDGE build/CBB.DRV
 
-build/pins.h: pins.sh build/CBB.DRV $(PI_CBB) build/pi_cbb
+build/pins.h: pins.sh build/CBB.DRV $(PI_CBB) build/CBBPI.GZ
+	sh pins.sh build/CBB.DRV $(PI_CBB) build/CBBPI.GZ >$@.new
+	mv $@.new $@
+
+# The Pi's cbb as the site serves it to an install, gzipped: less than
+# half the bytes to fetch and to send, which the Pi unpacks
+# (packaging/zxnext/site.sh copies it).
+build/CBBPI.GZ: $(PI_CBB) build/pi_cbb
 	@test -n "$(PI_CBB)" || { echo "make: PI_CBB names the Pi's cbb, which CBB installs" >&2; exit 1; }
-	sh pins.sh build/CBB.DRV $(PI_CBB) >$@.new
+	gzip -9n -c $(PI_CBB) >$@.new
 	mv $@.new $@
 
 # Which file PI_CBB names, so that another one makes pins.h again.
 build/pi_cbb: FORCE
 	@mkdir -p build
 	@echo '$(PI_CBB)' | cmp -s - $@ || echo '$(PI_CBB)' >$@
+
+# SITE_DIR as cbb.c takes it, made again when it changes.
+build/site.h: FORCE
+	@mkdir -p build
+	@echo '#define SITE_DIR "$(SITE_DIR)"' | cmp -s - $@ || echo '#define SITE_DIR "$(SITE_DIR)"' >$@
 
 # printf and scanf with only the conversions the code uses (formats.sh).
 build/formats: formats.sh $(SRC)
@@ -39,14 +54,14 @@ build/formats: formats.sh $(SRC)
 
 build/CBB.OVL: build/CBB
 
-build/CBB: mapcheck.sh budget.sh ovl.sh $(SRC) src/far.asm src/stack.asm src/logo.h src/frame.h src/link.h src/sha256.h build/pins.h build/formats
+build/CBB: mapcheck.sh budget.sh ovl.sh $(SRC) src/far.asm src/stack.asm src/sha256.asm src/logo.h src/frame.h src/link.h src/sha256.h build/pins.h build/formats build/site.h
 	@# The stack starts at 0xE000, under the overlays' window (src/far.asm):
 	@# z88dk's default, the top of memory, is in it. The page tables go
 	@# up to the last page used, not z88dk's 223.
 	rm -f build/cbb_PAGE_*.bin
 	cd build && $(ZCC) +zxn -vn -O2 -clib=new -subtype=dotn -startup=30 -I../src -I. $$(cat formats) \
-		-pragma-define:REGISTER_SP=0xE000 -pragma-define:DOTN_LAST_PAGE=19 \
-		$(addprefix ../,$(SRC)) ../src/far.asm ../src/stack.asm -o cbb -create-app -m
+		-pragma-define:REGISTER_SP=0xE000 -pragma-define:DOTN_LAST_PAGE=21 \
+		$(addprefix ../,$(SRC)) ../src/far.asm ../src/stack.asm ../src/sha256.asm -o cbb -create-app -m
 	@# The pages from 19 on go to CBB.OVL, which CBB loads (ovl.sh).
 	@sh ovl.sh build || { mv build/CBB build/CBB.bad; exit 1; }
 	@# The memory budget, with room to grow everywhere (README.md, "Memory"):

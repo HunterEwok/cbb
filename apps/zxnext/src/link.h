@@ -69,4 +69,8 @@ uint8_t link_line(char *buf, uint8_t max, uint16_t seconds);
 // Reads until the shell prompt comes back, so the next command starts clean.
 void link_prompt(void);
 
+// Throws away what is waiting, until the line is quiet for a fifth of a
+// second (a second through the driver).
+void link_drain(void);
+
 #endif

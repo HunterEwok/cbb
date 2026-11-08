@@ -6,11 +6,14 @@
 # place, so that a CBB installs only the driver and the Pi's cbb built with
 # it, whatever the site serves (README.md, "Install"):
 #
-#   sh pins.sh CBB.DRV PI_CBB >pins.h
+#   sh pins.sh CBB.DRV PI_CBB PI_GZ >pins.h
+#
+# PI_GZ is PI_CBB gzipped, as the site serves it: the Pi checks what it
+# unpacks against PI_CBB's SHA-256, so only its size is pinned.
 set -eu
 
-[ $# -eq 2 ] || { echo "usage: $0 CBB.DRV PI_CBB" >&2; exit 2; }
-for f in "$1" "$2"; do
+[ $# -eq 3 ] || { echo "usage: $0 CBB.DRV PI_CBB PI_GZ" >&2; exit 2; }
+for f in "$1" "$2" "$3"; do
 	test -s "$f" || { echo "$0: $f is missing" >&2; exit 1; }
 done
 pin() {
@@ -20,6 +23,7 @@ pin() {
 echo "// Made by pins.sh: the files built with this CBB."
 pin DRV "$1"
 pin PI "$2"
+printf '#define PIN_PIGZ_SIZE %sUL\n' "$(wc -c <"$3" | tr -d ' ')"
 # CBB.OVL is linked with CBB, so ovl.sh writes its size, its SHA-256 and
 # the stamp of its pages over these, after the link.
 echo '#define PIN_OVL_SIZE 0x7A73564FUL // "OVsz"'
