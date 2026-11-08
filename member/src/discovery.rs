@@ -280,6 +280,18 @@ impl Dialers {
     }
 }
 
+/// The mDNS sockets opened before the service gave up root (cbb service
+/// -user), which browsing takes when it starts.
+static PREOPENED: Mutex<Option<mdns_sd::ServiceDaemon>> = Mutex::new(None);
+
+/// Opens the mDNS sockets now, as Go's mdns.Preopen: on FreeBSD a socket on
+/// port 5353 shares it with avahi or another user's responder only when
+/// root opened it, and cbb service -user gives up root right after.
+pub fn preopen() -> Result<(), mdns_sd::Error> {
+    *PREOPENED.lock().unwrap_or_else(|e| e.into_inner()) = Some(mdns_sd::ServiceDaemon::new()?);
+    Ok(())
+}
+
 /// Starts dialing: the members at the given addresses, and, with mdns, the
 /// members of the group tag that browsing finds. With a port, it also
 /// publishes this member there.
@@ -323,7 +335,11 @@ fn browse(
     as_phone: bool,
     log: &(dyn Fn(&str) + Send + Sync),
 ) -> Result<(), mdns_sd::Error> {
-    let daemon = mdns_sd::ServiceDaemon::new()?;
+    let preopened = PREOPENED.lock().unwrap_or_else(|e| e.into_inner()).take();
+    let daemon = match preopened {
+        Some(d) => d,
+        None => mdns_sd::ServiceDaemon::new()?,
+    };
     // As Go's responder: no loopback interfaces.
     let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
     // On a router, only the devices of the interface list.

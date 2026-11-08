@@ -105,6 +105,10 @@ All notable changes to cbb are documented in this file. The format follows
   which runs the Go agent's code (`internal/agent`: Wayland and X11, the Mac's and Windows'
   pasteboard, Windows' remote paste target, the session's quick actions) and ends with it
   (`TestLiteAgent`).
+  `cbb service` in Rust takes `-state` and `-socket` after the command too, as launchd's plist,
+  FreeBSD's rc script and OpenWrt's init script pass them, and `-user`: started as root, it
+  opens the mDNS sockets and then runs as that user, as the Go service does for FreeBSD
+  (`TestLiteServiceFlags`).
 - A request to the Rust service while it is still starting waits for it rather than hearing
   that the device is in no group.
 - The Rust member no longer can deadlock when a renewed certificate and new records come at

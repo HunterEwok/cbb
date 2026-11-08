@@ -43,7 +43,7 @@ func TestLiteAgent(t *testing.T) {
 		st, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
 	})
-	if _, err := lite.do(t, control.Header{Op: control.OpMode, Name: "shared"}, ""); err != nil {
+	if _, err := lite.do(t, control.Header{Op: control.OpSync, Name: "on"}, ""); err != nil {
 		t.Fatal(err)
 	}
 

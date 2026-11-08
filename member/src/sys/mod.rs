@@ -325,3 +325,64 @@ pub fn has_stderr() -> bool {
     let h = unsafe { GetStdHandle(STD_ERROR_HANDLE) };
     !h.is_null() && h != INVALID_HANDLE_VALUE
 }
+
+/// Gives up root for the user name, with its groups, as Go's runAs (cbb
+/// service -user, which FreeBSD's rc script passes): root must not come
+/// back. HOME, USER and LOGNAME become the user's.
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+pub fn run_as(name: &str) -> Result<()> {
+    use crate::error::Error;
+    use std::ffi::{CStr, CString};
+    if !is_root() {
+        return Err(Error::msg("-user needs root"));
+    }
+    let cname = CString::new(name).map_err(|_| Error::msg("-user names no user"))?;
+    // SAFETY: an all-zero passwd is valid for getpwnam_r to fill.
+    let mut pw: libc::passwd = unsafe { std::mem::zeroed() };
+    let mut buf = vec![0 as libc::c_char; 16 * 1024];
+    let mut found: *mut libc::passwd = std::ptr::null_mut();
+    // SAFETY: pw, buf and found are valid, and buf's length is given.
+    let rc = unsafe { libc::getpwnam_r(cname.as_ptr(), &mut pw, buf.as_mut_ptr(), buf.len(), &mut found) };
+    if rc != 0 || found.is_null() {
+        return Err(Error::msg(format!("no user {name:?}")));
+    }
+    let (uid, gid) = (pw.pw_uid, pw.pw_gid);
+    // SAFETY: pw_dir points into buf, a string the call ended with a zero.
+    let home = unsafe { CStr::from_ptr(pw.pw_dir) }.to_string_lossy().into_owned();
+    let mut groups = vec![0 as libc::gid_t; 256];
+    let mut n = groups.len() as libc::c_int;
+    // SAFETY: groups holds n entries; the call writes at most that many.
+    if unsafe { libc::getgrouplist(cname.as_ptr(), gid, groups.as_mut_ptr(), &mut n) } < 0 {
+        n = 1;
+        groups[0] = gid;
+    }
+    groups.truncate(n.max(0) as usize);
+    // SAFETY: plain system calls with valid arguments.
+    unsafe {
+        if libc::setgroups(groups.len() as _, groups.as_ptr()) != 0 {
+            return Err(Error::msg(format!("setting the groups of {name}: {}", std::io::Error::last_os_error())));
+        }
+        if libc::setgid(gid) != 0 {
+            return Err(Error::msg(format!("setting the group of {name}: {}", std::io::Error::last_os_error())));
+        }
+        if libc::setuid(uid) != 0 {
+            return Err(Error::msg(format!("becoming {name}: {}", std::io::Error::last_os_error())));
+        }
+        if libc::setuid(0) == 0 {
+            return Err(Error::msg(format!("root came back after becoming {name}")));
+        }
+        // SAFETY: the service has started no thread that reads the
+        // environment yet (the mDNS daemon's does not).
+        std::env::set_var("HOME", home);
+        std::env::set_var("USER", name);
+        std::env::set_var("LOGNAME", name);
+    }
+    Ok(())
+}
+
+/// Gives up root for the user name: only on Linux and FreeBSD, whose rc
+/// script passes -user.
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+pub fn run_as(_name: &str) -> Result<()> {
+    Err(crate::error::Error::msg("-user is for FreeBSD and Linux"))
+}

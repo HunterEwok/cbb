@@ -104,14 +104,19 @@ Commands:
   agent                Link this session's clipboard with the service
                        (started at sign-in), through cbb-helper.
   service [-name name] [-port port] [-peer host:port]... [-no-mdns]
-          [-no-listen] [-tunnel-via host:port] [-full]
-                       Run the service (started by systemd or procd): it
+          [-no-listen] [-tunnel-via host:port] [-full] [-state dir]
+          [-socket path] [-user name]
+                       Run the service (started by systemd, procd, launchd,
+                       an rc script or Windows' service manager): it
                        dials the computers, and phones and other lite
                        members dial it on the member port (8764, CBB_PORT).
                        -tunnel-via: the tunnel to the hub sends its packets
                        there, a local UDP port that leads to the hub (cbb
                        next link -udp on the ZX Spectrum Next).
                        -full: as a computer's service, a full member.
+                       -state and -socket as before the command; -user:
+                       started as root, open the mDNS sockets, then run
+                       as this user (FreeBSD's rc script).
   copy [-secret]       Send standard input to the group.
   paste [-terminal [-lines] [-secret]]
                        Print this member's clipboard text; -terminal makes
@@ -533,11 +538,17 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
         tunnel_via: None,
         full: false,
     };
+    let mut run_user = None;
     let mut i = 0;
     while i < args.len() {
         let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(format!("{} needs a value", args[i])));
         match flag(&args[i]) {
             Some("name") => cfg.name = next()?,
+            // As the Go service takes them, after the command too (launchd's
+            // plist and FreeBSD's rc script).
+            Some("state") => cfg.state_dir = PathBuf::from(next()?),
+            Some("socket") => cfg.socket = PathBuf::from(next()?),
+            Some("user") => run_user = Some(next()?),
             Some("peer") => cfg.peers.push(resolve(&next()?)?),
             Some("tunnel-via") => cfg.tunnel_via = Some(resolve(&next()?)?),
             Some("port") => cfg.port = Some(next()?.parse().context("the port is a number")?),
@@ -562,6 +573,13 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
     }
     if !records::valid_name(&cfg.name) {
         return Err(Error::msg("the device name must be 1 to 64 bytes without control characters"));
+    }
+    if let Some(u) = run_user {
+        // Started as root: the mDNS sockets first, then the user.
+        if let Err(e) = discovery::preopen() {
+            eprintln!("cbb: opening the mDNS sockets as root: {e}");
+        }
+        sys::run_as(&u)?;
     }
     #[cfg(windows)]
     {
