@@ -1458,6 +1458,13 @@ int net_cmd(void)
 // server waits: the ESP has no flow control, and a card write runs with
 // interrupts off for longer than the UART's buffer lasts.
 #define CHUNK MAX_TEXT
+// fetch() asks for FETCH_BANKS banks' worth at a time, into banks of its
+// own in at $6000 (BASIC's, which nothing runs meanwhile): a quarter of the
+// round trips to the site.
+#define FETCH_BANKS 4
+#define FETCH_WINDOW ((uint8_t *)0x6000)
+#define BASIC_MMU3 11
+static uint8_t fetch_bank[FETCH_BANKS], fetch_banks;
 
 // The ROM's frame counter, 50 a second while interrupts run.
 // The ROM's scroll count: kept high, the screen scrolls without "scroll?".
@@ -1531,9 +1538,15 @@ static uint8_t http_range(const char *name, uint32_t from, uint16_t size)
     if (length != size) goto out;
     // Once the bytes come, they come without a pause: 251 when two seconds
     // pass without one, which the Next lost to a speed it cannot read at.
-    http_dst = text;
-    err = http_rx(size);
-    got = (uint16_t)(http_dst - text);
+    // Into the banks, 8K in each.
+    err = 0;
+    for (i = 0; got < size && !err; i++) {
+        ZXN_WRITE_MMU3(fetch_bank[i]);
+        http_dst = FETCH_WINDOW;
+        err = http_rx(size - got < CHUNK ? size - got : CHUNK);
+        got += CHUNK;
+    }
+    ZXN_WRITE_MMU3(BASIC_MMU3);
     if (err) {
         err = 251;
         goto out;
@@ -1855,10 +1868,25 @@ static uint8_t speed_down(uint32_t *speed, uint8_t row, const char *label)
 // Fetches one item to its .PRT file, going on from what an earlier try
 // left there, and puts it in place once it is the one built with this CBB;
 // 0 when done.
+// Writes the n bytes http_range() read to the card; 0 when written.
+static uint8_t fetch_write(uint8_t fh, uint16_t n)
+{
+    uint8_t i;
+    uint16_t k;
+    for (i = 0; n; i++) {
+        k = n < CHUNK ? n : CHUNK;
+        ZXN_WRITE_MMU3(fetch_bank[i]);
+        if (esx_f_write(fh, FETCH_WINDOW, k) != k) break;
+        n -= k;
+    }
+    ZXN_WRITE_MMU3(BASIC_MMU3);
+    return n != 0;
+}
+
 static int fetch(struct item *it, uint8_t row)
 {
     uint8_t fh, err, tries = 0;
-    uint16_t n, start = FRAMES_LO;
+    uint16_t n, k, start = FRAMES_LO;
     uint32_t got;
 again:
     // What an earlier try left.
@@ -1873,7 +1901,8 @@ again:
     esx_f_seek(fh, got, ESX_SEEK_SET);
     file_state(row, it->label, got ? "GOES ON" : "FETCHING");
     while (got < it->size) {
-        n = it->size - got > CHUNK ? CHUNK : (uint16_t)(it->size - got);
+        k = fetch_banks * CHUNK;
+        n = it->size - got > k ? k : (uint16_t)(it->size - got);
         err = http_range(it->name, got, n);
         if (err == LINK_BREAK) {
             esx_f_close(fh);
@@ -1900,7 +1929,7 @@ again:
             continue;
         }
         tries = 0;
-        if (esx_f_write(fh, text, n) != n) {
+        if (fetch_write(fh, n)) {
             esx_f_close(fh);
             return fail("cannot write to the card", it->part);
         }
@@ -1987,8 +2016,7 @@ static void wait_frames(uint8_t n)
 // on the way when it comes gzipped: at speed, which the
 // Pi's tty takes for the copy and leaves after, or with speed 0 at the
 // line's own. 0 when sent, 2 when the Pi did not say it was ready (its
-// tty may not take the speed), 3 when bytes were lost, else 1 with the
-// message shown.
+// tty may not take the speed), else 1 with the message shown.
 static int pi_send(struct item *it, uint8_t row, uint32_t speed)
 {
     uint8_t fh, err;
@@ -2029,23 +2057,8 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
         progress(row, sent, it->size, start);
     }
     esx_f_close(fh);
-    // Bytes lost on the way keep head waiting for more: filler after each
-    // quiet second ends it, and the copy is damaged then.
-    err = 0;
-    for (n = 0; n < 32;) {
-        if (!link_line(line, sizeof line, 1)) {
-            if (strcmp(line, "CBBEND") == 0) break;
-            continue;
-        }
-        http_dst = text;
-        pi_tx(4096);
-        err = 3;
-        n++;
-    }
-    wait_frames(2);
-    link_open();
-    link_prompt();
-    return err;
+    // The line stays at speed for pi_check()'s CBBEND.
+    return 0;
 }
 
 // The Pi's cbb to the Pi: from 2M a step slower each time the Pi's tty
@@ -2101,6 +2114,8 @@ static int to_pi(struct item *it, uint8_t row)
 static struct item cbb_new = {"CBB", "CBB", 0, 0, 0, 0, 0};
 // It shares CBB.OVL's row, as the CBB part of the install.
 #define CBB_ROW ITEM_ROW(1)
+
+static const char no_banks[] = "no memory free for the download";
 
 static int install_files(uint8_t update)
 {
@@ -2208,6 +2223,11 @@ static int install_files(uint8_t update)
     if (pi_answers && strcmp(pisha, pi->sha256)) nothing = 0;
     for (i = 0; i < ITEMS; i++)
         if (need[i]) nothing = 0;
+    // Banks for the chunks, as many as NextZXOS spares, one at least.
+    for (fetch_banks = 0; fetch_banks < FETCH_BANKS; fetch_banks++) {
+        if ((fetch_bank[fetch_banks] = esx_ide_bank_alloc(ESX_BANKTYPE_RAM)) == NO_BANK) break;
+    }
+    if (!fetch_banks) err = fail(no_banks, 0);
     for (i = 0; i < ITEMS && !err; i++) {
         // A newer CBB first, on one bar with its CBB.OVL.
         if (i == 1 && newer) {
@@ -2220,6 +2240,7 @@ static int install_files(uint8_t update)
         // CBB.DRV, which runs from memory once installed.
         if (i == 0 && need[i]) drv_new = 1;
     }
+    while (fetch_banks) esx_ide_bank_free(ESX_BANKTYPE_RAM, fetch_bank[--fetch_banks]);
     http_close();
     link_use(LINK_PI);
     if (err) return 1;
@@ -2962,8 +2983,9 @@ extern uint8_t tape_flag;
 #pragma bssseg PAGE_21
 #pragma dataseg PAGE_21
 
-// Whether the Pi got the cbb built with this CBB, whose SHA-256 is
-// pi_check_sha: 0 yes, 3 another file, else 1 with the message shown. Here, in
+// After pi_send(), with the line still at its speed: whether the Pi got
+// the cbb built with this CBB, whose SHA-256 is pi_check_sha: 0 yes, 3 a
+// damaged or another file, else 1 with the message shown. Here, in
 // CBB.OVL's second page, for the install's page, which has no room left
 // (install_files() loads it early): not static, as far_pi_check()
 // (far.asm) calls it.
@@ -2977,8 +2999,26 @@ static const char pc_wrap[] = "cd " PI_DIR " && [ \"$(head -c2 cbb 2>/dev/null)\
                               "/cbb.bin \"$@\"\\n' >cbb && chmod 755 cbb; }; cd\n";
 static const char pc_silent[] = "the Pi did not answer", pc_no_ok[] = "no CBBOK", pc_nosha_w[] = "CBBNOSHA",
                   pc_nosha[] = "the Pi has no sha256sum to check its cbb with", pc_err[] = "CBBERR", pc_ok[] = "CBBOK";
+static const char pc_end_w[] = "CBBEND";
 int pi_check(void)
 {
+    uint8_t n, lost = 0;
+    // Bytes lost on the way keep head waiting for more: filler after each
+    // quiet second ends it, and the copy is damaged then.
+    for (n = 0; n < 32;) {
+        if (!link_line(line, sizeof line, 1)) {
+            if (strcmp(line, pc_end_w) == 0) break;
+            continue;
+        }
+        http_dst = text;
+        pi_tx(4096);
+        lost = 1;
+        n++;
+    }
+    wait_frames(2);
+    link_open();
+    link_prompt();
+    if (lost) return 3;
     // The digest is pins.h's, 64 hex digits, never the site's.
     link_send_str(pc_cmd);
     link_send_str(pi_check_sha);

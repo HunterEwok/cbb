@@ -107,7 +107,10 @@ ends the copy, and steps down. The install fetches and sends the Pi's `cbb` gzip
 site's `cbb.gz`, under half the bytes), which the Pi unpacks with `gzip -dc` on the way and
 checks against the SHA-256 built into CBB; `.cbb update` with a newer CBB fetches `cbb` as it
 is, which the signed list names. The file's row says each new speed (`AT 921K`),
-and the speed found holds for the rest of the install. The Next reads each chunk, and sends the Pi's
+and the speed found holds for the rest of the install. It asks the site for 32K at a time, into
+four 8K banks of its own in at $6000, then writes them to the card while the server waits: the
+ESP has no flow control, so nothing may come during a card write, and fewer, larger ranges
+spend less time on the round trips. The Next reads each chunk, and sends the Pi's
 `cbb`, in loops of their own in assembly (about 110 and 70 T-states a byte), fast enough for
 2000000 at 28 MHz; in C it read no faster than 230400 and sent some 32K a second. The signed list `.cbb update` fetches
 first, a few hundred bytes, comes at the ESP's own 115200.
