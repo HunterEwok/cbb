@@ -614,11 +614,32 @@ fn via_name(v: Via) -> &'static str {
 
 impl Service {
     fn node(&self) -> Result<Arc<Node>> {
-        self.node.read().unwrap().clone().ok_or_else(|| Error::msg("this device is in no group; run cbb pair"))
+        self.started(&self.node)
     }
 
     fn away(&self) -> Result<Arc<Away>> {
-        self.away.read().unwrap().clone().ok_or_else(|| Error::msg("this device is in no group; run cbb pair"))
+        self.started(&self.away)
+    }
+
+    /// What slot holds once the member has started. The control sockets
+    /// open before it, for cbb pair; a device that is in a group but still
+    /// starting waits for it a while rather than being told it is in none.
+    fn started<T: Clone>(&self, slot: &RwLock<Option<T>>) -> Result<T> {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(v) = slot.read().unwrap().clone() {
+                return Ok(v);
+            }
+            let in_group = matches!(Identity::load(&self.state_dir), Ok(Some(_)));
+            if !in_group || std::time::Instant::now() >= deadline || STOP.load(Ordering::SeqCst) {
+                return Err(Error::msg(if in_group {
+                    "this device is still starting; try again in a moment"
+                } else {
+                    "this device is in no group; run cbb pair"
+                }));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
     }
 
     /// cbb global: shows sync away from home, or turns it on or off. The
