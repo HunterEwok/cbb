@@ -23,8 +23,8 @@ import (
 // for a check from a network that blocks WireGuard: CBB_REAL_FORWARDER is
 // the forwarder's host:port (cbb.tools:8764 for the project's), and
 // CBB_REAL_FORWARDER_PIN its pin when it is not the project's. The hub
-// registers (inside VLESS when the forwarder's TCP port does not answer),
-// then a client reaches its member listener over VLESS with XHTTP alone;
+// registers, inside VLESS when its hellos over UDP do not reach the
+// forwarder, then a client reaches its member listener over VLESS with XHTTP alone;
 // plain WireGuard to the forwarder's UDP port is tried as well and only
 // reported, since a blocking network is expected to drop it.
 func TestRustPhoneThroughRealForwarder(t *testing.T) {
@@ -57,9 +57,22 @@ func TestRustPhoneThroughRealForwarder(t *testing.T) {
 	var link map[string]any
 	h.waitFor("the forwarder did not take the hub", func(r map[string]any) bool {
 		link, _ = r["vless"].(map[string]any)
-		seen, _ := r["seen"].(string)
-		return link != nil && seen != ""
+		return link != nil
 	})
+	if !h.seenWithin(20 * time.Second) {
+		// The hub's hellos over UDP do not reach the forwarder from here:
+		// the hub registers inside VLESS instead, as it does when the
+		// forwarder's TCP port does not answer, and its packets go there.
+		t.Logf("the hub's hellos over UDP did not reach the forwarder; registering inside VLESS")
+		h.register(net.JoinHostPort(ips[0].String(), "9"), pin, []group.Record{h.own}, id)
+		h.waitFor("the forwarder never saw the hub over VLESS", func(r map[string]any) bool {
+			seen, _ := r["seen"].(string)
+			if l, _ := r["vless"].(map[string]any); l != nil {
+				link = l
+			}
+			return seen != ""
+		})
+	}
 	t.Logf("the hub is registered: %v", h.p.call(t, map[string]any{"op": "hub_status", "id": h.id})["forwarder"])
 	link["id"] = id
 
@@ -107,4 +120,17 @@ func rustClientEcho(t *testing.T, bin, hub string, key tunnel.Key, offer map[str
 		return fmt.Errorf("got %q", got)
 	}
 	return nil
+}
+
+// seenWithin reports whether the forwarder sees the hub's hellos within d.
+func (h *rustRootHub) seenWithin(d time.Duration) bool {
+	for end := time.Now().Add(d); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+		st := h.p.call(h.t, map[string]any{"op": "hub_status", "id": h.id})
+		if r, _ := st["forwarder"].(map[string]any); r != nil {
+			if seen, _ := r["seen"].(string); seen != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
