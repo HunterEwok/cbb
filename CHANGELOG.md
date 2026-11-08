@@ -75,6 +75,10 @@ All notable changes to cbb are documented in this file. The format follows
   user's own actions (`cbb action add`, `remove`), which CBB's agent runs in the user's
   session, as it runs the presets on a Mac and Windows (`TestLiteOwnActions`); the uinput
   helper presses a remote paste's keys for it with a one-time grant (`TestLiteKeysGrant`).
+  The Rust service is a Bluetooth keyboard and a TV's remote through cbb-helper, which runs
+  the Go service's code for both (`internal/peripheral`): `cbb keyboard`, `cbb remote`, their
+  status, the remote pastes the user sends there, and the quick action `keyboard-layout`
+  (`TestLitePeripherals`).
 - A pairing window closed while it sent its Welcome now ends when that attempt ends, also when
   the attempt fails, in Go and in Rust; an invitation cancelled at that moment no longer
   crashes the Go service.

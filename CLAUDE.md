@@ -57,8 +57,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 - `internal/keyboard`: the Bluetooth keyboards' layouts (the same as `cbb_core::keyboard` and the
   Android kit's `Keyboard`, all checked against `testdata/interop/keyboard.json`);
   `internal/blekeyboard`: a Linux computer as a BLE keyboard through BlueZ (`cbb keyboard`,
-  `internal/service/keyboard.go`; `bluetest` plays BlueZ in tests).
-- `internal/tvremote`: a member as a TV's remote (`cbb remote`, `internal/service/tvremote.go`):
+  `internal/peripheral`, which the Go service and cbb-helper run; `bluetest` plays BlueZ in tests).
+- `internal/tvremote`: a member as a TV's remote (`cbb remote`, `internal/peripheral/tv.go`):
   `androidtv` (Android TV Remote v2: pairing, the remote, `wire` its framing, `atvtest` a fake TV),
   `appletv` (the Companion protocol: pair-setup by PIN, pair-verify, the text field; `wire` its
   OPACK, TLV8, SRP, frames and archives, `atvtest` a fake Apple TV),

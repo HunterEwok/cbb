@@ -32,6 +32,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/netguard"
 	"github.com/HunterEwok/cbb/internal/node"
 	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/peripheral"
 	"github.com/HunterEwok/cbb/internal/piv"
 	"github.com/HunterEwok/cbb/internal/remotepaste"
 	"github.com/HunterEwok/cbb/internal/tunnel"
@@ -117,7 +118,7 @@ type Config struct {
 
 	// KeyboardBus connects to the bus BlueZ is on, for the Bluetooth
 	// keyboard; the system bus on Linux if nil. Tests replace it.
-	KeyboardBus keyboardDialer
+	KeyboardBus peripheral.BusDialer
 
 	// newMode is the sync mode of a device that makes or joins a group;
 	// clip.Own if nil. Tests that sync take clip.Shared.
@@ -181,10 +182,8 @@ type Service struct {
 	broken   *control.RequestError // the group's files cannot be read; set once at start
 	leftOld  bool                  // the device left a group made before 0.6 at start
 
-	// The Bluetooth keyboard, on Linux (keyboard_linux.go).
-	kbd keyboardState
-	// The TV pairing in progress (tvremote.go).
-	tv tvState
+	// The Bluetooth keyboard and the TVs' remotes (internal/peripheral).
+	host *peripheral.Host
 
 	createMu       sync.Mutex // one group creation at a time
 	mu             sync.Mutex
@@ -218,9 +217,6 @@ type Service struct {
 	// expire, so that none is carried out twice; the cache starts empty, so
 	// a command signed before startedMS is refused.
 	commands map[string]time.Time
-	// typing holds the targets that type a paste after its answer (the
-	// Bluetooth keyboard, a Roku): one text at a time on each.
-	typing map[string]bool
 	// keys holds the grants of the remote pastes handed to desktop
 	// sessions, for the uinput helper (keysGrant).
 	keys      map[string]*keysGrant
@@ -370,6 +366,7 @@ func Run(ctx context.Context, cfg Config) error {
 	s := &Service{cfg: cfg, logf: cfg.Logf, dialers: map[group.DeviceID]*dialer{}, watchers: map[*watcher]bool{}, restart: make(chan struct{}, 1), left: make(chan struct{}, 1),
 		seen: map[group.DeviceID]time.Time{}, archives: map[group.DeviceID]string{}, online: map[group.DeviceID]bool{}, unreached: map[group.DeviceID]bool{},
 		startedMS: cfg.now().UnixMilli()}
+	s.host = &peripheral.Host{Dir: cfg.StateDir, Name: cfg.Name, OS: cfg.OS, Bus: cfg.KeyboardBus, Logf: cfg.Logf}
 	if s.cfg.runner == nil {
 		// A Mac and Windows run the presets in the signed-in user's
 		// session, through the agent.
@@ -446,9 +443,8 @@ func Run(ctx context.Context, cfg Config) error {
 	if s.content != nil {
 		go s.sweepContent(ctx, contentSweepEvery)
 	}
-	go s.applyKeyboard()
-	defer s.closeKeyboard()
-	defer s.endTVPairing()
+	go s.host.ApplyKeyboard()
+	defer s.host.Close()
 
 	select {
 	case <-ctx.Done():

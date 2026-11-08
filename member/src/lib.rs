@@ -46,6 +46,7 @@ pub mod node;
 pub mod pair;
 mod pastehelper;
 pub mod peer;
+mod peripheral;
 pub mod phone;
 pub mod records;
 #[cfg(feature = "tunnel")]

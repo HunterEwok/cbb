@@ -63,6 +63,9 @@ pub(crate) const CONSOLE: &str = "console";
 /// driver on a Next's Pi.
 pub(crate) const NEXT: &str = "next";
 
+/// How often a paste typed after its answer checks that it may go on.
+const TYPING_CHECK: Duration = Duration::from_millis(500);
+
 /// How long a watcher may take to put a paste in; typing takes TYPE_WAIT
 /// more for each byte, as on a full member.
 const INJECT_WAIT: Duration = Duration::from_secs(5);
@@ -177,6 +180,8 @@ struct Service {
     /// The grants of the remote pastes handed to desktop sessions, for the
     /// uinput helper's keys, by their tokens.
     grants: Mutex<HashMap<String, Grant>>,
+    /// The Bluetooth keyboard and the TVs' remotes, through cbb-helper.
+    peripherals: Arc<crate::peripheral::Peripherals>,
     next_watcher: AtomicUsize,
     /// The limits of remote paste per sender.
     pastes: Mutex<remotepaste::Limiter>,
@@ -270,6 +275,7 @@ pub fn run(cfg: Config) -> Result<()> {
         away: RwLock::new(None),
         watchers: Mutex::new(Vec::new()),
         grants: Mutex::new(HashMap::new()),
+        peripherals: Arc::new(crate::peripheral::Peripherals::new(&cfg.state_dir, &cfg.name)),
         next_watcher: AtomicUsize::new(0),
         pastes: Mutex::new(remotepaste::Limiter::default()),
         acts: Mutex::new(remotepaste::Limiter::default()),
@@ -290,6 +296,11 @@ pub fn run(cfg: Config) -> Result<()> {
         pairing: Mutex::new(None),
         port: Mutex::new(None),
     });
+    {
+        // The helper puts a keyboard that is on back on BlueZ.
+        let p = svc.peripherals.clone();
+        std::thread::spawn(move || p.status());
+    }
     if let Some(h) = svc.helper.clone() {
         // Started at once, so that a helper that cannot run shows in the
         // log at the start rather than at the first request.
@@ -1181,9 +1192,7 @@ impl Service {
     /// The keyboard-layout preset: the Bluetooth keyboard types in the next
     /// layout.
     fn next_keyboard_layout(&self) -> std::result::Result<(), actions::Failure> {
-        Err(actions::Failure::Refused(
-            "this device has no Bluetooth keyboard of CBB's: cbb keyboard runs on a full member".into(),
-        ))
+        self.peripherals.next_layout()
     }
 
     /// Turns every quick action off here; the rights the user granted stay
@@ -1298,7 +1307,18 @@ impl Service {
             Ok(_) if !self.pastes.lock().unwrap().allow(&from.key, uptime::wall_ms()) => {
                 res.reason = "too many pastes: at most one a second and 30 a minute from one device".into();
             }
-            Ok(set) => res = self.inject(&body, &remotepaste::clean(&body.text), set, &from.name),
+            Ok(set) => {
+                let text = remotepaste::clean(&body.text);
+                match (!text.is_empty()).then(|| self.peripherals.paste(&text, set.enter, body.enter)).flatten() {
+                    Some((status, reason)) => {
+                        (res.status, res.reason) = (status, reason);
+                        if res.status == "done" {
+                            self.watch_typing(c, &body, text.len());
+                        }
+                    }
+                    None => res = self.inject(&body, &text, set, &from.name),
+                }
+            }
         }
         if res.status == "done" {
             (self.log)(&format!("cbb: {} pasted {} bytes here", from.who(&body), body.text.len()));
@@ -1322,6 +1342,28 @@ impl Service {
             }
         }
         res
+    }
+
+    /// Watches a paste the keyboard's host or a Roku types after its
+    /// answer, as Go's stillAllowed: once the records no longer take its
+    /// command c from its signer, removed or frozen meanwhile, the helper
+    /// stops typing; it stops by itself when remote paste goes off.
+    fn watch_typing(&self, c: &crate::records::Record, body: &crate::records::Command, len: usize) {
+        let Ok(node) = self.node() else { return };
+        let (c, at, p) = (c.clone(), body.time_ms, self.peripherals.clone());
+        // At most as long as the slowest typing: a Roku's pace, or the
+        // keyboard's slowest rate.
+        let until = Instant::now() + Duration::from_secs(60) + Duration::from_millis(200) * len as u32;
+        std::thread::spawn(move || {
+            while Instant::now() < until && !STOP.load(Ordering::SeqCst) {
+                std::thread::sleep(TYPING_CHECK);
+                let me = node.identity().id.to_string();
+                if node.records().lock().unwrap().verify_command(&c, &me, at).is_err() {
+                    p.stop();
+                    return;
+                }
+            }
+        });
     }
 
     /// Hands the text to the watchers that can put it in, best target
@@ -1498,6 +1540,7 @@ impl Service {
         let set = remotepaste::load(&self.state_dir).ok()?;
         let mut targets: Vec<String> =
             self.watchers.lock().unwrap().iter().filter(|w| !w.target.is_empty()).map(|w| w.target.clone()).collect();
+        targets.extend(self.peripherals.status().map(|p| p.targets).unwrap_or_default());
         targets.sort();
         targets.dedup();
         Some(control::Paste {
@@ -1837,6 +1880,7 @@ impl Service {
             )),
             "status" => {
                 let node = self.node()?;
+                let peripherals = self.peripherals.status();
                 let id = node.identity();
                 let skews = node.engine.skews();
                 let peers = node
@@ -1865,6 +1909,8 @@ impl Service {
                     paused_until_ms: node.engine.pause_left().filter(|l| *l > 0).map_or(0, |l| uptime::wall_ms() + l),
                     away: self.away()?.status(&node),
                     paste: self.paste_status(),
+                    keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
+                    tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
                     actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
                     stop: node.stop(),
                     removed: node.removed(),
@@ -1961,6 +2007,11 @@ impl Service {
                 Ok(control::reply(Header::default(), Vec::new()))
             }
             "paste-receive" => self.set_receive(h),
+            "keyboard" | "remote" => {
+                let p = self.peripherals.serve(&h.op, h, &m.payload)?;
+                let status = Status { keyboard: p.keyboard, tvs: p.tvs, ..Default::default() };
+                Ok(control::reply(Header { status: Some(status), done: true, ..Default::default() }, Vec::new()))
+            }
             "action-set" => self.set_action(h),
             "actions-off" => {
                 let node = self.node()?;

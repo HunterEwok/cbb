@@ -189,6 +189,15 @@ ends, the Go service described below is still the computers' member.
   seal a secret with the TPM or the Secure Enclave as Go's `group.Sealer` does: `cbb` keeps
   the key for sealed messages (`seal.json`) and the tunnel's keys (`tunnel.json`, with the
   hub's fields Go writes) sealed in the same fields as the Go member.
+- **The keyboard and the TVs.** `keyboard`, `remote`, `peripheral-status`,
+  `peripheral-paste`, `peripheral-stop` and `keyboard-layout` run Go's `internal/peripheral`,
+  the code the Go service runs too, with the state folder and the device's name in each
+  request: the helper keeps the Bluetooth keyboard on BlueZ and a TV pairing between requests,
+  and `cbb` asks it only once the keyboard or a TV was set up there (`keyboard`, `tvs.json`).
+  A remote paste goes to the keyboard's host or the TV the user sends pastes to before the
+  watchers; one typed after its answer stops when remote paste goes off, which the helper
+  reads in the same folder, or when `cbb`'s records no longer take its command, when `cbb`
+  sends `peripheral-stop` (`TestLitePeripherals`).
 - **The clients' operations.** The Rust service already takes what the command line and the
   desktops' agents ask on the control socket: `status`, `devices`, `config` (the largest
   copy, `limits` in its state), `copy` and `paste`, the watchers' `watch`, `clipboard`,

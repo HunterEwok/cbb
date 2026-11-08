@@ -46,5 +46,6 @@ func run(args []string, in io.Reader, out, errw io.Writer, terminal bool) int {
 func newServer() *helper.Server {
 	s := helper.New(version.String())
 	s.HandleKeys()
+	s.HandlePeripherals(os.Stderr)
 	return s
 }

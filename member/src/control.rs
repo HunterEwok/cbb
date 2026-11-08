@@ -151,6 +151,9 @@ pub struct Header {
     /// the paste's keys.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub keys: String,
+    /// In keyboard on: the keyboard's settings, as Go's control.Keyboard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyboard: Option<serde_json::Value>,
     /// In a watch: the watcher runs the quick actions in its user's
     /// session (CBB's agent), which the service hands it with act.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -244,6 +247,13 @@ pub struct Status {
     /// Remote paste on this device; None when in no group.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paste: Option<Paste>,
+    /// The Bluetooth keyboard, as Go's control.Keyboard, which cbb-helper
+    /// gives; None where it was never turned on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyboard: Option<serde_json::Value>,
+    /// The TVs this device is the remote of, as Go's control.TV.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tvs: Vec<serde_json::Value>,
     /// This device's quick actions, the presets in their order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub actions: Vec<Action>,
