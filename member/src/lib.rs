@@ -1708,7 +1708,8 @@ fn stamp(ms: i64) -> String {
 fn core_version() -> String {
     use cbb_core::api;
     let source = if api::SOURCE.is_empty() { String::from("unknown") } else { String::from(api::SOURCE) };
-    format!("core {}, abi {}, source {source}", api::VERSION, api::ABI)
+    // As the Go cbb's line, which the installers and sign.sh look for.
+    format!("rules: the Rust core {}, abi {}, source {source} (built in)", api::VERSION, api::ABI)
 }
 
 #[cfg(test)]
@@ -1728,7 +1729,11 @@ mod tests {
     fn names_the_core() {
         let line = core_version();
         assert!(
-            line.starts_with(&format!("core {}, abi {}, source ", cbb_core::api::VERSION, cbb_core::api::ABI)),
+            line.starts_with(&format!(
+                "rules: the Rust core {}, abi {}, source ",
+                cbb_core::api::VERSION,
+                cbb_core::api::ABI
+            )),
             "{line}"
         );
     }
