@@ -178,12 +178,11 @@ proptest! {
         for c in cases() {
             let mut s = seed;
             let mut records: Vec<Record> = c.records.iter().filter(|_| !next(&mut s).is_multiple_of(3)).cloned().collect();
-            if let Some(r) = records.first_mut() {
-                if !r.body.is_empty() {
+            if let Some(r) = records.first_mut()
+                && !r.body.is_empty() {
                     let i = flip.0 % r.body.len();
                     r.body[i] ^= flip.1 | 1;
                 }
-            }
             let _ = evaluate(&c, &records);
         }
     }

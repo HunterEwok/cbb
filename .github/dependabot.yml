@@ -11,6 +11,8 @@
 # dependency-name), or the firmware's `cargo build --locked` fails. esp-hal and its crates are
 # pinned to a git commit on purpose and are left alone. gradle covers the Android app and its kit.
 # npm covers only the checks of the website in CI (site/package.json).
+# swift covers the iPhone kit's packages. Versions written out by hand in the workflows (qemu,
+# zig, the ESP32 toolchain, the cargo tools CI installs) are checked weekly by tools/pins.
 # The cooldown waits a week after a release before proposing it, so a compromised release
 # has time to be noticed and pulled.
 version: 2
@@ -79,6 +81,11 @@ updates:
       # request, and CI's firmware build tells whether it fits esp-radio by then.
       - dependency-name: "trouble-host"
         versions: ["0.8.x"]
+      # libc 0.2.191 drops SYSPROTO_CONTROL and UTUN_OPT_IFNAME on iOS, which nix (GotaTun's
+      # utun) needs, so the phones' Rust library does not build for the iPhone. Only that
+      # version is skipped; CI's phone core (ios) job tells whether a newer one has them back.
+      - dependency-name: "libc"
+        versions: ["0.2.191"]
     groups:
       cargo:
         patterns: ["*"]
@@ -106,4 +113,17 @@ updates:
       default-days: 7
     groups:
       website-checks:
+        patterns: ["*"]
+
+  # The iPhone kit's Swift packages (apps/ios/CBBKit/Package.resolved).
+  - package-ecosystem: "swift"
+    directory: "/apps/ios/CBBKit"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      timezone: "UTC"
+    cooldown:
+      default-days: 7
+    groups:
+      swift:
         patterns: ["*"]
