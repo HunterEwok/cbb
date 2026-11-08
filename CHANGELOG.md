@@ -1331,6 +1331,10 @@ All notable changes to cbb are documented in this file. The format follows
   advanced ones behind a switch and tips that close once instead of long texts, and the
   device's card with its badges, one line, the house, a row of icons and the rest under
   More. Wear OS has the house beside the globe.
+- The Rust `cbb` speaks the locale's language when the project has it (Chinese, Spanish,
+  Russian, Arabic, Swahili, Hebrew, Hindi; English otherwise): its help, its questions and what
+  `status`, `sync`, `global`, `pair` and `leave` print (`member/l10n/`, every text checked
+  in every language by a test). `cbb pair` names the phones' + and Scan a code.
 - The Aurora app too: the house and the globe beside how many devices are online (the globe
   asks first and moves out of Settings), no Sync button or menu item, the Start screen with
   Create a group and the two Join buttons, Leave the group in Settings, "Lost phone?" on the

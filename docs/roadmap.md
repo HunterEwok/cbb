@@ -309,9 +309,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     (Chinese, English, Spanish, Russian, Arabic, Swahili, Hebrew, Hindi) and offers a choice
     in Settings, System or one of them, remembered. Today only the phones offer System,
     English or Russian; the Mac app follows the system's language and the tray app the
-    system's interface language on Windows and `LANGUAGE`/`LANG` on Linux. The command line
-    (`cbb`, the lite member) picks the language from the locale, and English where the
-    project has no translation for it. One list of the languages serves the site, the apps and
+    system's interface language on Windows and `LANGUAGE`/`LANG` on Linux. The Rust `cbb`
+    already picks the language from the locale (0.6, docs/reference/cli.md), and English
+    where the project has no translation for it. One list of the languages serves the site, the apps and
     the command line; Arabic and Hebrew lay the screens out right to left; a native speaker
     reads the new translations before a release.
 - **50.** **Planned for 0.7.** A LuCI page on OpenWrt, `luci-app-cbb`, in the

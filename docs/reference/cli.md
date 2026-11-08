@@ -12,6 +12,12 @@ that changes the group or this device's place in it (`new`, `pair`, `invite`, `r
 `global on|off|hub|hubs|...`, and on the lite member `global on|off`) uses the admin socket, which
 only root reaches: run it with `sudo`, on Windows from a terminal opened as administrator.
 
+The Rust `cbb` speaks the language of the locale (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`,
+as gettext reads them) when it is one of the project's: Chinese, Spanish, Russian, Arabic,
+Swahili, Hebrew or Hindi, and English otherwise. Its help, the questions it asks and what it
+prints are translated (`member/l10n/<language>.json`); the commands, flags, the service's log
+and the errors the service sends stay in English.
+
 ## cbb
 
 | Command | What it does |
