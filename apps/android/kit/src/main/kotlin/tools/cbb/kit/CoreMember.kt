@@ -320,9 +320,14 @@ class CoreMember private constructor(private val handle: Pointer, private val ca
     /** Waits up to timeoutMS for a member to connect. Blocks. */
     fun waitConnected(timeoutMS: Long): Boolean = call("wait", Wire.obj("timeout_ms" to Wire.num(timeoutMS))).optBool("connected") ?: false
 
-    /** Sets the sync mode the hellos say; the members see it at the next connection, which comes at once. */
-    fun setMode(mode: String) {
-        call("mode", Wire.obj("mode" to Wire.str(mode)))
+    /**
+     * Turns the phone's sync on, or off for forMS milliseconds, 0 for until
+     * it is turned on (design.md, "Sync on and off"); the members see it at
+     * the next connection, which comes at once. A time with sync on is
+     * refused.
+     */
+    fun setSync(on: Boolean, forMS: Long = 0) {
+        call("sync", Wire.obj("on" to JsonPrimitive(on), "for_ms" to Wire.num(forMS)))
     }
 
     /** Sets until when an admin muted this phone, in Unix milliseconds, 0 for until an admin unmutes it; null unmutes. */

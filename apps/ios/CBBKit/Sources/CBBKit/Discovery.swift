@@ -41,6 +41,15 @@ public enum Discovery {
         member(instance: instance, txt: txt.map { "\($0.key)=\($0.value)" })
     }
 
+    /// The TXT record of a device that waits to join, listening with its
+    /// QR code on screen: no group tag, so no member dials it, and the
+    /// fingerprint of its certificate, which a computer of the group checks
+    /// when it admits the device by the code typed there (docs/protocol.md,
+    /// sections 3 and 6).
+    public static func joinerTXT(fingerprint: String) -> [String: String] {
+        ["v": "1", "j": "1", "f": fingerprint]
+    }
+
     /// The members to dial: those browsing found, and the devices of the
     /// group with a known address that it did not find, as a member in
     /// another subnet, which mDNS does not reach (docs/protocol.md, section 9).

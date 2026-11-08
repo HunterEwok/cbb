@@ -381,37 +381,43 @@ struct DeviceRow: View {
     }
 }
 
-/// The system (or kind) of a device, then where it stands.
+/// The system (or kind) of a device, then where it stands: on one line
+/// when it fits, else one under the other, so a narrow tile cuts nothing.
 struct DeviceSubtitle: View {
     let device: AppModel.Computer
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 4) {
-            if let system = device.system {
-                Text(verbatim: system)
-            } else {
-                Text(device.kind.title)
-            }
-            if let standing = device.standing {
-                Text(verbatim: "·")
-                Text(standing)
-            }
-            if let mark = model.hubMark(device) {
-                Text(verbatim: "·")
-                Text(mark == .inUse ? "hub in use" : "hub")
-                    .foregroundStyle(mark == .inUse ? palette.accent : palette.textDim)
-            }
-            if device.muted != nil {
-                Text(verbatim: "·")
-                Label { Text("muted") } icon: { Image(systemName: "speaker.slash") }
-                    .foregroundStyle(palette.danger)
-            }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 4) { parts(dots: true) }
+            VStack(alignment: .leading, spacing: 2) { parts(dots: false) }
         }
         .font(.caption)
         .foregroundStyle(palette.textDim)
         .lineLimit(1)
+    }
+
+    @ViewBuilder private func parts(dots: Bool) -> some View {
+        if let system = device.system {
+            Text(verbatim: system)
+        } else {
+            Text(device.kind.title)
+        }
+        if let standing = device.standing {
+            if dots { Text(verbatim: "·") }
+            Text(standing)
+        }
+        if let mark = model.hubMark(device) {
+            if dots { Text(verbatim: "·") }
+            Text(mark == .inUse ? "hub in use" : "hub")
+                .foregroundStyle(mark == .inUse ? palette.accent : palette.textDim)
+        }
+        if device.muted != nil {
+            if dots { Text(verbatim: "·") }
+            Label { Text("muted") } icon: { Image(systemName: "speaker.slash") }
+                .foregroundStyle(palette.danger)
+        }
     }
 }
 

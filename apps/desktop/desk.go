@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,6 +50,10 @@ type Desk struct {
 	joinPath      string
 	join          Join
 	joinCancelled bool
+
+	// ask is what the window asks for next, once it reads it (TakeAsk):
+	// the tray's Settings, or the question before sync away from home.
+	ask string
 }
 
 // State is the window's whole picture, read again every few seconds.
@@ -69,6 +74,10 @@ type State struct {
 	// ShowDetails is whether messages show the error underneath, as
 	// Settings.Details or else the build sets it.
 	ShowDetails bool `json:"show_details"`
+	// Languages are the languages the window speaks, by their codes, and
+	// AtLogin whether the tray app starts with each sign-in.
+	Languages []string `json:"languages"`
+	AtLogin   bool     `json:"at_login"`
 }
 
 // Settings are the window's choices, kept in the user's configuration
@@ -80,6 +89,8 @@ type Settings struct {
 	// Details shows the error underneath each message; nil follows the
 	// build and CBB_DEBUG (showDetails).
 	Details *bool `json:"details,omitempty"`
+	// Lang is the language the user picked, "" for the system's.
+	Lang string `json:"lang,omitempty"`
 	// Arrangement is the user's order of the tiles and their collections
 	// (arrange.go); nil until the user changes something. The window never
 	// sends it: Arrange changes it.
@@ -89,8 +100,7 @@ type Settings struct {
 // NewDesk reads the settings and the language; it reaches the service only
 // when asked.
 func NewDesk() *Desk {
-	d := &Desk{socket: control.SocketPath(), lang: language(), settings: Settings{Color: "terminal", Appearance: "system", Layout: "tiles"}}
-	d.tr = translations(d.lang)
+	d := &Desk{socket: control.SocketPath(), settings: Settings{Color: "terminal", Appearance: "system", Layout: "tiles"}}
 	if dir, err := os.UserConfigDir(); err == nil {
 		d.settingsPath = filepath.Join(dir, "cbb", "desktop.json")
 		if data, err := os.ReadFile(d.settingsPath); err == nil {
@@ -99,12 +109,17 @@ func NewDesk() *Desk {
 			}
 		}
 	}
+	d.lang = pickLang(d.settings.Lang)
+	d.tr = translations(d.lang)
 	return d
 }
 
 // T translates an English text into the user's language.
 func (d *Desk) T(s string) string {
-	if t, ok := d.tr[s]; ok {
+	d.mu.Lock()
+	t, ok := d.tr[s]
+	d.mu.Unlock()
+	if ok {
 		return t
 	}
 	return s
@@ -121,7 +136,8 @@ func (d *Desk) snapshot() State {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	st := State{Lang: d.lang, Problem: d.problem, Status: d.status, Devices: d.devices, Busy: d.busy,
-		Message: d.message, Settings: d.settings, Version: version.String(), ShowDetails: details}
+		Message: d.message, Settings: d.settings, Version: version.String(), ShowDetails: details,
+		Languages: languages(), AtLogin: atLogin()}
 	if st.Devices == nil {
 		st.Devices = []control.Device{} // the window takes null for no list
 	}
@@ -253,37 +269,13 @@ func (d *Desk) requestHeader(h control.Header, payload []byte) (*control.Message
 	return m, m.Payload, nil
 }
 
-// Send sends the text on this computer's clipboard to the group, as a copy
-// here.
-func (d *Desk) Send() {
-	d.act(func() (string, error) {
-		text, ok := d.app.Clipboard.Text()
-		if !ok || text == "" {
-			return d.T("The clipboard holds no text."), nil
-		}
-		if _, _, err := d.request(control.OpCopy, []byte(text)); err != nil {
-			return "", err
-		}
-		return d.T("Sent to the group."), nil
-	})
+// CreateGroup makes a new group with this computer as its root, as cbb
+// new does as the administrator.
+func (d *Desk) CreateGroup() {
+	d.admin([]string{"new"}, false, "The group is made: this computer is its root. Add a device with the + button.")
 }
 
-// Fetch puts the group's latest text on this computer's clipboard.
-func (d *Desk) Fetch() {
-	d.act(func() (string, error) {
-		_, body, err := d.request(control.OpPaste, nil)
-		if err != nil {
-			return "", err
-		}
-		if len(body) == 0 {
-			return d.T("The group has no text yet."), nil
-		}
-		d.app.Clipboard.SetText(string(body))
-		return d.T("Fetched from the group."), nil
-	})
-}
-
-// Rename, Remove, MakeAdmin, Freeze, Unfreeze, MakeHub, StopHub, SetAway and SetMode change the group:
+// Rename, Remove, MakeAdmin, Freeze, Unfreeze, MakeHub, StopHub, SetAway and SetSync change the group:
 // cbb does them as the administrator (admin_*.go), after the system asks.
 // MakeAdmin's dialog warns that the computer's key is a file, which
 // -allow-file-key consents to.
@@ -360,6 +352,13 @@ func (d *Desk) Resolve() {
 	d.admin([]string{"resolve"}, false, "Both histories are void. The device signs its records again by itself.")
 }
 
+// Recover claims the group with its recovery key, typed from the sheet or
+// its QR code's text, as cbb recovery does as the administrator with the
+// key on its standard input; the claim waits as a takeover does.
+func (d *Desk) Recover(key string) {
+	d.adminWith([]string{"recovery"}, strings.TrimSpace(key)+"\n", "The claim is made: it takes effect after the group's takeover delay.")
+}
+
 // Update installs the newest signed release the group passed around, as
 // cbb update does as the administrator.
 func (d *Desk) Update() { d.admin([]string{"update"}, false, "CBB is updated.") }
@@ -374,33 +373,24 @@ func (d *Desk) SetAway(on bool) {
 	}
 }
 
-// SetMode sets the sync mode: this computer's with id empty, or on an admin
-// another device's, which cbb sends it as a signed command.
-func (d *Desk) SetMode(id, mode string) {
-	args := []string{"mode", mode}
+// SetSync turns sync on or off: this computer's with id empty, for forMS
+// (0 for until it is turned on again), which needs no administrator as the
+// service takes it on the control socket; or on an admin another device's,
+// which cbb sends it as a signed command (docs/design.md, "Sync on and off").
+func (d *Desk) SetSync(id string, on bool, forMS int64) {
+	name := map[bool]string{true: "on", false: "off"}[on]
 	if id != "" {
-		args = []string{"mode", "-on", id, mode}
+		d.admin([]string{"sync", "-on", id, name}, false, "Sync is set.")
+		return
 	}
-	d.admin(args, false, "The sync mode is set.")
-}
-
-// PauseReceiving keeps the group's copies out of this computer's clipboard
-// for forMS, 0 for until it is turned on again, or with on false takes them
-// again (design.md, "Muting a device"). It needs no administrator: the
-// service takes it on the control socket.
-func (d *Desk) PauseReceiving(on bool, forMS int64) {
 	d.act(func() (string, error) {
-		h := control.Header{Op: control.OpUnmute}
-		if on {
-			h = control.Header{Op: control.OpMute, ForMS: forMS}
-		}
-		if _, _, err := d.requestHeader(h, nil); err != nil {
+		if _, _, err := d.requestHeader(control.Header{Op: control.OpSync, Name: name, ForMS: forMS}, nil); err != nil {
 			return "", err
 		}
 		if on {
-			return d.T("This computer takes no copies from the group now; its own still go out."), nil
+			return d.T("Sync is on here: copies go to the group and come from it."), nil
 		}
-		return d.T("This computer takes the group's copies again."), nil
+		return d.T("Sync is off here: the clipboard is this computer's own."), nil
 	})
 }
 
@@ -460,14 +450,50 @@ func (d *Desk) act(work func() (string, error)) {
 	d.updateTray()
 }
 
-// SaveSettings keeps the window's choices.
+// SaveSettings keeps the window's choices; a language picked there is the
+// tray's at once too.
 func (d *Desk) SaveSettings(s Settings) error {
+	lang := pickLang(s.Lang)
+	tr := translations(lang)
 	d.mu.Lock()
 	// The window does not send the arrangement; Arrange keeps it.
 	s.Arrangement = d.settings.Arrangement
 	d.settings = s
+	changed := lang != d.lang
+	d.lang, d.tr = lang, tr
 	d.mu.Unlock()
-	return d.writeSettings()
+	err := d.writeSettings()
+	if changed {
+		d.updateTray()
+	}
+	return err
+}
+
+// SetAtLogin makes the tray app start, or not, with each sign-in.
+func (d *Desk) SetAtLogin(on bool) error {
+	if err := setAtLogin(on); err != nil {
+		return errors.New(d.describe(err))
+	}
+	return nil
+}
+
+// TakeAsk returns what the window should ask for now, once: "settings"
+// after the tray's Settings, "away" after the tray turned sync away from
+// home on, which asks first; "" for nothing.
+func (d *Desk) TakeAsk() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	a := d.ask
+	d.ask = ""
+	return a
+}
+
+// openFor shows the window, which then asks for what (TakeAsk).
+func (d *Desk) openFor(what string) {
+	d.mu.Lock()
+	d.ask = what
+	d.mu.Unlock()
+	d.Open()
 }
 
 // writeSettings writes the current settings to desktop.json. It reads them
@@ -562,6 +588,16 @@ func (d *Desk) Open() {
 	d.window.Focus()
 }
 
+// openIfNoGroup shows the window when this computer is in no group, so
+// that the start window greets the user after the install.
+func (d *Desk) openIfNoGroup() {
+	d.refresh()
+	s := d.snapshot()
+	if s.Problem == "" && s.Status != nil && s.Status.Group == "" {
+		d.Open()
+	}
+}
+
 // watch keeps the tray up to date.
 func (d *Desk) watch() {
 	for range time.Tick(5 * time.Second) {
@@ -570,8 +606,22 @@ func (d *Desk) watch() {
 	}
 }
 
-// updateTray writes the tray's menu: where the group stands, send, fetch,
-// the window.
+// syncTimes are the times the tray's and the window's sync switch turns
+// sync off for, 0 for until it is turned on again.
+var syncTimes = []struct {
+	label string
+	ms    int64
+}{
+	{"For 15 minutes", 15 * 60 * 1000},
+	{"For an hour", 60 * 60 * 1000},
+	{"For 8 hours", 8 * 60 * 60 * 1000},
+	{"Until I turn it on", 0},
+}
+
+// updateTray writes the tray's menu: where the group stands, the two
+// switches (sync, with a time to turn it off for, and sync away from
+// home), the window, its settings, an update, quit (docs/apps.md, "The tray
+// app").
 func (d *Desk) updateTray() {
 	if d.tray == nil || d.app == nil {
 		return
@@ -582,16 +632,38 @@ func (d *Desk) updateTray() {
 	if s.Message != "" {
 		menu.Add(s.Message).SetEnabled(false)
 	}
-	menu.AddSeparator()
-	inGroup := s.Problem == "" && s.Status != nil && s.Status.Group != ""
-	menu.Add(d.T("Send the clipboard")).SetEnabled(inGroup && !s.Busy).OnClick(func(*application.Context) { go d.Send() })
-	menu.Add(d.T("Fetch")).SetEnabled(inGroup && !s.Busy).OnClick(func(*application.Context) { go d.Fetch() })
-	if s.Problem == "" && s.Status != nil && s.Status.Update != "" {
+	inGroup := s.Problem == "" && s.Status != nil && s.Status.Group != "" && !s.Status.Removed
+	if inGroup {
 		menu.AddSeparator()
-		menu.Add(fmt.Sprintf(d.T("Update to %s"), s.Status.Update)).SetEnabled(!s.Busy).OnClick(func(*application.Context) { go d.Update() })
+		on := s.Status.Mode != "own"
+		label := d.T("Sync")
+		if !on && s.Status.SyncUntilMS > 0 {
+			label = fmt.Sprintf(d.T("Sync off until %s"), time.UnixMilli(s.Status.SyncUntilMS).Format("15:04"))
+		}
+		menu.AddCheckbox(label, on).SetEnabled(!s.Busy).OnClick(func(*application.Context) { go d.SetSync("", !on, 0) })
+		if on {
+			off := menu.AddSubmenu(d.T("Turn sync off"))
+			for _, t := range syncTimes {
+				ms := t.ms
+				off.Add(d.T(t.label)).SetEnabled(!s.Busy).OnClick(func(*application.Context) { go d.SetSync("", false, ms) })
+			}
+		}
+		away := s.Status.Away != nil
+		menu.AddCheckbox(d.T("Everywhere"), away).SetEnabled(!s.Busy && (on || away)).OnClick(func(*application.Context) {
+			if away {
+				go d.SetAway(false)
+			} else {
+				d.openFor("away") // the window asks first
+			}
+		})
 	}
 	menu.AddSeparator()
 	menu.Add(d.T("Open CBB")).OnClick(func(*application.Context) { d.Open() })
+	menu.Add(d.T("Settings")).OnClick(func(*application.Context) { d.openFor("settings") })
+	if s.Problem == "" && s.Status != nil && s.Status.Update != "" {
+		menu.Add(fmt.Sprintf(d.T("Update to %s"), s.Status.Update)).SetEnabled(!s.Busy).OnClick(func(*application.Context) { go d.Update() })
+	}
+	menu.AddSeparator()
 	menu.Add(d.T("Quit")).OnClick(func(*application.Context) { d.app.Quit() })
 	d.tray.SetMenu(menu)
 	if state := trayState(s); state != d.trayState {

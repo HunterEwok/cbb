@@ -68,7 +68,7 @@ mod tests {
         for name in GROUP_FILES.iter().filter(|n| **n != records::OLD_GROUP_DIR) {
             std::fs::write(dir.join(name), b"{}").unwrap();
         }
-        std::fs::write(dir.join("mode"), b"own\n").unwrap();
+        std::fs::write(dir.join("sync.json"), br#"{"off":true}"#).unwrap();
         remotepaste::save(&dir, remotepaste::Settings { on: true, enter: true, ..Default::default() }).unwrap();
         let mut set = actions::Settings::default();
         set.set(actions::Action { name: actions::RESTART.into(), on: true, ..Default::default() });
@@ -78,7 +78,7 @@ mod tests {
         for name in GROUP_FILES {
             assert!(!dir.join(name).exists(), "{name} is left");
         }
-        assert!(dir.join("mode").exists(), "the mode went");
+        assert!(dir.join("sync.json").exists(), "sync off went");
         assert!(!remotepaste::load(&dir).unwrap().on, "remote paste stayed on");
         assert!(actions::load(&dir).unwrap().on().is_empty(), "an action stayed on");
         leave_group(&dir).unwrap();

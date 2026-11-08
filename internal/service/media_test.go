@@ -98,6 +98,9 @@ func TestMedia(t *testing.T) {
 	b := startService(t, &h, "beta")
 	pairWith(t, a, b)
 	waitFor(t, "beta connected", func() bool { return len(b.status(t).Peers) == 1 })
+	if _, err := b.do(t, control.Header{Op: control.OpSync, Name: "off"}, ""); err != nil {
+		t.Fatal(err)
+	}
 
 	big := randomBytes(3<<20 + 5)
 	sent := []sentPart{
@@ -128,12 +131,12 @@ func TestMedia(t *testing.T) {
 		}
 	}
 	check(a)
-	// Beta joined in mode own: paste -o fetches the group's copy.
+	// Beta has sync off: paste -o fetches the group's copy.
 	waitFor(t, "beta has the copy", func() bool { return b.paste(t) == "photos, notes.txt" })
 	check(b)
 
-	// In mode shared beta fetches by itself.
-	if _, err := b.do(t, control.Header{Op: control.OpMode, Name: "shared"}, ""); err != nil {
+	// With sync on beta fetches by itself.
+	if _, err := b.do(t, control.Header{Op: control.OpSync, Name: "on"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	// A watcher whose clipboard takes images gets the image once it has

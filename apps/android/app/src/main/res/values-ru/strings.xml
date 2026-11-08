@@ -20,7 +20,7 @@
     <string name="theme_material">Material You</string>
     <string name="theme_light">Светлая</string>
     <string name="join_title">Войти в группу</string>
-    <string name="join_hint">На другом телефоне нажмите + и отсканируйте этот код. Не закрывайте этот экран.</string>
+    <string name="join_hint">На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте этот экран.</string>
     <string name="join_qr_label">QR-код для входа в группу</string>
     <string name="join_tv">Войти в группу телефона</string>
     <string name="join_tv_hint">Телевизор входит в группу вашего телефона: он показывает QR-код, а телефон его сканирует.</string>

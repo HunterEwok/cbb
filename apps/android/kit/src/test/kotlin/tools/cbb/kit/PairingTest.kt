@@ -51,6 +51,12 @@ class PairingTest {
     }
 
     @Test
+    fun joinerShowsAndAnnouncesTheCode() {
+        assertEquals("246 802", JoinCode("246802", emptyList(), "f").grouped)
+        assertEquals(mapOf("v" to "1", "j" to "1", "f" to "ab+c/d="), Discovery.joinerTXT("ab+c/d="))
+    }
+
+    @Test
     fun info() {
         assertTrue(Pairing.Info("pi", "linux").isValid)
         assertFalse(Pairing.Info("", "linux").isValid)

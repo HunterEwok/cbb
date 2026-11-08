@@ -53,7 +53,7 @@ class CoreMemberTest {
         m.addRecords(g.records.records)
         assertEquals(g.records.records.size, m.records().size)
         assertTrue(m.sends("on the phone"), "a clipboard nothing sent yet goes out")
-        assertFailsWith<Core.Refusal> { m.setMode("loud") }
+        assertFailsWith<Core.Refusal> { m.setSync(true, forMS = 1_000) }
         assertFailsWith<Core.Refusal> { m.fetch("nothing", 1 shl 20, File(dirs[0], "out")) }
         m.copy("from the phone")
         assertEquals("from the phone", m.current()?.text)

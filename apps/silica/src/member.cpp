@@ -410,8 +410,8 @@ void Member::pause(int minutes)
     if (!m_member)
         return;
     Failure failure;
-    const QJsonObject a = call(m_member, QStringLiteral("pause_receiving"),
-                               QJsonObject{{QStringLiteral("pause"), true},
+    const QJsonObject a = call(m_member, QStringLiteral("sync"),
+                               QJsonObject{{QStringLiteral("on"), false},
                                            {QStringLiteral("for_ms"), double(qint64(minutes) * 60 * 1000)}},
                                &failure);
     if (!failure.isNull()) {
@@ -419,8 +419,8 @@ void Member::pause(int minutes)
         emit changed();
         return;
     }
-    Errors::log(minutes > 0 ? QStringLiteral("member: takes no copies from the group for %1 min").arg(minutes)
-                            : QStringLiteral("member: takes no copies from the group until turned on"));
+    Errors::log(minutes > 0 ? QStringLiteral("member: sync is off for %1 min").arg(minutes)
+                            : QStringLiteral("member: sync is off until turned on"));
     readMuted(a);
 }
 
@@ -430,13 +430,13 @@ void Member::resume()
         return;
     Failure failure;
     const QJsonObject a =
-        call(m_member, QStringLiteral("pause_receiving"), QJsonObject{{QStringLiteral("pause"), false}}, &failure);
+        call(m_member, QStringLiteral("sync"), QJsonObject{{QStringLiteral("on"), true}}, &failure);
     if (!failure.isNull()) {
         m_error = Errors::shown(failure);
         emit changed();
         return;
     }
-    Errors::log(QStringLiteral("member: takes the group's copies again"));
+    Errors::log(QStringLiteral("member: sync is on"));
     readMuted(a);
 }
 
@@ -457,9 +457,9 @@ void Member::readMuted(const QJsonObject &a)
         const qint64 left = qint64(ms.toDouble());
         return left > 0 ? QDateTime::currentDateTime().addMSecs(left) : QDateTime();
     };
-    const bool paused = a.value(QStringLiteral("paused")).toBool();
+    const bool paused = a.value(QStringLiteral("sync_off")).toBool();
     const bool muted = a.value(QStringLiteral("muted")).toBool();
-    const QDateTime pausedUntil = paused ? until(a.value(QStringLiteral("paused_ms"))) : QDateTime();
+    const QDateTime pausedUntil = paused ? until(a.value(QStringLiteral("sync_off_ms"))) : QDateTime();
     const QDateTime mutedUntil = muted ? until(a.value(QStringLiteral("muted_ms"))) : QDateTime();
     // Within a few seconds the same end: the poll's own drift.
     const auto same = [](const QDateTime &x, const QDateTime &y) {

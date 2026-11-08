@@ -95,14 +95,13 @@ func cloneItems(items []Item) []Item {
 // View is what the app shows: the stored items in order without the
 // devices that are not listed, collections without listed devices left
 // out unless they were just made, then the listed devices that appear
-// nowhere, in the order given. self, this device, is never among them:
-// the app shows it first.
+// nowhere, in the order given. self, this device, is an item as the others
+// are, first while the stored items do not place it.
 func (a Arrangement) View(devices []string, self string) []Item {
+	devices = selfFirst(devices, self)
 	listed := map[string]bool{}
 	for _, d := range devices {
-		if d != self {
-			listed[d] = true
-		}
+		listed[d] = true
 	}
 	seen := map[string]bool{}
 	var out []Item
@@ -129,7 +128,26 @@ func (a Arrangement) View(devices []string, self string) []Item {
 	for _, d := range devices {
 		if listed[d] && !seen[d] {
 			seen[d] = true
-			out = append(out, Item{Device: d})
+			if d == self {
+				out = append([]Item{{Device: d}}, out...)
+			} else {
+				out = append(out, Item{Device: d})
+			}
+		}
+	}
+	return out
+}
+
+// selfFirst is devices with self, this device, first: the group's order
+// as the app shows it.
+func selfFirst(devices []string, self string) []string {
+	if self == "" || !slices.Contains(devices, self) {
+		return devices
+	}
+	out := []string{self}
+	for _, d := range devices {
+		if d != self {
+			out = append(out, d)
 		}
 	}
 	return out
@@ -160,8 +178,8 @@ func (a *Arrangement) Prune(devices []string) {
 	a.Items = items
 }
 
-// Apply makes the change, on the arrangement as View shows it for devices
-// (self left out); the stored items then hold the whole order. A change
+// Apply makes the change, on the arrangement as View shows it for devices;
+// the stored items then hold the whole order. A change
 // that does not fit leaves the arrangement as it was.
 func (a *Arrangement) Apply(op ArrangeOp, devices []string, self string) error {
 	b := Arrangement{V: a.V, Group: a.Group, Items: cloneItems(a.Items)}
@@ -185,9 +203,13 @@ func (a *Arrangement) apply(op ArrangeOp, devices []string, self string) error {
 			}
 		}
 	}
-	for _, d := range devices {
-		if d != self && shown[d] && a.find(d) < 0 {
-			a.Items = append(a.Items, Item{Device: d})
+	for _, d := range selfFirst(devices, self) {
+		if shown[d] && a.find(d) < 0 {
+			if d == self {
+				a.Items = append([]Item{{Device: d}}, a.Items...)
+			} else {
+				a.Items = append(a.Items, Item{Device: d})
+			}
 		}
 	}
 	switch op.Op {
@@ -278,7 +300,7 @@ func (a *Arrangement) apply(op ArrangeOp, devices []string, self string) error {
 		a.Items = slices.Replace(a.Items, ci, ci+1, items...)
 		return nil
 	case "reset":
-		a.reset(devices)
+		a.reset(selfFirst(devices, self))
 		return nil
 	}
 	return fmt.Errorf("%w: no operation %q", errArrange, op.Op)
