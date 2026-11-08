@@ -546,6 +546,13 @@ type rustRootHub struct {
 // device record its root key signed) and starts its hub in p.
 func startRustRootHub(t *testing.T, p *rustPhone) *rustRootHub {
 	t.Helper()
+	return startRustRootHubAt(t, p, "127.0.0.1:0")
+}
+
+// startRustRootHubAt is startRustRootHub with the hub's UDP socket on
+// listen.
+func startRustRootHubAt(t *testing.T, p *rustPhone, listen string) *rustRootHub {
+	t.Helper()
 	now := time.Now()
 	root, err := group.NewRootCA(now)
 	if err != nil {
@@ -574,7 +581,7 @@ func startRustRootHub(t *testing.T, p *rustPhone) *rustRootHub {
 	pub := h.clientKey.Public()
 	started := p.call(t, map[string]any{"op": "hub_start", "key": h.hubKey[:], "device": string(h.dev),
 		"clients":     []map[string]any{{"device": rustPhoneID, "key": pub[:], "psk": h.psk[:]}},
-		"member_port": echoServer(t), "listen": "127.0.0.1:0"})
+		"member_port": echoServer(t), "listen": listen})
 	h.id, h.udpPort = started["id"], uint16(started["udp_port"].(float64))
 	return h
 }

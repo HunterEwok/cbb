@@ -50,7 +50,9 @@ func TestRustPhoneThroughRealForwarder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := startRustRootHub(t, startRustPhone(t, bin))
+	// The hub sends its hellos to the forwarder from its UDP socket, so that
+	// socket is on every address, not the loopback one.
+	h := startRustRootHubAt(t, startRustPhone(t, bin), "0.0.0.0:0")
 	defer h.p.call(t, map[string]any{"op": "hub_stop", "id": h.id})
 	id, _ := tunnel.NewVLESSID()
 	h.register(endpoint, pin, []group.Record{h.own}, id)
