@@ -1355,7 +1355,7 @@ impl Service {
             .collect();
         if targets.is_empty() {
             res.reason = if text_only {
-                "the paste targets here take only text: tmux, a text console, or a desktop whose clipboard takes no images or files, or whose user is not at the screen"
+                "the paste targets here take only text: tmux, a text console, the ZX Spectrum Next, or a desktop whose clipboard takes no images or files, or whose user is not at the screen"
             } else {
                 "nothing on this device can paste images or files: no desktop session of CBB runs here"
             }

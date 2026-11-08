@@ -342,6 +342,8 @@
     <string name="paste_enter">Press Enter after it</string>
     <string name="paste_secret">A secret</string>
     <string name="paste_note">A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer\'s log or clipboard.</string>
+    <string name="paste_pick">Paste a picture or files…</string>
+    <string name="paste_pick_note">A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</string>
     <string name="paste">Paste</string>
     <string name="pasted">Pasted.</string>
     <string name="error_paste_refused">The device did not paste.</string>

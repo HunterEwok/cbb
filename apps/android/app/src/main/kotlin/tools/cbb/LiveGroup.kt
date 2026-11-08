@@ -1392,7 +1392,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             "paste" -> {
                 val (sender, verified) = synchronized(lock) { g.records.commandSender(c, g.device) }
                 val name = if (verified) g.devices.firstOrNull { it.id == body.by }?.name else null
-                return pastes.paste(body, sender, verified, name)
+                return pastes.paste(body, sender, verified, name) { pasteImage(body) }
             }
             "paste-off" -> {
                 Log.i(TAG, "${body.by} turned remote paste off")
@@ -1530,6 +1530,29 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         // The computer waits 5 s for its target, and 5 ms more for each typed byte.
         val wait = 10_000L + if (method == "type") text.toByteArray().size * 5L else 0L
         val r = withContext(Dispatchers.IO) { command(c, wait) }
+        if (!r.done) throw CommandRefused(r.reason ?: r.status)
+    }
+
+    /**
+     * Pastes an image or files where a computer's focus is (docs/protocol.md,
+     * section 15): they go to the group as a copy, then a paste command of
+     * kind media names that copy; the computer fetches it, puts it in its
+     * clipboard and presses the paste keys.
+     */
+    suspend fun pasteShared(id: String, shared: Files.Shared, enter: Boolean) {
+        val ca = caSigner(R.string.reason_paste)
+        val g = copyOfState() ?: return
+        val n = currentNode ?: throw Failure(Failure.Kind.NO_COMPUTERS)
+        notMuted()
+        val copy = withContext(Dispatchers.IO) {
+            when (shared) {
+                is Files.Shared.Image -> n.copyMedia("", listOf(CoreMember.Part.data(shared.image.type, shared.image.bytes)))
+                is Files.Shared.Many -> n.copyMedia("", shared.files.map { (path, bytes) -> CoreMember.Part.file(path, bytes) })
+            }
+        }
+        val c = g.pasteCopyCommand(id, copy.id, enter, ca, Instant.now())
+        // The computer waits up to 20 s for the copy, then 8 s for its desktop.
+        val r = withContext(Dispatchers.IO) { command(c, 35_000) }
         if (!r.done) throw CommandRefused(r.reason ?: r.status)
     }
 
@@ -2672,6 +2695,39 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             Log.w(TAG, "fetching an image", x)
             if (quiet) null else throw x
         }
+
+    /**
+     * The image of the group's copy that a remote paste of kind media names
+     * (docs/protocol.md, section 15), fetched into the app's cache: it waits
+     * up to 20 s for the copy, which must be sealed to this phone and to the
+     * paste's sender. It throws [PasteReceiver.NotPasted] with the reason.
+     */
+    private fun pasteImage(body: Commands.Body): Pair<File, String> {
+        val until = System.currentTimeMillis() + 20_000
+        var c: CoreMember.Copy?
+        while (true) {
+            val n = currentNode ?: throw PasteReceiver.NotPasted("this device is in no group")
+            c = runCatching { n.current() }.getOrNull()?.takeIf { it.id == body.text }
+            if (c != null) break
+            if (System.currentTimeMillis() >= until) throw PasteReceiver.NotPasted("the copy to paste did not arrive here, or a newer copy replaced it")
+            Thread.sleep(50)
+        }
+        val copy = c!!
+        when {
+            copy.unread -> throw PasteReceiver.NotPasted("this device cannot read the copy to paste")
+            copy.media == null -> throw PasteReceiver.NotPasted("the copy to paste holds no images or files")
+            body.by !in copy.readers -> throw PasteReceiver.NotPasted("the copy to paste was not sealed to the device that sent the paste")
+            copy.isFiles -> throw PasteReceiver.NotPasted("this phone pastes images into a text field, not files")
+        }
+        val part = Images.part(copy.media) ?: throw PasteReceiver.NotPasted("the copy to paste holds no image this phone pastes")
+        val n = currentNode ?: throw PasteReceiver.NotPasted("this device is in no group")
+        val f = try {
+            Images.fetch(context, n, copy, part)
+        } catch (x: Exception) {
+            throw PasteReceiver.NotPasted("the copy's image did not arrive here: ${x.message}", refused = false)
+        }
+        return f to copy.text
+    }
 
     /** Sends a text the phone's clipboard holds, unless it is the group's current text already. */
     fun send(text: String): SyncResult {
