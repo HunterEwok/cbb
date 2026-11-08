@@ -1992,6 +1992,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A member that booted less than a minute ago no longer writes an old copy from the group to
+  its clipboard as if it had just been made: the age of a copy counted at most the time since
+  the boot.
 - `cbb pair` out of a group waits for the phone on the running service's port, the one its
   firewall rule opens (on OpenWrt the port in `/etc/config/cbb`), not on the default one.
 - `cbb action`, run by a user, no longer fails on the polkit rule when the actions that are
