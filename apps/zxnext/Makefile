@@ -24,9 +24,16 @@ SRC := src/cbb.c src/link.c src/frame.c src/sha256.c
 
 all: build/CBB build/PIBRIDGE build/CBB.DRV
 
-build/pins.h: pins.sh build/CBB.DRV $(PI_CBB) build/pi_cbb
+build/pins.h: pins.sh build/CBB.DRV $(PI_CBB) build/CBBPI.GZ
+	sh pins.sh build/CBB.DRV $(PI_CBB) build/CBBPI.GZ >$@.new
+	mv $@.new $@
+
+# The Pi's cbb as the site serves it to an install, gzipped: less than
+# half the bytes to fetch and to send, which the Pi unpacks
+# (packaging/zxnext/site.sh copies it).
+build/CBBPI.GZ: $(PI_CBB) build/pi_cbb
 	@test -n "$(PI_CBB)" || { echo "make: PI_CBB names the Pi's cbb, which CBB installs" >&2; exit 1; }
-	sh pins.sh build/CBB.DRV $(PI_CBB) >$@.new
+	gzip -9n -c $(PI_CBB) >$@.new
 	mv $@.new $@
 
 # Which file PI_CBB names, so that another one makes pins.h again.

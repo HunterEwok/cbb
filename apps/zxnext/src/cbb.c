@@ -196,6 +196,7 @@ static int link_fail(uint8_t err)
 #define PASTE_CFG "/cbb/PASTE.CFG"
 // The Pi's cbb: on the card, and where NextPi's shell finds it.
 #define PI_CARD "/cbb/CBBPI.BIN"
+#define PI_GZ_CARD "/cbb/CBBPI.GZ"
 #define PI_DIR "/NextPi/nextpi"
 #define DRV_COUNTERS 1
 #define DRV_SWITCH 2
@@ -337,6 +338,8 @@ static uint8_t drv_uninstall(uint8_t bank)
 #define OVL_FILE "/cbb/CBB.OVL"
 #define OVL_FIRST 19
 #define OVL_CHUNK 512
+// The page of CBB.OVL with pi_check(); pi_probe() is in its first.
+#define OVL_PI 21
 extern uint8_t _z_page_table[];
 #pragma codeseg code_dot
 #pragma constseg code_dot
@@ -419,9 +422,19 @@ static char **far_argv;
 // .cbb pair CODE: the code from cbb pair on a computer of the group.
 static char *pair_code;
 static uint8_t install_update;
+// For pi_probe() and pi_check(), from the install's page: the Pi's cbb
+// on the card, the speed, its SHA-256.
+static const char *pi_path, *pi_check_sha;
+static uint32_t pi_speed;
+extern int far_pi_check(void), far_pi_probe(void);
+// The UART's loops in far.asm: pi_tx() sends n bytes from http_dst on.
+extern uint8_t *http_dst;
+extern void pi_tx(uint16_t n) __z88dk_fastcall;
 // sha_run()'s file, whether it takes the digest, and the digest in hex.
 static const char *sha_path;
 static uint8_t sha_digest;
+// With sha_limit, sha_run() takes only that many bytes from the start.
+static uint32_t sha_limit;
 static char sha_out[65];
 extern uint32_t far_sha(void);
 // The newest CBB's size and CRC-32 in the site's list (far_read_list()),
@@ -744,7 +757,7 @@ static void link_quit(void)
 // each time the bytes do not come whole (speed_down()), as far as the
 // Next reads them as they come at 28 MHz; it asks for each chunk, so
 // nothing more than one answer comes at a time.
-#define ESP_FETCH_TOP 2000000UL
+#define ESP_FETCH_TOP 460800UL
 
 // The speeds the ESP may be at, which esp_answers() tries: the fetch's
 // is the one it is at now.
@@ -834,6 +847,8 @@ static uint8_t esp_speed(uint32_t speed)
 #pragma constseg PAGE_17
 #pragma bssseg PAGE_17
 #pragma dataseg PAGE_17
+
+
 
 // The short form's defaults: the member's port, and where the phones reach
 // the Pi (the ESP's port, the lite member's own).
@@ -1440,7 +1455,9 @@ int net_cmd(void)
 // name: on the server; label: on the screen. size and sha256 are those of
 // the files built with this CBB (pins.h, from the Makefile): whatever the
 // site serves, only they are installed. The Next checks the driver's
-// SHA-256 itself; the Pi's cbb, megabytes, the Pi checks.
+// SHA-256 itself; the Pi's cbb, megabytes, the Pi checks. pi is 1 for the
+// Pi's cbb, 2 when it comes gzipped: size is then the gzipped file's,
+// sha256 still that of what the Pi unpacks.
 struct item {
     const char *name, *label, *card, *part;
     uint32_t size;
@@ -1451,7 +1468,7 @@ struct item {
 static struct item items[] = {
     {"CBB.DRV", "CBB.DRV", "/cbb/CBB.DRV", "/cbb/DRV.PRT", PIN_DRV_SIZE, PIN_DRV_SHA256, 0},
     {"CBB.OVL", "CBB", OVL_FILE, "/cbb/OVL.PRT", PIN_OVL_SIZE, PIN_OVL_SHA256, 0},
-    {"cbb", "SERVICE", PI_CARD, "/cbb/CBBPI.PRT", PIN_PI_SIZE, PIN_PI_SHA256, 1},
+    {"cbb.gz", "SERVICE", PI_GZ_CARD, "/cbb/CBBGZ.PRT", PIN_PIGZ_SIZE, PIN_PI_SHA256, 2},
 };
 #define ITEMS (sizeof items / sizeof items[0])
 // This CBB, as the install's own steps put it in /cbb.
@@ -1463,8 +1480,6 @@ static uint16_t http_status;
 static const char no_file[] = SITE " has no such file; are its files in place?";
 
 extern uint8_t http_rx(uint16_t n) __z88dk_fastcall;
-extern uint8_t *http_dst;
-extern void pi_tx(uint16_t n) __z88dk_fastcall;
 
 // Asks for size bytes of name from offset on the open connection; 0 with
 // the bytes in text[] when they all came.
@@ -1794,6 +1809,7 @@ static uint32_t file_crc(const char *path, uint32_t *size)
     return crc;
 }
 
+#pragma codeseg code_compiler
 // The size of a file on the card (0 without it), and with digest 1 its
 // SHA-256 in sha_out. SHA-256 is in the screen's page with sha_run(),
 // whose arguments these are (far.asm, far_sha()).
@@ -1823,6 +1839,7 @@ static uint8_t speed_down(uint32_t *speed, uint8_t row, const char *label)
     file_state(row, label, s);
     return 0;
 }
+#pragma codeseg PAGE_13
 
 // Fetches one item to its .PRT file, going on from what an earlier try
 // left there, and puts it in place once it is the one built with this CBB;
@@ -1925,6 +1942,7 @@ static uint8_t pi_sha(char *sha)
 // UART: the shell reads exactly its size, then checks its SHA-256 against
 // the one built with this CBB before it takes the place of the old one. The
 // wrapper that NextPi's shell runs is written unless there is one.
+#pragma codeseg code_compiler
 // How long head may wait for the Pi's cbb: twice the time the copy takes
 // at speed (0: 115200), and a minute; above 460800, as at that, since the
 // Next sends no faster than it reads the card.
@@ -1948,15 +1966,18 @@ static void wait_frames(uint8_t n)
         }
     }
 }
+#pragma codeseg PAGE_13
 
 // The row of the Pi's cbb on its way to the Pi, under the files.
 #define SEND_ROW ITEMS
 #define SEND_LABEL "TO PI"
 
-// Sends the Pi's cbb from the card to PI_DIR/cbb.new: at speed, which the
+// Sends the Pi's cbb from the card to PI_DIR/cbb.new, which the Pi unpacks
+// on the way when it comes gzipped: at speed, which the
 // Pi's tty takes for the copy and leaves after, or with speed 0 at the
 // line's own. 0 when sent, 2 when the Pi did not say it was ready (its
-// tty may not take the speed), else 1 with the message shown.
+// tty may not take the speed), 3 when bytes were lost, else 1 with the
+// message shown.
 static int pi_send(struct item *it, uint8_t row, uint32_t speed)
 {
     uint8_t fh, err;
@@ -1972,9 +1993,9 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
     // CR first ends the line the rest of the echo left, which the Next
     // hears garbled at that speed.
     sprintf(line,
-            "s=$(stty -g); stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && timeout %lu head -c %lu >" PI_DIR
-            "/cbb.new; stty $s\n",
-            speed ? speed : 115200UL, pi_seconds(it, speed), it->size);
+            "s=$(stty -g); stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && timeout %lu head -c %lu%s >" PI_DIR
+            "/cbb.new; printf '\\r\\nCBBEND\\r\\n'; stty $s\n",
+            speed ? speed : 115200UL, pi_seconds(it, speed), it->size, it->pi == 2 ? " | gzip -dc" : "");
     link_send_str(line);
     if (speed) {
         wait_frames(2);
@@ -1997,28 +2018,23 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
         progress(row, sent, it->size, start);
     }
     esx_f_close(fh);
+    // Bytes lost on the way keep head waiting for more: filler after each
+    // quiet second ends it, and the copy is damaged then.
+    err = 0;
+    for (n = 0; n < 32;) {
+        if (!link_line(line, sizeof line, 1)) {
+            if (strcmp(line, "CBBEND") == 0) break;
+            continue;
+        }
+        http_dst = text;
+        pi_tx(4096);
+        err = 3;
+        n++;
+    }
     wait_frames(2);
     link_open();
     link_prompt();
-    return 0;
-}
-
-// Whether the Pi got the cbb built with this CBB: 0 yes, 3 another file,
-// else 1 with the message shown.
-static int pi_check(struct item *it)
-{
-    // The digest is pins.h's, 64 hex digits, never the site's.
-    link_send_str("cd " PI_DIR " && if ! command -v sha256sum >/dev/null; then rm -f cbb.new; echo CBBNOSHA; "
-                  "elif [ \"$(sha256sum <cbb.new | cut -c1-64)\" = '");
-    link_send_str(it->sha256);
-    link_send_str("' ]; then chmod 755 cbb.new && mv -f cbb.new cbb.bin && echo CBBOK; else rm -f cbb.new; "
-                  "echo CBBERR; fi\n");
-    for (;;) {
-        if (link_line(line, sizeof line, 60)) return fail("the Pi did not answer", "no CBBOK");
-        if (strcmp(line, "CBBNOSHA") == 0) return fail("the Pi has no sha256sum to check its cbb with", 0);
-        if (strcmp(line, "CBBERR") == 0) return 3;
-        if (strcmp(line, "CBBOK") == 0) return 0;
-    }
+    return err;
 }
 
 // The Pi's cbb to the Pi: from 2M a step slower each time the Pi's tty
@@ -2029,8 +2045,12 @@ static int to_pi(struct item *it, uint8_t row)
     uint16_t start;
     uint32_t speed = PI_FAST_SPEED;
     if (link_shell()) return pi_silent();
+    pi_path = it->card;
     for (;;) {
-        err = pi_send(it, row, speed);
+        // A speed above the line's own carries a probe first.
+        pi_speed = speed;
+        err = speed > ESP_SPEED ? far_pi_probe() : 0;
+        if (!err) err = pi_send(it, row, speed);
         if (err == 2) {
             // A tty that took the speed but lost CBBGO keeps head waiting,
             // until its timeout at the most.
@@ -2040,7 +2060,8 @@ static int to_pi(struct item *it, uint8_t row)
                     return fail("the Pi did not get ready", "no CBBGO");
             }
         } else if (!err) {
-            err = pi_check(it);
+            pi_check_sha = it->sha256;
+            err = far_pi_check();
         }
         if (err != 2 && err != 3) break;
         if (err == 3) link_prompt();
@@ -2054,20 +2075,7 @@ static int to_pi(struct item *it, uint8_t row)
         esx_f_unlink(it->card);
         return fail("the Pi got another file than this CBB's; run .cbb install again", 0);
     }
-    if (err) return 1;
-    link_prompt();
-    // A service of the old cbb, which .cbb net on or a hand started, stops,
-    // so that the next .cbb net on starts the new one.
-    link_send_str(PKILL_SERVICE "\n");
-    link_prompt();
-    // The wrapper keeps the state in the user partition, since NextPi's
-    // root is read-only; an older cbb that is the program itself is kept
-    // as cbb.old.
-    link_send_str("cd " PI_DIR " && [ \"$(head -c2 cbb 2>/dev/null)\" = '#!' ] || { [ -e cbb ] && mv -f cbb cbb.old; "
-                  "printf '#!/bin/sh\\nexport CBB_STATE=" PI_DIR "/cbb-state\\nexec " PI_DIR
-                  "/cbb.bin \"$@\"\\n' >cbb && chmod 755 cbb; }; cd\n");
-    link_prompt();
-    return 0;
+    return err ? 1 : 0;
 }
 
 // .cbb install and .cbb update: the Next's files to /cbb, the Pi's cbb
@@ -2146,6 +2154,11 @@ static int install_files(uint8_t update)
                 items[i].size = list_isize[i];
                 items[i].sha256 = list_isha[i];
             }
+            // The signed list names the Pi's cbb as it is, not gzipped.
+            pi->name = "cbb";
+            pi->card = PI_CARD;
+            pi->part = "/cbb/CBBPI.PRT";
+            pi->pi = 1;
             cbb_new.part = dot ? DOT_CBB ".NEW" : CBB_CARD ".NEW";
             cbb_new.size = list_isize[LISTED - 1];
             cbb_new.sha256 = list_isha[LISTED - 1];
@@ -2176,6 +2189,9 @@ static int install_files(uint8_t update)
             need[i] = 1;
         }
     }
+    // pi_check() and pi_probe(), in CBB.OVL's pages, which this CBB's
+    // CBB.OVL fills before a newer one takes their place.
+    if (!need[1] && !ovl_load(OVL_PI)) ovl_load(OVL_FIRST);
     // Nothing to fetch, nothing to send: .cbb update says so.
     nothing = !newer;
     if (pi_answers && strcmp(pisha, pi->sha256)) nothing = 0;
@@ -2275,6 +2291,64 @@ void usage_run(void)
 // .cbb uninstall, leave and paste-receive are in CBB.OVL's page.
 #pragma codeseg PAGE_19
 #pragma bssseg PAGE_19
+#pragma constseg PAGE_19
+
+// The first PROBE bytes of the Pi's cbb at pi_speed, before all of it: the
+// Pi's sha256sum of them against the Next's. 0 when they came whole, 2
+// when the Pi did not say it was ready, 3 when they did not come whole.
+// Not static: far_pi_probe() (far.asm) calls it.
+#define PROBE 32768UL
+static const char pp_cmd[] = "s=$(stty -g); stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && "
+                             "printf 'CBBP %%s\\r\\n' $(timeout 5 head -c %lu | sha256sum); stty $s\n";
+static const char pp_go[] = "CBBGO", pp_sum[] = "CBBP ";
+int pi_probe(void)
+{
+    uint8_t fh, err = 3;
+    uint16_t n, frame;
+    uint32_t size;
+    sha_path = pi_path;
+    sha_digest = 1;
+    sha_limit = PROBE;
+    size = far_sha();
+    sha_limit = 0;
+    errno = 0;
+    fh = esx_f_open(pi_path, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
+    if (errno) return 1;
+    sprintf(line, pp_cmd, pi_speed, size);
+    link_send_str(line);
+    // As pi_send(): the command leaves before the speed changes.
+    for (n = 0; n < 2; n++) {
+        frame = FRAMES_LO;
+        while (FRAMES_LO == frame) {
+        }
+    }
+    link_speed(pi_speed);
+    do {
+        if (link_line(line, sizeof line, 5)) {
+            err = 2;
+            goto out;
+        }
+    } while (strcmp(line, pp_go));
+    while ((n = esx_f_read(fh, text, MAX_TEXT)) > 0 && size) {
+        http_dst = text;
+        pi_tx(n);
+        size -= n;
+    }
+    while (!link_line(line, sizeof line, 7)) {
+        if (strncmp(line, pp_sum, 5) == 0) {
+            if (strncmp(line + 5, sha_out, 64) == 0) err = 0;
+            break;
+        }
+    }
+out:
+    esx_f_close(fh);
+    link_open();
+    if (err != 2) link_prompt();
+    return err;
+}
+
+
+
 // .cbb uninstall: everything .cbb install and .cbb net put anywhere, after
 // a Y: the network and the driver, the Pi's cbb and its state, the files
 // in /cbb and the folder when nothing else is left in it. The phone app
@@ -2286,7 +2360,7 @@ static const char un_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; cd " PI_DIR " && rm 
                                 "cbb-state /ram/link.log /ram/cbbjoin; cd; echo CBB$((1))GONE\n";
 // The service stops first, so that cbb leave changes the files itself.
 static const char lv_pi_cmd[] = "pkill -f '" PI_DIR "/cbb'; " CBB_LITE " leave -yes; rm -rf /ram/cbbjoin; echo CBB$((1))GONE\n";
-static const char card_names[] = "CBB.DRV\0CBB.OVL\0OVL.PRT\0NET.CFG\0CBBPI.BIN\0DRV.PRT\0CBBPI.PRT\0PASTE.CFG\0CBB\0";
+static const char card_names[] = "CBB.DRV\0CBB.OVL\0OVL.PRT\0NET.CFG\0CBBPI.BIN\0CBBPI.GZ\0DRV.PRT\0CBBPI.PRT\0CBBGZ.PRT\0PASTE.CFG\0CBB\0";
 static const char un_ask[] = "Remove CBB: the network, the\ndriver, the Pi's cbb and its\ngroup, the files in /cbb? y/n\n";
 static const char un_none[] = "Nothing removed.\n";
 static const char un_drv_stays[] = "CBB.DRV stays: .uninstall it.\n";
@@ -2690,6 +2764,7 @@ uint32_t sha_run(void)
     while ((n = esx_f_read(fh, text, CHUNK)) > 0) {
         if (sha_digest) sha256_add(&sha_state, text, n);
         size += n;
+        if (size == sha_limit) break;
     }
     esx_f_close(fh);
     // In lowercase hex, as sha256sum prints it.
@@ -2875,6 +2950,47 @@ extern uint8_t tape_flag;
 #pragma constseg PAGE_21
 #pragma bssseg PAGE_21
 #pragma dataseg PAGE_21
+
+// Whether the Pi got the cbb built with this CBB, whose SHA-256 is
+// pi_check_sha: 0 yes, 3 another file, else 1 with the message shown. Here, in
+// CBB.OVL's second page, for the install's page, which has no room left
+// (install_files() loads it early): not static, as far_pi_check()
+// (far.asm) calls it.
+static const char pc_cmd[] = "cd " PI_DIR " && if ! command -v sha256sum >/dev/null; then rm -f cbb.new; echo CBBNOSHA; "
+                             "elif [ \"$(sha256sum <cbb.new | cut -c1-64)\" = '";
+static const char pc_end[] = "' ]; then chmod 755 cbb.new && mv -f cbb.new cbb.bin && echo CBBOK; else rm -f cbb.new; "
+                             "echo CBBERR; fi\n";
+static const char pc_pkill[] = PKILL_SERVICE "\n";
+static const char pc_wrap[] = "cd " PI_DIR " && [ \"$(head -c2 cbb 2>/dev/null)\" = '#!' ] || { [ -e cbb ] && mv -f cbb cbb.old; "
+                              "printf '#!/bin/sh\\nexport CBB_STATE=" PI_DIR "/cbb-state\\nexec " PI_DIR
+                              "/cbb.bin \"$@\"\\n' >cbb && chmod 755 cbb; }; cd\n";
+static const char pc_silent[] = "the Pi did not answer", pc_no_ok[] = "no CBBOK", pc_nosha_w[] = "CBBNOSHA",
+                  pc_nosha[] = "the Pi has no sha256sum to check its cbb with", pc_err[] = "CBBERR", pc_ok[] = "CBBOK";
+int pi_check(void)
+{
+    // The digest is pins.h's, 64 hex digits, never the site's.
+    link_send_str(pc_cmd);
+    link_send_str(pi_check_sha);
+    link_send_str(pc_end);
+    for (;;) {
+        if (link_line(line, sizeof line, 60)) return fail(pc_silent, pc_no_ok);
+        if (strcmp(line, pc_nosha_w) == 0) return fail(pc_nosha, 0);
+        if (strcmp(line, pc_err) == 0) return 3;
+        if (strcmp(line, pc_ok) == 0) break;
+    }
+    link_prompt();
+    // A service of the old cbb, which .cbb net on or a hand started, stops,
+    // so that the next .cbb net on starts the new one.
+    link_send_str(pc_pkill);
+    link_prompt();
+    // The wrapper keeps the state in the user partition, since NextPi's
+    // root is read-only; an older cbb that is the program itself is kept
+    // as cbb.old.
+    link_send_str(pc_wrap);
+    link_prompt();
+    return 0;
+}
+
 
 #define IMG_PIXELS 81920UL
 #define IMG_BANKS 10

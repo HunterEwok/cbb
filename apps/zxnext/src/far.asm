@@ -37,6 +37,8 @@ PUBLIC _far_sha
 PUBLIC _far_uninstall
 PUBLIC _far_net_halt
 PUBLIC _far_read_list
+PUBLIC _far_pi_check
+PUBLIC _far_pi_probe
 PUBLIC _far_cbb_swap
 PUBLIC _far_autoexec
 PUBLIC _far_install_end
@@ -75,6 +77,8 @@ EXTERN _paste_receive
 EXTERN _pair_check
 EXTERN _net_halt
 EXTERN _read_list
+EXTERN _pi_check
+EXTERN _pi_probe
 EXTERN _cbb_swap
 EXTERN _autoexec
 EXTERN _install_end
@@ -250,6 +254,18 @@ far_page:
    pop af
    nextreg 0x57,a
    ret
+
+; int far_pi_check(void) and int far_pi_probe(void), from the install's
+; page.
+_far_pi_check:
+   ld a,FAR_SHOW
+   ld hl,_pi_check
+   jp far_call
+
+_far_pi_probe:
+   ld a,FAR_OVL
+   ld hl,_pi_probe
+   jp far_call
 
 call_hl:
    jp (hl)

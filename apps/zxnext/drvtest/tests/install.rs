@@ -98,6 +98,9 @@ fn kit(name: &str) -> Option<Kit> {
             sha256::hex(&data)
         );
     }
+    // The Pi's cbb gzipped, which an install fetches; the signed list
+    // names only the Pi's cbb as it is.
+    std::fs::copy(build.join("CBBPI.GZ"), site.join("cbb.gz")).unwrap();
     sign_list(&site, &list);
     Some(Kit {
         dot,
@@ -257,9 +260,9 @@ fn installs_then_finds_all_current() {
         "{}",
         o.screen
     );
-    // The site's files from 2M down a step at a time, to a speed the Next
-    // reads whole (the played one loses bytes above 230400); the Pi's cbb
-    // at 2M, which the played Pi's tty takes.
+    // The site's files from 460800 down a step at a time, to a speed the
+    // Next reads whole; the Pi's cbb gzipped at 2M, which the played Pi's
+    // tty takes, after a probe there.
     let fetch: Vec<u32> = o
         .esp()
         .log
@@ -268,14 +271,15 @@ fn installs_then_finds_all_current() {
         .map(|r| r.split(',').next().unwrap().parse().unwrap())
         .filter(|&b| b != 115_200 && b != 19_200)
         .collect();
-    assert_eq!(fetch.first(), Some(&2_000_000), "{fetch:?}");
+    assert_eq!(fetch.first(), Some(&460_800), "{fetch:?}");
     let step = |b: u32| if b > 921_600 { 921_600 } else { b / 2 };
     assert!(
         fetch.windows(2).all(|w| w[1] == w[0] || w[1] == step(w[0])),
         "{fetch:?}"
     );
+    let at_2m: Vec<_> = o.pi().log.iter().filter(|l| l.contains("stty 2000000 raw")).collect();
     assert!(
-        o.pi().log.iter().any(|l| l.contains("stty 2000000 raw")),
+        at_2m.len() == 2 && at_2m[0].contains("| sha256sum)") && at_2m[1].contains("| gzip -dc >"),
         "{:?}",
         o.pi().log
     );

@@ -489,6 +489,39 @@ pub struct Pi {
     /// cbb next speed-in: the bytes it waits for, those that came (noise
     /// when the Next sends at another speed), and when it gives up.
     speed_in: Option<(usize, Vec<u8>, u64)>,
+    /// What the raw copy's command says once its bytes came, at its speed:
+    /// CBBEND after the Pi's cbb, the probe's sha256sum.
+    raw_end: RawEnd,
+    /// Whether the raw copy goes through gzip -dc.
+    raw_gz: bool,
+}
+
+#[derive(Default, PartialEq)]
+enum RawEnd {
+    #[default]
+    Nothing,
+    End,
+    Probe,
+}
+
+/// gzip -dc, as the Pi's shell runs it.
+fn gunzip(data: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut child = std::process::Command::new("gzip")
+        .arg("-dc")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("gzip");
+    let mut stdin = child.stdin.take().unwrap();
+    let data = data.to_vec();
+    let feed = std::thread::spawn(move || {
+        let _ = stdin.write_all(&data);
+    });
+    let out = child.wait_with_output().unwrap();
+    feed.join().unwrap();
+    out.stdout
 }
 
 impl Pi {
@@ -516,6 +549,8 @@ impl Pi {
             baud: 115_200,
             pending_baud: None,
             speed_in: None,
+            raw_end: RawEnd::Nothing,
+            raw_gz: false,
         }
     }
 
@@ -605,6 +640,14 @@ impl Pi {
             self.say(now + 10_000 + sleep, &out);
             self.raw = n;
             self.received.clear();
+            self.raw_gz = cmd.contains("| gzip -dc");
+            self.raw_end = if cmd.contains("printf 'CBBP %s\\r\\n' $(timeout 5 head -c ") {
+                RawEnd::Probe
+            } else if cmd.contains("CBBEND") {
+                RawEnd::End
+            } else {
+                RawEnd::Nothing
+            };
             return;
         }
         // The lite member's frames (member/README.md): a text, and a copy
@@ -828,9 +871,20 @@ impl Peer for Pi {
             self.received.push(b);
             self.raw -= 1;
             if self.raw == 0 {
-                // stty $s: the line's speed again.
-                self.pending_baud = Some((now + 1_000, 115_200));
-                self.prompt(now);
+                if self.raw_gz {
+                    self.received = gunzip(&self.received);
+                }
+                // At the copy's speed, then stty $s: the line's again.
+                match std::mem::take(&mut self.raw_end) {
+                    RawEnd::Nothing => {}
+                    RawEnd::End => self.say(now, "\r\nCBBEND\r\n"),
+                    RawEnd::Probe => {
+                        let sum = crate::sha256::hex(&self.received);
+                        self.say(now, &format!("CBBP {sum}\r\nCBBP -\r\n"));
+                    }
+                }
+                self.pending_baud = Some((now + 20_000, 115_200));
+                self.prompt(now + 20_000);
             }
             return;
         }
