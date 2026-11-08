@@ -339,27 +339,41 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
 `internal/control`: a JSON header line, then the payload), as a member of the
 `_cbb` group, and reads the status and the devices every few seconds.
 
-- **The window**: the group in a line (how many devices are online, its tag, sync away from
-  home and its switch), the devices as tiles, a list or orbits around this Mac (the toolbar
-  switches), a device's details in a pane beside them (the summary rows of the phones,
-  with its device ID and when it was last seen), and "Send the clipboard" and "Fetch" at the
-  bottom. "+" gives the commands that add a device.
+- **The window**: as the tray app's (below): the group in a line with the two switches in
+  its header, the house (sync on this Mac, `sync` over the control socket, no password: a
+  click toggles it, holding it opens 15 minutes, an hour, 8 hours or until turned on) and the
+  globe ("Everywhere", sync away from home, `cbb global`, which asks first and waits while
+  sync is off); the devices as tiles, a list or orbits around this Mac (the toolbar
+  switches), and a device's card in a pane beside them. There is no Send or Fetch: the
+  clipboard syncs by itself. An update the group passed around shows as a card on top.
+- **The start window**: in no group, "Create a group" (`cbb new`), "Join a group" and
+  "Recovery key".
+- **The device card**: its name, online dot and badges (this Mac, root, admin, hub,
+  frozen), one line of its system and CBB version, the house (an admin turns another
+  computer's sync off there, `cbb sync -on`), mute, and the rest (type, MAC address, role,
+  ID) under More; then the hub's line and what an admin may do.
 - **Alerts**: the phones' card (Home, above) under the group's line, from `cbb status`;
   on the root its buttons run `cbb remove` or `cbb resolve` as the administrator.
-- **The menu bar item**: how many devices are online, send, fetch, the window, Settings. Like
-  the tray app it lives there only: no Dock icon (`LSUIElement`) and no window at launch;
-  "Open CBB" opens it. Its glyph is a template image from `tools/icon` in three
-  states (no group or a problem, a group, another device online), which macOS draws white or
-  black for the menu bar. The app makes itself a login item on its first run
-  (`SMAppService`); Settings, "Open at login", turns that off.
-- **Settings**: the colour and the appearance of the phones (`Theme.swift` and `Tokens.swift`
-  of the iPhone app, shared), sync on or off on this Mac (`cbb sync`), whether the app may press keys for remote paste, and error details (on in debug builds, off in release ones, and
-  the `ShowErrorDetails` default either way).
+- **The menu bar item**: as the tray item: how many devices are online, Sync (a check mark,
+  with a submenu of times to turn it off for), Everywhere (turning it on opens the window,
+  which asks first), Open CBB, Settings, the update when there is one, Quit. Like the tray
+  app it lives there only: no Dock icon (`LSUIElement`) and no window at launch; "Open CBB"
+  opens it. Its glyph is a template image from `tools/icon` in three states (no group or a
+  problem, a group, another device online), which macOS draws white or black for the menu
+  bar. The app makes itself a login item on its first run (`SMAppService`); Settings, "Open
+  at sign-in", turns that off.
+- **Settings**: the appearance as icons, the colour and the language in a row (the phones'
+  `Theme.swift` and `Tokens.swift`, shared; the language through `AppleLanguages`, shown once
+  the app opens again), "Open at sign-in", "Advanced settings" (whether the app may press
+  keys for remote paste, the recovery key), and about: the version, where seven clicks show
+  error details (on in debug builds, off in release ones, and the `ShowErrorDetails` default
+  either way).
 - What changes the group (rename, remove, make an admin, freeze, unfreeze, sync away from
   home, "Make it a hub" for this Mac or, on an admin, for another admin computer (`cbb global
   hub -on`), "Stop being the hub" (`cbb global hub off`, with `-on` for another device), and on this Mac while it is a hub how its tunnel hides (WireGuard, AmneziaWG,
   VLESS) and its forwarder (`cbb global hub -keep`, the tray app's page of this computer
-  the same), sync on or off on another computer, on an admin: `cbb sync -on`) goes only through the admin socket, which only root reaches, so the app runs
+  the same), sync on or off on another computer, on an admin: `cbb sync -on`, adding a
+  device by its six digits: `cbb pair -qr`, the update: `cbb update`) goes only through the admin socket, which only root reaches, so the app runs
   `cbb` with administrator privileges (`Admin`, `do shell script … with administrator
   privileges`): macOS asks for the password, as `sudo cbb` does in Terminal. With error
   details on, `CBB_DEBUG=1` makes cbb name the error underneath.
@@ -380,18 +394,17 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   second the pasteboard gets its items back, unless the user copied meanwhile. Typing posts
   Unicode key events, which no layout changes. It refuses without the permission, on the lock
   screen, in a session not on the screen, and under Secure Event Input.
-- **Sync on and off** (docs/design.md, "Sync on and off"): beside "Fetch" a quick switch
-  turns sync on this Mac off or on (`sync` over the control socket, no password): a click
-  turns it off or on again, its menu turns it off for 15 minutes, an hour, 8 hours or until
-  it is turned on. **Muting** (docs/design.md, "Muting a device"): on an admin, a device's page has "Mute" with the same times (`cbb mute -on`,
-  "Until an admin unmutes it" for the last) and "Unmute"; a muted device says so on its tile,
-  its row and its summary, and this Mac's own mute is an alert, with "Unmute" on an admin.
-- **Join a phone's group**: on a Mac in no group, the button runs `cbb pair -app FILE` as the
+- **Muting** (docs/design.md, "Muting a device"): on an admin, a device's card has "Mute"
+  with the house's times (`cbb mute -on`, "Until an admin unmutes it" for the last) and
+  "Unmute"; a muted device says so on its tile, its row and its card, and this Mac's own
+  mute is an alert, with "Unmute" on an admin.
+- **Join a group**: on a Mac in no group, the button runs `cbb pair -app FILE` as the
   administrator, and the sheet shows the QR code that cbb writes into the file (JSON: `qr`,
-  `expires`, `port`) while it waits for the phone, with the code as text and the time left.
-  Cancel removes the file, and cbb hangs up, which ends the wait. Admitting a computer into
-  a group still runs in Terminal (`sudo cbb pair`); the Developer ID app of roadmap item 22
-  carries the service itself and a Network Extension.
+  `expires`, `port`) with its six digits while it waits: a phone of the group scans the code,
+  a computer of the group types the digits after "+". Cancel removes the file, and cbb hangs
+  up, which ends the wait. "+" on the root or an admin takes the digits, or the QR code's
+  text or a picture of it, and runs `cbb pair -qr` with them on its standard input; "Device
+  far away? Send an invitation" says how to invite one through the hub.
 
 Each release carries it in `cbb-X.Y.Z.pkg` with the service, signed with the Developer ID and
 notarized (docs/maintaining.md, "Signing for macOS"). CI's `Mac app` job builds it and runs

@@ -2640,6 +2640,466 @@
           }
         }
       }
+    },
+    "Admit it as an admin: only for your own phone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принять как админа: только для своего телефона."
+          }
+        }
+      }
+    },
+    "Advanced": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расширенные"
+          }
+        }
+      }
+    },
+    "Advanced settings": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расширенные настройки"
+          }
+        }
+      }
+    },
+    "Allow cbb to run as the administrator; the code shows next.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разрешите cbb запуск от имени администратора; затем появится код."
+          }
+        }
+      }
+    },
+    "An admin's paste goes where this Mac's keyboard focus is, while this app is open. Turn it on with cbb paste-receive on.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставка админа идёт туда, где фокус клавиатуры этого Mac, пока приложение открыто. Включается командой cbb paste-receive on."
+          }
+        }
+      }
+    },
+    "CBB %@ is out.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вышла CBB %@."
+          }
+        }
+      }
+    },
+    "CBB is updated.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB обновлена."
+          }
+        }
+      }
+    },
+    "Claim": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Забрать"
+          }
+        }
+      }
+    },
+    "Claim the group with its recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Забрать группу ключом восстановления"
+          }
+        }
+      }
+    },
+    "Create a group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создать группу"
+          }
+        }
+      }
+    },
+    "Device far away? Send an invitation": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство далеко? Отправить приглашение"
+          }
+        }
+      }
+    },
+    "Everywhere": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Везде"
+          }
+        }
+      }
+    },
+    "Everywhere is off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Везде» выключено"
+          }
+        }
+      }
+    },
+    "Everywhere is on": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Везде» включено"
+          }
+        }
+      }
+    },
+    "Everywhere waits while sync is off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Везде» ждёт, пока синхронизация выключена"
+          }
+        }
+      }
+    },
+    "Join a group": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти в группу"
+          }
+        }
+      }
+    },
+    "Language": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Язык"
+          }
+        }
+      }
+    },
+    "More": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подробнее"
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте это окно."
+          }
+        }
+      }
+    },
+    "On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На хабе группы выполните cbb invite и отправьте получившийся файл по надёжному каналу. На новом устройстве выполните cbb pair -invite с этим файлом."
+          }
+        }
+      }
+    },
+    "On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На новом устройстве выберите «Войти в группу»: оно покажет QR-код и шесть цифр. Телефон группы сканирует код; здесь введите цифры."
+          }
+        }
+      }
+    },
+    "Open a picture of its QR code": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть картинку с его QR-кодом"
+          }
+        }
+      }
+    },
+    "Open at sign-in": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открывать при входе"
+          }
+        }
+      }
+    },
+    "Paste from other devices": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставка с других устройств"
+          }
+        }
+      }
+    },
+    "Recovery key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления"
+          }
+        }
+      }
+    },
+    "Reopen CBB": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перезапустить CBB"
+          }
+        }
+      }
+    },
+    "Send an invitation": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправить приглашение"
+          }
+        }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройки"
+          }
+        }
+      }
+    },
+    "Sync is on": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация включена"
+          }
+        }
+      }
+    },
+    "Sync: click to turn it off or on; hold it for a time": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация: щелчок выключает или включает; удержание — на время"
+          }
+        }
+      }
+    },
+    "System language": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Язык системы"
+          }
+        }
+      }
+    },
+    "The claim is made: it takes effect after the group's takeover delay.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заявка подана: она вступит в силу после задержки передачи группы."
+          }
+        }
+      }
+    },
+    "The group is made: this Mac is its root. Add a device with the + button.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Группа создана: этот Mac — её корень. Добавьте устройство кнопкой +."
+          }
+        }
+      }
+    },
+    "The new language shows once CBB opens again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новый язык появится после перезапуска CBB."
+          }
+        }
+      }
+    },
+    "The recovery key claims a group whose phones are all lost. Join that group first, then claim it in Settings.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления забирает группу, все телефоны которой потеряны. Сначала войдите в эту группу, затем заберите её в настройках."
+          }
+        }
+      }
+    },
+    "The six digits the new device shows": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Шесть цифр, которые показывает новое устройство"
+          }
+        }
+      }
+    },
+    "The six digits: %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Шесть цифр: %@"
+          }
+        }
+      }
+    },
+    "This Mac is no admin of the group: add the device on the phone or on an admin computer.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот Mac не админ группы: добавьте устройство на телефоне или на компьютере-админе."
+          }
+        }
+      }
+    },
+    "Turn Everywhere on?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включить «Везде»?"
+          }
+        }
+      }
+    },
+    "Turn sync off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выключить синхронизацию"
+          }
+        }
+      }
+    },
+    "Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите ключ с листа или вставьте текст его QR-кода. Заявка ждёт, как при передаче группы."
+          }
+        }
+      }
+    },
+    "Type the six digits the new device shows.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите шесть цифр, которые показывает новое устройство."
+          }
+        }
+      }
+    },
+    "Update to %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновить до %@"
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Версия"
+          }
+        }
+      }
+    },
+    "Without a camera": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Без камеры"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

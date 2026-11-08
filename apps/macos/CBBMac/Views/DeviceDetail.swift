@@ -23,6 +23,7 @@ struct DeviceDetail: View {
     @State private var changingForwarder = false
     @State private var forwarderAddress = ""
     @State private var forwarderKey = ""
+    @State private var more = false
 
     private var device: Control.Device? { model.devices.first { $0.id == id } }
 
@@ -31,7 +32,9 @@ struct DeviceDetail: View {
             if let d = device {
                 VStack(alignment: .leading, spacing: Tokens.spacingLarge) {
                     header(d)
-                    summary(d)
+                    syncCard(d)
+                    iconRow(d)
+                    DisclosureGroup(isExpanded: $more) { summary(d) } label: { Text("More") }
                     actions(d)
                     hubSettings(d)
                 }
@@ -102,16 +105,31 @@ struct DeviceDetail: View {
         }
     }
 
+    /// Its icon, name and whether it is online, its badges and, in one
+    /// line, its system and CBB's version.
     private func header(_ d: Control.Device) -> some View {
         HStack(alignment: .top, spacing: Tokens.spacingMedium) {
             DeviceIcon(device: d, size: 56)
             VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: d.name).font(.system(.title2, design: .monospaced).weight(.bold)).lineLimit(2)
                 HStack(spacing: 6) {
-                    OnlineDot(online: d.online)
-                    (d.online ? Text("online") : Text("offline")).foregroundStyle(d.online ? palette.accent : palette.textDim)
+                    Text(verbatim: d.name).font(.system(.title2, design: .monospaced).weight(.bold)).lineLimit(2)
+                    OnlineDot(online: d.online || d.isSelf)
+                        .accessibilityLabel(d.online || d.isSelf ? Text("online") : Text("offline"))
                 }
-                .font(.subheadline)
+                let badges = Self.badges(d)
+                if !badges.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(badges, id: \.self) { b in
+                            Text(verbatim: b).font(.caption.weight(.medium))
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(palette.soft, in: Capsule())
+                        }
+                    }
+                }
+                let line = [d.systemWithVersion, d.version.map { "CBB " + $0 }].compactMap { $0 }.joined(separator: " · ")
+                if !line.isEmpty {
+                    Text(verbatim: line).font(.caption).foregroundStyle(palette.textDim).lineLimit(2)
+                }
             }
             .accessibilityElement(children: .combine)
             Spacer()
@@ -122,18 +140,47 @@ struct DeviceDetail: View {
         }
     }
 
+    static func badges(_ d: Control.Device) -> [String] {
+        var out: [String] = []
+        if d.isSelf { out.append(String(localized: "This Mac")) }
+        if d.root { out.append(String(localized: "root")) } else if d.admin { out.append(String(localized: "admin")) }
+        if d.hub { out.append(String(localized: "hub")) }
+        if d.frozen { out.append(String(localized: "frozen")) }
+        return out
+    }
+
+    /// The house: this Mac's own sync, or, on an admin, another computer's
+    /// that is online; the phones and lite members refuse.
+    @ViewBuilder private func syncCard(_ d: Control.Device) -> some View {
+        if d.isSelf || d.mode != nil {
+            let on = d.isSelf ? !model.syncOff : d.mode != "own"
+            let mayTurn = d.isSelf || (model.isAdmin && d.online && d.role == "full")
+            Toggle(isOn: Binding(get: { on }, set: { new in Task { await model.setSync(new, on: d.isSelf ? nil : d.id) } })) {
+                Label { Text("Sync") } icon: { Image(systemName: on ? "house.fill" : "house") }
+            }
+            .toggleStyle(.switch)
+            .disabled(!mayTurn || model.busy)
+            .padding(Tokens.spacingMedium)
+            .glassTile(cornerRadius: Tokens.radiusCard)
+        }
+    }
+
+    /// The row of icons: mute or unmute, on an admin.
+    @ViewBuilder private func iconRow(_ d: Control.Device) -> some View {
+        if model.isAdmin, d.muted || d.online || d.isSelf {
+            HStack {
+                muteLine(d)
+                    .padding(.vertical, 4)
+                    .glassTile(cornerRadius: Tokens.radiusCard)
+                    .disabled(model.busy)
+            }
+        }
+    }
+
     /// What the group knows of it, a row each.
     private func summary(_ d: Control.Device) -> some View {
         VStack(spacing: 0) {
             row(Text("Type"), Text(d.kind.title))
-            if let system = d.systemWithVersion {
-                line
-                row(Text("Operating system"), Text(verbatim: system))
-            }
-            if let version = d.version {
-                line
-                row(Text("CBB"), Text(verbatim: version).monospaced())
-            }
             if let mac = d.mac {
                 line
                 row(Text("MAC address"), Text(verbatim: mac).monospaced())
@@ -158,10 +205,6 @@ struct DeviceDetail: View {
             if d.hub {
                 line
                 row(Text("Away from home"), model.status?.away?.hubDevice == d.id ? Text("The group's hub, in use now") : Text("The group's hub"))
-            }
-            if let mode = d.mode.flatMap(SyncMode.init(rawValue:)) {
-                line
-                row(Text("Sync"), Text(mode.title))
             }
             if !d.online, d.lastSeenMS > 0 {
                 line
@@ -284,24 +327,6 @@ struct DeviceDetail: View {
                 }
                 line
                 hubLine(d)
-                // An admin turns sync on or off on a computer; the phones and
-                // lite members refuse.
-                if !d.isSelf, d.online, d.role == "full" {
-                    line
-                    Menu {
-                        ForEach(SyncMode.allCases) { mode in
-                            Button { Task { await model.setMode(mode, on: d.id) } } label: { Text(mode.title) }
-                        }
-                    } label: {
-                        Label { Text("Sync") } icon: { Image(systemName: "arrow.left.arrow.right") }
-                            .foregroundStyle(palette.accent)
-                    }
-                    .menuStyle(.borderlessButton)
-                    .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
-                    .padding(.horizontal, Tokens.spacingMedium)
-                }
-                line
-                muteLine(d)
                 if !d.isSelf {
                     line
                     action("xmark.circle", "Remove", danger: true) { removing = true }

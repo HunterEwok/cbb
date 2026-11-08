@@ -1299,6 +1299,14 @@ All notable changes to cbb are documented in this file. The format follows
   line with More beside; tiles move by a drag and open their menu when held; Settings has the
   language, "Open at sign-in" and "Advanced settings", and error details after seven taps on
   the version.
+- The Mac app works as the tray app does: the house and the globe in the window's header and
+  as check marks in the menu bar item, with a timer to turn sync off for; no Send or Fetch,
+  and the orbit's centre is this Mac; an update shows as a card and in the menu. In no group
+  the window is the start window (Create a group, Join a group, Recovery key); joining shows
+  the QR code with the six digits, and + takes them; the device card shows its badges, one
+  line, the house and mute, the rest under More; Settings has the appearance as icons, the
+  colour, the language, "Open at sign-in", "Advanced settings" and error details after seven
+  clicks on the version.
 - One switch, sync, replaces the four sync modes and the device's own "not listening" switch
   (design.md, "Sync on and off"): on by default, so a device that joins syncs at once; off,
   for a time or until turned on, the clipboard is the device's own, both ways. `cbb sync [on
