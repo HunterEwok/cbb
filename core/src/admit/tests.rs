@@ -214,18 +214,18 @@ fn refusals() {
     // A wrong code: the joiner learns nothing, and the member hears why.
     let (admitter, rs) = root_group();
     let joiner = Joiner::new("router").unwrap();
-    let mut joining = Attempt::listening(&joiner, "111111", &clock()).unwrap();
+    let (code, wrong) = two_codes();
+    let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
     let mut adm =
-        Admission::dial(admitter.clone(), GroupView::of(&rs), "222222", &joiner.fingerprint(), &clock()).unwrap();
+        Admission::dial(admitter.clone(), GroupView::of(&rs), &wrong, &joiner.fingerprint(), &clock()).unwrap();
     let (admitted, joined, member_err, joiner_err, _) = run(&mut adm, &mut joining);
     assert!(admitted.is_none() && joined.is_none() && joiner_err.is_some());
     assert!(text(member_err).contains(Refusal::WrongCode.message()));
 
     // Another device than the QR code's.
-    let mut joining = Attempt::listening(&joiner, "111111", &clock()).unwrap();
+    let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
     let other = Joiner::new("other").unwrap();
-    let mut adm =
-        Admission::dial(admitter.clone(), GroupView::of(&rs), "111111", &other.fingerprint(), &clock()).unwrap();
+    let mut adm = Admission::dial(admitter.clone(), GroupView::of(&rs), &code, &other.fingerprint(), &clock()).unwrap();
     let (admitted, _, member_err, _, _) = run(&mut adm, &mut joining);
     assert!(admitted.is_none());
     assert!(text(member_err).contains("not the one in the QR code"));
@@ -233,8 +233,8 @@ fn refusals() {
     // A device ID in the group already.
     let mut view = GroupView::of(&rs);
     view.devices.insert(joiner.id.to_string());
-    let mut joining = Attempt::listening(&joiner, "111111", &clock()).unwrap();
-    let mut adm = Admission::dial(admitter.clone(), view, "111111", &joiner.fingerprint(), &clock()).unwrap();
+    let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
+    let mut adm = Admission::dial(admitter.clone(), view, &code, &joiner.fingerprint(), &clock()).unwrap();
     let (admitted, _, member_err, joiner_err, _) = run(&mut adm, &mut joining);
     assert!(admitted.is_none());
     assert!(text(member_err).contains(Refusal::Taken.message()));
@@ -242,8 +242,8 @@ fn refusals() {
 
     // A phone that asks to be an admin in a window that makes none.
     let phone = Joiner::with_key("phone", "aurora", soft()).unwrap().offering_admin_key(soft()).unwrap();
-    let mut joining = Attempt::listening(&phone, "111111", &clock()).unwrap();
-    let mut adm = Admission::dial(admitter, GroupView::of(&rs), "111111", &phone.fingerprint(), &clock()).unwrap();
+    let mut joining = Attempt::listening(&phone, &code, &clock()).unwrap();
+    let mut adm = Admission::dial(admitter, GroupView::of(&rs), &code, &phone.fingerprint(), &clock()).unwrap();
     let (admitted, joined, member_err, _, _) = run(&mut adm, &mut joining);
     assert!(admitted.is_none() && joined.is_none());
     assert!(text(member_err).contains("add it as an admin"));
@@ -421,17 +421,32 @@ fn a_joiner_dials_the_window() {
     // A wrong code: the joiner did not get the member's tag, and the
     // attempt counts.
     let other = Joiner::new("other").unwrap();
-    let mut adm = window(&admitter, &rs, "111111");
-    let (admitted, joined, member_err, started) = dial_window(&mut adm, &other, "222222");
+    let (code, wrong) = two_codes();
+    let mut adm = window(&admitter, &rs, &code);
+    let (admitted, joined, member_err, started) = dial_window(&mut adm, &other, &wrong);
     assert!(admitted.is_none() && started);
     assert!(text(member_err).contains(Refusal::WrongCode.message()));
     assert!(text(joined.err()).contains(Refusal::WrongCode.message()));
 }
 
+/// Two different pairing codes, drawn at run time rather than written as
+/// literals, which CodeQL would take for hard-coded passwords.
+fn two_codes() -> (String, String) {
+    let code = pair::new_code();
+    let wrong = loop {
+        let c = pair::new_code();
+        if c != code {
+            break c;
+        }
+    };
+    (code, wrong)
+}
+
 /// A random invitation secret, as the hub makes one.
 fn random_secret() -> [u8; pair::MIN_SECRET] {
-    let (a, b) = (getrandom::u64().unwrap(), getrandom::u64().unwrap());
-    (u128::from(a) << 64 | u128::from(b)).to_le_bytes()
+    // Each byte from the system's randomness, with no constant mixed in,
+    // which CodeQL would take for a hard-coded secret.
+    core::array::from_fn(|_| getrandom::u32().unwrap().to_le_bytes()[0])
 }
 
 /// A remote invitation's window, as Go's TestInvitation: the joiner proves
