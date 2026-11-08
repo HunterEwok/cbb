@@ -9,6 +9,7 @@
 
 #define CB_PNG 0 // the types of an image
 #define CB_JPEG 1
+#define CB_GIF 2
 
 long cb_change_count(const char *name);
 int cb_read(const char *name, char **text, long *len, int *flags, long *change);

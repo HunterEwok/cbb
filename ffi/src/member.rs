@@ -305,6 +305,8 @@ fn copy_json(ev: &Copy, key: &str) -> Value {
         "text": ev.text,
         "media": ev.media,
         "unread": ev.unread,
+        // The devices the copy is sealed to: a paste of it must come from one.
+        "readers": ev.sealed.as_ref().map(|s| s.wraps.iter().map(|w| w.to.clone()).collect::<Vec<_>>()).unwrap_or_default(),
         "key": key,
     })
 }

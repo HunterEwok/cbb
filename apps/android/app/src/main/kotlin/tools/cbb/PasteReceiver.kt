@@ -44,13 +44,14 @@ class PasteReceiver(private val context: Context, dir: File, private val keyboar
      * (RecordSet.commandSender), verified when the records show that the
      * device by names signed; name is that device's, when known.
      */
-    fun paste(body: Commands.Body, sender: String, verified: Boolean, name: String?): Member.CommandResult {
+    fun paste(body: Commands.Body, sender: String, verified: Boolean, name: String?, image: () -> Pair<File, String>): Member.CommandResult {
         val set = settings
         val nowMS = System.currentTimeMillis()
         val res = when {
             !set.on -> refused(body, "remote paste is off on this device; its user turns it on in the app's settings")
             body.enter && !set.enter -> refused(body, "this device takes pastes without Enter only; its user allows Enter in the app's settings")
             !limiter.allow(sender, nowMS) -> refused(body, "too many pastes: at most one a second and 30 a minute from one device")
+            body.kind == "media" -> injectImage(body, image)
             else -> inject(body, RemotePaste.clean(body.text ?: ""))
         }
         val who = if (verified) body.by else "${body.by} (unverified)"
@@ -102,6 +103,29 @@ class PasteReceiver(private val context: Context, dir: File, private val keyboar
             },
         )
         return when (val r = target.inject(text, body.mode ?: "paste", body.enter, body.kind == "secret")) {
+            null -> Member.CommandResult(body.id, "done")
+            else -> Member.CommandResult(body.id, if (r.refused) "refused" else "failed", r.reason)
+        }
+    }
+
+    /** Why a paste of images or files did not go in. */
+    class NotPasted(message: String, val refused: Boolean = true) : Exception(message)
+
+    /**
+     * Pastes the image of the group's copy that body names into the focused
+     * text field: image fetches it, the accessibility service puts it on the
+     * clipboard and pastes it. The Bluetooth keyboard types only text.
+     */
+    private fun injectImage(body: Commands.Body, image: () -> Pair<File, String>): Member.CommandResult {
+        val k = keyboard.settings
+        if (k.on && k.pastes) return refused(body, "this device sends its pastes to the Bluetooth keyboard, which types only text")
+        val target = CopyWatcher.running ?: return refused(body, "this device pastes through CBB's accessibility service, which is off; its user turns it on in the app's settings")
+        val (file, alt) = try {
+            image()
+        } catch (e: NotPasted) {
+            return Member.CommandResult(body.id, if (e.refused) "refused" else "failed", e.message)
+        }
+        return when (val r = target.injectImage(file, alt, body.enter)) {
             null -> Member.CommandResult(body.id, "done")
             else -> Member.CommandResult(body.id, if (r.refused) "refused" else "failed", r.reason)
         }

@@ -42,7 +42,7 @@ func TestHTML(t *testing.T) {
 	html := "<p>Hello, <b>world</b></p>"
 	b.copyOn(Item{Text: "Hello, world", HTML: html})
 	waitFor(t, "the desktop's formatted text", func() bool {
-		got, err := fetchMedia(t.Context(), socket, nil)
+		got, err := fetchMedia(t.Context(), socket, nil, "")
 		return err == nil && got.html == html && got.text == "Hello, world"
 	})
 	if got := paste(t, socket); got != "Hello, world" {
@@ -66,7 +66,7 @@ func TestHTML(t *testing.T) {
 	long := strings.Repeat("x", clip.MaxAltText+1)
 	b.copyOn(Item{Text: long, HTML: "<p>" + long + "</p>"})
 	waitFor(t, "the long text", func() bool { return paste(t, socket) == long })
-	if _, err := fetchMedia(t.Context(), socket, nil); err == nil {
+	if _, err := fetchMedia(t.Context(), socket, nil, ""); err == nil {
 		t.Error("the long text went as formatted text")
 	}
 	b.copyOn(Item{Text: "a password", HTML: "<b>a password</b>", Secret: true})
