@@ -1313,6 +1313,10 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The Android and iPhone apps put one received image or video, and an image the button
+  fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
+  Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).
+  Other files still go to Downloads/CBB on Android and to Files on the iPhone.
 - The tile of the device an app runs on comes first by default, and moves as the other tiles
   do, into a collection too (docs/apps.md, "Collections and the order of the tiles"), on Aurora
   too, where the core's arrangement follows the same rule. A tile's system and its mark ("this
