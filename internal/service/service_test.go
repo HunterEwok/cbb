@@ -431,7 +431,8 @@ func startEnv(t *testing.T, h *hub, name string, cfg func(*Config), env ...strin
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	return startIn(t, h, &testService{name: name, dir: dir, os: group.OSLinux, cfg: cfg, env: env})
+	// An empty env still says the Rust service needs no more than it.
+	return startIn(t, h, &testService{name: name, dir: dir, os: group.OSLinux, cfg: cfg, env: append([]string{}, env...)})
 }
 
 // restartService starts a stopped service again with its state.

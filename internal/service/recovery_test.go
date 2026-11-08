@@ -9,7 +9,9 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/base64"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,25 +29,17 @@ import (
 // sheet the key's QR code gives.
 func addRecovery(t *testing.T, root *testService) *recoverySheet {
 	t.Helper()
+	sheet := newRecoveryKey(t, root)
 	id, err := group.Load(root.dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
 	ca := id.RootCA()
-	cert, err := ca.IssueAdmin(group.NewDeviceID(), &key.PublicKey, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
 	recs, err := group.LoadRecords(root.dir, id.GroupCA.Cert)
 	if err != nil {
 		t.Fatal(err)
 	}
-	k := group.KeyHashOf(cert)
-	r, err := recs.Sign(group.RecordBody{Type: group.RecordRecovery, TimeMS: time.Now().UnixMilli(), Admin: &k, Cert: cert.Raw}, ca.Key, nil)
+	r, err := recs.Sign(group.RecordBody{Type: group.RecordRecovery, TimeMS: time.Now().UnixMilli(), Admin: &sheet.Admin, Cert: sheet.Cert}, ca.Key, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +49,34 @@ func addRecovery(t *testing.T, root *testService) *recoverySheet {
 	if err := recs.Save(root.dir); err != nil {
 		t.Fatal(err)
 	}
-	return &recoverySheet{Key: key, Admin: k, Cert: cert.Raw, Group: group.Tag(id.GroupCA.Cert)}
+	return sheet
+}
+
+// newRecoveryKey makes a recovery key for the group of root, which may
+// run, with its admin CA under the root, and names it in no record.
+func newRecoveryKey(t *testing.T, root *testService) *recoverySheet {
+	t.Helper()
+	id, err := group.Load(root.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := id.RootCA().IssueAdmin(group.NewDeviceID(), &key.PublicKey, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &recoverySheet{Key: key, Admin: group.KeyHashOf(cert), Cert: cert.Raw, Group: group.Tag(id.GroupCA.Cert)}
+}
+
+// qr is the text of the sheet's QR code (docs/protocol.md, section 10,
+// "The recovery sheet"; testdata/interop/recovery-sheet.json), which the
+// Rust service reads with the core.
+func (s *recoverySheet) qr() string {
+	k := base64.RawURLEncoding.EncodeToString(s.Key.D.FillBytes(make([]byte, 32)))
+	return "cbb://recover?g=" + s.Group + "&k=" + k + "&c=" + base64.RawURLEncoding.EncodeToString(s.Cert)
 }
 
 // TestRecovery checks that a computer of the group that is no admin takes
@@ -64,30 +85,33 @@ func addRecovery(t *testing.T, root *testService) *recoverySheet {
 // lets an admin take the group over at once, without the new root's wait.
 func TestRecovery(t *testing.T) {
 	var h hub
-	var sheet *recoverySheet
+	// The Go service reads the sheets the test made without the core,
+	// which a test build has not.
+	var sheets sync.Map // the QR code's text: *recoverySheet
 	read := func(c *Config) {
 		c.readSheet = func(text string) (*recoverySheet, error) {
-			if text != "the sheet" {
-				return nil, &errRefusedSheet{"check", "the check group does not match"}
+			if s, ok := sheets.Load(text); ok {
+				return s.(*recoverySheet), nil
 			}
-			if sheet == nil {
-				// A key the group does not know.
-				return &recoverySheet{}, nil
-			}
-			return sheet, nil
+			return nil, &errRefusedSheet{"not_sheet", "this is not a cbb recovery sheet"}
 		}
 	}
-	pi := startWith(t, &h, "pi", group.OSLinux, read)
+	sheetText := func(s *recoverySheet) string {
+		sheets.Store(s.qr(), s)
+		return s.qr()
+	}
+	pi := startEnv(t, &h, "pi", read)
 	a := startService(t, &h, "a")
-	b := startWith(t, &h, "b", group.OSLinux, read)
+	b := startEnv(t, &h, "b", read)
 	pairWith(t, pi, a)
 	pairWith(t, pi, b)
 	noClaimWait(t, pi, a, b)
-	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, "the sheet"); err == nil || !strings.Contains(err.Error(), "no recovery key") {
+	level := pi.status(t).KeyLevel
+	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, sheetText(newRecoveryKey(t, pi))); err == nil || !strings.Contains(err.Error(), "no recovery key") {
 		t.Errorf("recovery in a group without a recovery key: %v", err)
 	}
 	pi.stop()
-	sheet = addRecovery(t, pi)
+	sheet := addRecovery(t, pi)
 	pi = restartService(t, &h, pi)
 	waitFor(t, "b holds the recovery key's record", func() bool {
 		id, err := group.Load(b.dir)
@@ -97,22 +121,19 @@ func TestRecovery(t *testing.T) {
 		recs, err := group.LoadRecords(b.dir, id.GroupCA.Cert)
 		return err == nil && recs.State().Recovery != nil
 	})
-	if _, err := pi.do(t, control.Header{Op: control.OpRecovery}, "the sheet"); err == nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRecovery}, sheetText(sheet)); err == nil {
 		t.Error("the root claimed its own group")
 	}
-	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, "a typo"); err == nil || !strings.Contains(err.Error(), "check group") {
+	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, "a typo"); err == nil || !strings.Contains(err.Error(), "not a cbb recovery sheet") {
 		t.Errorf("a refused text: %v", err)
 	}
 	other := *sheet
 	other.Group = "0123456789abcdef"
-	good := sheet
-	sheet = &other
-	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, "the sheet"); err == nil || !strings.Contains(err.Error(), "another group") {
+	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, sheetText(&other)); err == nil || !strings.Contains(err.Error(), "another group") {
 		t.Errorf("a sheet of another group: %v", err)
 	}
-	sheet = good
 	pi.stop()
-	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, "the sheet"); err != nil {
+	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, sheetText(sheet)); err != nil {
 		t.Fatalf("recovery: %v", err)
 	}
 	waitFor(t, "b is the root", func() bool {
@@ -123,12 +144,14 @@ func TestRecovery(t *testing.T) {
 		id, err := group.Load(a.dir)
 		return err == nil && len(id.Roots) == 1
 	})
-	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, "the sheet"); err == nil {
+	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, sheetText(sheet)); err == nil {
 		t.Error("the new root claimed the group again")
 	}
 
 	// The new root waits 72 hours for a claim, but hands the group to an
 	// admin at once.
+	// The new root signs the old root's settings again, the key level too.
+	waitFor(t, "b keeps the group's key level", func() bool { return b.status(t).KeyLevel == level })
 	makeAdmin(t, b, a)
 	if _, err := b.do(t, control.Header{Op: control.OpHandover, Name: "pi"}, ""); err == nil {
 		t.Error("handed the group to a device that is no admin")
