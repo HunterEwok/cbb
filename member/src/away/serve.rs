@@ -273,7 +273,7 @@ impl Away {
         // Both IPv6 and IPv4 where the system has IPv6, else IPv4 alone.
         let start = |ip: std::net::IpAddr| -> Result<Hub> {
             Hub::start(
-                &st.serving_key(),
+                &st.serving_key()?,
                 self.me.as_str(),
                 st.obfuscation.as_ref(),
                 peers.clone(),
@@ -329,7 +329,7 @@ impl Away {
             pins: pins.into_iter().collect::<Result<_>>()?,
             chain,
             key,
-            wg_key: st.serving_key(),
+            wg_key: st.serving_key()?,
             obfuscation: st.obfuscation.clone(),
             vless_id: Some(f.vless_id.clone()).filter(|id| !id.is_empty()),
             records: Arc::new(Mutex::new(records)),
@@ -510,7 +510,7 @@ pub(super) fn own_offer(st: &State, psk: &[u8]) -> Option<TunnelOffer> {
         return None;
     }
     Some(TunnelOffer {
-        hub_key: crate::tunnel::public_key_of(&st.serving_key()),
+        hub_key: crate::tunnel::public_key_of(&st.serving_key().ok()?),
         psk: psk.to_vec(),
         endpoints: st.hub_endpoints().iter().map(ToString::to_string).collect(),
         obfuscation: st.obfuscation.clone(),

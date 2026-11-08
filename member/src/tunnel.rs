@@ -427,14 +427,13 @@ impl State {
 
     /// The device's own private key, with which it registers with its
     /// relay.
-    pub fn private_key(&self) -> [u8; 32] {
-        self.key.as_slice().try_into().unwrap_or([0; 32])
+    pub fn private_key(&self) -> Result<[u8; 32]> {
+        key32(&self.key)
     }
 
     /// The key the hub serves its clients with: the period's, else its own.
-    pub fn serving_key(&self) -> [u8; 32] {
-        let k = if self.serving.len() == 32 { &self.serving } else { &self.key };
-        k.as_slice().try_into().unwrap_or([0; 32])
+    pub fn serving_key(&self) -> Result<[u8; 32]> {
+        key32(if self.serving.len() == 32 { &self.serving } else { &self.key })
     }
 
     /// The public key of the hub's next period, empty for none.
@@ -656,6 +655,12 @@ impl State {
         });
         gone
     }
+}
+
+/// A key of 32 bytes, or an error for a damaged one: a key is never
+/// replaced by zeros.
+pub(crate) fn key32(k: &[u8]) -> Result<[u8; 32]> {
+    k.try_into().map_err(|_| Error::msg("the tunnel's key is damaged: it is not 32 bytes"))
 }
 
 /// The public key of a private key.

@@ -161,8 +161,10 @@ final class CoreMemberTests: XCTestCase {
         let t = try CoreGroup(test: self)
         let (a, b) = (t.phones[0], t.phones[1])
         try await t.connect(1, to: 0)
-        for (i, mode) in ["send", "shared", "receive", "shared", "send", "shared"].enumerated() {
-            try b.member.setMode(mode)
+        // Sync off says "own" in the hellos, on says "shared".
+        for (i, on) in [false, true, false, true].enumerated() {
+            let mode = on ? "shared" : "own"
+            try b.member.setSync(on: on)
             let start = Date()
             try await b.until("the peer's hello with mode \(mode), change \(i + 1)") {
                 try a.member.peers().contains { $0.device == b.device && $0.mode == mode }

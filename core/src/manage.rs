@@ -49,6 +49,9 @@ pub enum Order {
     Hub(serde_json::Value),
     /// Turn sync away from home off; only its own user turns it on again.
     AwayOff,
+    /// Turn its sync on or off, with a mode command (design.md, "Sync on
+    /// and off").
+    Sync(bool),
     /// Put the text where its focus is: by the clipboard (`paste`) or by
     /// typing it (`type`), as `text` or `secret`, with Enter after it if
     /// asked.
@@ -227,6 +230,10 @@ pub fn order(rs: &Records, s: &Signer, device: &str, o: &Order, now_ms: i64) -> 
         }
         Order::Unmute => put("type", "unmute".into()),
         Order::AwayOff => put("type", "away-off".into()),
+        Order::Sync(on) => {
+            put("type", "mode".into());
+            put("mode", if *on { "shared" } else { "own" }.into());
+        }
         Order::Hub(h) => {
             put("type", "hub".into());
             put("hub", h.clone());

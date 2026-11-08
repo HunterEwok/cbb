@@ -278,6 +278,13 @@ private fun JoinScreen(model: AppModel) {
                     .clip(RoundedCornerShape(Tokens.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
                     .semantics { contentDescription = label },
             )
+            Text(
+                code.grouped,
+                style = MaterialTheme.typography.headlineLarge,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { contentDescription = code.code.toList().joinToString(" ") },
+            )
             Text(stringResource(if (model.isTv) R.string.join_hint_tv else R.string.join_hint), textAlign = TextAlign.Center, color = palette.textDim)
         } else if (model.message == null) {
             CircularProgressIndicator(color = palette.accent)

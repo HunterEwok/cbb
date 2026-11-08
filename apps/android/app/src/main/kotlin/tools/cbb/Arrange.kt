@@ -158,21 +158,20 @@ private class Moves(val ref: Tiles.Ref, val level: List<Tiles.Ref>, val model: A
 }
 
 /**
- * This phone first, then the devices and collections in the user's order,
- * as tiles or a list; a device opens its details, a collection its page.
+ * The devices and collections in the user's order, this phone first until
+ * it is moved, as tiles or a list; a device opens its details, a collection
+ * its page.
  */
 @Composable
 internal fun ArrangedDevices(model: AppModel, layout: DeviceLayout, select: (String) -> Unit, openCollection: (String) -> Unit) {
     val items = model.arranged
-    val me = model.devices.firstOrNull { it.isSelf }
-    if (items.isEmpty() && me == null) {
+    if (items.isEmpty()) {
         Text(stringResource(R.string.no_computers), color = LocalPalette.current.textDim)
         return
     }
     val level = items.map { it.ref }
     if (layout == DeviceLayout.LIST) {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            me?.let { d -> DeviceRow(d, open = { select(d.id) }) }
             for (item in items) {
                 when (item) {
                     is AppModel.Arranged.Device -> Arrangeable(model, item.ref, level, item.device.name, Modifier.fillMaxWidth()) { m, open, menu ->
@@ -184,31 +183,26 @@ internal fun ArrangedDevices(model: AppModel, layout: DeviceLayout, select: (Str
         }
         return
     }
-    TileGrid(model, items.map { it.key }) { key, m ->
-        when {
-            me != null && key == SELF -> DeviceTile(me, m, open = { select(me.id) })
-            else -> when (val item = items.first { it.key == key }) {
-                is AppModel.Arranged.Device -> Arrangeable(model, item.ref, level, item.device.name, m) { inner, open, menu ->
-                    DeviceTile(item.device, inner, open = if (open) ({ select(item.device.id) }) else null, menu = menu)
-                }
-                is AppModel.Arranged.Collection -> Arrangeable(model, item.ref, level, item.collection.name, m) { inner, open, menu ->
-                    CollectionTile(item, inner, open = if (open) ({ openCollection(item.collection.id) }) else null, menu = menu)
-                }
+    TileGrid(items.map { it.key }) { key, m ->
+        when (val item = items.first { it.key == key }) {
+            is AppModel.Arranged.Device -> Arrangeable(model, item.ref, level, item.device.name, m) { inner, open, menu ->
+                DeviceTile(item.device, inner, open = if (open) ({ select(item.device.id) }) else null, menu = menu)
+            }
+            is AppModel.Arranged.Collection -> Arrangeable(model, item.ref, level, item.collection.name, m) { inner, open, menu ->
+                CollectionTile(item, inner, open = if (open) ({ openCollection(item.collection.id) }) else null, menu = menu)
             }
         }
     }
 }
-
-private const val SELF = "self"
 
 /**
  * Tiles in rows as wide as the screen allows; the row of a dragged tile
  * stands above the others so the tile passes over them.
  */
 @Composable
-private fun TileGrid(model: AppModel, keys: List<String>, withSelf: Boolean = true, tile: @Composable (String, Modifier) -> Unit) {
+private fun TileGrid(keys: List<String>, tile: @Composable (String, Modifier) -> Unit) {
     val arrange = LocalArrange.current
-    val all = if (withSelf && model.devices.any { it.isSelf }) listOf(SELF) + keys else keys
+    val all = keys
     val dragged = arrange.dragging?.let { r ->
         when (r) {
             is Tiles.Ref.Device -> "d:" + r.id
@@ -515,7 +509,7 @@ internal fun CollectionPage(model: AppModel, id: String, back: () -> Unit, selec
                 }
             }
         } else {
-            TileGrid(model, item.devices.map { "d:" + it.id }, withSelf = false) { key, m ->
+            TileGrid(item.devices.map { "d:" + it.id }) { key, m ->
                 val d = item.devices.first { "d:" + it.id == key }
                 Arrangeable(model, Tiles.Ref.Device(d.id), level, d.name, m) { inner, open, more ->
                     DeviceTile(d, inner, open = if (open) ({ select(d.id) }) else null, menu = more)

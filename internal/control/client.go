@@ -49,11 +49,11 @@ func IsAdmin(op string) bool {
 }
 
 // NeedsAdmin reports whether the service takes the request h only on its
-// admin socket: IsAdmin of its operation, except a mute or unmute of this
-// device's receiving, which changes nothing for the group (design.md,
-// "Muting a device").
+// admin socket: IsAdmin of its operation, except turning this device's own
+// sync on or off, which changes nothing for the group (design.md, "Sync on
+// or off").
 func NeedsAdmin(h Header) bool {
-	if (h.Op == OpMute || h.Op == OpUnmute) && h.Device == "" {
+	if h.Op == OpSync && h.Device == "" {
 		return false
 	}
 	return IsAdmin(h.Op)

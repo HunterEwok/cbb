@@ -20,10 +20,10 @@ const hardeningMax = 2.6
 var exposure = regexp.MustCompile(`Overall exposure level for cbb\.service: ([0-9.]+)`)
 
 // settingsOf is what an install again must keep on d (I5): the group, the
-// mode, the limits, the quick actions, remote paste and the keys.
+// sync on or off, the limits, the quick actions, remote paste and the keys.
 func settingsOf(ctx context.Context, d *Device) (string, error) {
 	var b strings.Builder
-	for _, c := range []string{"cbb mode", "cbb config", "cbb action", "cbb paste-receive", "sha256sum /var/lib/cbb/identity.json"} {
+	for _, c := range []string{"cbb sync", "cbb config", "cbb action", "cbb paste-receive", "sha256sum /var/lib/cbb/identity.json"} {
 		out, err := Run(ctx, d, c, "")
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", c, err)
@@ -43,7 +43,7 @@ func settingsOf(ctx context.Context, d *Device) (string, error) {
 // /dev/tpmrm0 alone.
 func installedCases(ctx context.Context, r *Report, d *Device, archive string) {
 	r.Do("fleet/I5-install-again", func() error {
-		for _, c := range []string{"cbb mode receive", "cbb config max-copy 20MiB", "cbb action enable restart -yes", "cbb paste-receive on -enter"} {
+		for _, c := range []string{"cbb sync off", "cbb config max-copy 20MiB", "cbb action enable restart -yes", "cbb paste-receive on -enter"} {
 			if _, err := Run(ctx, d, c, ""); err != nil {
 				return fmt.Errorf("%s: %w", c, err)
 			}
@@ -66,7 +66,7 @@ func installedCases(ctx context.Context, r *Report, d *Device, archive string) {
 			return fmt.Errorf("install.sh again changed the settings:\n%s", footprintDiff(before, after))
 		}
 		// Back to the defaults for the cases after.
-		for _, c := range []string{"cbb mode own", "cbb config max-copy 100MiB", "cbb action off", "cbb paste-receive off"} {
+		for _, c := range []string{"cbb sync on", "cbb config max-copy 100MiB", "cbb action off", "cbb paste-receive off"} {
 			if _, err := Run(ctx, d, c, ""); err != nil {
 				return fmt.Errorf("%s: %w", c, err)
 			}

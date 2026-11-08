@@ -440,7 +440,7 @@ func clocks(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 			}
 			defer setClock(ctx, clock, "")
 			return eventually(ctx, timeout, func() error {
-				return errorShown(ctx, from, errorCase{cmd: "cbb mode -on " + to.Name + " own", want: []string{reason}})
+				return errorShown(ctx, from, errorCase{cmd: "cbb sync -on " + to.Name + " off", want: []string{reason}})
 			})
 		})
 	}

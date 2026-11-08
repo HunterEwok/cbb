@@ -216,6 +216,8 @@ pub fn listen(
         ));
     }
     shown(&join_qr(code, &addrs, &joiner.fingerprint()));
+    // Announced, so that a computer finds it by the code alone.
+    let _announced = crate::discovery::announce_joiner(&joiner.id, port, &joiner.fingerprint());
     ln.set_nonblocking(true).context("cannot listen")?;
     let end = Instant::now() + wait;
     let mut failures = 0;

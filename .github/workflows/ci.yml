@@ -1983,18 +1983,54 @@ jobs:
     if: needs.changes.outputs.lite == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      # qemu-user from its release source, checked against this hash. Up to
+      # 10.2.2 (Ubuntu 26.04 has 10.2.1) qemu leaves the last attribute of a
+      # netlink message in the host's byte order when it is exactly 4 bytes
+      # long, and the runner's kernel ends every link message with one (an
+      # empty IFLA_DPLL_PIN); a big-endian guest's musl getifaddrs then walks
+      # past its buffer and hangs or crashes. qemu fixed it in commit
+      # 029f10e85278 (issue 2485; 10.2.3 and 11.1 carry it). The build (mips
+      # and mipsel only) is cached.
+      QEMU: "11.1.3"
+      QEMU_SHA256: 5a8289c7940dc77d3873c81a6c29ba3afe1446fc9d36e77fa1658cdbecb84b22
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: nightly Rust with the standard library's source, zig, and qemu
+      - name: nightly Rust with the standard library's source, and zig
         run: |
           rustup toolchain install nightly-2026-10-26 --profile minimal --component rust-src
           python3 -m venv "$RUNNER_TEMP/zig"
           "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.15.2 cargo-zigbuild==0.24.0
           echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
-          sudo apt-get update
-          sudo apt-get install -y -q qemu-user qemu-user-binfmt
+      - name: qemu from the cache
+        id: qemu
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/qemu
+          key: qemu-${{ env.QEMU }}-mips-linux-user-${{ runner.os }}-${{ env.ImageOS }}
+      - name: qemu from its source
+        if: steps.qemu.outputs.cache-hit != 'true'
+        working-directory: ${{ runner.temp }}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build libglib2.0-dev python3-venv
+          curl -fsSL --retry 3 -o qemu.tar.xz "https://download.qemu.org/qemu-$QEMU.tar.xz"
+          echo "$QEMU_SHA256  qemu.tar.xz" | sha256sum -c -
+          tar xJf qemu.tar.xz
+          cd "qemu-$QEMU"
+          ./configure --python=/usr/bin/python3 --target-list=mips-linux-user,mipsel-linux-user --disable-tools --disable-docs --prefix="$RUNNER_TEMP/qemu"
+          ninja -C build qemu-mips qemu-mipsel
+          mkdir -p "$RUNNER_TEMP/qemu/bin"
+          cp build/qemu-mips build/qemu-mipsel "$RUNNER_TEMP/qemu/bin/"
+      - name: qemu's netlink for a big-endian guest
+        # A static musl program that lists the interfaces with getifaddrs
+        # must finish under qemu-mips.
+        run: |
+          printf '#include <ifaddrs.h>\n#include <stdio.h>\nint main(void){struct ifaddrs *a; if (getifaddrs(&a)) return 1; for (struct ifaddrs *p = a; p; p = p->ifa_next) puts(p->ifa_name); return 0;}\n' >"$RUNNER_TEMP/ifaddrs.c"
+          python3 -m ziglang cc -target mips-linux-musleabi -msoft-float -static -o "$RUNNER_TEMP/ifaddrs" "$RUNNER_TEMP/ifaddrs.c"
+          timeout 60 "$RUNNER_TEMP/qemu/bin/qemu-mips" "$RUNNER_TEMP/ifaddrs"
       - name: build for mips and mipsel
         run: |
           sh member/packaging/mips.sh mips
@@ -2006,16 +2042,10 @@ jobs:
       - name: the MIPS builds under qemu with Go members, all but sync away from home
         # The hubs' and the invitations' tests need the tunnel, which the
         # MIPS build leaves out.
-        # qemu-user translates netlink for a big-endian guest badly, so
-        # musl's getifaddrs, which a pairing window's addresses call, hangs
-        # or crashes under qemu-mips (and works under qemu-mipsel):
-        # TestLiteRootWindow runs on mipsel only.
         run: |
           for a in mips mipsel; do
             skip='TestLiteMemberAway|TestLiteHub|TestLiteForwardOnly|TestLiteRelay|TestLiteInvite|TestLiteJoinInvite'
-            if [ "$a" = mips ]; then skip="$skip|TestLiteRootWindow"; fi
-            # Ubuntu 26.04's qemu-user is static and has no -static names.
-            q=$(command -v "qemu-$a-static" || command -v "qemu-$a")
+            q="$RUNNER_TEMP/qemu/bin/qemu-$a"
             printf '#!/bin/sh\nexec %s %s "$@"\n' "$q" "$PWD/target/$a-unknown-linux-musl/release/cbb" >"$RUNNER_TEMP/cbb-$a"
             chmod +x "$RUNNER_TEMP/cbb-$a"
             "$RUNNER_TEMP/cbb-$a" version | grep -q 'linux/mips'

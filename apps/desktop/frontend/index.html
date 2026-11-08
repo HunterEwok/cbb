@@ -16,17 +16,16 @@
       <span id="tag" class="mono dim"></span>
     </div>
     <div class="tools">
-      <span id="away-badge" class="badge" hidden></span>
-      <label class="switch" id="away-switch" hidden>
-        <input type="checkbox" id="away">
-        <span data-t>Away from home</span>
-      </label>
+      <div class="switches" id="switches" hidden>
+        <button class="icon toggle" id="sync" data-icon="house" aria-pressed="true" data-t-title="Sync: tap to turn it off or on; hold it for a time"></button>
+        <button class="icon toggle" id="away" data-icon="globe" aria-pressed="false" data-t-title="Everywhere: sync away from home too"></button>
+        <span id="away-badge" class="badge" hidden></span>
+      </div>
       <div class="segmented" id="layouts" role="radiogroup">
         <button data-layout="tiles" data-t-title="Tiles" data-icon="tiles"></button>
         <button data-layout="list" data-t-title="List" data-icon="list"></button>
         <button data-layout="orbit" data-t-title="Orbit" data-icon="orbit"></button>
       </div>
-      <button class="icon" id="arrange" data-t-title="Arrange devices" aria-pressed="false" data-icon="arrange" hidden></button>
       <button class="icon" id="add" data-t-title="Add a device" data-icon="add"></button>
       <button class="icon" id="settings" data-t-title="Settings" data-icon="settings"></button>
     </div>
@@ -36,15 +35,7 @@
     <section id="devices"></section>
     <aside id="detail" hidden></aside>
   </main>
-  <footer id="bar">
-    <div class="buttons">
-      <button class="accent" id="send" data-t>Send the clipboard</button>
-      <button class="glass" id="fetch" data-t>Fetch</button>
-      <button class="glass" id="listen" aria-pressed="true" data-t-title="Tap to take no copies from the group, or again; hold it for a time"></button>
-      <button class="glass" id="update" hidden></button>
-    </div>
-    <p id="message" class="dim"></p>
-  </footer>
+  <p id="message" class="toast" role="status" hidden></p>
 
   <dialog id="confirm">
     <form method="dialog">
@@ -82,36 +73,35 @@
   <dialog id="add-dialog">
     <form method="dialog">
       <h2 data-t>Add a device</h2>
-      <ol class="steps">
-        <li><span data-t>On the new computer, run:</span> <code>cbb pair</code></li>
-        <li><span data-t>In a group of the phone, scan the QR code it shows with the phone app. In a group of computers, run this on this computer or another admin, as the administrator, and type the code it shows on the new computer:</span> <code>cbb pair</code></li>
-      </ol>
-      <p class="dim" data-t>A phone joins from the start screen of its app.</p>
-      <div id="admit-box" hidden>
-        <h3 data-t>Admit by QR code</h3>
-        <p class="dim" data-t>A phone with Aurora OS or Sailfish OS shows a QR code and waits. Paste the code's text, or open a picture of it:</p>
-        <textarea id="admit-text" class="field mono" rows="3" spellcheck="false" placeholder="cbb://join?..."></textarea>
-        <input id="admit-file" type="file" accept="image/png,image/jpeg" hidden>
-        <label id="admit-admin-row" class="check" hidden><input type="checkbox" id="admit-admin"> <span data-t>Admit it as an admin: it may then add, remove and renew devices and take the group over after the takeover delay. Only for your own phone.</span></label>
+      <p class="dim" data-t>On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.</p>
+      <div id="admit-box">
+        <input id="admit-code" class="field code mono" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="123 456" data-t-title="The six digits the new device shows">
+        <label id="admit-admin-row" class="check" hidden><input type="checkbox" id="admit-admin"> <span data-t>Admit it as an admin: only for your own phone.</span></label>
         <p id="admit-error" class="dim" hidden></p>
         <div class="buttons">
-          <button type="button" id="admit-picture" class="glass" data-t>Open a picture</button>
+          <button type="button" id="admit-picture" class="glass" data-t>Open a picture of its QR code</button>
           <button type="button" id="admit" class="accent" data-t>Admit</button>
         </div>
+        <input id="admit-file" type="file" accept="image/png,image/jpeg" hidden>
       </div>
-      <menu><button value="ok" class="accent" data-t>Done</button></menu>
+      <p id="admit-none" class="dim" data-t hidden>This computer is no admin of the group: add the device on the phone or on an admin computer.</p>
+      <p class="small"><button type="button" class="link" id="invite" data-t>Device far away? Send an invitation</button></p>
+      <menu><button value="cancel" class="glass" data-t>Cancel</button></menu>
     </form>
   </dialog>
 
   <dialog id="join-dialog">
     <form method="dialog">
-      <h2 data-t>Join a phone's group</h2>
-      <p id="join-wait" class="dim" data-t>Allow cbb to run as the administrator; the QR code shows next.</p>
+      <h2 data-t>Join a group</h2>
+      <p id="join-wait" class="dim" data-t>Allow cbb to run as the administrator; the code shows next.</p>
       <div id="join-code" hidden>
-        <p data-t>In the CBB app on the phone, tap "Connect a new device" and scan this code:</p>
         <img id="join-qr" alt="">
-        <p class="dim small" data-t>Without a camera, paste this into the app:</p>
-        <code id="join-text" class="mono"></code>
+        <p class="code mono" id="join-digits"></p>
+        <p data-t>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.</p>
+        <details>
+          <summary class="dim small" data-t>Without a camera</summary>
+          <code id="join-text" class="mono"></code>
+        </details>
         <p class="dim small" id="join-ends"></p>
         <p class="dim small" id="join-port"></p>
       </div>
@@ -122,23 +112,29 @@
   <dialog id="settings-dialog">
     <form method="dialog">
       <h2 data-t>Settings</h2>
-      <h3 data-t>Colour</h3>
-      <div id="swatches"></div>
-      <h3 data-t>Appearance</h3>
-      <div class="segmented" id="appearances">
-        <button type="button" data-appearance="system" data-t>System</button>
-        <button type="button" data-appearance="dark" data-t>Dark</button>
-        <button type="button" data-appearance="light" data-t>Light</button>
+      <div class="icon-row">
+        <div class="segmented" id="appearances" role="radiogroup">
+          <button type="button" data-appearance="system" data-icon="auto" data-t-title="System"></button>
+          <button type="button" data-appearance="dark" data-icon="moon" data-t-title="Dark"></button>
+          <button type="button" data-appearance="light" data-icon="sun" data-t-title="Light"></button>
+        </div>
+        <select id="language" class="field" data-t-title="Language"></select>
       </div>
-      <div id="mode-settings" hidden>
-        <h3 data-t>This computer's clipboard</h3>
-        <div class="segmented" id="modes"></div>
-        <p class="dim small" data-t>Own keeps this computer's copies here and the group's away from its clipboard; Fetch still brings the group's text. Shared sends copies to the group and takes the group's. Receive only takes them, Send only sends them.</p>
+      <div id="swatches"></div>
+      <label class="switch"><input type="checkbox" id="at-login"> <span data-t>Open at sign-in</span></label>
+      <label class="switch"><input type="checkbox" id="advanced"> <span data-t>Advanced settings</span></label>
+      <div id="advanced-box" hidden>
+        <h3 data-t>Advanced</h3>
+        <div class="menu-items">
+          <button type="button" class="glass" id="advanced-away" data-t>Away from home: hub and tunnel</button>
+          <button type="button" class="glass" id="advanced-recovery" data-t>Claim the group with its recovery key</button>
+        </div>
       </div>
       <h3 data-t>About</h3>
-      <label class="switch"><input type="checkbox" id="details"> <span data-t>Show error details</span></label>
-      <p class="dim small" data-t>Error messages show the error underneath them, to find out what failed.</p>
-      <p class="dim small mono" id="version"></p>
+      <button type="button" class="link dim small mono" id="version"></button>
+      <div id="details-row" hidden>
+        <label class="switch"><input type="checkbox" id="details"> <span data-t>Show error details</span></label>
+      </div>
       <menu><button value="ok" class="accent" data-t>Done</button></menu>
     </form>
   </dialog>

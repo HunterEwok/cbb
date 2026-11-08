@@ -74,9 +74,9 @@ impl Away {
         }
         let mut secret = vec![0u8; cbb_core::invite::MIN_SECRET];
         getrandom::fill(&mut secret).map_err(|_| Error::msg("cannot make a secret: the system has no randomness"))?;
-        let guest_key = key32(crate::tunnel::new_key()?);
-        let guest_psk = key32(crate::tunnel::new_key()?);
-        let guest_public = key32(crate::tunnel::public_of(&guest_key));
+        let guest_key = crate::tunnel::key32(&crate::tunnel::new_key()?)?;
+        let guest_psk = crate::tunnel::key32(&crate::tunnel::new_key()?)?;
+        let guest_public = crate::tunnel::key32(&crate::tunnel::public_of(&guest_key))?;
 
         // The client's answers, and its hang-up.
         let (answers, asked) = mpsc::sync_channel::<bool>(1);
@@ -239,7 +239,7 @@ impl Away {
         let addr = peer.addr;
         self.guests.lock().unwrap().insert(addr, Guest { peer, window, admitted: None, offered: false, done: false });
         self.set_peers(st);
-        Ok((key32(crate::tunnel::public_of(&st.serving_key())), endpoints, obfuscation))
+        Ok((crate::tunnel::key32(&crate::tunnel::public_of(&st.serving_key()?))?, endpoints, obfuscation))
     }
 
     /// Forgets a guest tunnel: its packets are dropped from then on.
@@ -306,11 +306,6 @@ pub(super) fn serve_guests(ln: TcpListener, hub: std::sync::Weak<Hub>, node: std
     });
 }
 
-/// A key of 32 bytes; a shorter one is zeros, which the hub refuses.
-fn key32(k: Vec<u8>) -> [u8; 32] {
-    k.as_slice().try_into().unwrap_or([0; 32])
-}
-
 /// The file in the state directory that holds the invitation a device
 /// joined with until it has the hub's offer: the service dials the hub
 /// through its guest tunnel meanwhile, to offer its own key.
@@ -371,7 +366,7 @@ fn guest_link(inv: &Invitation, log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<
         obfuscation,
         vless: None,
     };
-    let own = hub::guest_addr(&key32(crate::tunnel::public_of(&inv.guest_key)));
+    let own = hub::guest_addr(&crate::tunnel::key32(&crate::tunnel::public_of(&inv.guest_key))?);
     let peer = crate::tunnel::addr(&inv.hub).ok_or_else(|| Error::msg("the invitation names no hub"))?;
     crate::tunnel::Link::start_at(&st, &hub, own, peer, log)
 }

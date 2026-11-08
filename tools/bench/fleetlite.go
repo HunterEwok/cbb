@@ -81,7 +81,7 @@ func joinLite(ctx context.Context, hub, d *Device) error {
 	}); err != nil {
 		return err
 	}
-	_, err = Run(ctx, d, "cbb mode shared", "")
+	_, err = Run(ctx, d, "cbb sync on", "")
 	return err
 }
 
