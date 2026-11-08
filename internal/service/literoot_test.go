@@ -419,6 +419,12 @@ func TestLiteTakeover(t *testing.T) {
 
 	adminOn(t, cli, desk, "rust")
 	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
+	// The laptop gets its admin CA over its connection to the desk, which
+	// the desk's new admin may have just made it open again.
+	laptopID := laptop.status(t).Device
+	waitFor(t, "the desk connected to the laptop", func() bool {
+		return slices.ContainsFunc(desk.status(t).Peers, func(p control.Device) bool { return p.ID == laptopID })
+	})
 	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "laptop"); err != nil {
 		t.Fatalf("cbb admin laptop on the desk: %v\n%s", err, out)
 	}

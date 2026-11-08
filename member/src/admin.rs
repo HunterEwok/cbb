@@ -307,6 +307,19 @@ pub fn become_admin(dir: &Path, node: &Node, der: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Held while a takeover finishes: the new root signs the old root's
+/// settings again right after it becomes the root, and what reads the key
+/// level waits for that, as Go does both under one lock.
+static TAKEOVER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// The group's key level, hardware when no record sets it, once a takeover
+/// that is finishing has signed the settings again.
+fn settled_level(node: &Node) -> String {
+    drop(TAKEOVER.lock().unwrap_or_else(|e| e.into_inner()));
+    let l = node.records().lock().unwrap().state().key_level;
+    if l.is_empty() { "hardware".into() } else { l }
+}
+
 /// Makes this admin the group's root once the records make the new root of
 /// its claim the current one, as Go's finishTakeoverLocked: the claim's key
 /// becomes the root key, a member certificate from the new root replaces
@@ -316,8 +329,7 @@ pub fn become_admin(dir: &Path, node: &Node, der: &[u8]) -> Result<()> {
 pub fn finish_takeover(dir: &Path, node: &Node, name: &str) -> Result<bool> {
     // The claim's check and cbb takeover may finish at once; one does, and
     // the other then finds no claim.
-    static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
+    let _one = TAKEOVER.lock().unwrap_or_else(|e| e.into_inner());
     let f = admin_file(dir)?;
     let (Some(claim), Some(claim_key)) = (f.claim.as_deref(), f.claim_key.as_deref()) else { return Ok(false) };
     let claim_cert = Cert::parse(claim)?;
@@ -1003,8 +1015,7 @@ impl Admin<'_> {
 
     /// The group's key level, hardware when no record sets it.
     fn key_level(&self) -> String {
-        let l = self.node.records().lock().unwrap().state().key_level;
-        if l.is_empty() { "hardware".into() } else { l }
+        settled_level(self.node)
     }
 
     /// Sets the group's key level on its root, as Go's setKeyLevel,
@@ -1308,8 +1319,7 @@ impl Admin<'_> {
         let Some(s) = s.filter(|_| may) else {
             return Err(Error::msg("only the group's root or an admin that may be a hub sets the main hubs"));
         };
-        let level = self.node.records().lock().unwrap().state().key_level;
-        let level = if level.is_empty() { "hardware".to_string() } else { level };
+        let level = settled_level(self.node);
         let mut ids: Vec<String> = Vec::new();
         for t in targets {
             let d = find_device(self.node, t)?;
@@ -1703,8 +1713,7 @@ pub fn may_be_hub(dir: &Path, node: &Node) -> Result<()> {
     } else {
         "file"
     };
-    let level = node.records().lock().unwrap().state().key_level;
-    level_allows(if level.is_empty() { "hardware" } else { &level }, store, "this device", "", true)
+    level_allows(&settled_level(node), store, "this device", "", true)
 }
 
 /// The image sets CBB_CONTAINER (packaging/docker/Dockerfile). A container
