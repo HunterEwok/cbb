@@ -465,6 +465,7 @@ fn run_with(kit: &Kit, args: &str, esp: Esp, pi: Pi) -> Run {
     let card = card(&format!("plain-{}-{n}", args.replace(' ', "-")));
     std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
     std::fs::copy(kit.site.join("CBB.DRV"), card.join("cbb/CBB.DRV")).unwrap();
+    std::fs::copy(kit.site.join("CBB.OVL"), card.join("cbb/CBB.OVL")).unwrap();
     let run = run_on(kit, &card, args, esp, pi, Vec::new());
     let _ = std::fs::remove_dir_all(&card);
     run
@@ -522,10 +523,12 @@ fn run_after(
         .map(|b| format!("{:#06x}: {}", b.pc, b.what))
         .collect();
     assert!(breaches.is_empty(), "breaches:\n{}", breaches.join("\n"));
-    // Only an installed driver keeps its bank.
+    // Only an installed driver keeps its bank, and while the network
+    // runs the eleven for its images.
+    let images = if run.hw.img_banks != 0 { 11 } else { 0 };
     assert_eq!(
         run.hw.ours.iter().filter(|&&p| p).count(),
-        run.hw.drivers.len() - earlier,
+        run.hw.drivers.len() - earlier + images,
         "pages still taken"
     );
     run
@@ -1208,6 +1211,10 @@ fn leaves_the_start_to_the_driver_after_power_on() {
         "{line:?}"
     );
     assert_eq!(run.hw.boot_state, 1);
+    // The driver holds ten banks in a row and one more for showing images.
+    let (base, state) = (run.hw.img_banks as u8 as usize, (run.hw.img_banks >> 8) as usize);
+    assert!(base != 0 && base % 2 == 0, "{:#06x}", run.hw.img_banks);
+    assert!((base..base + 10).chain([state]).all(|b| run.hw.ours[b]));
     let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
     assert!(
         !pi.log.iter().any(|l| l.contains("next link")),
@@ -1217,6 +1224,10 @@ fn leaves_the_start_to_the_driver_after_power_on() {
     let waiting = |run: &mut Run| {
         run.hw.boot_state = 1;
         run.hw.drivers.push((124, Vec::new()));
+        for b in (40..50).chain([31]) {
+            run.hw.ours[b] = true;
+        }
+        run.hw.img_banks = 0x1F28;
     };
     for (args, says) in [
         ("text hello", "TRY AGAIN THEN"),
@@ -1236,6 +1247,8 @@ fn leaves_the_start_to_the_driver_after_power_on() {
         assert!(s.contains(says), "{args}: {s}");
         if args == "net off" {
             assert_eq!(run.hw.boot_state, 0, "net off ends it");
+            assert_eq!(run.hw.img_banks, 0, "and takes the driver's banks back");
+            assert!((40..50).chain([31]).all(|b| !run.hw.ours[b]));
         }
     }
     let _ = std::fs::remove_dir_all(&card);

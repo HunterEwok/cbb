@@ -42,6 +42,7 @@ PUBLIC _far_autoexec
 PUBLIC _far_install_end
 PUBLIC _far_net_restart
 PUBLIC _far_show
+PUBLIC _far_img_banks
 PUBLIC _rx_block
 PUBLIC _rx_dst
 PUBLIC _rx_left
@@ -74,6 +75,7 @@ EXTERN _install_end
 EXTERN _net_restart
 EXTERN _ovl_load
 EXTERN _show_run
+EXTERN _img_banks_run
 
 FAR_DATA    equ 15
 FAR_INSTALL equ 13
@@ -245,6 +247,12 @@ far_page:
 
 call_hl:
    jp (hl)
+
+; int far_img_banks(void): the driver's banks for images (cbb.c).
+_far_img_banks:
+   ld a,FAR_OVL
+   ld hl,_img_banks_run
+   jr far_call
 
 ; void rom_char(uint8_t c) __z88dk_fastcall
 ;

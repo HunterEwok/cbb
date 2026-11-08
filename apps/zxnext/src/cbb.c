@@ -203,6 +203,13 @@ static int link_fail(uint8_t err)
 #define DRV_ESP 4
 #define DRV_DROP 5
 #define DRV_CAP 6
+#define DRV_IMAGES 10
+
+// The driver's banks for showing the group's images while the network
+// runs: given (1) or taken back (0), in CBB.OVL's second page (far.asm,
+// far_img_banks()); a Next without the memory shows none.
+static uint8_t img_banks_on;
+extern int far_img_banks(void);
 
 static struct esx_drvapi drv;
 
@@ -1123,6 +1130,8 @@ static int net_start(int argc, char **argv)
     start_send(" -log /ram/link.log\n");
     if (booting) {
         if (driver(DRV_BOOT, BOOT_GO)) return fail(boot_cannot, boot_call);
+        img_banks_on = 1;
+        far_img_banks();
         if (!quiet) printf(boot_wait);
         return 0;
     }
@@ -1153,6 +1162,8 @@ static int net_start(int argc, char **argv)
         }
     }
     if (driver(DRV_SWITCH, 1)) return fail("the driver did not start", "M_DRVAPI 124 failed");
+    img_banks_on = 1;
+    far_img_banks();
     if (!quiet) printf("The Pi's network runs through\nthe ESP in the background.\n");
     return 0;
 }
@@ -1291,6 +1302,8 @@ int net_pair(void)
 static int net_stop(void)
 {
     uint8_t b = boot_state();
+    img_banks_on = 0;
+    far_img_banks();
     if (b && b <= BOOT_LINK) {
         driver(DRV_SWITCH, 0);
         printf(boot_none);
@@ -2275,11 +2288,55 @@ int paste_receive(void)
     return 0;
 }
 
+// The driver's banks (bank.asm, call 10): the ones it had go back, and
+// with img_banks_on ten in a row, the first even (Layer 2 takes 16K
+// banks), and one for what the screen showed go to it. NextZXOS gives
+// banks from the top down, so each is usually one under the last; the
+// ones of no use go back. Not static: far_img_banks() (far.asm) calls it.
+#define DRV_BANKS 10
+#define DRV_TRIES 32
+int img_banks_run(void)
+{
+    uint8_t got[DRV_TRIES], n = 0, run = 0, base = 0, b, i;
+    if (driver(DRV_IMAGES, 0)) return 1;
+    b = (uint8_t)drv.de;
+    if (b) {
+        for (i = 0; i < DRV_BANKS; i++) esx_ide_bank_free(ESX_BANKTYPE_RAM, b + i);
+        esx_ide_bank_free(ESX_BANKTYPE_RAM, drv.de >> 8);
+    }
+    if (!img_banks_on) return 0;
+    while (n < DRV_TRIES && (b = esx_ide_bank_alloc(ESX_BANKTYPE_RAM)) != NO_BANK) {
+        got[n] = b;
+        run = n && got[n - 1] == b + 1 ? run + 1 : 1;
+        n++;
+        if (run >= DRV_BANKS && !(b & 1)) {
+            base = b;
+            break;
+        }
+    }
+    // The state's bank: one more, or one of those of no use.
+    b = base ? esx_ide_bank_alloc(ESX_BANKTYPE_RAM) : NO_BANK;
+    for (i = 0; i < n; i++)
+        if (!base || got[i] < base || got[i] >= base + DRV_BANKS) {
+            if (b == NO_BANK && base) b = got[i];
+            else esx_ide_bank_free(ESX_BANKTYPE_RAM, got[i]);
+        }
+    if (!base || b == NO_BANK) {
+        if (base)
+            for (i = 0; i < DRV_BANKS; i++) esx_ide_bank_free(ESX_BANKTYPE_RAM, base + i);
+        return 1;
+    }
+    driver(DRV_IMAGES, (uint16_t)b << 8 | base);
+    return 0;
+}
+
 // Not static: far_uninstall() (far.asm) calls it, for leave too.
 // The network stops, for the Pi's shell.
 static void un_net(void)
 {
     if (net_on()) {
+        img_banks_on = 0;
+        far_img_banks();
         driver(DRV_SWITCH, 0);
         link_quit();
         esp_speed(ESP_SPEED);

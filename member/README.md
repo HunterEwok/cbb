@@ -331,13 +331,23 @@ before), `E` bytes from the ESP, `e` bytes for the ESP, `T` the clock (the date 
 MS-DOS's form, as NextZXOS's `M_DATE` gives them, each 16 bits little-endian),
 `A` how many bytes on the wire the driver has taken (16 bits, little-endian; the link
 sends at most 384 ahead, less than the Next's 512-byte buffer), `K` characters to type,
-`Q` to stop, `C` what `.cbb` types for the Pi's shell and `c` the answers for it. The link drives the ESP's stock AT firmware (AT 1.2) inside the `e` and `E`
+`Q` to stop, `C` what `.cbb` types for the Pi's shell and `c` the answers for it, and for
+the group's images (driver 0.3) `I` an image waits, `i` the driver froze the program for it
+and `J` its head: the mode (`L` or `H`) and the 16-bit sum of its bytes, little-endian, after
+which its bytes follow raw, as `cbb next image` sends them, outside the frames and the
+window. The link drives the ESP's stock AT firmware (AT 1.2) inside the `e` and `E`
 frames, with up to five connections (`AT+CIPMUX=1`) and the data in `+IPD` blocks.
 
 The link is also a remote paste target, `next`: once `cbb paste-receive on` is set, an
 admin's paste goes to the driver in `K` frames, 50 characters a second, and the driver types
 them into whatever program runs on the Next. As with the text console, the link has to run
 as root and a line break needs `-enter`.
+
+The link also asks the service to hear of the group's images (a `watch` with `images`):
+when a copy with a PNG or a JPEG has come and the member has fetched it, the link makes the
+Next's image of it, as `cbb next image` does, and sends `I`. A driver that holds banks for
+images (`.cbb net on` gives them) answers `i` at its next interrupt, and the link sends what
+waits before the head, the head and the bytes.
 
 While the network runs, `.cbb paste`, `copy` and `text` reach the Pi in `C` frames (driver
 0.2): the link takes the line `cbb [-debug] next paste|copy ...`, and nothing else, runs it

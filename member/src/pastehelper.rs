@@ -42,6 +42,12 @@ pub trait Target {
     /// no_lock_check lets it paste where nothing tells whether the session
     /// is locked.
     fn inject(&self, text: &str, method: &str, enter: bool, no_lock_check: bool) -> std::result::Result<(), Fail>;
+    /// Whether it wants to hear of the group's images (the Next does).
+    fn images(&self) -> bool {
+        false
+    }
+    /// A copy of images came to the group and the member fetched it.
+    fn image(&self) {}
 }
 
 const MIN_BACKOFF: Duration = Duration::from_secs(1);
@@ -78,7 +84,8 @@ pub(crate) fn serve(socket: &Path, target: &dyn Target, log: &dyn Fn(&str)) -> !
 fn session(socket: &Path, target: &dyn Target, log: &dyn Fn(&str)) -> Result<()> {
     let conn = UnixStream::connect(socket).context(format!("cannot reach the service at {}", socket.display()))?;
     let mut w = conn.try_clone().context("cannot reach the service")?;
-    let watch = Header { op: "watch".into(), inject: target.name().into(), ..Default::default() };
+    let watch =
+        Header { op: "watch".into(), inject: target.name().into(), images: target.images(), ..Default::default() };
     control::write(&mut w, &Message::new(watch, Vec::new()))?;
     let mut r = control::Reader::new(conn);
     let first = r.read()?.ok_or_else(|| Error::msg("the service closed the connection"))?;
@@ -87,6 +94,9 @@ fn session(socket: &Path, target: &dyn Target, log: &dyn Fn(&str)) -> Result<()>
     }
     log(&format!("cbb: pasting as the {} target", target.name()));
     while let Some(m) = r.read()? {
+        if m.header.op == "write" && m.header.kind == "media" {
+            target.image();
+        }
         if m.header.op != "inject" {
             continue;
         }

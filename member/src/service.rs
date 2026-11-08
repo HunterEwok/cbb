@@ -1329,7 +1329,10 @@ impl Service {
         *self.media.lock().unwrap() = Some(ev.clone());
         let Some(m) = ev.media.clone() else { return };
         let alt = (!w.text.is_empty()).then(|| WriteReq { kind: Kind::Text, media: None, event: None, ..w.clone() });
-        let node = self.node().ok().filter(|_| self.watchers.lock().unwrap().iter().any(|x| x.board && x.takes(&m)));
+        let node = self
+            .node()
+            .ok()
+            .filter(|_| self.watchers.lock().unwrap().iter().any(|x| (x.board || x.target == NEXT) && x.takes(&m)));
         let takers = node.is_some();
         if let Some(node) = node {
             let svc = self.clone();
@@ -1345,11 +1348,22 @@ impl Service {
                 }
                 let whole = fetched.is_ok().then_some(w);
                 svc.send_writes(|x| if x.takes(&m) { whole.clone().or_else(|| alt.clone()) } else { None });
+                if let Some(w) = whole {
+                    svc.tell_next(&m, w);
+                }
             });
         }
         let Some(alt) = alt else { return };
         if !self.send_writes(|x| if x.takes(&m) && takers { None } else { Some(alt.clone()) }) && !takers {
             *self.pending.lock().unwrap() = Some(alt);
+        }
+    }
+
+    /// Tells the Next's link of a copy of images it fetched, which the Next
+    /// shows over the program in front (docs: apps/zxnext/README.md).
+    fn tell_next(&self, m: &Manifest, w: WriteReq) {
+        for x in self.watchers.lock().unwrap().iter().filter(|x| x.target == NEXT && x.takes(m)) {
+            let _ = x.tx.try_send(ToWatcher::Write(w.clone()));
         }
     }
 

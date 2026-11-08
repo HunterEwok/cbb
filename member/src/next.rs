@@ -259,7 +259,7 @@ impl Drop for LineSpeed {
 
 /// The type and bytes of the first PNG or JPEG of the latest copy of
 /// images or files, which the service gives with paste-media.
-fn latest_image(g: &Global) -> Result<(String, Vec<u8>)> {
+pub(crate) fn latest_image(g: &Global) -> Result<(String, Vec<u8>)> {
     let conn = crate::connect(g)?;
     let mut w = conn.try_clone().context("cannot reach the service")?;
     control::write(

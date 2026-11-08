@@ -296,6 +296,8 @@ pub struct Next {
     /// cbb.drv's start in the background (call 9): its line and state.
     pub boot_line: Vec<u8>,
     pub boot_state: u8,
+    /// The driver's banks for images (call 10): the first, and the state's.
+    pub img_banks: u16,
     /// Whether cbb.drv runs the network (its call 2 switches it).
     pub net: bool,
     /// Whether cbb.drv carries .cbb's commands to the Pi while the network
@@ -669,6 +671,7 @@ impl Run {
             drivers: Vec::new(),
             boot_line: Vec::new(),
             boot_state: 0,
+            img_banks: 0,
             net: false,
             via: false,
             via_sent: Vec::new(),
@@ -1085,6 +1088,11 @@ impl Run {
             },
             3 => {
                 self.set(Reg16::DE, self.hw.net as u16);
+                self.ok();
+            }
+            10 => {
+                let old = std::mem::replace(&mut self.hw.img_banks, de);
+                self.set(Reg16::DE, old);
                 self.ok();
             }
             7 | 8 if !self.hw.via => self.carry(true),

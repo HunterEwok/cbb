@@ -213,6 +213,15 @@ the work:
   Pi's answers in a 1 KB ring of their own, which `.cbb` reads; while it reads, the Pi's
   frames wait in the Pi's UART when that ring is full too, and answers nobody reads are
   dropped;
+- it shows the group's images over the program in front (driver 0.3): when the Pi says an
+  image came, it freezes the program in its interrupt, keeps Layer 2's registers, clip
+  window, palette and port $123B in a bank of its own, shows the image as `.cbb show` does
+  (grey, column by column, the border flipping blue and yellow with each column that came,
+  then its colours), waits for a key with the border blinking, and puts everything back.
+  It needs the eleven banks `.cbb net on` gives it (88K, held while the network runs) and
+  NextZXOS's IM1 interrupt: under a program with its own IM2 handler the image waits. While
+  the image comes (about 7 seconds) the ESP's bytes are not read, so a connection may break
+  and is opened again;
 - it restores the UART selection it found, and stops on the Pi's quit frame.
 
 The frames are those of `cbb next link` (member/README.md, "The network through the Next's
@@ -222,7 +231,9 @@ frames, bytes taken; 2 on or off, and turning it on starts the counts again, as 
 dropped frame; 6 the last 64 bytes from the Pi, which `.cbb -d net` shows; 7 `.cbb`'s
 bytes for the Pi, D = 0 opens, 1 a byte in E, 2 sends what waits, 3 that and the frame that
 stops the command, 4 closes; 8 the next byte of the Pi's answers, in E with D = 1, or D = 0
-for none yet; driver 0.2). Its id, 124, is not
+for none yet; driver 0.2; 10 the banks for images, E the first of ten in a row, even, D
+the one for the screen they cover, E = 0 for none, and the ones before back in D and E;
+driver 0.3). Its id, 124, is not
 assigned by NextZXOS's maintainers yet.
 
 To use it, put `CBB` and `CBB.DRV` in `/cbb` (`.cbb install` does), join the ESP to the Wi-Fi network as NextZXOS's own
