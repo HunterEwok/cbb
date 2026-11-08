@@ -1660,12 +1660,15 @@ jobs:
           sh packaging/macos/sign.sh - "$app"
           for a in arm64 amd64; do
             CGO_ENABLED=1 GOARCH=$a go build -trimpath -o "$RUNNER_TEMP/cbb-$a" ./cmd/cbb
+            CGO_ENABLED=1 GOARCH=$a go build -trimpath -o "$RUNNER_TEMP/cbb-helper-$a" ./cmd/cbb-helper
             # A build without the Rust core, which sign.sh's run would refuse;
             # the build job checks that the release's runs signed.
             codesign --force --options runtime --identifier tools.cbb.cli \
               --entitlements packaging/macos/cbb.entitlements --sign - "$RUNNER_TEMP/cbb-$a"
+            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-helper-$a"
           done
           lipo -create "$RUNNER_TEMP/cbb-arm64" "$RUNNER_TEMP/cbb-amd64" -output "$RUNNER_TEMP/cbb"
+          lipo -create "$RUNNER_TEMP/cbb-helper-arm64" "$RUNNER_TEMP/cbb-helper-amd64" -output "$RUNNER_TEMP/cbb-helper"
           sh packaging/macos/pkg.sh 0.0.1 "$RUNNER_TEMP/cbb" "$app" "$RUNNER_TEMP/cbb-0.0.1.pkg"
           sudo installer -pkg "$RUNNER_TEMP/cbb-0.0.1.pkg" -target / -verboseR
           [ -x /Applications/CBB.app/Contents/MacOS/CBB ]
@@ -1673,8 +1676,9 @@ jobs:
           for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
           sudo /usr/local/bin/cbb status | grep -q 'Not in a group'
           [ ! -e "/Library/Application Support/cbb-package" ]
+          [ -x /usr/local/bin/cbb-helper ] && [ -x "/Library/Application Support/cbb/bin/cbb-helper" ]
           sudo sh /usr/local/share/cbb/uninstall.sh --purge
-          for f in /Applications/CBB.app /usr/local/bin/cbb "/Library/Application Support/cbb" /Library/LaunchDaemons/tools.cbb.plist; do
+          for f in /Applications/CBB.app /usr/local/bin/cbb /usr/local/bin/cbb-helper "/Library/Application Support/cbb" /Library/LaunchDaemons/tools.cbb.plist; do
             if [ -e "$f" ]; then
               echo "uninstall.sh left $f" >&2
               exit 1

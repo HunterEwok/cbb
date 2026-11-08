@@ -10,7 +10,11 @@ All notable changes to cbb are documented in this file. The format follows
 - The release archives carry `cbb-helper` beside `cbb`, and the installers (Linux, rootless,
   macOS, FreeBSD, Windows, Homebrew) install it there, owned by root where `cbb` is, and
   remove it again; CI checks that each archive and installer has it. OpenWrt and the
-  container image go without it.
+  container image go without it. The release builds it with the release's version (a
+  release `cbb` takes only a helper of its own release) and the Rust core, signs it with
+  Authenticode on Windows and with the Developer ID on macOS (identifier
+  `tools.cbb.helper`), notarizes it, puts it universal in the `.pkg`, and the Go bill of
+  materials lists its modules.
 - A new device shows a code, and a computer of the group types it: a device that listens to
   join announces itself by mDNS (TXT `j=1` and its fingerprint, docs/protocol.md sections 3
   and 6), and `cbb pair -qr` takes the six digits as well as the QR code's text, finds the

@@ -6,6 +6,7 @@
 # notarization requires:
 #
 #   sh packaging/macos/sign.sh IDENTITY path/to/cbb
+#   sh packaging/macos/sign.sh IDENTITY path/to/cbb-helper
 #   sh packaging/macos/sign.sh IDENTITY path/to/CBB.app
 #
 # IDENTITY is a Developer ID Application identity in a keychain (its SHA-1
@@ -14,17 +15,18 @@
 # the hardened runtime with its Rust core (cbb version). A Developer ID
 # signature carries a secure timestamp, which notarization requires; an ad hoc
 # one cannot. The binary keeps its identifier tools.cbb.cli, so that every
-# release is the same program to macOS. An app, built by xcodebuild without
+# release is the same program to macOS; cbb-helper, the Go helper cbb starts
+# as its child, keeps tools.cbb.helper. An app, built by xcodebuild without
 # signing, is signed from the inside out: its nested code first, then the
 # bundle, which keeps the identifier of its Info.plist.
 #
-# cbb is signed with cbb.entitlements beside this script: the Rust core,
-# which wazero compiles at run time, needs executable memory that no
-# signature covers. CBB.app runs no such code and asks for nothing.
+# cbb and cbb-helper are signed with cbb.entitlements beside this script:
+# the Rust core, which wazero compiles at run time, needs executable memory
+# that no signature covers. CBB.app runs no such code and asks for nothing.
 set -eu
 
 if [ $# -ne 2 ]; then
-	echo "usage: sh packaging/macos/sign.sh IDENTITY|- path/to/cbb|path/to/CBB.app" >&2
+	echo "usage: sh packaging/macos/sign.sh IDENTITY|- path/to/cbb|path/to/cbb-helper|path/to/CBB.app" >&2
 	exit 2
 fi
 identity=$1
@@ -55,7 +57,11 @@ case $bin in
 	;;
 esac
 
-sign "$bin" --identifier tools.cbb.cli --entitlements "$entitlements"
+identifier=tools.cbb.cli
+case $bin in
+*/cbb-helper | cbb-helper) identifier=tools.cbb.helper ;;
+esac
+sign "$bin" --identifier "$identifier" --entitlements "$entitlements"
 codesign --verify --strict --verbose=2 "$bin"
 # The runtime flag is what notarization and the checks below rely on.
 codesign --display --verbose=2 "$bin" 2>&1 | grep -q 'flags=.*runtime'
@@ -72,4 +78,9 @@ if [ "$(lipo -archs "$bin")" != "$(uname -m)" ] && ! arch -x86_64 /usr/bin/true 
 fi
 out=$("$bin" version)
 echo "$out"
+if [ "$identifier" = tools.cbb.helper ]; then
+	# The helper says only its version; the rules it runs are checked in cbb.
+	echo "$out" | grep -q '^cbb '
+	exit 0
+fi
 echo "$out" | grep -q '^rules: the Rust core .*, abi [0-9]'

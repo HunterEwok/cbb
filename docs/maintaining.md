@@ -495,7 +495,7 @@ Setting it up, once, on cbb.tools:
 
 ## Signing for Windows
 
-The release workflow signs `cbb.exe`, `cbbw.exe` and the tray app `cbb-desktop.exe` with Authenticode (`osslsigncode`, SHA-256,
+The release workflow signs `cbb.exe`, `cbbw.exe`, `cbb-helper.exe` and the tray app `cbb-desktop.exe` with Authenticode (`osslsigncode`, SHA-256,
 a timestamp from DigiCert) when the secrets hold a code signing certificate; without it they
 stay unsigned and SmartScreen warns on the first start. Setting it up, once:
 
@@ -517,7 +517,7 @@ which signs open-source projects for free with its own certificate:
   from tags, the code-signing policy page they ask for).
 - [ ] Once accepted, they give an organization id, a project slug and a signing policy; put
   `SIGNPATH_API_TOKEN` in the Actions secrets and the ids in Actions variables.
-- [ ] The release workflow then uploads the unsigned `cbb.exe`, `cbbw.exe` and `cbb-desktop.exe` as an
+- [ ] The release workflow then uploads the unsigned `cbb.exe`, `cbbw.exe`, `cbb-helper.exe` and `cbb-desktop.exe` as an
   artifact, submits it with SignPath's GitHub action, and archives the signed programs it
   gets back, in place of the `osslsigncode` step (which stays for a bought certificate).
 
@@ -526,9 +526,10 @@ it installs only programs with the same signer.
 
 ## Signing for macOS
 
-The release workflow signs `cbb` for macOS with the project's **Developer ID Application**
+The release workflow signs `cbb` and `cbb-helper` (identifier `tools.cbb.helper`, the same
+entitlement) for macOS with the project's **Developer ID Application**
 certificate and the hardened runtime (`packaging/macos/sign.sh`) and has Apple's notary
-service check it (`packaging/macos/notarize.sh`, `notarytool` signed in with the App Store
+service check each (`packaging/macos/notarize.sh`, `notarytool` signed in with the App Store
 Connect API key), so that Gatekeeper opens it without a warning. Without the secrets the
 program is signed ad hoc, as before. The certificates live in a keychain of the run's own
 (`packaging/macos/keychain.sh`), removed when the step ends. CI's build job signs every pull
