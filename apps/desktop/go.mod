@@ -9,7 +9,7 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/makiuchi-d/gozxing v0.1.1
-	github.com/wailsapp/wails/v3 v3.0.0-beta.34
+	github.com/wailsapp/wails/v3 v3.1.0-nightly.20261028
 	golang.org/x/sys v0.49.0
 	rsc.io/qr v0.2.0
 )
