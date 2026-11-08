@@ -692,7 +692,7 @@ pub struct ZXNextFile {
 
 /// The body of zxnext.json, signed by a release key: the Next's files of a
 /// release, which the Pi's cbb checks before `.cbb update` takes a newer
-/// CBB (docs/protocol.md, section 16, "The ZX Spectrum Next's files").
+/// CBB (docs/protocol.md, section 16, "Where the files are").
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ZXNext {
     pub version: String,

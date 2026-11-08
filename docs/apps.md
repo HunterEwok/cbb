@@ -123,7 +123,7 @@ they look, so both apps are built to the same plan.
    needs Face ID, the fingerprint or the passcode, and is done; removing an admin phone shows
    the devices it had admitted, which stay. On the root phone a computer's row also offers
    "Make it an admin" when the computer offers an admin key (docs/protocol.md, section 10,
-   "A computer as admin"): it asks once, warns that the key is a file on the computer, needs
+   "Admins"): it asks once, warns that the key is a file on the computer, needs
    Face ID, and the computer then adds and removes devices with `cbb pair` and
    `cbb remove`. If the removed phone held the root, this phone
    takes it over in the same step. On an admin phone a connected computer's house turns its sync

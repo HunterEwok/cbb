@@ -1200,8 +1200,7 @@ final class LiveGroup: GroupController {
         if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
     }
 
-    /// Makes a computer an admin (docs/protocol.md, section 10, "A computer
-    /// as admin"): the root key, after Face ID, certifies the admin key the
+    /// Makes a computer an admin (docs/protocol.md, section 10, "Admins"): the root key, after Face ID, certifies the admin key the
     /// computer offers; the computer gets its admin CA and every member the
     /// new record.
     func makeAdmin(_ id: String) async throws {

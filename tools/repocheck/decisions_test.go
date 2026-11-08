@@ -35,3 +35,17 @@ func TestCheckDecisions(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckReplacedCites(t *testing.T) {
+	register := "## Decisions in force\n\n| D-903 | partly replaced by D-904 | c |\n| D-904 | accepted | d |\n\n" +
+		"## Replaced decisions\n\n| D-902 | replaced by D-904 | b |\n"
+	files := map[string][]byte{
+		"docs/decisions.md": []byte(register),
+		"CHANGELOG.md":      []byte("- Done (D-902).\n"),
+		"docs/design.md":    []byte("Holds (D-903, D-904).\nHeld once\n(D-904 and D-902).\nSince D-902 it was so.\n"),
+	}
+	got := checkReplacedCites(files)
+	if len(got) != 1 || !strings.Contains(got[0], "docs/design.md:3: cites D-902, which D-904 replaced") {
+		t.Fatalf("checkReplacedCites = %q, want one problem on docs/design.md:3", got)
+	}
+}

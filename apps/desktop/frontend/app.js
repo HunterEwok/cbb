@@ -166,10 +166,6 @@ function glyph(d, size = 44) {
     `stroke-width="1.8" stroke-linecap="round">${shapes[kindOf(d)]}</svg></span>`;
 }
 
-// Sync on (mode shared) or off (mode own; docs/design.md, "Sync on and
-// off").
-const modeName = (m) => ({ shared: t("On"), own: t("Off") })[m] ?? m;
-
 // How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
 const tunnels = ["plain", "obfuscate", "vless"];
 const tunnelName = (m) => ({ plain: "WireGuard", obfuscate: "AmneziaWG", vless: "VLESS" })[m];
@@ -609,13 +605,13 @@ async function menuChoice(v, ref, level) {
     case "end": return moveBy(ref, level, Infinity);
     case "new": {
       const name = await ask(t("New collection"), t("The collection is kept on this computer only."), t("Save"), "");
-      if (name && name.trim()) await arrange({ op: "new", name: name.trim(), devices: [ref.slice(2)] });
+      if (name?.trim()) await arrange({ op: "new", name: name.trim(), devices: [ref.slice(2)] });
       return;
     }
     case "rename": {
       const c = collectionOf(ref.slice(2));
       const name = await ask(t("Rename collection"), t("The collection is kept on this computer only."), t("Save"), c?.name ?? "");
-      if (name && name.trim()) await arrange({ op: "rename", collection: ref.slice(2), name: name.trim() });
+      if (name?.trim()) await arrange({ op: "rename", collection: ref.slice(2), name: name.trim() });
       return;
     }
   }
@@ -822,7 +818,7 @@ async function deviceAction(action) {
   switch (action) {
     case "rename": {
       const name = await ask(t("Rename %s", d.name), t("Every device of the group shows the new name."), t("Rename"), d.name);
-      if (name && name.trim()) await act("Rename", d.id, name.trim());
+      if (name?.trim()) await act("Rename", d.id, name.trim());
       break;
     }
     case "remove":
@@ -1000,7 +996,7 @@ async function recovery() {
     return;
   }
   const key = await ask(t("Claim the group with its recovery key?"), t("Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does."), t("Claim"), "");
-  if (key && key.trim()) await act("Recover", key.trim());
+  if (key?.trim()) await act("Recover", key.trim());
 }
 
 // Joining a group: JoinGroup runs until the join ends, while the dialog

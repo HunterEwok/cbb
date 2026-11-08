@@ -46,6 +46,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **48.** The name Copy Beyond Borders, short CBB, in 0.6 ([BRAND.md](../BRAND.md#the-name)):
     CBB under the icons, the full name in the stores, the docs and the site; the apps'
     identifiers start with `tools.cbb`.
+- **63.** Copies sealed end to end, in 0.6 (D-84; [protocol.md](protocol.md), section 4,
+    "Sealing").
 
 ### Partly done
 
@@ -159,6 +161,12 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 
     Later, point 8: the hubs' order from a table the root signs (D-65) instead of one derived
     from the roles.
+- **64.** **The service in Rust, for 0.6** (D-88;
+    [design](design.md#the-service-and-its-helper)): the Rust `cbb` as the service and the
+    command line on every computer, with the Go `cbb-helper` as its child for what needs Go.
+    The program and its helper are in; the whole command line in Rust, the relay's server in
+    Rust (the forwarder stays in Go) and the removal of the Go member's code follow, its
+    rules staying as the tests' reference.
 
 ### Next
 

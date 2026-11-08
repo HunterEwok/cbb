@@ -19,6 +19,13 @@
 //     its Go and Rust files keeps its own copyright notice instead of the
 //     header;
 //   - the documentation's links, names and command reference hold (docs.go);
+//   - the register of decisions is consistent, and no text outside it and
+//     CHANGELOG.md cites a replaced decision (decisions.go);
+//   - every reference to a section of docs/protocol.md, and to a heading
+//     it quotes, exists, and the protocol's contents list its sections
+//     (protocol.go);
+//   - no note of work left to do in the code: the work goes into
+//     docs/roadmap.md (notes.go);
 //   - the Android apps' version is the last release in CHANGELOG.md
 //     (version.go);
 //   - no compiled program (ELF, Mach-O, PE) and no file over 1 MiB is
@@ -49,7 +56,7 @@ import (
 	"unicode"
 )
 
-const spdxLine = "// SPDX-License-Identifier: AGPL-3.0-only"
+const spdxLine = "// SPDX-" + "License-Identifier: AGPL-3.0-only"
 
 var copyrightLine = regexp.MustCompile(`^// Copyright \(C\) \d{4}(-\d{4})? HunterEwok$`)
 
@@ -114,6 +121,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 		problems = append(problems, check(f.name, f.data, listed)...)
 		problems = append(problems, checkDocs(f.name, f.data, contents)...)
 		problems = append(problems, checkOldName(f.name, f.data)...)
+		problems = append(problems, checkWorkNotes(f.name, f.data)...)
 	}
 	problems = append(problems, checkCommands(contents)...)
 	problems = append(problems, checkFlags(contents)...)
@@ -123,6 +131,8 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 	problems = append(problems, checkEnv(contents)...)
 	problems = append(problems, checkIndex(contents)...)
 	problems = append(problems, checkDecisions(contents)...)
+	problems = append(problems, checkReplacedCites(contents)...)
+	problems = append(problems, checkProtocolRefs(contents)...)
 	problems = append(problems, checkPlanned(contents)...)
 	problems = append(problems, checkAndroidVersion(contents)...)
 	problems = append(problems, checkSpecVersions(contents)...)

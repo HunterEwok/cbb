@@ -144,3 +144,17 @@ these before the bench has run them.
 
 A failing test is a finding, never noise: find the cause before running it again. A test is
 never skipped, disabled or retried until green to make CI pass.
+
+## Unstable tests
+
+A test that fails only now and then is a red test too, with a cause to find: a race in the
+code, a wait too short for a slow runner, or an order the test assumes. The nightly
+workflow's `unstable` job runs the members' tests ten times over, with the Go service and
+with the Rust `cbb`, and its summary lists every test that failed and how often. A test
+found there goes into this table with what is known of its cause, and leaves it with the
+fix that removes the cause.
+
+| Test | Where | Seen | What is known |
+|---|---|---|---|
+| `TestSeveralHubs` | `internal/service` | about one run in six, 2026-11 | not yet found |
+| `TestWindow` | `apps/desktop`, Windows | rarely, 2026-11 | Chrome gave no DevTools port within 30 seconds; the test now prints Chrome's error output, to be read when it fails again |

@@ -164,7 +164,7 @@ func (s *Service) settleRecords(fresh []group.Record) {
 // 10, "The copies setting"), and whether the current event's origin is
 // still a member. A copy from a device removed since, or from a root an
 // admin took the group over from, is dropped then, so it is never written
-// later (docs/protocol.md, section 4, "Writing the member's own clipboard").
+// later (docs/protocol.md, section 5, "Writing the member's own clipboard").
 func (s *Service) applyCopyRules() {
 	s.mu.Lock()
 	eng := s.eng

@@ -415,7 +415,7 @@ func (e *Engine) CurrentCopy() (string, *Sealed) {
 
 // Forget drops the group's current event when it is the event id: its
 // origin was removed from the group, so its copy no longer counts and is
-// never written (docs/protocol.md, section 4, "Writing the member's own
+// never written (docs/protocol.md, section 5, "Writing the member's own
 // clipboard"). What the local clipboard already holds stays. It reports
 // whether it dropped one.
 func (e *Engine) Forget(id string) bool {

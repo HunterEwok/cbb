@@ -109,7 +109,7 @@ apps" below).
   compares the same way everywhere.
 - **Member port**: CBB's one port, TCP 8764 unless the installer was given another,
   advertised in the mDNS SRV record. Every computer and lite member listens there for mutual
-  TLS (Macs since D-46); phones only dial, except a phone that is the hub. The ALPN protocol of a connection picks
+  TLS (Macs too, D-50); phones only dial, except a phone that is the hub. The ALPN protocol of a connection picks
   what it gets (docs/protocol.md, section 4):
   - members and the phone app, with the member ALPN protocol and mutual TLS;
   - pairing, with its own ALPN protocol.

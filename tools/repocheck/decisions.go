@@ -82,3 +82,46 @@ func checkDecisions(files map[string][]byte) []string {
 	}
 	return problems
 }
+
+// decisionCite matches a citation of decisions in parentheses, such as
+// "(D-14)" or "(D-9, D-33 and D-51)": the form a document uses to say that
+// a decision stands behind what it describes.
+var decisionCite = regexp.MustCompile(`\((D-\d+(?:(?:, | and |, and )D-\d+)*)\)`)
+
+// checkReplacedCites reports a citation of a replaced decision outside the
+// register and the changelog: a text that cites one describes what no longer
+// holds, as design.md did with D-10 and D-19. A decision replaced only in
+// part may still be cited.
+func checkReplacedCites(files map[string][]byte) []string {
+	data, ok := files["docs/decisions.md"]
+	if !ok {
+		return nil
+	}
+	replacedBy := map[string]string{}
+	for _, line := range strings.Split(string(data), "\n") {
+		m := decisionRow.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		if s := decisionStatus.FindStringSubmatch(strings.TrimSpace(m[2])); s != nil && s[2] != "" {
+			replacedBy[m[1]] = s[2]
+		}
+	}
+	idRef := regexp.MustCompile(`D-\d+`)
+	var problems []string
+	for _, name := range sortedKeys(files) {
+		if name == "docs/decisions.md" || name == "CHANGELOG.md" {
+			continue
+		}
+		text := string(files[name])
+		for _, loc := range decisionCite.FindAllStringSubmatchIndex(text, -1) {
+			for _, id := range idRef.FindAllString(text[loc[2]:loc[3]], -1) {
+				if by, ok := replacedBy[id]; ok {
+					line := strings.Count(text[:loc[0]], "\n") + 1
+					problems = append(problems, fmt.Sprintf("%s:%d: cites %s, which %s replaced; cite the decision in force", name, line, id, by))
+				}
+			}
+		}
+	}
+	return problems
+}
