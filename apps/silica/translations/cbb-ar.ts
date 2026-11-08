@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>اكتب محتوى الحافظة على %1</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>جهاز لوحة المفاتيح</translation>
+    </message>
+    <message>
         <source>Back to the group's order</source>
         <translation>العودة إلى ترتيب المجموعة</translation>
     </message>
@@ -413,6 +421,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>لوحة مفاتيح بلوتوث</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>العمل كلوحة مفاتيح بلوتوث</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>متوقف</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>متصل</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>لا يعمل</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>يعمل</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>الإعدادات</translation>
@@ -986,6 +1018,128 @@
     <message>
         <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
         <translation>لا توجد أجهزة في هذه التجميعة بعد. اضغط مطولًا على مربع جهاز في الصفحة الرئيسية لنقله إلى هنا.</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>لم يستجب بلوتوث الهاتف. ربما لا يُسمح لـ CBB باستخدامه.</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>لا يستطيع بلوتوث هذا الهاتف العمل كلوحة مفاتيح.</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>البلوتوث متوقف. شغّله من إعدادات الهاتف، ثم شغّل لوحة المفاتيح مرة أخرى.</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>تعذّر على الهاتف أن يعمل كلوحة مفاتيح.</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>لم يقبل بلوتوث الهاتف لوحة المفاتيح.</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>تعذّر على الهاتف الإعلان عن لوحة المفاتيح.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>لا يوجد جهاز متصل. اتصل بهذا الهاتف من الجهاز، من إعدادات البلوتوث فيه.</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>لا توجد نصوص في الحافظة.</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>يحتوي النص على أكثر من %1 حرف، وهذا أكثر مما تكتبه لوحة المفاتيح.</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>لا يحتوي تخطيط الجهاز على مفتاح لـ: %1. اختر تخطيطه في الأعلى.</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>انقطع الجهاز؛ لم يُكتب النص كاملًا.</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>لوحة مفاتيح بلوتوث</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>العمل كلوحة مفاتيح بلوتوث</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>يكتب هذا الهاتف في تلفاز أو جهاز لوحي أو جهاز ألعاب أو حاسوب مقترن به، دون تثبيت أي شيء عليه: محتوى الحافظة، بلمسة منك.</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>جارٍ التحضير…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>متصل بـ %1.</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>يوجد جهاز متصل.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>لا يوجد جهاز متصل. اتصل بهذا الهاتف من الجهاز، من إعدادات البلوتوث فيه.</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>مرئي لمدة %1 ث</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>اجعل هذا الهاتف مرئيًا</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>أثناء ظهوره، يجد الجهاز الجديد هذا الهاتف باسم “CBB keyboard” في إعدادات البلوتوث.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>حاول مرة أخرى</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>تخطيط لوحة مفاتيح الجهاز</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>الإنجليزية (الولايات المتحدة)</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>الروسية</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>السرعة</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>%1 حرفًا في الثانية</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>جارٍ الكتابة…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>اكتب محتوى الحافظة</translation>
     </message>
 </context>
 </TS>

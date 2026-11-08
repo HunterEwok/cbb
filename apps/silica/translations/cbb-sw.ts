@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>Andika ubao wa kunakili kwenye %1</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>kifaa cha kibodi</translation>
+    </message>
+    <message>
         <source>Back to the group's order</source>
         <translation>Rudi kwenye mpangilio wa kikundi</translation>
     </message>
@@ -413,6 +421,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>Kibodi ya Bluetooth</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>Fanya kazi kama kibodi ya Bluetooth</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Imezimwa</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>Imeunganishwa</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>Haifanyi kazi</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Imewashwa</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>Mipangilio</translation>
@@ -986,6 +1018,128 @@
     <message>
         <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
         <translation>Bado hakuna vifaa kwenye mkusanyiko huu. Shikilia kigae cha kifaa kwenye ukurasa mkuu ili kukihamishia hapa.</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>Bluetooth ya simu haikujibu. Huenda CBB hairuhusiwi kuitumia.</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>Bluetooth ya simu hii haiwezi kufanya kazi kama kibodi.</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>Bluetooth imezimwa. Iwashe kwenye mipangilio ya simu, kisha uwashe kibodi tena.</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>Simu haikuweza kuwa kibodi.</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>Bluetooth ya simu haikukubali kibodi.</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>Simu haikuweza kutangaza kibodi.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>Hakuna kifaa kilichounganishwa. Unganisha na simu hii kutoka kwenye kifaa, katika mipangilio yake ya Bluetooth.</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>Ubao wa kunakili hauna maandishi.</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>Maandishi yana herufi zaidi ya %1, zaidi ya kibodi inavyoandika.</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>Mpangilio wa kifaa hauna kitufe cha: %1. Chagua mpangilio wake hapo juu.</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>Kifaa kiliondoka; maandishi hayakuandikwa yote.</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>Kibodi ya Bluetooth</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>Fanya kazi kama kibodi ya Bluetooth</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>Simu hii huandika kwenye TV, kompyuta kibao, konsoli au kompyuta iliyooanishwa nayo, bila kusakinisha chochote huko: ubao wa kunakili, ukigusa.</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>Inajiandaa…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>Imeunganishwa na %1.</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>Kifaa kimeunganishwa.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>Hakuna kifaa kilichounganishwa. Unganisha na simu hii kutoka kwenye kifaa, katika mipangilio yake ya Bluetooth.</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>Inaonekana kwa sekunde %1</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>Fanya simu hii ionekane</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>Ikiwa inaonekana, kifaa kipya huipata simu hii kama “CBB keyboard” kwenye mipangilio yake ya Bluetooth.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Jaribu tena</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>Mpangilio wa kibodi wa kifaa</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>Kiingereza (Marekani)</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>Kirusi</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Kasi</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>Herufi %1 kwa sekunde</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>Inaandika…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>Andika ubao wa kunakili</translation>
     </message>
 </context>
 </TS>

@@ -633,6 +633,17 @@ meanwhile. The layouts are the same tables (`internal/keyboard`, checked against
 vectors). The tests run against a fake BlueZ on a private bus; a real adapter and host are
 not yet tried.
 
+The Aurora app is a Bluetooth LE keyboard as the Linux computer is (`src/blekeyboard.cpp`): it
+registers the same HID over GATT service with the phone's BlueZ, through the sandbox's
+`Bluetooth` permission, and takes the reports and the report map from the core's `keyboard`
+call (`cbb_core::keyboard`). Settings, Bluetooth keyboard has the switch, **Make this phone
+visible** (two minutes, as "CBB keyboard"), the device's layout, the speed (10, 20 or 40) and
+**Type the clipboard**; the main page's pull-down menu types the clipboard too while a device
+is connected. Aurora's own pairing dialog asks about a new device, so the app has no agent.
+Remote pastes are not typed there yet: the Aurora app takes no remote paste. Not yet tried on
+the phone: whether the store's check takes the `Bluetooth` permission for a regular app, and
+whether the sandbox lets BlueZ call the app's objects.
+
 ## A computer as a TV's remote
 
 A computer can also type on a TV without Bluetooth, as the TV's own remote over the home

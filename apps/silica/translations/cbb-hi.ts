@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>%1 पर क्लिपबोर्ड टाइप करें</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>कीबोर्ड वाले डिवाइस</translation>
+    </message>
+    <message>
         <source>Back to the group's order</source>
         <translation>समूह के क्रम पर लौटें</translation>
     </message>
@@ -413,6 +421,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>ब्लूटूथ कीबोर्ड</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>ब्लूटूथ कीबोर्ड की तरह काम करें</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>बंद</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>कनेक्ट है</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>काम नहीं कर रहा</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>चालू</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>सेटिंग्स</translation>
@@ -986,6 +1018,128 @@
     <message>
         <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
         <translation>इस संग्रह में अभी कोई डिवाइस नहीं है। किसी डिवाइस को यहाँ लाने के लिए मुख्य पेज पर उसकी टाइल दबाकर रखें।</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>फ़ोन के ब्लूटूथ ने जवाब नहीं दिया। हो सकता है CBB को उसे इस्तेमाल करने की अनुमति न हो।</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>इस फ़ोन का ब्लूटूथ कीबोर्ड की तरह काम नहीं कर सकता।</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>ब्लूटूथ बंद है। फ़ोन की सेटिंग में उसे चालू करें, फिर कीबोर्ड दोबारा चालू करें।</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>फ़ोन कीबोर्ड नहीं बन सका।</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>फ़ोन के ब्लूटूथ ने कीबोर्ड स्वीकार नहीं किया।</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>फ़ोन कीबोर्ड की घोषणा नहीं कर सका।</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>कोई डिवाइस कनेक्ट नहीं है। डिवाइस की ब्लूटूथ सेटिंग से इस फ़ोन से कनेक्ट करें।</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>क्लिपबोर्ड में कोई टेक्स्ट नहीं है।</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>टेक्स्ट में %1 से ज़्यादा अक्षर हैं, जितने कीबोर्ड टाइप करता है उससे ज़्यादा।</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>डिवाइस के लेआउट में इनके लिए कोई कुंजी नहीं है: %1। ऊपर उसका लेआउट चुनें।</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>डिवाइस डिस्कनेक्ट हो गया; टेक्स्ट पूरा टाइप नहीं हुआ।</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>ब्लूटूथ कीबोर्ड</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>ब्लूटूथ कीबोर्ड की तरह काम करें</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>यह फ़ोन अपने साथ पेयर किए गए टीवी, टैबलेट, कंसोल या कंप्यूटर में टाइप करता है, वहाँ कुछ इंस्टॉल नहीं करना पड़ता: आपके टैप करने पर क्लिपबोर्ड।</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>तैयार हो रहा है…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>%1 से कनेक्ट है।</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>एक डिवाइस कनेक्ट है।</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>कोई डिवाइस कनेक्ट नहीं है। डिवाइस की ब्लूटूथ सेटिंग से इस फ़ोन से कनेक्ट करें।</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>%1 सेकंड तक दिखेगा</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>इस फ़ोन को दिखने योग्य बनाएँ</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>जब तक यह दिखता है, नया डिवाइस इसे अपनी ब्लूटूथ सेटिंग में “CBB keyboard” नाम से ढूँढ लेता है।</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>फिर से कोशिश करें</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>डिवाइस का कीबोर्ड लेआउट</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>अंग्रेज़ी (अमेरिका)</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>रूसी</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>गति</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>%1 अक्षर प्रति सेकंड</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>टाइप हो रहा है…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>क्लिपबोर्ड टाइप करें</translation>
     </message>
 </context>
 </TS>

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "admit.h"
+#include "blekeyboard.h"
 #include "events.h"
 #include "join.h"
 #include "member.h"
@@ -40,6 +41,7 @@ class App : public QObject
     Q_PROPERTY(Member *member READ member CONSTANT)
     Q_PROPERTY(Admit *admit READ admit CONSTANT)
     Q_PROPERTY(Events *events READ events CONSTANT)
+    Q_PROPERTY(BleKeyboard *keyboard READ keyboard CONSTANT)
     // Settings: the error details under each error message (Errors::
     // showDetails), the language the next start uses ("" for the
     // system's), and whether the main page shows the devices as a list.
@@ -81,6 +83,7 @@ public:
     Member *member() { return &m_node; }
     Admit *admit() { return &m_admit; }
     Events *events() { return &m_events; }
+    BleKeyboard *keyboard() { return &m_keyboard; }
 
     bool errorDetails() const;
     void setErrorDetails(bool on);
@@ -176,6 +179,7 @@ private:
     Member m_node;
     Admit m_admit;
     Events m_events;
+    BleKeyboard m_keyboard;
     bool m_busy = false;
     QTimer m_renewTimer;
     QTimer m_claimTimer;

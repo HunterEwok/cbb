@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>Набрать буфер обмена на %1</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>устройстве клавиатуры</translation>
+    </message>
+    <message>
         <source>Back to the group's order</source>
         <translation>Вернуть порядок группы</translation>
     </message>
@@ -413,6 +421,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>Bluetooth-клавиатура</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>Работать как Bluetooth-клавиатура</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Выкл.</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>Подключено</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>Не работает</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Вкл.</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>Настройки</translation>
@@ -986,6 +1018,128 @@
     <message>
         <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
         <translation>В коллекции пока нет устройств. Удерживайте плитку устройства на главном экране, чтобы переместить его сюда.</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>Bluetooth телефона не ответил. Возможно, CBB не разрешено им пользоваться.</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>Bluetooth этого телефона не может работать как клавиатура.</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>Bluetooth выключен. Включите его в настройках телефона, затем снова включите клавиатуру.</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>Телефону не удалось стать клавиатурой.</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>Bluetooth телефона не принял клавиатуру.</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>Телефону не удалось объявить клавиатуру.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>Ни одно устройство не подключено. Подключитесь к этому телефону с устройства, в его настройках Bluetooth.</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>В буфере обмена нет текста.</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>В тексте больше %1 символов — больше, чем набирает клавиатура.</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>В раскладке устройства нет клавиши для: %1. Выберите его раскладку выше.</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>Устройство отключилось; текст набран не полностью.</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>Bluetooth-клавиатура</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>Работать как Bluetooth-клавиатура</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>Телефон набирает текст на телевизоре, планшете, приставке или компьютере, с которым он сопряжён, и там ничего не нужно устанавливать: буфер обмена, по вашему нажатию.</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>Подготовка…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>Подключено к %1.</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>Устройство подключено.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>Ни одно устройство не подключено. Подключитесь к этому телефону с устройства, в его настройках Bluetooth.</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>Виден ещё %1 с</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>Сделать телефон видимым</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>Пока телефон виден, новое устройство найдёт его в своих настройках Bluetooth как «CBB keyboard».</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Попробовать снова</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>Раскладка устройства</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>Английская (США)</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>Русская</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Скорость</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>%1 символов в секунду</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>Набираю…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>Набрать буфер обмена</translation>
     </message>
 </context>
 </TS>

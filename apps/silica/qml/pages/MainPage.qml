@@ -58,6 +58,12 @@ Page {
                 onClicked: pageStack.push(Qt.resolvedUrl("AddDevicePage.qml"))
             }
             MenuItem {
+                visible: app.keyboard.state === "connected"
+                text: qsTr("Type the clipboard on %1").arg(app.keyboard.host !== "" ? app.keyboard.host : qsTr("the keyboard's device"))
+                enabled: !app.keyboard.typing
+                onClicked: app.keyboard.typeClipboard()
+            }
+            MenuItem {
                 visible: app.member.running
                 text: qsTr("Sync the clipboard")
                 onClicked: app.member.button()

@@ -184,6 +184,14 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>הקלדת הלוח ב-%1</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>המכשיר של המקלדת</translation>
+    </message>
+    <message>
         <source>Back to the group's order</source>
         <translation>חזרה לסדר של הקבוצה</translation>
     </message>
@@ -413,6 +421,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>מקלדת בלוטות'</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>שימוש כמקלדת בלוטות'</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>כבוי</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>מחובר</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>לא עובד</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>פועל</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>הגדרות</translation>
@@ -986,6 +1018,128 @@
     <message>
         <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
         <translation>עדיין אין מכשירים באוסף הזה. לחצו לחיצה ארוכה על אריח של מכשיר בדף הראשי כדי להעביר אותו לכאן.</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>הבלוטות' של הטלפון לא ענה. ייתכן ש-CBB לא מורשה להשתמש בו.</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>הבלוטות' של הטלפון הזה לא יכול לשמש כמקלדת.</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>הבלוטות' כבוי. הפעילו אותו בהגדרות הטלפון, ואז הפעילו שוב את המקלדת.</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>הטלפון לא הצליח לשמש כמקלדת.</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>הבלוטות' של הטלפון לא קיבל את המקלדת.</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>הטלפון לא הצליח לפרסם את המקלדת.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>אין מכשיר מחובר. התחברו לטלפון הזה מהמכשיר, בהגדרות הבלוטות' שלו.</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>אין טקסט בלוח.</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>בטקסט יש יותר מ-%1 תווים, יותר ממה שמקלדת מקלידה.</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>בפריסה של המכשיר אין מקש עבור: %1. בחרו את הפריסה שלו למעלה.</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>המכשיר התנתק; הטקסט לא הוקלד במלואו.</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>מקלדת בלוטות'</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>שימוש כמקלדת בלוטות'</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>הטלפון הזה מקליד בטלוויזיה, בטאבלט, בקונסולה או במחשב שהוא מותאם אליהם, בלי להתקין שם דבר: את הלוח, בהקשה שלכם.</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>מתכונן…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>מחובר אל %1.</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>מכשיר מחובר.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>אין מכשיר מחובר. התחברו לטלפון הזה מהמכשיר, בהגדרות הבלוטות' שלו.</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>גלוי עוד %1 שנ'</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>הפיכת הטלפון לגלוי</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>כל עוד הטלפון גלוי, מכשיר חדש מוצא אותו בהגדרות הבלוטות' שלו בשם “CBB keyboard”.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>ניסיון נוסף</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>פריסת המקלדת של המכשיר</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>אנגלית (ארה״ב)</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>רוסית</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>מהירות</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>%1 תווים בשנייה</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>מקליד…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>הקלדת הלוח</translation>
     </message>
 </context>
 </TS>

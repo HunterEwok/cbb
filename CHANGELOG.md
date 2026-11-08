@@ -19,6 +19,10 @@ All notable changes to cbb are documented in this file. The format follows
   a tile or a row moves it, puts it into a collection or a new one and takes it out, a
   collection's tile shows how many of its devices are online and opens its page, and the
   pull-down menu has New collection… and Back to the group's order.
+- The Aurora app can be a Bluetooth keyboard: as the Linux computer, it registers the HID over
+  GATT service with the phone's BlueZ, and types the clipboard into a TV, a tablet or a
+  computer paired with it, in the device's layout (US or Russian) and at 10, 20 or 40
+  characters a second. The reports come from the core's new `keyboard` call.
 - `cbb-helper`, the Go helper of the Rust program `cbb` (docs/design.md, "The service and its
   helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
   its hello and starts it again when it stops. It does nothing else yet; the steps that make
