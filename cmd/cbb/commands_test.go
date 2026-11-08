@@ -321,7 +321,7 @@ func TestWriteDevices(t *testing.T) {
 		if strings.Contains(line, "c3") && !strings.Contains(line, "admin        off ") {
 			t.Errorf("deck's line lacks sync off: %q", line)
 		}
-		if strings.Contains(line, "c3") && !strings.Contains(line, "full, hub ") {
+		if strings.Contains(line, "c3") && !strings.Contains(line, "member, hub ") {
 			t.Errorf("deck's line does not say it is a hub: %q", line)
 		}
 		if strings.Contains(line, "d4") && !strings.Contains(line, "hub that only passes copies on") {
