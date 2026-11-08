@@ -491,12 +491,11 @@ pub fn run(cfg: Config) -> Result<()> {
             (node.clone(), cfg.state_dir.clone(), cfg.name.clone(), log.clone(), away.clone(), creds.clone());
         std::thread::spawn(move || {
             let (mut last, mut failed) = (String::new(), String::new());
-            let renewed = std::sync::Mutex::new(std::collections::HashMap::new());
             // The server credentials are brought up to date when the records
             // or the credentials change, and twice a day for the period.
             let (mut cred_seen, mut cred_at) = ((String::new(), usize::MAX), std::time::Instant::now());
             while !node.is_closed() {
-                crate::admin::renew_admin_cas(&dir, &node, &renewed);
+                crate::admin::renew_admin_cas(&dir, &node);
                 let seen = (node.records().lock().unwrap().digest(), creds.changes());
                 if seen != cred_seen || cred_at.elapsed() >= CREDENTIAL_CHECK {
                     creds.refresh(&node);
@@ -727,7 +726,9 @@ impl Service {
             }
             let in_group = matches!(Identity::load(&self.state_dir), Ok(Some(_)));
             if !in_group || std::time::Instant::now() >= deadline || STOP.load(Ordering::SeqCst) {
-                return Err(Error::msg("this device is in no group; run cbb pair"));
+                return Err(Error::msg(
+                    "this device is in no group; run cbb new here to start one, or cbb pair to join one",
+                ));
             }
             std::thread::sleep(Duration::from_millis(20));
         }

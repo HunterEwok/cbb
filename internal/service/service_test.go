@@ -210,8 +210,20 @@ func (s *testService) logged(part string) bool {
 // addr returns the member port's address.
 func (s *testService) addr() string {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.memberAddr
+	addr := s.memberAddr
+	s.mu.Unlock()
+	if addr != "" {
+		return addr
+	}
+	// A child service (the Rust one) says where it listens.
+	s.logMu.Lock()
+	defer s.logMu.Unlock()
+	for _, l := range s.lines {
+		if _, p, ok := strings.Cut(l, "listening on port "); ok {
+			return "127.0.0.1:" + strings.TrimSpace(p)
+		}
+	}
+	return ""
 }
 
 func startService(t *testing.T, h *hub, name string) *testService {
@@ -254,8 +266,17 @@ func (l countingListener) Accept() (net.Conn, error) {
 	return c, err
 }
 
+// rustService is the Rust service's binary (member/) when
+// CBB_TEST_RUST_SERVICE names it: the tests that start a Linux member with
+// the default configuration then run it in place of the Go service, which
+// finds its peers by mDNS rather than through the hub.
+func rustService() string { return os.Getenv("CBB_TEST_RUST_SERVICE") }
+
 func startIn(t *testing.T, h *hub, s *testService) *testService {
 	t.Helper()
+	if bin := rustService(); bin != "" && s.cfg == nil && s.os == group.OSLinux {
+		return startRust(t, bin, s)
+	}
 	s.socket, s.done = filepath.Join(s.dir, "c.sock"), make(chan error, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
@@ -1841,4 +1862,13 @@ func TestPairingAcrossARenewal(t *testing.T) {
 	if m, err := c.Receive(); err != nil || m.Name != "b" {
 		t.Fatalf("pair ended with %+v, %v", m, err)
 	}
+}
+
+// startRust runs s on the Rust service as a computer's (-full), on a port
+// of its own, which addr reads from its log once it is in a group.
+func startRust(t *testing.T, bin string, s *testService) *testService {
+	t.Helper()
+	r := startLiteEnv(t, bin, s.dir, nil, "-full", "-port", "0", "-name", s.name)
+	r.name, r.os = s.name, s.os
+	return r
 }

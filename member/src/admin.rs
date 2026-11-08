@@ -414,13 +414,20 @@ fn after_takeover(dir: &Path, node: &Node, old_root: Hash, name: &str) {
     node.logf("cbb: the claim took effect; this device is the group's root now");
 }
 
+/// The root each admin got its admin CA from, by device: from cbb admin
+/// (make_admin) or renew_admin_cas, so neither gives a second one. One
+/// service runs in a process.
+static ADMIN_CAS_SENT: Mutex<std::collections::BTreeMap<String, [u8; 32]>> =
+    Mutex::new(std::collections::BTreeMap::new());
+
 /// On the group's root, gives each connected admin computer whose admin
 /// CA is from an earlier root, as after a takeover, a new admin CA for the
 /// same key from this root, as Go's renewAdminCAs: the records name the
 /// key, so they stay, and a takeover by that admin later hangs under this
 /// root. The key comes from the admin CA in its chain, or from its hello.
-/// sent remembers, by device, the root each got one from.
-pub fn renew_admin_cas(dir: &Path, node: &Node, sent: &Mutex<HashMap<String, [u8; 32]>>) {
+/// ADMIN_CAS_SENT remembers, by device, the root each got one from.
+pub fn renew_admin_cas(dir: &Path, node: &Node) {
+    let sent = &ADMIN_CAS_SENT;
     let ident = node.identity();
     let Ok(Some(s)) = signer(dir, &ident) else { return };
     if !s.root {
@@ -849,7 +856,19 @@ impl Admin<'_> {
             identity::sign_external(&*s.key, tbs)
         })?;
         let admin = Hash(Cert::parse(&ca)?.key_hash());
-        self.sign(
+        // Its connection still shows no admin CA, and its hello the admin
+        // key: renew_admin_cas, which may run as soon as the record below is
+        // in the set, must not give it a second one, as in Go. Noted before
+        // signing, and undone if it never gets this one.
+        let before = ADMIN_CAS_SENT.lock().unwrap().insert(d.id.clone(), s.ca.key_hash());
+        let undo = || {
+            let mut sent = ADMIN_CAS_SENT.lock().unwrap();
+            match before {
+                Some(b) => sent.insert(d.id.clone(), b),
+                None => sent.remove(&d.id),
+            };
+        };
+        let signed = self.sign(
             &s,
             Body {
                 kind: authority::TYPE_DEVICE.into(),
@@ -865,8 +884,13 @@ impl Admin<'_> {
                 seal: d.seal.clone(),
                 ..Default::default()
             },
-        )?;
+        );
+        if let Err(e) = signed {
+            undo();
+            return Err(e);
+        }
         if !self.node.send_to(&peer.id, cbb_core::wire::admin(&ca)) {
+            undo();
             return Err(Error::msg(format!(
                 "{} left before it got its admin CA; it is listed as an admin, so run cbb admin again when it is back",
                 d.name
