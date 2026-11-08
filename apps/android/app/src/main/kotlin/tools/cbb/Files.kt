@@ -24,12 +24,53 @@ import java.io.IOException
  * Files between the phone and the group (docs/design.md, "Images and
  * files"): what the user shares with the app goes to the computers, and
  * the files a computer copied are saved in Downloads, in a folder
- * "CBB", when the button fetches them. Android apps rarely
+ * "CBB", when the button fetches them; one image or video goes to the
+ * gallery's album "CBB" (Pictures/CBB or Movies/CBB) instead, as
+ * Telegram and WhatsApp put what they receive, and as the Aurora app does. Android apps rarely
  * put files on the clipboard, so neither side uses it for files.
  */
 object Files {
-    /** Where saved files go, under Downloads. */
+    /** Where saved files go, under Downloads, Pictures and Movies. */
     const val FOLDER = "CBB"
+
+    /** What [save] did: how many files it saved, and whether the one it saved went to the gallery. */
+    data class Saved(val count: Int, val gallery: Boolean)
+
+    /** The MIME type of a file by its name's extension, or null. */
+    private fun typeOf(name: String): String? = MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
+
+    /** Whether a file of type goes to the gallery: an image or a video. */
+    fun forGallery(type: String?): Boolean = type != null && (type.startsWith("image/") || type.startsWith("video/"))
+
+    /**
+     * Puts f, an image or a video of type, in the gallery's album "CBB"
+     * (Pictures/CBB or Movies/CBB) under name; a name taken there gets a
+     * number from Android.
+     */
+    fun toGallery(context: Context, f: File, name: String, type: String) {
+        val video = type.startsWith("video/")
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, type)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, (if (video) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_PICTURES) + "/" + FOLDER)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val collection = if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        insert(context, collection, values, f, "the gallery")
+    }
+
+    /** Writes f to a new item of collection with values, pending until it is whole; where names the place in errors. */
+    private fun insert(context: Context, collection: Uri, values: ContentValues, f: File, where: String) {
+        val cr = context.contentResolver
+        val uri = cr.insert(collection, values) ?: throw IOException("$where took no file")
+        try {
+            (cr.openOutputStream(uri) ?: throw IOException("$where took no file")).use { out -> f.inputStream().use { it.copyTo(out) } }
+            cr.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+        } catch (x: Exception) {
+            cr.delete(uri, null, null)
+            throw x
+        }
+    }
 
     /** What the user shared: one image, which goes as an image, or files. */
     sealed class Shared {
@@ -74,11 +115,6 @@ object Files {
         return Shared.Many(files)
     }
 
-    /**
-     * Fetches every file of e from the computers and saves it in
-     * Downloads/CBB, with its folders; it returns how many it
-     * saved. A name taken there gets a number from Android.
-     */
     /** The folder in the cache the node opens a fetched copy into, emptied after each. */
     const val FETCHED = "fetched"
 
@@ -100,8 +136,12 @@ object Files {
         }
     }
 
-    fun save(context: Context, node: CoreMember, e: CoreMember.Copy, m: Media.Manifest): Int {
-        val cr = context.contentResolver
+    /**
+     * Fetches every file of e from the computers and saves it in
+     * Downloads/CBB, with its folders, or one image or video in the
+     * gallery's album "CBB". A name taken there gets a number from Android.
+     */
+    fun save(context: Context, node: CoreMember, e: CoreMember.Copy, m: Media.Manifest): Saved {
         var saved = 0
         // The copy's sealed blob holds the bytes of all its files, fetched
         // and opened before any is saved.
@@ -111,27 +151,26 @@ object Files {
             File(context.cacheDir, FETCHED).deleteRecursively()
             throw x
         }
-        for (p in parts) {
-            if (p.dir) continue
-            val path = p.path ?: continue
+        val files = parts.filter { !it.dir && it.path != null }
+        val one = files.singleOrNull()
+        val oneType = one?.let { it.type?.takeIf(::forGallery) ?: typeOf(it.path!!) }
+        val gallery = one != null && forGallery(oneType)
+        for (p in files) {
+            val path = p.path!!
             val f = p.file
             try {
                 val name = path.substringAfterLast('/')
-                val dir = path.substringBeforeLast('/', "")
-                val values = ContentValues().apply {
-                    put(MediaStore.Downloads.DISPLAY_NAME, name)
-                    put(MediaStore.Downloads.RELATIVE_PATH, listOf(Environment.DIRECTORY_DOWNLOADS, FOLDER, dir).filter { it.isNotEmpty() }.joinToString("/"))
-                    MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
-                        ?.let { put(MediaStore.Downloads.MIME_TYPE, it) }
-                    put(MediaStore.Downloads.IS_PENDING, 1)
-                }
-                val uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: throw IOException("Downloads took no file")
-                try {
-                    (cr.openOutputStream(uri) ?: throw IOException("Downloads took no file")).use { out -> f.inputStream().use { it.copyTo(out) } }
-                    cr.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
-                } catch (x: Exception) {
-                    cr.delete(uri, null, null)
-                    throw x
+                if (gallery) {
+                    toGallery(context, f, name, oneType!!)
+                } else {
+                    val dir = path.substringBeforeLast('/', "")
+                    val values = ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, name)
+                        put(MediaStore.Downloads.RELATIVE_PATH, listOf(Environment.DIRECTORY_DOWNLOADS, FOLDER, dir).filter { it.isNotEmpty() }.joinToString("/"))
+                        typeOf(name)?.let { put(MediaStore.Downloads.MIME_TYPE, it) }
+                        put(MediaStore.Downloads.IS_PENDING, 1)
+                    }
+                    insert(context, MediaStore.Downloads.EXTERNAL_CONTENT_URI, values, f, "Downloads")
                 }
                 saved++
             } finally {
@@ -139,6 +178,6 @@ object Files {
             }
         }
         File(context.cacheDir, FETCHED).deleteRecursively()
-        return saved
+        return Saved(saved, gallery)
     }
 }
