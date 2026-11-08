@@ -1510,7 +1510,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1531,10 +1531,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: the Swift phone admits the Go joiner, and Go reads its member frames
+      - name: Go reads the Swift phone's member frames
         if: runner.os == 'Linux'
         run: |
-          CBB_SWIFT_INTEROP="$PWD/cbb-interop" go test ./internal/pair -run TestSwiftMemberAdmitsGoJoiner -v
           # swift test just wrote testdata/interop/swift-member.json, and to
           # interop-out the records it signed, a certificate it renewed and
           # what an admin phone makes.
@@ -1553,17 +1552,19 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: the Swift phone admits the Go joiner and syncs with a Go member over TLS
+      - name: the Swift phone pairs both ways with the computers' cbb and syncs with it over TLS
         if: runner.os == 'macOS'
         run: |
+          # The computer is the Rust cbb, with cbb-helper beside it.
+          cargo build --locked --release -p cbb-lite
+          go build -o target/release/cbb-helper ./cmd/cbb-helper
           # A throwaway keychain for the tool's identity, unlocked and the default.
           security create-keychain -p ci ci.keychain
           security list-keychains -d user -s ci.keychain
           security default-keychain -s ci.keychain
           security unlock-keychain -p ci ci.keychain
           security set-keychain-settings ci.keychain
-          CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 3m ./internal/pair -run 'TestSwiftMemberAdmitsGoJoinerTLS|TestSwiftHubAdmitsInvitedGoJoiner|TestSwiftJoinsComputerRoot' -v
-          CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 3m ./internal/node -run 'TestSwiftMemberTLS|TestSwiftRestoresWithRecoveryKey' -v
+          CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 5m ./internal/service -run 'TestSwift' -v
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: runner.os == 'macOS'
         with:
@@ -1891,15 +1892,17 @@ jobs:
           cache: false
       - name: Go reads what the Kotlin kit signed
         run: CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
-      - name: Go pairs and syncs with the Kotlin kit over TLS
+      - name: the Kotlin kit pairs both ways with the computers' cbb and syncs with it over TLS
         # The Kotlin twin of cbb-interop plays the phone; Conscrypt
         # gives it TLS 1.3 on Linux as on Android.
         run: |
           (cd apps/android && ./gradlew --no-daemon -p kit interopScript)
           tool="$PWD/apps/android/kit/build/interop/cbb-interop"
-          CBB_SWIFT_INTEROP="$tool" go test ./internal/pair -run 'TestSwiftMemberAdmitsGoJoiner$' -v
-          CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/pair -run 'TestSwiftMemberAdmitsGoJoinerTLS|TestSwiftHubAdmitsInvitedGoJoiner|TestSwiftJoinsComputerRoot' -v
-          CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/node -run 'TestSwiftMemberTLS|TestSwiftRestoresWithRecoveryKey' -v
+          # The computer is the Rust cbb, with cbb-helper beside it.
+          rustup toolchain install stable --profile minimal
+          cargo +stable build --locked --release -p cbb-lite
+          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 5m ./internal/service -run 'TestSwift' -v
       - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'

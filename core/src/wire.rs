@@ -8,6 +8,7 @@ use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -142,6 +143,16 @@ pub fn with_release(mut m: Message, order: (u64, u64)) -> Message {
     m
 }
 
+/// m, a hello, carrying the group's first root, DER (section 4, "Hello":
+/// only on a connection that carries records only with a device no device
+/// record names).
+pub fn with_group_ca(mut m: Message, der: &[u8]) -> Message {
+    if let Some(Value::Object(h)) = m.hello.as_mut() {
+        h.insert("group_ca".into(), to_value(&base64::engine::general_purpose::STANDARD.encode(der)));
+    }
+    m
+}
+
 /// The answer to a command (section 15): `done`, `refused` or `failed`, and
 /// why for the last two.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
@@ -231,6 +242,13 @@ pub struct HelloBody {
     /// one that serves the content of media events.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub features: Vec<String>,
+    /// From a full member on a connection that carries records only with a
+    /// device no device record names: the group's first root, DER, so that
+    /// a phone restoring the group with the recovery key builds the group's
+    /// path from the records (section 4, "Hello"; section 10, "The recovery
+    /// key").
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    pub group_ca: Option<Vec<u8>>,
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -406,6 +424,7 @@ pub fn hello(
         release_seq: 0,
         release_keys_seq: 0,
         features: Vec::new(),
+        group_ca: None,
     };
     Message { kind: "hello".into(), role: role.into(), hello: Some(to_value(&body)), ..Default::default() }
 }
@@ -544,6 +563,19 @@ pub fn frame_len(head: [u8; 4], max: usize) -> Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::{CommandResult, DeviceInfo, archive_name_valid, decode};
+
+    /// A records-only hello carries the group's first root in base64, which
+    /// a hello decodes back; every other hello leaves it out.
+    #[test]
+    fn group_ca_in_a_hello() {
+        let h = super::Hello { wall: 1, current: None };
+        let m = super::hello(&h, "d".into(), "full", "pi", "linux", &DeviceInfo::default(), None, "own", None, &[], "file", None, (0, 0), None);
+        assert!(!serde_json::to_string(&m.hello).unwrap().contains("group_ca"));
+        let m = super::with_group_ca(m, &[1, 2, 3]);
+        assert_eq!(m.hello.as_ref().unwrap()["group_ca"], "AQID");
+        let (_, body) = super::decode_hello(m.hello.as_ref()).unwrap();
+        assert_eq!(body.group_ca.as_deref(), Some(&[1u8, 2, 3][..]));
+    }
 
     /// A hello's archive is kept only when it is named as
     /// packaging/archive.sh names them, as Go's archivePattern.

@@ -956,6 +956,11 @@ impl Records {
         &self.tag
     }
 
+    /// The group's first root, which names the group.
+    pub fn group_ca(&self) -> &Cert {
+        &self.group_ca
+    }
+
     /// For every signer of the set, the highest seq the set holds of it:
     /// what a removal, a freeze or a claim names in seen, sorted by key.
     pub fn seen(&self) -> Vec<Seen> {

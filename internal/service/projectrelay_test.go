@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/node"
 	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/release"
 )
@@ -27,7 +26,7 @@ func (s *releaseSigner) signRelayKeys(t *testing.T, seq uint64, relays ...relay.
 func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, relays ...relay.Keys) string {
 	t.Helper()
 	s.keysSeq = seq
-	var set node.EntriesSet
+	var set entriesSet
 	if err := json.Unmarshal([]byte(s.signEntries(t, seq, "/relay-path-01")), &set); err != nil {
 		t.Fatal(err)
 	}

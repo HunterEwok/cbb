@@ -16,7 +16,6 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
-	"github.com/HunterEwok/cbb/internal/node"
 	"github.com/HunterEwok/cbb/internal/release"
 )
 
@@ -41,7 +40,7 @@ func (s *releaseSigner) signEntries(t *testing.T, seq uint64, path string) strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := json.Marshal(node.EntriesSet{Keys: keys, Entries: e})
+	data, err := json.Marshal(entriesSet{Keys: keys, Entries: e})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +66,7 @@ func TestEntriesSpread(t *testing.T) {
 		if err != nil {
 			return 0
 		}
-		var set node.EntriesSet
+		var set entriesSet
 		var e release.Entries
 		if json.Unmarshal(m.Payload, &set) != nil || json.Unmarshal(set.Entries.Body, &e) != nil {
 			return 0
@@ -117,7 +116,7 @@ func TestLiteEntries(t *testing.T) {
 	}
 	waitFor(t, "the lite member keeps the entry points", func() bool {
 		data, err := os.ReadFile(filepath.Join(dir, "entries.json"))
-		var set node.EntriesSet
+		var set entriesSet
 		var e release.Entries
 		return err == nil && json.Unmarshal(data, &set) == nil && json.Unmarshal(set.Entries.Body, &e) == nil && e.Seq == 2
 	})
@@ -129,4 +128,11 @@ func TestLiteEntries(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, other.signEntries(t, 3, "/forged-path-1")); err == nil {
 		t.Error("pi took entry points signed under other roots")
 	}
+}
+
+// entriesSet is the body of an entries message (docs/protocol.md): the
+// signer's keys.json and the entry points it signed.
+type entriesSet struct {
+	Keys    release.File `json:"keys"`
+	Entries release.File `json:"entries"`
 }

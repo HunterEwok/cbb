@@ -2330,7 +2330,16 @@ fn writer(
                     who.admin_key.read().unwrap().as_deref(),
                 );
                 let m = wire::with_features(m, if content.is_some() && !c.records_only { &["media"] } else { &[] });
-                Some(wire::with_release(m, if c.records_only { (0, 0) } else { releases.order(uptime::wall_ms()) }))
+                let m = wire::with_release(m, if c.records_only { (0, 0) } else { releases.order(uptime::wall_ms()) });
+                // A full member hands the group's first root to a device no
+                // record names, as a phone restoring the group with the
+                // recovery key, which builds the group's path from it.
+                let rs = records.lock().unwrap();
+                Some(if c.records_only && who.role == "full" && rs.refused_peer(&c.chain) == Some(Refusal::NotListed) {
+                    wire::with_group_ca(m, &rs.group_ca().der)
+                } else {
+                    m
+                })
             }
             Out::Event(ev, queued) => {
                 let mut s = ev.sealed?;
