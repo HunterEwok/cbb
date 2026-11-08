@@ -2004,14 +2004,15 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: the MIPS builds under qemu with Go members, all but sync away from home
-        # The hubs' tests need the tunnel, which the MIPS build leaves out.
+        # The hubs' and the invitations' tests need the tunnel, which the
+        # MIPS build leaves out.
         # qemu-user translates netlink for a big-endian guest badly, so
         # musl's getifaddrs, which a pairing window's addresses call, hangs
         # or crashes under qemu-mips (and works under qemu-mipsel):
         # TestLiteRootWindow runs on mipsel only.
         run: |
           for a in mips mipsel; do
-            skip='TestLiteMemberAway|TestLiteHub|TestLiteForwardOnly|TestLiteRelay'
+            skip='TestLiteMemberAway|TestLiteHub|TestLiteForwardOnly|TestLiteRelay|TestLiteInvite|TestLiteJoinInvite'
             if [ "$a" = mips ]; then skip="$skip|TestLiteRootWindow"; fi
             # Ubuntu 26.04's qemu-user is static and has no -static names.
             q=$(command -v "qemu-$a-static" || command -v "qemu-$a")
