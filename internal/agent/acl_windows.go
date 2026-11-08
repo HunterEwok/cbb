@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-package main
+package agent
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ import (
 // open another user's process; without this it names the agent's user
 // nobody, and gives it no remote pastes and no quick actions.
 func letServiceQuery() error {
-	sid, _, _, err := windows.LookupSID("", `NT SERVICE\`+serviceName)
+	sid, _, _, err := windows.LookupSID("", `NT SERVICE\cbb`)
 	if err != nil {
 		return fmt.Errorf("the service's account: %w", err)
 	}

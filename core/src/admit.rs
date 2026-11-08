@@ -231,6 +231,10 @@ pub enum Outcome {
     /// The Welcome is out, and the device counts as admitted: the program
     /// adds its device record (device_record) and keeps feeding.
     Admitted(Box<Admitted>),
+    /// The joiner proved that it knows a remote invitation's secret: the
+    /// program asks the admin about this device, then calls
+    /// [`Admission::answer`].
+    Confirm(Request),
     /// The joiner answered the Welcome: whether it stored its identity.
     /// The admission is over.
     Done { confirmed: bool },
@@ -245,10 +249,28 @@ pub struct Step {
     pub outcome: Outcome,
 }
 
+/// A device that used a remote invitation, for its admin to confirm, as
+/// Go's pair.Request: its fingerprint is the one the device shows.
+#[derive(Clone, Debug)]
+pub struct Request {
+    pub device: DeviceId,
+    pub name: String,
+    pub os: String,
+    pub fingerprint: String,
+}
+
 enum State {
     Handshake,
     First,
-    Confirm { st: Box<cpace::State>, joiner: Joiner },
+    Confirm {
+        st: Box<cpace::State>,
+        joiner: Joiner,
+    },
+    /// The joiner proved the secret; the admin is asked.
+    Asking {
+        st: Box<cpace::State>,
+        joiner: Joiner,
+    },
     Done,
     Over,
 }
@@ -266,7 +288,11 @@ pub struct Admission {
     exporter: Arc<Exporter>,
     admitter: Admitter,
     view: GroupView,
-    code: String,
+    /// The CPace password: the code's digits, or an invitation's secret.
+    password: Vec<u8>,
+    /// The admin confirms the device before it is admitted (an
+    /// invitation's window).
+    confirming: bool,
     fingerprint: String,
     sid: [u8; 32],
     joiner_der: Vec<u8>,
@@ -304,7 +330,8 @@ impl Admission {
             exporter,
             admitter,
             view,
-            code,
+            password: code.into_bytes(),
+            confirming: false,
             fingerprint: fingerprint.to_string(),
             sid: [0; 32],
             joiner_der: Vec::new(),
@@ -328,6 +355,34 @@ impl Admission {
         exporter: Arc<Exporter>,
     ) -> Result<Admission> {
         let code = pair::normalize_code(code)?;
+        Self::accepting(admitter, view, code.into_bytes(), false, session, exporter)
+    }
+
+    /// An admission like accept for a remote invitation's window, with its
+    /// secret in place of a code (Go's pair.Options.Secret): once the
+    /// joiner proved the secret, the step's outcome is
+    /// [`Outcome::Confirm`], and the admin's answer decides.
+    pub fn accept_secret(
+        admitter: Admitter,
+        view: GroupView,
+        secret: &[u8],
+        session: Session,
+        exporter: Arc<Exporter>,
+    ) -> Result<Admission> {
+        if secret.len() < pair::MIN_SECRET {
+            return Err(Error::msg("the invitation's secret is too short"));
+        }
+        Self::accepting(admitter, view, secret.to_vec(), true, session, exporter)
+    }
+
+    fn accepting(
+        admitter: Admitter,
+        view: GroupView,
+        password: Vec<u8>,
+        confirming: bool,
+        session: Session,
+        exporter: Arc<Exporter>,
+    ) -> Result<Admission> {
         if !admitter.ca.is_ca || !admitter.ca.cert_sign {
             return Err(Error::msg("this device is not an admin of the group"));
         }
@@ -336,7 +391,8 @@ impl Admission {
             exporter,
             admitter,
             view,
-            code,
+            password,
+            confirming,
             fingerprint: String::new(),
             sid: [0; 32],
             joiner_der: Vec::new(),
@@ -407,11 +463,13 @@ impl Admission {
                     Ok(next) => self.state = next,
                     Err(o) => return Ok(o),
                 },
-                State::Confirm { st, joiner } => return self.confirm(f, &st, joiner, now_ms),
+                State::Confirm { st, joiner } => return self.confirm(f, st, joiner, now_ms),
                 State::Done => {
                     return Ok(Outcome::Done { confirmed: f.ok });
                 }
-                State::Handshake | State::Over => return Err(Error::msg("the frames came out of order")),
+                State::Handshake | State::Asking { .. } | State::Over => {
+                    return Err(Error::msg("the frames came out of order"));
+                }
             }
         }
         if self.session.peer_closed() {
@@ -461,7 +519,7 @@ impl Admission {
         // refused before the exchange.
         if self.view.devices.contains(device.as_str()) {
             self.send(&Out { error: "taken", ..Default::default() });
-            return Err(fail(Error::with("the pairing failed", Refusal::Taken)));
+            return Err(fail(Error::with(format!("pair: {}", Refusal::Taken), Refusal::Taken)));
         }
         let (Some(msg), Some(ad)) = (f.msg, f.ad) else {
             return Err(fail(Error::msg("the joining device sent a bad first frame")));
@@ -475,7 +533,7 @@ impl Admission {
         let ci = pair::channel_id(&id.cert.der, &self.joiner_der);
         let started = cpace::start(&cpace::Config {
             role: cpace::Role::Responder,
-            password: self.code.as_bytes(),
+            password: &self.password,
             channel_id: &ci,
             session_id: &self.sid,
             ad: &my_ad,
@@ -490,18 +548,63 @@ impl Admission {
         Ok(State::Confirm { st: Box::new(st), joiner: Joiner { device, point: cert.public_key().to_vec(), info } })
     }
 
-    /// Takes the joiner's confirmation, then issues and sends the Welcome.
-    fn confirm(&mut self, f: In, st: &cpace::State, joiner: Joiner, now_ms: i64) -> Result<Outcome> {
+    /// Takes the joiner's confirmation, then asks the admin about the
+    /// device in an invitation's window, else issues and sends the Welcome.
+    fn confirm(&mut self, f: In, st: Box<cpace::State>, joiner: Joiner, now_ms: i64) -> Result<Outcome> {
         if !f.error.is_empty() {
-            return Err(Error::with("the pairing failed", Refusal::of(&f.error)));
+            return Err(Error::with(format!("pair: {}", Refusal::of(&f.error)), Refusal::of(&f.error)));
         }
         if st.verify(&f.tag.unwrap_or_default()).is_err() {
             self.send(&Out { error: "wrong-code", ..Default::default() });
             return Ok(Outcome::Failed {
-                error: Error::with("the pairing failed", Refusal::WrongCode),
+                error: Error::with(format!("pair: {}", Refusal::WrongCode), Refusal::WrongCode),
                 wrong_code: true,
             });
         }
+        if self.confirming {
+            let r = Request {
+                device: joiner.device.clone(),
+                name: joiner.info.name.clone(),
+                os: joiner.info.os.clone(),
+                fingerprint: certs::fingerprint(&self.joiner_der),
+            };
+            self.state = State::Asking { st, joiner };
+            return Ok(Outcome::Confirm(r));
+        }
+        self.welcome(&st, joiner, now_ms)
+    }
+
+    /// Takes the admin's answer about the device of an
+    /// [`Outcome::Confirm`]: yes admits it, as the step's outcome says; no
+    /// tells the joiner that the admin declined.
+    pub fn answer(&mut self, yes: bool, now_ms: i64) -> Step {
+        let outcome = match core::mem::replace(&mut self.state, State::Over) {
+            State::Asking { st, joiner } if yes => match self.welcome(&st, joiner, now_ms) {
+                Ok(o) => o,
+                Err(error) => {
+                    if !self.told {
+                        self.send(&Out { error: Refusal::Refused.code(), ..Default::default() });
+                    }
+                    Outcome::Failed { error, wrong_code: false }
+                }
+            },
+            State::Asking { .. } => {
+                self.send(&Out { error: Refusal::Declined.code(), ..Default::default() });
+                Outcome::Failed {
+                    error: Error::with(format!("pair: {}", Refusal::Declined), Refusal::Declined),
+                    wrong_code: false,
+                }
+            }
+            _ => Outcome::Failed { error: Error::msg("nothing waits for the admin's answer"), wrong_code: false },
+        };
+        if matches!(outcome, Outcome::Failed { .. }) {
+            let _ = self.session.close();
+        }
+        Step { send: self.session.take_outgoing(), outcome }
+    }
+
+    /// Issues the joiner's certificate and sends the Welcome.
+    fn welcome(&mut self, st: &cpace::State, joiner: Joiner, now_ms: i64) -> Result<Outcome> {
         let info = &joiner.info;
         let a = &self.admitter;
         if !info.admin_key.is_empty() {

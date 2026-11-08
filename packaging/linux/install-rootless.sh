@@ -143,6 +143,10 @@ install -d -m 0755 "${cbb%/*}" "$share" "$units"
 install -d -m 0700 "$state" "${env%/*}"
 install -m 0755 "$bin" "$cbb.new"
 mv "$cbb.new" "$cbb"
+if [ -f "$(dirname "$bin")/cbb-helper" ]; then
+	install -m 0755 "$(dirname "$bin")/cbb-helper" "${cbb%/*}/cbb-helper.new"
+	mv "${cbb%/*}/cbb-helper.new" "${cbb%/*}/cbb-helper"
+fi
 install -m 0644 "$here/uninstall.sh" "$share/uninstall.sh"
 install -m 0644 "$here/../tmux/cbb.conf" "$share/tmux.conf"
 place "$here/cbb-rootless.service" "$units/cbb.service"

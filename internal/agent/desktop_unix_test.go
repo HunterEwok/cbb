@@ -3,7 +3,7 @@
 
 //go:build linux || freebsd
 
-package main
+package agent
 
 import (
 	"os"

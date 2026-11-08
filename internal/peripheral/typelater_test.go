@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-package service
+package peripheral
 
 import (
 	"context"
@@ -13,17 +13,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/node"
 	"github.com/HunterEwok/cbb/internal/tvremote"
 )
 
 // TestTypeLater checks that a paste typed after its answer goes one at a
 // time on a target and stops once it may no longer go on.
 func TestTypeLater(t *testing.T) {
-	defer func(d time.Duration) { typingCheck = d }(typingCheck)
-	typingCheck = 10 * time.Millisecond
-	s := &Service{logf: t.Logf}
+	defer func(d time.Duration) { TypingCheck = d }(TypingCheck)
+	TypingCheck = 10 * time.Millisecond
+	s := &Host{Logf: t.Logf}
 	var allowed atomic.Bool
 	allowed.Store(true)
 	stopped := make(chan error, 1)
@@ -62,10 +60,10 @@ func TestTypeLater(t *testing.T) {
 // A paste typed on a Roku after its answer stops once the paste may no
 // longer go on: tvPaste hands still to typeLater.
 func TestTVPasteStopsWhenNotAllowed(t *testing.T) {
-	defer func(d time.Duration) { typingCheck = d }(typingCheck)
-	typingCheck = 10 * time.Millisecond
-	defer func(d func(context.Context, string, string) (net.Conn, error)) { tvDial = d }(tvDial)
-	tvDial = (&net.Dialer{}).DialContext
+	defer func(d time.Duration) { TypingCheck = d }(TypingCheck)
+	TypingCheck = 10 * time.Millisecond
+	defer func(d func(context.Context, string, string) (net.Conn, error)) { TVDial = d }(TVDial)
+	TVDial = (&net.Dialer{}).DialContext
 	var keys atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -82,12 +80,12 @@ func TestTVPasteStopsWhenNotAllowed(t *testing.T) {
 	if err := tvremote.Save(dir, tvremote.State{TVs: []tvremote.TV{{Name: "tv", Kind: tvremote.Roku, Host: srv.Listener.Addr().String(), Pastes: true}}}); err != nil {
 		t.Fatal(err)
 	}
-	s := &Service{cfg: Config{StateDir: dir}, logf: t.Logf}
+	s := &Host{Dir: dir, Logf: t.Logf}
 	var allowed atomic.Bool
 	allowed.Store(true)
 	text := strings.Repeat("a", 400) // 8 s at a Roku's pace
-	res, ok := s.tvPaste(group.CommandBody{ID: "1"}, text, false, allowed.Load)
-	if !ok || res.Status != node.ResultDone {
+	res, ok := s.tvPaste(text, false, false, allowed.Load)
+	if !ok || res.Status != Done {
 		t.Fatalf("tvPaste: %v %+v", ok, res)
 	}
 	for keys.Load() < 3 {

@@ -12,6 +12,7 @@
 
 mod actions;
 mod admin;
+mod agent;
 #[cfg(feature = "tunnel")]
 mod away;
 #[cfg(not(feature = "tunnel"))]
@@ -20,9 +21,11 @@ mod away;
 #[cfg(feature = "tunnel")]
 mod awg;
 pub mod button;
+mod cli;
 pub mod content;
 mod control;
 mod copies;
+pub mod credentials;
 mod device;
 pub mod discovery;
 pub mod entries;
@@ -37,22 +40,36 @@ pub mod identity;
 mod interfaces;
 mod keys;
 mod leave;
+mod logfile;
 mod mute;
+pub mod networks;
 mod next;
+#[cfg(unix)]
 mod nextlink;
 pub mod node;
 pub mod pair;
+#[cfg(unix)]
 mod pastehelper;
 pub mod peer;
+mod peripheral;
 pub mod phone;
+mod piv;
 pub mod records;
 #[cfg(feature = "tunnel")]
 pub mod relay;
+pub mod releases;
 mod remotepaste;
 mod rootless;
 pub mod sealkey;
+mod sekey;
+#[cfg(all(unix, not(target_os = "macos")))]
+mod third_party {
+    pub mod pcsclite;
+}
 mod service;
+mod signed;
 mod sync;
+mod sys;
 pub mod tls;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
@@ -63,9 +80,9 @@ pub mod vless;
 mod window;
 pub mod wire;
 
+use crate::sys::UnixStream;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
-use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -81,17 +98,27 @@ Commands:
                        (-addr: where the phone reaches this device, when the
                        code would name the wrong addresses).
   pair -code host:port Join with the code from cbb pair on a full member.
+  pair -invite file    Join with a remote invitation from cbb invite on the
+                       group's hub, through its tunnel; sync away from home
+                       goes on.
   pair -full ...       Join as a computer with the service, a full member
                        that may become an admin, rather than a lite member.
+  agent                Link this session's clipboard with the service
+                       (started at sign-in), through cbb-helper.
   service [-name name] [-port port] [-peer host:port]... [-no-mdns]
-          [-no-listen] [-tunnel-via host:port] [-full]
-                       Run the service (started by systemd or procd): it
+          [-no-listen] [-tunnel-via host:port] [-full] [-state dir]
+          [-socket path] [-user name]
+                       Run the service (started by systemd, procd, launchd,
+                       an rc script or Windows' service manager): it
                        dials the computers, and phones and other lite
                        members dial it on the member port (8764, CBB_PORT).
                        -tunnel-via: the tunnel to the hub sends its packets
                        there, a local UDP port that leads to the hub (cbb
                        next link -udp on the ZX Spectrum Next).
                        -full: as a computer's service, a full member.
+                       -state and -socket as before the command; -user:
+                       started as root, open the mDNS sockets, then run
+                       as this user (FreeBSD's rc script).
   copy [-secret]       Send standard input to the group.
   paste [-terminal [-lines] [-secret]]
                        Print this member's clipboard text; -terminal makes
@@ -152,7 +179,7 @@ port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the
 
 /// The commands of a full member (cmd/cbb) that the lite member does not
 /// have, so that it says so instead of "unknown command".
-const FULL_ONLY: &[&str] = &["remove", "admin", "takeover", "new", "invite", "forward", "relay", "agent"];
+const FULL_ONLY: &[&str] = &["invite", "forward", "relay"];
 
 /// Reports whether this is an OpenWrt router, whose /var is in RAM and
 /// which keeps /etc across upgrades.
@@ -161,7 +188,7 @@ pub(crate) fn openwrt() -> bool {
 }
 
 #[derive(Clone)]
-struct Global {
+pub(crate) struct Global {
     state: PathBuf,
     socket: PathBuf,
 }
@@ -175,18 +202,12 @@ pub fn main() {
             if rootless::is() {
                 rootless::state_dir()
             } else {
-                PathBuf::from(if openwrt() { "/etc/cbb/state" } else { "/var/lib/cbb" })
+                if openwrt() { PathBuf::from("/etc/cbb/state") } else { sys::default_state() }
             }
         }),
-        socket: std::env::var_os("CBB_SOCKET").map(PathBuf::from).unwrap_or_else(|| {
-            if rootless::is() {
-                rootless::socket()
-            } else if openwrt() {
-                PathBuf::from("/var/run/cbb/control.sock")
-            } else {
-                PathBuf::from("/run/cbb/control.sock")
-            }
-        }),
+        socket: std::env::var_os("CBB_SOCKET")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| if rootless::is() { rootless::socket() } else { sys::default_socket(openwrt()) }),
     };
     while let Some(a) = args.first().cloned() {
         match flag(&a) {
@@ -208,6 +229,8 @@ pub fn main() {
                 "pair" => join(&g, rest, false),
                 "next" => std::process::exit(next::run(&g, rest)),
                 "service" => cmd_service(&g, rest),
+                "agent" if rest.is_empty() => agent::run(&g.socket),
+                "agent" => Err(Error::msg("cbb agent takes no arguments")),
                 "copy" => cmd_copy(&g, rest),
                 "paste" => cmd_paste(&g, rest),
                 "status" => cmd_status(&g, rest),
@@ -217,8 +240,22 @@ pub fn main() {
                 "sync" => cmd_sync(&g, rest),
                 "paste-receive" => cmd_paste_receive(&g, rest),
                 "action" => cmd_action(&g, rest),
+                #[cfg(unix)]
                 "paste-helper" => pastehelper::run(&g.socket, rest),
                 "update" => cmd_update(&g, rest),
+                "remove" => cli::remove(&g, rest),
+                "rename" => cli::rename(&g, rest),
+                "takeover" => cli::takeover(&g, rest),
+                "keys" => cli::keys(&g, rest),
+                "incoming" => cli::incoming(&g, rest),
+                "handover" => cli::handover(&g, rest),
+                "freeze" | "unfreeze" => cli::freeze(&g, rest, cmd == "freeze"),
+                "resolve" => cli::resolve(&g, rest),
+                "admin" => cli::admin(&g, rest),
+                "new" => cli::new(&g, rest),
+                "mute" | "unmute" => cli::mute(&g, rest, cmd == "unmute"),
+                "config" => cli::config(&g, rest),
+                "network" => cli::network(&g, rest),
                 "version" | "-version" | "--version" => {
                     println!(
                         "cbb {} ({}/{}), the lite member",
@@ -242,7 +279,7 @@ pub fn main() {
                 Ok(()) => 0,
                 Err(e) => {
                     eprintln!("cbb: {}", e.for_user());
-                    1
+                    if cli::is_usage(&e) { 2 } else { 1 }
                 }
             }
         }
@@ -251,24 +288,17 @@ pub fn main() {
 }
 
 /// The name of a flag, with one dash or two.
-fn flag(a: &str) -> Option<&str> {
+pub(crate) fn flag(a: &str) -> Option<&str> {
     a.strip_prefix("--").or_else(|| a.strip_prefix('-')).filter(|f| !f.is_empty())
 }
 
 fn host_name() -> String {
-    let mut buf = [0u8; 256];
-    // SAFETY: gethostname writes at most len bytes into buf.
-    let ok = unsafe { libc::gethostname(buf.as_mut_ptr() as *mut libc::c_char, buf.len()) } == 0;
-    let name = if ok {
-        String::from_utf8_lossy(&buf[..buf.iter().position(|&b| b == 0).unwrap_or(0)]).to_string()
-    } else {
-        String::new()
-    };
+    let name = sys::host_name();
     let name: String = name.split('.').next().unwrap_or("").chars().take(64).collect();
     if records::valid_name(&name) { name } else { "lite".into() }
 }
 
-fn resolve(s: &str) -> Result<SocketAddr> {
+pub(crate) fn resolve(s: &str) -> Result<SocketAddr> {
     s.to_socket_addrs()
         .context(format!("{s:?} is not host:port"))?
         .next()
@@ -292,6 +322,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut port = member_port();
     let mut addrs = Vec::new();
     let mut code_addr = None;
+    let mut invite = None;
     let mut full = false;
     let mut i = 0;
     while i < args.len() {
@@ -306,17 +337,35 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
             Some("port") => port = next()?.parse().context("the port is a number")?,
             Some("addr") => addrs.push(next()?),
             Some("code") if !for_next => code_addr = Some(next()?),
+            Some("invite") if !for_next => invite = Some(next()?),
             _ => return Err(Error::msg(format!("unknown argument {:?}; see cbb help", args[i]))),
         }
         i += 2;
     }
-    let (mut joiner, save) = joiner(g, &name)?;
+    let invite = match invite {
+        Some(path) => Some(invite_consent(&path)?),
+        None => None,
+    };
+    let (mut joiner, save) = joiner(&g.state, &name)?;
     if full {
         joiner = joiner.as_computer(admin::os_name());
     }
     let save = &*save;
-    let id = match code_addr {
-        Some(a) => {
+    let id = match (invite, code_addr) {
+        (Some((path, text)), _) => {
+            let shown = |fp: &str| {
+                println!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp));
+                println!("Whoever invited you sees it on the hub and admits this device if it matches.");
+                println!("Waiting for them; press Ctrl+C to give up.");
+                std::io::stdout().flush().ok();
+            };
+            let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
+            let id = away::join_invite(&g.state, &joiner, save, &text, &shown, log)?;
+            // It is used up, and was a secret; nothing needs it any more.
+            let _ = std::fs::remove_file(&path);
+            id
+        }
+        (None, Some(a)) => {
             print!("Pairing code: ");
             std::io::stdout().flush().ok();
             let mut line = String::new();
@@ -326,7 +375,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                 .context(format!("cannot connect to {a}"))?;
             pair::join(&joiner, sock, &code, save)?
         }
-        None => {
+        (None, None) => {
             let ln = TcpListener::bind(("::", port))
                 .or_else(|_| TcpListener::bind(("0.0.0.0", port)))
                 .or_else(|_| TcpListener::bind(("0.0.0.0", 0)))
@@ -378,20 +427,41 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     Ok(())
 }
 
+/// Reads a remote invitation's file for cbb pair -invite and asks the user
+/// to agree that sync away from home goes on with the join; returns the
+/// path and the invitation's text.
+fn invite_consent(path: &str) -> Result<(String, String)> {
+    let text = std::fs::read_to_string(path).context(format!("cannot read {path}"))?;
+    let inv = cbb_core::invite::parse(&text).map_err(|r| Error::msg(r.message()))?;
+    if inv.expired(uptime::wall_ms() / 1000) {
+        return Err(Error::msg("the invitation has expired; ask for a new one"));
+    }
+    println!("A device that joins with an invitation syncs away from home through the");
+    println!("group's hub, so sync away from home is turned on here.\n");
+    print!("Type yes to join and turn sync away from home on: ");
+    std::io::stdout().flush().ok();
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line).context("cannot read the answer")?;
+    if !line.trim().eq_ignore_ascii_case("yes") {
+        return Err(Error::msg("nothing changed"));
+    }
+    Ok((path.to_string(), text))
+}
+
 /// The joiner of a device in no group yet, and how it saves the group it
 /// joins.
-fn joiner(g: &Global, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
-    if identity::Identity::load(&g.state)?.is_some() {
+pub(crate) fn joiner(state: &std::path::Path, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
+    if identity::Identity::load(state)?.is_some() {
         return Err(Error::msg(format!(
             "this device is already in a group, and a lite member admits no devices (use the phone app or \
              a full member); to join another group, stop the service and remove {}",
-            g.state.join(identity::FILE_NAME).display()
+            state.join(identity::FILE_NAME).display()
         )));
     }
-    std::fs::create_dir_all(&g.state).context(format!(
+    std::fs::create_dir_all(state).context(format!(
         "cannot create {0}; make it for the service's user first: \
          sudo install -d -o cbb -g cbb -m 0700 {0}",
-        g.state.display()
+        state.display()
     ))?;
     let mut joiner = pair::Joiner::new(name)?;
     // The device key goes into the TPM or the Secure Enclave where cbb-helper
@@ -404,13 +474,13 @@ fn joiner(g: &Global, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
     }
     // The key for sealed messages the service will offer in its hello goes
     // with the info, so that a phone records it as it admits this member.
-    match sealkey::load(&g.state)
+    match sealkey::load(state)
         .and_then(|s| cbb_core::seal::public_key(&s).map_err(|e| e.context("the key for sealed messages")))
     {
         Ok(public) => joiner.seal = public,
         Err(e) => eprintln!("cbb: the key for sealed commands: {e}; commands will come unsealed"),
     }
-    let state = g.state.clone();
+    let state = state.to_path_buf();
     let save = move |id: &identity::Identity, rs: &[records::Record], ts: &[records::ClaimTime]| {
         let mut set = records::new(&id.group_ca);
         let _ = set.add_all(rs);
@@ -423,8 +493,9 @@ fn joiner(g: &Global, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
 
 /// Joins with the code from cbb pair on a full member, through a
 /// connection to it: the Next's link joins this way through the ESP.
+#[cfg(unix)]
 pub(crate) fn join_with_code(g: &Global, sock: TcpStream, code: &str) -> Result<identity::Identity> {
-    let (joiner, save) = joiner(g, &host_name())?;
+    let (joiner, save) = joiner(&g.state, &host_name())?;
     let code = pair::normalize_code(code)?;
     pair::join(&joiner, sock, &code, &*save)
 }
@@ -482,11 +553,17 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
         tunnel_via: None,
         full: false,
     };
+    let mut run_user = None;
     let mut i = 0;
     while i < args.len() {
         let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(format!("{} needs a value", args[i])));
         match flag(&args[i]) {
             Some("name") => cfg.name = next()?,
+            // As the Go service takes them, after the command too (launchd's
+            // plist and FreeBSD's rc script).
+            Some("state") => cfg.state_dir = PathBuf::from(next()?),
+            Some("socket") => cfg.socket = PathBuf::from(next()?),
+            Some("user") => run_user = Some(next()?),
             Some("peer") => cfg.peers.push(resolve(&next()?)?),
             Some("tunnel-via") => cfg.tunnel_via = Some(resolve(&next()?)?),
             Some("port") => cfg.port = Some(next()?.parse().context("the port is a number")?),
@@ -512,7 +589,47 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
     if !records::valid_name(&cfg.name) {
         return Err(Error::msg("the device name must be 1 to 64 bytes without control characters"));
     }
-    service::run(cfg)
+    if let Some(u) = run_user {
+        // Started as root: the mDNS sockets first, then the user.
+        if let Err(e) = discovery::preopen() {
+            eprintln!("cbb: opening the mDNS sockets as root: {e}");
+        }
+        sys::run_as(&u)?;
+    }
+    #[cfg(windows)]
+    {
+        // Under the service manager, which gives it no standard error, the
+        // service logs to ProgramData\cbb\logs\service.log; started by
+        // hand, in the console until Ctrl+C.
+        let run: sys::service_windows::Run = Box::new(move |in_service| {
+            if !in_service {
+                return service::run(cfg);
+            }
+            logfile::set(&sys::program_data().join("cbb").join("logs").join("service.log"))?;
+            let res = service::run(cfg);
+            if let Err(e) = &res {
+                service::log_line(&format!("cbb: {}", e.for_user()));
+            }
+            res
+        });
+        match sys::service_windows::run(run, service::request_stop) {
+            Ok(res) => res,
+            Err(run) => run(false),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        // Started by launchd (packaging/macos/tools.cbb.plist), its own log,
+        // moved aside past 1 MiB as on Windows; standard error follows it, so
+        // a crash lands there too.
+        #[cfg(target_os = "macos")]
+        if std::env::var("XPC_SERVICE_NAME").as_deref() == Ok("tools.cbb")
+            && let Err(e) = logfile::set(std::path::Path::new("/Library/Logs/cbb/service.log"))
+        {
+            eprintln!("cbb: the log: {}", e.for_user());
+        }
+        service::run(cfg)
+    }
 }
 
 /// Connects to the service's control socket, which only the members of the
@@ -543,7 +660,7 @@ fn hint(systemd: bool, systemctl: &str) -> String {
 
 /// Sends one request to the service and returns its answer.
 pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
-    let conn = if control::is_admin(&m.header.op) {
+    let conn = if control::needs_admin(&m.header) {
         let path = control::admin_socket(&g.socket);
         match UnixStream::connect(&path) {
             Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
@@ -671,6 +788,15 @@ fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
     let m =
         request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))?;
     let s = m.header.status.unwrap_or_default();
+    if s.group.is_empty() {
+        // As Go's writeStatus.
+        println!("{}", s.version);
+        if s.left_old_group {
+            println!("This device left its group, which was made before 0.6: groups are set up again from 0.6 on.");
+        }
+        println!("Not in a group. Run cbb new here to start one, or cbb pair to join one.");
+        return Ok(());
+    }
     println!("device  {}\ngroup   {}\nrole    {}\nversion {}", s.device, s.group, s.role, s.version);
     if !s.mode.is_empty() {
         println!("mode    {}", s.mode);
@@ -906,8 +1032,7 @@ fn paste_line(p: &control::Paste) -> String {
     line
 }
 
-const ACTION_USAGE: &str =
-    "usage: cbb action [enable NAME [-by root,phone,computer,watch] [-any-key] [-yes] | disable NAME | off]";
+const ACTION_USAGE: &str = "usage: cbb action [enable NAME [-by root,phone,computer,watch] [-any-key] [-yes] | disable NAME | off |\n                   add NAME [-by KINDS] [-any-key] [-yes] -- PROGRAM ARGS | remove NAME]";
 
 /// cbb action: shows this device's quick actions and sets them, as on a
 /// full member (docs/design.md, "Quick actions"). Enabling says what it lets
@@ -942,29 +1067,39 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             println!("The quick actions are off here.");
             return Ok(());
         }
-        [v, name, ..] if v == "enable" || v == "disable" => (v.as_str(), name.clone()),
+        [v, name] if v == "remove" => {
+            let h = control::Header { op: "action-remove".into(), name: name.clone(), ..Default::default() };
+            let m = request(g, &control::Message::new(h, Vec::new()))?;
+            grant(&m)?;
+            println!("{name} is removed.");
+            return Ok(());
+        }
+        [v, name, ..] if v == "enable" || v == "disable" || v == "add" => (v.as_str(), name.clone()),
         _ => return Err(usage()),
     };
-    let mut a = control::Action { name, on: verb == "enable", ..Default::default() };
+    let mut a = control::Action { name, on: verb != "disable", ..Default::default() };
     let mut yes = false;
     let mut rest = args[2..].iter();
     while let Some(arg) = rest.next() {
         match flag(arg) {
+            _ if arg == "--" && verb == "add" => {
+                a.command = rest.by_ref().cloned().collect();
+                break;
+            }
             Some("by") if a.on => a.by = actions::parse_kinds(rest.next().ok_or_else(usage)?)?,
             Some("any-key") if a.on => a.any_key = true,
             Some("yes") if a.on => yes = true,
             _ => return Err(usage()),
         }
     }
-    if !actions::PRESETS.contains(&a.name.as_str()) {
-        return Err(Error::msg(format!(
-            "this device has no action {:?}: the lite member has reboot, cancel-shutdown and restart",
-            a.name
-        )));
+    if verb == "add"
+        && let Some(why) = actions::check_own(&a.name, &a.command)
+    {
+        return Err(Error::msg(why));
     }
     if a.on && rootless::is() && !actions::rights(std::slice::from_ref(&a.name)).is_empty() {
         return Err(Error::msg(format!(
-            "{} needs a polkit rule, which only root writes; this device is installed without root, so it has restart only",
+            "{} needs a polkit rule, which only root writes; this device is installed without root, so it runs only the actions that need none",
             a.name
         )));
     }
@@ -1005,8 +1140,7 @@ fn grant(m: &control::Message) -> Result<()> {
 }
 
 fn is_root() -> bool {
-    // SAFETY: geteuid has no preconditions and cannot fail.
-    unsafe { libc::geteuid() == 0 }
+    sys::is_root()
 }
 
 /// How an action stands and who may run it, as on a full member.
@@ -1025,9 +1159,19 @@ fn action_line(a: &control::Action) -> String {
 /// here.
 fn action_warning(a: &control::Action) -> String {
     let what = match a.name.as_str() {
+        actions::LOCK => "lock this device's screen",
+        actions::SLEEP => "put this device to sleep",
         actions::REBOOT => "reboot this device, a minute after they ask",
-        actions::CANCEL => "cancel a reboot that is pending",
-        _ => "restart the CBB service here",
+        actions::SHUTDOWN => "shut this device down, a minute after they ask",
+        actions::CANCEL => "cancel a reboot or shutdown that is pending",
+        actions::RESTART => "restart the CBB service here",
+        actions::LAYOUT => "switch the layout this device's Bluetooth keyboard types in",
+        _ => "run this action here",
+    };
+    let what = if a.command.is_empty() {
+        what.to_string()
+    } else {
+        format!("run {} here as the user signed in", a.command.join(" "))
     };
     let mut who = if a.by.is_empty() {
         "the group's admins".to_string()
@@ -1086,7 +1230,8 @@ fn cmd_global(g: &Global, args: &[String]) -> Result<()> {
             h.consent = true;
         }
         [a] if a == "off" => h.name = "off".into(),
-        _ => return Err(Error::msg("usage: cbb global [on|off]")),
+        [a, rest @ ..] if a == "hubs" => return cli::hubs(g, rest),
+        _ => return Err(cli::usage("cbb global [on|off]")),
     }
     let m = request(g, &control::Message::new(h, Vec::new()))?;
     print_away(m.header.status.and_then(|s| s.away).as_ref());
@@ -1306,6 +1451,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         let work =
             if root { work.clone() } else { std::env::temp_dir().join(format!("cbb-update-{}", std::process::id())) };
         let _ = std::fs::create_dir_all(&work);
+        let link = ServiceLink(g);
         let u = update::Updater {
             work: work.clone(),
             roots,
@@ -1317,6 +1463,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
             install: &update::install,
             healthy: &healthy,
             log: &log,
+            group: Some(&link),
         };
         let found = u.check(&st);
         if !root {
@@ -1332,6 +1479,9 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
             st.checked_ms = update::now_ms();
             st.available = if found.newer && !found.failed { r.version.clone() } else { String::new() };
             update::save_state(&dir, &st)?;
+            if found.source != update::FROM_GROUP {
+                u.archives_for_group(found.source, r);
+            }
         }
         let v = service::VERSION;
         match () {
@@ -1372,6 +1522,113 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         log(&format!("cbb update: {}", e.for_user()));
     }
     res
+}
+
+/// The service as cbb update's link to the group (update::Group), as Go's
+/// cbb update asks it: a service that does not run costs nothing but the
+/// group's help.
+struct ServiceLink<'a>(&'a Global);
+
+impl ServiceLink<'_> {
+    fn open(&self, op: &str, wait: Duration) -> Result<(UnixStream, control::Reader<UnixStream>)> {
+        let path = if control::is_admin(op) { control::admin_socket(&self.0.socket) } else { self.0.socket.clone() };
+        let c = UnixStream::connect(&path).context("cannot reach the service")?;
+        let _ = c.set_read_timeout(Some(wait));
+        let _ = c.set_write_timeout(Some(wait));
+        let r = control::Reader::new(c.try_clone().context("cannot reach the service")?);
+        Ok((c, r))
+    }
+
+    fn answer(r: &mut control::Reader<UnixStream>) -> Result<control::Message> {
+        check(r.read()?.ok_or_else(|| Error::msg("the service closed the connection"))?)
+    }
+
+    fn ask(&self, op: &str, payload: Vec<u8>) -> Result<control::Message> {
+        let (mut c, mut r) = self.open(op, Duration::from_secs(10))?;
+        control::write(
+            &mut c,
+            &control::Message::new(control::Header { op: op.into(), ..Default::default() }, payload),
+        )?;
+        Self::answer(&mut r)
+    }
+}
+
+impl update::Group for ServiceLink<'_> {
+    fn share(&self, set: &serde_json::Value) {
+        if let Ok(data) = serde_json::to_vec(set) {
+            let _ = self.ask("release", data);
+        }
+    }
+
+    fn held(&self) -> Result<serde_json::Value> {
+        let m = self.ask("release-held", Vec::new())?;
+        serde_json::from_slice(&m.payload).context("the service's release does not decode")
+    }
+
+    fn get(&self, sha: &str, size: i64, path: &std::path::Path) -> Result<()> {
+        use std::io::Write;
+        // The service tries its peers for a while before it answers.
+        let (mut c, mut r) = self.open("release-get", Duration::from_secs(15 * 60))?;
+        let h = control::Header { op: "release-get".into(), value: sha.into(), ..Default::default() };
+        control::write(&mut c, &control::Message::new(h, Vec::new()))?;
+        let first = Self::answer(&mut r)?;
+        if first.header.part.as_ref().map(|p| p.size) != Some(size) {
+            return Err(Error::msg("the service answered with another file"));
+        }
+        let mut f = std::fs::File::create(path).context("cannot keep the archive")?;
+        let mut got: i64 = 0;
+        loop {
+            let m = Self::answer(&mut r)?;
+            got += m.payload.len() as i64;
+            if got > size {
+                return Err(Error::msg("the service sent more than the archive"));
+            }
+            f.write_all(&m.payload).context("cannot keep the archive")?;
+            if m.header.done {
+                break;
+            }
+        }
+        if got != size {
+            return Err(Error::msg("the service sent less than the archive"));
+        }
+        Ok(())
+    }
+
+    fn keep(&self, sha: &str, size: i64, path: &std::path::Path) {
+        use std::io::Read;
+        let res = (|| -> Result<()> {
+            let mut f = std::fs::File::open(path).context("cannot read the archive")?;
+            let (mut c, mut r) = self.open("release-file", Duration::from_secs(120))?;
+            let part = control::Part { size, ..Default::default() };
+            let h = control::Header {
+                op: "release-file".into(),
+                value: sha.into(),
+                part: Some(part),
+                ..Default::default()
+            };
+            control::write(&mut c, &control::Message::new(h, Vec::new()))?;
+            let mut buf = vec![0; 1 << 20];
+            loop {
+                let n = f.read(&mut buf).context("cannot read the archive")?;
+                if n == 0 {
+                    break;
+                }
+                let h = control::Header { op: "data".into(), ..Default::default() };
+                control::write(&mut c, &control::Message::new(h, buf[..n].to_vec()))?;
+            }
+            Self::answer(&mut r).map(|_| ())
+        })();
+        if let Err(e) = res {
+            eprintln!("cbb: the service did not take the archive to serve to the group: {}", e.for_log());
+        }
+    }
+
+    fn want(&self) -> Vec<String> {
+        self.ask("release-want", Vec::new())
+            .ok()
+            .and_then(|m| serde_json::from_slice::<Option<Vec<String>>>(&m.payload).ok().flatten())
+            .unwrap_or_default()
+    }
 }
 
 /// The command that updates a copy from method.

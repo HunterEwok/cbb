@@ -78,6 +78,11 @@ pub struct Config {
     pub records: Arc<Mutex<Vec<Value>>>,
     /// Sends a datagram from the hub's WireGuard port.
     pub send: SendFn,
+    /// The period's hubs' credential that lists the hub's server key, as Go's
+    /// HubConfig.Credentials; asked at each registration and checked while
+    /// it lasts, so that a newer one makes the hub register again.
+    pub credential: Option<CredentialFn>,
+
     /// The project's ways in over VLESS, for a hub whose forwarder is the
     /// project's; the next registration takes what is there then.
     pub ways: Arc<Mutex<Ways>>,
@@ -167,6 +172,19 @@ fn vless_ways(addr: std::net::IpAddr, id: &str, learned: Option<&Value>, ways: &
     out
 }
 
+/// The hubs' credential a hub registers with in place of its member
+/// certificate and the records (docs/protocol.md, section 18).
+#[derive(Clone)]
+pub struct HubCredential {
+    pub credentials: Vec<cbb_core::credential::Credential>,
+    /// The certificate of the server key, which names no device.
+    pub cert: Vec<u8>,
+    pub key: Arc<dyn crate::identity::ExternalKey>,
+}
+
+/// Gives the hub's credential now, None when it has none.
+pub type CredentialFn = Arc<dyn Fn() -> Option<HubCredential> + Send + Sync>;
+
 /// How the registration stands.
 #[derive(Clone, Default, Serialize, Debug)]
 pub struct Report {
@@ -217,7 +235,12 @@ fn run(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool, log: &Arc<dyn Fn
     while !stop.load(Ordering::SeqCst) {
         let start = Instant::now();
         let err = match once(cfg, report, stop, log) {
-            Ok(()) => return,
+            // A new hubs' credential: registering again at once with it.
+            Ok(true) => {
+                backoff = MIN_BACKOFF;
+                continue;
+            }
+            Ok(false) => return,
             Err(e) => e,
         };
         if stop.load(Ordering::SeqCst) {
@@ -271,6 +294,8 @@ struct Claim<'a> {
     admin_sig: Option<()>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     records: Vec<Value>,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    credentials: &'a [cbb_core::credential::Credential],
 }
 
 #[derive(Deserialize, Default)]
@@ -301,11 +326,24 @@ struct VlessAnswer {
     path: String,
 }
 
-/// One registration, until it breaks or stop.
-fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool, log: &Arc<dyn Fn(&str) + Send + Sync>) -> Result<()> {
-    let connect = |at: SocketAddr, tcp: TcpStream| {
-        Registrar::handshake(tcp, at, &cfg.pins, &cfg.chain, &cfg.key, PROTOCOL, "forwarder")
+/// One registration, until it breaks or stop; true when it ends because
+/// the hub has a new hubs' credential, or one now where it had none, as
+/// Go's errNewCredential.
+fn once(
+    cfg: &Config,
+    report: &Mutex<Report>,
+    stop: &AtomicBool,
+    log: &Arc<dyn Fn(&str) + Send + Sync>,
+) -> Result<bool> {
+    // With a credential the hub shows its server key's certificate and the
+    // credential, and neither its member certificate nor the records.
+    let cred = cfg.credential.as_ref().and_then(|f| f());
+    let (chain, key) = match &cred {
+        Some(c) => (std::slice::from_ref(&c.cert), &c.key),
+        None => (&cfg.chain[..], &cfg.key),
     };
+    let connect =
+        |at: SocketAddr, tcp: TcpStream| Registrar::handshake(tcp, at, &cfg.pins, chain, key, PROTOCOL, "forwarder");
     // The stream over VLESS the registration took, and its way in.
     let mut over: Option<(crate::vless::Stream, cbb_core::vless::Link)> = None;
     let mut reg = match TcpStream::connect_timeout(&cfg.endpoint, SETUP_TIMEOUT) {
@@ -345,7 +383,8 @@ fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool, log: &Arc<dyn F
     let ch: Challenge = reg.read(stop)?;
     let (public, proof) = prove(&cfg.wg_key, &ch.e, &proof_key)
         .ok_or_else(|| Error::msg("registering with the forwarder: a bad challenge"))?;
-    let mut records = cfg.records.lock().map(|r| r.clone()).unwrap_or_default();
+    let mut records =
+        if cred.is_some() { Vec::new() } else { cfg.records.lock().map(|r| r.clone()).unwrap_or_default() };
     records.truncate(MAX_RECORDS);
     let claim = Claim {
         key: public.to_vec(),
@@ -354,6 +393,7 @@ fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool, log: &Arc<dyn F
         vless: cfg.vless_id.as_deref(),
         admin_sig: None,
         records,
+        credentials: cred.as_ref().map_or(&[], |c| &c.credentials[..]),
     };
     reg.write(&claim)?;
     let a: Answer = reg.read(stop)?;
@@ -396,6 +436,9 @@ fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool, log: &Arc<dyn F
     if let Ok(mut r) = report.lock() {
         *r = Report { registered: true, vless: vless.clone(), ..Report::default() };
     }
+    if cred.is_some() {
+        log("cbb: the hub registered with the forwarder with the group's hubs' credential");
+    }
 
     // Hellos until the connection breaks: every second until the forwarder
     // saw one, then every HELLO_EVERY; between them, its answers.
@@ -406,6 +449,15 @@ fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool, log: &Arc<dyn F
     let mut next = Instant::now();
     while !stop.load(Ordering::SeqCst) {
         if Instant::now() >= next {
+            // A newer credential makes the hub register again with it.
+            let now = cfg.credential.as_ref().and_then(|f| f());
+            if now
+                .as_ref()
+                .and_then(|n| n.credentials.last())
+                .is_some_and(|n| cred.as_ref().and_then(|c| c.credentials.last()) != Some(n))
+            {
+                return Ok(true);
+            }
             let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
             counter = counter.saturating_add(1).max(now);
             (cfg.send)(hello_to, &hello(&mask, &hello_key, a.id, counter));
@@ -421,7 +473,7 @@ fn once(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool, log: &Arc<dyn F
             }
         }
     }
-    Ok(())
+    Ok(false)
 }
 
 /// The VLESS settings an offer carries, from the forwarder's answer.
