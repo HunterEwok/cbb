@@ -294,7 +294,8 @@ impl Awg {
     }
 
     fn protect(&self, nonce: &[u8], data: &mut [u8]) {
-        let mut c = ChaCha20::new(&self.o.header_key.into(), nonce[..NONCE].into());
+        let nonce: &[u8; NONCE] = nonce[..NONCE].try_into().expect("NONCE bytes");
+        let mut c = ChaCha20::new(&self.o.header_key.into(), nonce.into());
         c.apply_keystream(data);
     }
 

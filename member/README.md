@@ -41,7 +41,7 @@ member TLS dials. GotaTun gets its ChaCha20-Poly1305 from a stand-in for ring on
 
 ## Build
 
-With Rust 1.85 or later:
+With Rust 1.95 or later:
 
 ```sh
 cargo build --release          # target/release/cbb

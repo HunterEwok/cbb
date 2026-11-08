@@ -150,10 +150,10 @@ impl ServerCertVerifier for MemberVerifier {
         if dev == self.self_id {
             return Err(tls_err("connected to itself"));
         }
-        if let Some(want) = &self.peer {
-            if &dev != want {
-                return Err(tls_err(&format!("reached {dev} instead of {want}")));
-            }
+        if let Some(want) = &self.peer
+            && &dev != want
+        {
+            return Err(tls_err(&format!("reached {dev} instead of {want}")));
         }
         Ok(ServerCertVerified::assertion())
     }

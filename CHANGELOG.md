@@ -1309,6 +1309,8 @@ All notable changes to cbb are documented in this file. The format follows
   fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
   Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).
   Other files still go to Downloads/CBB on Android and to Files on the iPhone.
+- Building the Rust crates needs Rust 1.95 or later: `core` and `embassy` declared 1.87, which
+  no build checked, and CI now checks the workspace on 1.95.
 - The tile of the device an app runs on comes first by default, and moves as the other tiles
   do, into a collection too (docs/apps.md, "Collections and the order of the tiles"); on
   Aurora, which cannot move tiles yet, it stays first. A tile's system and its mark ("this
