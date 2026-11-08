@@ -92,9 +92,6 @@ struct Act {
 /// The quick actions in peer::may_take, as Go's targetAct.
 const ACT: &str = "act";
 
-/// How long a request waits for a device in a group to start.
-const START_WAIT: Duration = Duration::from_secs(10);
-
 /// A remote paste for a watcher, with where its answer goes: the status,
 /// done, refused or failed, and the reason.
 struct Inject {
