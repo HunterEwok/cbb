@@ -136,6 +136,12 @@ jobs:
         # package has 20.
         shell: bash
         run: go test -race -timeout 20m -coverprofile="cover-go-${{ matrix.os }}.out" ./...
+      # The Rust service's own Windows parts: the control sockets' folders
+      # and access lists.
+      - name: cargo test of the Rust service's Windows parts
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: cargo test --locked -p cbb-lite --lib sys::acl
       # int is 32 bits there, as on the Raspberry Pi's armv7, and 386 runs
       # on the runner without an emulator.
       - name: go test of the group and the copies on a 32-bit build
@@ -770,7 +776,11 @@ jobs:
           CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb-helper" ./cmd/cbb-helper
       - name: systemd-analyze verify
         run: |
+          # With cbb-helper beside it, as the full member's archive installs
+          # it: cbb alone is the lite member, which get.sh below would
+          # refuse to replace.
           sudo install -m 0755 "$RUNNER_TEMP/cbb" /usr/local/bin/cbb
+          sudo install -m 0755 "$RUNNER_TEMP/cbb-helper" /usr/local/bin/cbb-helper
           sudo systemd-sysusers "$PWD/packaging/linux/cbb.sysusers"
           systemd-analyze verify packaging/linux/cbb.service
           systemd-analyze security --offline=true packaging/linux/cbb.service --threshold=30 # 3.0 on the scale it prints
@@ -1947,13 +1957,15 @@ jobs:
           rustup toolchain install "$(sed -n 's/^cbb.rust=//p' gradle.properties)" --profile minimal \
             --target aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
           cargo install --locked cargo-ndk@4.1.2
-      - name: the fleet's cbb, and cbb-helper beside it
+      - name: the fleet's cbb, and cbb-helper, cbb-forward and cbb-relay beside it
         run: |
           rustup toolchain install stable --profile minimal
           cargo +stable build --locked --release -p cbb-lite
           mkdir -p "$RUNNER_TEMP/fleet"
           cp target/release/cbb "$RUNNER_TEMP/fleet/cbb"
-          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/fleet/cbb-helper" ./cmd/cbb-helper
+          for p in cbb-helper cbb-forward cbb-relay; do
+            CGO_ENABLED=0 go build -o "$RUNNER_TEMP/fleet/$p" "./cmd/$p"
+          done
       - name: an emulator, with KVM
         # The runner has KVM for its user once udev lets it.
         timeout-minutes: 15

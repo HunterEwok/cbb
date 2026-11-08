@@ -332,7 +332,19 @@ func makeAdmin(t *testing.T, root, s *testService) {
 		}
 		return false
 	})
-	m, err := root.do(t, control.Header{Op: control.OpAdmin, Name: s.name, Consent: true}, "")
+	// A connection seen a moment ago may be on its way to a new one, as
+	// right after a claim takes effect, when the members connect again with
+	// the new root's chain: the admin CA goes over the next.
+	var m *control.Message
+	var err error
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		m, err = root.do(t, control.Header{Op: control.OpAdmin, Name: s.name, Consent: true}, "")
+		if err == nil || !strings.Contains(err.Error(), "is not connected") || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if err != nil || m.Name != s.name {
 		t.Fatalf("admin %s on %s: %+v, %v", s.name, root.name, m, err)
 	}

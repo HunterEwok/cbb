@@ -2545,3 +2545,45 @@ fn run_basics() {
         ],
     );
 }
+
+/// Out of a group cbb pair waits for the phone on the service's own port,
+/// which its firewall rule opens (OpenWrt's comes from /etc/config/cbb),
+/// not on the default one.
+#[test]
+fn pair_waits_on_the_service_port() {
+    let dir = tempdir("pair-port");
+    let port = std::net::TcpListener::bind("0.0.0.0:0").unwrap().local_addr().unwrap().port();
+    let sock = dir.join("control.sock");
+    serve(
+        UnixListener::bind(&sock).unwrap(),
+        always(status(json!({"port": port})), b""),
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    let file = dir.join("join.json");
+    std::fs::write(&file, "").unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_cbb"))
+        .args(["pair", "-app", file.to_str().unwrap()])
+        .env("CBB_SOCKET", &sock)
+        .env("CBB_STATE", dir.join("state"))
+        .env("LC_ALL", "C")
+        .env("HOME", &dir)
+        .env_remove("CBB_PORT")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut written = String::new();
+    for _ in 0..300 {
+        written = std::fs::read_to_string(&file).unwrap_or_default();
+        if !written.is_empty() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    let _ = std::fs::remove_dir_all(&dir);
+    let j: Value = serde_json::from_str(written.trim()).unwrap_or_else(|e| panic!("the file holds {written:?}: {e}"));
+    assert_eq!(j["port"].as_u64(), Some(u64::from(port)), "the file holds {j}");
+}

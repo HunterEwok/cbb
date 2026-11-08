@@ -155,9 +155,12 @@ func (f *Fleet) containerOf(ctx context.Context, bin, net string, run, env []str
 		"--network", net, "--label", "cbbbench=fleet",
 		"--cap-add", "NET_ADMIN",
 		"-v", bin + ":/usr/local/bin/cbb:ro"}
-	// cbb-helper, the Go helper the Rust cbb starts, beside it when built.
-	if helper := filepath.Join(filepath.Dir(bin), "cbb-helper"); fileExists(helper) {
-		args = append(args, "-v", helper+":/usr/local/bin/cbb-helper:ro")
+	// cbb-helper, the Go helper the Rust cbb starts, and cbb-forward and
+	// cbb-relay, which cbb forward and cbb relay run, beside it when built.
+	for _, p := range []string{"cbb-helper", "cbb-forward", "cbb-relay"} {
+		if path := filepath.Join(filepath.Dir(bin), p); fileExists(path) {
+			args = append(args, "-v", path+":/usr/local/bin/"+p+":ro")
+		}
 	}
 	if fleetCoverDir != "" {
 		args = append(args, "-v", fleetCoverDir+":/cover", "-e", "GOCOVERDIR=/cover")

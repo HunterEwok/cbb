@@ -176,3 +176,5 @@ cmd/cbb/pairqr_test.go TestReadQRText D-88: cmd/cbb is gone; member/tests/cli_co
 cmd/cbb/qr_test.go TestWriteQR D-88: cmd/cbb is gone; lib.rs qr_reads_back reads the Rust cbb's modules back
 cmd/cbb/qr_test.go TestEntriesString D-88: cmd/cbb is gone; global_cli.rs entries_round_trip checks the Rust cbb's, with the same bad strings
 cmd/cbb/stop_test.go TestStopLines D-88: cmd/cbb is gone; member/tests/cli_commands.rs stop_lines checks the Rust cbb's lines and status_text.rs durations its roughly
+internal/service/control_windows_test.go TestOwnDirMovesLinksAside D-88: the Go service's control sockets are gone; member/src/sys/acl_windows.rs own_dir_moves_links_aside checks the Rust service's
+internal/service/control_windows_test.go TestControlMovesNamesAside D-88: the Go service's control sockets are gone; member/src/sys/acl_windows.rs control_moves_names_aside checks the Rust service's

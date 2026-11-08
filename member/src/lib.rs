@@ -389,7 +389,10 @@ const PAIR_USE: &str =
 
 fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut name = host_name();
-    let mut port = member_port();
+    // The service's own port, which its firewall rule opens (OpenWrt's
+    // init script passes the one in /etc/config/cbb); out of a group the
+    // service does not listen on it, so the phone finds cbb pair there.
+    let mut port = service_port(g).unwrap_or_else(member_port);
     let mut addrs = Vec::new();
     let mut code_addr = None;
     let mut invite = None;
@@ -837,6 +840,14 @@ fn hint(systemd: bool, systemctl: &str) -> String {
     } else {
         tr!("is it running (start it with cbb service)?").to_string()
     }
+}
+
+/// The member port of the running service, None when none answers.
+fn service_port(g: &Global) -> Option<u16> {
+    let m =
+        request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))
+            .ok()?;
+    m.header.status.and_then(|s| u16::try_from(s.port).ok()).filter(|p| *p != 0)
 }
 
 /// Whether the service runs in a group: cbb pair then admits a device
@@ -1346,7 +1357,13 @@ fn grant(m: &control::Message) -> Result<()> {
     if rootless::is() {
         return Ok(());
     }
-    actions::grant(std::path::Path::new("/"), &on_actions(m.header.status.as_ref())).map(|_| ())
+    let on = on_actions(m.header.status.as_ref());
+    // Only root writes the rule; a user's actions that need no right leave it
+    // to root, as the polkit directory is not theirs to read.
+    if actions::rights(&on).is_empty() && !is_root() {
+        return Ok(());
+    }
+    actions::grant(std::path::Path::new("/"), &on).map(|_| ())
 }
 
 /// The names of the actions a status says are on.
