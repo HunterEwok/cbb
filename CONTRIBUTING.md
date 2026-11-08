@@ -166,18 +166,15 @@ sh ffi/bind.sh host /tmp/cbb-core
 cd apps/ios/CBBKit && swift test -Xlinker -L/tmp/cbb-core
 ```
 
-The phones' tunnel (`mobile/cbbtun`, WireGuard for sync away from home) is a Go package that
-gomobile binds for both apps; the `phone tunnel` jobs build it (the Android NDK for the AAR,
-Xcode for the framework):
+The phones' tunnel (WireGuard for sync away from home) is in the Rust core's library
+(`ffi/src/tunnel.rs`, feature `tunnel`), which `ffi/bind.sh` builds for both apps; its tests
+run it against the Go hub, clients and forwarder:
 
 ```sh
-go test -race ./mobile/...
-ANDROID_NDK_HOME=<ndk> mobile/cbbtun/bind.sh android cbbtun.aar
-mobile/cbbtun/bind.sh ios Cbbtun.xcframework   # macOS with Xcode
+cargo test -p cbb-ffi --features tunnel tunnel
+cargo build --release -p cbb-ffi --features tunnel --example tunnel-on-linux
+CBB_TUNNEL_ON_LINUX="$PWD/target/release/examples/tunnel-on-linux" go test -race ./internal/tunnel -run TestRustPhone
 ```
-
-The Android app's build runs `bind.sh` itself (the `bindTunnel` task), so building the app
-needs Go besides the Android SDK and its NDK.
 
 The group rules of records `v:2` (docs/records-v2.md) reach the phones from the Rust core:
 `ffi/` exports the core's one entry point (`cbb_core::api`, docs/core-api.md) as the C
@@ -246,8 +243,7 @@ Cross tests between Go and Swift: Swift tests write vectors that Go reads, and t
 The app (macOS with Xcode):
 
 ```sh
-mobile/cbbtun/bind.sh ios apps/ios/Cbbtun.xcframework   # the tunnel the app links; needs Go
-sh ffi/bind.sh ios apps/ios/CbbCore                 # the Rust core the kit links; needs Rust
+sh ffi/bind.sh ios apps/ios/CbbCore   # the Rust core and tunnel the kit links; needs Rust
 brew install xcodegen
 cd apps/ios && xcodegen generate   # CBB.xcodeproj and Info.plist are not committed
 xcodebuild test -project CBB.xcodeproj -scheme CBB \

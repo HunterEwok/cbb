@@ -52,10 +52,10 @@ var goParts = []struct {
 	}},
 }
 
-// goProduct tells the service's own code: cmd, internal and mobile, without
+// goProduct tells the service's own code: cmd and internal, without
 // copied code and the fakes that only tests use.
 func goProduct(rel string) bool {
-	if !(strings.HasPrefix(rel, "cmd/") || strings.HasPrefix(rel, "internal/") || strings.HasPrefix(rel, "mobile/")) {
+	if !(strings.HasPrefix(rel, "cmd/") || strings.HasPrefix(rel, "internal/")) {
 		return false
 	}
 	if strings.Contains(rel, "/third_party/") || strings.HasSuffix(rel, "_test.go") {

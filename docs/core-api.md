@@ -168,13 +168,15 @@ phones' tunnel (`ffi/src/tunnel.rs`, whose comment lists the requests): `cbb_tun
 a JSON request by its `op` for the tunnel to the hub (a loopback port that leads to the hub's
 member port, with AmneziaWG and VLESS with XHTTP), for the phone as the group's hub (its
 clients, its remote invitations with a guest tunnel to the pairing window), and their status;
-`cbb_tunnel_register` registers the phone's hub with the group's forwarder and
+`cbb_tunnel_register` registers the phone's hub with the group's forwarder (inside VLESS with
+XHTTP when the forwarder's TCP port does not answer, as the Go hub does) and
 `cbb_tunnel_relay` links the phone to the blind relay, both signing their TLS with the member
 key through the same callback, the relay's link telling the app through an events' callback
 which connections it joined; `cbb_tunnel_relay_credentials` makes the link register with the
 group's server credentials (docs/protocol.md, section 18), signed with the period's server key
 through another callback. `TestRustPhoneTunnel`, `TestRustPhoneHub`, `TestRustPhoneHubInvite`,
-`TestRustPhoneHubForwarder`, `TestRustPhoneRelay` and `TestRustPhoneRelayCredentials` run them
+`TestRustPhoneHubForwarder`, `TestRustPhoneHubOverXHTTP`, `TestRustPhoneRelay` and
+`TestRustPhoneRelayCredentials` run them
 against Go's hub, clients, forwarder and relay through the example `tunnel-on-linux`.
 
 Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking

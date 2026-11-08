@@ -29,11 +29,6 @@ Builds:
     versionCode: 600
     commit: v0.6.0
     subdir: apps/android/app
-    # Go for the tunnel's library (mobile/cbbtun); go.mod's toolchain line then fetches
-    # the Go it names, checked against sum.golang.org, which Debian's Go leaves off.
-    sudo:
-      - apt-get update
-      - apt-get install -y -t bookworm-backports golang-go
     # Rust for the core's library (ffi/), the version of cbb.rust in
     # apps/android/gradle.properties, with cargo-ndk.
     srclibs:
@@ -44,11 +39,10 @@ Builds:
       - apps/android/wear
     prebuild:
       - sed -i -e '/play-services/d' build.gradle.kts
-      - go env -w GOTOOLCHAIN=auto
       - $$rustup$$/rustup-init.sh -y --profile minimal --default-toolchain 1.99.0 --target aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
       - $HOME/.cargo/bin/cargo install --locked cargo-ndk@4.1.2
     output: build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk
-    # cbb.ndk in apps/android/gradle.properties, for the tunnel and the core.
+    # cbb.ndk in apps/android/gradle.properties, for the core.
     ndk: 30.0.16248370
     gradle:
       - fdroid

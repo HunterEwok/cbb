@@ -9,7 +9,7 @@ import java.time.Instant
 /**
  * The pairing window of a remote invitation on the phone that is the
  * group's hub (docs/protocol.md, section 12): it listens on the loopback
- * address, where cbbtun's hub joins the connections of the invitation's
+ * address, where the phone's hub joins the connections of the invitation's
  * guest tunnel, and runs each attempt with admit, one at a time. It admits
  * one device once, until expires, and ends after three failed attempts;
  * onEnd gets the admitted device, or why it ended without one.
@@ -43,7 +43,7 @@ class InvitationWindow(
     private var ended = false
     private var current: TLSTransport? = null
 
-    /** The port it listens on: cbbtun's Hub.Invite takes it. */
+    /** The port it listens on: RustTunnel.Hub.invite takes it. */
     val port: Int get() = listener.port
 
     init {
