@@ -338,7 +338,7 @@ static uint8_t drv_uninstall(uint8_t bank)
 #define OVL_FILE "/cbb/CBB.OVL"
 #define OVL_FIRST 19
 #define OVL_CHUNK 512
-// The page of CBB.OVL with pi_check(); pi_probe() is in its first.
+// The page of CBB.OVL with pi_check().
 #define OVL_PI 21
 extern uint8_t _z_page_table[];
 #pragma codeseg code_dot
@@ -427,19 +427,15 @@ static uint8_t install_update;
 #define BASIC_MMU3 11
 // fetch()'s banks (FETCH_BANKS below), with the other always-mapped state.
 static uint8_t fetch_bank[FETCH_BANKS], fetch_banks;
-// For pi_probe() and pi_check(), from the install's page: the Pi's cbb
-// on the card, the speed, its SHA-256.
-static const char *pi_path, *pi_check_sha;
-static uint32_t pi_speed;
-extern int far_pi_check(void), far_pi_probe(void);
+// For pi_check(), from the install's page: the Pi's cbb's SHA-256.
+static const char *pi_check_sha;
+extern int far_pi_check(void);
 // The UART's loops in far.asm: pi_tx() sends n bytes from http_dst on.
 extern uint8_t *http_dst;
 extern void pi_tx(uint16_t n) __z88dk_fastcall;
 // sha_run()'s file, whether it takes the digest, and the digest in hex.
 static const char *sha_path;
 static uint8_t sha_digest;
-// With sha_limit, sha_run() takes only that many bytes from the start.
-static uint32_t sha_limit;
 static char sha_out[65];
 extern uint32_t far_sha(void);
 // The newest CBB's size and CRC-32 in the site's list (far_read_list()),
@@ -2079,12 +2075,8 @@ static int to_pi(struct item *it, uint8_t row)
     uint16_t start;
     uint32_t speed = PI_FAST_SPEED;
     if (link_shell()) return pi_silent();
-    pi_path = it->card;
     for (;;) {
-        // A speed above the line's own carries a probe first.
-        pi_speed = speed;
-        err = speed > ESP_SPEED ? far_pi_probe() : 0;
-        if (!err) err = pi_send(it, row, speed);
+        err = pi_send(it, row, speed);
         if (err == 2) {
             // A tty that took the speed but lost CBBGO keeps head waiting,
             // until its timeout at the most.
@@ -2225,9 +2217,9 @@ static int install_files(uint8_t update)
             need[i] = 1;
         }
     }
-    // pi_check() and pi_probe(), in CBB.OVL's pages, which this CBB's
-    // CBB.OVL fills before a newer one takes their place.
-    if (!need[1] && !ovl_load(OVL_PI)) ovl_load(OVL_FIRST);
+    // pi_check(), in CBB.OVL's page, which this CBB's CBB.OVL fills
+    // before a newer one takes its place.
+    if (!need[1]) ovl_load(OVL_PI);
     // Nothing to fetch, nothing to send: .cbb update says so.
     nothing = !newer;
     if (pi_answers && strcmp(pisha, pi->sha256)) nothing = 0;
@@ -2334,74 +2326,6 @@ void usage_run(void)
 #pragma codeseg PAGE_19
 #pragma bssseg PAGE_19
 #pragma constseg PAGE_19
-
-// The first PROBE bytes of the Pi's cbb at pi_speed, before all of it: the
-// Pi's sha256sum of them against the Next's. 0 when they came whole or the
-// Pi did not say it was ready (the copy tries the speed then), 3 when they
-// did not come whole, else 1 with the message shown.
-// Not static: far_pi_probe() (far.asm) calls it.
-#define PROBE 32768UL
-static const char pp_cmd[] = "s=$(stty -g); stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && "
-                             "printf 'CBBP %%s\\r\\n' $(timeout 5 head -c %lu | sha256sum); stty $s\n";
-static const char pp_go[] = "CBBGO", pp_sum[] = "CBBP ", pp_silent[] = "the Pi did not get ready";
-int pi_probe(void)
-{
-    uint8_t fh, err = 3;
-    uint16_t n, frame;
-    uint32_t size;
-    sha_path = pi_path;
-    sha_digest = 1;
-    sha_limit = PROBE;
-    size = far_sha();
-    sha_limit = 0;
-    errno = 0;
-    fh = esx_f_open(pi_path, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
-    if (errno) return 1;
-    sprintf(line, pp_cmd, pi_speed, size);
-    link_send_str(line);
-    // As pi_send(): the command leaves before the speed changes.
-    for (n = 0; n < 2; n++) {
-        frame = FRAMES_LO;
-        while (FRAMES_LO == frame) {
-        }
-    }
-    link_speed(pi_speed);
-    do {
-        if (link_line(line, sizeof line, 5)) {
-            err = 2;
-            goto out;
-        }
-    } while (strcmp(line, pp_go));
-    pi_ready();
-    while ((n = esx_f_read(fh, text, MAX_TEXT)) > 0 && size) {
-        http_dst = text;
-        pi_tx(n);
-        size -= n;
-    }
-    while (!link_line(line, sizeof line, 7)) {
-        if (strncmp(line, pp_sum, 5) == 0) {
-            if (strncmp(line + 5, sha_out, 64) == 0) err = 0;
-            break;
-        }
-    }
-out:
-    esx_f_close(fh);
-    link_open();
-    if (err == 2) {
-        // No word from the probe is no verdict on the speed: once the
-        // shell is back (head gives up after 5 seconds, the tty after),
-        // the copy itself tries it.
-        frame = FRAMES_LO;
-        while (link_shell()) {
-            if (link_stopped || (uint16_t)(FRAMES_LO - frame) / 50 > 60) return fail(pp_silent, pp_go);
-        }
-        return 0;
-    }
-    link_prompt();
-    return err;
-}
-
-
 
 // .cbb uninstall: everything .cbb install and .cbb net put anywhere, after
 // a Y: the network and the driver, the Pi's cbb and its state, the files
@@ -2818,7 +2742,6 @@ uint32_t sha_run(void)
     while ((n = esx_f_read(fh, text, CHUNK)) > 0) {
         if (sha_digest) sha256_add(&sha_state, text, n);
         size += n;
-        if (size == sha_limit) break;
     }
     esx_f_close(fh);
     // In lowercase hex, as sha256sum prints it.
@@ -3026,9 +2949,12 @@ int pi_check(void)
 {
     uint8_t n, lost = 0;
     // Bytes lost on the way keep head waiting for more: filler after each
-    // quiet second ends it, and the copy is damaged then.
+    // two quiet seconds ends it, and the copy is damaged then. The filler
+    // is newlines, so that bytes no head reads any more only give the
+    // shell empty lines.
+    memset(text, '\n', 4096);
     for (n = 0; n < 32;) {
-        if (!link_line(line, sizeof line, 1)) {
+        if (!link_line(line, sizeof line, 2)) {
             if (strcmp(line, pc_end_w) == 0) break;
             continue;
         }

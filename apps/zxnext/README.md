@@ -100,10 +100,11 @@ changes; the Pi's copy is removed from the card once the Pi has it.
 The install goes as fast as the lines keep the bytes whole: the site's files through the ESP
 from 460800 down a step at a time (230400, 115200) once bytes go missing or a file arrives
 damaged, and the Pi's `cbb` from 2000000 (921600, 460800, ...), down a step when the Pi's tty
-does not take the speed or a probe does not come whole: before the file, the first 32K of it,
-whose SHA-256 the Pi's `sha256sum` says and the Next compares with its own. Bytes lost on the
-way all the same leave `head` waiting: the Next sends filler after each quiet second, which
-ends the copy, and steps down. The install fetches and sends the Pi's `cbb` gzipped (the
+does not take the speed or the file does not come whole. Bytes lost on the way leave `head`
+waiting: the Next sends newlines as filler after each two quiet seconds, which ends the copy,
+and steps down; a copy that came whole but differs from the SHA-256 built into CBB steps down
+too. The Next's UART divisor is rounded to the nearest, so that 921600 and 2M stay within the
+UARTs' margin in every video timing. The install fetches and sends the Pi's `cbb` gzipped (the
 site's `cbb.gz`, under half the bytes), which the Pi unpacks with `gzip -dc` on the way and
 checks against the SHA-256 built into CBB; `.cbb update` with a newer CBB fetches `cbb` as it
 is, which the signed list names. The file's row says each new speed (`AT 921K`),

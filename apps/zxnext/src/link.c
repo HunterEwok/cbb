@@ -39,7 +39,9 @@ static uint8_t nextreg(uint8_t reg)
 // Sets the selected UART's speed.
 static void set_speed(uint32_t speed)
 {
-    uint32_t prescaler = clocks[nextreg(NR_VIDEO_TIMING) & 7] / speed;
+    // Rounded, not cut: at 921600 and 2M a cut divisor runs up to five per cent fast in
+    // some video timings, more than the UARTs at both ends take.
+    uint32_t prescaler = (clocks[nextreg(NR_VIDEO_TIMING) & 7] + speed / 2) / speed;
     z80_outp(PORT_RX_BAUD, (uint8_t)(prescaler & 0x7F));
     z80_outp(PORT_RX_BAUD, (uint8_t)(((prescaler >> 7) & 0x7F) | 0x80));
 }

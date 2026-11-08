@@ -262,7 +262,7 @@ fn installs_then_finds_all_current() {
     );
     // The site's files from 460800 down a step at a time, to a speed the
     // Next reads whole; the Pi's cbb gzipped at 2M, which the played Pi's
-    // tty takes, after a probe there.
+    // tty takes.
     let fetch: Vec<u32> = o
         .esp()
         .log
@@ -279,7 +279,7 @@ fn installs_then_finds_all_current() {
     );
     let at_2m: Vec<_> = o.pi().log.iter().filter(|l| l.contains("stty 2000000 raw")).collect();
     assert!(
-        at_2m.len() == 2 && at_2m[0].contains("| sha256sum)") && at_2m[1].contains("| gzip -dc >"),
+        at_2m.len() == 1 && at_2m[0].contains("| gzip -dc >"),
         "{:?}",
         o.pi().log
     );

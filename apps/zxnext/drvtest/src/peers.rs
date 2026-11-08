@@ -505,7 +505,6 @@ enum RawEnd {
     #[default]
     Nothing,
     End,
-    Probe,
 }
 
 /// gzip -dc, as the Pi's shell runs it.
@@ -654,9 +653,7 @@ impl Pi {
             self.raw = n;
             self.received.clear();
             self.raw_gz = cmd.contains("| gzip -dc");
-            self.raw_end = if cmd.contains("printf 'CBBP %s\\r\\n' $(timeout 5 head -c ") {
-                RawEnd::Probe
-            } else if cmd.contains("CBBEND") {
+            self.raw_end = if cmd.contains("CBBEND") {
                 RawEnd::End
             } else {
                 RawEnd::Nothing
@@ -897,10 +894,6 @@ impl Peer for Pi {
                 match std::mem::take(&mut self.raw_end) {
                     RawEnd::Nothing => {}
                     RawEnd::End => self.say(now, "\r\nCBBEND\r\n"),
-                    RawEnd::Probe => {
-                        let sum = crate::sha256::hex(&self.received);
-                        self.say(now, &format!("CBBP {sum}\r\nCBBP -\r\n"));
-                    }
                 }
                 self.pending_baud = Some((now + 20_000, 115_200));
                 self.prompt(now + 20_000);
