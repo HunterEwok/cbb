@@ -154,7 +154,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 
 ## Status
 
-Done: the Go service (0.2.0 released); the app makes its own group (root key in the Secure
+Done: the Go service (0.5.0 released); the app makes its own group (root key in the Secure
 Enclave, Face ID before each signing action), admits computers by QR code, syncs with them,
 shows the devices and removes them, renews certificates (any admin renews any device, the
 `cert` message carrying its admin CA); admin CAs under the root work in Go and in the kit

@@ -2,7 +2,7 @@
 # Architecture decisions
 
 For engineers. Every decision that shapes Copy Beyond Borders, numbered once and never
-renumbered: the code, the changelog and the other documents cite them as D-1 to D-87. The
+renumbered: the code, the changelog and the other documents cite them as D-1, D-2 and so on. The
 reasons and the details of each are in the [design](design.md) and the
 [protocol](protocol.md); this page is the register.
 
@@ -15,13 +15,17 @@ it would cost a migration. The pull request that makes it:
    sentences: what was decided, and the main reason or the option it rules out;
 2. explains it where the work is described: a section of the design or the protocol, which
    names the decision (`(D-81)`), with the options considered and the consequences;
-3. when it replaces an earlier one, sets that row's status to `replaced by D-81` and keeps
-   its text, so that old references still make sense.
+3. when it replaces an earlier one, sets that row's status to `replaced by D-81` and moves
+   the row, with its text unchanged, to "Replaced decisions" below, so that old references
+   still make sense; when it replaces only a part, the row stays with the status
+   `partly replaced by D-81`.
 
-A decision is never deleted. The statuses are `accepted`, `replaced by D-N` and
-`partly replaced by D-N`.
+A decision is never deleted or reworded. The statuses are `accepted`, `replaced by D-N` and
+`partly replaced by D-N`. To read the architecture as it is, read the decisions in force; the
+replaced ones are its history. `tools/repocheck` checks the register: every number once, every
+`replaced by` row among the replaced decisions and naming a decision that exists.
 
-## The register
+## Decisions in force
 
 | ID | Status | Decision |
 |---|---|---|
@@ -34,23 +38,17 @@ A decision is never deleted. The statuses are `accepted`, `replaced by D-N` and
 | D-7 | accepted | Console without a desktop: tmux for copy and paste, a root helper for console paste outside tmux. |
 | D-8 | accepted | The repository is in English only, apart from the apps' translations (String Catalogs, Android `values-<language>`). |
 | D-9 | accepted | Pairing a computer: code entry with CPace inside TLS 1.3 instead of comparing digits, which a man in the middle can grind. |
-| D-10 | replaced by D-80 | The iPhone trusts a separate CA restricted by name constraints; the token is shown only after that trust is in place. |
-| D-11 | accepted | One advertised port serves members, pairing and the iPhone, told apart by the first bytes. |
+| D-11 | partly replaced by D-80 | One advertised port serves members, pairing and the iPhone, told apart by the first bytes. |
 | D-12 | accepted | Own mDNS responder on Linux: no Go library publishes a separate name with its own lifetime, answers per interface and sends goodbyes. |
-| D-13 | replaced by D-53 | Only Linux members hold `cbb.local`; Macs never hold it (since D-46 they listen too). |
 | D-14 | accepted | The hybrid clock never refuses a timestamp and warns about skew measured per connection; events carry their age for the 45-second rule and secret expiry, and local durations count sleep. |
 | D-15 | accepted | macOS runs the service as a LaunchDaemon plus a pasteboard LaunchAgent, which avoids the Local Network prompt; installing needs administrator rights. |
 | D-16 | accepted | Desktop clipboard in pure Go: Wayland data-control (both protocol variants) and X11 through `jezek/xgb`; no `wl-clipboard`. |
 | D-17 | accepted | Console paste injects a single line by default, with control characters removed. |
 | D-18 | accepted | Secrets reach only root and the `cbb` group; the control socket enforces it through file permissions. |
-| D-19 | replaced by D-85 | The group state is last-writer-wins; the protection of copies made during a disconnect applies only to writing the local clipboard (live window 60 s, rejoin window 30 s). The first version kept that rule in the group state, and a review showed that the group could then split for good. |
-| D-20 | replaced by D-85 | The rejoin window opens only on a local sign that the member itself was away (start, wake), not when it merely lost its peers. A network that drops without a sleep is not noticed yet. |
 | D-21 | accepted | Each member keeps its own clipboard text apart from the group state; `cbb paste`, tmux, the console helper and the iPhone button use it. |
 | D-22 | accepted | A secret travels in a hello as a mark without its text, so the group converges on secrets too. |
-| D-23 | replaced by D-51 | Revoking a Linux member replaces both CAs, because it holds their keys; members that were off still trust the old CA until they pair again, and iPhones delete the old profile. |
 | D-24 | accepted | Local durations use a clock that counts sleep and ignores wall-clock steps (package `uptime`). |
 | D-25 | accepted | The hybrid clock saves a mark 10 seconds ahead before passing the last one, so it never goes back after a crash. |
-| D-26 | accepted | iPhone pairing: the profile over a separate plain-HTTP port and the fingerprint check first, then the code on a page that the trusted CA authenticates. |
 | D-27 | accepted | The engine remembers secrets for 12 hours; a watcher offering one again without its mark makes no event, a deliberate action makes it a secret again. |
 | D-28 | accepted | Two ways in: watchers report changes (no event when nothing really changed), deliberate actions always send and also write the member's own clipboard. |
 | D-29 | accepted | Certificates are checked with the local clock, but never earlier than the group CA's start: a clock that is behind does not break the group, an expired certificate is still rejected. |
@@ -64,20 +62,18 @@ A decision is never deleted. The statuses are `accepted`, `replaced by D-N` and
 | D-37 | accepted | Windows runs the service as a Windows service plus a clipboard agent in each session, as on the Mac, since a service cannot reach a session's clipboard; the control socket stays an AF_UNIX socket, guarded by the access list of its directory, so the protocol and the client code are the same everywhere. |
 | D-38 | accepted | Away from home: a star of WireGuard tunnels to a hub, a member at home, with WireGuard in user space inside `cbb` and the apps and the member TLS inside; no third-party services; a feature that cannot keep the data fully protected is not built. |
 | D-39 | partly replaced by D-75 | Homes behind carrier-grade NAT use a forwarder run by the project that holds no keys and routes each packet to its own group's hub only (by WireGuard's `mac1`, so nothing on the wire tells groups apart; if that fails, by a port the group computes from its secret and the hour, never by a fixed port or a request naming the group), with limits per group. On disk it keeps only each group's roots, removals and freezes (so a removed device cannot register as its hub again), never a device's name. The hub registers with its member certificate; changing the hub's WireGuard key on a schedule and cover traffic are options, off by default. The part on disk is replaced by D-75: the hubs register with a credential (D-67). |
-| D-40 | accepted | Blocked networks: AmneziaWG first, then WireGuard inside VLESS with REALITY to the forwarder, so that traffic always stays inside the group's tunnel. |
+| D-40 | partly replaced by D-87 | Blocked networks: AmneziaWG first, then WireGuard inside VLESS with REALITY to the forwarder, so that traffic always stays inside the group's tunnel. |
 | D-41 | accepted | (Push refined by D-74.) Phones keep the tunnel inside the app, without a system VPN or push notifications, so the VPN slot stays free and no one else's server is involved. |
 | D-42 | accepted | The ESP32 stays on the home network until a mature WireGuard exists for it. |
 | D-43 | accepted | A device away from the group joins by SSH, by the user's own VPN, or by a remote invitation: a QR code or a file, never typed, with a one-time guest WireGuard key that reaches only the pairing and a 128-bit secret, and admitted only after the admin confirms the device. The six-digit code never faces the open internet. |
 | D-44 | accepted | Computers keep their keys in the TPM or the Secure Enclave where they have one, and otherwise in a file sealed as far as the system allows, shown as such in `cbb status`; keys are renewed on a schedule. |
 | D-45 | partly replaced by D-82 | A group starts on the home network only; sync away from home is turned on by the user, at the hub and on each device, and a device whose keys sit in a file needs a separate consent that explains the risk and the measures against it. |
-| D-46 | replaced by D-50 | Macs listen on the member port and publish themselves with `r=mac`, so phones, other Macs and lite members reach them without a Linux member; a Mac still dials the Linux and lite members, which never dial it, so its firewall cannot cut it off from them. |
 | D-47 | accepted | (Refined by D-70.) Key attestation (TPM, Android) is built as an option, off by default and not used in the project's own setup; it is checked only offline, so no maker's or Apple's server is involved. |
 | D-48 | accepted | The ZX Spectrum Next joins through its own Raspberry Pi, which runs the lite member; no device outside the Next takes part, and a Next without a Pi is future research on its own hardware only. |
 | D-49 | accepted | No gateway or plain tier: a device too weak for the member protocol joins through hardware of its own or not at all; on Arduino only ESP32 boards (the Nano ESP32 first) are supported, as full lite members. |
 | D-50 | accepted | A device's operating system (`os`) is stated apart from its role, so a Windows PC is shown as Windows; the roles are `full` (every computer with the service, the Mac included), `lite`, `phone` and `iphone`, and the `linux` and `mac` roles are dropped. |
 | D-51 | accepted | In a group a computer creates, only the creating computer (the root) and the members it makes admins hold CA keys, through the admin CAs of D-33 under a root with path length 1; any device but the root is removed by a record without a new group, and a lost root is taken over by an admin. |
 | D-52 | accepted | Groups made before D-51 are upgraded in place with a `root` record signed by the old group CA key and a revocation of that key; a leftover copy of the old key can break such a group but never take it over. |
-| D-53 | replaced by D-80 | `cbb.local` is held only by a member with the iPhone CA key, machines that do not sleep first and laptops as a fallback, guessed from a battery and set by a setting. |
 | D-54 | accepted | Every admin may paste a text on any member that turned remote paste on (D-59), the target pressing nothing per paste, since a member already trusts its admins; the command is signed by the admin and checked by the target, and the iPhone is a sender only, because iOS allows no input into other apps. |
 | D-55 | accepted | Each device has one switch, sync, on by default: off, its clipboard is its own, as without CBB; it stays connected either way, its user turns it off for a while or until turned on, and any admin turns it on or off on any member with a signed command. |
 | D-56 | accepted | Images, files and folders sync wherever the platform allows, with formatted text (HTML) last and optional; lite members, the iPhone shortcut, secrets and remote paste stay text only. |
@@ -112,3 +108,19 @@ A decision is never deleted. The statuses are `accepted`, `replaced by D-N` and
 | D-85 | accepted | Every device follows one clipboard rule: a copy from another device goes into the clipboard while it is live, for the group's live window after it was copied (one minute by default, 5 seconds to an hour, set by the root or any admin in a signed `copies` record), counted in durations; once it has passed, the copy is gone and the device's own copy of any age is what its button sends. There is no rejoin window and no separate fetch, and a copy from a removed device is dropped even before it is written. |
 | D-86 | accepted | The iPhone and Android apps run the Rust core's member (ffi/, docs/core-api.md, "The member") in place of their own Swift and Kotlin nodes: one implementation of the member protocol, the clipboard rule and the button for every phone, as the Aurora app runs it. The apps keep what is theirs: finding the members (Bonjour, NSD) and handing their addresses in, the keys and Face ID or BiometricPrompt, pairing, the records they sign, the tunnel and the relay (whose loopback ports they hand in), and the answers to commands, renewals and tunnel keys, which the member asks of them by its events. |
 | D-87 | accepted | The phones run one tunnel, the lite member's in Rust (`ffi/src/tunnel.rs`), for the client, the phone as the hub with its forwarder and invitations, and the blind relay, in place of a Go tunnel bound by gomobile: one WireGuard, AmneziaWG and VLESS for the lite member and every phone, and app builds without Go. The phones reach a forwarder over VLESS with XHTTP behind a web server only; REALITY stays on the Go servers, whose ClientHello rustls cannot hide. |
+| D-90 | accepted | A device's role says only how it behaves on the network; its rights come from an admin key alone. Any admin with `admit` admits a phone that offers no admin key as a plain member, as it admits a computer; only the root makes a phone an admin and signs the `admins`, `clock` and `root` records. Ruled out: the earlier rule that only the root signs a phone's device record, which kept an admin from adding a phone without an admin key, such as a TV or the Aurora app, when the root phone was away. |
+
+## Replaced decisions
+
+Kept so that the code, the changelog and older documents that cite them still make sense.
+
+| ID | Status | Decision |
+|---|---|---|
+| D-10 | replaced by D-80 | The iPhone trusts a separate CA restricted by name constraints; the token is shown only after that trust is in place. |
+| D-13 | replaced by D-53 | Only Linux members hold `cbb.local`; Macs never hold it (since D-46 they listen too). |
+| D-19 | replaced by D-85 | The group state is last-writer-wins; the protection of copies made during a disconnect applies only to writing the local clipboard (live window 60 s, rejoin window 30 s). The first version kept that rule in the group state, and a review showed that the group could then split for good. |
+| D-20 | replaced by D-85 | The rejoin window opens only on a local sign that the member itself was away (start, wake), not when it merely lost its peers. A network that drops without a sleep is not noticed yet. |
+| D-23 | replaced by D-51 | Revoking a Linux member replaces both CAs, because it holds their keys; members that were off still trust the old CA until they pair again, and iPhones delete the old profile. |
+| D-26 | replaced by D-80 | iPhone pairing: the profile over a separate plain-HTTP port and the fingerprint check first, then the code on a page that the trusted CA authenticates. |
+| D-46 | replaced by D-50 | Macs listen on the member port and publish themselves with `r=mac`, so phones, other Macs and lite members reach them without a Linux member; a Mac still dials the Linux and lite members, which never dial it, so its firewall cannot cut it off from them. |
+| D-53 | replaced by D-80 | `cbb.local` is held only by a member with the iPhone CA key, machines that do not sleep first and laptops as a fallback, guessed from a battery and set by a setting. |

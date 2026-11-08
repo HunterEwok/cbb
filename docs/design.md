@@ -122,9 +122,9 @@ apps" below).
 The few ideas the rest follows from:
 
 - **Equal members, no server** (D-3). Every device holds the whole state and passes it on;
-  last writer wins under a hybrid logical clock (D-14, D-19), so the group converges without
+  last writer wins under a hybrid logical clock (D-14, D-85), so the group converges without
   a coordinator.
-- **The group is a certificate authority** (D-9, D-10). A root key, on a phone's secure
+- **The group is a certificate authority** (D-9, D-33, D-51). A root key, on a phone's secure
   hardware or a computer, signs admin CAs and device certificates; every connection is
   mutual TLS 1.3 under them, and signed records add, rename and remove devices.
 - **Pairing by a short code or a QR code** with CPace inside TLS (D-9), so a guess costs one
@@ -132,9 +132,10 @@ The few ideas the rest follows from:
 - **One port at home, one tunnel away** (D-5, D-11, D-38). At home the members find each
   other by mDNS on one TCP port; away from home they reach a hub through the group's own
   WireGuard star, optionally through a forwarder or a blind relay that hold no keys.
-- **One protocol, four implementations**: Go (the service), Rust (the lite member), Swift
-  and Kotlin (the phone kits), held together by shared interop vectors in
-  `testdata/interop`.
+- **One protocol, two members, four readers**: the member protocol runs in Go (the service)
+  and in the Rust core, which the lite member and every phone app run (D-86); the Swift and
+  Kotlin kits still read and write the records, pairing and certificates themselves. All four
+  are held together by shared interop vectors in `testdata/interop`.
 - **Copies sealed end to end** (D-84). The device that copies seals each copy to the devices
   of the group that read copies and signs it, so the members that pass it on, a hub among
   them, carry it without reading or changing it, and the forwarder and the relay see even
@@ -1585,7 +1586,7 @@ sing-box is not used (GPL).
 | Member                         | Tunnel                                                                                        | Role                     |
 |--------------------------------|-----------------------------------------------------------------------------------------------|--------------------------|
 | Go service (Linux, FreeBSD, macOS, Windows) | amneziawg-go with netstack in `cbb`; Xray-core as a Go module                | hub, forwarder, relay or client |
-| iPhone app                     | in the app process, no Network Extension, one Go framework for WireGuard and Xray             | client, or the hub, while the app is open |
+| iPhone app                     | in the app process, no Network Extension; the Rust tunnel of `ffi/src/tunnel.rs` (D-87)        | client, or the hub, while the app is open |
 | Android app                    | in the app process, in the foreground service the app already has; no `VpnService`            | client, or the hub while the app is open or in its foreground service |
 | the lite member on Linux       | GotaTun's WireGuard (from Mullvad) with smoltcp's TCP, in its process; AmneziaWG and VLESS over XHTTP of its own, no REALITY | client |
 | the lite member on the ESP32   | none: the home network only, until a mature WireGuard exists for it                           | home only                |
@@ -1668,14 +1669,13 @@ only adds to it.
    switch, which keeps the hub's offer and reaches the hub through the tunnel while it is not
    found at home; remote invitations made and served on a phone that is the hub. Using an
    invitation on a phone follows.
-8. Blocked networks: AmneziaWG, then VLESS. Done: `cbb` and the phones' tunnel
-   run on amneziawg-go; obfuscation per group between computers (`cbb global hub
-   -obfuscate`), in the hub's offer and in invitations, on both phones, and through the
+8. Blocked networks: AmneziaWG, then VLESS. Done: `cbb` runs on amneziawg-go, and the
+   phones' and the lite member's tunnel on GotaTun with AmneziaWG of its own (`awg.rs`);
+   obfuscation per group between computers (`cbb global hub -obfuscate`), in the hub's offer and in invitations, on both phones, and through the
    forwarder; VLESS between computers (`cbb forward -vless-xhttp` behind a web server or
    `-vless-site` with REALITY, `cbb global hub -vless`) and on both phones.
-9. The lite member on Linux (done: `cbb global on`, GotaTun and smoltcp in `cbb`, plain
-   WireGuard only, so a group whose hub hides its tunnel keeps it at home); the ESP32 when
-   WireGuard on it is mature.
+9. The lite member on Linux (done: `cbb global on`, GotaTun and smoltcp in `cbb`, with
+   AmneziaWG and VLESS over XHTTP, but no REALITY); the ESP32 when WireGuard on it is mature.
 
 ### What the servers learn
 

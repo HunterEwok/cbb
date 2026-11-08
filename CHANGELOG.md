@@ -1305,6 +1305,12 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- docs/decisions.md lists the decisions in force apart from the replaced ones, which stay
+  below as history, and `tools/repocheck` checks the register: each number once, a known
+  status, a replaced row among the replaced decisions, naming a decision that exists. D-90
+  records that a role gives no rights, so any admin with `admit` admits a phone without an
+  admin key; D-26 is marked replaced by D-80, D-11 partly replaced by D-80 and D-40 partly
+  replaced by D-87.
 - The Android and iPhone apps put one received image or video, and an image the button
   fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
   Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).

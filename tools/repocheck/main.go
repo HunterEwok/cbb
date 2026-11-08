@@ -121,6 +121,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 	problems = append(problems, checkStyle(contents)...)
 	problems = append(problems, checkEnv(contents)...)
 	problems = append(problems, checkIndex(contents)...)
+	problems = append(problems, checkDecisions(contents)...)
 	problems = append(problems, checkPlanned(contents)...)
 	problems = append(problems, checkAndroidVersion(contents)...)
 	problems = append(problems, checkSpecVersions(contents)...)

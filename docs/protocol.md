@@ -1044,7 +1044,7 @@ window (a plain `cbb pair`, an invitation) refuses a joiner that offers `admin_k
 confirmation, with `{"error": "refused"}`, and so does an admin computer that is not the root. A
 phone that offers no admin key, such as the Aurora OS app unless the user asks to join as an
 admin, joins any admin's window as a member: the admin signs its `device` record with role
-`phone` and no `admin`. A phone that listens and shows its QR code ("The joiner listens" below)
+`phone` and no `admin`, since a role gives no rights and only an admin key does (D-90). A phone that listens and shows its QR code ("The joiner listens" below)
 asks to be an admin the same way, and the root admits it as one with `cbb pair -qr -admin`. Before it certifies an
 admin key, the admitting side (the root computer, or an admin phone) checks `admin_proof` against
 `sid` of this connection, so that a key the joiner does not hold, or a proof made for another
