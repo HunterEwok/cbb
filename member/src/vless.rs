@@ -62,11 +62,20 @@ struct Ctx {
     link: Link,
     endpoint: SocketAddr,
     tls: Arc<ClientConfig>,
-    udp: UdpSocket,
-    /// The tunnel's socket, which the packets come from and answers go to.
-    peer: Mutex<Option<SocketAddr>>,
-    stop: AtomicBool,
+    /// VLESS's request header, which the first upload of a session carries.
+    header: Vec<u8>,
+    out: Out,
+    stop: Arc<AtomicBool>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
+}
+
+/// Where the forwarder's answers go.
+enum Out {
+    /// The local UDP port, to the tunnel's socket, which the packets come
+    /// from.
+    Udp { udp: UdpSocket, peer: Mutex<Option<SocketAddr>> },
+    /// The local connection whose bytes the stream carries (`Stream`).
+    Stream(TcpStream),
 }
 
 /// The running way. Dropping it stops it.
@@ -87,7 +96,9 @@ impl Client {
         let udp = UdpSocket::bind("127.0.0.1:0").context("cannot open the local port of the way over VLESS")?;
         udp.set_read_timeout(Some(POLL)).context("cannot open the local port of the way over VLESS")?;
         let addr = udp.local_addr().context("cannot open the local port of the way over VLESS")?;
-        let ctx = Arc::new(Ctx { link, endpoint, tls, udp, peer: Mutex::new(None), stop: AtomicBool::new(false), log });
+        let header = cv::request_header(&link.id);
+        let out = Out::Udp { udp, peer: Mutex::new(None) };
+        let ctx = Arc::new(Ctx { link, endpoint, tls, header, out, stop: Arc::new(AtomicBool::new(false)), log });
         let thread = {
             let ctx = ctx.clone();
             std::thread::spawn(move || upload(&ctx))
@@ -108,6 +119,113 @@ impl Drop for Client {
             let _ = t.join();
         }
     }
+}
+
+/// A TCP stream over VLESS to the forwarder's registrations
+/// (docs/protocol.md, section 13, "VLESS"), as internal/vless's
+/// DialRegistration: a local port that takes one connection, whose bytes go
+/// inside VLESS with the registrations' user ID and path, in XHTTP's
+/// `packet-up` mode. The stream ends when either side closes. Dropping it
+/// stops it.
+pub struct Stream {
+    addr: SocketAddr,
+    stop: Arc<AtomicBool>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Stream {
+    /// Opens the stream's local port for the way in `link` (the group's
+    /// XHTTP settings or the project's); nothing is sent before a
+    /// connection to it.
+    pub fn registration(link: &Link, log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<Stream> {
+        let mut link = link.clone();
+        link.path = cv::registration_path(&link.path).to_string();
+        link.id = cv::REGISTRATION_ID;
+        let endpoint: SocketAddr =
+            link.endpoint.parse().map_err(|_| Error::msg(format!("{:?} is not an address", link.endpoint)))?;
+        let tls = Arc::new(tls_config()?);
+        let what = "cannot open the local port of the stream over VLESS";
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").context(what)?;
+        ln.set_nonblocking(true).context(what)?;
+        let addr = ln.local_addr().context(what)?;
+        let stop = Arc::new(AtomicBool::new(false));
+        let thread = {
+            let stop = stop.clone();
+            std::thread::spawn(move || {
+                let deadline = Instant::now() + TIMEOUT;
+                let tcp = loop {
+                    if stop.load(Ordering::SeqCst) || Instant::now() > deadline {
+                        return;
+                    }
+                    match ln.accept() {
+                        Ok((t, from)) if from.ip().is_loopback() => break t,
+                        Ok(_) => {}
+                        Err(_) => std::thread::sleep(Duration::from_millis(20)),
+                    }
+                };
+                drop(ln);
+                if tcp.set_nonblocking(false).is_err() || tcp.set_read_timeout(Some(POLL)).is_err() {
+                    return;
+                }
+                let Ok(reader) = tcp.try_clone() else { return };
+                let header = cv::stream_header(&link.id, cv::REGISTRATION_PORT);
+                let ctx = Arc::new(Ctx { link, endpoint, tls, header, out: Out::Stream(tcp), stop, log });
+                carry(&ctx, &reader);
+            })
+        };
+        Ok(Stream { addr, stop, thread: Some(thread) })
+    }
+
+    /// The local address to connect to.
+    pub fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+}
+
+impl Drop for Stream {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+/// The stream's uploads: the local connection's bytes, gathered, in one
+/// session, until either side ends it.
+fn carry(ctx: &Arc<Ctx>, tcp: &TcpStream) {
+    let mut session = Session::open(ctx);
+    let mut queue: VecDeque<Vec<u8>> = VecDeque::new();
+    let mut buf = vec![0u8; 16 << 10];
+    let queued = |q: &VecDeque<Vec<u8>>| q.iter().map(Vec::len).sum::<usize>();
+    'run: while !ctx.stop.load(Ordering::SeqCst) && !session.ended.load(Ordering::SeqCst) {
+        let mut reader = tcp;
+        match reader.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => queue.push_back(buf[..n].to_vec()),
+            Err(e) if timed_out(&e) => continue,
+            Err(_) => break,
+        }
+        let until = Instant::now() + Duration::from_millis(u64::from(between(10, 50)));
+        while Instant::now() < until && queued(&queue) < cv::MAX_POST {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => queue.push_back(buf[..n].to_vec()),
+                Err(e) if timed_out(&e) => break,
+                Err(_) => break 'run,
+            }
+        }
+        while !queue.is_empty() {
+            if let Err(e) = session.send(ctx, &mut queue) {
+                if !ctx.stop.load(Ordering::SeqCst) {
+                    (ctx.log)(&format!("cbb: the stream over VLESS: {}", e.for_log()));
+                }
+                break 'run;
+            }
+        }
+    }
+    let _ = tcp.shutdown(std::net::Shutdown::Both);
+    ctx.stop.store(true, Ordering::SeqCst);
 }
 
 /// The TLS of the web server: TLS 1.3, HTTP/1.1, the roots of the system.
@@ -159,9 +277,13 @@ fn between(lo: u32, hi: u32) -> u32 {
     lo + u32::from_le_bytes(random()) % (hi - lo + 1)
 }
 
-/// A session's ID as Xray's client makes it: a random UUID, which is also
-/// the form of a group's VLESS user ID (Go's tunnel.NewVLESSID).
-pub(crate) fn session_id() -> String {
+/// A session's ID as Xray's client makes it: a random UUID.
+fn session_id() -> String {
+    random_uuid()
+}
+
+/// A random UUID (version 4), as a session's ID or a group's VLESS user ID.
+pub(crate) fn random_uuid() -> String {
     let mut b: [u8; 16] = random();
     b[6] = b[6] & 0x0f | 0x40;
     b[8] = b[8] & 0x3f | 0x80;
@@ -285,6 +407,10 @@ impl Session {
                     (ctx.log)(&format!("cbb: the way over VLESS: {}", e.for_log()));
                 }
                 ended.store(true, Ordering::SeqCst);
+                // A stream ends with its one session.
+                if let Out::Stream(t) = &ctx.out {
+                    let _ = t.shutdown(std::net::Shutdown::Both);
+                }
             })
         };
         Session { id, seq: 0, post: None, left: 0, ended, down: Some(down) }
@@ -296,8 +422,20 @@ impl Session {
         if self.ended.load(Ordering::SeqCst) {
             return Err(Error::msg("the forwarder ended the session"));
         }
-        let mut body = if self.seq == 0 { cv::request_header(&ctx.link.id) } else { Vec::new() };
-        while let Some(p) = queue.front() {
+        let mut body = if self.seq == 0 { ctx.header.clone() } else { Vec::new() };
+        if let Out::Stream(_) = ctx.out {
+            // A stream's bytes as they are, split where an upload is full.
+            while let Some(p) = queue.front_mut() {
+                let room = cv::MAX_POST.saturating_sub(body.len());
+                if p.len() > room {
+                    body.extend(p.drain(..room));
+                    break;
+                }
+                body.append(p);
+                queue.pop_front();
+            }
+        }
+        while let (Out::Udp { .. }, Some(p)) = (&ctx.out, queue.front()) {
             let f = cv::frame(p)?;
             if body.len() + f.len() > cv::MAX_POST {
                 if f.len() + 26 > cv::MAX_POST {
@@ -362,7 +500,7 @@ fn download(ctx: &Ctx, id: &str, ended: &AtomicBool) -> Result<()> {
         return Err(Error::msg(format!("the forwarder's site answers the download with {}", head.status)));
     }
     let mut chunked = Chunked::default();
-    let mut down = Down::default();
+    let mut down = if let Out::Stream(_) = ctx.out { Down::stream() } else { Down::default() };
     let mut left = match head.body {
         Body::Length(n) => n,
         _ => u64::MAX,
@@ -386,10 +524,20 @@ fn download(ctx: &Ctx, id: &str, ended: &AtomicBool) -> Result<()> {
             };
             data.clear();
             let packets = down.push(&body)?;
-            let peer = *ctx.peer.lock().unwrap();
-            if let Some(p) = peer {
-                for pkt in packets {
-                    let _ = ctx.udp.send_to(&pkt, p);
+            match &ctx.out {
+                Out::Udp { udp, peer } => {
+                    let peer = *peer.lock().unwrap();
+                    if let Some(p) = peer {
+                        for pkt in packets {
+                            let _ = udp.send_to(&pkt, p);
+                        }
+                    }
+                }
+                Out::Stream(t) => {
+                    let mut w = t;
+                    for pkt in packets {
+                        w.write_all(&pkt).context("the stream over VLESS cannot pass its bytes on")?;
+                    }
                 }
             }
             if chunked.done() || left == 0 {
@@ -459,16 +607,17 @@ fn upload(ctx: &Arc<Ctx>) {
 /// Takes a packet of the tunnel into the queue, waiting at most until the
 /// deadline (or POLL); reports whether one came.
 fn receive(ctx: &Ctx, buf: &mut [u8], queue: &mut VecDeque<Vec<u8>>, until: Option<Instant>) -> bool {
+    let Out::Udp { udp, peer } = &ctx.out else { return false };
     if let Some(u) = until {
         let wait = u.saturating_duration_since(Instant::now()).max(Duration::from_millis(1));
-        let _ = ctx.udp.set_read_timeout(Some(wait.min(POLL)));
+        let _ = udp.set_read_timeout(Some(wait.min(POLL)));
     } else {
-        let _ = ctx.udp.set_read_timeout(Some(POLL));
+        let _ = udp.set_read_timeout(Some(POLL));
     }
-    match ctx.udp.recv_from(buf) {
+    match udp.recv_from(buf) {
         // Only the tunnel on this computer sends here.
         Ok((n, from)) if from.ip().is_loopback() => {
-            *ctx.peer.lock().unwrap() = Some(from);
+            *peer.lock().unwrap() = Some(from);
             queue.push_back(buf[..n].to_vec());
             if queue.len() > MAX_QUEUE {
                 queue.pop_front();

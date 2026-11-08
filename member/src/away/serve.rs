@@ -339,6 +339,8 @@ impl Away {
                 let f: forward::CredentialFn = Arc::new(move || c.hub(&*n.upgrade()?));
                 f
             }),
+            ways: Default::default(),
+            learned: Default::default(),
         };
         let report = Arc::new(Mutex::new(Report::default()));
         let registration = Registration::start(cfg, report.clone(), self.log.clone());
@@ -594,7 +596,7 @@ fn vless_for(f: &mut Forwarder, vless: bool, old: Option<&Forwarder>) {
                 f.vless.clone_from(&o.vless);
             }
         }
-        None => f.vless_id = crate::vless::session_id(),
+        None => f.vless_id = crate::vless::random_uuid(),
     }
 }
 

@@ -56,7 +56,7 @@ import (
 
 	// What the two sides use of Xray, registered by their init functions.
 	// The configs are built here rather than from Xray's JSON, whose
-	// package pulls in much more, some of which gomobile cannot link.
+	// package pulls in much more.
 	_ "github.com/xtls/xray-core/app/proxyman/inbound"
 	_ "github.com/xtls/xray-core/app/proxyman/outbound"
 	_ "github.com/xtls/xray-core/transport/internet/tcp"

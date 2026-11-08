@@ -61,7 +61,7 @@ public struct HubState: Codable, Equatable, Sendable {
         return b.base64EncodedString() == pin
     }
 
-    /// The forwarder's endpoint as cbbtun takes it, "ip:port", when s is an
+    /// The forwarder's endpoint as the hub takes it, "ip:port", when s is an
     /// IPv4 or a bracketed IPv6 address with its port; a name is not looked
     /// up here.
     public static func endpoint(_ s: String) -> String? {
@@ -91,7 +91,7 @@ public struct HubState: Codable, Equatable, Sendable {
     }
 }
 
-/// A running hub of mobile/cbbtun.
+/// A running hub of the phone's tunnel.
 public protocol HubTunnel: AnyObject, Sendable {
     func setClients(_ json: String) throws
     /// Registers with the forwarder; vlessID is the group's VLESS user ID,
@@ -99,17 +99,16 @@ public protocol HubTunnel: AnyObject, Sendable {
     func register(endpoint: String, pin: String, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: String, vlessID: String) throws
     func setRecords(_ records: String) throws
     /// Tells the hub that its forwarder is the project's, with the ways in
-    /// over VLESS of the signed entry points as JSON, "" for none (cbbtun's
-    /// Hub.SetProjectWays).
+    /// over VLESS of the signed entry points as JSON, "" for none.
     func setProjectWays(_ ways: String) throws
-    /// cbbtun's Status JSON.
+    /// The forwarder's report as JSON.
     func status() -> String
-    /// Opens a remote invitation's guest tunnel (cbbtun's Hub.Invite).
+    /// Opens a remote invitation's guest tunnel.
     func invite(group: String, endpoints: String, lifetime: Int, guestPort: UInt16) throws -> HubGuest
     func close()
 }
 
-/// The guest tunnel of a remote invitation, cbbtun's Guest.
+/// The guest tunnel of a remote invitation.
 public protocol HubGuest: AnyObject, Sendable {
     /// The invitation's text, cbb://invite#….
     var text: String { get }
@@ -122,16 +121,16 @@ public protocol HubGuest: AnyObject, Sendable {
     func close()
 }
 
-/// Starts hubs; the app's come from mobile/cbbtun, the tests' from a fake.
+/// Starts hubs; the app's come from the Rust core, the tests' from a fake.
 public protocol HubTunnels: Sendable {
     func newKey() throws -> Data
     func publicKey(_ privateKey: Data) throws -> Data
     /// Starts the hub; obfuscation is its AmneziaWG settings as JSON, ""
     /// for plain WireGuard.
     func start(privateKey: Data, device: String, memberPort: UInt16, obfuscation: String, clients: String) throws -> HubTunnel
-    /// New AmneziaWG settings for the group (cbbtun's NewObfuscation).
+    /// New AmneziaWG settings for the group.
     func newObfuscation() throws -> Member.Obfuscation
-    /// A new VLESS user ID for the group (cbbtun's NewVLESSID).
+    /// A new VLESS user ID for the group.
     func newVLESSID() throws -> String
 }
 
