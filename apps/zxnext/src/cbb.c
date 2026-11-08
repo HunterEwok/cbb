@@ -1462,6 +1462,9 @@ static struct item items[] = {
 static uint16_t http_status;
 static const char no_file[] = SITE " has no such file; are its files in place?";
 
+extern uint8_t http_rx(uint16_t n) __z88dk_fastcall;
+extern uint8_t *http_dst;
+
 // Asks for size bytes of name from offset on the open connection; 0 with
 // the bytes in text[] when they all came.
 static uint8_t http_range(const char *name, uint32_t from, uint16_t size)
@@ -1501,13 +1504,12 @@ static uint8_t http_range(const char *name, uint32_t from, uint16_t size)
     if (length != size) goto out;
     // Once the bytes come, they come without a pause: 251 when two seconds
     // pass without one, which the Next lost to a speed it cannot read at.
-    for (; got < size; got++) {
-        err = link_recv(&c, 2);
-        if (err) {
-            if (err != LINK_BREAK) err = 251;
-            goto out;
-        }
-        text[got] = c;
+    http_dst = text;
+    err = http_rx(size);
+    got = (uint16_t)(http_dst - text);
+    if (err) {
+        err = 251;
+        goto out;
     }
     return 0;
 out:

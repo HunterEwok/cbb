@@ -44,6 +44,8 @@ PUBLIC _far_net_restart
 PUBLIC _far_show
 PUBLIC _far_img_banks
 PUBLIC _rx_block
+PUBLIC _http_rx
+PUBLIC _http_dst
 PUBLIC _tape_block
 PUBLIC _tape_dst
 PUBLIC _tape_len
@@ -301,6 +303,60 @@ _rom_char:
    pop iy
    pop ix
    ret
+
+SECTION PAGE_13
+
+; uint8_t http_rx(uint16_t n) __z88dk_fastcall
+;
+; .cbb install's chunk from the site: n bytes from the selected UART (the
+; ESP) to http_dst, as fast as they come (about 110 T-states a byte, so
+; 2 Mbit/s at 28 MHz), where link_recv() in C keeps up with 230400 only.
+; 0 when all came, 1 when some two seconds pass without a byte (the UART
+; lost them); http_dst says how far it got. SPACE waits for the next
+; chunk, a fraction of a second away, whose answer link_recv() waits for.
+HR_ROUNDS equ 14                ; rounds of 65536 polls, about 2 s
+
+_http_rx:
+   push ix
+   ex de,hl
+   ld hl,(_http_dst)
+   ld bc,0x133b
+hr_next:
+   ld a,d
+   or e
+   jr z,hr_end                  ; a = 0
+   ld ix,0
+   ld a,HR_ROUNDS
+   ld (hr_rounds),a
+hr_poll:
+   in a,(c)
+   rra
+   jr nc,hr_wait
+   inc b
+   ini
+   dec de
+   jr hr_next
+hr_wait:
+   dec ix
+   ld a,ixh
+   or ixl
+   jr nz,hr_poll
+   ld a,(hr_rounds)
+   dec a
+   ld (hr_rounds),a
+   jr nz,hr_poll
+   inc a
+hr_end:
+   ld (_http_dst),hl
+   ld l,a
+   ld h,0
+   pop ix
+   ret
+
+_http_dst:
+   defw 0
+hr_rounds:
+   defb 0
 
 SECTION PAGE_21
 

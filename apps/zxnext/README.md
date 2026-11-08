@@ -101,7 +101,8 @@ The install goes as fast as the lines keep the bytes whole: the site's files thr
 from 2000000 down a step at a time (921600, 460800, 230400, 115200) once bytes go missing or
 a file arrives damaged, and the Pi's `cbb` the same way, down a step when the Pi's tty does not
 take the speed or its SHA-256 does not match. The file's row says each new speed (`AT 921K`),
-and the speed found holds for the rest of the install. The signed list `.cbb update` fetches
+and the speed found holds for the rest of the install. The Next reads each chunk in a loop of its
+own in assembly, about 110 T-states a byte, fast enough for 2000000 at 28 MHz. The signed list `.cbb update` fetches
 first, a few hundred bytes, comes at the ESP's own 115200.
 
 A line shows each download: the percentage, the kilobytes, the speed and the time left, and
