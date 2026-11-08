@@ -209,6 +209,7 @@ class PhoneGroup internal constructor(
             d.commands.takeIf { admin != null && admin.contentEqualsOrNull(d.adminKey) && it.isNotEmpty() },
             d.seal,
             d.forwardOnly,
+            d.caps,
         )
 
     /**
