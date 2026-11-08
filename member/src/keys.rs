@@ -135,12 +135,11 @@ pub fn unseal(b: &Sealed) -> Result<Vec<u8>> {
     Ok(open.secret)
 }
 
-/// A key on a YubiKey (Go's internal/piv), which the helper signs with
-/// after its PIN: the recovery key a root phone put there. The key whose
+/// A key on a YubiKey, which cbb signs with itself after its PIN
+/// (piv.rs): the recovery key a root phone put there. The key whose
 /// certificate's public key has the hash key_hash signs; public is that
 /// key, from the admin CA the records carry for it.
 pub struct CardKey {
-    helper: Arc<Helper>,
     key_hash: [u8; 32],
     pin: String,
     public: Vec<u8>,
@@ -149,26 +148,8 @@ pub struct CardKey {
 impl CardKey {
     /// The card's key for key_hash, whose public key is public.
     pub fn new(key_hash: [u8; 32], pin: &str, public: Vec<u8>) -> Result<CardKey> {
-        let helper = crate::helper::shared().ok_or_else(|| {
-            Error::msg("a YubiKey signs only through cbb-helper, and there is no cbb-helper beside cbb")
-        })?;
-        Ok(CardKey { helper, key_hash, pin: pin.to_string(), public })
+        Ok(CardKey { key_hash, pin: pin.to_string(), public })
     }
-}
-
-#[derive(Serialize)]
-struct CardSign<'a> {
-    #[serde(with = "b64")]
-    key_hash: &'a [u8],
-    pin: &'a str,
-    #[serde(with = "b64")]
-    digest: &'a [u8],
-}
-
-#[derive(Deserialize)]
-struct Signed {
-    #[serde(with = "b64", default)]
-    sig: Vec<u8>,
 }
 
 impl ExternalKey for CardKey {
@@ -177,12 +158,7 @@ impl ExternalKey for CardKey {
     }
 
     fn sign_digest(&self, digest: &[u8; 32]) -> Result<Vec<u8>> {
-        let req = CardSign { key_hash: &self.key_hash, pin: &self.pin, digest };
-        let payload = serde_json::to_vec(&req).context("cannot encode a card request")?;
-        let ans = self.helper.call(Header { op: "card-sign".into(), ..Default::default() }, payload, KEY_TIME)?;
-        let s: Signed =
-            serde_json::from_slice(&ans.payload).context("the helper's answer about the card is not understood")?;
-        Ok(s.sig)
+        crate::piv::sign_with_card(&self.key_hash, &self.pin, &self.public, digest)
     }
 }
 

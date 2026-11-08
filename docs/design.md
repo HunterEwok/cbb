@@ -192,14 +192,16 @@ ends, the Go service described below is still the computers' member.
   where the key would go into a file, which `cbb` then makes itself. `identity.json` keeps
   the blob as the Go member's file does (`key_tpm`, `key_se`); `key-public` loads it by the
   blob and `key-sign` signs a SHA-256 digest with it, so `cbb`'s handshakes, copies and
-  records are signed in the hardware and the key never leaves it. `card-sign` signs with a
-  key on a YubiKey, found by its certificate's key hash, after its PIN. `seal` and `unseal`
+  records are signed in the hardware and the key never leaves it. `seal` and `unseal`
   seal a secret with the TPM or the Secure Enclave as Go's `group.Sealer` does: `cbb` keeps
   the key for sealed messages (`seal.json`) and the tunnel's keys (`tunnel.json`, with the
   hub's fields Go writes) sealed in the same fields as the Go member. On a Mac, which has no
   TPM, `cbb` does all of this with the Secure Enclave itself (`member/src/sekey.rs`, through
   Security.framework, the same blobs and the same sealed format as Go's `internal/sekey`,
   checked against `testdata/interop/go-sekey-seal.json`), so there the helper holds no key.
+  A YubiKey `cbb` reads itself on every system (`member/src/piv.rs`, Go's `internal/piv`
+  translated, through pcscd's socket on Linux, PCSC.framework on a Mac and winscard on
+  Windows): it finds the slot by its certificate's key hash, takes the PIN and signs.
 - **The keyboard and the TVs.** `keyboard`, `remote`, `peripheral-status`,
   `peripheral-paste`, `peripheral-stop` and `keyboard-layout` run Go's `internal/peripheral`,
   the code the Go service runs too, with the state folder and the device's name in each
@@ -244,7 +246,7 @@ ends, the Go service described below is still the computers' member.
   each connected admin whose admin CA is from an earlier root a new one for the same key, as
   Go's `renewAdminCAs` (`TestLiteTakeover`). Any
   member claims the group the same way with the recovery key (`recovery`): the sheet's key,
-  or with `yubikey` the card's, which cbb-helper's `card-sign` uses after the PIN, signs the
+  or with `yubikey` the card's, which `cbb` signs with after the PIN (`member/src/piv.rs`), signs the
   claim under the recovery key's admin CA from the records or the sheet (`TestLiteRecovery`).
 - **The hub.** On an admin whose key level allows it, `hub` makes the Rust service the
   group's hub as Go's `cbb global hub` does: the state in `tunnel.json` becomes a hub's

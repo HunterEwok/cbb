@@ -9,7 +9,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,7 +17,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/keyseal"
-	"github.com/HunterEwok/cbb/internal/piv"
 	"github.com/HunterEwok/cbb/internal/tpmkey"
 )
 
@@ -33,9 +31,6 @@ const (
 	// OpKeySign signs a SHA-256 digest with the key a Sign names; the
 	// answer's payload is the ECDSA signature, DER.
 	OpKeySign = "key-sign"
-	// OpCardSign signs a digest with a key on a YubiKey (internal/piv)
-	// after its PIN; the answer is a Signed.
-	OpCardSign = "card-sign"
 	// OpSeal seals a secret with the TPM or the Secure Enclave
 	// (group.Sealer); the request and the answer are a Sealed, the
 	// answer with no blob where secrets stay in files.
@@ -68,38 +63,19 @@ type Sign struct {
 	Digest []byte `json:"digest"`
 }
 
-// CardSign asks a YubiKey for a signature with the key whose certificate's
-// public key has the hash KeyHash (group.KeyHashOf), after PIN.
-type CardSign struct {
-	KeyHash []byte `json:"key_hash"`
-	PIN     string `json:"pin"`
-	Digest  []byte `json:"digest"`
-}
-
-// Signed is a YubiKey's signature, DER, and the certificate of its key.
-type Signed struct {
-	Cert []byte `json:"cert"`
-	Sig  []byte `json:"sig"`
-}
-
 // keys serves the key operations; it keeps each key it loaded.
 type keys struct {
 	mu     sync.Mutex
 	loaded map[string]crypto.Signer
-	// openCard finds the YubiKey slot whose certificate match takes;
-	// piv.Open, tests replace it.
-	openCard func(match func(*x509.Certificate) bool) (*piv.Key, error)
 }
 
-// HandleKeys serves the key operations on s.
-func (s *Server) HandleKeys() { s.handleKeys(piv.Open) }
-
-func (s *Server) handleKeys(openCard func(func(*x509.Certificate) bool) (*piv.Key, error)) {
-	k := &keys{loaded: map[string]crypto.Signer{}, openCard: openCard}
+// HandleKeys serves the key operations on s. A YubiKey cbb reads itself
+// (member/src/piv.rs).
+func (s *Server) HandleKeys() {
+	k := &keys{loaded: map[string]crypto.Signer{}}
 	s.Handle(OpKeyNew, k.new)
 	s.Handle(OpKeyPublic, k.public)
 	s.Handle(OpKeySign, k.sign)
-	s.Handle(OpCardSign, k.cardSign)
 	s.Handle(OpSeal, seal)
 	s.Handle(OpUnseal, unseal)
 }
@@ -183,34 +159,6 @@ func (k *keys) sign(req *control.Message) (*control.Message, error) {
 		return nil, fmt.Errorf("signing with this device's key: %w", err)
 	}
 	return &control.Message{Payload: sig}, nil
-}
-
-func (k *keys) cardSign(req *control.Message) (*control.Message, error) {
-	var r CardSign
-	if err := json.Unmarshal(req.Payload, &r); err != nil {
-		return nil, fmt.Errorf("a signing request that is not understood: %w", err)
-	}
-	if len(r.Digest) != sha256.Size || len(r.KeyHash) != sha256.Size {
-		return nil, errors.New("a signing request without a SHA-256 digest and key hash")
-	}
-	want := group.KeyHash(r.KeyHash)
-	c, err := k.openCard(func(c *x509.Certificate) bool { return group.KeyHashOf(c) == want })
-	if err != nil {
-		return nil, err
-	}
-	defer c.Card.Close()
-	if err := piv.Verify(c.Card, r.PIN); err != nil {
-		return nil, err
-	}
-	signer, err := c.Signer()
-	if err != nil {
-		return nil, err
-	}
-	sig, err := signer.Sign(rand.Reader, r.Digest, crypto.SHA256)
-	if err != nil {
-		return nil, err
-	}
-	return answer(Signed{Cert: c.Cert.Raw, Sig: sig})
 }
 
 // load returns the key held loads, loading it once.
