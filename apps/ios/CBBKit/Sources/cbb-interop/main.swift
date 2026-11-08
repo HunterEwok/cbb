@@ -45,7 +45,8 @@
 // KEY (its 32 bytes) and CERT (its admin CA, DER), both base64, and GROUP,
 // the group's tag, make the sheet's QR code, which the tool reads as the
 // app does. It takes the records, checks them, claims the group for a new
-// root, sends the claim on a second connection, and prints its device ID,
+// root through its member in the Rust core, sends the claim on a second
+// connection, and prints its device ID,
 // then the new root in base64. Test use only.
 
 import CBBKit
@@ -204,8 +205,18 @@ func restoreTLS(host: String, port: UInt16, key: Data, cert: Data, tag: String) 
         return tls
     }
     var g = try r.group(try await Restore.exchange(try await dial(), name: "iPhone", os: "ios", now: now), now: now)
-    let newRoot = try GroupCertificates.groupCA(signer: SoftwareSigner(), now: now, pathLength: 1)
-    let claim = try r.claim(&g, newRoot: newRoot, now: now)
+    // The core's member signs the claim, as in the app; it goes out on a records-only connection.
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-interop-restore-\(Member.newID())")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let member = try CoreMember(.init(dir: dir, name: "iPhone", device: r.device, publicKeyDER: signer.publicKeyDER, seal: Data((0..<32).map { _ in UInt8.random(in: 0...255) }),
+                                      cert: r.memberCert, issuer: r.adminCA, groupCA: g.groupCA, roots: g.trusted)) { try signer.signature(digest: $0) }
+    defer { member.stop() }
+    try member.addRecords(g.records.records)
+    let newRootKey = SoftwareSigner()
+    let newRoot = try member.rootCA(public: newRootKey.publicKeyDER) { try newRootKey.signature(digest: $0) }
+    try r.claim(&g, member: member, newRoot: newRoot)
+    guard let claim = g.claimRecord(in: try member.records()) else { throw TLSTransport.Failure.notReady("the member holds no claim") }
     _ = try await Restore.exchange(try await dial(), name: "iPhone", os: "ios", now: Date(), send: [claim])
     print(r.device)
     print(newRoot.base64EncodedString())

@@ -73,6 +73,7 @@ mod service;
 mod signed;
 mod sync;
 mod sys;
+pub mod takeover;
 pub mod tls;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;

@@ -537,6 +537,9 @@
     <string name="mute_ever">जब तक कोई एडमिन अनम्यूट न करे</string>
     <string name="create_group">समूह बनाएँ</string>
     <string name="join_group">समूह से जुड़ें</string>
+    <string name="join_admin">एडमिन के रूप में जुड़ें</string>
+    <string name="join_admin_title">एडमिन के रूप में जुड़ें</string>
+    <string name="join_admin_hint">समूह के रूट फ़ोन पर + दबाएँ और यह कोड स्कैन करें: केवल रूट ही किसी फ़ोन को एडमिन के रूप में जोड़ता है। यह स्क्रीन खुली रखें।</string>
     <string name="restore_link">रिकवरी कुंजी से बहाल करें</string>
     <string name="sync_on">सिंक चालू है</string>
     <string name="sync_off">सिंक बंद है</string>

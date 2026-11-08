@@ -19,6 +19,7 @@ import tools.cbb.kit.Content
 import tools.cbb.kit.CopyKeys
 import tools.cbb.kit.InvitationWindow
 import tools.cbb.kit.JoinCode
+import tools.cbb.kit.CorePairing
 import tools.cbb.kit.PairingJoiner
 import tools.cbb.kit.PairingMember
 import tools.cbb.kit.Pairing
@@ -333,9 +334,14 @@ class AppModel(private val app: Context) {
         }
     }
 
-    /** Opens the screen that joins another device's group. */
-    fun startJoining() {
+    /** Whether the join screen asks to join as an admin, which only the group's root grants. */
+    var joinAsAdmin by mutableStateOf(false)
+        private set
+
+    /** Opens the screen that joins another device's group; with admin, as an admin. */
+    fun startJoining(admin: Boolean = false) {
         message = null
+        joinAsAdmin = admin
         phase = Phase.JOINING
     }
 
@@ -346,7 +352,7 @@ class AppModel(private val app: Context) {
      */
     suspend fun join() {
         try {
-            group.join { code -> joinCode = code }
+            group.join(joinAsAdmin) { code -> joinCode = code }
             update()
             phase = Phase.HOME
         } catch (e: CancellationException) {
@@ -1233,6 +1239,7 @@ class AppModel(private val app: Context) {
             is CopyKeys.NoRecords -> R.string.error_copy_no_records
             is LiveGroup.Muted -> R.string.error_muted
             is LiveGroup.Unavailable, is LiveGroup.NotConnected, is Content.Mismatch -> R.string.error_image_unavailable
+            is CorePairing.Failure -> if (e.wrongCode) R.string.error_wrong_code else R.string.error_refused
             is PairingMember.Failure ->
                 if (e.code == Pairing.ErrorCode.WRONG_CODE) R.string.error_wrong_code else R.string.error_refused
             is PhoneGroup.Failure -> R.string.error_generic

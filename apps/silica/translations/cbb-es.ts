@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>La raíz del grupo canceló la solicitud; el teléfono sigue siendo administrador.</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>La solicitud para tomar el grupo dejó de ser válida; el teléfono sigue siendo administrador.</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>Conecta el teléfono al Wi-Fi de tu casa para unirte a un grupo.</translation>
     </message>
@@ -176,6 +184,22 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>Escribir el portapapeles en %1</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>el dispositivo del teclado</translation>
+    </message>
+    <message>
+        <source>Back to the group's order</source>
+        <translation>Volver al orden del grupo</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Nueva colección…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>Comprobar la clave de nuevo</translation>
     </message>
@@ -311,6 +335,30 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Take the group over</source>
+        <translation>Tomar el grupo</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>Tomando el grupo de %1</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>Tomar el grupo</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>Esperando, quedan %1 h</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>Esperando a que el grupo reciba la solicitud</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>En disputa: la raíz del grupo respondió a la solicitud</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>Quitar</translation>
     </message>
@@ -393,6 +441,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>Teclado Bluetooth</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>Actuar como teclado Bluetooth</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Desactivado</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>Conectado</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>No funciona</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Activado</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>Ajustes</translation>
@@ -806,6 +878,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>Un vídeo</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>Una imagen</translation>
     </message>
@@ -833,6 +909,10 @@
 <context>
     <name>Notifier</name>
     <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>%1 del grupo está en la galería</translation>
+    </message>
+    <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>Se guardó %1 del grupo en Descargas</translation>
     </message>
@@ -843,6 +923,275 @@
     <message>
         <source>%1 files</source>
         <translation>%1 archivos</translation>
+    </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>Pegado desde %1</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>Ordenar</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>Mover al principio</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>Mover antes</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>Mover después</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>Mover al final</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>Mover a %1</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Nueva colección…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>Sacar de la colección</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Renombrar colección…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>Desagrupar</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>Crear</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Renombrar</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>Nueva colección</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>Renombrar colección</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Nombre</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>Oficina, Casa, Televisores…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 de %2 en línea</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 de %2 en línea</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>Desagrupar</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Renombrar colección…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 de %2 en línea</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>Aún no hay dispositivos en esta colección. Mantén pulsado el mosaico de un dispositivo en la pantalla principal para moverlo aquí.</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>El Bluetooth del teléfono no respondió. Puede que CBB no tenga permiso para usarlo.</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>El Bluetooth de este teléfono no puede actuar como teclado.</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>El Bluetooth está apagado. Actívalo en los ajustes del teléfono y vuelve a activar el teclado.</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>El teléfono no pudo actuar como teclado.</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>El Bluetooth del teléfono no aceptó el teclado.</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>El teléfono no pudo anunciar el teclado.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>No hay ningún dispositivo conectado. Conéctate a este teléfono desde el dispositivo, en sus ajustes de Bluetooth.</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>El portapapeles no contiene texto.</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>El texto tiene más de %1 caracteres, más de los que escribe un teclado.</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>La distribución del dispositivo no tiene tecla para: %1. Elige su distribución arriba.</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>El dispositivo se desconectó; el texto no se escribió entero.</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>Teclado Bluetooth</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>Actuar como teclado Bluetooth</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>Este teléfono escribe en un televisor, una tableta, una consola o un ordenador emparejado con él, sin instalar nada allí: el portapapeles, cuando tocas.</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>Preparando…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>Conectado a %1.</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>Hay un dispositivo conectado.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>No hay ningún dispositivo conectado. Conéctate a este teléfono desde el dispositivo, en sus ajustes de Bluetooth.</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>Visible durante %1 s</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>Hacer visible este teléfono</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>Mientras es visible, un dispositivo nuevo encuentra este teléfono como “CBB keyboard” en sus ajustes de Bluetooth.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Reintentar</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>Distribución del teclado del dispositivo</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>Inglés (EE. UU.)</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>Ruso</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Velocidad</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>%1 caracteres por segundo</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>Escribiendo…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>Escribir el portapapeles</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>Pegado remoto</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>Permitir que los administradores del grupo peguen allí</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>Un administrador del grupo escribe entonces un texto a través de este teléfono en el dispositivo al que está conectado, desde su propia app o con cbb paste. Este teléfono muestra quién pegó y guarda un registro de los últimos pegados sin su texto.</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>Permitir que un pegado pulse Intro</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>También lo necesita un texto con un salto de línea: el teclado escribe un salto de línea como Intro.</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>Últimos pegados</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>(sin verificar)</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>%1 bytes</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>rechazado</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>falló</translation>
     </message>
 </context>
 <context>

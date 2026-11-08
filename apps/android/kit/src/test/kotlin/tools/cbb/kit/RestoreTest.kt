@@ -3,7 +3,10 @@
 
 package tools.cbb.kit
 
+import java.io.File
 import java.time.Instant
+import kotlin.io.path.createTempDirectory
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -20,8 +23,29 @@ import kotlin.test.assertTrue
  * of the group and claims the group.
  */
 class RestoreTest {
-    /** When the group was made: long enough ago that a claim made then took effect by now. */
-    private val t0 = Instant.now().minusSeconds(100L * 3600)
+    /** When the group was made. */
+    private val t0 = Instant.now().minusSeconds(3600)
+
+    private val top: File = createTempDirectory("cbb-restore").toFile()
+    private val members = mutableListOf<CoreMember>()
+
+    @AfterTest
+    fun cleanUp() {
+        members.forEach { it.close() }
+        top.deleteRecursively()
+    }
+
+    /** The new phone's member in the Rust core, as the app starts it once [Restore.group] gave it the group. */
+    private fun member(r: Restore, group: PhoneGroup, key: SoftwareSigner): CoreMember {
+        val m = CoreMember.start(
+            CoreMember.Start(File(top, "${members.size}").apply { mkdirs() }, "New", "android", "17", "0.6.0", device = r.device, publicKey = key.publicKeyDER,
+                seal = CoreGroup.SEAL, cert = r.memberCert, issuer = r.adminCA, groupCA = group.groupCA, roots = group.trusted),
+            key::signDigest,
+        ) { }
+        members += m
+        m.addRecords(group.records.records)
+        return m
+    }
 
     private class Group(t0: Instant) {
         val rootKey = SoftwareSigner()
@@ -78,32 +102,32 @@ class RestoreTest {
         val fetched = Restore.exchange(phone, "New", "android", t0, quietMS = 300)
         pc.join()
         val group = r.group(fetched, t0)
-        group.records.clock = { t0 }
         assertFalse(group.isRoot)
         assertEquals(g.root.tag, group.tag)
         assertTrue(group.devices.none { it.id == r.device }, "no record names the new phone yet")
         assertIs<RecordSet.Verdict.NotListed>(group.records.verdict(r.chain), "the computers take its chain for records only")
 
+        val m = member(r, group, memberKey)
         val newRootKey = SoftwareSigner()
-        val newRoot = GroupCertificates.groupCA(newRootKey, t0, pathLength = 1)
-        val claim = r.claim(group, newRoot, t0)
+        val newRoot = m.rootCA(newRootKey.publicKeyDER, newRootKey::signDigest)
+        r.claim(group, m, newRoot)
+        group.add(m.records())
         assertEquals("pending", group.claimState)
-        assertTrue(group.finishTakeOver(newRootKey, t0).isEmpty(), "the claim waits")
+        val finish = { m.finishTakeover(newRoot, newRootKey.publicKeyDER, "New", "android", Records.HARDWARE, null, newRootKey::signDigest) }
+        assertEquals("pending", finish().state, "the claim waits")
 
-        // The claim reaches the computer on the next exchange.
-        val (phone2, pc2) = computer(g.root.records.records, g.root.groupCA, listOf(g.computer.cert))
-        Restore.exchange(phone2, "New", "android", t0, send = listOf(claim), quietMS = 300)
-        assertEquals(listOf(Records.id(claim).toHex()), pc2.join().map { Records.id(it).toHex() })
-
-        // Once the delay ran out, the phone is the root.
-        group.records.clock = { Instant.now() }
-        val rs = group.finishTakeOver(newRootKey, Instant.now(), "New", seal = null)
+        // Once the delay ran out (the root set none here), the phone is the root.
+        val none = g.root.setTakeoverDelay(0, g.rootKey, Instant.now())
+        group.add(listOf(none))
+        m.addRecords(listOf(none))
+        val done = finish()
+        assertEquals("effective", done.state)
+        group.becameRoot(done.cert!!, m.records())
         assertTrue(group.isRoot)
         assertNull(group.memberIssuer)
         assertNull(group.adminCA)
         assertEquals(r.device, group.records.rootDevice)
         assertEquals(listOf("New", "one"), group.devices.map { it.name }.sorted(), "the lost root's device goes")
-        assertTrue(rs.isNotEmpty())
         assertEquals(r.device, GroupCertificates.verifyMember(group.memberChain, listOf(newRoot), Instant.now()))
         assertContentEquals(CertificateInfo(r.memberCert).publicKey, CertificateInfo(group.memberCert).publicKey, "the same member key")
         assertNull(group.records.refused(group.memberChain))
@@ -123,16 +147,19 @@ class RestoreTest {
 
         Piv.select(card)
         val (s, cert) = Piv.recoveryKeys(card).single()
-        val r = Restore.onCard(Piv.Signer(card, s, CertificateInfo(cert).publicKey, "123456"), cert, SoftwareSigner().publicKeyDER, t0)
+        val memberKey = SoftwareSigner()
+        val r = Restore.onCard(Piv.Signer(card, s, CertificateInfo(cert).publicKey, "123456"), cert, memberKey.publicKeyDER, t0)
         val (phone, pc) = computer(g.root.records.records, g.root.groupCA, listOf(g.computer.cert))
         val fetched = Restore.exchange(phone, "New", "android", t0, quietMS = 300)
         pc.join()
         val group = r.group(fetched, t0)
-        group.records.clock = { t0 }
-        val newRoot = GroupCertificates.groupCA(SoftwareSigner(), t0, pathLength = 1)
-        assertEquals(Restore.Kind.NOT_THE_KEY, assertFailsWith<Restore.Failure> { r.claim(group, newRoot, t0, SoftwareSigner()) }.kind)
+        val m = member(r, group, memberKey)
+        val newRootKey = SoftwareSigner()
+        val newRoot = m.rootCA(newRootKey.publicKeyDER, newRootKey::signDigest)
+        assertEquals(Restore.Kind.NOT_THE_KEY, assertFailsWith<Restore.Failure> { r.claim(group, m, newRoot, SoftwareSigner()) }.kind)
         Piv.select(card)
-        r.claim(group, newRoot, t0, Piv.Signer(card, s, CertificateInfo(cert).publicKey, "123456"))
+        r.claim(group, m, newRoot, Piv.Signer(card, s, CertificateInfo(cert).publicKey, "123456"))
+        group.add(m.records())
         assertEquals("pending", group.claimState)
         assertEquals(2, card.signed)
     }

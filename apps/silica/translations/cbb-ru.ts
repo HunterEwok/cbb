@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>Корень группы отменил заявку; телефон остаётся админом.</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>Заявка на перехват группы стала недействительной; телефон остаётся админом.</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>Подключите телефон к домашнему Wi-Fi, чтобы войти в группу.</translation>
     </message>
@@ -176,6 +184,22 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>Набрать буфер обмена на %1</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>устройстве клавиатуры</translation>
+    </message>
+    <message>
+        <source>Back to the group's order</source>
+        <translation>Вернуть порядок группы</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Новая коллекция…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>Проверить ключ снова</translation>
     </message>
@@ -311,6 +335,30 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Take the group over</source>
+        <translation>Забрать группу</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>Группа переходит от %1</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>Перехват группы</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>Ожидание, осталось %1 ч</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>Ждём, пока группа получит заявку</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>Спор: корень группы ответил на заявку</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>Удалить</translation>
     </message>
@@ -393,6 +441,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>Bluetooth-клавиатура</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>Работать как Bluetooth-клавиатура</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Выкл.</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>Подключено</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>Не работает</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Вкл.</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>Настройки</translation>
@@ -806,6 +878,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>Видео</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>Изображение</translation>
     </message>
@@ -833,6 +909,10 @@
 <context>
     <name>Notifier</name>
     <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>%1 из группы — в Галерее</translation>
+    </message>
+    <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>Сохранено в «Загрузках» из группы: %1</translation>
     </message>
@@ -843,6 +923,275 @@
     <message>
         <source>%1 files</source>
         <translation>файлов: %1</translation>
+    </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>Вставлено с %1</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>Упорядочить</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>В начало</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>Переместить раньше</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>Переместить позже</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>В конец</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>В коллекцию «%1»</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Новая коллекция…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>Убрать из коллекции</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Переименовать коллекцию…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>Разгруппировать</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>Создать</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Переименовать</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>Новая коллекция</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>Переименовать коллекцию</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Название</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>Офис, Дом, Телевизоры…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 из %2 в сети</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 из %2 в сети</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>Разгруппировать</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Переименовать коллекцию…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 из %2 в сети</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>В коллекции пока нет устройств. Удерживайте плитку устройства на главном экране, чтобы переместить его сюда.</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>Bluetooth телефона не ответил. Возможно, CBB не разрешено им пользоваться.</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>Bluetooth этого телефона не может работать как клавиатура.</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>Bluetooth выключен. Включите его в настройках телефона, затем снова включите клавиатуру.</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>Телефону не удалось стать клавиатурой.</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>Bluetooth телефона не принял клавиатуру.</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>Телефону не удалось объявить клавиатуру.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>Ни одно устройство не подключено. Подключитесь к этому телефону с устройства, в его настройках Bluetooth.</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>В буфере обмена нет текста.</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>В тексте больше %1 символов — больше, чем набирает клавиатура.</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>В раскладке устройства нет клавиши для: %1. Выберите его раскладку выше.</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>Устройство отключилось; текст набран не полностью.</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>Bluetooth-клавиатура</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>Работать как Bluetooth-клавиатура</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>Телефон набирает текст на телевизоре, планшете, приставке или компьютере, с которым он сопряжён, и там ничего не нужно устанавливать: буфер обмена, по вашему нажатию.</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>Подготовка…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>Подключено к %1.</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>Устройство подключено.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>Ни одно устройство не подключено. Подключитесь к этому телефону с устройства, в его настройках Bluetooth.</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>Виден ещё %1 с</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>Сделать телефон видимым</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>Пока телефон виден, новое устройство найдёт его в своих настройках Bluetooth как «CBB keyboard».</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Попробовать снова</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>Раскладка устройства</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>Английская (США)</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>Русская</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Скорость</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>%1 символов в секунду</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>Набираю…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>Набрать буфер обмена</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>Удалённая вставка</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>Разрешить админам группы вставлять туда</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>Тогда админ группы набирает текст через этот телефон на устройстве, к которому он подключён, из своего приложения или командой cbb paste. Телефон показывает, кто вставил, и хранит журнал последних вставок без их текста.</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>Разрешить вставке нажимать Enter</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>Это нужно и для текста с переводом строки: клавиатура набирает перевод строки как Enter.</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>Последние вставки</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>(не проверено)</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>%1 байт</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>отклонено</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>не удалось</translation>
     </message>
 </context>
 <context>

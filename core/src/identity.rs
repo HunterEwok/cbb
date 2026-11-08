@@ -234,10 +234,21 @@ impl Identity {
     /// Returns the identity with a member certificate that an admin renewed
     /// for it: from the issuer of the current one or a root, or, when
     /// issuer is given, from that admin CA under a root. It must name this
-    /// device and its key and end later than the current one.
+    /// device and its key and end later than the current one, unless the
+    /// current root took the group over from the root of the current one.
     pub fn with_cert_from(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<Identity> {
         let next = self.with_cert_any_end(der, issuer)?;
-        if next.cert.not_after <= self.cert.not_after {
+        // A certificate from a root that took the group over replaces one
+        // from an earlier root (or an admin CA under it) instead of renewing
+        // it, so it may be issued in the same second.
+        let root = self.root();
+        let replaced = next.cert.signed_by(root)
+            && match &self.issuer {
+                // The admin's own key may be the new root's (the Aurora app).
+                Some(i) => !i.signed_by(root),
+                None => !self.cert.signed_by(root),
+            };
+        if !replaced && next.cert.not_after <= self.cert.not_after {
             return Err(Error::msg("the renewed certificate does not end later than the current one"));
         }
         Ok(next)
@@ -258,6 +269,11 @@ impl Identity {
         next.cert = Cert::parse(der).wrap("the renewed certificate")?;
         if let Some(i) = issuer {
             next.issuer = Some(Cert::parse(i).wrap("the renewed certificate's issuer")?);
+        } else if next.cert.signed_by(self.root()) {
+            // The current root issued it, even when an admin CA for the same
+            // key issued the current one, as on the Aurora app after a
+            // takeover, whose admin key became the root's.
+            next.issuer = None;
         }
         if let Err(e) = next.check() {
             if self.issuer.is_none() || issuer.is_some() {
