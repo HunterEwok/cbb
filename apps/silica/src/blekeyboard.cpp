@@ -549,7 +549,7 @@ bool BleKeyboard::send(const QByteArray &report)
     if (m_listening == 0)
         return false;
     // The boot keyboard's report when the host chose the boot protocol.
-    Characteristic &c = m_chars[m_chars[m_protocol].value.value(0) == 0 ? m_boot : m_report];
+    Characteristic &c = m_chars[m_chars[m_protocol].value.startsWith(char(0)) ? m_boot : m_report];
     c.value = report;
     QDBusMessage s = QDBusMessage::createSignal(c.path, propsIface, QStringLiteral("PropertiesChanged"));
     s << charIface << QVariantMap{{QStringLiteral("Value"), report}} << QStringList();
