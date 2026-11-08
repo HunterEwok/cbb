@@ -289,7 +289,10 @@ fn play_tape(bytes: &[u8]) -> Result<()> {
     res
 }
 
-/// The speeds `cbb next speed` takes, as termios names them.
+/// The speeds `cbb next speed` takes, as termios names them: the Pi's
+/// Linux has them all, other systems (where the crate builds for the
+/// phones) only the common two.
+#[cfg(any(target_os = "linux", target_os = "android"))]
 const SPEEDS: [(u32, libc::speed_t); 9] = [
     (115_200, libc::B115200),
     (230_400, libc::B230400),
@@ -301,6 +304,8 @@ const SPEEDS: [(u32, libc::speed_t); 9] = [
     (1_500_000, libc::B1500000),
     (2_000_000, libc::B2000000),
 ];
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+const SPEEDS: [(u32, libc::speed_t); 2] = [(115_200, libc::B115200), (230_400, libc::B230400)];
 
 /// `.cbb speed`'s test of the line (apps/zxnext): `CBBS <baud> <bytes>
 /// <crc32>` CR at the line's own speed, then, after half a second, bytes
