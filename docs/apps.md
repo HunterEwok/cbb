@@ -60,10 +60,14 @@ they look, so both apps are built to the same plan.
    Shortcuts and Spotlight offer as soon as the app is installed (App Intents with an
    App Shortcut): Back Tap or the Action button runs it without opening the app; it waits
    a few seconds for a computer to connect and says what it did in one line. The same
-   action is a home-screen widget "Sync clipboard" on both phones (on the iPhone also a
-   Control Center control, iOS 18): one tap opens the app for a moment, since iOS lets an
-   app read the clipboard only in the foreground, and syncs; on Android the widget sends
-   as the tile does. On the iPhone, **Share → Copy Beyond Borders** (from any app, and from the
+   action is a home-screen widget "Sync clipboard" on both phones: one tap opens the app
+   for a moment, since iOS lets an app read the clipboard only in the foreground, and
+   syncs; on Android the widget sends. The house is also outside the app: the Quick Settings
+   tile on Android and the Control Center control on the iPhone (iOS 18): a clipboard, lit
+   while sync is on and grey while it is off (struck through on Android, empty on the
+   iPhone). A tap turns sync on this phone on or off; on Android a long press opens the app
+   (iOS gives a control no long press of its own), and without a group the tile opens the
+   app. On the iPhone, **Share → Copy Beyond Borders** (from any app, and from the
    text selection menu's Share) sends the text or the link at once: the share extension
    dials the group's computers with the phone's member key, which it shares with the app
    through an app group and a keychain access group (both need the Apple developer
@@ -570,7 +574,7 @@ the sender.
 
 **Sending with one tap, without the service** (and always as well):
 
-- the **Quick Settings tile** "Send clipboard", and the **home-screen widget** of the same name;
+- the **home-screen widget** "Send clipboard";
 - the **"Send" button** in the service's notification;
 - **text selection → Copy Beyond Borders** (`ACTION_PROCESS_TEXT`) and **Share → Copy Beyond Borders**,
   which first ask "Allow" or "Always for this app", naming the app, since any app can hand
@@ -586,8 +590,8 @@ the sender.
 - **opening the app**, by the Home button's rule.
 
 Each of these opens a transparent activity for a moment: it has the focus, reads the
-clipboard, sends, says what it did in one line (a toast) and closes. The tile, the widget and
-the notification open one that other apps cannot (not exported); Share, the selection menu and
+clipboard, sends, says what it did in one line (a toast) and closes. The widget and the
+notification open one that other apps cannot (not exported); Share, the selection menu and
 "cbb send" open the exported one, which asks as above.
 
 A secret written to the clipboard goes after its minute even while the app is in the

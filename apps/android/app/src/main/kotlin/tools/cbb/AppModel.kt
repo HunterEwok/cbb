@@ -86,7 +86,10 @@ class AppModel(private val app: Context) {
     init {
         loadArrangement()
         // A command from an admin changes this phone's mode on the node's thread.
-        group.onModeChanged = { Handler(Looper.getMainLooper()).post { devices = group.devices } }
+        group.onModeChanged = {
+            Handler(Looper.getMainLooper()).post { devices = group.devices }
+            SyncTileService.changed(app)
+        }
     }
     val computers: List<LiveGroup.Device> get() = devices.filter { !it.isSelf }
     var message by mutableStateOf<Note?>(null)

@@ -188,11 +188,12 @@ final class AppModelTests: XCTestCase {
     }
 
     /// The house turns sync off for a time or until it is turned on again,
-    /// and on; an admin mutes a device and unmutes it; a mute that ended
-    /// holds no more.
+    /// and on, and the control in Control Center shows it; an admin mutes a
+    /// device and unmutes it; a mute that ended holds no more.
     func testPauseAndMute() async {
         let g = FakeGroup()
         g.computers = [.init(id: "a", name: "pi", online: true)]
+        g.hasGroup = true
         let m = AppModel(group: g)
         XCTAssertNil(m.syncOff)
         m.turnSync(false, forMS: PauseTime.hour.ms)
@@ -200,8 +201,11 @@ final class AppModelTests: XCTestCase {
         m.turnSync(false, forMS: PauseTime.ever.ms)
         XCTAssertNotNil(m.syncOff)
         XCTAssertNil(m.syncOff?.until)
+        // The house in Control Center follows it.
+        XCTAssertEqual(SyncSwitch.isOn, false)
         m.turnSync(true)
         XCTAssertNil(m.syncOff)
+        XCTAssertEqual(SyncSwitch.isOn, true)
         await m.setMuted("a", true, forMS: PauseTime.quarter.ms)
         XCTAssertNotNil(m.devices.first { $0.id == "a" }?.muted?.until)
         await m.setMuted("a", false)

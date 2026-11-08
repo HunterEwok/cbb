@@ -132,6 +132,9 @@ targets:
     sources:
       - Widgets
       - Shared/OpenAndSyncIntent.swift
+      # The house in Control Center and the settings it shares with the app.
+      - Shared/SyncSwitch.swift
+      - Shared/Shared.swift
       # The Live Activity in the Dynamic Island, in the app's colours.
       - Shared/StatusActivity.swift
       - CBB/Theme

@@ -131,6 +131,11 @@
     <string name="share_allowed_none">None: the phone asks every app.</string>
     <string name="share_forget">Ask every app again</string>
     <string name="tile_label">Send clipboard</string>
+    <string name="tile_sync_on">Sync is on</string>
+    <string name="tile_sync_off">Sync is off</string>
+    <string name="tile_on">On</string>
+    <string name="tile_off">Off</string>
+    <string name="tile_no_group">Not in a group</string>
     <string name="accessibility_label">Send my copies by themselves</string>
     <string name="accessibility_description">Notices when you copy text, then reads the clipboard for a moment and sends the text to your computers. With remote paste on, it puts an admin\'s text into the text field that has the focus. It reads nothing else on the screen.</string>
     <string name="auto_send_body">Android lets an app read the clipboard only while it is in front. Turn CBB on in Accessibility, and what you copy goes to your computers without a tap; Android then says \"CBB pasted from your clipboard\" each time. Without it, use the Send clipboard tile, the notification\'s Send button, or Share.</string>

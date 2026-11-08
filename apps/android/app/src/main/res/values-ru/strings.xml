@@ -128,6 +128,11 @@
     <string name="share_allowed_none">Нет: телефон спрашивает каждое приложение.</string>
     <string name="share_forget">Снова спрашивать все приложения</string>
     <string name="tile_label">Отправить буфер</string>
+    <string name="tile_sync_on">Синхронизация включена</string>
+    <string name="tile_sync_off">Синхронизация выключена</string>
+    <string name="tile_on">Вкл.</string>
+    <string name="tile_off">Выкл.</string>
+    <string name="tile_no_group">Нет группы</string>
     <string name="accessibility_label">Отправлять скопированное само</string>
     <string name="accessibility_description">Замечает, когда вы копируете текст, на мгновение читает буфер обмена и отправляет текст на ваши компьютеры. Если вы включили удалённую вставку, вставляет текст от админа группы в поле ввода с фокусом. Больше ничего на экране не читает.</string>
     <string name="auto_send_body">Android даёт приложению читать буфер обмена, только пока оно на экране. Включите CBB в спец. возможностях, и скопированное будет уходить на компьютеры без нажатий; Android при этом каждый раз пишет «CBB вставил из буфера обмена». Без этого пользуйтесь плиткой «Отправить буфер», кнопкой «Отправить» в уведомлении или меню «Поделиться».</string>

@@ -127,6 +127,11 @@
     <string name="share_allowed_none">Hakuna: simu huuliza kila programu.</string>
     <string name="share_forget">Uliza kila programu tena</string>
     <string name="tile_label">Tuma ubao wa kunakili</string>
+    <string name="tile_sync_on">Usawazishaji umewashwa</string>
+    <string name="tile_sync_off">Usawazishaji umezimwa</string>
+    <string name="tile_on">Umewashwa</string>
+    <string name="tile_off">Umezimwa</string>
+    <string name="tile_no_group">Hakuna kikundi</string>
     <string name="accessibility_label">Tuma nakala zangu zenyewe</string>
     <string name="accessibility_description">Hutambua unaponakili maandishi, kisha husoma ubao wa kunakili kwa muda mfupi na kutuma maandishi kwenye kompyuta zako. Kubandika kwa mbali kukiwashwa, huweka maandishi ya msimamizi kwenye sehemu ya maandishi iliyochaguliwa. Haisomi kitu kingine chochote kwenye skrini.</string>
     <string name="auto_send_body">Android huruhusu programu kusoma ubao wa kunakili tu ikiwa mbele. Washa CBB katika Ufikivu, na unachonakili huenda kwenye kompyuta zako bila kugusa; kisha Android husema \"CBB imebandika kutoka ubao wako wa kunakili\" kila mara. Bila hiyo, tumia kigae cha Tuma ubao wa kunakili, kitufe cha Tuma cha arifa, au Shiriki.</string>

@@ -127,6 +127,11 @@
     <string name="share_allowed_none">无：手机会询问每个应用。</string>
     <string name="share_forget">重新询问每个应用</string>
     <string name="tile_label">发送剪贴板</string>
+    <string name="tile_sync_on">同步已开启</string>
+    <string name="tile_sync_off">同步已关闭</string>
+    <string name="tile_on">开</string>
+    <string name="tile_off">关</string>
+    <string name="tile_no_group">未加入群组</string>
     <string name="accessibility_label">自动发送我的副本</string>
     <string name="accessibility_description">在你复制文本时察觉，随后短暂读取剪贴板并将文本发送到你的电脑。开启远程粘贴后，它会将管理员的文本放入当前焦点所在的文本框。它不会读取屏幕上的其他任何内容。</string>
     <string name="auto_send_body">Android 只允许应用在前台时读取剪贴板。在“无障碍”中打开 CBB，你复制的内容无需点按就会发到你的电脑；Android 每次都会提示“CBB 粘贴了剪贴板中的内容”。不打开时，可使用“发送剪贴板”快捷设置、通知中的“发送”按钮或“分享”。</string>

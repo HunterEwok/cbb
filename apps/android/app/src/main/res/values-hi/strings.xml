@@ -127,6 +127,11 @@
     <string name="share_allowed_none">कोई नहीं: फ़ोन हर ऐप से पूछता है।</string>
     <string name="share_forget">हर ऐप से फिर पूछें</string>
     <string name="tile_label">क्लिपबोर्ड भेजें</string>
+    <string name="tile_sync_on">सिंक चालू है</string>
+    <string name="tile_sync_off">सिंक बंद है</string>
+    <string name="tile_on">चालू</string>
+    <string name="tile_off">बंद</string>
+    <string name="tile_no_group">किसी ग्रुप में नहीं</string>
     <string name="accessibility_label">मेरी कॉपी अपने आप भेजें</string>
     <string name="accessibility_description">जब आप टेक्स्ट कॉपी करते हैं तो यह ध्यान देता है, फिर एक पल के लिए क्लिपबोर्ड पढ़कर टेक्स्ट आपके कंप्यूटरों पर भेजता है। रिमोट पेस्ट चालू होने पर, यह एडमिन का टेक्स्ट उस टेक्स्ट फ़ील्ड में डालता है जिस पर फ़ोकस है। यह स्क्रीन पर और कुछ नहीं पढ़ता।</string>
     <string name="auto_send_body">Android किसी ऐप को क्लिपबोर्ड तभी पढ़ने देता है जब वह सामने हो। एक्सेसिबिलिटी में CBB चालू करें, और आप जो कॉपी करें वह बिना टैप के आपके कंप्यूटरों पर पहुँचेगा; तब Android हर बार कहेगा \"CBB ने आपके क्लिपबोर्ड से पेस्ट किया\"। इसके बिना, क्लिपबोर्ड भेजें टाइल, सूचना का भेजें बटन, या शेयर इस्तेमाल करें।</string>

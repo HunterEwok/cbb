@@ -1351,6 +1351,10 @@ All notable changes to cbb are documented in this file. The format follows
   advanced ones behind a switch and tips that close once instead of long texts, and the
   device's card with its badges, one line, the house, a row of icons and the rest under
   More. Wear OS has the house beside the globe.
+- The house outside the app: the Quick Settings tile on Android and the Control Center control
+  on the iPhone turn sync on the phone on or off with one tap, lit while it is on and grey
+  while it is off; on Android a long press opens the app. The tile no longer
+  sends; the home-screen widgets still do.
 - The Rust `cbb` speaks the locale's language when the project has it (Chinese, Spanish,
   Russian, Arabic, Swahili, Hebrew, Hindi; English otherwise): its help, its questions and what
   `status`, `sync`, `global`, `pair` and `leave` print (`member/l10n/`, every text checked

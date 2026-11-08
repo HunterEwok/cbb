@@ -334,7 +334,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var phase: Phase
     @Published private(set) var computers: [Computer] = []
     @Published private(set) var devices: [Computer] = [] {
-        didSet { loadArrangement() }
+        didSet {
+            loadArrangement()
+            SyncSwitch.publish(group.hasGroup ? syncOff == nil : nil)
+        }
     }
     /// The user's order of the tiles and their collections (docs/apps.md,
     /// "Collections and the order of the tiles"), kept on this phone only;
