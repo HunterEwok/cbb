@@ -29,7 +29,9 @@ pub fn run(g: &Global, args: &[String]) -> i32 {
         Some("paste") => paste(g, &args[1..]),
         Some("copy") => copy(g, &args[1..]),
         Some("image") => image(g, &args[1..]),
+        #[cfg(unix)]
         Some("speed") => speed(&args[1..]),
+        #[cfg(unix)]
         Some("speed-in") => speed_in(&args[1..]),
         Some("check-list") => check_list(&args[1..], &mut std::io::stdout()),
         Some("pair") => crate::join(g, &args[1..], true),
@@ -292,7 +294,7 @@ fn play_tape(bytes: &[u8]) -> Result<()> {
 
 /// The speeds `cbb next speed` takes, as termios names them: the Pi's
 /// Linux has them all, other systems (where the crate builds for the
-/// phones) only the common two.
+/// phones) only the common two; none without termios.
 #[cfg(any(target_os = "linux", target_os = "android"))]
 const SPEEDS: [(u32, libc::speed_t); 9] = [
     (115_200, libc::B115200),
@@ -305,9 +307,10 @@ const SPEEDS: [(u32, libc::speed_t); 9] = [
     (1_500_000, libc::B1500000),
     (2_000_000, libc::B2000000),
 ];
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
 const SPEEDS: [(u32, libc::speed_t); 2] = [(115_200, libc::B115200), (230_400, libc::B230400)];
 
+#[cfg(unix)]
 /// `.cbb speed`'s test of the line (apps/zxnext): `CBBS <baud> <bytes>
 /// <crc32>` CR at the line's own speed, then, after half a second, bytes
 /// of a fixed pseudo-random sequence at baud, then half a second later
@@ -331,6 +334,7 @@ fn speed(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 /// `.cbb speed`'s test of the other way: the line goes to baud, and half a
 /// second later `CBBGO` at it; then up to bytes from the Next, until a
 /// second passes without one; then the line's own speed again, half a
@@ -362,6 +366,7 @@ fn speed_in(args: &[String]) -> Result<()> {
         .context("cannot answer the Next")
 }
 
+#[cfg(unix)]
 /// The speed, as a number and as termios names it, and the length of a
 /// speed test.
 fn speed_args(args: &[String]) -> Result<(u32, libc::speed_t, usize)> {
@@ -375,6 +380,7 @@ fn speed_args(args: &[String]) -> Result<(u32, libc::speed_t, usize)> {
     Ok((baud, b, n))
 }
 
+#[cfg(unix)]
 /// The bytes of the speed test: xorshift32 from 1, the low byte of each.
 pub fn speed_bytes(n: usize) -> Vec<u8> {
     let mut x: u32 = 1;
@@ -388,9 +394,11 @@ pub fn speed_bytes(n: usize) -> Vec<u8> {
         .collect()
 }
 
+#[cfg(unix)]
 /// The terminal's speed for a while, then its own again.
 struct LineSpeed(Option<libc::termios>);
 
+#[cfg(unix)]
 impl LineSpeed {
     fn set(b: libc::speed_t) -> Result<LineSpeed> {
         // SAFETY: tcgetattr, cfset*speed and tcsetattr only read and write
@@ -411,6 +419,7 @@ impl LineSpeed {
     }
 }
 
+#[cfg(unix)]
 impl Drop for LineSpeed {
     fn drop(&mut self) {
         if let Some(old) = &self.0 {
@@ -694,6 +703,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn speed_bytes_are_fixed() {
         // xorshift32 from 1: every byte value turns up, as a test of a
         // line should.
