@@ -2467,24 +2467,27 @@ final class LiveGroup: GroupController {
     }
 
     /// Puts a copy from another device in this phone's clipboard: a text,
-    /// an image fetched whole, or files saved in Files; then it waits no
-    /// more.
-    private func take(_ c: CoreMember.Copy) async throws {
+    /// an image fetched whole, or files saved in Files, or one image or
+    /// video in Photos (true); then it waits no more.
+    @discardableResult
+    private func take(_ c: CoreMember.Copy) async throws -> Bool {
+        var photos = false
         guard let node else { throw PendingGroup.Failure.noComputers }
         if let files = c.media.flatMap({ $0.isFiles ? $0 : nil }) {
             guard await connected(node) else { throw PendingGroup.Failure.noComputers }
-            try await save(c, files: files)
+            photos = try await save(c, files: files)
         } else if let part = Images.part(of: c.media) {
             try await receive(c, image: part)
         } else if !c.text.isEmpty {
             write(c.text, kind: c.kind)
         }
         try node.took(c.id)
+        return photos
     }
 
     /// What the button says it fetched.
-    private func fetched(_ c: CoreMember.Copy) -> AppModel.SyncResult {
-        if c.media?.isFiles == true { return .savedFiles }
+    private func fetched(_ c: CoreMember.Copy, photos: Bool = false) -> AppModel.SyncResult {
+        if c.media?.isFiles == true { return .savedFiles(photos: photos) }
         let preview = Images.part(of: c.media) == nil && c.kind == .text ? Self.preview(c.text) : nil
         return .fetched(from: devices.first { $0.id == c.origin && !$0.isSelf }?.name, preview: preview)
     }
@@ -2496,13 +2499,14 @@ final class LiveGroup: GroupController {
         guard let node, state != nil else { return nil }
         _ = await connected(node)
         guard let c = pending(node, byItself: true) else { return nil }
+        let photos: Bool
         do {
-            try await take(c)
+            photos = try await take(c)
         } catch {
             imageLog.error("taking the waiting copy: \(String(reflecting: error), privacy: .public)")
             return nil
         }
-        return fetched(c)
+        return fetched(c, photos: photos)
     }
 
     /// The one button, and Back Tap through Shortcuts (docs/design.md, "The
@@ -2516,8 +2520,8 @@ final class LiveGroup: GroupController {
         guard let node, state != nil else { throw PendingGroup.Failure.noComputers }
         online = node.connected()
         if let c = pending(node, byItself: false) {
-            try await take(c)
-            return fetched(c)
+            let photos = try await take(c)
+            return fetched(c, photos: photos)
         }
         let board: AppModel.Board
         if let given { board = given } else { board = try await Self.readBoard() }
@@ -2588,8 +2592,9 @@ final class LiveGroup: GroupController {
     }
 
     /// Fetches the files a computer copied into the app's folder in Files,
-    /// Received, with their folders; a name taken there gets a number.
-    private func save(_ c: CoreMember.Copy, files m: Media.Manifest) async throws {
+    /// Received, with their folders; a name taken there gets a number. One
+    /// image or video goes to Photos instead (true) when the user allows it.
+    private func save(_ c: CoreMember.Copy, files m: Media.Manifest) async throws -> Bool {
         let fm = FileManager.default
         let root = try fm.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("Received", isDirectory: true)
         // Each top-level name of the copy, made free in Received.
@@ -2611,6 +2616,7 @@ final class LiveGroup: GroupController {
         // opened and checked by the member before any is placed.
         let (dir, parts) = try await fetch(c, limit: Images.maxCopy)
         defer { try? fm.removeItem(at: dir) }
+        if await Gallery.add(parts, of: m) { return true }
         for p in parts {
             guard let path = p.path, !path.isEmpty else { continue }
             let url = target(path)
@@ -2621,7 +2627,7 @@ final class LiveGroup: GroupController {
             try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try fm.moveItem(at: URL(fileURLWithPath: p.file), to: url)
         }
-        _ = m
+        return false
     }
 
     /// Fetches a computer's image whole and puts it on this phone's
@@ -2632,6 +2638,7 @@ final class LiveGroup: GroupController {
         guard let got = parts.first(where: { !$0.dir && $0.type == part.type }) else { throw Content.Failure.noParts }
         let data = try Data(contentsOf: URL(fileURLWithPath: got.file))
         Images.write(data, type: part.type ?? "image/png", alt: c.text)
+        await Gallery.keep(data, type: part.type ?? "image/png")
     }
 
     /// Puts a text into the phone's clipboard; a secret stays on this phone
