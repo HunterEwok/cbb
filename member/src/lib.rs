@@ -48,6 +48,7 @@ mod pastehelper;
 pub mod peer;
 mod peripheral;
 pub mod phone;
+mod piv;
 pub mod records;
 #[cfg(feature = "tunnel")]
 pub mod relay;
@@ -55,6 +56,11 @@ pub mod releases;
 mod remotepaste;
 mod rootless;
 pub mod sealkey;
+mod sekey;
+#[cfg(all(unix, not(target_os = "macos")))]
+mod third_party {
+    pub mod pcsclite;
+}
 mod service;
 pub mod tls;
 #[cfg(feature = "tunnel")]
