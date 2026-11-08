@@ -11,7 +11,6 @@
 
 use std::collections::{HashMap, HashSet};
 use std::net::{Ipv6Addr, Shutdown, SocketAddr, TcpStream, UdpSocket};
-use std::os::fd::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -29,6 +28,7 @@ use smoltcp::socket::tcp;
 use smoltcp::wire::{HardwareAddress, IpAddress, IpCidr};
 
 use crate::error::{Context, Error, Result};
+use crate::sys;
 use crate::tunnel::{
     Bridge, HANDSHAKE_RATE_LIMIT, MAX_BRIDGES, MAX_POLL, MEMBER_PORT, MTU, Queues, TCP_BUFFER, move_bytes, now,
 };
@@ -557,21 +557,11 @@ impl Pump {
     fn wait(&mut self) {
         let delay = self.iface.poll_delay(now(), &self.sockets).map(|d| Duration::from_micros(d.total_micros()));
         let timeout = delay.map_or(MAX_POLL, |d| d.min(MAX_POLL));
-        let mut fds = vec![libc::pollfd { fd: self.udp.as_raw_fd(), events: libc::POLLIN, revents: 0 }];
+        let mut socks = vec![(sys::raw(&self.udp), true, false)];
         for b in &self.bridges {
-            let mut events = 0;
-            if !b.local_eof && b.up.len() < TCP_BUFFER {
-                events |= libc::POLLIN;
-            }
-            if !b.down.is_empty() {
-                events |= libc::POLLOUT;
-            }
-            fds.push(libc::pollfd { fd: b.local.as_raw_fd(), events, revents: 0 });
+            socks.push((sys::raw(&b.local), !b.local_eof && b.up.len() < TCP_BUFFER, !b.down.is_empty()));
         }
-        // SAFETY: fds is a valid array of pollfd of the given length.
-        unsafe {
-            libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout.as_millis() as libc::c_int);
-        }
+        sys::poll(&socks, timeout);
     }
 }
 

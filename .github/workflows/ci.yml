@@ -2034,7 +2034,7 @@ jobs:
           persist-credentials: false
       - name: the Rust toolchain, a cross compiler for the Raspberry Pi, and swtpm for the key in a TPM
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt,clippy,llvm-tools-preview --target aarch64-unknown-linux-gnu,arm-unknown-linux-musleabihf
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy,llvm-tools-preview --target aarch64-unknown-linux-gnu,arm-unknown-linux-musleabihf,x86_64-pc-windows-gnu,aarch64-apple-darwin,x86_64-unknown-freebsd
           rustup default stable
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross swtpm
@@ -2048,6 +2048,11 @@ jobs:
           cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member,tunnel --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features tunnel --all-targets -- -D warnings
+      - name: cargo clippy for Windows, macOS and FreeBSD (the service builds there too)
+        run: |
+          for t in x86_64-pc-windows-gnu aarch64-apple-darwin x86_64-unknown-freebsd; do
+            cargo clippy --locked -p cbb-lite --target "$t" --all-targets -- -D warnings
+          done
       - name: cargo-llvm-cov, for the tests' coverage
         run: cargo install --locked cargo-llvm-cov@0.9.1
       - name: cargo test (the interop vectors in testdata/interop too), with coverage
@@ -2088,7 +2093,7 @@ jobs:
           sh wasm/build.sh
           go test -race -overlay target/cbb-core-overlay.json -tags cbbwasm ./internal/core -v
       - name: the lite member joins by the phone, syncs with Go members, takes their remote pastes and serves the Go command line and agent
-        run: CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run 'TestLiteMember|TestLiteRemotePaste|TestLiteQuickActions|TestLiteRootless|TestLiteHelper|TestLiteClients|TestLiteTPM|TestLiteRoot|TestLiteTakeover|TestLiteRecovery|TestLiteHub|TestLiteHubs|TestLiteHubCommands|TestLiteHubForwarder|TestLiteHubVLESS|TestLiteForwardOnly|TestLiteNetwork|TestLiteRelay' -v
+        run: CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run 'TestLite' -v
       - name: get.sh --lite installs the lite member, and uninstall.sh removes it
         run: |
           rel="$RUNNER_TEMP/release"

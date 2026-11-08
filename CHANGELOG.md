@@ -87,6 +87,10 @@ All notable changes to cbb are documented in this file. The format follows
   `release-want`, `TestLiteRelease`, `TestLiteReleaseArchives`). The Rust `cbb update` hands
   the service the release and the archive it installed, downloads on a hub the archives the
   members update from, and installs from the group when no update server answers.
+  The Rust service builds for Windows: its control sockets are AF_UNIX sockets there too, in
+  a folder whose access list lets in the system, administrators, the user who started it and
+  the group `cbb`, and it tells a client's user and session by the socket's peer, as the Go
+  service does; CI checks it for Windows, macOS and FreeBSD.
 - A request to the Rust service while it is still starting waits for it rather than hearing
   that the device is in no group.
 - The Rust member no longer can deadlock when a renewed certificate and new records come at

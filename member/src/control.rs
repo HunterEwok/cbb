@@ -548,5 +548,7 @@ pub fn is_admin(op: &str) -> bool {
 
 /// The admin socket next to the control socket at `socket`.
 pub fn admin_socket(socket: &std::path::Path) -> std::path::PathBuf {
-    socket.with_file_name("admin.sock")
+    // On Windows it sits in a folder of its own, whose access list lets
+    // only the service and the administrators in (Go's adminSocketName).
+    if cfg!(windows) { socket.with_file_name("admin").join("admin.sock") } else { socket.with_file_name("admin.sock") }
 }

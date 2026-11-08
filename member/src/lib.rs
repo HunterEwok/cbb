@@ -41,9 +41,11 @@ mod leave;
 mod mute;
 pub mod networks;
 mod next;
+#[cfg(unix)]
 mod nextlink;
 pub mod node;
 pub mod pair;
+#[cfg(unix)]
 mod pastehelper;
 pub mod peer;
 mod peripheral;
@@ -62,6 +64,7 @@ mod third_party {
     pub mod pcsclite;
 }
 mod service;
+mod sys;
 pub mod tls;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
@@ -72,9 +75,9 @@ pub mod vless;
 mod window;
 pub mod wire;
 
+use crate::sys::UnixStream;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
-use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -190,18 +193,12 @@ pub fn main() {
             if rootless::is() {
                 rootless::state_dir()
             } else {
-                PathBuf::from(if openwrt() { "/etc/cbb/state" } else { "/var/lib/cbb" })
+                if openwrt() { PathBuf::from("/etc/cbb/state") } else { sys::default_state() }
             }
         }),
-        socket: std::env::var_os("CBB_SOCKET").map(PathBuf::from).unwrap_or_else(|| {
-            if rootless::is() {
-                rootless::socket()
-            } else if openwrt() {
-                PathBuf::from("/var/run/cbb/control.sock")
-            } else {
-                PathBuf::from("/run/cbb/control.sock")
-            }
-        }),
+        socket: std::env::var_os("CBB_SOCKET")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| if rootless::is() { rootless::socket() } else { sys::default_socket(openwrt()) }),
     };
     while let Some(a) = args.first().cloned() {
         match flag(&a) {
@@ -233,6 +230,7 @@ pub fn main() {
                 "mute" | "unmute" => cmd_mute(&g, rest, cmd == "unmute"),
                 "paste-receive" => cmd_paste_receive(&g, rest),
                 "action" => cmd_action(&g, rest),
+                #[cfg(unix)]
                 "paste-helper" => pastehelper::run(&g.socket, rest),
                 "update" => cmd_update(&g, rest),
                 "version" | "-version" | "--version" => {
@@ -272,14 +270,7 @@ fn flag(a: &str) -> Option<&str> {
 }
 
 fn host_name() -> String {
-    let mut buf = [0u8; 256];
-    // SAFETY: gethostname writes at most len bytes into buf.
-    let ok = unsafe { libc::gethostname(buf.as_mut_ptr() as *mut libc::c_char, buf.len()) } == 0;
-    let name = if ok {
-        String::from_utf8_lossy(&buf[..buf.iter().position(|&b| b == 0).unwrap_or(0)]).to_string()
-    } else {
-        String::new()
-    };
+    let name = sys::host_name();
     let name: String = name.split('.').next().unwrap_or("").chars().take(64).collect();
     if records::valid_name(&name) { name } else { "lite".into() }
 }
@@ -485,6 +476,7 @@ fn joiner(g: &Global, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
 
 /// Joins with the code from cbb pair on a full member, through a
 /// connection to it: the Next's link joins this way through the ESP.
+#[cfg(unix)]
 pub(crate) fn join_with_code(g: &Global, sock: TcpStream, code: &str) -> Result<identity::Identity> {
     let (joiner, save) = joiner(g, &host_name())?;
     let code = pair::normalize_code(code)?;
@@ -1085,8 +1077,7 @@ fn grant(m: &control::Message) -> Result<()> {
 }
 
 fn is_root() -> bool {
-    // SAFETY: geteuid has no preconditions and cannot fail.
-    unsafe { libc::geteuid() == 0 }
+    sys::is_root()
 }
 
 /// How an action stands and who may run it, as on a full member.

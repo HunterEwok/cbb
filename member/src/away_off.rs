@@ -84,8 +84,8 @@ impl Away {
         self: &Arc<Self>,
         _admitter: cbb_core::admit::Admitter,
         _expires: i64,
-        _r: control::Reader<std::os::unix::net::UnixStream>,
-        _out: &mut std::os::unix::net::UnixStream,
+        _r: control::Reader<crate::sys::UnixStream>,
+        _out: &mut crate::sys::UnixStream,
     ) -> Result<()> {
         Err(off())
     }

@@ -407,6 +407,7 @@ mod tests {
         std::process::exit(0);
     }
 
+    #[cfg(unix)]
     /// A Helper that runs this test program as fake_helper.
     fn fake(log: Arc<Mutex<Vec<String>>>) -> Helper {
         Helper::new(script(), Arc::new(move |s: &str| log.lock().unwrap().push(s.to_string())))
@@ -417,6 +418,7 @@ mod tests {
     /// cbb-helper. A process another test forks while the script is open
     /// for writing keeps it busy (ETXTBSY) until it execs, so the script is
     /// run once until it starts.
+    #[cfg(unix)]
     fn script() -> &'static std::path::Path {
         static SCRIPT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
         SCRIPT.get_or_init(|| {
@@ -449,11 +451,13 @@ mod tests {
         })
     }
 
+    #[cfg(unix)]
     fn next() -> usize {
         static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     }
 
+    #[cfg(unix)]
     fn req(op: &str) -> Header {
         Header { op: op.into(), ..Default::default() }
     }

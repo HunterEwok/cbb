@@ -374,12 +374,16 @@ fn gateways() -> HashMap<u32, String> {
     else {
         return HashMap::new();
     };
-    gateways_from(&routes, &arp, &|name| {
+    #[cfg(unix)]
+    let index = |name: &str| {
         let c = std::ffi::CString::new(name).ok()?;
         // SAFETY: c is a valid C string for the call.
         let i = unsafe { libc::if_nametoindex(c.as_ptr()) };
         (i != 0).then_some(i)
-    })
+    };
+    #[cfg(not(unix))]
+    let index = |_: &str| None;
+    gateways_from(&routes, &arp, &index)
 }
 
 fn gateways_from(routes: &str, arp: &str, index: &dyn Fn(&str) -> Option<u32>) -> HashMap<u32, String> {

@@ -65,8 +65,8 @@ impl Away {
         self: &Arc<Self>,
         admitter: Admitter,
         expires: i64,
-        mut r: control::Reader<std::os::unix::net::UnixStream>,
-        out: &mut std::os::unix::net::UnixStream,
+        mut r: control::Reader<crate::sys::UnixStream>,
+        out: &mut crate::sys::UnixStream,
     ) -> Result<()> {
         let lifetime = if expires > 0 { Duration::from_secs(expires as u64) } else { DEFAULT_LIFETIME };
         if lifetime > MAX_LIFETIME {

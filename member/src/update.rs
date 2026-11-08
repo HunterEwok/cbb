@@ -113,8 +113,7 @@ pub fn save_state(dir: &Path, st: &State) -> Result<()> {
 }
 
 fn mkdir_private(dir: &Path) -> Result<()> {
-    use std::os::unix::fs::DirBuilderExt;
-    fs::DirBuilder::new().recursive(true).mode(0o700).create(dir).context(format!("cannot make {}", dir.display()))
+    crate::sys::mkdir_private(dir)
 }
 
 /// Reports whether a timer should check now.
@@ -323,10 +322,9 @@ fn fetch_with(tool: &str, url: &str, mut child: std::process::Child, path: &Path
         // Only the time running out stops the tool: done is dropped once
         // its output has ended, and a tool may still be finishing then.
         if let Err(std::sync::mpsc::RecvTimeoutError::Timeout) = stop.recv_timeout(FETCH_TIME) {
-            // SAFETY: kill has no memory preconditions, and the child is
-            // waited for only after this thread is joined, so pid is
-            // still its.
-            unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
+            // The child is waited for only after this thread is joined,
+            // so pid is still its.
+            crate::sys::kill(pid);
         }
     });
     let copied = (|| -> std::io::Result<u64> {

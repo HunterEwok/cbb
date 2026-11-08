@@ -4,9 +4,9 @@
 //! The lite member's service: the control socket, the identity, the sync
 //! engine and the connections to the other members.
 
+use crate::sys::{UnixListener, UnixStream};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
@@ -117,7 +117,7 @@ struct Inject {
 /// it. The helper presses keys anywhere, so it presses none the service did
 /// not ask for, after the paste switches and the checks on the signer.
 struct Grant {
-    uid: u32,
+    uid: peer::Who,
     enter: bool,
     pasted: bool,
     done: bool,
@@ -136,7 +136,7 @@ struct Watcher {
     /// not, so they get no writes and report no copies.
     board: bool,
     /// Its user, read when it offers a target or the actions (peer.rs).
-    uid: Option<u32>,
+    uid: Option<peer::Who>,
     /// It runs the quick actions in its user's session (CBB's agent).
     act: bool,
     /// Its clipboard takes images, files and formatted text whole.
@@ -265,6 +265,7 @@ pub fn run(cfg: Config) -> Result<()> {
     unsafe {
         libc::signal(libc::SIGTERM, on_signal as *const () as libc::sighandler_t);
         libc::signal(libc::SIGINT, on_signal as *const () as libc::sighandler_t);
+        #[cfg(unix)]
         libc::signal(libc::SIGPIPE, libc::SIG_IGN);
     }
     std::fs::create_dir_all(&cfg.state_dir).context(format!("cannot create {}", cfg.state_dir.display()))?;
@@ -638,8 +639,19 @@ pub(crate) fn clock(dir: &Path) -> Clock {
     )
 }
 
+/// Listens on the control socket on Windows, its folder's access list set
+/// first (sys/acl_windows.rs).
+#[cfg(windows)]
+fn listen(path: &Path, admin: bool) -> Result<UnixListener> {
+    if UnixStream::connect(path).is_ok() {
+        return Err(Error::msg(format!("another cbb service runs at {}", path.display())));
+    }
+    crate::sys::listen_windows(path, admin)
+}
+
 /// Listens on the control socket: mode 0660, in its own directory; the
 /// admin socket gets mode 0600, for root and the service's user only.
+#[cfg(unix)]
 fn listen(path: &Path, admin: bool) -> Result<UnixListener> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).context(format!("cannot create {}", dir.display()))?;
@@ -1172,7 +1184,7 @@ impl Service {
     /// that offers to run the actions as the user at the screen, as Go's
     /// sessionRunner: the first that answers decides.
     fn in_session(&self, name: &str, command: &[String]) -> std::result::Result<(), actions::Failure> {
-        let ws: Vec<(Option<u32>, SyncSender<ToWatcher>)> =
+        let ws: Vec<(Option<peer::Who>, SyncSender<ToWatcher>)> =
             self.watchers.lock().unwrap().iter().filter(|w| w.act).map(|w| (w.uid, w.tx.clone())).collect();
         if ws.is_empty() {
             return Err(actions::Failure::Refused(
@@ -1428,7 +1440,7 @@ impl Service {
         }
         let (targets, console) = {
             let ws = self.watchers.lock().unwrap();
-            let targets: Vec<(String, Option<u32>, SyncSender<ToWatcher>)> = order
+            let targets: Vec<(String, Option<peer::Who>, SyncSender<ToWatcher>)> = order
                 .iter()
                 .flat_map(|t| ws.iter().filter(move |w| w.target == *t))
                 .map(|w| (w.target.clone(), w.uid, w.tx.clone()))
@@ -1449,7 +1461,7 @@ impl Service {
         // the system tells who that is.
         let secret = body.paste_kind == "secret";
         let mut why = "";
-        let targets: Vec<(String, Option<u32>, SyncSender<ToWatcher>)> = targets
+        let targets: Vec<(String, Option<peer::Who>, SyncSender<ToWatcher>)> = targets
             .into_iter()
             .filter(|(t, uid, _)| match peer::may_take(*uid, t, peer::at_screen) {
                 peer::Verdict::Allowed => true,
@@ -1523,7 +1535,7 @@ impl Service {
 
     /// Makes the grant of a remote paste for uid, a desktop session's user,
     /// valid for wait, as Go's grantKeys.
-    fn grant_keys(&self, uid: u32, enter: bool, wait: Duration) -> String {
+    fn grant_keys(&self, uid: peer::Who, enter: bool, wait: Duration) -> String {
         let mut b = [0u8; 16];
         if getrandom::fill(&mut b).is_err() {
             return String::new();
@@ -2645,10 +2657,10 @@ const FIRST_REQUEST_TIME: Duration = Duration::from_secs(30);
 
 /// The open connections of each user of a control socket.
 #[derive(Default)]
-struct ControlUsers(Mutex<HashMap<Option<u32>, usize>>);
+struct ControlUsers(Mutex<HashMap<Option<crate::peer::Who>, usize>>);
 
 impl ControlUsers {
-    fn add(&self, user: Option<u32>) -> bool {
+    fn add(&self, user: Option<crate::peer::Who>) -> bool {
         let mut n = self.0.lock().unwrap();
         let c = n.entry(user).or_default();
         if *c >= MAX_CONTROL_PER_USER {
@@ -2658,7 +2670,7 @@ impl ControlUsers {
         true
     }
 
-    fn done(&self, user: Option<u32>) {
+    fn done(&self, user: Option<crate::peer::Who>) {
         let mut n = self.0.lock().unwrap();
         if let Some(c) = n.get_mut(&user) {
             *c -= 1;
@@ -2680,12 +2692,15 @@ impl Drop for PairingSlot<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ControlUsers, MAX_CONTROL_PER_USER, accept_control};
+    #[cfg(unix)]
+    use super::ControlUsers;
+    use super::{MAX_CONTROL_PER_USER, accept_control};
+    use crate::sys::{UnixListener, UnixStream};
     use std::io::Read;
-    use std::os::unix::net::{UnixListener, UnixStream};
     use std::time::Duration;
 
     #[test]
+    #[cfg(unix)]
     fn control_users_are_bounded() {
         let u = ControlUsers::default();
         for _ in 0..MAX_CONTROL_PER_USER {

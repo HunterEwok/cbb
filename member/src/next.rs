@@ -31,6 +31,7 @@ pub fn run(g: &Global, args: &[String]) -> i32 {
         Some("check-list") => check_list(&args[1..], &mut std::io::stdout()),
         Some("pair") => crate::join(g, &args[1..], true),
         // The link answers in frames, not in a status line.
+        #[cfg(unix)]
         Some("link") => {
             return match crate::nextlink::link::run(g, &args[1..]) {
                 Ok(()) => 0,
@@ -260,8 +261,22 @@ pub fn crc32(data: &[u8]) -> u32 {
 /// as long as it lives: no echo, no line editing, no CR to LF, and a read
 /// that gives up after the timeout without a byte. It restores the old mode when
 /// dropped.
+#[cfg(unix)]
 pub(crate) struct RawTerminal(Option<libc::termios>);
 
+/// No terminal to set on a system without termios: the Next's UART is on a
+/// Pi.
+#[cfg(not(unix))]
+pub(crate) struct RawTerminal;
+
+#[cfg(not(unix))]
+impl RawTerminal {
+    pub(crate) fn new(_timeout: u8, _binary: bool) -> RawTerminal {
+        RawTerminal
+    }
+}
+
+#[cfg(unix)]
 impl RawTerminal {
     /// timeout in tenths of a second; binary also turns off the output's
     /// processing (LF to CR LF), for frames.
@@ -295,6 +310,7 @@ impl RawTerminal {
     }
 }
 
+#[cfg(unix)]
 impl Drop for RawTerminal {
     fn drop(&mut self) {
         if let Some(old) = &self.0 {

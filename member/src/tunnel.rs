@@ -11,7 +11,6 @@
 use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::net::{Ipv6Addr, Shutdown, SocketAddr, TcpListener, TcpStream, UdpSocket};
-use std::os::fd::AsRawFd;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -33,6 +32,7 @@ use smoltcp::wire::{HardwareAddress, IpAddress, IpCidr};
 use crate::certs::{DeviceId, b64};
 use crate::error::{Context, Error, Result};
 use crate::files;
+use crate::sys;
 use crate::wire::TunnelOffer;
 
 /// The tunnel state's file in the state directory.
@@ -1177,24 +1177,11 @@ impl Pump {
     fn wait(&mut self) {
         let delay = self.iface.poll_delay(now(), &self.sockets).map(|d| Duration::from_micros(d.total_micros()));
         let timeout = delay.map_or(MAX_POLL, |d| d.min(MAX_POLL));
-        let mut fds = vec![
-            libc::pollfd { fd: self.udp.as_raw_fd(), events: libc::POLLIN, revents: 0 },
-            libc::pollfd { fd: self.ln.as_raw_fd(), events: libc::POLLIN, revents: 0 },
-        ];
+        let mut socks = vec![(sys::raw(&self.udp), true, false), (sys::raw(&self.ln), true, false)];
         for b in &self.bridges {
-            let mut events = 0;
-            if !b.local_eof && b.up.len() < TCP_BUFFER {
-                events |= libc::POLLIN;
-            }
-            if !b.down.is_empty() {
-                events |= libc::POLLOUT;
-            }
-            fds.push(libc::pollfd { fd: b.local.as_raw_fd(), events, revents: 0 });
+            socks.push((sys::raw(&b.local), !b.local_eof && b.up.len() < TCP_BUFFER, !b.down.is_empty()));
         }
-        // SAFETY: fds is a valid array of pollfd of the given length.
-        unsafe {
-            libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout.as_millis() as libc::c_int);
-        }
+        sys::poll(&socks, timeout);
     }
 }
 
@@ -1274,8 +1261,7 @@ fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
     // the host's byte order, the port in network order.
     let hex = |a: std::net::SocketAddrV4| format!("{:08X}:{:04X}", u32::from_ne_bytes(a.ip().octets()), a.port());
     let (local, remote) = (hex(from), hex(to));
-    // SAFETY: geteuid has no preconditions.
-    let me = unsafe { libc::geteuid() };
+    let me = sys::euid();
     table.lines().skip(1).any(|l| {
         let f: Vec<&str> = l.split_whitespace().collect();
         f.len() > 7 && f[1] == local && f[2] == remote && f[7].parse::<u32>().ok() == Some(me)
@@ -1340,8 +1326,7 @@ mod tests {
             SocketAddr::V4(a) => format!("{:08X}:{:04X}", u32::from_ne_bytes(a.ip().octets()), a.port()),
             _ => unreachable!(),
         };
-        // SAFETY: geteuid has no preconditions.
-        let other = unsafe { libc::geteuid() } + 1;
+        let other = sys::euid() + 1;
         let line = |uid: u32| {
             format!(
                 "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n   0: {} {} 01 00000000:00000000 00:00000000 00000000 {uid:5} 0 1 1\n",
@@ -1422,8 +1407,11 @@ mod tests {
         let back = State::load(&dir).unwrap().unwrap();
         assert_eq!(back.public_key(), st.public_key());
         assert_eq!(back.group, "abc");
-        use std::os::unix::fs::PermissionsExt;
-        assert_eq!(std::fs::metadata(dir.join(FILE_NAME)).unwrap().permissions().mode() & 0o777, 0o600);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(dir.join(FILE_NAME)).unwrap().permissions().mode() & 0o777, 0o600);
+        }
         State::remove(&dir).unwrap();
         assert!(State::load(&dir).unwrap().is_none());
         std::fs::remove_dir_all(&dir).unwrap();
