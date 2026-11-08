@@ -149,10 +149,11 @@ type media struct {
 	text  string
 }
 
-// fetchMedia asks the service for the clipboard's copy: of an image, the
-// PNG if it has one, else the JPEG, and its formatted text, if any; files
-// are saved in a new folder of copies, if any.
-func fetchMedia(ctx context.Context, socket string, copies *copies) (media, error) {
+// fetchMedia asks the service for the clipboard's copy, or with copyID
+// for the group's copy of a remote paste: of an image, the PNG if it has
+// one, else the JPEG, and its formatted text, if any; files are saved in a
+// new folder of copies, if any.
+func fetchMedia(ctx context.Context, socket string, copies *copies, copyID string) (media, error) {
 	c, err := control.Dial(socket)
 	if err != nil {
 		return media{}, err
@@ -160,7 +161,7 @@ func fetchMedia(ctx context.Context, socket string, copies *copies) (media, erro
 	defer c.Close()
 	stop := context.AfterFunc(ctx, func() { c.Close() })
 	defer stop()
-	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPasteMedia}})
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPasteMedia, Value: copyID}})
 	if err != nil {
 		return media{}, err
 	}
@@ -204,6 +205,22 @@ func fetchMedia(ctx context.Context, socket string, copies *copies) (media, erro
 		return media{}, errors.New("the copy holds no image or formatted text")
 	}
 	return got, nil
+}
+
+// writeMedia writes a fetched copy into b in the first form b takes.
+func writeMedia(b Board, got media) error {
+	ib, images := b.(ImageBoard)
+	fb, files := b.(FileBoard)
+	hb, html := b.(HTMLBoard)
+	switch {
+	case got.image != nil && images:
+		return ib.WriteImage(*got.image, got.text)
+	case got.html != "" && html:
+		return hb.WriteHTML(got.html, got.text)
+	case got.files != nil && files:
+		return fb.WriteFiles(got.files)
+	}
+	return errors.New("this clipboard does not take the copy")
 }
 
 // receiveData collects the parts of clipboard data that follow

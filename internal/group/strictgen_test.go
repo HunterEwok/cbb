@@ -713,6 +713,17 @@ func makeGenVectors() genVectors {
 	v.Commands = append(v.Commands,
 		paste("paste", 1<<20, true), paste("paste", 1<<20+1, false),
 		paste("type", 4<<10, true), paste("type", 4<<10+1, false))
+	// A paste of a copy of images or files names the copy's event ID in
+	// its text and goes only through the paste keys.
+	media := func(name, mode, text string, valid bool) genVector {
+		return genVector{Name: "paste: media " + name, Rule: "commands/paste/kind", Valid: valid,
+			Body: []byte(`{"v":1,"type":"paste","group":` + genGroup + `,"by":` + genOther + `,"to":` + genDev + `,"id":` + genID +
+				`,"time_ms":1000,"expires_ms":20000,"mode":"` + mode + `","kind":"media","text":` + text + `}`)}
+	}
+	v.Commands = append(v.Commands,
+		media("of a copy", "paste", genID, true),
+		media("typed", "type", genID, false), media("of a text", "paste", `"hello"`, false),
+		media("of an ID in upper case", "paste", strings.ToUpper(genID), false), media("of no copy", "paste", `""`, false))
 	for _, k := range manifestKinds() {
 		v.Manifests = append(v.Manifests, genKindVectors(k)...)
 	}

@@ -53,3 +53,25 @@ func keysInject(ctx context.Context, kb keyboard, b connector.PasteBoard, text, 
 	}
 	return err
 }
+
+// keysInjectMedia pastes images or files through the clipboard and kb:
+// write puts them in, kb presses Shift+Insert, then Enter if enter is set.
+func keysInjectMedia(ctx context.Context, kb keyboard, write func() error, enter bool) error {
+	if why := lockcheck.Reason(connector.NoLockCheck(ctx)); why != "" {
+		return &connector.Refusal{Reason: why}
+	}
+	if k, ok := kb.(granted); ok {
+		kb = k.withGrant(connector.KeysGrant(ctx))
+	}
+	if err := kb.ready(); err != nil {
+		return err
+	}
+	if err := write(); err != nil {
+		return err
+	}
+	err := kb.paste()
+	if err == nil && enter {
+		err = kb.enter()
+	}
+	return err
+}

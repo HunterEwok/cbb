@@ -1999,6 +1999,19 @@ pasted newline before the user sees it. The `enter` flag presses Enter afterward
 | Nano ESP32 | not yet: the firmware takes no commands; its USB keyboard (`esp32/`, `usb.rs`) types only what its console's `type` gives it, in a `console-type` build | only the characters of the layout set on the board, which must match the host's |
 | ZX Spectrum Next | none: `.cbb` runs only when started | |
 
+**Images and files.** A remote paste carries a copy of images or files too, so that a
+photo sent from the phone lands in the chat or document that has the focus on a computer.
+The sender makes an ordinary copy of them in the group (it reaches every device's clipboard,
+as any copy does) and signs a `paste` command of kind `media` that names that copy. The
+receiver fetches the copy as it fetches any, writes it into its clipboard in the forms the
+system knows (an image, formatted text, or files as a file manager copies them, so that a
+program takes files and not their paths), and presses only the paste keys of the table above:
+Shift+Insert on Linux, Ctrl+V on Windows, Cmd+V in the Mac app. Typing them is not possible,
+and tmux, a text console, a Bluetooth keyboard and a TV refuse them with that reason. The
+receiver takes only a copy that is sealed to the sender's device too, so a paste never puts
+in a copy its sender could not read. Senders: `cbb paste -on DEVICE FILE...` (`-image` for one
+PNG or JPEG as an image, `-copy` for the group's current copy).
+
 **The lock check.** Synthetic input does not stop at a lock screen: XTEST events pass a
 locker's keyboard grab, and a uinput device is a real keyboard to the compositor, the
 display manager and the text console. So every target checks right before it injects that

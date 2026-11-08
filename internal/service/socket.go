@@ -148,7 +148,7 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 		}
 		reply(c, control.Header{Done: true}, nil)
 	case control.OpPasteMedia:
-		if err := s.pasteMedia(ctx, c); err != nil {
+		if err := s.pasteMedia(ctx, c, m.Value); err != nil {
 			fail(c, err)
 		}
 	case control.OpConfig:

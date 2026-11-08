@@ -7,6 +7,14 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Remote paste carries images and files (docs/design.md, "Remote paste"): `cbb paste -on
+  DEVICE FILE...` (`-image` for one PNG or JPEG as an image, `-copy` for the group's current
+  copy) copies them to the group and signs a `paste` command of kind `media` that names the
+  copy. The receiver fetches it, its desktop connector writes it into the clipboard (an image,
+  or files as a file manager copies them) and presses the paste keys, on X11, Wayland, GNOME
+  and KDE (the portal or the uinput helper) and Windows, so a chat such as Telegram gets the
+  picture; tmux and text consoles refuse it. The Go and the Rust member take it, and only a
+  copy sealed to the sender too (docs/protocol.md, section 15).
 - `cbb-helper`, the Go helper of the Rust program `cbb` (docs/design.md, "The service and its
   helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
   its hello and starts it again when it stops. It does nothing else yet; the steps that make

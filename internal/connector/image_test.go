@@ -5,7 +5,9 @@ package connector
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
+	"errors"
 	"testing"
 	"time"
 
@@ -60,7 +62,7 @@ func TestImages(t *testing.T) {
 	rand.Read(png.Data)
 	b.copyOn(Item{Image: &png})
 	waitFor(t, "the desktop's image", func() bool {
-		got, err := fetchMedia(t.Context(), socket, nil)
+		got, err := fetchMedia(t.Context(), socket, nil, "")
 		return err == nil && got.image != nil && bytes.Equal(got.image.Data, png.Data)
 	})
 
@@ -82,4 +84,52 @@ func TestImages(t *testing.T) {
 	// A text after the image replaces it.
 	do(t, socket, control.Header{Op: control.OpCopy}, "a text again")
 	expectWrite(t, b.fakeBoard, "a text again", false)
+}
+
+// mediaTarget is a fake target that pastes images and files.
+type mediaTarget struct {
+	locked bool
+	keys   int
+}
+
+func (m *mediaTarget) Target() string { return "desktop" }
+func (m *mediaTarget) Inject(context.Context, string, string, bool, bool) error {
+	return errors.New("a text")
+}
+
+func (m *mediaTarget) InjectMedia(_ context.Context, write func() error, enter bool) error {
+	if m.locked {
+		return &Refusal{Reason: "the session is locked"}
+	}
+	if err := write(); err != nil {
+		return err
+	}
+	m.keys++
+	return nil
+}
+
+// textTarget pastes only text.
+type textTarget struct{ mediaTarget }
+
+func (textTarget) InjectMedia() {}
+
+// TestInjectedMedia: a remote paste of images or files reaches only a
+// target that takes them, fetches the copy it names, and refuses on a
+// locked session before it writes the clipboard.
+func TestInjectedMedia(t *testing.T) {
+	socket := startService(t)
+	b := &imageBoard{fakeBoard: newBoard(), images: make(chan Image, 4)}
+	m := &control.Message{Header: control.Header{Op: control.OpInject, Seq: 7, Kind: control.KindMedia, Method: "paste"},
+		Payload: []byte("0123456789abcdef0123456789abcdef")}
+	nop := func(string, ...any) {}
+	if ans := injectedMedia(t.Context(), socket, b, &textTarget{}, nil, m, nop); !ans.Refused || ans.Seq != 7 {
+		t.Errorf("a text target: %+v", ans.Header)
+	}
+	if ans := injectedMedia(t.Context(), socket, b, &mediaTarget{locked: true}, nil, m, nop); !ans.Refused || ans.Error != "the session is locked" {
+		t.Errorf("a locked session: %+v", ans.Header)
+	}
+	tgt := &mediaTarget{}
+	if ans := injectedMedia(t.Context(), socket, b, tgt, nil, m, nop); ans.Error == "" || ans.Refused || tgt.keys != 0 {
+		t.Errorf("a copy that is not the group's: %+v, %d presses", ans.Header, tgt.keys)
+	}
 }
