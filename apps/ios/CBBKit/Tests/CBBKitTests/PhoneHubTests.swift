@@ -31,7 +31,7 @@ final class PhoneHubTests: XCTestCase {
         XCTAssertThrowsError(try hub.admit(device: b, key: Data(count: 31)))
         XCTAssertThrowsError(try hub.admit(device: "B", key: key(4)))
 
-        // The clients go to cbbtun as JSON and come back from it.
+        // The clients go to the tunnel as JSON and come back from it.
         _ = try hub.admit(device: b, key: key(4))
         XCTAssertEqual(try PhoneHub.clients(json: try hub.clientsJSON()), hub.clients.map(\.shared))
         XCTAssertEqual(try PhoneHub.clients(json: ""), [])
@@ -88,7 +88,7 @@ final class PhoneHubTests: XCTestCase {
         XCTAssertTrue(hub.clients.allSatisfy(\.met))
         let kept = try JSONDecoder().decode([PhoneHub.Client].self, from: JSONEncoder().encode(hub.clients))
         XCTAssertEqual(kept, hub.clients)
-        XCTAssertFalse(try PhoneHub.clients(json: hub.clientsJSON()).contains(where: \.met), "cbbtun gets no met")
+        XCTAssertFalse(try PhoneHub.clients(json: hub.clientsJSON()).contains(where: \.met), "the tunnel gets no met")
 
         // Another hub's offer goes to the clients with their own preshared keys.
         XCTAssertTrue(hub.setOther(other, offer: Member.TunnelOffer(hubKey: key(10), psk: Data(), endpoints: ["198.51.100.1:8764"])))

@@ -24,7 +24,7 @@ public struct RelaySettings: Codable, Equatable, Sendable {
     }
 }
 
-/// What mobile/cbbtun's relay link asks of the kit (cbbtun's RelayEvents).
+/// What the relay link asks of the kit.
 public protocol RelayLinkEvents: AnyObject, Sendable {
     /// The relay joined a connection to peer: the kit dials 127.0.0.1:port,
     /// which takes one connection, as the TLS client expecting peer.
@@ -38,16 +38,16 @@ public protocol RelayLinkEvents: AnyObject, Sendable {
     func changed(_ state: String)
 }
 
-/// A running link of mobile/cbbtun to a blind relay.
+/// A running link to a blind relay.
 public protocol RelayLink: AnyObject, Sendable {
     func setRecords(_ records: String) throws
-    /// cbbtun's Relay.SetCredentials: an empty creds goes back to the
-    /// member certificate.
+    /// Registers with the group's server credentials: an empty creds goes
+    /// back to the member certificate.
     func setCredentials(serverKey: Data, sign: @escaping @Sendable (Data) throws -> Data, creds: String, roots: String, names: String) throws
     func close()
 }
 
-/// Starts links to relays; the app's come from mobile/cbbtun, the tests'
+/// Starts links to relays; the app's come from the Rust core, the tests'
 /// from a fake.
 public protocol RelayLinks: Sendable {
     func newKey() throws -> Data
@@ -73,7 +73,7 @@ public final class RelayOnPhone: RelayLinkEvents, @unchecked Sendable {
     /// The relay's address is no "ip:port", or its key no pin.
     public enum Failure: Error, Equatable { case badRelay }
 
-    /// How the link stands, as cbbtun reports it: registered, the other
+    /// How the link stands, as the link reports it: registered, the other
     /// devices of the group at the relay, the connections through it, and
     /// why it is not connected.
     public struct Report: Decodable, Equatable, Sendable {

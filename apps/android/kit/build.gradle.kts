@@ -45,7 +45,7 @@ val rust = rootDir.resolve("../../..").canonicalFile
 val coreDir = rust.resolve("target/release").path
 val buildCore by tasks.registering(Exec::class) {
     workingDir = rust
-    commandLine("cargo", "build", "--locked", "--release", "-p", "cbb-ffi", "--features", "member")
+    commandLine("cargo", "build", "--locked", "--release", "-p", "cbb-ffi", "--features", "member,tunnel")
 }
 
 tasks.test {

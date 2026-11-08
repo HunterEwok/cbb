@@ -160,6 +160,39 @@ pub fn parse_id(s: &str) -> Result<[u8; 16]> {
     Ok(id)
 }
 
+/// The VLESS user ID of the forwarder's registrations
+/// (`0cbb0000-7e91-4000-8000-000000008764`, internal/vless's
+/// RegistrationID): it reaches the registrations and nothing else.
+pub const REGISTRATION_ID: [u8; 16] = [0x0c, 0xbb, 0, 0, 0x7e, 0x91, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0x87, 0x64];
+
+/// The port a stream names to reach the forwarder's registrations
+/// (internal/vless's RegistrationPort).
+pub const REGISTRATION_PORT: u16 = 8764;
+
+/// The path of the registrations behind a group's XHTTP path: the path
+/// without the group's own part (internal/tunnel's RegistrationPath).
+pub fn registration_path(p: &str) -> &str {
+    match p.rfind('/') {
+        Some(i) if i > 0 => p.get(..i).unwrap_or(p),
+        _ => p,
+    }
+}
+
+/// The VLESS request header for a TCP stream to `port` on the forwarder:
+/// as `request_header`, with the command TCP (1). The forwarder sends a
+/// stream to its registrations or its mirror by the port alone.
+pub fn stream_header(id: &[u8; 16], port: u16) -> Vec<u8> {
+    let mut h = Vec::with_capacity(26);
+    h.push(0);
+    h.extend_from_slice(id);
+    h.push(0); // no addons
+    h.push(1); // TCP
+    h.extend_from_slice(&port.to_be_bytes());
+    h.push(1); // IPv4
+    h.extend_from_slice(&[127, 0, 0, 1]);
+    h
+}
+
 /// The VLESS request header for UDP: version 0, the user ID, no addons,
 /// the command UDP (2) and a target. The forwarder sends every packet to
 /// its own UDP port whatever the target, so it names the loopback address
@@ -193,12 +226,20 @@ pub fn frame(packet: &[u8]) -> Result<Vec<u8>> {
 pub struct Down {
     buf: Vec<u8>,
     header: bool,
+    /// A stream's bytes, not framed (`Down::stream`).
+    raw: bool,
 }
 
 /// The most the reader holds of a packet that has not all come.
 const MAX_HELD: usize = 64 << 10;
 
 impl Down {
+    /// Reads a TCP stream's download: VLESS's response header, then the
+    /// stream's bytes as they are, which `push` returns as one piece.
+    pub fn stream() -> Down {
+        Down { raw: true, ..Down::default() }
+    }
+
     /// Takes the next bytes of the download and returns the packets they
     /// complete.
     pub fn push(&mut self, data: &[u8]) -> Result<Vec<Vec<u8>>> {
@@ -216,6 +257,10 @@ impl Down {
             }
             self.buf.drain(..n.saturating_add(2));
             self.header = true;
+        }
+        if self.raw {
+            let all = core::mem::take(&mut self.buf);
+            return Ok(if all.is_empty() { Vec::new() } else { alloc::vec![all] });
         }
         let mut out = Vec::new();
         let mut rest = self.buf.as_slice();
@@ -484,6 +529,21 @@ mod tests {
         assert!(bad("id", "6f1c2b9e-3d4a-3f5b-8c7d-0e1f2a3b4c5d".into()), "version 3");
         assert!(bad("public_key", "AAAA".into()));
         assert!(bad("other", "x".into()));
+    }
+
+    #[test]
+    fn streams_reach_the_registrations() {
+        assert_eq!(parse_id("0cbb0000-7e91-4000-8000-000000008764").unwrap(), REGISTRATION_ID);
+        let h = stream_header(&REGISTRATION_ID, REGISTRATION_PORT);
+        assert_eq!(h.len(), 26);
+        assert_eq!(&h[17..22], &[0, 1, 0x22, 0x3c, 1]);
+        assert_eq!(registration_path("/AbC-12_xyz0123456/a-group-of-its-own"), "/AbC-12_xyz0123456");
+        assert_eq!(registration_path("/banMEJvnYJJap8S"), "/banMEJvnYJJap8S");
+        let mut d = Down::stream();
+        assert!(d.push(&[0]).unwrap().is_empty());
+        assert!(d.push(&[0]).unwrap().is_empty());
+        assert_eq!(d.push(b"\x00\x05ab").unwrap(), alloc::vec![b"\x00\x05ab".to_vec()]);
+        assert_eq!(d.push(b"c").unwrap(), alloc::vec![b"c".to_vec()]);
     }
 
     #[test]

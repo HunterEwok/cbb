@@ -52,3 +52,18 @@ apps/android/kit/src/test/kotlin/tools/cbb/kit/DiscoveryTest.kt dialFailuresBack
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt aCopyWaits D-86: the button's rule is the Rust member's now (waiting), tested in lite and by TestFFIMember
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt theButton D-86: the button's rule is the Rust member's now (sends), tested in lite and by TestFFIMember
 apps/android/app/src/test/kotlin/tools/cbb/SyncRuleTest.kt theButtonKeepsWhatThePhoneSent D-86: the button's rule is the Rust member's now (sends, took), tested in lite and by TestFFIMember
+mobile/cbbtun/cbbtun_test.go TestThroughTunnel D-87: the Go phone tunnel is gone; TestRustPhoneTunnel runs the Rust one against the Go hub
+mobile/cbbtun/cbbtun_test.go TestThroughObfuscatedTunnel D-87: the Go phone tunnel is gone; TestRustPhoneTunnel runs the Rust one with AmneziaWG
+mobile/cbbtun/cbbtun_test.go TestThroughVLESS D-87: the Go phone tunnel is gone; TestRustPhoneTunnel runs the Rust one over VLESS with XHTTP
+mobile/cbbtun/cbbtun_test.go TestCloseEndsConnections D-87: the Go phone tunnel is gone; ffi's stop_ends_connections checks the Rust one
+mobile/cbbtun/cbbtun_test.go TestBadArguments D-87: the Go phone tunnel is gone; ffi's bad_arguments checks the Rust one
+mobile/cbbtun/cbbtun_test.go TestNewObfuscation D-87: the Go phone tunnel is gone; ffi's keys checks new_obfuscation and new_vless_id
+mobile/cbbtun/hub_test.go TestPhoneHub D-87: the Go phone hub is gone; TestRustPhoneHub runs the Rust one with Go clients
+mobile/cbbtun/hub_test.go TestPhoneHubWithoutRecords D-87: the Go phone hub is gone; TestRustPhoneHubForwarder registers the Rust one without records, then with them
+mobile/cbbtun/hub_test.go TestHubBadArguments D-87: the Go phone hub is gone; ffi's bad_arguments checks the Rust one's start and registration
+mobile/cbbtun/hub_test.go TestPhoneHubInvitation D-87: the Go phone hub is gone; TestRustPhoneHubInvite runs the Rust one's invitation
+mobile/cbbtun/hub_test.go TestPhoneHubWays D-87: the Go phone hub is gone; ways_in_over_vless and TestRustPhoneHubOverXHTTP check the Rust one's ways in
+mobile/cbbtun/onlycbb_test.go TestPhoneHubReachesOnlyTheMemberListener D-87: the Go phone hub is gone; TestRustPhoneHubReachesOnlyTheMemberListener checks the Rust one
+mobile/cbbtun/relay_test.go TestPhoneAtRelay D-87: the Go relay link is gone; TestRustPhoneRelay runs the Rust one against the Go relay
+mobile/cbbtun/relay_test.go TestPhoneAtRelayWithCredentials D-87: the Go relay link is gone; TestRustPhoneRelayCredentials runs the Rust one with the server credentials
+mobile/cbbtun/relay_test.go TestRelayBadArguments D-87: the Go relay link is gone; ffi's bad_arguments checks the Rust one

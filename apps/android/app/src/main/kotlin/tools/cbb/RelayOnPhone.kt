@@ -6,6 +6,7 @@ package tools.cbb
 import tools.cbb.kit.CredentialStore
 import tools.cbb.kit.Member
 import tools.cbb.kit.FrameTransport
+import tools.cbb.kit.RustTunnel
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -45,7 +46,7 @@ data class RelaySettings(val key: ByteArray, val relay: HubState.Forwarder) {
     }
 }
 
-/** What mobile/cbbtun's relay link asks of the app (cbbtun's RelayEvents). */
+/** What the relay link asks of the app. */
 interface RelayLinkEvents {
     /** The relay joined a connection to peer: the app dials 127.0.0.1:port, which takes one connection, as the TLS client expecting peer. */
     fun dial(peer: String, port: Int)
@@ -57,15 +58,15 @@ interface RelayLinkEvents {
     fun changed(state: String)
 }
 
-/** A running link of mobile/cbbtun to a blind relay. */
+/** A running link to a blind relay. */
 interface RelayLink {
     fun setRecords(records: String)
-    /** cbbtun's Relay.SetCredentials: an empty creds goes back to the member certificate. */
+    /** Registers with the group's server credentials: an empty creds goes back to the member certificate. */
     fun setCredentials(serverKey: ByteArray, sign: (ByteArray) -> ByteArray, creds: String, roots: String, names: String)
     fun close()
 }
 
-/** Starts links to relays; the app's come from mobile/cbbtun, the tests' from a fake. */
+/** Starts links to relays; the app's come from the Rust core, the tests' from a fake. */
 interface RelayLinks {
     fun newKey(): ByteArray
     fun start(
@@ -74,24 +75,24 @@ interface RelayLinks {
     ): RelayLink
 }
 
-/** The links of mobile/cbbtun to a blind relay. */
-object GoRelayLinks : RelayLinks {
-    override fun newKey(): ByteArray = cbbtun.Cbbtun.newKey()
+/** The links to a blind relay in the Rust core (the kit's RustTunnel). */
+object CoreRelayLinks : RelayLinks {
+    override fun newKey(): ByteArray = RustTunnel.newKey()
     override fun start(
         private: ByteArray, device: String, endpoint: String, pin: String, chain: String,
         sign: (ByteArray) -> ByteArray, records: String, memberPort: Int, events: RelayLinkEvents,
     ): RelayLink {
-        val r = cbbtun.Cbbtun.startRelay(private, device, endpoint, pin, chain, cbbtun.Signer { sign(it) }, records, memberPort.toLong(),
-            object : cbbtun.RelayEvents {
-                override fun dial(peer: String, port: Long) = events.dial(peer, port.toInt())
-                override fun calling(peer: String, localPort: Long) = events.calling(peer, localPort.toInt())
+        val r = RustTunnel.startRelay(private, device, endpoint, pin, chain, sign, records, memberPort,
+            object : RustTunnel.RelayEvents {
+                override fun dial(peer: String, port: Int) = events.dial(peer, port)
+                override fun calling(peer: String, localPort: Int) = events.calling(peer, localPort)
                 override fun wanted(peer: String): Boolean = events.wanted(peer)
                 override fun changed(state: String) = events.changed(state)
             })
         return object : RelayLink {
             override fun setRecords(records: String) = r.setRecords(records)
             override fun setCredentials(serverKey: ByteArray, sign: (ByteArray) -> ByteArray, creds: String, roots: String, names: String) =
-                r.setCredentials(serverKey, cbbtun.Signer { sign(it) }, creds, roots, names)
+                r.setCredentials(serverKey, sign, creds, roots, names)
             override fun close() = r.close()
         }
     }
@@ -135,7 +136,7 @@ class RelayOnPhone(
         val shown: String get() = listOf(Base64.getEncoder().encodeToString(serverKey), creds, roots, names).joinToString("\n")
     }
 
-    /** How the link stands, as cbbtun reports it: registered, the other devices of the group at the relay, the connections through it, why it is not connected. */
+    /** How the link stands, as the link reports it: registered, the other devices of the group at the relay, the connections through it, why it is not connected. */
     data class Report(val connected: Boolean = false, val online: List<String> = emptyList(), val through: Int = 0, val error: String? = null)
 
     private val lock = Any()
