@@ -1282,7 +1282,7 @@ All notable changes to cbb are documented in this file. The format follows
 ### Changed
 - The Android and iPhone apps put one received image or video, and an image the button
   fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
-  Movies/CBB) on Android, an album "CBB" in Photos on the iPhone, which asks only to add photos.
+  Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).
   Other files still go to Downloads/CBB on Android and to Files on the iPhone.
 - The Rust code is one workspace at the top of the repository: the core in `core/`, the
   member's program `cbb` in `member/`, and `ffi/`, `embassy/`, `esp32/`, `ring-shim/` and

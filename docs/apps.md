@@ -88,8 +88,8 @@ they look, so both apps are built to the same plan.
    Received, on the iPhone; it saves a copy once. One image or video, and an image the button
    fetches, goes where the gallery shows it, as Telegram and WhatsApp put what they receive
    and as the Aurora app does: the album "CBB" (Pictures/CBB or Movies/CBB through MediaStore)
-   on Android, an album "CBB" in Photos on the iPhone, which asks only to add photos
-   (`NSPhotoLibraryAddUsageDescription`). Android's Share sends a single image as an
+   on Android, Photos on the iPhone (Recents: with access only to add photos,
+   `NSPhotoLibraryAddUsageDescription`, iOS lets no app make an album). Android's Share sends a single image as an
    image and anything else as files, up to 100 MiB together. A copy over 100 MiB stays on
    the computers.
 3. **Add a device**: the camera with a frame; the device appears in the list when it has
