@@ -589,7 +589,7 @@ fn finds_a_computer_of_the_group_for_the_network() {
     let Some(kit) = kit("find") else { return };
     let mut esp = Esp::new(kit.site.clone());
     esp.members = vec![
-        ("192.168.0.50".into(), 8764, "r=lite".into()),
+        ("192.168.0.50".into(), 8764, "r=listen".into()),
         ("192.168.0.60".into(), 8764, "r=phone".into()),
         ("192.168.0.175".into(), 8770, String::new()),
     ];
@@ -612,7 +612,7 @@ fn finds_a_computer_of_the_group_for_the_network() {
 fn says_when_no_computer_answers() {
     let Some(kit) = kit("nofind") else { return };
     let mut esp = Esp::new(kit.site.clone());
-    esp.members = vec![("192.168.0.50".into(), 8764, "r=lite".into())];
+    esp.members = vec![("192.168.0.50".into(), 8764, "r=listen".into())];
     let run = run_with(&kit, "net on", esp, Pi::new());
     let s = run.hw.screen_text().to_uppercase();
     assert!(s.contains("FOUND NO COMPUTER"), "{s}");
