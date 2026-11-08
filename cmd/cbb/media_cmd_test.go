@@ -118,7 +118,7 @@ func TestCopyFiles(t *testing.T) {
 	})
 	runCommandCases(t, []commandCase{
 		{name: "-type with two files", args: []string{"copy", "-type", "png", notes, notes}, code: 2, stderr: "takes one file"},
-		{name: "-type of a stranger", args: []string{"copy", "-type", "gif", notes}, code: 2, stderr: "-type is png, jpeg or html"},
+		{name: "-type of a stranger", args: []string{"copy", "-type", "webp", notes}, code: 2, stderr: "-type is png, jpeg, gif or html"},
 		{name: "-type of a folder", args: []string{"copy", "-type", "html", dir}, code: 1, stderr: "is not a file"},
 		{name: "-type of nothing", args: []string{"copy", "-type", "png", filepath.Join(dir, "none")}, code: 1},
 	})

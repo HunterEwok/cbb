@@ -528,7 +528,9 @@ func imageCopy(m *clip.Manifest) bool {
 	if m == nil || m.Files() {
 		return false
 	}
-	return slices.ContainsFunc(m.Parts, func(p clip.Part) bool { return p.Type == clip.TypePNG || p.Type == clip.TypeJPEG })
+	return slices.ContainsFunc(m.Parts, func(p clip.Part) bool {
+		return p.Type == clip.TypePNG || p.Type == clip.TypeJPEG || p.Type == clip.TypeGIF
+	})
 }
 
 // htmlCopy reports whether a copy is clipboard data with formatted text,

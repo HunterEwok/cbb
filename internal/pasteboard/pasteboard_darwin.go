@@ -122,8 +122,11 @@ func (b *Board) readImage(flags C.int) (Item, bool, error) {
 		return Item{Change: int64(change)}, false, nil
 	}
 	it := Item{Secret: flags&C.CB_SECRET != 0, Remote: flags&C.CB_REMOTE != 0, Change: int64(change), ImageType: clip.TypePNG}
-	if typ == C.CB_JPEG {
+	switch typ {
+	case C.CB_JPEG:
 		it.ImageType = clip.TypeJPEG
+	case C.CB_GIF:
+		it.ImageType = clip.TypeGIF
 	}
 	it.Image = C.GoBytes(data, C.int(n))
 	C.free(data)
@@ -170,7 +173,8 @@ func (b *Board) WriteFiles(paths []string) (int64, error) {
 }
 
 // WriteImage puts an image of a type on the pasteboard, as itself and as a
-// TIFF, with its text, if any, and returns the new change counter.
+// TIFF (a GIF also as a PNG of its first frame), with its text, if any, and
+// returns the new change counter.
 func (b *Board) WriteImage(typ string, data []byte, text string) (int64, error) {
 	if len(data) == 0 {
 		return 0, errors.New("pasteboard: an empty image")
@@ -180,6 +184,8 @@ func (b *Board) WriteImage(typ string, data []byte, text string) (int64, error) 
 	case clip.TypePNG:
 	case clip.TypeJPEG:
 		t = C.CB_JPEG
+	case clip.TypeGIF:
+		t = C.CB_GIF
 	default:
 		return 0, errors.New("pasteboard: no image of type " + typ)
 	}

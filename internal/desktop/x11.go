@@ -106,7 +106,7 @@ type sendKey struct {
 }
 
 var x11Atoms = []string{"CLIPBOARD", "PRIMARY", "TARGETS", "UTF8_STRING", "STRING", "TEXT", "text/plain;charset=utf-8",
-	"text/plain", "INCR", "ATOM", "TIMESTAMP", secretType, "CBB_SELECTION", "MULTIPLE", clip.TypePNG, clip.TypeJPEG,
+	"text/plain", "INCR", "ATOM", "TIMESTAMP", secretType, "CBB_SELECTION", "MULTIPLE", clip.TypePNG, clip.TypeJPEG, clip.TypeGIF,
 	clip.TypeHTML, uriListType, gnomeFilesType, portalFilesType}
 
 // An xgb extension's Init writes the package-wide tables of its events and
@@ -594,7 +594,8 @@ func (b *X11) Write(text string, secret bool) error {
 // WriteImage owns CLIPBOARD and PRIMARY with the image, and its text, if
 // any.
 func (b *X11) WriteImage(img connector.Image, text string) error {
-	return b.write(connector.Item{Text: text, Image: &img}, map[string][]byte{img.Type: img.Data}, []string{img.Type})
+	forms, order := connector.ImageForms(img)
+	return b.write(connector.Item{Text: text, Image: &img}, forms, order)
 }
 
 // WriteHTML owns CLIPBOARD and PRIMARY with formatted text and its plain

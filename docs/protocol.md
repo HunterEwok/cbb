@@ -676,7 +676,7 @@ Part:
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `type` | string or absent | clipboard data: `image/png`, `image/jpeg` or `text/html`, each at most once, so three parts at most today; an unknown type is refused, and the limit for types added later is 8 |
+| `type` | string or absent | clipboard data: `image/png`, `image/jpeg`, `image/gif` or `text/html`, each at most once, so four parts at most today; an unknown type is refused, and the limit for types added later is 8 |
 | `path` | string or absent | a copy of files: the file's or folder's path, names joined by `/`, each path once, compared byte for byte (case matters) |
 | `dir` | bool or absent | with `path`: `true` for a folder, which has no `size` or `sha256`: the field is absent, never null or an empty string |
 | `size` | integer or absent | the part's bytes; absent means 0 |
@@ -1225,7 +1225,7 @@ Header fields (all omitted when empty):
 | `status` | object | for `status` |
 | `devices` | array | reserved |
 | `part` | object | `copy-media`'s `part` messages and `paste-media`'s answers: `{type?, path?, dir?, size?}`, a part of images or files without its hash; `release-file` and `release-get`: the archive's `size` |
-| `value` | string | `config`: the setting's new value; `remote add`: the TV's kind, `androidtv` (the default), `appletv` or `roku`; `remote pastes`: `on` or `off` |
+| `value` | string | `config`: the setting's new value; `paste-media`: a remote paste's copy; `remote add`: the TV's kind, `androidtv` (the default), `appletv` or `roku`; `remote pastes`: `on` or `off` |
 | `detail` | string | with `error`: the underlying error, which the client shows with error details on (`CBB_DEBUG=1`) |
 | `admins` | bool | `pair`, on the group's root: the window may make a phone with the app an admin (`cbb pair -admin`) |
 | `forwarder`, `forwarder_key` | strings | `away hub`: the forwarder's address and its key, 44 characters of base64 |
@@ -1249,7 +1249,7 @@ A connection carries one request: the service reads the first message and dispat
 | `paste` | none | `{kind, done}` + payload = the member's own clipboard text; error `the clipboard is empty` when unknown or an expired secret, and one that names `cbb paste -o` for images or files without a text |
 | `copy-media` | payload = the plain-text alternative, or none; then for each part `{"op":"part", part}`, followed for a file or clipboard data by `{"op":"data"}` messages whose payloads, at most 1 MiB each, are exactly its `size` bytes; last `{"op":"part", done}` | `{done}`: the parts are in the cache and the copy went to the group as a `media` event (section 4, "Media"), also written to the member's own clipboard. An error when the copy is over this device's limit, its manifest is not valid or the bytes do not come as said. `cbb copy FILE...` reads the files as the user and sends them |
 | `copied-media` | as `copy-media` | as `copy-media`, but a watcher's report that its clipboard changed: the copy goes to the group as an event when the engine decides so (section 5) and is not written back to the member's own clipboard |
-| `paste-media` | none | once every part of the member's own images or files (with sync off the group's) is in the cache, fetched first if it is not: `{kind: "media"}` + payload = the plain-text alternative; then for each part `{part}` and its bytes in answers of at most 1 MiB; last `{done}`. An error when the clipboard holds none, or they did not arrive. `cbb paste -o DIR` writes them |
+| `paste-media` | `{value?}` | with `value`, the event ID of a remote paste's copy (section 15), while it is the group's current copy and its parts are here: the same answers for that copy. Without it, once every part of the member's own images or files (with sync off the group's) is in the cache, fetched first if it is not: `{kind: "media"}` + payload = the plain-text alternative; then for each part `{part}` and its bytes in answers of at most 1 MiB; last `{done}`. An error when the clipboard holds none, or they did not arrive. `cbb paste -o DIR` writes them |
 | `config` | `{name?, value?}`: `max-copy` or `max-copy-away` and a size such as `200MiB` | `{status, done}`, with the setting saved first when `name` is given; `status.media` = `{max_copy, max_copy_away, fetching?, fetched?, from?, failed?}`, in bytes, also in `status` |
 | `status` | none | `{status, done}`; `status` = `{device, group, role, os, peers: [{id, role, os, skew_ms}], unreached?, port, cert_ends_ms, incoming_ms, away?, version}`; `cert_ends_ms` is when this device's member certificate ends, in Unix milliseconds, `unreached` lists the members at home that could not connect to this one and synced only because it dialed them back, `port` is the member port; `incoming_ms` is the group's live window (section 5, "Writing the member's own clipboard"); `away`, present while sync away from home is on: `{hub, port, endpoints, clients, hub_device, through, keys_in_file, error, detail, forwarder?, relay?}` (section 11); `forwarder`, on a hub with one: `{endpoint, registered, seen, error, detail}` (section 13); `relay`, on a device with one: `{endpoint, connected, online, error, detail}`, where `online` lists the other devices of the group on the relay and `through` tells whether a member connection runs through it (section 14) |
 | `leave` | none | `{done}`: the device leaves its group (D-83): the service deletes the keys and the group's files, turns remote paste and the quick actions off, and restarts in no group. Refused on the group's root while the group has other devices; taken while the group file is damaged |
@@ -1260,7 +1260,7 @@ A connection carries one request: the service reads the first message and dispat
 | `sync` | `{name, device?, for_ms?}`: `name` `on` or `off`; `device`, a name or device ID, for another device (on an admin); `for_ms`, only with `off` and no `device`, from 1 to 2 592 000 000 (30 days), absent for until turned on | without `device`: `{status, done}`, saved in `sync.json` and in effect, `status.mode` `shared` or `own` and, while off for a time, `status.sync_until_ms` when it turns on again, in Unix milliseconds (design.md, "Sync on and off"); with it: `{done}` once that device answered `done` to the `mode` command (section 15), or an error with its reason. Without `device` on either socket, so that the apps switch it without the administrator; with it only on the admin socket |
 | `mute` | `{device, for_ms?}`: `device` a name or device ID; `for_ms` from 1 to 2 592 000 000 (30 days), absent for until `unmute` | `{status, done}` or an error. On an admin that is not frozen, mutes that device: sends it a `mute` command (section 15), or mutes this device at once when it names this one (design.md, "Muting a device"). The mute lasts across restarts, in `mute.json`. Only on the admin socket |
 | `unmute` | `{device}` | `{status, done}` or an error: on an admin that is not frozen, sends that device an `unmute` command, or ends this device's own mute at once. So a muted device that is no admin waits for an admin, and a muted admin or root ends its own mute. Only on the admin socket |
-| `paste-on` | `{device, method?, enter?, kind?}` + payload = the text | `{done}` once that device answered `done` to the `paste` command this admin signed (section 15), or an error with its reason. The text is cleaned first (design.md, "Remote paste"). Only on the admin socket |
+| `paste-on` | `{device, method?, enter?, kind?}` + payload = the text | `{done}` once that device answered `done` to the `paste` command this admin signed (section 15), or an error with its reason. The text is cleaned first (design.md, "Remote paste"). `kind` `media`, without a payload, pastes the group's current copy, which must be images or files that this device reads (`cbb paste -on DEVICE FILE...` copies the files first). Only on the admin socket |
 | `paste-receive` | `{name, enter?, console?, device?, all?}`: `name` `on` or `off` | `{status, done}`: `on` saves the switches of remote paste here, only for this device; `off` turns it off here, or with `device` or `all` on another or every device through `paste-off` commands. Only on the admin socket |
 | `keyboard` | `{name?, keyboard?}` + payload for `type`: `name` `on`, `off`, `pair`, `type` or none | `{status, done}`: `on` saves the Bluetooth keyboard's settings and registers it with BlueZ (Linux only), `off` takes it off, `pair` makes it discoverable for two minutes, `type` types the payload on the connected device and answers once it is typed, none only answers the status. Only on the admin socket |
 | `remote` | `{name?, address?, value?, new_name?, consent?, code?, device?}` + payload for `type`: `name` `add`, `code`, `cancel`, `remove`, `pastes`, `type` or none | `{status, done}`: `add` pairs with the TV at `address` (an Android TV or a Google TV shows a code; a Roku, `value` `roku`, needs `consent`, as its control is plain HTTP), `code` finishes that pairing within two minutes, `cancel` ends it, `remove` forgets the TV `device`, `pastes` sends the group's remote pastes to it or not, `type` types the payload into the field open on the TV, none only answers the status; `status.tvs` = `[{name?, kind, host, pastes?, pairing?}]`. An address outside the home network fails. Only on the admin socket |
@@ -1333,7 +1333,11 @@ A desktop connector or the Mac's pasteboard agent keeps a `watch` connection ope
   is set, clears the clipboard after a `secret`, shows a notification with the sender, and
   answers `injected` with the same `seq`: no `error` when it did, or `error` (and `detail`),
   with `refused` when it would not (a locked session, an administrator's window, a missing
-  permission) rather than could not. The service waits 5 s for it, and 5 ms more for each
+  permission) rather than could not. An `inject` of `kind` `media` goes only to a `desktop`
+  watcher whose watch request set `images`, `files` (or `html`) for what the copy holds; its
+  payload is the copy's event ID, which the watcher fetches with `paste-media` and `value`
+  on a connection of its own, writes into its clipboard as it writes a copy, and pastes with
+  the paste keys alone; the service waits 8 s for it, after the copy arrived. The service waits 5 s for it, and 5 ms more for each
   byte it types. A watcher whose target is `tmux` or `console`, or whose watch request
   set `paste_only`, holds no clipboard: the service sends it no `write` and takes no report
   from it. On a Mac only the app pastes (a `desktop` watcher with `paste_only`): macOS lets
@@ -3095,8 +3099,8 @@ signed bodies (Conventions):
 | `expires_ms` | integer | after `time_ms`, at most 30 000 ms later: from `time_ms` + 1 to `time_ms` + 30 000 |
 | `mode` | string | in a `mode` command: `shared` (sync on) or `own` (sync off); in a `paste` command: `paste` (the clipboard and the paste keys) or `type` (key by key) |
 | `enter` | bool | in a `paste` command: press Enter after the text |
-| `kind` | string | in a `paste` command: `text` or `secret` |
-| `text` | string | in a `paste` command: the text, not empty, at most 1 MiB of UTF-8 for `paste` and 4 KiB for `type` |
+| `kind` | string | in a `paste` command: `text`, `secret` or `media` (the group's copy of images or files that `text` names, below) |
+| `text` | string | in a `paste` command: the text, not empty, at most 1 MiB of UTF-8 for `paste` and 4 KiB for `type`; in one of kind `media`, the event ID of the copy (32 of `0`-`9` and `a`-`f`), with `mode` `paste` |
 | `action` | string | in an `action` command: the action's name, 1 to 32 of `a`-`z`, `0`-`9` and `-`, starting with a letter; in no other command |
 | `hub` | object | in a `hub` command: `forwarder` (`endpoint`, `key`) or absent, `endpoints` (at most 8 with the forwarder's) or absent, at least one of the two, and `clients`, at most 256 of `{device, key, psk}` (base64, 32 bytes each, no device twice); or `{"stop":true}` with none of the others, which makes the receiver stop being a hub |
 | `for_ms` | integer | in a `mute` command: how long the mute lasts, from 1 to 2 592 000 000 (30 days) on the receiver's clock from when it takes the command; absent or 0 for until an `unmute` command or the receiver's user ends it |
@@ -3108,7 +3112,7 @@ and `text` in `paste`, and `action` in `action`. In a command of another type th
 are absent or empty: `mode`, `kind`, `text` and `action` `""`, `enter` `false`, `for_ms` `0`,
 and `hub` absent, since even `{}` is an order. `mode` in a `mode` command is any string that is not
 empty here; the receiver answers a mode it does not know with an error. `paste`'s `mode`
-and `kind` are exactly the values above. The 1 MiB and 4 KiB of `text` count the bytes of
+and `kind` are exactly the values above, and one of kind `media` has `mode` `paste` and an event ID as its `text`. The 1 MiB and 4 KiB of `text` count the bytes of
 UTF-8 once its escapes are read. In `hub`, `forwarder` has `endpoint` and `key`, strings
 that are not empty; `endpoints` holds at most 8 strings (the forwarder does not count among
 them) and, without a forwarder, one at least; each of `clients` has `device`, a device ID,
@@ -3194,7 +3198,21 @@ focused text field through its accessibility service takes it: a line break ther
 character of the field. The receiver answers `done` when the target put it
 in, `refused` with its reason (for example a locked session) or `failed`. It keeps the last
 100 pastes in a log (sender, time, length, way, result, never the text), but no `secret`
-one. A `paste-off` command turns remote paste off, Enter and consoles too; only the
+one.
+
+A `paste` command of kind `media` pastes images or files: its sender first makes a copy of
+them in the group as any copy (section 4, "Media"), then signs the command with that copy's
+event ID as its `text`. The receiver waits up to 20 s for that copy to be its group's current
+copy, and refuses it unless it reads the copy, the copy is a `media` copy, and the copy has a
+wrap for the signer's device (`by`), so that a paste never puts in a copy its sender could not
+read. It fetches the copy's blob within its limits (section 4, "Content"), then hands the
+paste to a desktop watcher whose clipboard takes the copy whole (the watcher protocol's
+`inject` of kind `media`, section 8), which writes it into the clipboard (an image, formatted
+text, or the files as a file manager copies them) and presses the paste keys, and Enter when
+`enter` is set. The clipboard keeps the copy, which is the group's anyway. tmux, a text
+console, a Bluetooth keyboard and a TV take only text, so a receiver with only those refuses
+it. The receiver answers within the command's lifetime, after which the members in between no
+longer pass the result back; the sender waits 33 s for it. A `paste-off` command turns remote paste off, Enter and consoles too; only the
 device's own user turns it on again.
 
 An `action` command carries only the action's name: what it does is defined on the receiver,
