@@ -955,7 +955,7 @@ A window for a remote invitation (design.md, "Joining from another network") dif
 ### Channel binding and CPace
 
 Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
-`internal/third_party/cpace`, with explicit key confirmation.
+`core/src/third_party/cpace`, with explicit key confirmation.
 
 | Input | Value |
 |-------|-------|
