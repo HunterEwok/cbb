@@ -164,7 +164,7 @@ func forgedCommands(ctx context.Context, r *Report, f *Fleet, timeout time.Durat
 		if err := expect("replay 2", "refused: this command was carried out already"); err != nil {
 			return err
 		}
-		return succeeds(ctx, t, "cbb mode", "", "receive")
+		return succeeds(ctx, t, "cbb sync", "", "Sync is off")
 	})
 	r.Do("fleet/S23-changed", func() error { return expect("altered 1", "refused: group: the record's signature is not valid") })
 	r.Do("fleet/T8-other-group", func() error { return expect("other-group 1", "refused: group: the command is for another group") })
@@ -172,7 +172,7 @@ func forgedCommands(ctx context.Context, r *Report, f *Fleet, timeout time.Durat
 		if got := line("other-target 1"); strings.HasPrefix(got, "done") {
 			return fmt.Errorf("a command for another device was carried out: %q", got)
 		}
-		return succeeds(ctx, t, "cbb mode", "", "receive")
+		return succeeds(ctx, t, "cbb sync", "", "Sync is off")
 	})
 }
 

@@ -16,8 +16,6 @@ func TestModes(t *testing.T) {
 	}{
 		{Shared, true, true},
 		{Own, false, false},
-		{Receive, false, true},
-		{SendOnly, true, false},
 	} {
 		t.Run(tc.mode.String(), func(t *testing.T) {
 			w := newWorld()
@@ -81,19 +79,20 @@ func TestModeSecretStaysSecret(t *testing.T) {
 }
 
 func TestParseMode(t *testing.T) {
-	for m := Shared; m <= SendOnly; m++ {
+	for m := Shared; m <= Own; m++ {
 		if got, err := ParseMode(m.String()); err != nil || got != m {
 			t.Fatalf("ParseMode(%q) = %v, %v", m, got, err)
 		}
 	}
-	if _, err := ParseMode("everything"); err == nil {
-		t.Fatal("ParseMode took an unknown mode")
+	for _, name := range []string{"everything", "receive", "send"} {
+		if _, err := ParseMode(name); err == nil {
+			t.Fatalf("ParseMode took %q", name)
+		}
 	}
 }
 
 // TestMute keeps a muted member's copies, deliberate ones too, from the
-// group until the mute ends, and the group's copies out of a member that
-// paused receiving.
+// group until the mute ends.
 func TestMute(t *testing.T) {
 	w := newWorld()
 	e := w.member(idA)
@@ -123,25 +122,46 @@ func TestMute(t *testing.T) {
 	if muted, _ := e.Muted(); muted {
 		t.Fatal("Unmute left the mute")
 	}
+}
 
-	e.PauseReceiving(time.UnixMilli(w.wall).Add(time.Minute))
+// TestSyncOffForAWhile turns sync off until a time: the member neither
+// sends nor takes copies, keeps the group's text at hand, and syncs again
+// once the time has passed.
+func TestSyncOffForAWhile(t *testing.T) {
+	w := newWorld()
+	e := w.member(idA)
+	until := time.UnixMilli(w.wall).Add(time.Minute)
+	e.SetSync(false, until)
+	if on, at := e.Sync(); on || !at.Equal(until) || e.Mode() != Own {
+		t.Fatalf("Sync() = %v, %v; Mode() = %v", on, at, e.Mode())
+	}
 	w.advance(time.Second)
 	res := mustReceive(t, e, event(w, "theirs", 0, 0))
 	if res.Write || res.Forward == nil {
-		t.Fatalf("a copy while paused: Write %v, forwarded %v", res.Write, res.Forward != nil)
+		t.Fatalf("a copy while off: Write %v, forwarded %v", res.Write, res.Forward != nil)
 	}
 	if cur, _ := e.Current(); cur.Text != "theirs" {
-		t.Fatal("a paused member does not keep the group's text at hand")
+		t.Fatal("a member with sync off does not keep the group's text at hand")
 	}
-	if _, ok, _ := e.Copied("mine while paused", Text, Copy); !ok {
-		t.Fatal("a paused member's own copy did not go out")
+	if _, ok, _ := e.Copied("mine while off", Text, Copy); ok {
+		t.Fatal("a member with sync off sent its copy")
 	}
 	w.advance(time.Minute)
-	if paused, _ := e.ReceivingPaused(); paused {
-		t.Fatal("the pause outlasted its end")
+	if on, at := e.Sync(); !on || !at.IsZero() || e.Mode() != Shared {
+		t.Fatalf("after its time: Sync() = %v, %v", on, at)
 	}
 	w.advance(time.Second)
-	if res := mustReceive(t, e, event(w, "after the pause", 0, 0)); !res.Write {
-		t.Fatal("a copy after the pause ended was not taken")
+	if res := mustReceive(t, e, event(w, "after", 0, 0)); !res.Write {
+		t.Fatal("a copy after sync turned on again was not taken")
+	}
+
+	e.SetSync(false, time.Time{})
+	w.advance(30 * 24 * time.Hour)
+	if on, at := e.Sync(); on || !at.IsZero() {
+		t.Fatalf("off until turned on: Sync() = %v, %v", on, at)
+	}
+	e.SetSync(true, time.Time{})
+	if on, _ := e.Sync(); !on {
+		t.Fatal("SetSync(true) left sync off")
 	}
 }

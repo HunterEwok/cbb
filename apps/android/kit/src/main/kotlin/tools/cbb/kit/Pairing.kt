@@ -275,6 +275,9 @@ data class JoinCode(val code: String, val addrs: List<String>, val fingerprint: 
     /** Whether the code is six digits, as the computer expects. */
     val codeIsValid: Boolean get() = code.length == 6 && code.all { it in '0'..'9' }
 
+    /** The code as the screen shows it, in two groups of three digits, for a computer of the group to type. */
+    val grouped: String get() = if (code.length == 6) code.substring(0, 3) + " " + code.substring(3) else code
+
     /** The text of the QR code, as cbb pair shows it. */
     val qrText: String
         get() {

@@ -144,12 +144,23 @@ func TestLiteRoot(t *testing.T) {
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
 	})
 	for _, mode := range []*testService{root, laptop} {
-		if _, err := mode.do(t, control.Header{Op: control.OpMode, Name: "shared"}, ""); err != nil {
+		if _, err := mode.do(t, control.Header{Op: control.OpSync, Name: "on"}, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
 	must("from the root", "copy")
 	waitFor(t, "the laptop has the root's text", func() bool { return laptop.paste(t) == "from the root" })
+
+	// The root turns the laptop's sync off and on again with signed mode
+	// commands.
+	if _, err := root.do(t, control.Header{Op: control.OpSync, Device: laptop.status(t).Device, Name: "off"}, ""); err != nil {
+		t.Fatalf("turning the laptop's sync off: %v", err)
+	}
+	waitFor(t, "the laptop's sync off", func() bool { return laptop.status(t).Mode == "own" })
+	if _, err := root.do(t, control.Header{Op: control.OpSync, Device: laptop.status(t).Device, Name: "on"}, ""); err != nil {
+		t.Fatalf("turning the laptop's sync on: %v", err)
+	}
+	waitFor(t, "the laptop's sync on", func() bool { return laptop.status(t).Mode == "shared" })
 
 	listed := func(name string, admin bool) func() bool {
 		return func() bool {

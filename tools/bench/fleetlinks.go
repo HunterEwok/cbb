@@ -379,7 +379,7 @@ func diskFull(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	}) != nil {
 		return
 	}
-	fails(ctx, r, p+"error-shown", d, errorCase{cmd: "cbb mode shared", want: []string{"no space left on device"}})
+	fails(ctx, r, p+"error-shown", d, errorCase{cmd: "cbb sync on", want: []string{"no space left on device"}})
 	r.Do(p+"group-goes-on", func() error {
 		if _, err := Run(ctx, g.hub, "cbb rename "+d.Name+" u8-renamed", ""); err != nil {
 			return err
@@ -393,7 +393,7 @@ func diskFull(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		if err := listsAs(ctx, []*Device{d}, "u8-renamed", "", false, timeout); err != nil {
 			return err
 		}
-		if err := succeeds(ctx, d, "cbb mode shared", "", "shared"); err != nil {
+		if err := succeeds(ctx, d, "cbb sync on", "", "Sync is on"); err != nil {
 			return err
 		}
 		return syncs(ctx, g, d, g.hub, "after the disk had room", timeout)

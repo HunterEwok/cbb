@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/authority"
-	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/mdns"
@@ -277,7 +276,6 @@ func startIn(t *testing.T, h *hub, s *testService) *testService {
 		browseFor:  2 * time.Second,
 		joinListen: func() (net.Listener, error) { return net.Listen("tcp", "127.0.0.1:0") },
 		joinAddrs:  func(port uint16) []string { return []string{fmt.Sprintf("127.0.0.1:%d", port)} },
-		newMode:    &sharedMode,
 		lookupIP: func(context.Context, string) ([]netip.Addr, error) {
 			return nil, errors.New("tests look up no names")
 		},
@@ -1803,9 +1801,6 @@ func TestBrokenIdentity(t *testing.T) {
 		t.Fatalf("the identity file changed: %q, %v", data, err)
 	}
 }
-
-// sharedMode is the sync mode of the test services, which sync.
-var sharedMode = clip.Shared
 
 // TestPairingAcrossARenewal checks that a pairing window keeps working when
 // the admin's certificates change while it is open, as when its root sends

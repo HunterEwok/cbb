@@ -96,13 +96,13 @@ mod tests {
         assert!(dir.join(crate::identity::FILE_NAME).exists());
         // A group of 0.5: its files move, the settings stay.
         std::fs::write(dir.join(FILE_NAME), b"\n [ ]").unwrap();
-        std::fs::write(dir.join("mode"), b"own").unwrap();
+        std::fs::write(dir.join("sync.json"), br#"{"off":true}"#).unwrap();
         assert!(leave_version1_group(&dir).unwrap());
         for name in [crate::identity::FILE_NAME, FILE_NAME] {
             assert!(!dir.join(name).exists(), "{name} stayed");
             assert!(dir.join(OLD_GROUP_DIR).join(name).exists(), "{name} did not move");
         }
-        assert!(dir.join("mode").exists());
+        assert!(dir.join("sync.json").exists());
         assert!(!leave_version1_group(&dir).unwrap());
         std::fs::remove_dir_all(&dir).unwrap();
     }

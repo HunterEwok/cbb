@@ -63,7 +63,9 @@ func TestWindow(t *testing.T) {
 	t.Run("russian", w.russian)
 	t.Run("errors", w.errors)
 	t.Run("admin", w.admin)
-	t.Run("join", w.joinPhone)
+	t.Run("switches", w.switches)
+	t.Run("add", w.add)
+	t.Run("join", w.joinGroup)
 }
 
 // window is the page under test and what stands around it.
@@ -180,6 +182,7 @@ var $h = () => $q("#headline")?.textContent ?? "";
 var $click = (s) => { const e = $q(s); if (!e) throw new Error("no " + s); e.click(); return true; };
 var $clickText = (s, text) => { const all = $all(s), e = all.find((x) => x.textContent.trim() === text); if (!e) throw new Error("no " + s + " " + text + " among " + JSON.stringify(all.map((x) => x.textContent.trim()))); e.click(); return true; };
 var $answer = (text) => { $q("#confirm-input").value = text; return $click("#confirm-ok"); };
+var $menu = (ref) => { const c = $q('.cell[data-ref="' + ref + '"]'); if (!c) throw new Error("no cell " + ref); c.dispatchEvent(new MouseEvent("contextmenu", {bubbles: true, cancelable: true})); return true; };
 var $order = () => $all("#devices .tiles > .cell").map((c) => c.dataset.ref);
 var $search = (text) => { const s = $q("#search"); s.value = text; s.dispatchEvent(new Event("input", {bubbles: true})); return true; };
 var $css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim().toUpperCase();
@@ -241,7 +244,8 @@ func (w *window) themes(t *testing.T) {
 	w.eval(`$click('[data-layout="list"]')`, nil)
 	w.wait(`$all("#devices .list .row").length === 14`)
 	w.eval(`$click('[data-layout="orbit"]')`, nil)
-	w.wait(`$q("#devices").classList.contains("fixed") && $all("#devices [data-id]").length === 13`)
+	// The 13 devices around this computer.
+	w.wait(`$q("#devices").classList.contains("fixed") && $all("#devices .node[data-id]").length === 13 && $q('#devices .hub[data-id="self"]')`)
 	w.eval(`$click('[data-layout="tiles"]')`, nil)
 	w.wait(`$all("#devices .tiles .tile").length === 14`)
 	w.waitSettings(d, func(s Settings) bool { return s.Layout == "tiles" })
@@ -267,11 +271,11 @@ func (w *window) waitSettings(d *Desk, ok func(Settings) bool) {
 func (w *window) collections(t *testing.T) {
 	w.t = t
 	d := w.open("en")
-	w.wait(`$all("#devices .tile").length === 14`)
-	w.eval(`$click("#arrange")`, nil)
-	w.wait(`$all(".cell.arranging").length === 13`)
+	w.wait(`$all("#devices .tile").length === 14 && $all(".cell[draggable]").length === 14`)
+	// This computer comes first, and moves as the others do.
+	w.wait(`$order()[0] === "d:self" && $q('.cell[data-ref="d:self"] .tile').textContent.includes("This computer")`)
 
-	w.eval(`$click('[data-menu="d:win"]')`, nil)
+	w.eval(`$menu("d:win")`, nil)
 	w.wait(`$q("#tile-menu").open`)
 	w.eval(`$clickText("#tile-menu-items button", "New collection…")`, nil)
 	w.wait(`$q("#confirm").open`)
@@ -280,7 +284,7 @@ func (w *window) collections(t *testing.T) {
 	var id string
 	w.eval(`$all("[data-open]")[0].dataset.open`, &id)
 
-	w.eval(`$click('[data-menu="d:mac"]')`, nil)
+	w.eval(`$menu("d:mac")`, nil)
 	w.wait(`$q("#tile-menu").open`)
 	w.eval(`$clickText("#tile-menu-items button", "Move to Work")`, nil)
 	w.wait(`$q('[data-open]')?.textContent.includes("1 of 2 online")`)
@@ -303,8 +307,6 @@ func (w *window) collections(t *testing.T) {
 	}
 
 	// The collection's page, then a rename from its menu.
-	w.eval(`$click("#arrange-done")`, nil)
-	w.wait(`!$q(".cell.arranging")`)
 	w.eval(fmt.Sprintf(`$click('[data-open="%s"]')`, id), nil)
 	w.wait(`$q(".collection-head h2")?.textContent === "Work" && $all("#devices .tile").length === 2`)
 	w.eval(fmt.Sprintf(`$click('[data-menu="c:%s"]')`, id), nil)
@@ -316,14 +318,16 @@ func (w *window) collections(t *testing.T) {
 	w.eval(`$click("#collection-back")`, nil)
 
 	// Ungroup, then back to the group's order.
-	w.eval(`$click("#arrange")`, nil)
-	w.eval(fmt.Sprintf(`$click('[data-menu="c:%s"]')`, id), nil)
+	w.eval(fmt.Sprintf(`$menu("c:%s")`, id), nil)
 	w.wait(`$q("#tile-menu").open`)
 	w.eval(`$clickText("#tile-menu-items button", "Ungroup")`, nil)
 	w.wait(`!$q("[data-open]") && $all("#devices .tile").length === 14`)
+	// The group's order: this computer first, then the others as listed.
 	var group []string
 	for _, dev := range w.svc.devices {
-		if !dev.Self {
+		if dev.Self {
+			group = append([]string{"d:" + dev.ID}, group...)
+		} else {
 			group = append(group, "d:"+dev.ID)
 		}
 	}
@@ -331,11 +335,11 @@ func (w *window) collections(t *testing.T) {
 	if reflect.DeepEqual(before, group) {
 		t.Fatalf("the tiles are in the group's order before Back to the group's order: %q", before)
 	}
-	w.wait(`$q("#arrange-reset")`)
-	w.eval(`$click("#arrange-reset")`, nil)
+	w.eval(`$menu("d:tv")`, nil)
+	w.wait(`$q("#tile-menu").open`)
+	w.eval(`$clickText("#tile-menu-items button", "Back to the group's order")`, nil)
 	groupJSON, _ := json.Marshal(group)
 	w.wait(`JSON.stringify($order()) === ` + "`" + string(groupJSON) + "`")
-	w.eval(`$click("#arrange-done")`, nil)
 
 	// The search finds by name and system; the filters by state.
 	w.eval(`$search("macOS")`, nil)
@@ -371,10 +375,10 @@ func (w *window) russian(t *testing.T) {
 	if len(left) > 0 {
 		t.Errorf("in Russian these stay English: %q", left)
 	}
-	var send, head string
-	w.eval(`$q("#send").textContent`, &send)
-	if want := d.T("Send the clipboard"); send != want || want == "Send the clipboard" {
-		t.Errorf("the send button says %q, not %q", send, want)
+	var sync, head string
+	w.eval(`$q("#sync").getAttribute("aria-label")`, &sync)
+	if want := d.T("Sync is on"); sync != want || want == "Sync is on" {
+		t.Errorf("the sync switch says %q, not %q", sync, want)
 	}
 	w.eval(`$h()`, &head)
 	if want := fmt.Sprintf(strings.ReplaceAll(d.T("%d of %d online"), "%d", "%v"), w.svc.online(), 14); head != want {
@@ -395,7 +399,14 @@ func (w *window) errors(t *testing.T) {
 	w.wait(`$h() === "The service does not answer"`)
 	w.wait(fmt.Sprintf(`$q(".notice p").textContent === %q`, plain))
 
-	w.eval(`$click("#settings"); $click("#details")`, nil)
+	// The switch shows after seven taps on the version, as on the phones.
+	w.eval(`$click("#settings"); $q("#details-row").hidden`, nil)
+	var hidden bool
+	w.eval(`$q("#details-row").hidden`, &hidden)
+	if !hidden {
+		t.Error("Show error details is in sight before the taps on the version")
+	}
+	w.eval(`for (let i = 0; i < 7; i++) $click("#version"); $click("#details")`, nil)
 	w.eval(`$click('#settings-dialog menu button')`, nil)
 	w.wait(fmt.Sprintf(`$q(".notice p").textContent.startsWith(%q + "\n\n")`, plain))
 	var detail string
@@ -505,7 +516,7 @@ func (w *window) admin(t *testing.T) {
 	// A hub of the group says so on its page.
 	var page string
 	w.eval(`document.body.innerText`, &page)
-	if !strings.Contains(page, "The group's hub") {
+	if !strings.Contains(page, "This is the group's hub") {
 		t.Errorf("the hub's page does not say it is the hub:\n%s", page)
 	}
 	w.eval(`$click('.tile[data-id="mac"]')`, nil)
@@ -551,10 +562,10 @@ func (w *window) admin(t *testing.T) {
 	}
 }
 
-// joinPhone joins a phone's group from a computer in none: the window shows
-// the QR code cbb pair -app writes, and closing the dialog removes the file,
-// which cancels.
-func (w *window) joinPhone(t *testing.T) {
+// joinGroup joins a group from a computer in none, from the start window:
+// the window shows the QR code cbb pair -app writes and its six digits, and
+// closing the dialog removes the file, which cancels.
+func (w *window) joinGroup(t *testing.T) {
 	w.t = t
 	t.Setenv("CBB_DEBUG", "0")
 	w.svc.mu.Lock()
@@ -591,12 +602,18 @@ func (w *window) joinPhone(t *testing.T) {
 	}
 	defer func() { adminRun = old }()
 	w.open("en")
-	w.wait(`$q("#join") && !$q("#join").disabled`)
+	w.wait(`$q("#join") && !$q("#join").disabled && $q("#create") && $q("#recovery")`)
+	var inSight bool
+	w.eval(`!$q("#switches").hidden || !$q("#add").hidden`, &inSight)
+	if inSight {
+		t.Error("the switches or + show on the start window")
+	}
 
 	// Cancelled: the file is gone, and the window says nothing.
 	w.eval(`$click("#join")`, nil)
 	w.wait(`$q("#join-dialog").open && !$q("#join-code").hidden && $q("#join-qr").src.startsWith("data:image/png;base64,")`)
 	w.wait(`$q("#join-text").textContent.startsWith("cbb://join?code=123456") && $q("#join-port").textContent.includes("8764")`)
+	w.wait(`$q("#join-digits").textContent === "123 456"`)
 	w.eval(`$clickText("#join-dialog menu button", "Cancel")`, nil)
 	w.wait(`!$q("#join-dialog").open`)
 	w.wait(`$q("#join") && !$q("#join").disabled && $q("#message").textContent === ""`)
@@ -612,6 +629,90 @@ func (w *window) joinPhone(t *testing.T) {
 	w.wait(`!$q("#join-dialog").open && $q("#message").textContent === "Joined the group."`)
 }
 
+// switches: the house turns sync off and on with no administrator, and
+// holding it picks a time; the globe asks before it turns sync away from
+// home on, and waits while sync is off.
+func (w *window) switches(t *testing.T) {
+	w.t = t
+	t.Setenv("CBB_DEBUG", "0")
+	old := adminRun
+	var ranMu sync.Mutex
+	var ran [][]string
+	adminRun = func(args []string, _ string, _ bool) error {
+		ranMu.Lock()
+		defer ranMu.Unlock()
+		ran = append(ran, args)
+		return nil
+	}
+	defer func() { adminRun = old }()
+	w.open("en")
+	w.wait(`!$q("#switches").hidden && $q("#sync").getAttribute("aria-pressed") === "true" && !$q("#away").disabled`)
+
+	w.eval(`$click("#sync")`, nil)
+	w.wait(`$q("#sync").getAttribute("aria-pressed") === "false" && $q("#away").disabled`)
+	if h := w.svc.lastSync(); h.Name != "off" || h.ForMS != 0 {
+		t.Errorf("the house sent %+v", h)
+	}
+	w.eval(`$click("#sync")`, nil)
+	w.wait(`$q("#sync").getAttribute("aria-pressed") === "true"`)
+	// Held, it asks for how long.
+	w.eval(`$q("#sync").dispatchEvent(new MouseEvent("contextmenu", {bubbles: true, cancelable: true})); true`, nil)
+	w.wait(`$q("#mute-dialog").open`)
+	w.eval(`$clickText("#mute-dialog .menu-items button", "For an hour")`, nil)
+	w.wait(`$q("#sync").getAttribute("aria-pressed") === "false"`)
+	if h := w.svc.lastSync(); h.Name != "off" || h.ForMS != 3600000 {
+		t.Errorf("an hour sent %+v", h)
+	}
+	w.eval(`$click("#sync")`, nil)
+	w.wait(`$q("#sync").getAttribute("aria-pressed") === "true"`)
+
+	// The globe asks first; Cancel runs nothing.
+	w.eval(`$click("#away")`, nil)
+	w.wait(`$q("#confirm").open && $q("#confirm-title").textContent === "Turn Everywhere on?"`)
+	w.eval(`$clickText("#confirm menu button", "Cancel")`, nil)
+	w.wait(`!$q("#confirm").open`)
+	w.eval(`$click("#away")`, nil)
+	w.wait(`$q("#confirm").open`)
+	w.eval(`$click("#confirm-ok")`, nil)
+	w.wait(`$q("#message").textContent === "Sync away from home is on."`)
+	ranMu.Lock()
+	got := ran
+	ranMu.Unlock()
+	if !reflect.DeepEqual(got, [][]string{{"global", "on"}}) {
+		t.Errorf("the globe ran %q", got)
+	}
+}
+
+// add: + admits the new device by the six digits it shows, typed here,
+// with cbb pair -qr as the administrator.
+func (w *window) add(t *testing.T) {
+	w.t = t
+	old := adminRun
+	var args []string
+	var input string
+	var mu sync.Mutex
+	adminRun = func(a []string, in string, _ bool) error {
+		mu.Lock()
+		defer mu.Unlock()
+		args, input = a, in
+		return nil
+	}
+	defer func() { adminRun = old }()
+	w.open("en")
+	w.wait(`!$q("#add").hidden`)
+	w.eval(`$click("#add")`, nil)
+	w.wait(`$q("#add-dialog").open && !$q("#admit-box").hidden`)
+	w.eval(`$q("#admit-code").value = "12"; $click("#admit")`, nil)
+	w.wait(`!$q("#admit-error").hidden`)
+	w.eval(`$q("#admit-code").value = "246 810"; $click("#admit")`, nil)
+	w.wait(`$q("#message").textContent === "It joined the group."`)
+	mu.Lock()
+	defer mu.Unlock()
+	if !reflect.DeepEqual(args, []string{"pair", "-qr"}) || input != "246810\n" {
+		t.Errorf("admitting by the code ran %q with %q", args, input)
+	}
+}
+
 // fakeService answers the window's status and devices requests on a
 // control socket, and can stop listening, as a service that is not
 // running.
@@ -622,6 +723,14 @@ type fakeService struct {
 	devices []control.Device
 	mu      sync.Mutex
 	ln      net.Listener
+	// sync is the last sync request.
+	sync control.Header
+}
+
+func (s *fakeService) lastSync() control.Header {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sync
 }
 
 func newFakeService(t *testing.T) *fakeService {
@@ -712,6 +821,17 @@ func (s *fakeService) serve(c net.Conn) {
 		a.Status = &st
 	case control.OpDevices:
 		a.Devices = s.devices
+	case control.OpSync:
+		s.mu.Lock()
+		s.sync = m.Header
+		s.status.Mode, s.status.SyncUntilMS = "shared", 0
+		if m.Name == "off" {
+			s.status.Mode = "own"
+			if m.ForMS > 0 {
+				s.status.SyncUntilMS = time.Now().UnixMilli() + m.ForMS
+			}
+		}
+		s.mu.Unlock()
 	default:
 		a.Error = "the stand-in service does not do " + m.Op
 	}

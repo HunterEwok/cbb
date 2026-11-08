@@ -37,7 +37,7 @@ func TestMediaAway(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpMode, Name: "own"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpSync, Name: "off"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	piID := pi.status(t).Device
@@ -103,9 +103,9 @@ func TestMediaAway(t *testing.T) {
 	}
 	arrives(deck, small)
 
-	// A hub whose mode takes the copy fetches it, but still serves through
+	// A hub with sync on fetches it, but still serves through
 	// its tunnel only what is within its limit away from home.
-	if _, err := pi.do(t, control.Header{Op: control.OpMode, Name: "shared"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpSync, Name: "on"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	large = file("large.bin", randomBytes(2<<20))

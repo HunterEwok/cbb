@@ -19,15 +19,14 @@ import (
 	"github.com/HunterEwok/cbb/internal/node"
 )
 
-// muteFile holds an admin's mute of this device and its user's pause of
-// receiving (design.md, "Muting a device"), in the state directory.
+// muteFile holds an admin's mute of this device (design.md, "Muting a
+// device"), in the state directory.
 const muteFile = "mute.json"
 
-// muteState is what mute.json holds: the end of the mute and of the pause,
-// in Unix milliseconds, 0 for until it is lifted.
+// muteState is what mute.json holds: the end of the mute, in Unix
+// milliseconds, 0 for until it is lifted.
 type muteState struct {
-	Mute  *int64 `json:"mute,omitempty"`
-	Pause *int64 `json:"pause,omitempty"`
+	Mute *int64 `json:"mute,omitempty"`
 }
 
 // unixMS is t in Unix milliseconds, 0 for the zero time.
@@ -46,7 +45,7 @@ func fromUnixMS(ms int64) time.Time {
 	return time.UnixMilli(ms)
 }
 
-// loadMute gives e the mute and the pause saved in dir.
+// loadMute gives e the mute saved in dir.
 func loadMute(dir string, e *clip.Engine) error {
 	data, err := os.ReadFile(filepath.Join(dir, muteFile))
 	if errors.Is(err, os.ErrNotExist) {
@@ -62,22 +61,15 @@ func loadMute(dir string, e *clip.Engine) error {
 	if st.Mute != nil {
 		e.SetMute(fromUnixMS(*st.Mute))
 	}
-	if st.Pause != nil {
-		e.PauseReceiving(fromUnixMS(*st.Pause))
-	}
 	return nil
 }
 
-// saveMute writes e's mute and pause to dir.
+// saveMute writes e's mute to dir.
 func saveMute(dir string, e *clip.Engine) error {
 	var st muteState
 	if muted, until := e.Muted(); muted {
 		ms := unixMS(until)
 		st.Mute = &ms
-	}
-	if paused, until := e.ReceivingPaused(); paused {
-		ms := unixMS(until)
-		st.Pause = &ms
 	}
 	data, err := json.Marshal(st)
 	if err != nil {
@@ -97,10 +89,9 @@ func (s *Service) muteUntil(ms int64) (time.Time, error) {
 	return s.cfg.now().Add(time.Duration(ms) * time.Millisecond), nil
 }
 
-// muteOp carries out the control operations mute and unmute: without a
-// device, this device's user pauses receiving or resumes it; with one, an
-// admin mutes that device or ends its mute, with a command it signs, or
-// at once when the device is this one.
+// muteOp carries out the control operations mute and unmute: an admin
+// mutes a device or ends its mute, with a command it signs, or at once
+// when the device is this one.
 func (s *Service) muteOp(ctx context.Context, m *control.Message) error {
 	on := m.Op == control.OpMute
 	s.mu.Lock()
@@ -114,21 +105,14 @@ func (s *Service) muteOp(ctx context.Context, m *control.Message) error {
 		return err
 	}
 	if m.Device == "" {
-		if on {
-			e.PauseReceiving(until)
-			s.logf("cbb: this device takes no copies from the group now")
-		} else {
-			e.ResumeReceiving()
-			s.logf("cbb: this device takes the group's copies again")
-		}
-		return saveMute(s.cfg.StateDir, e)
+		return errors.New("name the device to mute with -on; cbb sync off turns this device's own sync off")
 	}
 	d, err := s.findDevice(m.Device)
 	if err != nil {
 		return err
 	}
 	if ca, _ := id.Signer(); ca == nil {
-		return errors.New("only an admin mutes a device or ends its mute: the group's root, an admin it made (cbb admin), or an admin phone; cbb mute without -on keeps the group's copies out of this device")
+		return errors.New("only an admin mutes a device or ends its mute: the group's root, an admin it made (cbb admin), or an admin phone; cbb sync off turns this device's own sync off")
 	}
 	if s.frozen(id) {
 		return errFrozen

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1a79497966a1 -->
+<!-- source: 46c1b3ed05bb -->
 # Inicio rápido
 
 Copy Beyond Borders da a tu teléfono y a tus ordenadores un único portapapeles: copias en uno y pegas en otro. Los dispositivos forman un **grupo** en tu red doméstica. El teléfono guarda la clave del grupo y deja entrar a cada dispositivo nuevo, así que nadie puede unirse sin ti.
@@ -49,22 +49,14 @@ En la app, pulsa **Connect a new device** y escanea el código. La app crea la c
 
 Añade el resto de ordenadores del mismo modo: instalar, `sudo cbb pair` y **+** en la app.
 
-## 4. Comparte el portapapeles del ordenador
+## 4. Copia en uno, pega en otro
 
-Un ordenador nuevo se guarda su portapapeles para sí mismo hasta que digas lo contrario. Para que lo que copies en él llegue al grupo, y lo que el grupo copie llegue a él:
-
-```sh
-sudo cbb mode shared
-```
-
-En Windows, ejecuta `cbb mode shared` en la terminal de administrador.
-
-Ahora copia en el ordenador y pega en el teléfono, o al revés:
+Lo que copias en el ordenador llega al grupo, y lo que copia el grupo llega a él. Copia en el ordenador y pega en el teléfono, o al revés:
 
 - **Android** recibe por sí solo lo que copian los ordenadores. Para enviar lo que copia el teléfono, pulsa el botón grande de Inicio de la app, el icono **Send clipboard** de Ajustes rápidos o Send en la notificación; o activa **Send my copies by themselves** en la app para que se haga solo.
-- **Entre ordenadores** en modo compartido: copia en uno y pega en otro. No hay nada que pulsar.
+- **Entre ordenadores**: copia en uno y pega en otro. No hay nada que pulsar.
 
-Los demás modos (solo recibir, solo enviar) están en [los comandos](../reference/cli.md#cbb) (`cbb mode`), y el resto de lo que hacen las apps está en [Las apps](apps.md).
+Para que el portapapeles de un dispositivo sea solo suyo durante un tiempo, desactiva la sincronización: el botón de la casa en la primera pantalla de la app, o `cbb sync off` ([los comandos](../reference/cli.md#cbb)). El resto de lo que hacen las apps está en [Las apps](apps.md).
 
 ## 5. Recomendado: deja que un ordenador siempre encendido ayude al teléfono
 

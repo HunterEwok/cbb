@@ -119,10 +119,10 @@ public struct Arrangement: Codable, Equatable, Sendable {
     /// What the app shows: the stored items in order without the devices
     /// that are not listed, collections without listed devices left out
     /// unless they were just made, then the listed devices that appear
-    /// nowhere, in the order given. self, this device, is never among them:
-    /// the app shows it first.
+    /// nowhere, in the order given. self, this device, is an item as the
+    /// others are, first while the stored items do not place it.
     public func view(devices: [String], self me: String?) -> [Item] {
-        let listed = Set(devices.filter { $0 != me })
+        let listed = Set(devices)
         var seen = Set<String>()
         var out: [Item] = []
         for it in items {
@@ -135,10 +135,17 @@ public struct Arrangement: Codable, Equatable, Sendable {
                 if !c.devices.isEmpty || had { out.append(.collection(c)) }
             }
         }
-        for d in devices where listed.contains(d) && seen.insert(d).inserted {
-            out.append(.device(d))
+        for d in Self.selfFirst(devices, me) where seen.insert(d).inserted {
+            if d == me { out.insert(.device(d), at: 0) } else { out.append(.device(d)) }
         }
         return out
+    }
+
+    /// devices with self, this device, first: the group's order as the app
+    /// shows it.
+    static func selfFirst(_ devices: [String], _ me: String?) -> [String] {
+        guard let me, devices.contains(me) else { return devices }
+        return [me] + devices.filter { $0 != me }
     }
 
     /// Drops the devices that are not listed, and the collections that lose
@@ -159,7 +166,7 @@ public struct Arrangement: Codable, Equatable, Sendable {
     }
 
     /// Makes the change, on the arrangement as view shows it for devices
-    /// (self left out); the stored items then hold the whole order. move puts
+    /// (self among them); the stored items then hold the whole order. move puts
     /// an item before another, or at the end of its level (a device in a
     /// collection: the end of the collection); a device before a device in a
     /// collection joins it, a collection never goes into one. into appends a
@@ -177,10 +184,11 @@ public struct Arrangement: Codable, Equatable, Sendable {
             case .collection(let c): shown.formUnion(c.devices)
             }
         }
-        for d in devices where d != me && shown.contains(d) && w.find(d) == nil {
-            w.items.append(.device(d))
+        let ordered = Self.selfFirst(devices, me)
+        for d in ordered where shown.contains(d) && w.find(d) == nil {
+            if d == me { w.items.insert(.device(d), at: 0) } else { w.items.append(.device(d)) }
         }
-        try w.apply(op, devices: devices, shown: shown)
+        try w.apply(op, devices: ordered, shown: shown)
         items = w.items
     }
 

@@ -149,8 +149,8 @@
         <translation>Uniéndose…</translation>
     </message>
     <message>
-        <source>On a phone or a computer of your group, add a device and scan this code. Keep this screen open.</source>
-        <translation>En un teléfono o un ordenador de tu grupo, añade un dispositivo y escanea este código. Mantén esta pantalla abierta.</translation>
+        <source>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</source>
+        <translation>En un teléfono del grupo, toca + y escanea este código. En un ordenador del grupo, toca + y escribe los números. Mantén esta pantalla abierta.</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>

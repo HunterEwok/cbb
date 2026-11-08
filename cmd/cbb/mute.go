@@ -13,9 +13,9 @@ import (
 	"github.com/HunterEwok/cbb/internal/group"
 )
 
-// cmdMute pauses receiving on this device for a while, or with -on, on an
-// admin, mutes a device of the group, whose copies then stay its own
-// (design.md, "Muting a device"). With unmute set it ends either.
+// cmdMute, on an admin, mutes a device of the group, whose copies then
+// stay its own (design.md, "Muting a device"); with unmute set it ends the
+// mute.
 func cmdMute(args []string, unmute bool, stdout, stderr io.Writer) int {
 	name := "mute"
 	if unmute {
@@ -31,11 +31,14 @@ func cmdMute(args []string, unmute bool, stdout, stderr io.Writer) int {
 	if fs.Parse(args) != nil {
 		return 2
 	}
-	if fs.NArg() > 0 {
+	if fs.NArg() > 0 || *on == "" {
 		if unmute {
-			fmt.Fprintln(stderr, "usage: cbb unmute [-on DEVICE]")
+			fmt.Fprintln(stderr, "usage: cbb unmute -on DEVICE")
 		} else {
-			fmt.Fprintln(stderr, "usage: cbb mute [-on DEVICE] [-for DURATION]")
+			fmt.Fprintln(stderr, "usage: cbb mute -on DEVICE [-for DURATION]")
+		}
+		if *on == "" {
+			fmt.Fprintln(stderr, "cbb sync off turns this device's own sync off.")
 		}
 		return 2
 	}
@@ -49,11 +52,7 @@ func cmdMute(args []string, unmute bool, stdout, stderr io.Writer) int {
 		}
 		h.ForMS = dur.Milliseconds()
 	}
-	dial := func() (*control.Client, error) { return control.Dial(control.SocketPath()) }
-	if control.NeedsAdmin(h) {
-		dial = func() (*control.Client, error) { return control.DialFor(h.Op) }
-	}
-	c, err := dial()
+	c, err := control.DialFor(h.Op)
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -67,25 +66,17 @@ func cmdMute(args []string, unmute bool, stdout, stderr io.Writer) int {
 
 // muteDone says what a mute or unmute did.
 func muteDone(h control.Header, now time.Time) string {
-	until := "until cbb unmute"
-	if h.Device != "" {
-		until = "until an admin unmutes it"
-	}
+	until := "until an admin unmutes it"
 	if h.ForMS > 0 {
 		until = "until " + now.Add(time.Duration(h.ForMS)*time.Millisecond).Format("2006-01-02 15:04")
 	}
-	switch {
-	case h.Op == control.OpUnmute && h.Device == "":
-		return "This device takes the group's copies again."
-	case h.Op == control.OpUnmute:
+	if h.Op == control.OpUnmute {
 		return fmt.Sprintf("%s is no longer muted: its copies reach the group again.", h.Device)
-	case h.Device == "":
-		return fmt.Sprintf("This device takes no copies from the group %s; its own copies still go out.", until)
 	}
 	return fmt.Sprintf("%s is muted %s: its copies do not reach the group.", h.Device, until)
 }
 
-// muteLines describe this device's mute and pause for cbb status.
+// muteLines describe this device's mute for cbb status.
 func muteLines(st *control.Status) []string {
 	at := func(ms int64) string { return time.UnixMilli(ms).Format("2006-01-02 15:04") }
 	var out []string
@@ -94,12 +85,6 @@ func muteLines(st *control.Status) []string {
 		out = append(out, "An admin muted this device: its copies do not reach the group until an admin unmutes it.")
 	case st.Muted:
 		out = append(out, "An admin muted this device until "+at(st.MutedUntilMS)+": its copies do not reach the group until then.")
-	}
-	switch {
-	case st.Paused && st.PausedUntilMS == 0:
-		out = append(out, "This device takes no copies from the group until cbb unmute.")
-	case st.Paused:
-		out = append(out, "This device takes no copies from the group until "+at(st.PausedUntilMS)+", or cbb unmute.")
 	}
 	return out
 }

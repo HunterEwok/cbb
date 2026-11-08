@@ -64,7 +64,7 @@ func fakeHandler(t *testing.T, handle func(m *control.Message, r *control.Reader
 				m, err := r.Read()
 				switch {
 				case err != nil:
-				case control.IsAdmin(m.Op) && !admin:
+				case control.NeedsAdmin(m.Header) && !admin:
 					answer(c, control.Message{Header: control.Header{Error: m.Op + " changes the group, so the service takes it only on its admin socket", Done: true}})
 				default:
 					got <- m
@@ -307,19 +307,19 @@ func TestWriteDevices(t *testing.T) {
 	writeDevices(&b, []control.Device{
 		{ID: "a1", Name: "pi", Role: "full", OS: "linux", Admin: true, Root: true, Online: true, Self: true, Listed: true, Version: "0.6.1"},
 		{ID: "b2", Name: "mac", Role: "full", OS: "macos", LastSeenMS: now.Add(-5 * time.Minute).UnixMilli(), Listed: true, Version: "0.6.0"},
-		{ID: "c3", Name: "deck", Role: "full", OS: "windows", Admin: true, Online: true, Mode: "send", Hub: true},
+		{ID: "c3", Name: "deck", Role: "full", OS: "windows", Admin: true, Online: true, Mode: "own", Hub: true},
 		{ID: "d4", Name: "nas", Role: "full", OS: "linux", Listed: true, ForwardOnly: true, Hub: true},
 	}, []control.Device{{ID: "c3", SkewMS: 9000}}, "0.6.1", now)
 	out := b.String()
 	for _, want := range []string{"pi (this device)", "online", "5 min ago", "deck *", "not in the devices list yet",
-		"Linux", "macOS", "Windows", "root", "admin", "off by 9s", "MODE", "VERSION", "0.6.0 (old)", "below CBB 0.6.1"} {
+		"Linux", "macOS", "Windows", "root", "admin", "off by 9s", "SYNC", "VERSION", "0.6.0 (old)", "below CBB 0.6.1"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}
 	for _, line := range strings.Split(out, "\n") {
-		if strings.Contains(line, "c3") && !strings.Contains(line, "send") {
-			t.Errorf("deck's line lacks its mode: %q", line)
+		if strings.Contains(line, "c3") && !strings.Contains(line, "admin        off ") {
+			t.Errorf("deck's line lacks sync off: %q", line)
 		}
 		if strings.Contains(line, "c3") && !strings.Contains(line, "full, hub ") {
 			t.Errorf("deck's line does not say it is a hub: %q", line)

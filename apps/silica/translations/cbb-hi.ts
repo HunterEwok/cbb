@@ -149,8 +149,8 @@
         <translation>शामिल हो रहा है…</translation>
     </message>
     <message>
-        <source>On a phone or a computer of your group, add a device and scan this code. Keep this screen open.</source>
-        <translation>अपने समूह के किसी फ़ोन या कंप्यूटर पर डिवाइस जोड़ें और यह कोड स्कैन करें। यह स्क्रीन खुली रखें।</translation>
+        <source>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</source>
+        <translation>समूह के किसी फ़ोन पर + दबाएँ और यह कोड स्कैन करें। समूह के किसी कंप्यूटर पर + दबाएँ और अंक टाइप करें। यह स्क्रीन खुली रखें।</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>

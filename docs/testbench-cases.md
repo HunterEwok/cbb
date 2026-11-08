@@ -46,9 +46,8 @@ What `smoke` and `full` do first.
 4. For each other device: on the hub `cbb pair` (shows a six-digit code and waits); on the
    device `cbb pair -code [HUB:PORT]` (the lite member: `sudo -u cbb cbb pair -code
    HUB:PORT`), the code on standard input. The hub's `cbb pair` ends when the device joins.
-5. On every device, right after it made or joined the group: `cbb mode shared` (the lite
-   member: `sudo cbb mode shared`), since a new device keeps its own clipboard (design.md,
-   "Sync modes").
+5. On every device, right after it made or joined the group: `cbb sync` says that sync is
+   on (design.md, "Sync on and off").
 6. `cbb status` on every device shows the same group tag.
 
 ### R3. End a run
@@ -475,25 +474,23 @@ the texts are Russian.
 Pass: as P29, also with the phone app closed; without Play services the phone app works and
 logs once that there is no watch.
 
-**P34. Sync modes.** Runs: auto (`full`: steps 1 to 4 on the hub against another member, the headless members of step 5, and `-on` of step 6); the Mac app and the refused and stopped targets of step 6 manual.
-1. On desktop `cbb mode own`; copy on desktop's desktop, then on win's.
-2. On desktop `cbb paste`; then `cbb mode receive` and copy on desktop and on win; then `cbb mode
-   send` and do the same.
-3. Restart desktop's service (`sudo systemctl restart cbb`); `cbb mode` and `cbb
+**P34. Sync on and off.** Runs: auto (`full`: steps 1 to 4 on the hub against another member, the headless members of step 5, and `-on` of step 6); the Mac app and the refused and stopped targets of step 6 manual.
+1. On desktop `cbb sync off`; copy on desktop's desktop, then on win's.
+2. On desktop `cbb paste`.
+3. Restart desktop's service (`sudo systemctl restart cbb`); `cbb sync` and `cbb
    status` on desktop, `cbb devices` on win.
-4. `cbb mode shared` on desktop.
-Pass: in own neither copy crosses, and `cbb paste` on desktop prints win's text; in receive only
-win's copy reaches desktop, in send only desktop's reaches win; the mode survives the restart and
-win lists it; in shared both cross (R5).
-5. On `lite` `sudo cbb mode own`, copy on `desktop`, then `cbb paste` on `lite`; `sudo cbb
-   mode shared` and copy again. The same on `nas` through `docker exec`, and on `mac` in the
-   Mac app's Settings.
-6. On `desktop` (the root) `cbb mode -on mac receive`, then `cbb mode -on lite send`; `cbb mode`
-   on each. On `win` before it is an admin `cbb mode -on desktop own`. With `mac`'s service
-   stopped, `cbb mode -on mac shared` on `desktop`.
-Pass (steps 5 and 6): the lite member keeps its mode in its `mode` file and prints the
-group's text in own; the container and the Mac follow the same rules as `desktop`; the root's
-commands are taken and each target's `cbb mode` shows the new mode; a member that is not an
+4. `cbb sync on` on desktop.
+Pass: with sync off neither copy crosses, and `cbb paste` on desktop prints win's text; sync
+off survives the restart and win lists it; with sync on both cross (R5).
+5. On `lite` `cbb sync off`, copy on `desktop`, then `cbb paste` on `lite`; `cbb sync on`
+   and copy again. The same on `nas` through `docker exec`, and on `mac` with the app's
+   switch.
+6. On `desktop` (the root) `cbb sync -on mac off`, then `cbb sync -on lite off`; `cbb sync`
+   on each. On `win` before it is an admin `cbb sync -on desktop off`. With `mac`'s service
+   stopped, `cbb sync -on mac on` on `desktop`.
+Pass (steps 5 and 6): the lite member keeps sync off in its `sync.json` and prints the
+group's text with sync off; the container and the Mac follow the same rules as `desktop`;
+the root's commands are taken and each target's `cbb sync` shows it; a member that is not an
 admin is refused with a clear message; a stopped target gives an error within 10 s and
 nothing changes.
 
@@ -511,7 +508,7 @@ group's CA keys, and they stay off a container.
    restart policy starts it again.
 4. `docker restart`; then a new container from the same volume (`docker compose up -d
    --force-recreate`, as after `docker compose pull`). After each, `cbb status` shows the same
-   group, `cbb mode` says shared, and a copy on another member arrives on `nas` and on the rest.
+   group, `cbb sync` says sync is on, and a copy on another member arrives on `nas` and on the rest.
 5. Only as an explicit choice for the run, since it puts an admin key in a file
    (the key levels of docs/roadmap.md, level 3): first `cbb admin nas` on `desktop`, which must
    be refused ("offers no admin key"); then `CBB_KEYS_IN_FILE: "yes"` in the compose file
@@ -740,9 +737,9 @@ Pass: only keys and certificates, owner-only permissions; no clipboard text anyw
 
 **S17. Commands.** Runs: manual (step 3 planned: a helper that captures and replays a command).
 Devices: `desktop` (the root), `win` or `mac` (an admin), `lite`.
-1. On the admin `cbb mode -on lite own`; then on `desktop` `cbb freeze` the admin and repeat;
+1. On the admin `cbb sync -on lite off`; then on `desktop` `cbb freeze` the admin and repeat;
    `cbb unfreeze` it.
-2. Set `lite`'s clock 2 minutes back, send a mode command, set the clock right.
+2. Set `lite`'s clock 2 minutes back, send a `mode` command (`cbb sync -on lite off`), set the clock right.
 3. Send one command twice with the same `id`.
 Pass: the admin's command is taken, a frozen admin's is refused; a command more than 60 s
 ahead of the receiver's clock is refused; the second copy is refused by the replay cache;

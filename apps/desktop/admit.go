@@ -18,11 +18,10 @@ import (
 	"github.com/HunterEwok/cbb/internal/phone"
 )
 
-// Admitting a device that shows a QR code and waits, such as a phone with
-// the app on Aurora OS or Sailfish OS: on the root or an admin, the user
-// pastes the code's text, or opens a picture of it, and cbb pair -qr runs
-// as the administrator with the text on its standard input, never on its
-// command line.
+// Admitting a new device that shows a code and waits: on the root or an
+// admin, the user types the six digits it shows, pastes its QR code's text
+// or opens a picture of it, and cbb pair -qr runs as the administrator with
+// the code on its standard input, never on its command line.
 
 // maxImage bounds the picture ReadQR decodes.
 const maxImage = 16 << 20
@@ -72,14 +71,37 @@ func waitingJoiner(text string) bool {
 	return ok && len(jc.Addrs) > 0 && jc.Fingerprint != ""
 }
 
-// AdmitByQR admits the device whose QR code says text, as cbb pair -qr does
-// as the administrator; with admin, on the group's root, a phone that asks
-// to be an admin becomes one (cbb pair -qr -admin).
-func (d *Desk) AdmitByQR(text string, admin bool) {
+// shownCode is the six digits a new device shows, as typed: spaces and
+// dashes between them are fine; "" when text is not such a code.
+func shownCode(text string) string {
+	digits := strings.Map(func(r rune) rune {
+		switch {
+		case r >= '0' && r <= '9':
+			return r
+		case r == ' ' || r == '-':
+			return -1
+		}
+		return 'x'
+	}, text)
+	if len(digits) != 6 || strings.Contains(digits, "x") {
+		return ""
+	}
+	return digits
+}
+
+// Admit admits the new device that shows text and waits: the six digits it
+// shows, typed here, or its QR code's text; cbb pair -qr does it as the
+// administrator, finding the device by its code on the home network. With
+// admin, on the group's root, a phone that asks to be an admin becomes one
+// (cbb pair -qr -admin).
+func (d *Desk) Admit(text string, admin bool) {
 	text = strings.TrimSpace(text)
-	if !waitingJoiner(text) {
+	if code := shownCode(text); code != "" {
+		text = code
+	} else if !waitingJoiner(text) {
+		msg := d.T("Type the six digits the new device shows.") // T takes d.mu
 		d.mu.Lock()
-		d.message = d.T("This QR code is not of a device that waits to join.")
+		d.message = msg
 		d.mu.Unlock()
 		return
 	}
