@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-package cbbtun
+package tunnel_test
 
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -21,10 +21,16 @@ import (
 	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
-// A client of a phone's hub, sending TCP and UDP to any address through a
-// tunnel it configured by hand, reaches only the app's member listener:
-// no other port of the phone and nothing beyond it.
-func TestPhoneHubReachesOnlyTheMemberListener(t *testing.T) {
+// TestRustPhoneHubReachesOnlyTheMemberListener gives a client of the
+// phones' Rust hub (ffi/, the example tunnel-on-linux) a tunnel it
+// configured by hand, routing every address: TCP and UDP to any address
+// reach only the app's member listener, no other port of the phone and
+// nothing beyond it.
+func TestRustPhoneHubReachesOnlyTheMemberListener(t *testing.T) {
+	bin := os.Getenv("CBB_TUNNEL_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_TUNNEL_ON_LINUX is not set")
+	}
 	// The phone's other services, on its loopback address.
 	var hits atomic.Int64
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -57,20 +63,18 @@ func TestPhoneHubReachesOnlyTheMemberListener(t *testing.T) {
 		}
 	}()
 
-	hubPriv, _ := NewKey()
-	hubPub, _ := PublicKey(hubPriv)
-	clientPriv, _ := NewKey()
-	clientPub, _ := PublicKey(clientPriv)
+	member := echoServer(t)
+	hubKey, _ := tunnel.NewPrivateKey()
+	clientKey, _ := tunnel.NewPrivateKey()
 	psk, _ := tunnel.NewPresharedKey()
-	clients, _ := json.Marshal([]Client{{Device: phoneID, Key: clientPub, PSK: psk[:]}})
-	const hubDevice = "0123456789abcdef0123456789abcdef"
-	hub, err := StartHub(hubPriv, hubDevice, echo(t), "", string(clients))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer hub.Close()
-	hubAddr, _ := tunnel.Addr(hubDevice)
-	clientAddr, _ := tunnel.Addr(phoneID)
+	clientPub := clientKey.Public()
+	p := startRustPhone(t, bin)
+	started := p.call(t, map[string]any{"op": "hub_start", "key": hubKey[:], "device": rustHubID,
+		"clients":     []map[string]any{{"device": rustPhoneID, "key": clientPub[:], "psk": psk[:]}},
+		"member_port": member, "listen": "127.0.0.1:0"})
+	defer p.call(t, map[string]any{"op": "hub_stop", "id": started["id"]})
+	hubAddr, _ := tunnel.Addr(rustHubID)
+	clientAddr, _ := tunnel.Addr(rustPhoneID)
 
 	tdev, n, err := netstack.CreateNetTUN([]netip.Addr{clientAddr, netip.MustParseAddr("10.0.0.2")}, nil, tunnel.MTU)
 	if err != nil {
@@ -78,8 +82,9 @@ func TestPhoneHubReachesOnlyTheMemberListener(t *testing.T) {
 	}
 	dev := device.NewDevice(tdev, conn.NewDefaultBind(), device.NewLogger(device.LogLevelSilent, ""))
 	defer dev.Close()
+	hubPub := hubKey.Public()
 	cfg := fmt.Sprintf("private_key=%s\npublic_key=%s\npreshared_key=%s\nendpoint=127.0.0.1:%d\nallowed_ip=0.0.0.0/0\nallowed_ip=::/0\n",
-		hex.EncodeToString(clientPriv), hex.EncodeToString(hubPub), hex.EncodeToString(psk[:]), hub.UDPPort())
+		hex.EncodeToString(clientKey[:]), hex.EncodeToString(hubPub[:]), hex.EncodeToString(psk[:]), int(started["udp_port"].(float64)))
 	if err := dev.IpcSet(cfg); err != nil {
 		t.Fatal(err)
 	}

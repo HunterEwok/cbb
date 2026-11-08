@@ -213,9 +213,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
        without what visionOS lacks: the QR code scanner (the six digits instead), the watch
        link and the Live Activities. The clipboard, the Secure Enclave and Optic ID work as on
        the iPhone; like the iPhone, it syncs only while the app is open.
-    3. Sync away from home there: gomobile builds no visionOS framework
-       ([golang/go#65251](https://github.com/golang/go/issues/65251)), so the phones' tunnel
-       needs another build of the same Go code or the lite member's tunnel in Rust.
+    3. Sync away from home there: the phones' tunnel is in the Rust core's library
+       (`ffi/src/tunnel.rs`), which `ffi/bind.sh` would build for visionOS too.
 - **41.** **Being built for 0.6**, with the rules core (item 42). Commands sealed for their receiver: a command's body (a
     paste's text among it) is signed but not encrypted, so a hub that passes a command on
     for a device the sender cannot reach reads it; since 0.6 only the hubs pass commands
@@ -536,7 +535,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     nothing: VLESS over REALITY and XHTTP (`internal/vless/onlycbb_test.go`: packets reach
     only the forwarder's port, streams only the mirror, the registrations' ID neither), the
     hub's tunnel (`internal/tunnel/onlycbb_test.go`), the phones' hub
-    (`mobile/cbbtun/onlycbb_test.go`), the relay (`internal/relay/onlycbb_test.go`) and the
+    (`internal/tunnel/rustonly_test.go`, the Rust hub through `tunnel-on-linux`), the relay (`internal/relay/onlycbb_test.go`) and the
     lite member's tunnel, whose end a fake hub on GotaTun sends to (`member/src/tunnel.rs`,
     `link_reaches_nothing_from_the_tunnel`); the forwarder's `FuzzForwardWire` sends a
     packet only to an endpoint it knows. The check of cbb.tools is written down in
@@ -882,9 +881,9 @@ a site.
   it needs an update and stays at home; it never falls back to plain WireGuard, which would
   show the network what it hides.
 - **Clients.**
-  - `cbb` and the phones' tunnel (`mobile/cbbtun`): Xray-core has VLESS over XHTTP; its TLS
-    uses Xray's browser fingerprint (uTLS), so the ClientHello looks like a browser's.
-  - The lite member, on Linux only (the owner, 2026-11-03: not on the ESP32, whose memory
+  - `cbb`: Xray-core has VLESS over XHTTP; its TLS uses Xray's browser fingerprint (uTLS),
+    so the ClientHello looks like a browser's.
+  - The lite member on Linux and the phones (the owner, 2026-11-03: not on the ESP32, whose memory
     it would not fit, and after AmneziaWG): a VLESS and XHTTP client of its own in
     `cbb_core` (sans-I/O, `no_std` with alloc), on the TLS it has (rustls with the
     RustCrypto provider), with VLESS's own encryption (ML-KEM-768 with X25519, as
@@ -1168,7 +1167,7 @@ Extension, a packet tunnel provider, and each condition for it fails or is doubt
 2. **One VPN at a time.** iOS keeps one tunnel-type VPN on; any other VPN app turns ours off
    and stops its on-demand rules. Per-app VPN, app proxies and DNS proxies need a managed
    device.
-3. **Memory.** A packet tunnel extension gets 50 MiB on iOS 15 to 26. cbbtun's hub alone uses
+3. **Memory.** A packet tunnel extension gets 50 MiB on iOS 15 to 26. A Go hub alone uses
    about 4 MiB with no clients and 11 MiB with 256 on Linux, so a small group would fit only
    after tuning (the forwarder code pulls Xray-core into the hub, gVisor allows 1 MiB per
    connection), and the Swift member node comes on top.
@@ -1183,7 +1182,7 @@ Found on the way and worth fixing anyway: the phones' member key is kept with th
 locked.
 
 **Looked at again on 2026-11-03, with Android and the user's own VPN.** The finding stands,
-and one point weighs more than the rest: today's tunnel (`mobile/cbbtun`) is an app's own
+and one point weighs more than the rest: today's tunnel (`ffi/src/tunnel.rs`) is an app's own
 traffic, so it runs beside any VPN the user has on, and CBB's packets simply go inside that
 VPN. A packet tunnel on the iPhone or a `VpnService` on Android would take the phone's one
 VPN slot: turning on one's own VPN would stop sync away from home, and the other way round.

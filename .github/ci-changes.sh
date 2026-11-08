@@ -17,7 +17,7 @@ set -eu
 base=$1
 head=$2
 
-core=false     # the Go service: cmd, internal, mobile, packaging, the e2e scripts
+core=false     # the Go service: cmd, internal, packaging, the e2e scripts
 tools=false    # Go tools under tools/, tested by the test job
 lite=false     # the lite member and its firmware
 ios=false      # the Swift kit, the iPhone and Watch apps
@@ -36,7 +36,7 @@ for f in $files; do
 	.github/workflows/ci.yml | .github/ci-changes.sh | .github/differential.sh | go.mod | go.sum | testdata/*) all=true ;;
 	packaging/zxnext/*) zxnext=true ;; # the Next's files for the site, not the members' packages
 	packaging/macos/*) core=true; macos=true ;; # the Mac app's job tests the .pkg
-	cmd/* | internal/* | mobile/* | packaging/* | tools/e2e/*) core=true ;;
+	cmd/* | internal/* | packaging/* | tools/e2e/*) core=true ;;
 	tools/tokens/* | tools/icon/* | apps/design/*) design=true; tools=true ;;
 	tools/site/*) site=true; tools=true ;;
 	tools/sbom/*) core=true; tools=true ;; # the packaging job and the Android job run it

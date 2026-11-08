@@ -51,7 +51,7 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 | The lite member | RustCrypto (`p256`, `sha2`, `hmac`, `x25519-dalek`, `chacha20poly1305`, `aes-gcm`, `x509-cert`), rustls without its default provider, GotaTun for WireGuard with `ring-shim/` over RustCrypto |
 | The iPhone kit | swift-crypto (CryptoKit's API, BoringSSL on Linux), the Security framework for the keychain and the Secure Enclave, Network.framework for TLS |
 | The Android kit | `java.security` and `javax.crypto`, the Android Keystore, its own X25519 and CPace in Kotlin (`Field25519.kt`, `CPace.kt`), checked against the Go code by the interop vectors |
-| The phones' tunnel | the Go tunnel of `mobile/cbbtun`, bound by gomobile |
+| The phones' tunnel | the lite member's (`ffi/src/tunnel.rs`): GotaTun for WireGuard with `ring-shim/` over RustCrypto, rustls for VLESS with XHTTP |
 
 The interop vectors in `testdata/interop` pin the bytes of each signed object and of a
 CPace exchange, so the four implementations cannot drift apart ([testing](testing.md)).

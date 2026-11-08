@@ -500,8 +500,8 @@ public enum Member {
     /// with REALITY (`transport` empty: `publicKey` and `shortID`) or XHTTP
     /// behind the forwarder's web server (`transport` "xhttp": `path`);
     /// with it, the only way to the hub. The kit only carries it: the
-    /// tunnel in mobile/cbbtun checks and uses it, and refuses a transport
-    /// it does not know.
+    /// tunnel (RustTunnel) checks and uses it, and refuses a transport it
+    /// does not take.
     public struct VLESS: Codable, Equatable, Sendable {
         public var transport: String
         public var endpoint: String
@@ -546,7 +546,7 @@ public enum Member {
             try c.encode(id, forKey: .id)
         }
 
-        /// The settings as JSON, for mobile/cbbtun.
+        /// The settings as JSON, for the tunnel.
         public func jsonText() throws -> String {
             String(decoding: try JSONEncoder().encode(self), as: UTF8.self)
         }
@@ -554,7 +554,7 @@ public enum Member {
 
     /// A group's AmneziaWG settings (section 11, "Obfuscation"), with
     /// AmneziaWG's own names. The kit only carries them: the tunnel in
-    /// mobile/cbbtun checks and uses them.
+    /// RustTunnel checks and uses them.
     public struct Obfuscation: Codable, Equatable, Sendable {
         public var jc, jmin, jmax: Int
         public var s1, s2, s3, s4: Int
@@ -566,7 +566,7 @@ public enum Member {
             case headerProtectionKey = "header_protection_key"
         }
 
-        /// The settings as JSON, for mobile/cbbtun.
+        /// The settings as JSON, for the tunnel.
         public func jsonText() throws -> String {
             String(decoding: try JSONEncoder().encode(self), as: UTF8.self)
         }

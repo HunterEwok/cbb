@@ -71,7 +71,7 @@ public protocol OpenTunnel: AnyObject, Sendable {
     func close()
 }
 
-/// Makes keys and tunnels; the app's come from mobile/cbbtun, the tests'
+/// Makes keys and tunnels; the app's come from the Rust core, the tests'
 /// from a fake.
 public protocol Tunnels: Sendable {
     func newKey() throws -> Data
