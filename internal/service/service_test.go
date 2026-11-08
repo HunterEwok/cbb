@@ -1988,8 +1988,9 @@ func TestFallbackDial(t *testing.T) {
 			return h.discover(dc)
 		}
 	}
-	a := startWith(t, &h, "alpha", group.OSLinux, cfg)
-	b := startWith(t, &h, "beta", group.OSMacOS, cfg)
+	// The Rust service takes both from CBB_TEST_FALLBACK.
+	a := startEnv(t, &h, "alpha", cfg, "CBB_TEST_FALLBACK=500")
+	b := startEnv(t, &h, "beta", cfg, "CBB_TEST_FALLBACK=500")
 	pairWith(t, a, b)
 	waitFor(t, "connected", func() bool { return len(a.status(t).Peers) == 1 && len(b.status(t).Peers) == 1 })
 	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "through the fallback"); err != nil {

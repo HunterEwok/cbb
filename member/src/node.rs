@@ -247,6 +247,9 @@ pub struct Node {
     on_pairing: RwLock<Option<OnPairing>>,
     /// A pairing window is open here, which mDNS announces (TXT p=1).
     window_open: AtomicBool,
+    /// The members with a lower device ID that did not dial this one, so
+    /// that it dialed them after FALLBACK (discovery's later dialer).
+    unreached: Mutex<std::collections::BTreeSet<DeviceId>>,
 }
 
 /// The ID of a command as its body names it, for the result of one that
@@ -428,6 +431,7 @@ impl Node {
             on_relay: RwLock::new(None),
             on_pairing: RwLock::new(None),
             window_open: AtomicBool::new(false),
+            unreached: Mutex::new(Default::default()),
         }
     }
 
@@ -626,6 +630,24 @@ impl Node {
         shown.issuer = der("prev_issuer").and_then(|d| Cert::parse(&d).ok());
         shown.cert = prev;
         Arc::new(shown)
+    }
+
+    /// Marks whether the member did not dial this one, so that this one
+    /// dials it, as Go's trackSeen and waitUnconnected.
+    pub fn set_unreached(&self, id: &DeviceId, unreached: bool) {
+        let mut u = self.unreached.lock().unwrap();
+        if unreached {
+            u.insert(id.clone());
+        } else {
+            u.remove(id);
+        }
+    }
+
+    /// The members connected only because this one dialed them back after
+    /// they did not dial it, sorted.
+    pub fn unreached(&self) -> Vec<String> {
+        let u = self.unreached.lock().unwrap().clone();
+        u.into_iter().filter(|id| self.connected(id)).map(|id| id.to_string()).collect()
     }
 
     /// Reports whether a connection to the device is up.

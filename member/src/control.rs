@@ -312,6 +312,13 @@ pub struct Status {
     /// When this device's member certificate ends, in Unix milliseconds.
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub cert_ends_ms: i64,
+    /// The members at home that could not connect to this device and sync
+    /// with it only because it dials them back, as Go's Unreached.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unreached: Vec<String>,
+    /// The member port, as Go's Port; 0 when this device does not listen.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub port: i64,
 }
 
 /// A claim to take the group over, as Go's control.Claim: who claims it

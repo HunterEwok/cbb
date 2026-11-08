@@ -72,8 +72,36 @@ pub fn write_status(st: &Status, devs: &[Device], now_ms: i64, limit: &str) -> S
     if st.peers.is_empty() {
         w.push_str("No members connected.\n");
     }
+    write_unreached(&mut w, st, devs);
     write_devices(&mut w, devs, &st.peers, &st.release, now_ms);
     w
+}
+
+/// Says when members at home could not connect to this device and sync
+/// with it only because it dials them back, as Go's writeUnreached: a
+/// firewall here drops the member port, and a phone would not sync.
+fn write_unreached(w: &mut String, st: &Status, devs: &[Device]) {
+    if st.unreached.is_empty() {
+        return;
+    }
+    let names: Vec<&str> = st
+        .unreached
+        .iter()
+        .map(|id| devs.iter().find(|d| &d.id == id && !d.name.is_empty()).map_or(id.as_str(), |d| d.name.as_str()))
+        .collect();
+    let port = if st.port == 0 { 8764 } else { st.port };
+    let express = if cfg!(windows) { "-Express" } else { "--express" };
+    let _ = writeln!(
+        w,
+        "Warning: {} could not connect to this device; they sync only because this device connects to them.",
+        names.join(", ")
+    );
+    let _ = writeln!(
+        w,
+        "A firewall here likely drops TCP {port} from the home network, and phones cannot reach this device."
+    );
+    let _ =
+        writeln!(w, "Allow TCP {port} and UDP 5353 from the home network, or run the installer again with {express}.");
 }
 
 /// How this system's cbb updates itself, as Go's updateCommand.
@@ -468,6 +496,17 @@ fn seen(d: &Device, now_ms: i64) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unreached() {
+        let mut w = String::new();
+        write_unreached(&mut w, &Status { port: 9000, ..Default::default() }, &[]);
+        assert!(w.is_empty(), "nothing unreached, yet: {w}");
+        let st = Status { port: 9000, unreached: vec!["id1".into(), "id2".into()], ..Default::default() };
+        let devs = [Device { id: "id1".into(), name: "deck".into(), ..Default::default() }];
+        write_unreached(&mut w, &st, &devs);
+        assert!(w.contains("deck, id2 could not connect") && w.contains("TCP 9000"), "unreached: {w}");
+    }
+
     use super::*;
 
     #[test]

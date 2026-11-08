@@ -2398,6 +2398,8 @@ impl Service {
                     key_level: if key_level.is_empty() { "hardware".into() } else { key_level },
                     key_problem: String::new(),
                     incoming_ms: incoming_ms.unwrap_or(cbb_core::authority::DEFAULT_INCOMING),
+                    unreached: node.unreached(),
+                    port: self.port.lock().unwrap().map_or(0, i64::from),
                     quiet: node.networks().map(|n| n.unknown()).unwrap_or_default(),
                     cert_ends_ms: id.cert.not_after * 1000,
                     ..group

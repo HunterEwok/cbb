@@ -162,6 +162,15 @@ const MAX_WAIT: Duration = Duration::from_secs(30);
 /// How long a full member waits for one with a lower device ID to dial it
 /// before it dials that one itself, as Go's fallbackDial.
 const FALLBACK: Duration = Duration::from_secs(30);
+
+/// The fallback test's wait, in milliseconds from CBB_TEST_FALLBACK, as
+/// Go's fallbackAfter: with it set, this member also dials the members with
+/// a greater device ID at port 1, as if a firewall there dropped the member
+/// port, so that only their fallback dials connect.
+fn test_fallback() -> Option<Duration> {
+    static AFTER: std::sync::OnceLock<Option<Duration>> = std::sync::OnceLock::new();
+    *AFTER.get_or_init(|| std::env::var("CBB_TEST_FALLBACK").ok()?.parse().ok().map(Duration::from_millis))
+}
 /// At most this many connections may be in their TLS handshake at once.
 const MAX_HANDSHAKES: usize = 16;
 /// The members found by browsing that are dialed at once, as Go's mDNS
@@ -198,13 +207,20 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
         if let (true, Some(p)) = (later, &peer) {
             let r = node.redials();
             if node.connected(p) {
+                // It dialed this one: this loop dials only below.
+                node.set_unreached(p, false);
                 (since, redials) = (std::time::Instant::now(), r);
                 node.nap(Duration::from_secs(1));
                 continue;
             }
-            if r == redials && since.elapsed() < FALLBACK {
+            if r == redials && since.elapsed() < test_fallback().unwrap_or(FALLBACK) {
                 node.nap(Duration::from_secs(1));
                 continue;
+            }
+            // A redial (a new network, the app resumed) is no sign that it
+            // could not dial this one.
+            if r == redials {
+                node.set_unreached(p, true);
             }
             redials = r;
         }
@@ -629,6 +645,11 @@ fn browse(
                 if addrs.is_empty() {
                     continue;
                 }
+                let addrs = if test_fallback().is_some() && id > me {
+                    addrs.into_iter().map(|a| SocketAddr::new(a.ip(), 1)).collect()
+                } else {
+                    addrs
+                };
                 match found.get(&id) {
                     Some(cur) => {
                         node.found(&id, true);
