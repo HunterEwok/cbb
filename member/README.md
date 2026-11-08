@@ -284,6 +284,9 @@ do. These commands answer in frames a Z80 reads without a parser:
 | `cbb next paste [-max bytes]` | `CBB1 <len> <crc32>`, then len bytes of the latest text (cut to bytes), then CR, then the status line. |
 | `cbb next copy [-secret] <len> <crc32>` | `CBBGO` once the service answers; the Next then sends exactly len bytes, which the lite member reads with the terminal in raw mode (no echo, no CR to LF; it gives up after 10 s without a byte), checks the CRC-32 and sends to the group, as a secret with `-secret` (as `cbb copy -secret`); then the status line. |
 | `cbb next check-list <file>` | For `.cbb update`: the file holds `keys.json` and the release's `zxnext.json`, a line each (at most 16 KiB). It checks them against the pinned roots, refuses a release older than this `cbb`, and writes `CBBL <name> <size> <crc32> <sha256>` for each of the Next's four files; then the status line. |
+| `cbb next image [-mode auto\|lo\|hi] [-tape]` | For `.cbb show`: the latest image the lite member received (PNG or JPEG), fitted to Layer 2's 320×256 in 256 colours (`L`) or 640×256 in 16 (`H`), whichever shows it closer (`auto`), with colours from the Next's 512 and Floyd–Steinberg dithering. `CBBI <L\|H> <len> <crc32>`; the Next answers one byte once it has room, and then come len bytes: the 81920 bytes of pixels in Layer 2's order (a column of 256 after another; in `H` two pixels a byte, the left one in the high nibble), then the palette, two bytes an entry as Next register 0x44 takes them (256 entries for `L`, 16 for `H`), then CR and the status line. With `-tape` the bytes go as sound instead (`aplay`, through the Pi's I2S, which the Next hands to EAR): half a second of silence, then eleven blocks as the Spectrum's ROM saves them (3223 pilot halves of 2168 T-states at 3.5 MHz, a sync of 667 and 735, the flag, the data and their XOR, each bit two halves of 855 or 1710), the flag the index of the block: the ten 8K pieces of the pixels, then the palette, half a second apart; then CR and the status line. A byte 3 from the Next stops it, and the status line is `CBBOK`. |
+| `cbb next speed <baud> <bytes>` | For `.cbb speed`: `CBBS <baud> <bytes> <crc32>` at the line's own speed; half a second later the line goes to baud (115200 to 2000000) and the bytes follow, the low byte of each step of xorshift32 from 1; half a second after the last one the line's own speed again, and the status line. The Next checks the CRC-32 to see what that speed keeps whole. |
+| `cbb next speed-in <baud> <bytes>` | `.cbb speed`'s other way: the line goes to baud and, half a second later, `CBBGO` at it; then up to bytes from the Next, until a second passes without one; then the line's own speed, half a second, and `CBBR <bytes got> <crc32>` before the status line. |
 | `cbb next pair [-name name] [-port port] [-addr host[:port]]...` | `CBBQ <size>`, then size rows of the QR code for the phone app, each of (size + 3) / 4 hex digits with the leftmost module in the high bit of the first digit and a set bit dark; the Next draws it, the phone scans it, and after the pairing the status line (up to 5 minutes). A join payload makes a code of about 41 modules, which fits the 192 lines of the screen at 4 pixels per module. |
 
 ### The network through the Next's ESP8266
@@ -333,13 +336,23 @@ before), `E` bytes from the ESP, `e` bytes for the ESP, `T` the clock (the date 
 MS-DOS's form, as NextZXOS's `M_DATE` gives them, each 16 bits little-endian),
 `A` how many bytes on the wire the driver has taken (16 bits, little-endian; the link
 sends at most 384 ahead, less than the Next's 512-byte buffer), `K` characters to type,
-`Q` to stop, `C` what `.cbb` types for the Pi's shell and `c` the answers for it. The link drives the ESP's stock AT firmware (AT 1.2) inside the `e` and `E`
+`Q` to stop, `C` what `.cbb` types for the Pi's shell and `c` the answers for it, and for
+the group's images (driver 0.3) `I` an image waits, `i` the driver froze the program for it
+and `J` its head: the mode (`L` or `H`) and the 16-bit sum of its bytes, little-endian, after
+which its bytes follow raw, as `cbb next image` sends them, outside the frames and the
+window. The link drives the ESP's stock AT firmware (AT 1.2) inside the `e` and `E`
 frames, with up to five connections (`AT+CIPMUX=1`) and the data in `+IPD` blocks.
 
 The link is also a remote paste target, `next`: once `cbb paste-receive on` is set, an
 admin's paste goes to the driver in `K` frames, 50 characters a second, and the driver types
 them into whatever program runs on the Next. As with the text console, the link has to run
 as root and a line break needs `-enter`.
+
+The link also asks the service to hear of the group's images (a `watch` with `images`):
+when a copy with a PNG or a JPEG has come and the member has fetched it, the link makes the
+Next's image of it, as `cbb next image` does, and sends `I`. A driver that holds banks for
+images (`.cbb net on` gives them) answers `i` at its next interrupt, and the link sends what
+waits before the head, the head and the bytes.
 
 While the network runs, `.cbb paste`, `copy` and `text` reach the Pi in `C` frames (driver
 0.2): the link takes the line `cbb [-debug] next paste|copy ...`, and nothing else, runs it

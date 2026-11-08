@@ -37,10 +37,29 @@ PUBLIC _far_sha
 PUBLIC _far_uninstall
 PUBLIC _far_net_halt
 PUBLIC _far_read_list
+PUBLIC _far_pi_check
 PUBLIC _far_cbb_swap
 PUBLIC _far_autoexec
 PUBLIC _far_install_end
 PUBLIC _far_net_restart
+PUBLIC _far_show
+PUBLIC _far_img_banks
+PUBLIC _rx_block
+PUBLIC _http_rx
+PUBLIC _pi_tx
+PUBLIC _http_dst
+PUBLIC _tape_block
+PUBLIC _tape_dst
+PUBLIC _tape_len
+PUBLIC _tape_flag
+PUBLIC _rx_dst
+PUBLIC _rx_left
+PUBLIC _rx_border
+PUBLIC _crc_block
+PUBLIC _crc_ptr
+PUBLIC _crc_len
+PUBLIC _crc_state
+PUBLIC _crc_hi_at
 
 EXTERN __z_page_table
 EXTERN _install_run
@@ -57,17 +76,21 @@ EXTERN _paste_receive
 EXTERN _pair_check
 EXTERN _net_halt
 EXTERN _read_list
+EXTERN _pi_check
 EXTERN _cbb_swap
 EXTERN _autoexec
 EXTERN _install_end
 EXTERN _net_restart
 EXTERN _ovl_load
+EXTERN _show_run
+EXTERN _img_banks_run
 
 FAR_DATA    equ 15
 FAR_INSTALL equ 13
 FAR_NET     equ 17
 FAR_OVL     equ 19
 FAR_CMD     equ FAR_OVL
+FAR_SHOW    equ 21
 OVL_FIRST   equ 19
 
 ; MMU7's page now, in a (reads NextReg 0x57).
@@ -161,6 +184,12 @@ _far_pair_check:
    ld hl,_pair_check
    jr far_call
 
+; int far_show(void): .cbb show and speed, in CBB.OVL's second page.
+_far_show:
+   ld a,FAR_SHOW
+   ld hl,_show_run
+   jr far_call
+
 ; int far_net_halt(void) and int far_net_restart(void): the network
 ; stopped and started again around a command of CBB.OVL's page.
 _far_net_halt:
@@ -224,8 +253,20 @@ far_page:
    nextreg 0x57,a
    ret
 
+; int far_pi_check(void), from the install's page.
+_far_pi_check:
+   ld a,FAR_SHOW
+   ld hl,_pi_check
+   jp far_call
+
 call_hl:
    jp (hl)
+
+; int far_img_banks(void): the driver's banks for images (cbb.c).
+_far_img_banks:
+   ld a,FAR_OVL
+   ld hl,_img_banks_run
+   jr far_call
 
 ; void rom_char(uint8_t c) __z88dk_fastcall
 ;
@@ -271,3 +312,389 @@ _rom_char:
    pop iy
    pop ix
    ret
+
+SECTION code_dot
+
+; void pi_tx(uint16_t n) __z88dk_fastcall
+;
+; The Pi's cbb on its way, and .cbb speed's bytes: n bytes from http_dst to the selected UART, each
+; as soon as it has room (about 70 T-states a byte), where link_send() in
+; C sent some 32K a second at most. OUT (C),A, not OUTI, whose port's high
+; byte emulators do not agree on.
+_pi_tx:
+   ex de,hl
+   ld hl,(_http_dst)
+   ld bc,0x133b
+pt_next:
+   ld a,d
+   or e
+   ret z
+pt_wait:
+   in a,(c)
+   and 2                        ; still sending
+   jr nz,pt_wait
+   ld a,(hl)
+   out (c),a
+   inc hl
+   dec de
+   jr pt_next
+
+_http_dst:
+   defw 0
+
+SECTION PAGE_13
+
+; uint8_t http_rx(uint16_t n) __z88dk_fastcall
+;
+; .cbb install's chunk from the site: n bytes from the selected UART (the
+; ESP) to http_dst, as fast as they come (about 110 T-states a byte, so
+; 2 Mbit/s at 28 MHz), where link_recv() in C keeps up with 230400 only.
+; 0 when all came, 1 when some two seconds pass without a byte (the UART
+; lost them); http_dst says how far it got. SPACE waits for the next
+; chunk, a fraction of a second away, whose answer link_recv() waits for.
+HR_ROUNDS equ 14                ; rounds of 65536 polls, about 2 s
+
+_http_rx:
+   push ix
+   ex de,hl
+   ld hl,(_http_dst)
+   ld bc,0x133b
+hr_next:
+   ld a,d
+   or e
+   jr z,hr_end                  ; a = 0
+   ld ix,0
+   ld a,HR_ROUNDS
+   ld (hr_rounds),a
+hr_poll:
+   in a,(c)
+   rra
+   jr nc,hr_wait
+   inc b
+   ini
+   dec de
+   jr hr_next
+hr_wait:
+   dec ix
+   ld a,ixh
+   or ixl
+   jr nz,hr_poll
+   ld a,(hr_rounds)
+   dec a
+   ld (hr_rounds),a
+   jr nz,hr_poll
+   inc a
+hr_end:
+   ld (_http_dst),hl
+   ld l,a
+   ld h,0
+   pop ix
+   ret
+
+hr_rounds:
+   defb 0
+
+SECTION PAGE_21
+
+; uint8_t rx_block(void)
+;
+; Reads rx_left bytes from the selected UART to rx_dst as fast as they
+; come (about 90 T-states a byte, so 2 Mbit/s at 28 MHz), and flips the
+; border between rx_border and rx_border xor 7 after every 32: the
+; stripes follow the bytes that really came. LINK_OK (0) when all came,
+; LINK_TIMEOUT (1) when the line was quiet for some 20 seconds in all,
+; LINK_BREAK (2) on SPACE; rx_dst and rx_left say how far it got. The
+; UART's status and data ports differ only in their high byte, so INI
+; reads a byte into (hl) and leaves b at the status port again.
+RX_WAITS equ 160                ; rounds of 65536 polls, about 20 s
+
+_rx_block:
+   push ix
+   ld hl,(_rx_dst)
+   ld de,(_rx_left)
+   ld ix,0
+   ld a,RX_WAITS
+   ld (rx_rounds),a
+   ld bc,0x133b
+   ld a,d
+   or e
+   jr z,rx_ok
+rx_poll:
+   in a,(c)
+   rra
+   jr nc,rx_wait
+   inc b
+   ini
+   dec de
+   ld a,e
+   and 31
+   jr z,rx_flip
+rx_more:
+   ld a,d
+   or e
+   jr nz,rx_poll
+rx_ok:
+   ld a,0
+   jr rx_end
+rx_flip:
+   ld a,(_rx_border)
+   xor 7
+   ld (_rx_border),a
+   out (0xfe),a
+   jr rx_more
+rx_wait:
+   dec ix
+   ld a,ixh
+   or ixl
+   jr nz,rx_poll
+   ld a,0x7f                    ; SPACE: port 0x7ffe, bit 0
+   in a,(0xfe)
+   rra
+   ld a,2
+   jr nc,rx_end
+   ld a,(rx_rounds)
+   dec a
+   ld (rx_rounds),a
+   jr nz,rx_poll
+   inc a                        ; LINK_TIMEOUT
+rx_end:
+   ld (_rx_dst),hl
+   ld (_rx_left),de
+   ld l,a
+   ld h,0
+   pop ix
+   ret
+
+_rx_dst:
+   defw 0
+_rx_left:
+   defw 0
+_rx_border:
+   defb 1
+rx_rounds:
+   defb 0
+
+; uint8_t tape_block(void)
+;
+; Loads a block from the tape, here the Pi's sound through EAR (NextReg
+; 0xA2 bit 0), at 3.5 MHz with the ROM's timings: a pilot of 2168
+; T-state halves, a sync of 667 and 735, then each bit as two halves of
+; 855 (0) or 1710 (1), high bit first; the flag byte first, tape_len
+; bytes to tape_dst, and the XOR of all as the last byte. The border
+; flips at each edge, red and cyan in the pilot, blue and yellow in the
+; data, as the ROM's loader does. 0 when it loaded, 1 when no tape
+; played for some 150 seconds, or a block broke off, or SPACE stopped it, 2 when the block came damaged
+; or with another flag. The interrupts are off meanwhile.
+;
+; tb_edge counts B up, 52 T-states a count, until EAR changes; the counts
+; below are from 100: a pilot half about 43 counts, a sync half 13 to
+; 15, a bit's two halves 34 (0) or 68 (1).
+TAPE_FROM   equ 100
+TAPE_PILOT  equ 120             ; a pilot half: 20 to 100 counts
+TAPE_LONG   equ 200
+TAPE_SYNC   equ 125             ; under 25 counts: the sync
+TAPE_BIT    equ 151             ; a bit's halves: over 51 counts, a 1
+
+_tape_block:
+   di
+   ld a,0x7f
+   in a,(0xfe)
+   and 0x40
+   or 2                         ; red, and EAR's level now
+   ld c,a
+   ld hl,0
+   ld (tb_wait),hl              ; 65536 quiet waits, some 150 s, at most
+   ld e,0                       ; 256 pilot halves in a row, at least
+tb_pilot:
+   ld b,TAPE_FROM
+   call tb_edge
+   jr nc,tb_quiet
+   ld a,b
+   cp TAPE_PILOT
+   jr c,tb_short
+   cp TAPE_LONG
+   jr nc,tb_short
+   inc e
+   jr nz,tb_pilot
+tb_sync:
+   ld b,TAPE_FROM
+   call tb_edge
+   jr nc,tb_none
+   ld a,b
+   cp TAPE_SYNC
+   jr nc,tb_sync                ; the pilot still
+   ld b,TAPE_FROM
+   call tb_edge
+   jr nc,tb_none
+   ld a,c
+   and 0x40
+   or 1                         ; blue and yellow now
+   ld c,a
+   call tb_byte
+   jr nc,tb_none
+   ld (tb_sum),a
+   ld hl,_tape_flag
+   cp (hl)
+   jr nz,tb_bad
+   ld hl,(_tape_dst)
+tb_data:
+   call tb_byte
+   jr nc,tb_none
+   ld (hl),a
+   inc hl
+   ld e,a
+   ld a,(tb_sum)
+   xor e
+   ld (tb_sum),a
+   ld de,(_tape_len)
+   dec de
+   ld (_tape_len),de
+   ld a,d
+   or e
+   jr nz,tb_data
+   call tb_byte                 ; the checksum
+   jr nc,tb_none
+   ld e,a
+   ld a,(tb_sum)
+   xor e
+   jr nz,tb_bad
+   ld l,0
+   jr tb_end
+tb_quiet:
+   ld a,0x7f                    ; SPACE?
+   in a,(0xfe)
+   rra
+   jr nc,tb_none
+   ld hl,(tb_wait)
+   dec hl
+   ld (tb_wait),hl
+   ld a,h
+   or l
+   jr z,tb_none
+tb_short:
+   ld e,0                       ; not the pilot: from the start
+   jr tb_pilot
+tb_none:
+   ld l,1
+   jr tb_end
+tb_bad:
+   ld l,2
+tb_end:
+   ld h,0
+   ei
+   ret
+
+; A byte in A, carry set; carry clear when no edge came in time or SPACE.
+tb_byte:
+   ld d,1                       ; a marker, out after eight bits
+tb_bit:
+   ld b,TAPE_FROM
+   call tb_edge
+   ret nc
+   call tb_edge
+   ret nc
+   ld a,b
+   cp TAPE_BIT
+   ccf                          ; carry for a long one
+   rl d
+   jr nc,tb_bit
+   ld a,d
+   scf
+   ret
+
+; B counts up until EAR changes, then the border flips: carry set; carry
+; clear when B wrapped or SPACE is down.
+tb_edge:
+   inc b                        ; 4
+   jr z,tb_out                  ; 7
+   ld a,0x7f                    ; 7
+   in a,(0xfe)                  ; 11
+   xor c                        ; 4
+   and 0x40                     ; 7
+   jr z,tb_edge                 ; 12: 52 a round
+   ld a,c
+   xor 0x47                     ; the level, and the border's colour
+   ld c,a
+   and 7
+   out (0xfe),a
+   ld a,0x7f
+   in a,(0xfe)
+   rra                          ; SPACE: bit 0, low when down
+   ret
+tb_out:
+   and a
+   ret
+
+_tape_dst:
+   defw 0
+_tape_len:
+   defw 0
+_tape_flag:
+   defb 0
+tb_sum:
+   defb 0
+tb_wait:
+   defw 0
+
+; void crc_block(void)
+;
+; CRC-32 (IEEE 802.3) of crc_len bytes from crc_ptr, continued in
+; crc_state, which holds the CRC inverted (start with 0xFFFFFFFF, invert
+; at the end): with four tables of 256 bytes, one for each
+; byte of the table's entries, about 110 T-states a byte, where
+; crc32_update() takes over a thousand. crc_table_make() fills them.
+_crc_block:
+   push ix
+   ld ix,(_crc_len)
+   ld a,ixh
+   or ixl
+   jr z,crc_end
+   ld hl,(_crc_state)
+   ld c,l
+   ld b,h
+   ld de,(_crc_state + 2)
+   ld hl,(_crc_ptr)
+crc_loop:
+   ld a,(hl)
+   xor c
+   push hl
+   ld l,a
+crc_hi:
+   ld h,0                       ; crc_table_make() writes the tables' page
+   ld a,b
+   xor (hl)
+   ld c,a
+   inc h
+   ld a,e
+   xor (hl)
+   ld b,a
+   inc h
+   ld a,d
+   xor (hl)
+   ld e,a
+   inc h
+   ld d,(hl)
+   pop hl
+   inc hl
+   dec ix
+   ld a,ixh
+   or ixl
+   jr nz,crc_loop
+   ld (_crc_ptr),hl
+   ld l,c
+   ld h,b
+   ld (_crc_state),hl
+   ld (_crc_state + 2),de
+crc_end:
+   pop ix
+   ret
+
+_crc_ptr:
+   defw 0
+_crc_len:
+   defw 0
+_crc_state:
+   defs 4
+
+_crc_hi_at:
+   defw crc_hi + 1

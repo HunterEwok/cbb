@@ -64,6 +64,10 @@ pub trait Peer {
     fn baud(&self) -> u32;
     /// The device itself, for a test to look at afterwards.
     fn as_any(&mut self) -> &mut dyn std::any::Any;
+    /// Its sound's level at `now`, for EAR (the Pi's I2S), if it plays.
+    fn ear(&mut self, _now: u64) -> Option<bool> {
+        None
+    }
 }
 
 pub struct Uart {
@@ -296,6 +300,8 @@ pub struct Next {
     /// cbb.drv's start in the background (call 9): its line and state.
     pub boot_line: Vec<u8>,
     pub boot_state: u8,
+    /// The driver's banks for images (call 10): the first, and the state's.
+    pub img_banks: u16,
     /// Whether cbb.drv runs the network (its call 2 switches it).
     pub net: bool,
     /// Whether cbb.drv carries .cbb's commands to the Pi while the network
@@ -323,6 +329,14 @@ pub struct Next {
     pub printed: String,
     /// An address whose writes go to the log.
     pub watch: Option<u16>,
+    /// Layer 2's port (0x123B): bit 1 shows it.
+    pub layer2: u8,
+    /// Layer 2's clip window (NR 0x18, its index reset by NR 0x1C).
+    pub clip: [u8; 4],
+    clip_index: usize,
+    /// What Layer 2 showed when its clip window opened to the whole
+    /// screen: the 80K of its banks from NR 0x12 and the palette.
+    pub shown: Option<(Vec<u8>, Vec<u16>)>,
 }
 
 impl Next {
@@ -464,7 +478,21 @@ impl Next {
                     }
                 }
             }
-            0x07 | 0x08 | 0x43 | 0xA0 | 0x7F => {}
+            0x1C => {
+                if v & 1 != 0 {
+                    self.clip_index = 0;
+                }
+            }
+            0x18 => {
+                self.clip[self.clip_index] = v;
+                self.clip_index = (self.clip_index + 1) % 4;
+                if self.clip == [0, 159, 0, 255] && self.layer2 & 2 != 0 {
+                    let base = self.nr[0x12] as usize * 2 * PAGE;
+                    let pixels = self.ram[base..base + 10 * PAGE].to_vec();
+                    self.shown = Some((pixels, self.palette.clone()));
+                }
+            }
+            0x07 | 0x08 | 0x43 | 0xA0 | 0x7F | 0x12 | 0x14 | 0x15 | 0x16 | 0x17 | 0x6B | 0x70 | 0x71 => {}
             _ => self
                 .log
                 .push(format!("{:#06x}: NR {r:#04x} = {v:#04x}", self.pc)),
@@ -475,6 +503,7 @@ impl Next {
     fn nextreg_read(&mut self, r: u8) -> u8 {
         match r {
             0x50..=0x57 => self.mmu[(r - 0x50) as usize],
+            0x18 => self.clip[self.clip_index],
             0x41 => (self.palette[self.pal_index as usize] >> 1) as u8,
             0x44 => (self.palette[self.pal_index as usize] & 1) as u8,
             _ => self.nr[r as usize],
@@ -514,8 +543,17 @@ impl Machine for Next {
             }
             0x153B => self.select,
             0x163B => 0,
+            0x123B => self.layer2,
             0x243B => self.nr_sel,
-            _ if a & 0xFF == 0xFE => self.keyboard((a >> 8) as u8),
+            _ if a & 0xFF == 0xFE => {
+                let k = self.keyboard((a >> 8) as u8);
+                // EAR, bit 6: the Pi's sound once NR 0xA2 bit 0 hands it there.
+                let now = self.now as u64;
+                match self.pi.peer.ear(now) {
+                    Some(level) if self.nr[0xA2] & 1 != 0 => k & !0x40 | (level as u8) << 6,
+                    _ => k,
+                }
+            }
             _ if a & 0xFF == 0x1F => 0, // Kempston
             _ => {
                 self.breach(format!("read port {a:#06x}"));
@@ -552,6 +590,7 @@ impl Machine for Next {
             }
             0x153B => self.select = v,
             0x163B => {}
+            0x123B => self.layer2 = v,
             0x7FFD | 0x1FFD | 0xDFFD => {
                 if a == 0x7FFD {
                     let bank = v & 7;
@@ -630,6 +669,10 @@ impl Run {
             keys: Vec::new(),
             border: 7,
             border_changes: 0,
+            layer2: 0,
+            clip: [0, 255, 0, 191],
+            clip_index: 0,
+            shown: None,
             pc: 0,
             breaches: Vec::new(),
             screen_writes: Vec::new(),
@@ -640,6 +683,7 @@ impl Run {
             drivers: Vec::new(),
             boot_line: Vec::new(),
             boot_state: 0,
+            img_banks: 0,
             net: false,
             via: false,
             via_sent: Vec::new(),
@@ -1056,6 +1100,11 @@ impl Run {
             },
             3 => {
                 self.set(Reg16::DE, self.hw.net as u16);
+                self.ok();
+            }
+            10 => {
+                let old = std::mem::replace(&mut self.hw.img_banks, de);
+                self.set(Reg16::DE, old);
                 self.ok();
             }
             7 | 8 if !self.hw.via => self.carry(true),

@@ -45,6 +45,10 @@ qrcode = { version = "0.14.1", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"
+# The group's images for the ZX Spectrum Next (src/nextimage.rs): PNG and
+# JPEG, in pure Rust.
+png = "0.18.1"
+zune-jpeg = { version = "0.5.15", default-features = false, features = ["std"] }
 # Keys in a Mac's Secure Enclave (src/sekey.rs): checking the enclave's
 # signatures and sealing secrets as Go's internal/sekey does.
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "ecdh"] }

@@ -39,6 +39,16 @@ pub const CBB_OUT: u8 = b'C';
 /// The command's output for `.cbb`, then `\r\nSUP>` as NextPi's shell
 /// writes its prompt (Pi to driver).
 pub const CBB_IN: u8 = b'c';
+/// An image waits for the driver to show (Pi to driver), empty: it shows
+/// it at once over the program in front, with banks .cbb net on gave it.
+pub const IMAGE: u8 = b'I';
+/// The driver froze the program and waits for the image (driver to Pi).
+pub const IMAGE_GO: u8 = b'i';
+/// The image's mode (`L` or `H`) and the 16-bit sum of its bytes, little
+/// endian (Pi to driver); its bytes follow raw, outside any frame and not
+/// counted in the window: the pixels, then the palette, as `cbb next
+/// image` sends them.
+pub const IMAGE_HEAD: u8 = b'J';
 
 /// How many bytes on the wire the Pi sends before the driver's ACK: less
 /// than the Next's 512-byte receive buffer, with room for a frame in flight.

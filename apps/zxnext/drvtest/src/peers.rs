@@ -457,6 +457,20 @@ pub struct Pi {
     pub received: Vec<u8>,
     /// The group's latest text, which cbb next paste gives.
     pub clip: Vec<u8>,
+    /// The latest image, which cbb next image gives: its mode letter and
+    /// its bytes (the pixels, then the palette).
+    pub image: Option<(char, Vec<u8>)>,
+    /// The fastest the line carries bytes whole: above it the Pi's tty
+    /// stays at its own speed, so the Next reads noise.
+    pub line_max: u32,
+    /// Speeds the line takes, and when.
+    later_bauds: Vec<(u64, u32)>,
+    /// The image's bytes, which go once the Next sends a byte.
+    image_wait: Option<Vec<u8>>,
+    /// show -tape: the image waiting for the Next's byte, then the times
+    /// of its sound's edges in microseconds, the level low before.
+    tape_wait: Option<Vec<u8>>,
+    tape: Vec<f64>,
     /// What cbb next copy took.
     pub copied: Vec<u8>,
     /// The cbb on the Pi: its SHA-256 in hex, or none.
@@ -467,11 +481,52 @@ pub struct Pi {
     pub fast: bool,
     /// Whether the Pi's cbb-state holds an identity: it is in a group.
     pub in_group: bool,
+    /// Whether cbb leave keeps the keys, as one that reads other state.
+    pub leave_keeps: bool,
     /// Whether the Pi's cbb has check-list: an older one has not.
     pub checks_lists: bool,
     baud: u32,
     /// A speed stty sets, and when.
     pending_baud: Option<(u64, u32)>,
+    /// cbb next speed-in: the bytes it waits for, those that came (noise
+    /// when the Next sends at another speed), and when it gives up.
+    speed_in: Option<(usize, Vec<u8>, u64)>,
+    /// What the raw copy's command says once its bytes came, at its speed:
+    /// CBBEND after the Pi's cbb.
+    raw_end: RawEnd,
+    /// Whether the raw copy goes through gzip -dc.
+    raw_gz: bool,
+    /// When the raw copy's reader runs: before it, the tty keeps 4K and
+    /// drops the rest, as a real one does while the Pi Zero starts head.
+    raw_reader: u64,
+    raw_early: usize,
+}
+
+#[derive(Default, PartialEq)]
+enum RawEnd {
+    #[default]
+    Nothing,
+    End,
+}
+
+/// gzip -dc, as the Pi's shell runs it.
+fn gunzip(data: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut child = std::process::Command::new("gzip")
+        .arg("-dc")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("gzip");
+    let mut stdin = child.stdin.take().unwrap();
+    let data = data.to_vec();
+    let feed = std::thread::spawn(move || {
+        let _ = stdin.write_all(&data);
+    });
+    let out = child.wait_with_output().unwrap();
+    feed.join().unwrap();
+    out.stdout
 }
 
 impl Pi {
@@ -483,25 +538,57 @@ impl Pi {
             raw_copy: false,
             received: Vec::new(),
             clip: b"Hello from the group".to_vec(),
+            image: None,
+            line_max: 2_000_000,
+            later_bauds: Vec::new(),
+            image_wait: None,
+            tape_wait: None,
+            tape: Vec::new(),
             copied: Vec::new(),
             cbb_sha: None,
             log: Vec::new(),
             answers: true,
             fast: true,
             in_group: false,
+            leave_keeps: false,
             checks_lists: true,
             baud: 115_200,
             pending_baud: None,
+            speed_in: None,
+            raw_end: RawEnd::Nothing,
+            raw_gz: false,
+            raw_reader: 0,
+            raw_early: 0,
         }
     }
 
     fn apply_baud(&mut self, now: u64) {
+        while let Some(&(t, baud)) = self.later_bauds.first() {
+            if now < t {
+                break;
+            }
+            self.baud = baud;
+            self.later_bauds.remove(0);
+        }
         if let Some((t, baud)) = self.pending_baud {
             if now >= t {
                 self.baud = baud;
                 self.pending_baud = None;
             }
         }
+    }
+
+    /// cbb next speed-in's end: the line's own speed, and half a second
+    /// later what came.
+    fn speed_in_end(&mut self, now: u64) {
+        let Some((_, got, _)) = self.speed_in.take() else {
+            return;
+        };
+        self.later_bauds.push((now + 10_000, 115_200));
+        let t = now + 500_000;
+        let crc = crate::crc32(&got);
+        self.say(t, &format!("CBBR {} {crc:08x}\rCBBOK\r", got.len()));
+        self.prompt(t);
     }
 
     fn say(&mut self, now: u64, s: &str) {
@@ -520,7 +607,7 @@ impl Pi {
         if cmd.contains("sha256sum /NextPi/nextpi/cbb.bin") {
             let s = self.cbb_sha.clone().unwrap_or_else(|| "none".into());
             self.say(now + 50_000, &format!("CBBS {s}\r\n"));
-            return self.prompt(now + 50_000);
+            return self.prompt(now + 1_050_000);
         }
         if let Some(rest) = cmd.strip_prefix("s=$(stty -g); stty ") {
             // Without a speed, the line keeps its own.
@@ -544,23 +631,36 @@ impl Pi {
             self.pending_baud = Some((now + 5_000, speed));
             // After stty raw the tty adds no CR to an LF, as a real one:
             // printf gives what it is given.
-            let sleep = if cmd.contains(" && sleep 1 && ") {
-                1_000_000
+            // CBBGO a second after the reader starts, in the background
+            // (cbb.c, pi_send()), or at once (the list's copy).
+            let late = "( (sleep 1; printf '\\r\\nCBBGO\\r\\n') & ";
+            let (sleep, out) = if cmd.contains(late) {
+                (1_000_000, "\r\nCBBGO\r\n".to_string())
             } else {
-                0
+                let next = cmd
+                    .split(" && ")
+                    .find(|p| p.starts_with("printf"))
+                    .unwrap_or("");
+                let out = next
+                    .strip_prefix("printf '")
+                    .and_then(|t| t.strip_suffix('\''))
+                    .map(|t| t.replace("\\r", "\r").replace("\\n", "\n"))
+                    .unwrap_or_default();
+                (0, out)
             };
-            let next = cmd
-                .split(" && ")
-                .find(|p| p.starts_with("printf"))
-                .unwrap_or("");
-            let out = next
-                .strip_prefix("printf '")
-                .and_then(|t| t.strip_suffix('\''))
-                .map(|t| t.replace("\\r", "\r").replace("\\n", "\n"))
-                .unwrap_or_default();
             self.say(now + 10_000 + sleep, &out);
+            // head starts with the command, or only after CBBGO, some
+            // 200 ms on a Pi Zero.
+            self.raw_reader = if sleep > 0 { now } else { now + 10_000 + 200_000 };
+            self.raw_early = 0;
             self.raw = n;
             self.received.clear();
+            self.raw_gz = cmd.contains("| gzip -dc");
+            self.raw_end = if cmd.contains("CBBEND") {
+                RawEnd::End
+            } else {
+                RawEnd::Nothing
+            };
             return;
         }
         // The lite member's frames (member/README.md): a text, and a copy
@@ -575,6 +675,63 @@ impl Pi {
                     f.extend_from_slice(b"\rCBBOK\r");
                     self.out.push(now + 50_000, &f);
                     return self.prompt(now + 50_000);
+                }
+                ["image"] => {
+                    let Some((mode, bytes)) = self.image.clone() else {
+                        self.say(now + 50_000, "CBBERR the clipboard holds no images or files\r");
+                        return self.prompt(now + 50_000);
+                    };
+                    let crc = crate::crc32(&bytes);
+                    // Some time to make it; the bytes once the Next asks.
+                    self.say(now + 1_000_000, &format!("CBBI {mode} {} {crc:08x}\r", bytes.len()));
+                    self.image_wait = Some(bytes);
+                    return;
+                }
+                ["image", "-tape"] => {
+                    let Some((mode, bytes)) = self.image.clone() else {
+                        self.say(now + 50_000, "CBBERR the clipboard holds no images or files\r");
+                        return self.prompt(now + 50_000);
+                    };
+                    let crc = crate::crc32(&bytes);
+                    self.say(now + 1_000_000, &format!("CBBI {mode} {} {crc:08x}\r", bytes.len()));
+                    self.tape_wait = Some(bytes);
+                    return;
+                }
+                ["speed", baud, n] => {
+                    // cbb next speed (member/src/next.rs): xorshift32 from 1.
+                    let baud: u32 = baud.parse().unwrap();
+                    let n: usize = n.parse().unwrap();
+                    let mut x: u32 = 1;
+                    let data: Vec<u8> = (0..n)
+                        .map(|_| {
+                            x ^= x << 13;
+                            x ^= x >> 17;
+                            x ^= x << 5;
+                            x as u8
+                        })
+                        .collect();
+                    let crc = crate::crc32(&data);
+                    let t = now + 50_000;
+                    self.say(t, &format!("CBBS {baud} {n} {crc:08x}\r"));
+                    // The line's speed for the data, then its own again.
+                    let at = if baud <= self.line_max { baud } else { 115_200 };
+                    self.later_bauds.push((t + 300_000, at));
+                    self.out.push(t + 500_000, &data);
+                    let end = t + 500_000 + (n as u64 * 10_000_000 / baud as u64) + 500_000;
+                    self.later_bauds.push((end, 115_200));
+                    self.out.push(end + 10_000, b"CBBOK\r");
+                    return self.prompt(end + 10_000);
+                }
+                ["speed-in", baud, n] => {
+                    // cbb next speed-in (member/src/next.rs): the line at
+                    // baud, if it takes it, and CBBGO half a second later.
+                    let baud: u32 = baud.parse().unwrap();
+                    let t = now + 50_000;
+                    let at = if baud <= self.line_max { baud } else { 115_200 };
+                    self.later_bauds.push((t + 300_000, at));
+                    self.out.push(t + 500_000, b"\r\nCBBGO\r\n");
+                    self.speed_in = Some((n.parse().unwrap(), Vec::new(), t + 1_500_000));
+                    return;
                 }
                 ["copy", rest @ ..] => {
                     let n = rest
@@ -622,11 +779,13 @@ impl Pi {
             self.say(now + 20_000, s);
             return self.prompt(now + 20_000);
         }
-        if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; cbb leave -yes; ")
+        if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; sleep 1; /NextPi/nextpi/cbb leave -yes; ")
             && cmd.ends_with("echo CBB$((1))GONE")
         {
-            self.in_group = false;
-            self.say(now + 50_000, "CBB1GONE\r\n");
+            // A leave that keeps the keys says so (leave_keeps).
+            self.in_group = self.leave_keeps;
+            let kept = if self.leave_keeps { "CBB1KEPT\r\n" } else { "" };
+            self.say(now + 1_050_000, &format!("{kept}CBB1GONE\r\n"));
             return self.prompt(now + 50_000);
         }
         if cmd.starts_with("pkill -f '/NextPi/nextpi/cbb'; cd /NextPi/nextpi && rm -rf ")
@@ -658,10 +817,60 @@ impl Default for Pi {
 }
 
 impl Peer for Pi {
-    fn rx(&mut self, now: u64, b: u8, _baud: u32) {
+    fn rx(&mut self, now: u64, b: u8, baud: u32) {
         self.apply_baud(now);
         if !self.answers {
             return;
+        }
+        let line_baud = self.baud;
+        if let Some((n, got, deadline)) = &mut self.speed_in {
+            // The Next's speed is its clock over a whole divisor: near, not
+            // equal.
+            got.push(if baud.abs_diff(line_baud) < line_baud / 32 {
+                b
+            } else {
+                !b
+            });
+            *deadline = now + 1_000_000;
+            if got.len() >= *n {
+                self.speed_in_end(now);
+            }
+            return;
+        }
+        if let Some(bytes) = self.tape_wait.take() {
+            // The ROM's tape blocks (member/src/next.rs, tape_block()), half a
+            // second apart, after half a second; the status line after.
+            let mut t = now as f64 + 500_000.0;
+            for (i, block) in bytes.chunks(8192).enumerate() {
+                let sum = block.iter().fold(i as u8, |s, &b| s ^ b);
+                let mut halves = vec![2168u32; 3223];
+                halves.extend([667, 735]);
+                for b in std::iter::once(i as u8).chain(block.iter().copied()).chain([sum]) {
+                    for bit in (0..8).rev() {
+                        let h = if b >> bit & 1 == 1 { 1710 } else { 855 };
+                        halves.extend([h, h]);
+                    }
+                }
+                for h in halves {
+                    t += h as f64 / 3.5;
+                    self.tape.push(t);
+                }
+                t += 500_000.0;
+            }
+            self.say(t as u64, "\rCBBOK\r");
+            return self.prompt(t as u64);
+        }
+        if b == 3 && !self.tape.is_empty() {
+            // The Next stopped the tape.
+            self.tape.clear();
+            self.out = Default::default();
+            self.say(now + 1_000, "\rCBBOK\r");
+            return self.prompt(now + 1_000);
+        }
+        if let Some(mut bytes) = self.image_wait.take() {
+            bytes.extend_from_slice(b"\rCBBOK\r");
+            self.out.push(now + 1_000, &bytes);
+            return self.prompt(now + 1_000);
         }
         if self.raw > 0 && self.raw_copy {
             self.copied.push(b);
@@ -674,12 +883,25 @@ impl Peer for Pi {
             return;
         }
         if self.raw > 0 {
+            if now < self.raw_reader {
+                self.raw_early += 1;
+                if self.raw_early > 4096 {
+                    return;
+                }
+            }
             self.received.push(b);
             self.raw -= 1;
             if self.raw == 0 {
-                // stty $s: the line's speed again.
-                self.pending_baud = Some((now + 1_000, 115_200));
-                self.prompt(now);
+                if self.raw_gz {
+                    self.received = gunzip(&self.received);
+                }
+                // At the copy's speed, then stty $s: the line's again.
+                match std::mem::take(&mut self.raw_end) {
+                    RawEnd::Nothing => {}
+                    RawEnd::End => self.say(now, "\r\nCBBEND\r\n"),
+                }
+                self.pending_baud = Some((now + 20_000, 115_200));
+                self.prompt(now + 20_000);
             }
             return;
         }
@@ -702,6 +924,9 @@ impl Peer for Pi {
     }
     fn tx(&mut self, now: u64) -> Option<u8> {
         self.apply_baud(now);
+        if self.speed_in.as_ref().is_some_and(|s| now >= s.2) {
+            self.speed_in_end(now);
+        }
         self.out.pop(now)
     }
     fn baud(&self) -> u32 {
@@ -709,5 +934,12 @@ impl Peer for Pi {
     }
     fn as_any(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+    fn ear(&mut self, now: u64) -> Option<bool> {
+        if self.tape.is_empty() {
+            return None;
+        }
+        let edges = self.tape.partition_point(|&t| t <= now as f64);
+        Some(edges % 2 == 1)
     }
 }
