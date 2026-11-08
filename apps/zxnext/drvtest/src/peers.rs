@@ -494,6 +494,10 @@ pub struct Pi {
     raw_end: RawEnd,
     /// Whether the raw copy goes through gzip -dc.
     raw_gz: bool,
+    /// When the raw copy's reader runs: before it, the tty keeps 4K and
+    /// drops the rest, as a real one does while the Pi Zero starts head.
+    raw_reader: u64,
+    raw_early: usize,
 }
 
 #[derive(Default, PartialEq)]
@@ -551,6 +555,8 @@ impl Pi {
             speed_in: None,
             raw_end: RawEnd::Nothing,
             raw_gz: false,
+            raw_reader: 0,
+            raw_early: 0,
         }
     }
 
@@ -623,21 +629,28 @@ impl Pi {
             self.pending_baud = Some((now + 5_000, speed));
             // After stty raw the tty adds no CR to an LF, as a real one:
             // printf gives what it is given.
-            let sleep = if cmd.contains(" && sleep 1 && ") {
-                1_000_000
+            // CBBGO a second after the reader starts, in the background
+            // (cbb.c, pi_send()), or at once (the list's copy).
+            let late = "( (sleep 1; printf '\\r\\nCBBGO\\r\\n') & ";
+            let (sleep, out) = if cmd.contains(late) {
+                (1_000_000, "\r\nCBBGO\r\n".to_string())
             } else {
-                0
+                let next = cmd
+                    .split(" && ")
+                    .find(|p| p.starts_with("printf"))
+                    .unwrap_or("");
+                let out = next
+                    .strip_prefix("printf '")
+                    .and_then(|t| t.strip_suffix('\''))
+                    .map(|t| t.replace("\\r", "\r").replace("\\n", "\n"))
+                    .unwrap_or_default();
+                (0, out)
             };
-            let next = cmd
-                .split(" && ")
-                .find(|p| p.starts_with("printf"))
-                .unwrap_or("");
-            let out = next
-                .strip_prefix("printf '")
-                .and_then(|t| t.strip_suffix('\''))
-                .map(|t| t.replace("\\r", "\r").replace("\\n", "\n"))
-                .unwrap_or_default();
             self.say(now + 10_000 + sleep, &out);
+            // head starts with the command, or only after CBBGO, some
+            // 200 ms on a Pi Zero.
+            self.raw_reader = if sleep > 0 { now } else { now + 10_000 + 200_000 };
+            self.raw_early = 0;
             self.raw = n;
             self.received.clear();
             self.raw_gz = cmd.contains("| gzip -dc");
@@ -868,6 +881,12 @@ impl Peer for Pi {
             return;
         }
         if self.raw > 0 {
+            if now < self.raw_reader {
+                self.raw_early += 1;
+                if self.raw_early > 4096 {
+                    return;
+                }
+            }
             self.received.push(b);
             self.raw -= 1;
             if self.raw == 0 {

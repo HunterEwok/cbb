@@ -2027,13 +2027,16 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
     if (errno) return fail("the Pi's cbb is not on the card", it->card);
     // Raw: every byte as it is, none taken as a key or echoed; head gives
     // up after twice the time the copy takes, and the tty gets its speed
-    // back after either. The second's sleep lets the Next, which takes
-    // the speed once the command has left, hear CBBGO at the new one; the
-    // CR first ends the line the rest of the echo left, which the Next
-    // hears garbled at that speed.
+    // back after either. CBBGO comes a second after head starts reading:
+    // the bytes that came before, while the Pi Zero started it, would
+    // overflow the tty's buffer at speed. The second also lets the Next,
+    // which takes the speed once the command has left, hear CBBGO at the
+    // new one; the CR first ends the line the rest of the echo left, which
+    // the Next hears garbled at that speed. The subshell keeps the job's
+    // notices off the line.
     sprintf(line,
-            "s=$(stty -g); stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && timeout %lu head -c %lu%s >" PI_DIR
-            "/cbb.new; printf '\\r\\nCBBEND\\r\\n'; stty $s\n",
+            "s=$(stty -g); stty %lu raw -echo -iexten && ( (sleep 1; printf '\\r\\nCBBGO\\r\\n') & timeout %lu head -c %lu%s >" PI_DIR
+            "/cbb.new; printf '\\r\\nCBBEND\\r\\n' ); stty $s\n",
             speed ? speed : 115200UL, pi_seconds(it, speed), it->size, it->pi == 2 ? " | gzip -dc" : "");
     link_send_str(line);
     if (speed) {
@@ -2066,21 +2069,25 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
 static int to_pi(struct item *it, uint8_t row)
 {
     uint8_t err;
-    uint16_t start;
+    uint16_t start, wait;
     uint32_t speed = PI_FAST_SPEED;
     if (link_shell()) return pi_silent();
     pi_path = it->card;
     for (;;) {
         // A speed above the line's own carries a probe first.
         pi_speed = speed;
+        wait = 15; // the probe's head: 5 seconds
         err = speed > ESP_SPEED ? far_pi_probe() : 0;
-        if (!err) err = pi_send(it, row, speed);
+        if (!err) {
+            wait = pi_seconds(it, speed) + 10;
+            err = pi_send(it, row, speed);
+        }
         if (err == 2) {
             // A tty that took the speed but lost CBBGO keeps head waiting,
             // until its timeout at the most.
             start = FRAMES_LO;
             while (link_shell()) {
-                if (link_stopped || (uint16_t)(FRAMES_LO - start) / 50 > pi_seconds(it, speed) + 10)
+                if (link_stopped || (uint16_t)(FRAMES_LO - start) / 50 > wait)
                     return fail("the Pi did not get ready", "no CBBGO");
             }
         } else if (!err) {
@@ -2330,8 +2337,8 @@ void usage_run(void)
 // when the Pi did not say it was ready, 3 when they did not come whole.
 // Not static: far_pi_probe() (far.asm) calls it.
 #define PROBE 32768UL
-static const char pp_cmd[] = "s=$(stty -g); stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && "
-                             "printf 'CBBP %%s\\r\\n' $(timeout 5 head -c %lu | sha256sum); stty $s\n";
+static const char pp_cmd[] = "s=$(stty -g); stty %lu raw -echo -iexten && ( (sleep 1; printf '\\r\\nCBBGO\\r\\n') & "
+                             "printf 'CBBP %%s\\r\\n' $(timeout 5 head -c %lu | sha256sum) ); stty $s\n";
 static const char pp_go[] = "CBBGO", pp_sum[] = "CBBP ";
 int pi_probe(void)
 {
