@@ -64,6 +64,10 @@ pub trait Peer {
     fn baud(&self) -> u32;
     /// The device itself, for a test to look at afterwards.
     fn as_any(&mut self) -> &mut dyn std::any::Any;
+    /// Its sound's level at `now`, for EAR (the Pi's I2S), if it plays.
+    fn ear(&mut self, _now: u64) -> Option<bool> {
+        None
+    }
 }
 
 pub struct Uart {
@@ -541,7 +545,15 @@ impl Machine for Next {
             0x163B => 0,
             0x123B => self.layer2,
             0x243B => self.nr_sel,
-            _ if a & 0xFF == 0xFE => self.keyboard((a >> 8) as u8),
+            _ if a & 0xFF == 0xFE => {
+                let k = self.keyboard((a >> 8) as u8);
+                // EAR, bit 6: the Pi's sound once NR 0xA2 bit 0 hands it there.
+                let now = self.now as u64;
+                match self.pi.peer.ear(now) {
+                    Some(level) if self.nr[0xA2] & 1 != 0 => k & !0x40 | (level as u8) << 6,
+                    _ => k,
+                }
+            }
             _ if a & 0xFF == 0x1F => 0, // Kempston
             _ => {
                 self.breach(format!("read port {a:#06x}"));

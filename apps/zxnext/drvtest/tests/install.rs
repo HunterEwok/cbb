@@ -505,7 +505,9 @@ fn run_after(
         u16::from_str_radix(table.split('$').nth(1).unwrap().get(..4).unwrap(), 16).unwrap();
     run.overlay_logical = kit.pages.clone();
     let mut t = 0;
-    while !run.done && t < 120 {
+    // A tape takes some eight minutes.
+    let limit = if args.contains("-tape") { 700 } else { 120 };
+    while !run.done && t < limit {
         run.run(1.0);
         t += 1;
     }
@@ -1315,6 +1317,24 @@ fn shows_the_groups_image_through_the_driver() {
     });
     assert!(run.hw.net, "the network stopped");
     check_shown(&run, &frame, &pal);
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+/// show -tape: the Pi plays the image as a tape through EAR, which the
+/// Next loads with the ROM's timings at 3.5 MHz, column by column.
+#[test]
+fn shows_the_groups_image_from_a_tape() {
+    let Some(kit) = kit("showtape") else { return };
+    let (frame, pal) = image_frame();
+    let mut pi = Pi::new();
+    pi.image = Some(('L', frame.clone()));
+    let card = card("showtape");
+    std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
+    std::fs::copy(kit.site.join("CBB.OVL"), card.join("cbb/CBB.OVL")).unwrap();
+    let run = run_on(&kit, &card, "show -tape", Esp::new(kit.site.clone()), pi, enter_at(560.0));
+    check_shown(&run, &frame, &pal);
+    assert_eq!(run.hw.nr[0x07], 0, "the CPU's speed as it was");
+    assert_eq!(run.hw.nr[0xA2] & 1, 0, "EAR back to the jack");
     let _ = std::fs::remove_dir_all(&card);
 }
 

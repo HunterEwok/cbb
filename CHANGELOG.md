@@ -12,6 +12,8 @@ All notable changes to cbb are documented in this file. The format follows
   640×256 with 16, whichever shows it closer, with dithering from the Next's 512 colours; the
   Next shows it column by column as it arrives and gives the screen back on a key.
   `.cbb speed` (`cbb next speed`) measures which speeds of the Pi's line keep 80K whole.
+  `.cbb show -tape` loads it as a real tape instead, from the Pi's sound through EAR, with
+  the cassette's stripes on the border (some 8 minutes).
   While the network runs, the driver shows each new image of the group by itself over the
   program in front, which it freezes until a key and then gives its screen back.
 - A new device shows a code, and a computer of the group types it: a device that listens to

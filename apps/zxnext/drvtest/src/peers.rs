@@ -467,6 +467,10 @@ pub struct Pi {
     later_bauds: Vec<(u64, u32)>,
     /// The image's bytes, which go once the Next sends a byte.
     image_wait: Option<Vec<u8>>,
+    /// show -tape: the image waiting for the Next's byte, then the times
+    /// of its sound's edges in microseconds, the level low before.
+    tape_wait: Option<Vec<u8>>,
+    tape: Vec<f64>,
     /// What cbb next copy took.
     pub copied: Vec<u8>,
     /// The cbb on the Pi: its SHA-256 in hex, or none.
@@ -497,6 +501,8 @@ impl Pi {
             line_max: 2_000_000,
             later_bauds: Vec::new(),
             image_wait: None,
+            tape_wait: None,
+            tape: Vec::new(),
             copied: Vec::new(),
             cbb_sha: None,
             log: Vec::new(),
@@ -606,6 +612,16 @@ impl Pi {
                     // Some time to make it; the bytes once the Next asks.
                     self.say(now + 1_000_000, &format!("CBBI {mode} {} {crc:08x}\r", bytes.len()));
                     self.image_wait = Some(bytes);
+                    return;
+                }
+                ["image", "-tape"] => {
+                    let Some((mode, bytes)) = self.image.clone() else {
+                        self.say(now + 50_000, "CBBERR the clipboard holds no images or files\r");
+                        return self.prompt(now + 50_000);
+                    };
+                    let crc = crate::crc32(&bytes);
+                    self.say(now + 1_000_000, &format!("CBBI {mode} {} {crc:08x}\r", bytes.len()));
+                    self.tape_wait = Some(bytes);
                     return;
                 }
                 ["speed", baud, n] => {
@@ -720,6 +736,36 @@ impl Peer for Pi {
         if !self.answers {
             return;
         }
+        if let Some(bytes) = self.tape_wait.take() {
+            // The ROM's tape blocks (member/src/next.rs, tape_block()), half a
+            // second apart, after half a second; the status line after.
+            let mut t = now as f64 + 500_000.0;
+            for (i, block) in bytes.chunks(8192).enumerate() {
+                let sum = block.iter().fold(i as u8, |s, &b| s ^ b);
+                let mut halves = vec![2168u32; 3223];
+                halves.extend([667, 735]);
+                for b in std::iter::once(i as u8).chain(block.iter().copied()).chain([sum]) {
+                    for bit in (0..8).rev() {
+                        let h = if b >> bit & 1 == 1 { 1710 } else { 855 };
+                        halves.extend([h, h]);
+                    }
+                }
+                for h in halves {
+                    t += h as f64 / 3.5;
+                    self.tape.push(t);
+                }
+                t += 500_000.0;
+            }
+            self.say(t as u64, "\rCBBOK\r");
+            return self.prompt(t as u64);
+        }
+        if b == 3 && !self.tape.is_empty() {
+            // The Next stopped the tape.
+            self.tape.clear();
+            self.out = Default::default();
+            self.say(now + 1_000, "\rCBBOK\r");
+            return self.prompt(now + 1_000);
+        }
         if let Some(mut bytes) = self.image_wait.take() {
             bytes.extend_from_slice(b"\rCBBOK\r");
             self.out.push(now + 1_000, &bytes);
@@ -771,5 +817,12 @@ impl Peer for Pi {
     }
     fn as_any(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+    fn ear(&mut self, now: u64) -> Option<bool> {
+        if self.tape.is_empty() {
+            return None;
+        }
+        let edges = self.tape.partition_point(|&t| t <= now as f64);
+        Some(edges % 2 == 1)
     }
 }

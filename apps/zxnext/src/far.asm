@@ -44,6 +44,10 @@ PUBLIC _far_net_restart
 PUBLIC _far_show
 PUBLIC _far_img_banks
 PUBLIC _rx_block
+PUBLIC _tape_block
+PUBLIC _tape_dst
+PUBLIC _tape_len
+PUBLIC _tape_flag
 PUBLIC _rx_dst
 PUBLIC _rx_left
 PUBLIC _rx_border
@@ -378,6 +382,168 @@ _rx_border:
    defb 1
 rx_rounds:
    defb 0
+
+; uint8_t tape_block(void)
+;
+; Loads a block from the tape, here the Pi's sound through EAR (NextReg
+; 0xA2 bit 0), at 3.5 MHz with the ROM's timings: a pilot of 2168
+; T-state halves, a sync of 667 and 735, then each bit as two halves of
+; 855 (0) or 1710 (1), high bit first; the flag byte first, tape_len
+; bytes to tape_dst, and the XOR of all as the last byte. The border
+; flips at each edge, red and cyan in the pilot, blue and yellow in the
+; data, as the ROM's loader does. 0 when it loaded, 1 when no tape
+; played for some 150 seconds, or a block broke off, or SPACE stopped it, 2 when the block came damaged
+; or with another flag. The interrupts are off meanwhile.
+;
+; tb_edge counts B up, 52 T-states a count, until EAR changes; the counts
+; below are from 100: a pilot half about 43 counts, a sync half 13 to
+; 15, a bit's two halves 34 (0) or 68 (1).
+TAPE_FROM   equ 100
+TAPE_PILOT  equ 120             ; a pilot half: 20 to 100 counts
+TAPE_LONG   equ 200
+TAPE_SYNC   equ 125             ; under 25 counts: the sync
+TAPE_BIT    equ 151             ; a bit's halves: over 51 counts, a 1
+
+_tape_block:
+   di
+   ld a,0x7f
+   in a,(0xfe)
+   and 0x40
+   or 2                         ; red, and EAR's level now
+   ld c,a
+   ld hl,0
+   ld (tb_wait),hl              ; 65536 quiet waits, some 150 s, at most
+   ld e,0                       ; 256 pilot halves in a row, at least
+tb_pilot:
+   ld b,TAPE_FROM
+   call tb_edge
+   jr nc,tb_quiet
+   ld a,b
+   cp TAPE_PILOT
+   jr c,tb_short
+   cp TAPE_LONG
+   jr nc,tb_short
+   inc e
+   jr nz,tb_pilot
+tb_sync:
+   ld b,TAPE_FROM
+   call tb_edge
+   jr nc,tb_none
+   ld a,b
+   cp TAPE_SYNC
+   jr nc,tb_sync                ; the pilot still
+   ld b,TAPE_FROM
+   call tb_edge
+   jr nc,tb_none
+   ld a,c
+   and 0x40
+   or 1                         ; blue and yellow now
+   ld c,a
+   call tb_byte
+   jr nc,tb_none
+   ld (tb_sum),a
+   ld hl,_tape_flag
+   cp (hl)
+   jr nz,tb_bad
+   ld hl,(_tape_dst)
+tb_data:
+   call tb_byte
+   jr nc,tb_none
+   ld (hl),a
+   inc hl
+   ld e,a
+   ld a,(tb_sum)
+   xor e
+   ld (tb_sum),a
+   ld de,(_tape_len)
+   dec de
+   ld (_tape_len),de
+   ld a,d
+   or e
+   jr nz,tb_data
+   call tb_byte                 ; the checksum
+   jr nc,tb_none
+   ld e,a
+   ld a,(tb_sum)
+   xor e
+   jr nz,tb_bad
+   ld l,0
+   jr tb_end
+tb_quiet:
+   ld a,0x7f                    ; SPACE?
+   in a,(0xfe)
+   rra
+   jr nc,tb_none
+   ld hl,(tb_wait)
+   dec hl
+   ld (tb_wait),hl
+   ld a,h
+   or l
+   jr z,tb_none
+tb_short:
+   ld e,0                       ; not the pilot: from the start
+   jr tb_pilot
+tb_none:
+   ld l,1
+   jr tb_end
+tb_bad:
+   ld l,2
+tb_end:
+   ld h,0
+   ei
+   ret
+
+; A byte in A, carry set; carry clear when no edge came in time or SPACE.
+tb_byte:
+   ld d,1                       ; a marker, out after eight bits
+tb_bit:
+   ld b,TAPE_FROM
+   call tb_edge
+   ret nc
+   call tb_edge
+   ret nc
+   ld a,b
+   cp TAPE_BIT
+   ccf                          ; carry for a long one
+   rl d
+   jr nc,tb_bit
+   ld a,d
+   scf
+   ret
+
+; B counts up until EAR changes, then the border flips: carry set; carry
+; clear when B wrapped or SPACE is down.
+tb_edge:
+   inc b                        ; 4
+   jr z,tb_out                  ; 7
+   ld a,0x7f                    ; 7
+   in a,(0xfe)                  ; 11
+   xor c                        ; 4
+   and 0x40                     ; 7
+   jr z,tb_edge                 ; 12: 52 a round
+   ld a,c
+   xor 0x47                     ; the level, and the border's colour
+   ld c,a
+   and 7
+   out (0xfe),a
+   ld a,0x7f
+   in a,(0xfe)
+   rra                          ; SPACE: bit 0, low when down
+   ret
+tb_out:
+   and a
+   ret
+
+_tape_dst:
+   defw 0
+_tape_len:
+   defw 0
+_tape_flag:
+   defb 0
+tb_sum:
+   defb 0
+tb_wait:
+   defw 0
 
 ; void crc_block(void)
 ;

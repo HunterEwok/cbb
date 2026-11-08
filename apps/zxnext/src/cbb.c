@@ -63,7 +63,7 @@ static const char usage_text[] = "CBB " VERSION "  .cbb COMMAND\n\n"
            "\tremote paste\n"
            "leave\tleave the group\n"
            "uninstall\tremove it all\n"
-           "show\tthe group's image\n"
+           "show [-tape]\tthe group's image\n"
            "speed\ttest the Pi's line\n"
            "-d ...\terror details\n";
 #pragma constseg rodata_compiler
@@ -2811,6 +2811,7 @@ static int install(void)
 // the banks. speed: the line's speeds tried with `cbb next speed`, each
 // checked by its CRC-32.
 static char **far_show_argv;
+static uint8_t far_show_tape;
 extern int far_show(void);
 extern uint8_t rx_block(void);
 extern uint8_t *rx_dst;
@@ -2822,6 +2823,10 @@ extern uint16_t crc_len;
 extern uint32_t crc_state;
 extern uint8_t img_crc_tab[1024 + 255];
 extern uint8_t *crc_hi_at;
+extern uint8_t tape_block(void);
+extern uint8_t *tape_dst;
+extern uint16_t tape_len;
+extern uint8_t tape_flag;
 
 #pragma codeseg PAGE_21
 #pragma constseg PAGE_21
@@ -2838,6 +2843,8 @@ extern uint8_t *crc_hi_at;
 #define WINDOW 0x6000 // MMU3: BASIC's program, which nothing runs meanwhile
 
 static const char s_image[] = "image";
+static const char s_image_tape[] = "image -tape";
+static const char s_tape_stopped[] = "the tape stopped: no sound came from the Pi, or SPACE";
 static const char s_failed[] = "cbb failed";
 static const char s_net_runs[] = "the network runs: .cbb net off first";
 static const char s_cbbi[] = "CBBI ";
@@ -2862,8 +2869,11 @@ static const uint8_t saved_regs[] = {0x12, 0x14, 0x15, 0x16, 0x17, 0x43, 0x6B, 0
 static uint8_t saved[sizeof saved_regs];
 static uint8_t saved_clip[4];
 static uint8_t saved_port;
-static uint8_t saved_pal[512];
-static uint8_t img_pal[512];
+// The two palettes, two bytes an entry, in a bank of their own, in at
+// WINDOW while they are used (pal_in()).
+static uint8_t img_state;
+#define SAVED_PAL ((uint8_t *)WINDOW)
+#define IMG_PAL ((uint8_t *)(WINDOW + 512))
 static uint8_t img_border;
 // The commands go through the driver while the network runs, as in
 // cmd_run() (CBB.OVL's first page, which this one cannot call).
@@ -2967,12 +2977,13 @@ static void banks_free(void)
     uint8_t i;
     if (img_base == NO_BANK) return;
     for (i = 0; i < IMG_BANKS; i++) esx_ide_bank_free(ESX_BANKTYPE_RAM, img_base + i);
+    esx_ide_bank_free(ESX_BANKTYPE_RAM, img_state);
     img_base = NO_BANK;
 }
 
-// Ten banks in a row from NextZXOS, the first even: banks come from the
-// top down, so each one is usually one under the last; the ones of no
-// use go back. 0 when img_base holds them.
+// Ten banks in a row from NextZXOS, the first even, and one for the
+// palettes: banks come from the top down, so each one is usually one
+// under the last; the ones of no use go back. 0 when img_base holds them.
 static uint8_t banks_take(void)
 {
     uint8_t n = 0, run = 0, b, i;
@@ -2988,11 +2999,22 @@ static uint8_t banks_take(void)
             break;
         }
     }
+    img_state = img_base == NO_BANK ? NO_BANK : esx_ide_bank_alloc(ESX_BANKTYPE_RAM);
     for (i = 0; i < n; i++) {
         b = img_taken[i];
         if (img_base == NO_BANK || b < img_base || b >= img_base + IMG_BANKS) esx_ide_bank_free(ESX_BANKTYPE_RAM, b);
     }
+    if (img_state == NO_BANK && img_base != NO_BANK) {
+        for (i = 0; i < IMG_BANKS; i++) esx_ide_bank_free(ESX_BANKTYPE_RAM, img_base + i);
+        img_base = NO_BANK;
+    }
     return img_base == NO_BANK;
+}
+
+// The palettes' bank in at WINDOW.
+static void pal_in(void)
+{
+    nr(0x53, img_state);
 }
 
 // The bank of the image's byte offset in WINDOW.
@@ -3028,11 +3050,13 @@ static void state_save(void)
     }
     saved_port = z80_inp(PORT_L2);
     nr(0x43, 0x50); // Layer 2's second palette, to read
+    pal_in();
     for (i = 0; i < 256; i++) {
         nr(0x40, i);
-        saved_pal[2 * i] = nr_get(0x41);
-        saved_pal[2 * i + 1] = nr_get(0x44);
+        SAVED_PAL[2 * i] = nr_get(0x41);
+        SAVED_PAL[2 * i + 1] = nr_get(0x44);
     }
+    bank_out();
 }
 
 // Writes Layer 2's second palette, two bytes an entry as NR 0x44 takes them.
@@ -3048,7 +3072,9 @@ static void state_restore(void)
 {
     uint8_t i;
     z80_outp(PORT_L2, saved_port);
-    pal_write(saved_pal);
+    pal_in();
+    pal_write(SAVED_PAL);
+    bank_out();
     clip_set(saved_clip[0], saved_clip[1], saved_clip[2], saved_clip[3]);
     for (i = 0; i < sizeof saved_regs; i++) nr(saved_regs[i], saved[i]);
     zx_border(BORDCR >> 3 & 7);
@@ -3064,13 +3090,14 @@ static void layer2_on(uint8_t hi)
         bank_in(i);
         memset((void *)WINDOW, 0, 8192);
     }
-    bank_out();
+    pal_in();
     for (i = 0; i < 256; i++) {
         g = hi ? (i & 15) >> 1 : i >> 5;
-        img_pal[2 * i] = g << 5 | g << 2 | g >> 1;
-        img_pal[2 * i + 1] = g & 1;
+        IMG_PAL[2 * i] = g << 5 | g << 2 | g >> 1;
+        IMG_PAL[2 * i + 1] = g & 1;
     }
-    pal_write(img_pal);
+    pal_write(IMG_PAL);
+    bank_out();
     nr(0x12, img_base >> 1);
     nr(0x70, hi ? 0x20 : 0x10);
     nr(0x16, 0);
@@ -3153,19 +3180,47 @@ static uint32_t img_crc(uint16_t pal_bytes)
         bank_in(i);
         crc_add_block((const uint8_t *)WINDOW, 8192);
     }
+    pal_in();
+    crc_add_block(IMG_PAL, pal_bytes);
     bank_out();
-    crc_add_block(img_pal, pal_bytes);
     return ~crc_state;
 }
 
-static int img_show(void)
+// The pixels and the palette as a tape: the Pi plays them as sound, which
+// NextReg 0xA2 bit 0 hands to EAR, in eleven blocks of the ROM's timings
+// (tape_block()), at 3.5 MHz. 0, or tape_block()'s failure.
+static uint8_t img_tape(uint16_t pal_bytes)
+{
+    uint8_t i, r = 0, a2 = nr_get(0xA2), cpu = nr_get(0x07);
+    nr(0xA2, a2 | 1);
+    nr(0x07, 0);
+    for (i = 0; !r && i <= IMG_BANKS; i++) {
+        tape_flag = i;
+        if (i < IMG_BANKS) {
+            bank_in(i);
+            tape_dst = (uint8_t *)WINDOW;
+            tape_len = 8192;
+        } else {
+            pal_in();
+            tape_dst = IMG_PAL;
+            tape_len = pal_bytes;
+        }
+        r = tape_block();
+    }
+    bank_out();
+    nr(0x07, cpu);
+    nr(0xA2, a2);
+    return r;
+}
+
+static int img_show(uint8_t tape)
 {
     uint32_t len, crc;
     uint16_t k, pal_bytes;
-    uint8_t err, hi, c;
+    uint8_t err, hi, c, t = 0;
     char *e;
     img_border = INK_RED;
-    if (command(s_image)) return 1;
+    if (command(tape ? s_image_tape : s_image)) return 1;
     for (;;) {
         err = img_line(60);
         if (err) return link_fail(err);
@@ -3193,10 +3248,18 @@ static int img_show(void)
     // Ready: the Pi sends the bytes now, as fast as the line goes.
     link_send('G');
     img_border = INK_BLUE;
-    err = img_pixels();
-    for (k = 0; !err && k < pal_bytes; k++) {
-        err = link_recv(&c, ANSWER_SECONDS);
-        img_pal[k] = c;
+    if (tape) {
+        err = 0;
+        t = img_tape(pal_bytes);
+        if (t) link_send(3); // the Pi stops playing, and says CBBOK
+    } else {
+        err = img_pixels();
+        for (k = 0; !err && k < pal_bytes; k++) {
+            err = link_recv(&c, ANSWER_SECONDS);
+            pal_in();
+            IMG_PAL[k] = c;
+        }
+        bank_out();
     }
     if (err || img_status()) {
         state_restore();
@@ -3204,15 +3267,21 @@ static int img_show(void)
         return err ? link_fail(err) : 1;
     }
     link_prompt();
+    if (t) {
+        state_restore();
+        banks_free();
+        return fail(t == 1 ? s_tape_stopped : s_damaged, 0);
+    }
     if (img_crc(pal_bytes) != crc) {
         state_restore();
         banks_free();
         return fail(s_damaged, s_crc);
     }
     // The colours, and the whole screen.
-    if (hi)
-        for (k = 32; k < 512; k++) img_pal[k] = 0;
-    pal_write(img_pal);
+    pal_in();
+    if (hi) memset(IMG_PAL + 32, 0, 480);
+    pal_write(IMG_PAL);
+    bank_out();
     clip_set(0, 159, 0, 255);
     in_wait_nokey();
     in_wait_key();
@@ -3289,7 +3358,7 @@ int show_run(void)
     img_base = NO_BANK;
     crc_table_make();
     if (img_open()) return 1;
-    err = strcmp(far_show_argv[0], "speed") == 0 ? img_speed() : img_show();
+    err = strcmp(far_show_argv[0], "speed") == 0 ? img_speed() : img_show(far_show_tape);
     zx_border(BORDCR >> 3 & 7);
     return img_close(err);
 }
@@ -3323,8 +3392,10 @@ static int run(int argc, char **argv)
         (strcmp(argv[i], "text") == 0 && argc - i >= 2)) {
         return far_cmd();
     }
-    if ((strcmp(argv[i], "show") == 0 || strcmp(argv[i], "speed") == 0) && argc - i == 1) {
+    if ((strcmp(argv[i], "show") == 0 || strcmp(argv[i], "speed") == 0) && argc - i == 1
+        || strcmp(argv[i], "show") == 0 && argc - i == 2 && strcmp(argv[i + 1], "-tape") == 0) {
         far_show_argv = argv + i;
+        far_show_tape = argc - i == 2;
         return far_show();
     }
     // NextPi has no network but the ESP's.

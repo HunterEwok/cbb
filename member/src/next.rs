@@ -17,7 +17,7 @@ use cbb_core::clip;
 use crate::error::{Context, Error, Result};
 use crate::{Global, control, request};
 
-const USAGE: &str = "usage: cbb next paste [-max bytes] | image [-mode auto|lo|hi] | speed <baud> <bytes> | copy [-secret] <len> <crc32> | check-list <file> | pair [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
+const USAGE: &str = "usage: cbb next paste [-max bytes] | image [-mode auto|lo|hi] [-tape] | speed <baud> <bytes> | copy [-secret] <len> <crc32> | check-list <file> | pair [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
 
 /// How long copy waits for the next byte from the Next.
 const READ_TIMEOUT_DECISECONDS: u8 = 100;
@@ -131,16 +131,23 @@ fn paste(g: &Global, args: &[String]) -> Result<()> {
 /// palette, then CR.
 fn image(g: &Global, args: &[String]) -> Result<()> {
     use crate::nextimage::{self, Mode};
-    let mode = match args {
-        [] => None,
-        [f, m] if crate::flag(f) == Some("mode") => match m.as_str() {
-            "auto" => None,
-            "lo" => Some(Mode::Lo),
-            "hi" => Some(Mode::Hi),
+    let (mut mode, mut tape, mut i) = (None, false, 0);
+    while i < args.len() {
+        match crate::flag(&args[i]) {
+            Some("tape") => tape = true,
+            Some("mode") => {
+                mode = match args.get(i + 1).map(String::as_str) {
+                    Some("auto") => None,
+                    Some("lo") => Some(Mode::Lo),
+                    Some("hi") => Some(Mode::Hi),
+                    _ => return Err(Error::msg(USAGE)),
+                };
+                i += 1;
+            }
             _ => return Err(Error::msg(USAGE)),
-        },
-        _ => return Err(Error::msg(USAGE)),
-    };
+        }
+        i += 1;
+    }
     let (kind, data) = latest_image(g)?;
     let img = nextimage::decode(&kind, &data)?;
     let f = nextimage::convert(&img, mode);
@@ -161,11 +168,124 @@ fn image(g: &Global, args: &[String]) -> Result<()> {
             Err(e) => return Err(Error::with("cannot read from the Next", e)),
         }
     }
+    if tape {
+        play_tape(&bytes)?;
+        out.write_all(b"\r").and_then(|_| out.flush()).context("cannot answer the Next")?;
+        return Ok(());
+    }
     out.write_all(&bytes)
         .and_then(|_| out.write_all(b"\r"))
         .and_then(|_| out.flush())
         .context("cannot write the image")?;
     Ok(())
+}
+
+/// The ROM's tape timings, in T-states at 3.5 MHz: the pilot's halves and
+/// how many in a data block, the sync's two, and a bit's two halves.
+const TAPE_PILOT: u32 = 2168;
+const TAPE_PILOT_HALVES: usize = 3223;
+const TAPE_SYNC: [u32; 2] = [667, 735];
+const TAPE_ZERO: u32 = 855;
+const TAPE_ONE: u32 = 1710;
+/// The sound's rate, and the silence between blocks, in samples.
+const TAPE_RATE: u64 = 44_100;
+const TAPE_GAP: usize = 22_050;
+
+/// The halves of a tape block as the ROM saves one: the pilot, the sync,
+/// the flag byte, the data and the XOR of all, each bit two halves, high
+/// bit first.
+pub fn tape_block(flag: u8, data: &[u8]) -> Vec<u32> {
+    let mut h = vec![TAPE_PILOT; TAPE_PILOT_HALVES];
+    h.extend(TAPE_SYNC);
+    let sum = data.iter().fold(flag, |s, &b| s ^ b);
+    for b in std::iter::once(flag).chain(data.iter().copied()).chain(std::iter::once(sum)) {
+        for bit in (0..8).rev() {
+            let t = if b >> bit & 1 == 1 { TAPE_ONE } else { TAPE_ZERO };
+            h.extend([t, t]);
+        }
+    }
+    h
+}
+
+/// The sound of halves, a square wave in 16-bit stereo samples; level and
+/// what is left of a sample (T-states times the rate) carry on.
+struct TapeSound {
+    high: bool,
+    t: u64,
+}
+
+impl TapeSound {
+    fn add(&mut self, halves: &[u32], out: &mut Vec<u8>) {
+        for &h in halves {
+            // T-states times the rate: samples until this half ends.
+            self.t += h as u64 * TAPE_RATE;
+            let n = self.t / 3_500_000;
+            self.t -= n * 3_500_000;
+            let v: i16 = if self.high { 20_000 } else { -20_000 };
+            for _ in 0..n {
+                out.extend(v.to_le_bytes());
+                out.extend(v.to_le_bytes());
+            }
+            self.high = !self.high;
+        }
+    }
+}
+
+/// `.cbb show -tape`: the image as a tape in eleven blocks, each of the
+/// Next's 8K banks with its index as the flag and the palette last,
+/// played through the Pi's sound, which the Next hands to EAR (NextReg
+/// 0xA2 bit 0); a byte 3 from the Next stops it. About 8 minutes.
+fn play_tape(bytes: &[u8]) -> Result<()> {
+    let mut player = std::process::Command::new("aplay")
+        .args(["-q", "-t", "raw", "-f", "S16_LE", "-c", "2", "-r", "44100", "-"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .context("the Pi cannot play sound (aplay)")?;
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    {
+        let stop = stop.clone();
+        std::thread::spawn(move || {
+            let mut b = [0u8];
+            while let Ok(1) = std::io::stdin().read(&mut b) {
+                if b[0] == 3 {
+                    stop.store(true, std::sync::atomic::Ordering::SeqCst);
+                    return;
+                }
+            }
+        });
+    }
+    let mut pipe = player.stdin.take().ok_or_else(|| Error::msg("the Pi cannot play sound"))?;
+    let mut sound = TapeSound { high: false, t: 0 };
+    // Half a second first, for the Next to start listening.
+    let mut buf = vec![0u8; TAPE_GAP * 4];
+    let res = (|| -> Result<()> {
+        for (i, block) in bytes.chunks(8192).enumerate() {
+            let halves = tape_block(i as u8, block);
+            for part in halves.chunks(4096) {
+                if stop.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(());
+                }
+                sound.add(part, &mut buf);
+                pipe.write_all(&buf).context("the Pi's sound stopped")?;
+                buf.clear();
+            }
+            let v: i16 = if sound.high { 20_000 } else { -20_000 };
+            for _ in 0..TAPE_GAP {
+                buf.extend(v.to_le_bytes());
+                buf.extend(v.to_le_bytes());
+            }
+        }
+        pipe.write_all(&buf).context("the Pi's sound stopped")?;
+        Ok(())
+    })();
+    drop(pipe);
+    if stop.load(std::sync::atomic::Ordering::SeqCst) {
+        let _ = player.kill();
+    }
+    let _ = player.wait();
+    res
 }
 
 /// The speeds `cbb next speed` takes, as termios names them.
@@ -489,6 +609,29 @@ impl Drop for RawTerminal {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A tape block: 3223 pilot halves, the sync, then flag, data and XOR,
+    /// two equal halves a bit; its sound keeps to 44.1 kHz without drift.
+    #[test]
+    fn tape_blocks_as_the_rom_saves_them() {
+        let h = tape_block(7, &[0x80, 0x01]);
+        assert_eq!(h.len(), 3223 + 2 + 4 * 16);
+        assert!(h[..3223].iter().all(|&t| t == 2168));
+        assert_eq!(&h[3223..3225], &[667, 735]);
+        let bits: Vec<u8> = h[3225..]
+            .chunks(2)
+            .map(|p| {
+                assert_eq!(p[0], p[1]);
+                (p[0] == 1710) as u8
+            })
+            .collect();
+        let bytes: Vec<u8> = bits.chunks(8).map(|b| b.iter().fold(0, |a, &x| a << 1 | x)).collect();
+        assert_eq!(bytes, [7, 0x80, 0x01, 7 ^ 0x80 ^ 0x01]);
+        let mut out = Vec::new();
+        let mut s = TapeSound { high: false, t: 0 };
+        s.add(&vec![3500; 1000], &mut out); // a second in all
+        assert!((44_099..=44_100).contains(&(out.len() / 4)), "{}", out.len() / 4);
+    }
 
     #[test]
     fn speed_bytes_are_fixed() {
