@@ -766,6 +766,8 @@ jobs:
           systemd-analyze security --offline=true packaging/linux/cbb.service --threshold=30 # 3.0 on the scale it prints
           systemd-analyze verify member/packaging/cbb.service
           for u in cbb-forward cbb-relay; do
+            CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/$u" "./cmd/$u"
+            sudo install -m 0755 "$RUNNER_TEMP/$u" "/usr/local/bin/$u"
             systemd-analyze verify "packaging/linux/$u.service"
             systemd-analyze security --offline=true "packaging/linux/$u.service" --threshold=20
           done
