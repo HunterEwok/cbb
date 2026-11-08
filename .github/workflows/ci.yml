@@ -2068,6 +2068,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross swtpm
           echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
+      - name: cargo check on the oldest Rust the crates declare (rust-version)
+        # Every crate of the workspace declares 1.95; the lock file must build there.
+        run: |
+          rustup toolchain install 1.95 --profile minimal
+          cargo +1.95 check --locked --workspace
       - name: cargo fmt
         run: cargo fmt --all --check
       - name: cargo clippy

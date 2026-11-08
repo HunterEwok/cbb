@@ -253,10 +253,10 @@ fn ru(c: char) -> Option<Key> {
     }
     // A capital: the small letter's key with Shift.
     let mut lower = c.to_lowercase();
-    if let (Some(l), None) = (lower.next(), lower.next()) {
-        if let Some(&(_, u)) = RU_LETTERS.iter().find(|&&(r, _)| r == l && l != c) {
-            return Some(Key::shift(u));
-        }
+    if let (Some(l), None) = (lower.next(), lower.next())
+        && let Some(&(_, u)) = RU_LETTERS.iter().find(|&&(r, _)| r == l && l != c)
+    {
+        return Some(Key::shift(u));
     }
     Some(match c {
         '!' => Key::shift(0x1e),

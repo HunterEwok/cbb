@@ -1280,6 +1280,8 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- Building the Rust crates needs Rust 1.95 or later: `core` and `embassy` declared 1.87, which
+  no build checked, and CI now checks the workspace on 1.95.
 - The Rust code is one workspace at the top of the repository: the core in `core/`, the
   member's program `cbb` in `member/`, and `ffi/`, `embassy/`, `esp32/`, `ring-shim/` and
   `wasm/` beside them, instead of all under `lite/`. Nothing changes for an installed member.

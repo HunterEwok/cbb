@@ -289,10 +289,10 @@ pub fn parse_endpoint(s: &str) -> Option<SocketAddr> {
     if a.port() == 0 || a.to_string() != s {
         return None;
     }
-    if let SocketAddr::V6(v6) = a {
-        if v6.scope_id() != 0 || v6.flowinfo() != 0 {
-            return None;
-        }
+    if let SocketAddr::V6(v6) = a
+        && (v6.scope_id() != 0 || v6.flowinfo() != 0)
+    {
+        return None;
     }
     Some(a)
 }
