@@ -6,6 +6,8 @@ package service
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -16,11 +18,25 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 )
 
-// fakeRunner records the presets it ran, and refuses those in refuse.
+// fakeRunner records the presets it ran, and refuses those in refuse: the
+// Go service's runner, and the Rust service's through the folder dir that
+// CBB_TEST_ACTIONS names (member/src/actions.rs).
 type fakeRunner struct {
 	mu     sync.Mutex
 	ran    []string
 	refuse map[string]string
+	dir    string
+}
+
+func newFakeRunner(t *testing.T, refuse map[string]string) *fakeRunner {
+	t.Helper()
+	r := &fakeRunner{refuse: refuse, dir: t.TempDir()}
+	for name, reason := range refuse {
+		if err := os.WriteFile(filepath.Join(r.dir, "refuse-"+name), []byte(reason), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return r
 }
 
 func (r *fakeRunner) Run(_ context.Context, name string) error {
@@ -33,17 +49,24 @@ func (r *fakeRunner) Run(_ context.Context, name string) error {
 	return nil
 }
 
+// env is the Rust service's environment for the runner.
+func (r *fakeRunner) env() string { return "CBB_TEST_ACTIONS=" + r.dir }
+
 func (r *fakeRunner) took() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return append([]string(nil), r.ran...)
+	ran := append([]string(nil), r.ran...)
+	if data, err := os.ReadFile(filepath.Join(r.dir, "ran")); err == nil {
+		ran = append(ran, strings.Fields(string(data))...)
+	}
+	return ran
 }
 
 func TestQuickActions(t *testing.T) {
 	var h hub
-	runner := &fakeRunner{refuse: map[string]string{actions.Sleep: "the session is locked"}}
+	runner := newFakeRunner(t, map[string]string{actions.Sleep: "the session is locked"})
 	pi := startService(t, &h, "pi")
-	deck := startWith(t, &h, "deck", "linux", func(c *Config) { c.runner = runner })
+	deck := startEnv(t, &h, "deck", func(c *Config) { c.runner = runner }, runner.env())
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 	run := func(name string) error {

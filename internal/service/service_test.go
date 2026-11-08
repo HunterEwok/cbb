@@ -2105,8 +2105,9 @@ func startRust(t *testing.T, bin string, s *testService) *testService {
 	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir()}, s.env...)
 	r := startLiteEnv(t, bin, s.dir, env, "-full", "-port", "0", "-name", s.name)
 	r.name, r.os, r.rust, r.cfg, r.env = s.name, s.os, true, s.cfg, s.env
-	// It ends with an error after cbb leave, for systemd to start it again,
-	// where Go's Run returns ErrLeft.
+	// It ends with an error after cbb leave or an admin's restart, for
+	// systemd to start it again, where Go's Run returns ErrLeft or
+	// ErrRestart.
 	inner := r.done
 	r.done = make(chan error, 1)
 	go func() {
@@ -2115,6 +2116,9 @@ func startRust(t *testing.T, bin string, s *testService) *testService {
 		for _, l := range r.lines {
 			if err != nil && strings.Contains(l, "restarting after leaving the group") {
 				err = ErrLeft
+			}
+			if err != nil && strings.Contains(l, "restarting at an admin's request") {
+				err = ErrRestart
 			}
 		}
 		r.logMu.Unlock()

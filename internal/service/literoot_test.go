@@ -52,6 +52,10 @@ func adminOn(t *testing.T, cli string, root *testService, name string) {
 // Rust service.
 func goCLI(t *testing.T) string {
 	t.Helper()
+	// Where the tests run the Rust service, its command line too.
+	if bin := rustService(); bin != "" {
+		return bin
+	}
 	cli := filepath.Join(t.TempDir(), "cbb")
 	if out, err := exec.Command("go", "build", "-o", cli, "github.com/HunterEwok/cbb/cmd/cbb").CombinedOutput(); err != nil {
 		t.Fatalf("go build cbb: %v\n%s", err, out)

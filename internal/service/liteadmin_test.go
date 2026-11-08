@@ -41,9 +41,9 @@ func TestLiteAdminCommands(t *testing.T) {
 	bin := liteBin(t)
 	cli := goCLI(t)
 	var h hub
-	runner := &fakeRunner{}
+	runner := newFakeRunner(t, nil)
 	desk := startService(t, &h, "desk")
-	deck := startWith(t, &h, "deck", "linux", func(c *Config) { c.runner = runner })
+	deck := startEnv(t, &h, "deck", func(c *Config) { c.runner = runner }, runner.env())
 	pairWith(t, desk, deck)
 	dir := joinFull(t, bin, desk)
 	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", deck.addr())
