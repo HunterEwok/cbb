@@ -4,6 +4,7 @@
 package service
 
 import (
+	"bufio"
 	"errors"
 	"os/exec"
 	"slices"
@@ -65,7 +66,36 @@ func TestRustCommandLine(t *testing.T) {
 	misuse("takeover", "-delay")
 
 	deck := startService(t, &h, "deck")
-	pairWith(t, pi, deck)
+	misuse("pair", "-now")
+	pair := exec.Command(bin, "-state", pi.dir, "-socket", pi.socket, "pair")
+	stdout, err := pair.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pair.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { pair.Process.Kill(); pair.Wait() })
+	lines := bufio.NewScanner(stdout)
+	var code string
+	for code == "" && lines.Scan() {
+		if c, ok := strings.CutPrefix(lines.Text(), "Pairing code: "); ok {
+			code = strings.ReplaceAll(c, " ", "")
+		}
+	}
+	if len(code) != 6 {
+		t.Fatalf("cbb pair showed no code: %v", lines.Err())
+	}
+	if _, err := deck.do(t, control.Header{Op: control.OpJoin, Code: code}, ""); err != nil {
+		t.Fatalf("join on deck: %v", err)
+	}
+	var rest strings.Builder
+	for lines.Scan() {
+		rest.WriteString(lines.Text() + "\n")
+	}
+	if err := pair.Wait(); err != nil || !strings.Contains(rest.String(), "deck joined the group.") {
+		t.Fatalf("cbb pair ended with %v: %s", err, rest.String())
+	}
 	misuse("rename", "deck")
 	want("Renamed deck to desk", "rename", "deck", "desk")
 	waitFor(t, "the root lists desk", func() bool {

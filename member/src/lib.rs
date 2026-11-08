@@ -12,6 +12,7 @@
 
 mod actions;
 mod admin;
+mod admit_cli;
 mod agent;
 #[cfg(feature = "tunnel")]
 mod away;
@@ -104,6 +105,13 @@ Commands:
                        goes on.
   pair -full ...       Join as a computer with the service, a full member
                        that may become an admin, rather than a lite member.
+  pair [-admin]        In a group, on its root or an admin: show a code for a
+                       new computer, or with -admin for a phone that becomes
+                       an admin.
+  pair -qr [-admin]    In a group: admit the device that shows a code and
+                       waits; type its code, or paste its QR code's text.
+  invite [-for 1h] [-o file]
+                       Invite a device from afar: run on the group's hub.
   agent                Link this session's clipboard with the service
                        (started at sign-in), through cbb-helper.
   service [-name name] [-port port] [-peer host:port]... [-no-mdns]
@@ -168,8 +176,9 @@ Commands:
   version              Print the version and that this is the lite member.
   help                 Print this help.
 
-This is the lite member: the commands of a full member, such as invite or
-remove, are not here, and pair only joins a group. The state directory is
+The commands that change the group (new, remove, rename, admin, takeover,
+keys, incoming, handover, freeze, unfreeze, resolve, mute, unmute, config,
+network, global hubs) work as on the Go cbb. The state directory is
 /var/lib/cbb (CBB_STATE), the control socket /run/cbb/control.sock
 (CBB_SOCKET); on OpenWrt /etc/cbb/state and
 /var/run/cbb/control.sock; installed without root (install.sh
@@ -180,7 +189,7 @@ port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the
 
 /// The commands of a full member (cmd/cbb) that the lite member does not
 /// have, so that it says so instead of "unknown command".
-const FULL_ONLY: &[&str] = &["invite", "forward", "relay"];
+const FULL_ONLY: &[&str] = &["forward", "relay"];
 
 /// Reports whether this is an OpenWrt router, whose /var is in RAM and
 /// which keeps /etc across upgrades.
@@ -227,7 +236,9 @@ pub fn main() {
         Some(cmd) => {
             let rest = &args[1..];
             let res = match cmd {
+                "pair" if in_group(&g) => admit_cli::pair(&g, rest),
                 "pair" => join(&g, rest, false),
+                "invite" => admit_cli::invite(&g, rest),
                 "next" => std::process::exit(next::run(&g, rest)),
                 "service" => cmd_service(&g, rest),
                 "agent" if rest.is_empty() => agent::run(&g.socket),
@@ -659,9 +670,26 @@ fn hint(systemd: bool, systemctl: &str) -> String {
     }
 }
 
+/// Whether the service runs in a group: cbb pair then admits a device
+/// rather than joining.
+fn in_group(g: &Global) -> bool {
+    request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))
+        .is_ok_and(|m| m.header.status.is_some_and(|s| !s.group.is_empty()))
+}
+
 /// Sends one request to the service and returns its answer.
 pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
-    let conn = if control::needs_admin(&m.header) {
+    let conn = open(g, &m.header)?;
+    let mut w = conn.try_clone().context("cannot reach the service")?;
+    control::write(&mut w, m)?;
+    let answer = control::Reader::new(conn).read()?.ok_or_else(|| Error::msg("the service closed the connection"))?;
+    check(answer)
+}
+
+/// Connects to the socket for a request with the header h: the
+/// administrator's for what changes the group, the control socket else.
+pub(crate) fn open(g: &Global, h: &control::Header) -> Result<UnixStream> {
+    Ok(if control::needs_admin(h) {
         let path = control::admin_socket(&g.socket);
         match UnixStream::connect(&path) {
             Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
@@ -675,14 +703,10 @@ pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Messa
         }
     } else {
         connect(g)?
-    };
-    let mut w = conn.try_clone().context("cannot reach the service")?;
-    control::write(&mut w, m)?;
-    let answer = control::Reader::new(conn).read()?.ok_or_else(|| Error::msg("the service closed the connection"))?;
-    check(answer)
+    })
 }
 
-fn check(m: control::Message) -> Result<control::Message> {
+pub(crate) fn check(m: control::Message) -> Result<control::Message> {
     if m.header.error.is_empty() {
         return Ok(m);
     }
