@@ -1528,6 +1528,11 @@ impl Service {
         if targets.is_empty() {
             res.reason = if console && !set.console {
                 "only a text console is here, and its user did not allow consoles (sudo cbb paste-receive on -console)"
+            } else if cfg!(target_os = "macos") {
+                // Only the app pastes on a Mac, as Go's: macOS lets an app
+                // press keys once its user allowed it in Accessibility, and
+                // the service and its agent are not apps.
+                "a Mac pastes through the CBB app, and it is not open here; its user opens it and allows it in System Settings, Privacy & Security, Accessibility"
             } else {
                 "nothing on this device can paste: no tmux or console helper of CBB, nor cbb next link, runs here"
             }
