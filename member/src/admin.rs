@@ -90,6 +90,26 @@ pub fn signer(dir: &Path, ident: &Identity) -> Result<Option<Signing>> {
     Ok(Some(Signing { ca: Cert::parse(&ca)?, key, root: false }))
 }
 
+/// Renews the certificates that are due on the group's root or an admin
+/// (Node::renew_due), as Go's renewLoop: this member's own and those of the
+/// members connected; nothing on another member or a frozen admin.
+pub fn renew_certificates(dir: &Path, node: &Node) {
+    let ident = node.identity();
+    let s = match signer(dir, &ident) {
+        Ok(Some(s)) => s,
+        Ok(None) => return,
+        Err(e) => return node.logf(&format!("cbb: renewing the certificates: {}", e.for_log())),
+    };
+    if !s.root && node.records().lock().unwrap().frozen(&s.ca.key_hash()) {
+        return;
+    }
+    let me = ident.id.to_string();
+    let signer = cbb_core::manage::Signer { ca: &s.ca, key: &*s.key, me: &me };
+    if let Err(e) = node.renew_due(&signer) {
+        node.logf(&format!("cbb: renewing the certificates: {}", e.for_log()));
+    }
+}
+
 /// The name of this system in a device record and a hello.
 pub fn os_name() -> &'static str {
     match std::env::consts::OS {

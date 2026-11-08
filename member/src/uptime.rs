@@ -21,10 +21,10 @@ pub fn wall_ms() -> i64 {
 
 /// The milliseconds the Go service's tests move this service's wall clock
 /// by, as the Go service's Config.now: the number in the file that
-/// CBB_TEST_CLOCK names, read each time, so that a test can move the clock
+/// CBB_TEST_AHEAD_FILE names, read each time, so that a test can move the clock
 /// while the service runs; 0 without it, as a release runs.
 fn test_offset_ms() -> i64 {
     static FILE: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
-    let Some(file) = FILE.get_or_init(|| std::env::var_os("CBB_TEST_CLOCK").map(Into::into)) else { return 0 };
+    let Some(file) = FILE.get_or_init(|| std::env::var_os("CBB_TEST_AHEAD_FILE").map(Into::into)) else { return 0 };
     std::fs::read_to_string(file).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0)
 }

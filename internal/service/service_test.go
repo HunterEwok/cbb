@@ -899,13 +899,13 @@ func TestMac(t *testing.T) {
 
 func TestRenewal(t *testing.T) {
 	// Eighteen months after pairing, the pi renews its own certificates
-	// when it starts and the Mac's when the Mac connects; both keep them.
+	// when it starts and the deck's when the deck connects; both keep them.
 	var h hub
 	pi := startService(t, &h, "pi")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
-	pairWith(t, pi, mac)
+	deck := startService(t, &h, "deck")
+	pairWith(t, pi, deck)
 	before := map[string]*group.Identity{}
-	for _, s := range []*testService{pi, mac} {
+	for _, s := range []*testService{pi, deck} {
 		s.stop()
 		id, err := group.Load(s.dir)
 		if err != nil {
@@ -913,19 +913,21 @@ func TestRenewal(t *testing.T) {
 		}
 		before[s.name] = id
 	}
-	later := func(c *Config) { c.now = func() time.Time { return time.Now().AddDate(1, 6, 0) } }
-	pi.cfg, mac.cfg = later, later
-	pi, mac = restartService(t, &h, pi), restartService(t, &h, mac)
-	for _, s := range []*testService{pi, mac} {
+	clock := newTestClock(t, 548*24*time.Hour)
+	later := func(c *Config) { c.now = clock.now }
+	pi.cfg, deck.cfg = later, later
+	pi.env, deck.env = []string{clock.env()}, []string{clock.env()}
+	pi, deck = restartService(t, &h, pi), restartService(t, &h, deck)
+	for _, s := range []*testService{pi, deck} {
 		waitFor(t, s.name+" keeps a renewed certificate", func() bool {
 			id, err := group.Load(s.dir)
 			return err == nil && id.Cert.NotAfter.After(before[s.name].Cert.NotAfter.AddDate(1, 0, 0))
 		})
 	}
 	// The renewed certificates work: the members connect again.
-	mac.stop()
-	mac = restartService(t, &h, mac)
-	waitFor(t, "connected with the renewed certificates", func() bool { return len(mac.status(t).Peers) == 1 })
+	deck.stop()
+	deck = restartService(t, &h, deck)
+	waitFor(t, "connected with the renewed certificates", func() bool { return len(deck.status(t).Peers) == 1 })
 }
 
 func TestMacCreatesAGroup(t *testing.T) {
@@ -2065,17 +2067,10 @@ func TestPairingAcrossARenewal(t *testing.T) {
 	every := renewEvery
 	renewEvery = 200 * time.Millisecond
 	t.Cleanup(func() { renewEvery = every })
-	var ahead atomic.Bool
+	clock := newTestClock(t, 0)
 	var h hub
 	pi := startService(t, &h, "pi")
-	pi.cfg = func(c *Config) {
-		c.now = func() time.Time {
-			if ahead.Load() {
-				return time.Now().AddDate(1, 6, 0)
-			}
-			return time.Now()
-		}
-	}
+	pi.cfg, pi.env = func(c *Config) { c.now = clock.now }, []string{clock.env()}
 	pi.stop()
 	pi = restartService(t, &h, pi)
 	b := startService(t, &h, "b")
@@ -2085,7 +2080,7 @@ func TestPairingAcrossARenewal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ahead.Store(true)
+	clock.set(t, 548*24*time.Hour)
 	waitFor(t, "the pi renews its certificate", func() bool {
 		id, err := group.Load(pi.dir)
 		return err == nil && !id.Cert.Equal(before.Cert)
@@ -2102,7 +2097,7 @@ func TestPairingAcrossARenewal(t *testing.T) {
 // of its own, which addr reads from its log once it is in a group.
 func startRust(t *testing.T, bin string, s *testService) *testService {
 	t.Helper()
-	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir()}, s.env...)
+	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir(), fmt.Sprintf("CBB_TEST_RENEW_EVERY=%d", renewEvery.Milliseconds())}, s.env...)
 	r := startLiteEnv(t, bin, s.dir, env, "-full", "-port", "0", "-name", s.name)
 	r.name, r.os, r.rust, r.cfg, r.env = s.name, s.os, true, s.cfg, s.env
 	// It ends with an error after cbb leave or an admin's restart, for
@@ -2128,7 +2123,7 @@ func startRust(t *testing.T, bin string, s *testService) *testService {
 }
 
 // testClock moves a service's wall clock: the Go service's Config.now,
-// and the Rust service's through the file CBB_TEST_CLOCK names, which it
+// and the Rust service's through the file CBB_TEST_AHEAD_FILE names, which it
 // reads each time, so that a test can move it while the service runs.
 type testClock struct {
 	file  string
@@ -2154,4 +2149,4 @@ func (c *testClock) set(t *testing.T, ahead time.Duration) {
 func (c *testClock) now() time.Time { return time.Now().Add(time.Duration(c.ahead.Load())) }
 
 // env is the Rust service's environment for the clock.
-func (c *testClock) env() string { return "CBB_TEST_CLOCK=" + c.file }
+func (c *testClock) env() string { return "CBB_TEST_AHEAD_FILE=" + c.file }

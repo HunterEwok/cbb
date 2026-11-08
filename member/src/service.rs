@@ -560,7 +560,15 @@ pub fn run(cfg: Config) -> Result<()> {
             // A root's resolve may have voided both histories of this
             // device's key: what it signed is signed again (signed.rs).
             let mut resign_seen = String::new();
+            // Certificates are renewed at the start, when a member connects
+            // and twice a day, as Go's renewLoop.
+            let (mut renew_peers, mut renew_at, every) = (None, std::time::Instant::now(), renew_every());
             while !node.is_closed() {
+                let peers: Vec<_> = node.peer_chains().into_iter().map(|(id, _)| id).collect();
+                if renew_peers.as_ref() != Some(&peers) || renew_at.elapsed() >= every {
+                    crate::admin::renew_certificates(&dir, &node);
+                    (renew_peers, renew_at) = (Some(peers), std::time::Instant::now());
+                }
                 let digest = node.records().lock().unwrap().digest();
                 if digest != resign_seen {
                     resign_seen = digest;
@@ -625,12 +633,18 @@ pub fn run(cfg: Config) -> Result<()> {
     Ok(())
 }
 
-/// How this member presents itself in its hellos: as a computer with the
-/// service (`full`) when its own device record says so, as the group's
-/// root on a computer made it; as a lite member otherwise. Its keys are in
-/// the hardware when cbb-helper holds the device key.
 /// How often the claims to take the group over are looked at again.
 const CLAIM_CHECK: Duration = Duration::from_secs(2);
+/// How often the root and the admins check whether certificates are due
+/// for renewal besides when a member connects: the renewal periods are
+/// months long, so twice a day is plenty, as Go's renewEvery. The Go
+/// service's tests shorten it with CBB_TEST_RENEW_EVERY (milliseconds).
+fn renew_every() -> Duration {
+    std::env::var("CBB_TEST_RENEW_EVERY")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map_or(Duration::from_secs(12 * 3600), Duration::from_millis)
+}
 /// How often the server credentials are looked at when nothing changed, as
 /// Go's renewEvery.
 const CREDENTIAL_CHECK: Duration = Duration::from_secs(12 * 3600);

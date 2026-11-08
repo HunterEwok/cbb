@@ -670,6 +670,39 @@ impl Node {
         conns.values().filter(|c| !c.records_only).map(|c| (c.id.clone(), c.chain.clone())).collect()
     }
 
+    /// Renews the member certificates that are due, as an admin with the
+    /// signer s, as Go's renew and the phone kits' renewal: each connected
+    /// member's, sent to it, and this member's own, kept. It returns how
+    /// many it renewed.
+    pub fn renew_due(&self, s: &cbb_core::manage::Signer) -> Result<usize> {
+        let now = uptime::wall_ms() / 1000;
+        let ident = self.identity();
+        let mut roots = self.records.lock().unwrap().roots();
+        if roots.is_empty() {
+            roots.push(ident.root().clone());
+        }
+        let issuer = (!roots.iter().any(|r| r == s.ca)).then(|| s.ca.der.clone());
+        let mut n = 0;
+        for (to, chain) in self.peer_chains() {
+            match cbb_core::manage::renewal(&chain, &roots, s, now) {
+                Ok(Some(cert)) => {
+                    if self.send_to(&to, wire::cert(&cert, issuer.as_deref())) {
+                        self.logf(&format!("cbb: renewed the certificate of {to}"));
+                        n += 1;
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => self.logf(&format!("cbb: renewing the certificate of {to}: {}", e.for_log())),
+            }
+        }
+        let own: Vec<_> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
+        if let Some(cert) = cbb_core::manage::renewal(&own, &roots, s, now)? {
+            self.renewed(&cert, issuer.as_deref())?;
+            n += 1;
+        }
+        Ok(n)
+    }
+
     /// Whether this device's newest record makes it a hub that only passes
     /// copies on: it makes no copies, and takes no paste or action command
     /// (docs/protocol.md, section 11, "Two kinds of hub").
