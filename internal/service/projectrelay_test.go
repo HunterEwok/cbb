@@ -69,7 +69,7 @@ func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, 
 func TestProjectRelayNewKey(t *testing.T) {
 	signer := newReleaseSigner(t)
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", func(c *Config) {
+	pi := startEnv(t, &h, "pi", func(c *Config) {
 		c.ReleaseRoots = signer.roots(t)
 		c.lookupIP = func(_ context.Context, host string) ([]netip.Addr, error) {
 			if host == "relay.example.org" {
@@ -77,7 +77,7 @@ func TestProjectRelayNewKey(t *testing.T) {
 			}
 			return nil, errors.New("tests look up no other names")
 		}
-	})
+	}, signer.rootsEnv(t), "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	group := pi.status(t).Group
