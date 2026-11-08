@@ -144,7 +144,7 @@ fn decode_jpeg(data: &[u8]) -> Result<Rgb> {
     if buf.len() < w * h * 3 {
         return Err(Error::msg("the JPEG image is damaged"));
     }
-    let pixels = buf.chunks_exact(3).take(w * h).map(|p| [p[0], p[1], p[2]]).collect();
+    let pixels = buf.as_chunks::<3>().0.iter().take(w * h).copied().collect();
     Ok(Rgb { width: w, height: h, pixels })
 }
 
