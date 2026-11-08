@@ -253,7 +253,10 @@ impl Identity {
         Ok(next)
     }
 
-    fn with_cert_any_end(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<Identity> {
+    /// Returns the identity with a member certificate issued again for it,
+    /// as with_cert_from checks it, whatever its end: the one from a new
+    /// admin CA may be issued in the same second as the current one.
+    pub fn with_cert_any_end(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<Identity> {
         let mut next = self.clone();
         next.cert = Cert::parse(der).wrap("the renewed certificate")?;
         if let Some(i) = issuer {

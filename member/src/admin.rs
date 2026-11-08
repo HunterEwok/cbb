@@ -290,11 +290,14 @@ pub fn become_admin(dir: &Path, node: &Node, der: &[u8]) -> Result<()> {
     let cert = cbb_core::issue::member(&ident.id, ident.cert.public_key(), &ca, now, &mut |tbs| {
         identity::sign_external(&*key, tbs)
     })?;
-    ident.with_cert_from(&cert, Some(der))?;
+    // The certificate from the admin CA replaces the member's own, which
+    // may have been issued in the same second, as right after joining: it
+    // need not end later, as Go's becomeAdmin asks nothing of its end.
+    ident.with_cert_any_end(&cert, Some(der))?;
     let mut fields = serde_json::Map::new();
     fields.insert("admin_ca".into(), b64_value(der));
     identity::save_with(&ident, dir, fields)?;
-    node.renewed(&cert, Some(der))?;
+    node.reissued(&cert, Some(der))?;
     node.offer_admin_key(None);
     node.logf(if renewed {
         "cbb: the group's root renewed this admin's CA, for the same key"

@@ -299,6 +299,10 @@ func TestWantedReleaseFiles(t *testing.T) {
 	signer := newReleaseSigner(t)
 	var h hub
 	pi := startEnv(t, &h, "pi", func(c *Config) { c.ReleaseRoots = signer.roots(t) }, signer.rootsEnv(t))
+	// The Rust service takes releases in a group only.
+	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pi.do(t, control.Header{Op: control.OpRelease}, releaseJSON(t, signer.sign(t, "0.6.1", 2))); err != nil {
 		t.Fatal(err)
 	}

@@ -1997,6 +1997,13 @@ impl Node {
         self.take_cert(self.identity().with_cert_from(der, issuer)?)
     }
 
+    /// Takes a member certificate issued again for this device that need
+    /// not end later than the current one, as the one from its new admin
+    /// CA (admin::become_admin).
+    pub fn reissued(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<()> {
+        self.take_cert(self.identity().with_cert_any_end(der, issuer)?)
+    }
+
     /// Takes the member certificate that this device, whose claim made it
     /// the group's root, issued itself from the new root.
     pub fn took_over(&self, der: &[u8]) -> Result<()> {
