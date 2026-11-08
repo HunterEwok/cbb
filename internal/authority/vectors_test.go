@@ -30,7 +30,7 @@ const (
 )
 
 // flooded are the scenarios whose cases go to floodPath.
-var flooded = map[string]bool{"record limit": true}
+var flooded = map[string]bool{"record limit": true, "checkpoint edges": true}
 
 // vectorFile is testdata/interop/v2-records.json: record sets of version 2
 // with the state every implementation must give for them, byte for byte,
