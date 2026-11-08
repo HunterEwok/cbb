@@ -360,6 +360,68 @@ pub(crate) fn new(g: &Global, args: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// The most cbb recovery reads: the QR code's text with its admin CA fits
+/// well within it, as the core's own limit.
+const MAX_SHEET_TEXT: usize = 4096;
+
+/// One line of standard input without echo where it is a terminal, at most
+/// limit bytes, trimmed, as Go's readSecretLine.
+fn read_secret_line(limit: usize) -> Result<String> {
+    use std::io::{BufRead, Read};
+    let _quiet = crate::sys::NoEcho::new();
+    let mut line = String::new();
+    std::io::stdin()
+        .lock()
+        .take(limit as u64 + 1)
+        .read_line(&mut line)
+        .map_err(|e| Error::with("cannot read standard input", e))?;
+    if line.trim_end_matches(['\r', '\n']).len() > limit {
+        return Err(Error::msg(format!("that is longer than {limit} characters")));
+    }
+    Ok(line.trim().to_string())
+}
+
+/// cbb recovery: claims the group with its recovery key, typed from the
+/// sheet or its QR code's text, or on a YubiKey with -yubikey, as Go's
+/// cmdRecovery. The key comes from standard input, never the command line.
+pub(crate) fn recovery(g: &Global, args: &[String]) -> Result<()> {
+    use std::io::IsTerminal;
+    let mut h = Header { kind: "secret".into(), ..header("recovery") };
+    match args {
+        [] => {}
+        [a] if flag(a) == Some("yubikey") => h.name = "yubikey".into(),
+        _ => {
+            return Err(usage(
+                "cbb recovery [-yubikey], then type the recovery key from the sheet (or paste its QR code's text), or with -yubikey the YubiKey's PIN; cbb status shows the claim",
+            ));
+        }
+    }
+    let terminal = std::io::stdin().is_terminal();
+    let card = h.name == "yubikey";
+    if terminal {
+        if card {
+            eprint!("Plug in the YubiKey with the group's recovery key, then type its PIN and press Enter: ");
+        } else {
+            eprintln!(
+                "Type the recovery key from the sheet, in groups of four, or paste the text of its QR code, then press Enter (it does not show):"
+            );
+        }
+    }
+    let text = read_secret_line(if card { 64 } else { MAX_SHEET_TEXT })?;
+    if text.is_empty() {
+        return Err(usage(if card { "no PIN was typed" } else { "no recovery key was typed" }));
+    }
+    if card && terminal {
+        eprintln!("Touch the YubiKey when it blinks.");
+    }
+    request(g, &Message::new(h, text.into_bytes()))?;
+    println!(
+        "Claimed the group with its recovery key. This device becomes the group's root when the waiting time ends (72 hours unless the root set another), unless the root phone cancels the claim; cbb status shows the time left."
+    );
+    println!("Then a new phone joins it (cbb pair -admin), and cbb handover gives that phone the group at once.");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

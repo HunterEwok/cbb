@@ -66,6 +66,7 @@ func TestRustCommandLine(t *testing.T) {
 	want("This network is one where the group is now", "network")
 	want("now waits 48h on each member", "takeover", "-delay", "48h")
 	misuse("takeover", "-delay")
+	misuse("recovery", "now")
 
 	want("This device is the remote of no TV", "remote")
 	misuse("remote", "-tv", "x", "add", "10.0.0.5")

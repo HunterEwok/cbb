@@ -242,6 +242,7 @@ pub fn main() {
                 "pair" => join(&g, rest, false),
                 "invite" => admit_cli::invite(&g, rest),
                 "keyboard" => devices_cli::keyboard(&g, rest),
+                "recovery" => cli::recovery(&g, rest),
                 "remote" => devices_cli::remote(&g, rest),
                 "next" => std::process::exit(next::run(&g, rest)),
                 "service" => cmd_service(&g, rest),
