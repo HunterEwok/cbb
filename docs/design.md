@@ -167,6 +167,14 @@ ends, the Go service described below is still the computers' member.
   which goes to `cbb`'s log. No socket or pipe has a name, so no other process can ask the
   helper for anything, and above all for a signature with a device's key. Started by hand,
   on a terminal or with arguments, the helper refuses to run.
+- **Checked before it starts.** The helper signs with the device's keys, so `cbb` trusts
+  it no less than itself: on Unix the program, its links followed, and its folder belong
+  to root, to `cbb`'s user or to the owner of `cbb`'s own program, and neither group nor
+  others may write to them (`cbb`'s own folder counts as trusted); on Windows the
+  installer's Program Files folder stands for that. The helper gets only the environment
+  it needs: the variables that start with `CBB_` and a short list for Go, PC/SC, D-Bus
+  and Windows. A release of `cbb` takes only the helper of the same release, which its
+  hello names; a build that is not a release takes any.
 - **Messages.** The control socket's: a JSON header on one line, then `len` bytes of
   payload (docs/protocol.md, section 8). A request carries a `seq` of `cbb`'s own; the
   helper answers it with op `reply`, the same `seq` and `done`, or with `error` and, in

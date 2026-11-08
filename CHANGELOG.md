@@ -9,7 +9,8 @@ All notable changes to cbb are documented in this file. The format follows
 ### Added
 - `cbb-helper`, the Go helper of the Rust program `cbb` (docs/design.md, "The service and its
   helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
-  its hello and starts it again when it stops. It does nothing else yet; the steps that make
+  its hello and starts it again when it stops. It starts only a helper that no other user
+  can change, of its own release, with only the environment it needs. It does nothing else yet; the steps that make
   the Rust `cbb` every computer's service hand it what needs Go.
 - The Rust `cbb` keeps its device key in the TPM, or a Mac's Secure Enclave, through
   `cbb-helper`, as the Go member does: `cbb pair` makes it there, `identity.json` keeps the
