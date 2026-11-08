@@ -47,7 +47,7 @@ targets:
       properties:
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ru]
+        CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
         UILaunchScreen: {}
         # AppDelegate keeps a phone upright and lets big screens turn.
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
@@ -105,7 +105,7 @@ targets:
       properties:
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ru]
+        CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
         NSBonjourServices: [_cbb._tcp]
         NSLocalNetworkUsageDescription: CBB finds your computers on the home network to send them what you share.
         NSExtension:
@@ -132,6 +132,9 @@ targets:
     sources:
       - Widgets
       - Shared/OpenAndSyncIntent.swift
+      # The house in Control Center and the settings it shares with the app.
+      - Shared/SyncSwitch.swift
+      - Shared/Shared.swift
       # The Live Activity in the Dynamic Island, in the app's colours.
       - Shared/StatusActivity.swift
       - CBB/Theme
@@ -140,7 +143,7 @@ targets:
       properties:
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ru]
+        CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
@@ -161,7 +164,7 @@ targets:
       properties:
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ru]
+        CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
         WKApplication: true
         WKCompanionAppBundleIdentifier: $(CBB_BUNDLE_ID)
     settings:

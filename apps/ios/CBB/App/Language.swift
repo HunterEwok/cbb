@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import Foundation
+import SwiftUI
 
 /// The language the user picks on the Start screen or in Settings; System
 /// follows the system's (and the per-app choice in the system's Settings).
 enum LanguageChoice: String, CaseIterable, Identifiable {
     case system
     case en
+    case zh = "zh-Hans"
+    case es
     case ru
+    case ar
+    case sw
+    case he
+    case hi
 
     static let key = "language"
 
@@ -21,22 +28,14 @@ enum LanguageChoice: String, CaseIterable, Identifiable {
         defaults.string(forKey: key).flatMap(LanguageChoice.init(rawValue:)) ?? .system
     }
 
-    /// Whether the Start screen offers the language: only when the app has
-    /// no translation for the language the system prefers (it shows English
-    /// then). Settings always offers it.
-    static func offeredOnStart(preferred: [String], localizations: [String]) -> Bool {
-        guard let first = preferred.first else { return false }
-        let supported = Set(localizations.filter { $0 != "Base" }.map(languageCode))
-        return !supported.contains(languageCode(first))
-    }
-
-    /// "pt" from "pt-BR" or "pt_BR".
-    private static func languageCode(_ id: String) -> String {
-        Locale(identifier: id).language.languageCode?.identifier ?? id
-    }
-
     /// The locale the views use, nil for System.
     var locale: Locale? { self == .system ? nil : Locale(identifier: rawValue) }
+
+    /// Right to left for Arabic and Hebrew; System keeps the system's.
+    var layoutDirection: LayoutDirection {
+        let code = (locale ?? .autoupdatingCurrent).language.languageCode?.identifier ?? ""
+        return Locale.Language(identifier: code).characterDirection == .rightToLeft ? .rightToLeft : .leftToRight
+    }
 
     /// Each language by its own name ("English", "Russian" in Russian), so
     /// that it can be found whichever language the app shows now.

@@ -2,8 +2,9 @@
 
 import SwiftUI
 
-/// The one page: how many devices are online, the away switch, the devices
-/// and the latest events.
+/// The one page: how many devices are online, the two switches of the
+/// phone (the house, sync; the globe, away from home), the devices and the
+/// latest events.
 struct WatchHome: View {
     @EnvironmentObject private var model: WatchModel
     @Environment(\.palette) private var palette
@@ -27,11 +28,17 @@ struct WatchHome: View {
         Section {
             Text("\(online) of \(model.state.devices.count) online")
                 .font(.headline)
-            if let away = model.state.away {
-                Toggle(isOn: Binding(get: { away != .off }, set: { model.setAway($0) })) {
-                    Text("Away from home")
+            if let sync = model.state.sync {
+                Toggle(isOn: Binding(get: { sync }, set: { model.setSync($0) })) {
+                    Label { Text("Sync") } icon: { Image(systemName: sync ? "house.fill" : "house") }
                 }
                 .disabled(model.switching)
+            }
+            if let away = model.state.away {
+                Toggle(isOn: Binding(get: { away != .off }, set: { model.setAway($0) })) {
+                    Label { Text("Everywhere") } icon: { Image(systemName: "globe") }
+                }
+                .disabled(model.switching || (model.state.sync == false && away == .off))
                 awayLine(away).font(.caption2).foregroundStyle(away == .connected ? palette.accent : palette.textDim)
             }
             if let note = model.note {

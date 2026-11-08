@@ -21,13 +21,35 @@ struct CBBMacApp: App {
         MenuBarExtra {
             MenuContent().environmentObject(model)
         } label: {
-            // The label is drawn at launch, the menu only when it opens.
-            Image(model.trayImage).onAppear { model.start() }
+            TrayLabel().environmentObject(model)
         }
 
         Settings {
             SettingsView().environmentObject(model).modifier(Themed())
         }
+    }
+}
+
+/// The menu bar item's glyph. It is drawn at launch, the menu only when it
+/// opens, so it starts the model, and it opens the window once when the
+/// first status says this Mac is in no group, so that the start window
+/// greets the user after the install.
+struct TrayLabel: View {
+    @EnvironmentObject private var model: MacModel
+    @Environment(\.openWindow) private var openWindow
+    @State private var checked = false
+
+    var body: some View {
+        Image(model.trayImage)
+            .onAppear { model.start() }
+            .onChange(of: model.status) { _, status in
+                guard !checked, let status else { return }
+                checked = true
+                if status.group?.isEmpty != false, status.removed != true {
+                    openWindow(id: "main")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            }
     }
 }
 

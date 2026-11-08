@@ -44,6 +44,7 @@ import androidx.wear.compose.material3.SwitchButton
 import androidx.wear.compose.material3.Text
 import tools.cbb.FormGlyph
 import tools.cbb.Palette
+import tools.cbb.SwitchGlyph
 import tools.cbb.WatchState
 import tools.cbb.paletteNamed
 
@@ -85,6 +86,18 @@ fun WearHome(model: WearModel) {
                             color = palette.text,
                         )
                     }
+                    s.sync?.let { on ->
+                        item {
+                            SwitchButton(
+                                checked = on,
+                                onCheckedChange = { model.setSync(it) },
+                                enabled = !model.switching,
+                                modifier = Modifier.fillMaxWidth(),
+                                icon = { SwitchGlyph("house", palette.accent, 24.dp) },
+                                label = { Text(stringResource(R.string.sync)) },
+                            )
+                        }
+                    }
                     s.away?.let { away ->
                         item {
                             SwitchButton(
@@ -92,6 +105,7 @@ fun WearHome(model: WearModel) {
                                 onCheckedChange = { model.setAway(it) },
                                 enabled = !model.switching,
                                 modifier = Modifier.fillMaxWidth(),
+                                icon = { SwitchGlyph("globe", palette.accent, 24.dp) },
                                 label = { Text(stringResource(R.string.away)) },
                                 secondaryLabel = { Text(stringResource(awayLine(away))) },
                             )

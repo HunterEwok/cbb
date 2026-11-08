@@ -17,6 +17,8 @@ data class WatchState(
     val devices: List<Device> = emptyList(),
     /** null without a group. */
     val away: Away? = null,
+    /** Whether the phone's sync is on (the house); null without a group. */
+    val sync: Boolean? = null,
     /** The latest events, newest first. */
     val events: List<String> = emptyList(),
     /** The phone's colour, by its name in Tokens.colors. */
@@ -201,6 +203,7 @@ data class WatchState(
             ),
         )
         .put("away", away?.key ?: JSONObject.NULL)
+        .put("sync", sync ?: JSONObject.NULL)
         .put("events", JSONArray(events))
         .put("color", color)
         .put("details", details)
@@ -214,6 +217,9 @@ data class WatchState(
 
         /** The watch's message that turns the phone's sync away from home on (1) or off (0). */
         const val AWAY_PATH = "/cbb/away"
+
+        /** The watch's message that turns the phone's sync on (1) or off (0): the house. */
+        const val SYNC_PATH = "/cbb/sync"
 
         /** The root phone's ask that the watch make its admin key; the watch answers on KEY_PATH. */
         const val CERTIFY_PATH = "/cbb/certify"
@@ -259,6 +265,7 @@ data class WatchState(
                         )
                     },
                     away = if (o.isNull("away")) null else Away.of(o.optString("away")),
+                    sync = if (!o.has("sync") || o.isNull("sync")) null else o.optBoolean("sync"),
                     events = (0 until es.length()).map { i -> es.getString(i) },
                     color = o.optString("color", "terminal"),
                     details = o.optBoolean("details"),

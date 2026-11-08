@@ -130,6 +130,7 @@ object WatchLink {
                 }
             }
         },
+        sync = (model.syncOff == null).takeIf { model.phase == AppModel.Phase.HOME },
         events = model.notifier.recent,
         // The wallpaper's colours are the phone's own; the watch takes the default.
         color = model.color.takeIf { c -> Tokens.colors.any { it.name == c } } ?: Tokens.colors.first().name,
@@ -137,7 +138,7 @@ object WatchLink {
     )
 }
 
-/** The watch's away switch, the same as the one in Settings; Play services start it when the watch asks. */
+/** The watch's two switches, the house and the globe, the same as Home's; Play services start it when the watch asks. */
 class WatchListener : WearableListenerService() {
     /**
      * The watch's emergency actions (docs/protocol.md, section 10, "Watches"):
@@ -172,13 +173,13 @@ class WatchListener : WearableListenerService() {
     override fun onMessageReceived(event: MessageEvent) {
         if (event.path == WatchState.KEY_PATH || event.path == WatchState.ADMITTED_PATH) return WatchLink.answered(event.path, event.data)
         if (event.path == WatchState.ASK_PATH || event.path == WatchState.SIGNED_PATH) return emergency(event)
-        if (event.path != WatchState.AWAY_PATH) return
+        if (event.path != WatchState.AWAY_PATH && event.path != WatchState.SYNC_PATH) return
         val on = event.data.firstOrNull() == 1.toByte()
         val model = (application as CBBApp).model
         // On a thread of Play services': the model changes on the main thread.
         runBlocking(Dispatchers.Main) {
             model.refresh()
-            model.setAway(on)
+            if (event.path == WatchState.SYNC_PATH) model.turnSync(on) else model.setAway(on)
         }
     }
 }

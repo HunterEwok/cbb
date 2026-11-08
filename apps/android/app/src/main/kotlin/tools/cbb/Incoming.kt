@@ -41,12 +41,7 @@ internal fun IncomingSection(model: AppModel, ms: Long) {
             }
         }
         model.incomingNote?.let { NoteText(it) }
-        Text(
-            stringResource(R.string.incoming_body),
-            Modifier.padding(Tokens.spacingMedium),
-            style = MaterialTheme.typography.bodyMedium,
-            color = palette.textDim,
-        )
+        Tip(R.string.incoming_body, Modifier.padding(Tokens.spacingMedium))
     }
 }
 

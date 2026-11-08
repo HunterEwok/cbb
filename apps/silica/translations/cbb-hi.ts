@@ -180,86 +180,6 @@
         <translation>कुंजी फिर से जाँचें</translation>
     </message>
     <message>
-        <source>Join a group</source>
-        <translation>समूह में शामिल हों</translation>
-    </message>
-    <message>
-        <source>Last copy</source>
-        <translation>पिछली कॉपी</translation>
-    </message>
-    <message>
-        <source>Leave the group</source>
-        <translation>समूह छोड़ें</translation>
-    </message>
-    <message>
-        <source>Leaving the group</source>
-        <translation>समूह छोड़ा जा रहा है</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>एडमिन के रूप में समूह से जुड़ें</translation>
-    </message>
-    <message>
-        <source>For 15 minutes</source>
-        <translation>15 मिनट के लिए</translation>
-    </message>
-    <message>
-        <source>For an hour</source>
-        <translation>एक घंटे के लिए</translation>
-    </message>
-    <message>
-        <source>For 8 hours</source>
-        <translation>8 घंटे के लिए</translation>
-    </message>
-    <message>
-        <source>Until I turn it on</source>
-        <translation>जब तक मैं चालू न करूँ</translation>
-    </message>
-    <message>
-        <source>Taking copies</source>
-        <translation>कॉपियाँ ली जा रही हैं</translation>
-    </message>
-    <message>
-        <source>Not taking copies until %1</source>
-        <translation>%1 तक कॉपियाँ नहीं ली जा रहीं</translation>
-    </message>
-    <message>
-        <source>Not taking copies</source>
-        <translation>कॉपियाँ नहीं ली जा रहीं</translation>
-    </message>
-    <message>
-        <source>Tap to take no copies from the group, or again; hold it for a time</source>
-        <translation>समूह की कॉपियाँ न लेने या फिर से लेने के लिए टैप करें; समय चुनने के लिए दबाकर रखें</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
-        <translation>एक एडमिन ने इस फ़ोन को %1 तक म्यूट किया है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
-        <translation>एक एडमिन ने इस फ़ोन को म्यूट किया है: जब तक कोई एडमिन अनम्यूट न करे, इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>समूह में</translation>
-    </message>
-    <message>
-        <source>Admin</source>
-        <translation>एडमिन</translation>
-    </message>
-    <message>
-        <source>Member</source>
-        <translation>सदस्य</translation>
-    </message>
-    <message>
-        <source>The phone has no key yet. Pull down to check it again.</source>
-        <translation>फ़ोन के पास अभी कोई कुंजी नहीं है। फिर से जाँचने के लिए नीचे खींचें।</translation>
-    </message>
-    <message>
-        <source>Devices</source>
-        <translation>डिवाइस</translation>
-    </message>
-    <message>
         <source>Settings</source>
         <translation>सेटिंग्स</translation>
     </message>
@@ -272,60 +192,124 @@
         <translation>डिवाइस सूची के रूप में दिखाएँ</translation>
     </message>
     <message>
-        <source>Add a device</source>
-        <translation>डिवाइस जोड़ें</translation>
+        <source>Scan a code</source>
+        <translation>कोड स्कैन करें</translation>
     </message>
     <message>
-        <source>Make a group</source>
+        <source>Create a group</source>
         <translation>समूह बनाएँ</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>समूह छोड़ रहा है और उसकी रूट कुंजी मिटा रहा है</translation>
+        <source>Join a group</source>
+        <translation>समूह में शामिल हों</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one or make one.</source>
-        <translation>फ़ोन अभी किसी समूह में नहीं है। किसी समूह से जुड़ने या नया बनाने के लिए नीचे खींचें।</translation>
+        <source>Join a group as an admin</source>
+        <translation>एडमिन के रूप में समूह से जुड़ें</translation>
     </message>
     <message>
-        <source>Root</source>
-        <translation>रूट</translation>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>फ़ोन के पास अभी कोई कुंजी नहीं है। फिर से जाँचने के लिए नीचे खींचें।</translation>
     </message>
     <message>
-        <source>Sync the clipboard</source>
-        <translation>क्लिपबोर्ड सिंक करें</translation>
+        <source>%1 of %2 online</source>
+        <translation>%2 में से %1 ऑनलाइन</translation>
     </message>
     <message>
-        <source>Sync</source>
-        <translation>सिंक करें</translation>
+        <source>Sync is on</source>
+        <translation>सिंक चालू है</translation>
     </message>
     <message>
-        <source>Fetching…</source>
-        <translation>ला रहा है…</translation>
+        <source>Sync is off until %1</source>
+        <translation>सिंक %1 तक बंद है</translation>
+    </message>
+    <message>
+        <source>Sync is off</source>
+        <translation>सिंक बंद है</translation>
+    </message>
+    <message>
+        <source>Everywhere is off</source>
+        <translation>“हर जगह” बंद है</translation>
+    </message>
+    <message>
+        <source>Everywhere waits while sync is off</source>
+        <translation>सिंक बंद रहने तक “हर जगह” रुका है</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>घर पर: सीधे सिंक हो रहा है।</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>सुरंग से हब से जुड़ रहा है…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>सुरंग से हब %1 से जुड़ा है।</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>सुरंग से हब से जुड़ा है।</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>हब की प्रतीक्षा: घर पर समूह के किसी कंप्यूटर के पास एक बार ऐप खोलें।</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>सिंक बंद करें</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>सिंक चालू करें</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere off</source>
+        <translation>“हर जगह” बंद करें</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere on</source>
+        <translation>“हर जगह” चालू करें</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>एक एडमिन ने इस फ़ोन को %1 तक म्यूट किया है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>एक एडमिन ने इस फ़ोन को म्यूट किया है: जब तक कोई एडमिन अनम्यूट न करे, इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
+    </message>
+    <message>
+        <source>Lost phone?</source>
+        <translation>फ़ोन खो गया?</translation>
+    </message>
+    <message>
+        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
+        <translation>दूसरे फ़ोन को एडमिन बनाएँ: उस पर “एडमिन के रूप में समूह से जुड़ें” टैप करें, फिर यहाँ “कोड स्कैन करें” से उसका कोड स्कैन करें। बंद करने के लिए टैप करें।</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>डिवाइस</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>15 मिनट के लिए बंद</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>एक घंटे के लिए बंद</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>8 घंटे के लिए बंद</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>जब तक मैं चालू न करूँ, बंद</translation>
     </message>
 </context>
 <context>
     <name>DevicePage</name>
-    <message>
-        <source>System</source>
-        <translation>सिस्टम</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>समूह में</translation>
-    </message>
-    <message>
-        <source>Type</source>
-        <translation>प्रकार</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>स्थिति</translation>
-    </message>
-    <message>
-        <source>Device ID</source>
-        <translation>डिवाइस ID</translation>
-    </message>
     <message>
         <source>Remove</source>
         <translation>हटाएँ</translation>
@@ -333,6 +317,14 @@
     <message>
         <source>Removing %1</source>
         <translation>%1 हटाया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>एडमिन बनाएँ</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>%1 को एडमिन बनाया जा रहा है</translation>
     </message>
     <message>
         <source>Unfreeze</source>
@@ -351,24 +343,52 @@
         <translation>म्यूट हटाने तक म्यूट करें</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>एक घंटे के लिए म्यूट करें</translation>
-    </message>
-    <message>
         <source>Muting %1</source>
         <translation>%1 म्यूट किया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>एक घंटे के लिए म्यूट करें</translation>
     </message>
     <message>
         <source>Rename</source>
         <translation>नाम बदलें</translation>
     </message>
     <message>
-        <source>Make an admin</source>
-        <translation>एडमिन बनाएँ</translation>
+        <source>Sync</source>
+        <translation>सिंक</translation>
     </message>
     <message>
-        <source>Making %1 an admin</source>
-        <translation>%1 को एडमिन बनाया जा रहा है</translation>
+        <source>Sync is off</source>
+        <translation>सिंक बंद है</translation>
+    </message>
+    <message>
+        <source>Sync is on</source>
+        <translation>सिंक चालू है</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>और</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>प्रकार</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>समूह में</translation>
+    </message>
+    <message>
+        <source>System version</source>
+        <translation>सिस्टम संस्करण</translation>
+    </message>
+    <message>
+        <source>MAC address</source>
+        <translation>MAC पता</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>डिवाइस ID</translation>
     </message>
 </context>
 <context>
@@ -396,6 +416,42 @@
     <message>
         <source>Puts the error itself under each error message</source>
         <translation>हर त्रुटि संदेश के नीचे त्रुटि को खुद दिखाता है</translation>
+    </message>
+    <message>
+        <source>Notifications</source>
+        <translation>सूचनाएँ</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>डिवाइस जुड़ते या हटते हैं</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>कोई डिवाइस एडमिन बनता है</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>कोई डिवाइस फ़्रीज़ या अनफ़्रीज़ होता है</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>कोई दूसरा फ़ोन समूह सँभाल लेता है</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>समूह</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>समूह छोड़ें</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>समूह छोड़ रहा है और उसकी रूट कुंजी मिटा रहा है</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>समूह छोड़ा जा रहा है</translation>
     </message>
     <message>
         <source>About</source>
@@ -438,64 +494,8 @@
         <translation>कुंजी फ़िंगरप्रिंट</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>समूह</translation>
-    </message>
-    <message>
         <source>Device</source>
         <translation>डिवाइस</translation>
-    </message>
-    <message>
-        <source>Notifications</source>
-        <translation>सूचनाएँ</translation>
-    </message>
-    <message>
-        <source>Devices join or leave</source>
-        <translation>डिवाइस जुड़ते या हटते हैं</translation>
-    </message>
-    <message>
-        <source>A device becomes an admin</source>
-        <translation>कोई डिवाइस एडमिन बनता है</translation>
-    </message>
-    <message>
-        <source>A device is frozen or unfrozen</source>
-        <translation>कोई डिवाइस फ़्रीज़ या अनफ़्रीज़ होता है</translation>
-    </message>
-    <message>
-        <source>Another phone takes the group over</source>
-        <translation>कोई दूसरा फ़ोन समूह सँभाल लेता है</translation>
-    </message>
-    <message>
-        <source>Away from home</source>
-        <translation>घर से दूर</translation>
-    </message>
-    <message>
-        <source>Sync away from home</source>
-        <translation>घर से दूर सिंक करें</translation>
-    </message>
-    <message>
-        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
-        <translation>जब फ़ोन घर के नेटवर्क पर नहीं होता, तो वह आपके अपने हब की WireGuard सुरंग से सिंक करता है, जो समूह का एक कंप्यूटर है जिसे cbb global hub से सेट किया गया है; उसका पोर्ट इंटरनेट से पहुँचा जा सकता है, पर केवल समूह की कुंजियों वाले WireGuard से। हब इस फ़ोन को अगली बार जवाब देता है जब यह घर पर जुड़ता है। कुछ भी कहीं और नहीं जाता, और सुरंग के बिना कोई कनेक्शन नहीं होता। इसे बंद करने पर यह फ़ोन अपनी सुरंग कुंजी भूल जाता है।</translation>
-    </message>
-    <message>
-        <source>At home: syncing directly.</source>
-        <translation>घर पर: सीधे सिंक हो रहा है।</translation>
-    </message>
-    <message>
-        <source>Connecting to the hub through the tunnel…</source>
-        <translation>सुरंग से हब से जुड़ रहा है…</translation>
-    </message>
-    <message>
-        <source>Connected to the hub %1 through the tunnel.</source>
-        <translation>सुरंग से हब %1 से जुड़ा है।</translation>
-    </message>
-    <message>
-        <source>Connected to the hub through the tunnel.</source>
-        <translation>सुरंग से हब से जुड़ा है।</translation>
-    </message>
-    <message>
-        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
-        <translation>हब की प्रतीक्षा: घर पर समूह के किसी कंप्यूटर के पास एक बार ऐप खोलें।</translation>
     </message>
 </context>
 <context>
@@ -674,8 +674,8 @@
         <translation>म्यूट</translation>
     </message>
     <message>
-        <source>Paused</source>
-        <translation>रुका हुआ</translation>
+        <source>Sync is off</source>
+        <translation>सिंक बंद है</translation>
     </message>
     <message>
         <source>Looking for devices</source>
@@ -843,6 +843,21 @@
     <message>
         <source>%1 files</source>
         <translation>%1 फ़ाइलें</translation>
+    </message>
+</context>
+<context>
+    <name>AwayDialog</name>
+    <message>
+        <source>Turn Everywhere on?</source>
+        <translation>“हर जगह” चालू करें?</translation>
+    </message>
+    <message>
+        <source>Turn on</source>
+        <translation>चालू करें</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>जब फ़ोन घर के नेटवर्क पर नहीं होता, तो वह आपके अपने हब की WireGuard सुरंग से सिंक करता है, जो समूह का एक कंप्यूटर है जिसे cbb global hub से सेट किया गया है; उसका पोर्ट इंटरनेट से पहुँचा जा सकता है, पर केवल समूह की कुंजियों वाले WireGuard से। हब इस फ़ोन को अगली बार जवाब देता है जब यह घर पर जुड़ता है। कुछ भी कहीं और नहीं जाता, और सुरंग के बिना कोई कनेक्शन नहीं होता। इसे बंद करने पर यह फ़ोन अपनी सुरंग कुंजी भूल जाता है।</translation>
     </message>
 </context>
 </TS>

@@ -5,10 +5,11 @@ import CoreImage
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// How a device joins: the commands to copy for pairing in Terminal and, on
-/// the root or an admin, admitting a device that shows a QR code and waits,
-/// such as a phone with Aurora OS or Sailfish OS, from the code's text or a
-/// picture of it.
+/// Adding a device: the new device chooses Join a group and shows a QR code
+/// and six digits; a phone of the group scans the code, and here, on the
+/// root or an admin, the user types the digits, or pastes the code's text or
+/// opens a picture of it (cbb pair -qr). A device far away gets an
+/// invitation.
 struct AddDeviceSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
@@ -16,54 +17,69 @@ struct AddDeviceSheet: View {
     @State private var qrText = ""
     @State private var qrError: String?
     @State private var asAdmin = false
+    @State private var inviting = false
+
+    private var typed: Bool {
+        let text = qrText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return MacModel.shownCode(text) != nil || MacModel.isWaitingJoiner(text)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.spacingLarge) {
             Text("Add a device").font(.title2.weight(.semibold))
-            step("1", Text("On the new computer, run:"), command: "cbb pair")
-            step("2", Text("In a group of the phone, scan the QR code it shows with the phone app. In a group of computers, run this on this Mac or another admin and type the code it shows on the new computer:"), command: "sudo cbb pair")
-            Text("A phone joins from the start screen of its app.").foregroundStyle(palette.textDim)
-            if model.isAdmin { admitByQR }
+            Text("On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.")
+                .foregroundStyle(palette.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+            if model.isAdmin {
+                admit
+            } else {
+                Text("This Mac is no admin of the group: add the device on the phone or on an admin computer.")
+                    .foregroundStyle(palette.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button { inviting = true } label: { Text("Device far away? Send an invitation") }
+                .buttonStyle(.link)
+                .font(.callout)
             HStack {
                 Spacer()
-                Button { dismiss() } label: { Text("Done") }.keyboardShortcut(.defaultAction)
+                Button(role: .cancel) { dismiss() } label: { Text("Cancel") }.keyboardShortcut(.cancelAction)
+                if model.isAdmin {
+                    Button {
+                        let text = qrText, admin = asAdmin && model.isRoot
+                        dismiss()
+                        Task { await model.admit(text, asAdmin: admin) }
+                    } label: { Text("Admit") }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!typed || model.busy)
+                }
             }
         }
         .padding(Tokens.spacingLarge)
-        .frame(width: 480)
+        .frame(width: 460)
         .background(AppBackground())
+        .alert(Text("Send an invitation"), isPresented: $inviting) {
+            Button {} label: { Text("OK") }
+        } message: {
+            Text("On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.")
+        }
     }
 
-    private var admitByQR: some View {
+    private var admit: some View {
         VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
-            Text("Admit by QR code").font(.headline)
-            Text("A phone with Aurora OS or Sailfish OS shows a QR code and waits. Paste the code's text, or open a picture of it:")
-                .foregroundStyle(palette.textDim)
-                .fixedSize(horizontal: false, vertical: true)
-            TextField(text: $qrText, prompt: Text(verbatim: "cbb://join?...")) { Text("The QR code's text") }
-                .font(.system(.body, design: .monospaced))
+            TextField(text: $qrText, prompt: Text(verbatim: "123 456")) { Text("The six digits the new device shows") }
+                .font(.system(.title2, design: .monospaced))
+                .multilineTextAlignment(.center)
                 .textFieldStyle(.roundedBorder)
+                .accessibilityLabel(Text("The six digits the new device shows"))
             // Only the group's root makes admins.
             if model.isRoot {
-                Toggle(isOn: $asAdmin) {
-                    Text("Admit it as an admin: it may then add, remove and renew devices and take the group over after the takeover delay. Only for your own phone.")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Toggle(isOn: $asAdmin) { Text("Admit it as an admin: only for your own phone.") }
             }
             if let qrError { Text(qrError).foregroundStyle(palette.textDim) }
-            HStack {
-                Button { openPicture() } label: { Text("Open a picture") }
-                Spacer()
-                Button {
-                    let text = qrText, admin = asAdmin && model.isRoot
-                    dismiss()
-                    Task { await model.admitByQR(text, asAdmin: admin) }
-                } label: { Text("Admit") }
-                    .disabled(!MacModel.isWaitingJoiner(qrText.trimmingCharacters(in: .whitespacesAndNewlines)) || model.busy)
-            }
+            Button { openPicture() } label: { Text("Open a picture of its QR code") }
+                .buttonStyle(.link)
+                .font(.callout)
         }
-        .padding(Tokens.spacingMedium)
-        .glassTile(cornerRadius: Tokens.radiusCard)
     }
 
     private func openPicture() {
@@ -89,26 +105,5 @@ struct AddDeviceSheet: View {
         else { return nil }
         return detector.features(in: image).compactMap { ($0 as? CIQRCodeFeature)?.messageString }.first?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func step(_ n: String, _ text: Text, command: String) -> some View {
-        HStack(alignment: .top, spacing: Tokens.spacingMedium) {
-            Text(verbatim: n).font(.headline).foregroundStyle(palette.onAccent).frame(width: 26, height: 26).background(palette.accent, in: Circle())
-            VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
-                text.fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    Text(verbatim: command).font(.system(.body, design: .monospaced)).textSelection(.enabled)
-                    Spacer()
-                    Button {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(command, forType: .string)
-                    } label: { Image(systemName: "doc.on.doc") }
-                        .buttonStyle(.borderless)
-                        .help(Text("Copy"))
-                }
-                .padding(Tokens.spacingSmall)
-                .glassTile(cornerRadius: Tokens.radiusCard)
-            }
-        }
     }
 }
