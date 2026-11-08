@@ -48,7 +48,7 @@ object Images {
      */
     fun fetch(context: Context, node: CoreMember, e: CoreMember.Copy, part: Media.Part): File {
         val dir = File(context.cacheDir, DIR).apply { mkdirs() }
-        val f = File(dir, "copy-${e.id}.${extension(part.type)}")
+        val f = File(dir, "copy-${e.id}.${extension(part.type.orEmpty())}")
         if (f.length() == part.size && f.exists()) return f
         val tmp = File(dir, f.name + ".part")
         try {
