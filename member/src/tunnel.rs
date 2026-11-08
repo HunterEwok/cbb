@@ -43,6 +43,23 @@ pub(crate) const KEEPALIVE: u16 = 25;
 /// The MTU inside the tunnel: IPv6's minimum, which fits in a UDP datagram
 /// on any path, so nothing is fragmented.
 pub(crate) const MTU: usize = 1280;
+
+/// How long a TCP connection inside the tunnel may hear nothing from the
+/// other end before it is dropped. smoltcp counts it from the last packet
+/// that came in even while nothing waits to be sent, so a connection that
+/// is only quiet (a join waiting for the admin's answer) would be dropped
+/// too: TCP_KEEP_ALIVE has the other end answer meanwhile.
+pub(crate) const TCP_TIMEOUT: smoltcp::time::Duration = smoltcp::time::Duration::from_secs(30);
+/// How often a quiet TCP connection inside the tunnel sends a keep-alive,
+/// well within TCP_TIMEOUT, so that a lost one or two do not drop it.
+pub(crate) const TCP_KEEP_ALIVE: smoltcp::time::Duration = smoltcp::time::Duration::from_secs(10);
+
+/// Sets a TCP socket inside the tunnel to drop a dead connection, never a
+/// quiet one.
+pub(crate) fn set_tcp_timeouts(sock: &mut tcp::Socket) {
+    sock.set_timeout(Some(TCP_TIMEOUT));
+    sock.set_keep_alive(Some(TCP_KEEP_ALIVE));
+}
 /// How long the link waits for the hub's answer at one endpoint before it
 /// tries the next.
 const ENDPOINT_WAIT: Duration = Duration::from_secs(10);
@@ -1171,7 +1188,7 @@ impl Pump {
                 tcp::SocketBuffer::new(vec![0; TCP_BUFFER]),
             );
             sock.set_nagle_enabled(false);
-            sock.set_timeout(Some(smoltcp::time::Duration::from_secs(30)));
+            set_tcp_timeouts(&mut sock);
             let port = self.next_port;
             self.next_port = if self.next_port == u16::MAX { 49152 } else { self.next_port + 1 };
             if sock.connect(self.iface.context(), (IpAddress::Ipv6(self.peer), MEMBER_PORT), port).is_err() {
