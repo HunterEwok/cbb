@@ -16,7 +16,8 @@ All notable changes to cbb are documented in this file. The format follows
   new root (`TestFFIPhoneTakeover`).
 - The tiles' order and collections are in the Rust core (`cbb_core::arrange`, checked against
   the same vectors as the tray app and the kits), and the Aurora app has them: a long press on
-  a tile or a row moves it, puts it into a collection or a new one and takes it out, a
+  a tile or a row moves it, puts it into a collection or a new one and takes it out, a drag
+  carries a tile over the others, a
   collection's tile shows how many of its devices are online and opens its page, and the
   pull-down menu has New collection… and Back to the group's order.
 - The Aurora app can be a Bluetooth keyboard: as the Linux computer, it registers the HID over

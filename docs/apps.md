@@ -830,8 +830,11 @@ focused tile in Arrange mode.
 pages, the model in the core's `arrange` call through `App::arranged`, kept as
 `ui/arrangement` in its settings): a long press on a tile or a row opens a page with every
 change (Move to start, Move earlier, Move later, Move to end, Move to each collection, New
-collection…, Take out of collection, and on a collection Rename collection… and Ungroup); there
-is no drag. A collection is a tile, or a section in the list, and a tap opens its page, with
+collection…, Take out of collection, and on a collection Rename collection… and Ungroup).
+Among the tiles a long press then a drag carries a tile over the others, as on Android, with
+no Arrange mode: it takes the place of the tile it is dropped on, a device dropped on a
+collection goes into it, and one dropped on this phone goes to the start; this phone's own
+tile is not dragged. A collection is a tile, or a section in the list, and a tap opens its page, with
 Rename and Ungroup in its pull-down menu. The main page's pull-down menu has **New
 collection…** and **Back to the group's order**.
 
