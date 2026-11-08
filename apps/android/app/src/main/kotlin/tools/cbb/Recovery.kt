@@ -106,7 +106,7 @@ internal fun RecoverySection(model: AppModel) {
                 QuietButton(stringResource(R.string.yubikey_put), onClick = { askingPin = true }, enabled = !busy)
             }
             model.recoveryNote?.let { NoteText(it) }
-            Text(stringResource(R.string.recovery_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+            Tip(R.string.recovery_body)
         }
     }
     when (asking) {

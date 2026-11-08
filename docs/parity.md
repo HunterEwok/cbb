@@ -62,7 +62,7 @@ on every platform of the class, on the roadmap).
 | Receive copies without a tap | yes (foreground service) | **OS** | yes | iOS lets an app read and write the clipboard only in the foreground; Aurora lets it write in the background |
 | Send without a tap | yes (accessibility service) | **OS** | **OS** | iOS: Back Tap or the Action button runs the app's shortcut, one gesture; Aurora reads the clipboard only in the foreground, so the app sends when it comes to the front |
 | Send from the share sheet and the text selection menu | yes | yes | yes, text, through the system's share menu; not yet tried on the phone | the iPhone's share extension; its menu's Share |
-| One-tap control outside the app | Quick Settings tile, notification button | Control Center control (iOS 18) | the cover's actions: the one button, pause; not yet tried on the phone | the control opens the app for a moment: **OS**, iOS reads the clipboard only in the foreground |
+| One-tap control outside the app | the house as a Quick Settings tile, notification button | the house as a Control Center control (iOS 18) | none: the cover has no action | the iPhone's control has no long press to open the app: **OS** |
 | Home-screen widget | yes | yes | **OS** (no widgets; the cover instead) | "Sync clipboard"; on the iPhone it opens the app for a moment, as the control does |
 | Rename a device | yes | yes | yes; not yet tried on the phone | Devices, Rename on an admin phone; `cbb rename` on an admin computer; a signed device record |
 | The group's alerts card, and the root's decision on it | yes | yes | yes; not yet tried on the phone | `GroupAlert` in the kits, the core's `alerts` op on Aurora |

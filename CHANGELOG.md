@@ -1452,6 +1452,51 @@ All notable changes to cbb are documented in this file. The format follows
   line with More beside; tiles move by a drag and open their menu when held; Settings has the
   language, "Open at sign-in" and "Advanced settings", and error details after seven taps on
   the version.
+- The Mac app works as the tray app does: the house and the globe in the window's header and
+  as check marks in the menu bar item, with a timer to turn sync off for; no Send or Fetch,
+  and the orbit's centre is this Mac; an update shows as a card and in the menu. In no group
+  the window is the start window (Create a group, Join a group, Recovery key); joining shows
+  the QR code with the six digits, and + takes them; the device card shows its badges, one
+  line, the house and mute, the rest under More; Settings has the appearance as icons, the
+  colour, the language, "Open at sign-in", "Advanced settings" and error details after seven
+  clicks on the version.
+- The iPhone app has the house and the globe beside how many devices are online, and no
+  send button: what was copied goes out as the app opens, after a note at the first Home
+  that sends the user to Settings to allow pasting from other apps; the system's paste
+  button stays only when iOS refuses the clipboard. "+" scans the new device's code or sends
+  an invitation; "Lost a phone?" is a card closed once. The Start screen has Create a group,
+  Join a group and Restore with the recovery key. Settings have the look in a row, the
+  advanced settings behind a switch and tips instead of long texts ("Copy lifetime",
+  "Security level", "Tunnel disguise", "Blind relay"); the globe on Home replaces the away
+  switch there. A device's card shows its badges, one line, the house, a row of icons and
+  the rest under More. The phone's sync off replaces its pause of receiving and may last for
+  a time; a phone that joins syncs at once. The Apple Watch has the house beside the globe.
+- The Android app does the same: the house and the globe beside how many devices are online,
+  no send button (what was copied goes out once each time the app comes to the front, with a
+  small button only when that failed), "+" for a code or an invitation, "⋯" for the view,
+  arranging and Settings, the orbit's centre this phone, the Start screen with Create a
+  group, Join a group and Restore with the recovery key, Settings with the look in a row, the
+  advanced ones behind a switch and tips that close once instead of long texts, and the
+  device's card with its badges, one line, the house, a row of icons and the rest under
+  More. Wear OS has the house beside the globe.
+- The house outside the app: the Quick Settings tile on Android and the Control Center control
+  on the iPhone turn sync on the phone on or off with one tap, lit while it is on and grey
+  while it is off; on Android a long press opens the app. The tile no longer
+  sends; the home-screen widgets still do.
+- The Rust `cbb` speaks the locale's language when the project has it (Chinese, Spanish,
+  Russian, Arabic, Swahili, Hebrew, Hindi; English otherwise): its help, its questions and what
+  `status`, `sync`, `global`, `pair` and `leave` print (`member/l10n/`, every text checked
+  in every language by a test). `cbb pair` names the phones' + and Scan a code.
+- The iPhone, Apple Watch, Android, Wear OS, Mac and tray apps in Chinese, Spanish, Arabic,
+  Swahili, Hebrew and Hindi as well as English and Russian, all of them in Settings'
+  language choice where the app has one; Arabic and Hebrew right to left, the tray app too.
+  The new translations wait for a native speaker's reading before a release.
+- The Aurora app too: the house and the globe beside how many devices are online (the globe
+  asks first and moves out of Settings), no Sync button or menu item, the Start screen with
+  Create a group and the two Join buttons, Leave the group in Settings, "Lost phone?" on the
+  one admin until closed, and the device's page with its marks, one line, the house (an
+  admin turns another device's through the core's new `sync_on` and `sync_off`) and the rest
+  under More. The core's `devices` names each connected device's sync, version and MAC.
 - One switch, sync, replaces the four sync modes and the device's own "not listening" switch
   (design.md, "Sync on and off"): on by default, so a device that joins syncs at once; off,
   for a time or until turned on, the clipboard is the device's own, both ways. `cbb sync [on

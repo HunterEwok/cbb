@@ -110,11 +110,11 @@ class GroupTest {
         return text
     }
 
-    /** A1: Start, "Connect a new device", the QR code's text, Add: the phone's own group with the computer in it. */
+    /** A1: Start, "Create a group", the QR code's text, Add: the phone's own group with the computer in it. */
     @Test
     fun a1_admitComputer() {
         assertEquals(AppModel.Phase.START, model.phase)
-        compose.onNodeWithText(str(R.string.connect_device)).performClick()
+        compose.onNodeWithText(str(R.string.create_group)).performClick()
         val (code, pairing) = Bench.pairCode(Bench.PC)
         typeAndAdd(code)
         until(90, "the phone admits ${Bench.PC}; the app says ${model.message}") { model.phase == AppModel.Phase.HOME }
@@ -152,13 +152,10 @@ class GroupTest {
     private fun idOf(name: String): String = model.group.devices.firstOrNull { it.name == name }?.id
         ?: throw AssertionError("no $name in the phone's devices: ${model.group.devices.map { it.name }}")
 
-    /** M7: a new phone keeps its own clipboard (own); in the mode shared a computer's new copy comes onto it without the button. */
+    /** M7: a new phone syncs (shared): a computer's new copy comes onto it without the button. */
     @Test
     fun a4_receivesByItself() {
-        val self = model.group.devices.first { it.isSelf }.id
-        assertEquals("a new phone's mode", "own", model.group.syncMode)
-        runBlocking { model.setMode(self, "shared") }
-        assertEquals("shared", model.group.syncMode)
+        assertEquals("a new phone's mode", "shared", model.group.syncMode)
         val text = "cbb-bench phone M7 by itself ${System.currentTimeMillis()}"
         Bench.copy(Bench.PC, text)
         until(30, "${Bench.PC}'s copy on the phone's clipboard without the button; it has ${clip()}") { clip() == text }
@@ -167,8 +164,7 @@ class GroupTest {
     /** M7: in the mode send the phone leaves its clipboard alone; shared again, it takes copies. */
     @Test
     fun a5_sendModeKeepsClipboard() {
-        val self = model.group.devices.first { it.isSelf }.id
-        runBlocking { model.setMode(self, "send") }
+        model.group.setOwnMode("send")
         assertEquals("send", model.group.syncMode)
         try {
             val before = clip()
@@ -177,7 +173,7 @@ class GroupTest {
             Thread.sleep(10_000)
             assertEquals("in the mode send the phone took ${Bench.PC}'s copy", before, clip())
         } finally {
-            runBlocking { model.setMode(self, "shared") }
+            model.group.setOwnMode("shared")
         }
         assertEquals("shared", model.group.syncMode)
     }
@@ -276,9 +272,10 @@ class GroupTest {
         throw AssertionError("not within 15s: the app starts admitting\n${appState()}")
     }
 
-    /** Admits a member in no group from Home's add button, by its QR code's text. */
+    /** Admits a member in no group from Home's + menu, by its QR code's text. */
     private fun admit(dev: String) {
         compose.onNodeWithContentDescription(str(R.string.add_device)).performClick()
+        compose.onNodeWithText(str(R.string.scan_code)).performClick()
         val (code, pairing) = Bench.pairCode(dev)
         typeAndAdd(code)
         val out = try {
@@ -314,8 +311,7 @@ class GroupTest {
         assertTrue("no home-screen widget: $widgets", widgets.any { it.provider.className == SendWidget::class.java.name })
         val text = "cbb-bench phone A12 from the tile ${System.currentTimeMillis()}"
         // In the mode own only the button sends: shared would send the new copy by itself.
-        val self = model.group.devices.first { it.isSelf }.id
-        runBlocking { model.setMode(self, "own") }
+        model.group.setOwnMode("own")
         try {
             // Settles what earlier tests left, so the send screen finds the group connected.
             runBlocking { model.sync() }
@@ -336,7 +332,7 @@ class GroupTest {
             }
             until(10, "the send screen says it sent; it says ${model.message}") { model.message?.text == R.string.sent }
         } finally {
-            runBlocking { model.setMode(self, "shared") }
+            model.group.setOwnMode("shared")
         }
     }
 

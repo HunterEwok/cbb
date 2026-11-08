@@ -90,9 +90,12 @@ enum Control {
         /// (docs/design.md, "Muting a device").
         var muted: Bool?
         var mutedUntilMS: Int64?
+        /// The newest signed release the group passed around, when this Mac
+        /// runs an older one.
+        var update: String?
 
         enum CodingKeys: String, CodingKey {
-            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted
+            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted, update
             case syncUntilMS = "sync_until_ms"
             case mutedUntilMS = "muted_until_ms"
         }

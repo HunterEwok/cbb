@@ -13,7 +13,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -83,11 +89,12 @@ enum class DeviceLayout(val key: String, val symbol: String, @StringRes val titl
     }
 }
 
-private enum class HomePage { MAIN, DEVICE, SETTINGS, ADD, COLLECTION }
+private enum class HomePage { MAIN, DEVICE, SETTINGS, ADD, INVITE, COLLECTION }
 
 /**
- * The one page: the big button, the result in one line, and every device
- * of the group as tiles or a list; a device opens its details. On a big
+ * The one page (docs/apps.md, Home): the house and the globe beside how
+ * many devices are online, an alert only when there is one, and every
+ * device of the group as tiles or a list; a device opens its details. On a big
  * screen (a tablet, a foldable's inner screen) the devices may stand on
  * orbits around this phone, and the details open beside them.
  */
@@ -127,6 +134,10 @@ internal fun HomeScreen(model: AppModel) {
             }
             HomePage.SETTINGS -> SettingsScreen(model) { page = HomePage.MAIN }
             HomePage.ADD -> AddDeviceScreen(model) { page = HomePage.MAIN }
+            HomePage.INVITE -> {
+                BackHandler { page = HomePage.MAIN }
+                Page(stringResource(R.string.invite_send), back = { page = HomePage.MAIN }) { InviteSection(model) }
+            }
             HomePage.COLLECTION -> {
                 val id = collection
                 val leave = {
@@ -178,11 +189,10 @@ private fun HomeMain(model: AppModel, open: (HomePage) -> Unit, openCollection: 
         }
         Summary(model)
         Alerts(model)
-        SyncButton(model)
-        ListenSwitch(model)
+        LostPhoneCard(model)
         model.message?.let { NoteText(it, dim = true) }
+        FallbackSend(model)
         Devices(model, search, layout, select, openCollection)
-        Hint(model)
     }
 }
 
@@ -190,7 +200,6 @@ private fun HomeMain(model: AppModel, open: (HomePage) -> Unit, openCollection: 
 @Composable
 private fun WideHome(model: AppModel, selected: String?, select: (String?) -> Unit, open: (HomePage) -> Unit, openCollection: (String) -> Unit) {
     var layout by remember { mutableStateOf(model.settings.wideLayout) }
-    val scope = rememberCoroutineScope()
     val search = rememberDeviceSearch(model)
     val arrange = LocalArrange.current
     Beside(model, selected, select) {
@@ -201,25 +210,22 @@ private fun WideHome(model: AppModel, selected: String?, select: (String?) -> Un
             }
             Summary(model)
             Alerts(model)
-            ListenSwitch(model)
+            LostPhoneCard(model)
             model.message?.let { NoteText(it, dim = true) }
+            FallbackSend(model)
             // The orbit keeps the group's order; Arrange mode and a search show tiles.
             if (layout == DeviceLayout.ORBIT && !arrange.on && !search.active) {
                 Orbit(
                     model.devices,
                     selected,
-                    busy = model.busy,
                     select = { select(it) },
-                    sync = { scope.launch { model.sync() } },
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
             } else {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-                    SyncButton(model)
                     Devices(model, search, if (layout == DeviceLayout.ORBIT) DeviceLayout.TILES else layout, { select(it) }, openCollection)
                 }
             }
-            Hint(model)
         }
     }
 }
@@ -313,61 +319,105 @@ private fun SearchBar(search: DeviceSearch) {
     }
 }
 
-/** Settings, the view, and Add a device on an admin phone. */
+/**
+ * The name, then + on an admin phone (scan a code or send an invitation)
+ * and ⋯ (the view, arranging the devices and Settings).
+ */
 @Composable
 private fun TopBar(model: AppModel, layout: DeviceLayout, layouts: List<DeviceLayout>, open: (HomePage) -> Unit, choose: (DeviceLayout) -> Unit) {
+    val arrange = LocalArrange.current
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        IconText("⚙", stringResource(R.string.settings)) { open(HomePage.SETTINGS) }
         Text(
             stringResource(R.string.cbb_name),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f).padding(horizontal = Tokens.spacingMedium),
+            modifier = Modifier.weight(1f),
         )
-        // The view: each tap shows the next one.
-        val next = layouts[(layouts.indexOf(layout) + 1) % layouts.size]
-        IconText(layout.symbol, stringResource(R.string.view_now, stringResource(layout.title))) { choose(next) }
-        if (model.arrangement != null) {
-            Spacer(Modifier.width(Tokens.spacingSmall))
-            ArrangeButton(model)
-        }
         if (model.isAdmin) {
+            var adding by remember { mutableStateOf(false) }
+            Box {
+                IconText("+", stringResource(R.string.add_device)) { adding = true }
+                DropdownMenu(expanded = adding, onDismissRequest = { adding = false }) {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.scan_code)) }, onClick = {
+                        adding = false
+                        open(HomePage.ADD)
+                    })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.invite_send)) }, onClick = {
+                        adding = false
+                        open(HomePage.INVITE)
+                    })
+                }
+            }
             Spacer(Modifier.width(Tokens.spacingSmall))
-            IconText("+", stringResource(R.string.add_device)) { open(HomePage.ADD) }
         }
-    }
-}
-
-/** Arrange devices or Done, and Back to the group's order once the user changed it. */
-@Composable
-private fun ArrangeButton(model: AppModel) {
-    val arrange = LocalArrange.current
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconText("⇅", stringResource(R.string.arrange_devices)) { open = true }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text(stringResource(if (arrange.on) R.string.arrange_done_long else R.string.arrange_devices)) }, onClick = {
-                open = false
-                arrange.on = !arrange.on
-            })
-            if (model.arrangement?.items?.isNotEmpty() == true) {
-                DropdownMenuItem(text = { Text(stringResource(R.string.arrange_reset)) }, onClick = {
-                    open = false
-                    model.arrange(Tiles.Op.Reset)
+        var more by remember { mutableStateOf(false) }
+        Box {
+            IconText("⋯", stringResource(R.string.more)) { more = true }
+            DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
+                // The view: each choice shows the next one.
+                val next = layouts[(layouts.indexOf(layout) + 1) % layouts.size]
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.view_next, stringResource(next.title))) },
+                    leadingIcon = { Text(next.symbol) },
+                    onClick = {
+                        more = false
+                        choose(next)
+                    },
+                )
+                if (model.arrangement != null) {
+                    DropdownMenuItem(text = { Text(stringResource(if (arrange.on) R.string.arrange_done_long else R.string.arrange_devices)) }, leadingIcon = { Text("⇅") }, onClick = {
+                        more = false
+                        arrange.on = !arrange.on
+                    })
+                    if (model.arrangement?.items?.isNotEmpty() == true) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.arrange_reset)) }, onClick = {
+                            more = false
+                            model.arrange(Tiles.Op.Reset)
+                        })
+                    }
+                }
+                DropdownMenuItem(text = { Text(stringResource(R.string.settings)) }, leadingIcon = { Text("⚙") }, onClick = {
+                    more = false
+                    open(HomePage.SETTINGS)
                 })
             }
         }
     }
 }
 
-/** How many devices are online, of how many. */
+/** How many devices are online, of how many, beside the house and the globe; under them what stands out. */
 @Composable
 private fun Summary(model: AppModel) {
-    Text(
-        stringResource(R.string.online_count, model.devices.count { it.online }, model.devices.size),
-        style = MaterialTheme.typography.bodyMedium,
-        color = LocalPalette.current.textDim,
-    )
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            stringResource(R.string.online_count, model.devices.count { it.online }, model.devices.size),
+            style = MaterialTheme.typography.bodyMedium,
+            color = LocalPalette.current.textDim,
+            modifier = Modifier.weight(1f),
+        )
+        SyncSwitches(model)
+    }
+    model.syncOff?.let { off ->
+        Text(
+            off.until?.let { stringResource(R.string.sync_off_until, shortTime(it)) } ?: stringResource(R.string.sync_off),
+            style = MaterialTheme.typography.bodySmall,
+            color = LocalPalette.current.danger,
+        )
+    }
+    // Everywhere while it connects, or once it fails.
+    model.away?.takeIf { it.on && model.hub?.on != true }?.let { away ->
+        val inUse = model.devices.firstOrNull { it.hub == LiveGroup.HubMark.IN_USE }
+        val line = when {
+            away.status == AwayFromHome.Status.CONNECTED && inUse != null -> stringResource(R.string.away_connected_to, inUse.name)
+            away.status == AwayFromHome.Status.CONNECTED -> stringResource(R.string.away_connected)
+            away.status == AwayFromHome.Status.CONNECTING -> stringResource(R.string.away_connecting)
+            away.status == AwayFromHome.Status.AT_HOME -> null
+            else -> stringResource(R.string.away_waiting)
+        }
+        line?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = LocalPalette.current.textDim) }
+        away.error?.let { NoteText(it) }
+    }
+    model.awayNote?.let { NoteText(it) }
     // The phone as the hub works while the app is open: Home says so, as a fact, not a fault.
     model.hub?.takeIf { it.on }?.let { h ->
         Text(
@@ -401,41 +451,93 @@ internal fun shortTime(ms: Long, date: Boolean = false): String {
 }
 
 /**
- * The quick switch for taking copies from the group: a tap turns it off or
- * on again, a long press turns it off for a time. This phone's own copies
- * still go out (docs/design.md, "Muting a device").
+ * The two switches (docs/design.md, "Sync on and off"): the house turns
+ * sync on this phone off or on with a tap, or off for a time with a long
+ * press; the globe turns Everywhere, sync away from home, on or off, after
+ * saying what it does, and waits while sync is off.
  */
 @Composable
-private fun ListenSwitch(model: AppModel) {
+private fun SyncSwitches(model: AppModel) {
     val scope = rememberCoroutineScope()
-    val palette = LocalPalette.current
-    val pause = model.pause
-    var open by remember { mutableStateOf(false) }
-    Box {
-        Text(
-            when {
-                pause == null -> stringResource(R.string.pause_taking)
-                pause.until == null -> stringResource(R.string.pause_not_taking)
-                else -> stringResource(R.string.pause_not_taking_until, shortTime(pause.until))
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (pause == null) palette.textDim else palette.danger,
-            modifier = Modifier.heightIn(min = 48.dp).focusRing().combinedClickable(
-                role = Role.Switch,
-                onClickLabel = stringResource(if (pause == null) R.string.pause_turn_off else R.string.pause_turn_on),
-                onClick = { scope.launch { model.pauseReceiving(if (pause == null) 0 else null) } },
-                onLongClickLabel = stringResource(R.string.pause_for_a_time),
-                onLongClick = { open = true },
-            ).padding(vertical = Tokens.spacingSmall),
-        )
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            for (t in PauseTime.entries) {
-                DropdownMenuItem(text = { Text(stringResource(t.title)) }, onClick = {
-                    open = false
-                    scope.launch { model.pauseReceiving(t.ms) }
-                })
+    val off = model.syncOff
+    var times by remember { mutableStateOf(false) }
+    Row(horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
+        Box {
+            SwitchFace(
+                "house",
+                on = off == null,
+                label = if (off == null) stringResource(R.string.sync_on) else off.until?.let { stringResource(R.string.sync_off_until, shortTime(it)) } ?: stringResource(R.string.sync_off),
+                clickLabel = stringResource(if (off == null) R.string.sync_turn_off else R.string.sync_turn_on),
+                longClickLabel = stringResource(R.string.pause_for_a_time),
+                onLongClick = { times = true },
+            ) { scope.launch { model.turnSync(off != null) } }
+            DropdownMenu(expanded = times, onDismissRequest = { times = false }) {
+                for (t in PauseTime.entries) {
+                    DropdownMenuItem(text = { Text(stringResource(t.title)) }, onClick = {
+                        times = false
+                        scope.launch { model.turnSync(false, t.ms) }
+                    })
+                }
             }
         }
+        val away = model.away
+        if (away != null && model.hub?.on != true) {
+            var asking by remember { mutableStateOf(false) }
+            val waits = off != null && !away.on
+            SwitchFace(
+                "globe",
+                on = away.on,
+                enabled = !waits && !model.busy,
+                label = stringResource(if (away.on) R.string.away_is_on else if (waits) R.string.away_waits else R.string.away_is_off),
+                clickLabel = stringResource(if (away.on) R.string.away_turn_off else R.string.away_turn_on),
+            ) { if (away.on) scope.launch { model.setAway(false) } else asking = true }
+            if (asking) {
+                Confirm(
+                    stringResource(R.string.away_ask_title),
+                    stringResource(R.string.away_body),
+                    stringResource(R.string.turn_on),
+                    dismiss = { asking = false },
+                ) {
+                    asking = false
+                    scope.launch { model.setAway(true) }
+                }
+            }
+        }
+    }
+}
+
+/** A switch's round face: filled with the accent while on; a tap switches it, a long press may offer more. */
+@Composable
+private fun SwitchFace(
+    glyph: String,
+    on: Boolean,
+    label: String,
+    clickLabel: String,
+    enabled: Boolean = true,
+    longClickLabel: String? = null,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    val palette = LocalPalette.current
+    Box(
+        Modifier.size(44.dp).clip(CircleShape).background(if (on) palette.accent else palette.surface)
+            .focusRing(CircleShape)
+            .combinedClickable(
+                enabled = enabled,
+                role = Role.Switch,
+                onClickLabel = clickLabel,
+                onClick = onClick,
+                onLongClickLabel = longClickLabel,
+                onLongClick = onLongClick,
+            )
+            .semantics {
+                contentDescription = label
+                stateDescription = label
+            }
+            .alpha(if (enabled) 1f else 0.5f),
+        contentAlignment = Alignment.Center,
+    ) {
+        SwitchGlyph(glyph, if (on) palette.onAccent else palette.textDim, 24.dp)
     }
 }
 
@@ -549,26 +651,40 @@ private fun alertText(alert: GroupAlert): String {
     }
 }
 
+/**
+ * "Lost phone?" on an admin phone that is the group's only admin: how a
+ * second phone becomes an admin. Closed once, it stays closed.
+ */
 @Composable
-private fun SyncButton(model: AppModel) {
-    val scope = rememberCoroutineScope()
-    val haptics = LocalHapticFeedback.current
-    AccentButton(stringResource(R.string.send_or_fetch), enabled = !model.busy, onClick = {
-        scope.launch {
-            model.sync()
-            haptics.performHapticFeedback(if (model.message?.error == true) HapticFeedbackType.Reject else HapticFeedbackType.Confirm)
+private fun LostPhoneCard(model: AppModel) {
+    if (!model.isAdmin || model.devices.count { it.admin } != 1) return
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("tips", android.content.Context.MODE_PRIVATE) }
+    var closed by remember { mutableStateOf(prefs.getBoolean("lostPhoneCard", false)) }
+    if (closed) return
+    val palette = LocalPalette.current
+    Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.lost_phone_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            IconText("✕", stringResource(R.string.close), small = true) {
+                closed = true
+                prefs.edit().putBoolean("lostPhoneCard", true).apply()
+            }
         }
-    })
+        Text(stringResource(R.string.lost_phone_note), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+    }
 }
 
+/**
+ * When the app could not read what was copied as it opened (Android lets
+ * only the app in front read it, and the user's own settings may stop it),
+ * one small button sends it.
+ */
 @Composable
-private fun Hint(model: AppModel) {
-    val dim = LocalPalette.current.textDim
-    if (!model.isAdmin) {
-        Text(stringResource(R.string.not_admin_note), style = MaterialTheme.typography.bodySmall, color = dim)
-    } else if (model.devices.count { it.admin } == 1) {
-        Text(stringResource(R.string.lost_phone_note), style = MaterialTheme.typography.bodySmall, color = dim)
-    }
+private fun FallbackSend(model: AppModel) {
+    if (!model.sendFailed) return
+    val scope = rememberCoroutineScope()
+    QuietButton(stringResource(R.string.send_copy), enabled = !model.busy, onClick = { scope.launch { model.sync() } })
 }
 
 /** The devices as tiles or as a list; each one opens its details. */

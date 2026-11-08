@@ -12,10 +12,12 @@ enum DeviceLayout: String {
     case tiles, list, orbit
 }
 
-/// The one page: the big button, the result in one line, and every device
-/// of the group as tiles or a list; a device opens its details. On a big
-/// screen (an iPad, a foldable iPhone's inner screen) the devices may stand
-/// on orbits around this phone, and the details open beside them.
+/// The one page: how many devices are online with the two switches, sync
+/// (the house) and Everywhere (the globe), an alert only when there is one,
+/// and every device of the group as tiles or a list; a device opens its
+/// card. What was copied goes out as the app opens (AppModel.sendOnOpen).
+/// On a big screen (an iPad, a foldable iPhone's inner screen) the devices
+/// may stand on orbits around this phone, and the card opens beside them.
 struct HomeView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
@@ -23,7 +25,10 @@ struct HomeView: View {
     @AppStorage(DeviceLayout.key) private var layout = DeviceLayout.tiles
     @AppStorage(DeviceLayout.wideKey) private var wideLayout = DeviceLayout.orbit
     @State private var adding = false
+    @State private var inviting = false
     @State private var settings = false
+    @AppStorage("LostPhoneCardClosed") private var lostPhoneClosed = false
+    @AppStorage(AppModel.pasteChoiceKey) private var pasteChoice: String?
     /// The device whose details stand beside the devices on a big screen.
     @State private var selected: AppModel.Computer.ID?
     @StateObject private var arrange = ArrangeState()
@@ -56,28 +61,26 @@ struct HomeView: View {
             .navigationDestination(isPresented: $settings) { SettingsView() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { menu }
-                // On a big screen the toolbar holds the sync button, which a
-                // foldable iPhone puts in the strip at its right edge.
-                if wide {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            Task { await model.sync() }
-                        } label: {
-                            Label { Text("Send or fetch") } icon: { Image(systemName: "arrow.up.arrow.down") }
-                        }
-                        .keyboardShortcut("r")
-                        .disabled(model.busy)
-                    }
-                }
                 ToolbarItem(placement: .primaryAction) {
                     if model.isAdmin {
-                        Button { adding = true } label: {
+                        Menu {
+                            Button { adding = true } label: {
+                                Label { Text("Scan a code") } icon: { Image(systemName: "qrcode.viewfinder") }
+                            }
+                            Button { inviting = true } label: {
+                                Label { Text("Send an invitation") } icon: { Image(systemName: "envelope") }
+                            }
+                        } label: {
                             Image(systemName: "plus").accessibilityLabel(Text("Add a device"))
+                        } primaryAction: {
+                            adding = true
                         }
                         .keyboardShortcut("n")
                     }
                 }
             }
+            .sheet(isPresented: $inviting) { InviteSheet() }
+            .sheet(isPresented: Binding(get: { pasteChoice == nil && model.phase == .home }, set: { _ in })) { PasteNote() }
             .sheet(isPresented: $adding) { AddDeviceView() }
             .modifier(ArrangePrompts())
             // Arrange mode is off while a search or a filter is on.
@@ -97,50 +100,34 @@ struct HomeView: View {
     private var compactBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Tokens.spacingLarge) {
-                summary
+                header
                 AlertsCard()
-                // The system's paste button hands the clipboard over
-                // without asking (UIPasteControl); a copy from another
-                // device that waits comes in instead.
-                PasteButton(supportedContentTypes: [.plainText, .image]) { providers in
-                    Task { @MainActor in await model.sync(board: await AppModel.Board.load(providers)) }
-                }
-                .buttonBorderShape(.capsule)
-                .controlSize(.large)
-                .tint(palette.accent)
-                .frame(maxWidth: .infinity)
-                .disabled(model.busy)
-                .sensoryFeedback(.success, trigger: model.message)
-                Text("Paste sends what you copied to the other devices. A copy from another device comes into this phone's clipboard by itself.")
-                    .font(.footnote)
-                    .foregroundStyle(palette.textDim)
-                ListenSwitch()
-
+                fallbackPaste
                 if let message = model.message {
                     Text(message).foregroundStyle(palette.textDim)
                 }
                 devicesView(layout: layout == .orbit ? .tiles : layout, select: nil)
-                hint
+                lostPhoneCard
             }
             .padding(Tokens.spacingLarge)
         }
+        .sensoryFeedback(.success, trigger: model.message)
     }
 
-    /// The big screen's page: the devices, and the chosen one's details
+    /// The big screen's page: the devices, and the chosen one's card
     /// beside them.
     private var wideBody: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: Tokens.spacingMedium) {
-                summary
+                header
                 AlertsCard()
-                ListenSwitch()
+                fallbackPaste
                 if let message = model.message {
                     Text(message).foregroundStyle(palette.textDim)
                 }
                 if wideLayout == .orbit && !arrange.on && !searching {
                     if many { DeviceFilters(filter: $filter) }
-                    OrbitView(devices: model.devices, selected: selected, busy: model.busy,
-                              select: { selected = $0 }, sync: { Task { await model.sync() } })
+                    OrbitView(devices: model.devices, selected: selected, select: { selected = $0 })
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: Tokens.spacingMedium) {
@@ -148,7 +135,7 @@ struct HomeView: View {
                         }
                     }
                 }
-                hint
+                lostPhoneCard
             }
             .padding(Tokens.spacingLarge)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -161,6 +148,24 @@ struct HomeView: View {
         }
         .animation(.smooth, value: selected)
         .sensoryFeedback(.success, trigger: model.message)
+    }
+
+    /// The system's paste button, only when iOS refused the app the
+    /// clipboard or its user chose not to let it read it: it hands the
+    /// clipboard over without asking (UIPasteControl).
+    @ViewBuilder private var fallbackPaste: some View {
+        if model.pasteRefused, model.syncOff == nil {
+            PasteButton(supportedContentTypes: [.plainText, .image]) { providers in
+                Task { @MainActor in await model.sync(board: await AppModel.Board.load(providers)) }
+            }
+            .labelStyle(.iconOnly)
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
+            .tint(palette.accent)
+            .frame(maxWidth: .infinity)
+            .disabled(model.busy)
+            .accessibilityLabel(Text("Send what you copied"))
+        }
     }
 
     /// The devices: in the user's order with the collections, or flat while
@@ -179,13 +184,17 @@ struct HomeView: View {
         }
     }
 
-    /// How many devices are online, of how many.
-    private var summary: some View {
-        let online = model.devices.filter(\.online).count
+    /// How many devices are online, of how many, with the two switches;
+    /// under it what holds now: this phone as the hub, an admin's mute.
+    private var header: some View {
+        let online = model.devices.filter { $0.online || $0.isSelf }.count
         return VStack(alignment: .leading, spacing: 2) {
-            Text("\(online) of \(model.devices.count) online")
-                .font(.subheadline)
-                .foregroundStyle(palette.textDim)
+            HStack(spacing: Tokens.spacingMedium) {
+                Text("\(online) of \(model.devices.count) online")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                SyncSwitches()
+            }
             // The phone as the hub works while the app is open: Home says so, as a fact, not a fault.
             if model.hub?.on == true {
                 Text("This phone is the hub: sync works while the app is open.")
@@ -234,51 +243,105 @@ struct HomeView: View {
         }
     }
 
-    @ViewBuilder private var hint: some View {
-        if !model.isAdmin {
-            Text("Only an admin phone can add or remove devices.").font(.footnote).foregroundStyle(palette.textDim)
-        } else if model.devices.filter({ $0.admin }).count == 1 {
-            Text("Lost a phone? Make a second phone an admin: on it, tap I already use CBB on another phone, then scan its code here with +.")
-                .font(.footnote).foregroundStyle(palette.textDim)
+    /// The one admin of the group is told, once, how not to lose the group
+    /// with this phone: a card it closes for good.
+    @ViewBuilder private var lostPhoneCard: some View {
+        if model.isAdmin, !lostPhoneClosed, model.devices.filter({ $0.admin }).count == 1 {
+            HStack(alignment: .top, spacing: Tokens.spacingSmall) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Lost a phone?").font(.headline)
+                    Text("Make a second phone an admin: on it, tap Join a group, then scan its code here with +.")
+                        .font(.footnote)
+                        .foregroundStyle(palette.textDim)
+                }
+                Spacer()
+                Button { lostPhoneClosed = true } label: {
+                    Image(systemName: "xmark").foregroundStyle(palette.textDim)
+                }
+                .accessibilityLabel(Text("Close"))
+            }
+            .padding(Tokens.spacingMedium)
+            .glassCard()
         }
     }
 }
 
-/// The quick switch for taking copies from the group: a tap turns it off or
-/// on again, a long press turns it off for a time. This phone's own copies
-/// still go out (docs/design.md, "Muting a device").
-struct ListenSwitch: View {
+/// The two switches: the house turns sync on this phone off or on (a tap;
+/// touch and hold for a time), the globe turns Everywhere, sync away from
+/// home, on or off; the globe waits while sync is off (docs/design.md,
+/// "Sync on and off").
+struct SyncSwitches: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @State private var askingAway = false
 
     var body: some View {
-        let pause = model.pause
-        Menu {
-            ForEach(PauseTime.allCases) { t in
-                Button { model.pauseReceiving(forMS: t.ms) } label: { Text(t.title) }
-            }
-        } label: {
-            Label {
-                if let pause { Text(verbatim: Self.pausedTitle(until: pause.until)) } else { Text("Taking copies from the group") }
-            } icon: {
-                Image(systemName: pause == nil ? "speaker.wave.2" : "speaker.slash")
-            }
-            .font(.subheadline)
-            .foregroundStyle(pause == nil ? palette.textDim : palette.danger)
-        } primaryAction: {
-            model.pauseReceiving(forMS: pause == nil ? 0 : nil)
+        HStack(spacing: Tokens.spacingSmall) {
+            house
+            if let away = model.away, model.hub?.on != true { globe(away.on) }
         }
-        .accessibilityHint(Text("Tap to take no copies from the group, or to take them again; touch and hold for a time"))
+        .alert(Text("Turn Everywhere on?"), isPresented: $askingAway) {
+            Button { Task { await model.setAway(true) } } label: { Text("Turn on") }
+            Button(role: .cancel) {} label: { Text("Cancel") }
+        } message: {
+            Text("When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, encrypted end to end. Nothing goes anywhere else.")
+        }
     }
 
-    static func pausedTitle(until: Date?) -> String {
-        guard let until else { return String(localized: "Not taking copies from the group", bundle: .app) }
-        return String(localized: "Not taking copies until \(until.formatted(date: .omitted, time: .shortened))", bundle: .app)
+    private var house: some View {
+        let off = model.syncOff
+        return Menu {
+            ForEach(PauseTime.allCases) { t in
+                Button { model.turnSync(false, forMS: t.ms) } label: { Text(t.title) }
+            }
+        } label: {
+            SwitchFace(symbol: off == nil ? "house.fill" : "house", on: off == nil)
+        } primaryAction: {
+            model.turnSync(off != nil)
+        }
+        .accessibilityLabel(off == nil ? Text("Sync is on") : Text(verbatim: Self.syncOffTitle(until: off?.until)))
+        .accessibilityHint(Text("Tap to turn sync off or on; touch and hold for a time"))
+        .accessibilityAddTraits(off == nil ? .isSelected : [])
+    }
+
+    private func globe(_ on: Bool) -> some View {
+        let waits = model.syncOff != nil && !on
+        return Button {
+            if on { Task { await model.setAway(false) } } else { askingAway = true }
+        } label: {
+            SwitchFace(symbol: "globe", on: on)
+        }
+        .buttonStyle(.plain)
+        .disabled(waits || model.busy)
+        .accessibilityLabel(on ? Text("Everywhere is on") : waits ? Text("Everywhere waits while sync is off") : Text("Everywhere is off"))
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    static func syncOffTitle(until: Date?) -> String {
+        guard let until else { return String(localized: "Sync off", bundle: .app) }
+        return String(localized: "Sync off until \(until.formatted(date: .omitted, time: .shortened))", bundle: .app)
     }
 }
 
-/// How long the quick switch keeps the group's copies out, or an admin's
-/// mute lasts.
+/// A switch's round face: filled with the accent while on.
+struct SwitchFace: View {
+    let symbol: String
+    let on: Bool
+    @Environment(\.palette) private var palette
+    @Environment(\.isEnabled) private var enabled
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 19, weight: .semibold))
+            .foregroundStyle(on ? palette.onAccent : palette.textDim)
+            .frame(width: 44, height: 44)
+            .background(on ? palette.accent : palette.soft, in: Circle())
+            .opacity(enabled ? 1 : 0.5)
+            .contentShape(Circle())
+    }
+}
+
+/// How long the house keeps sync off, or an admin's mute lasts.
 enum PauseTime: Int64, CaseIterable, Identifiable {
     case quarter = 900_000
     case hour = 3_600_000

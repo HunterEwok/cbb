@@ -304,16 +304,13 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     asks to add it; a card then gives the steps to Settings, Accessibility, Touch, Back Tap,
     Double Tap. The file names the release bundle identifier, so it waits for TestFlight; a
     copy for a Personal Team build tests it before.
-- **49.** **Planned for 0.7.** One set of languages across the project: every app (the
+- **49.** **Done in 0.6.** One set of languages across the project: every app (the
     phones, the watches, the Mac app, the tray app) speaks the languages of the website
     (Chinese, English, Spanish, Russian, Arabic, Swahili, Hebrew, Hindi) and offers a choice
-    in Settings, System or one of them, remembered. Today only the phones offer System,
-    English or Russian; the Mac app follows the system's language and the tray app the
-    system's interface language on Windows and `LANGUAGE`/`LANG` on Linux. The command line
-    (`cbb`, the lite member) picks the language from the locale, and English where the
-    project has no translation for it. One list of the languages serves the site, the apps and
-    the command line; Arabic and Hebrew lay the screens out right to left; a native speaker
-    reads the new translations before a release.
+    in Settings, System or one of them, remembered; the Rust `cbb` picks the language from
+    the locale (docs/reference/cli.md), and English where the project has no translation.
+    Arabic and Hebrew lay the screens out right to left. Left: a native speaker reads the
+    new translations before a release.
 - **50.** **Planned for 0.7.** A LuCI page on OpenWrt, `luci-app-cbb`, in the
     project's own apk feed: the group's devices and their state, adding a device with its
     QR code, sync away from home and the hub, the network zones; the same sections in the

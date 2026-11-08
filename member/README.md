@@ -130,8 +130,8 @@ shown on the device. To pair later, join as the service's user, so that it can r
 sudo -u cbb cbb pair -name pi
 ```
 
-It shows a QR code: in the Copy Beyond Borders app (iPhone or Android) tap "Connect a new device"
-and scan it. The phone reaches the device on
+It shows a QR code: on a phone of the group, tap + in the Copy Beyond Borders app, then Scan a
+code, and scan it. The phone reaches the device on
 TCP port 8764 (`-port` to change it), while it joins and afterwards to sync. In a group
 without a phone, run `cbb pair` on the group's root or an admin and
 `sudo -u cbb cbb pair -code <that member>:8764` here, then type the code.

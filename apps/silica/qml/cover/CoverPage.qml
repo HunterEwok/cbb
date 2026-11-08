@@ -29,7 +29,7 @@ CoverBackground {
             font.pixelSize: Theme.fontSizeSmall
             text: !member ? (app.group === "" ? qsTr("Not in a group") : qsTr("Not running"))
                 : app.member.muted ? qsTr("Muted")
-                : app.member.paused ? qsTr("Paused")
+                : app.member.paused ? qsTr("Sync is off")
                 : app.member.peers.length === 0 ? qsTr("Looking for devices")
                 : qsTr("Connected devices: %1").arg(app.member.peers.length)
         }
@@ -57,10 +57,6 @@ CoverBackground {
 
     CoverActionList {
         enabled: member
-        CoverAction {
-            iconSource: "image://theme/icon-cover-sync"
-            onTriggered: app.member.button()
-        }
         CoverAction {
             iconSource: app.member.paused ? "image://theme/icon-cover-play" : "image://theme/icon-cover-pause"
             onTriggered: app.member.paused ? app.member.resume() : app.member.pause(0)

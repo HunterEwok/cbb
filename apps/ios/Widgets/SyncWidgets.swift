@@ -4,9 +4,9 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// The home-screen widget and the Control Center control "Sync clipboard"
-/// (docs/apps.md): one tap opens the app, which syncs as its Home button
-/// does (OpenAndSyncIntent).
+/// The home-screen widget "Sync clipboard" (docs/apps.md): one tap opens
+/// the app, which syncs as it does when it comes to the front
+/// (OpenAndSyncIntent); and the house in Control Center (SyncControl).
 @main
 struct SyncWidgets: WidgetBundle {
     var body: some Widget {
@@ -58,14 +58,24 @@ struct SyncWidgetView: View {
     }
 }
 
+/// The house in Control Center (docs/apps.md): a tap turns sync on this
+/// phone on or off; on, the control is lit with a filled clipboard, off, it
+/// is grey with an empty one. iOS gives a control no long press of its own.
 struct SyncControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "tools.cbb.sync-control") {
-            ControlWidgetButton(action: OpenAndSyncIntent()) {
-                Label("Sync clipboard", systemImage: "arrow.up.arrow.down")
+        StaticControlConfiguration(kind: SyncSwitch.kind, provider: SyncValue()) { on in
+            ControlWidgetToggle("Sync", isOn: on, action: SetSyncIntent()) { on in
+                Label(on ? "On" : "Off", systemImage: on ? "list.clipboard.fill" : "clipboard")
             }
         }
-        .displayName("Sync clipboard")
-        .description("Opens CBB and syncs the clipboard with your computers.")
+        .displayName("Sync")
+        .description("Turns sync on this phone on or off.")
     }
+}
+
+/// What the control shows: the app's state from the shared settings, off
+/// without a group.
+struct SyncValue: ControlValueProvider {
+    var previewValue: Bool { true }
+    func currentValue() async throws -> Bool { SyncSwitch.isOn ?? false }
 }

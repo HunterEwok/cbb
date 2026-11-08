@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<resources>
+    <string name="no_group">افتح CBB على الهاتف لإنشاء مجموعة أو الانضمام إليها.</string>
+    <string name="online_count">%1$d من %2$d متصل</string>
+    <string name="away">في كل مكان</string>
+    <string name="sync">مزامنة</string>
+    <string name="away_off">متوقف</string>
+    <string name="away_at_home">في المنزل: مزامنة مباشرة.</string>
+    <string name="away_connecting">جارٍ الاتصال بالمحور…</string>
+    <string name="away_connected">عبر محورك.</string>
+    <string name="away_waiting">في انتظار المحور.</string>
+    <string name="devices">الأجهزة</string>
+    <string name="latest">الأحدث</string>
+    <string name="online">متصل</string>
+    <string name="watch_phone">هاتف هذه الساعة</string>
+    <string name="offline">غير متصل</string>
+    <string name="stale">كما قال الهاتف آخر مرة.</string>
+    <string name="no_phone">الهاتف غير متصل. قرّبه، ثم حاول مرة أخرى.</string>
+    <string name="no_answer">لم يُجب الهاتف. حاول مرة أخرى.</string>
+    <string name="watch_admin">هذه الساعة مشرف في المجموعة.</string>
+    <string name="act_freeze">تجميد هذا المشرف</string>
+    <string name="act_remove">إزالة من المجموعة</string>
+    <string name="act_paste_off">إيقاف اللصق عن بُعد</string>
+    <string name="act_actions_off">إيقاف الإجراءات السريعة</string>
+    <string name="act_away_off">إيقاف المزامنة بعيدًا عن المنزل</string>
+    <string name="ask_freeze">تجميد %1$s؟ يبقى مشرفًا بالاسم، لكن لا يُحتسب أي شيء يوقّعه حتى يلغي الجذر تجميده.</string>
+    <string name="ask_remove">إزالة %1$s من المجموعة؟</string>
+    <string name="ask_paste_off">إيقاف اللصق عن بُعد على %1$s؟</string>
+    <string name="ask_actions_off">إيقاف كل الإجراءات السريعة على %1$s؟</string>
+    <string name="ask_away_off">إيقاف المزامنة بعيدًا عن المنزل على %1$s؟</string>
+    <string name="ask_action">تشغيل %1$s على %2$s؟</string>
+    <string name="done">تم.</string>
+    <string name="not_done">لم يفعلها الهاتف. حاول مرة أخرى.</string>
+    <string name="not_done_because">لم يفعلها الهاتف.</string>
+    <string name="not_signed">لم يُوقَّع الإجراء. افتح قفل الساعة، ثم حاول مرة أخرى.</string>
+</resources>
