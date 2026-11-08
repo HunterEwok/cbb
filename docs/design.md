@@ -2152,8 +2152,10 @@ with a signed command, and the member logs every action it runs and who asked.
 
 #### Where
 
-Linux, Mac and Windows run actions; lite members run the presets reboot and restart the
-service (the ESP32 restarts); the phones send only, since iOS runs nothing for another
+Linux, Mac and Windows run actions, the Rust service as the Go one: the presets of the system
+through logind on Linux, and the user's own and, on a Mac and Windows, every preset through
+CBB's agent in the user's session (the watch with `act`, answered with `acted`); the ESP32
+restarts; the phones send only, since iOS runs nothing for another
 device and Android would need more rights than the app should hold.
 
 #### Steps

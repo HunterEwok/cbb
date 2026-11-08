@@ -67,7 +67,14 @@ All notable changes to cbb are documented in this file. The format follows
   with a new key in each period of the credentials (`TestLiteHubCredential`). A Rust hub
   makes remote invitations (`invite`, with the admin's confirmation of each device that uses
   one, `TestLiteInvite`), and the Rust member joins with one (`cbb pair -invite`), offering
-  its own tunnel key through the guest tunnel once it joined (`TestLiteJoinInvite`).
+  its own tunnel key through the guest tunnel once it joined (`TestLiteJoinInvite`). An admin
+  Rust service pastes on another device, runs its quick actions and turns either off there,
+  one device or all (`cbb paste -on`, `cbb action NAME -on`, `cbb action off -on`/`-all`,
+  `cbb paste-receive off -on`/`-all`, `TestLiteAdminCommands`). The Rust service has every
+  preset the Go service has (lock, sleep, shutdown and the keyboard's layout too) and its
+  user's own actions (`cbb action add`, `remove`), which CBB's agent runs in the user's
+  session, as it runs the presets on a Mac and Windows (`TestLiteOwnActions`); the uinput
+  helper presses a remote paste's keys for it with a one-time grant (`TestLiteKeysGrant`).
 - A pairing window closed while it sent its Welcome now ends when that attempt ends, also when
   the attempt fails, in Go and in Rust; an invitation cancelled at that moment no longer
   crashes the Go service.

@@ -3193,8 +3193,7 @@ the device's own user turns them on again.
 An `away-off` command turns sync away from home off on the receiver as its user's own
 `off` does (section 11, the control operation `away`): its tunnel keys go, and the members
 connect again once the result is sent. It answers `done` also when sync away from home was
-off already. Of the presets, the lite member knows only `reboot`, `cancel-shutdown` and
-`restart`.
+off already.
 
 A `mute` command mutes the receiver until `for_ms` from when it takes the command, or until
 an admin lifts it; the commands of several admins simply follow each other, the last one

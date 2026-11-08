@@ -1340,7 +1340,7 @@ func TestLiteKeysGrant(t *testing.T) {
 	}
 }
 
-// TestLiteQuickActions: the lite member runs only the presets its own user
+// TestLiteQuickActions: the lite member runs only the actions its own user
 // turned on, for the signers they allow, and restarts at an admin's request by ending with an error, after which
 // systemd starts it again. A reboot is not run here.
 func TestLiteQuickActions(t *testing.T) {
@@ -1379,10 +1379,8 @@ func TestLiteQuickActions(t *testing.T) {
 	}
 
 	wantRefused(actions.Restart, "the action restart is off on this device")
-	wantRefused(actions.Lock, "this device has no action")
-	if _, err := lite.do(t, control.Header{Op: control.OpActionSet, Actions: []control.Action{{Name: actions.Lock, On: true}}}, ""); err == nil {
-		t.Error("the lite member turned lock on")
-	}
+	wantRefused(actions.Lock, "the action lock is off on this device")
+	wantRefused("backup", "this device has no action")
 	// pi's keys are in files: reboot takes it only with any key, which this
 	// test leaves off.
 	set(control.Action{Name: actions.Reboot, On: true})
@@ -1391,7 +1389,7 @@ func TestLiteQuickActions(t *testing.T) {
 	wantRefused(actions.Restart, "only for phone")
 	set(control.Action{Name: actions.Restart, On: true})
 	st := lite.status(t)
-	if len(st.Actions) != 3 || st.Actions[0].Name != actions.Reboot || !st.Actions[0].On || st.Actions[1].On || !st.Actions[2].On {
+	if len(st.Actions) != len(actions.Presets) || st.Actions[2].Name != actions.Reboot || !st.Actions[2].On || st.Actions[4].On || !st.Actions[5].On {
 		t.Errorf("the lite member's actions: %+v", st.Actions)
 	}
 	out, err := exec.Command(bin, "-socket", lite.socket, "action").Output()
@@ -1413,10 +1411,10 @@ func TestLiteQuickActions(t *testing.T) {
 
 	// The log keeps who asked and how it ended, in the full member's file.
 	log, err := actions.ReadLog(dir)
-	if err != nil || len(log) != 5 {
+	if err != nil || len(log) != 6 {
 		t.Fatalf("the log: %+v, %v", log, err)
 	}
-	if e := log[4]; e.Action != actions.Restart || e.Result != "done" || e.Name != "pi" {
+	if e := log[5]; e.Action != actions.Restart || e.Result != "done" || e.Name != "pi" {
 		t.Errorf("the restart's entry: %+v", e)
 	}
 

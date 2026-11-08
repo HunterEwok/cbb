@@ -151,6 +151,14 @@ pub struct Header {
     /// the paste's keys.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub keys: String,
+    /// In a watch: the watcher runs the quick actions in its user's
+    /// session (CBB's agent), which the service hands it with act.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub act: bool,
+    /// In an act: the program and arguments of the user's own action;
+    /// empty for a preset.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub command: Vec<String>,
     /// The text of a remote invitation: made by invite, used by join.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub invite: String,
@@ -273,7 +281,7 @@ pub struct Action {
     pub by: Vec<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub any_key: bool,
-    /// The program of a user's own action, which only a full member has.
+    /// The program and arguments of a user's own action.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub command: Vec<String>,
 }
@@ -503,6 +511,8 @@ pub fn is_admin(op: &str) -> bool {
             | "write"
             | "inject"
             | "injected"
+            | "act"
+            | "acted"
             // The uinput helper, as root, through the socket's group; the
             // service checks that it is root.
             | "keys"

@@ -73,7 +73,19 @@ const TYPE_WAIT: Duration = Duration::from_millis(5);
 enum ToWatcher {
     Write(WriteReq),
     Inject(Inject),
+    Act(Act),
 }
+
+/// A quick action for an agent to run in the user's session: a preset by
+/// its name, or with command the user's own; the answer goes to done.
+struct Act {
+    name: String,
+    command: Vec<String>,
+    done: SyncSender<(String, String)>,
+}
+
+/// The quick actions in peer::may_take, as Go's targetAct.
+const ACT: &str = "act";
 
 /// A remote paste for a watcher, with where its answer goes: the status,
 /// done, refused or failed, and the reason.
@@ -115,8 +127,10 @@ struct Watcher {
     /// It holds a clipboard: tmux, the console and paste-only watchers do
     /// not, so they get no writes and report no copies.
     board: bool,
-    /// Its user, read when it offers a target (peer.rs).
+    /// Its user, read when it offers a target or the actions (peer.rs).
     uid: Option<u32>,
+    /// It runs the quick actions in its user's session (CBB's agent).
+    act: bool,
     /// Its clipboard takes images, files and formatted text whole.
     images: bool,
     files: bool,
@@ -1040,7 +1054,7 @@ impl Service {
                 res.status = "failed".into();
                 res.reason = format!("reading the quick actions: {}", e.for_log());
             }
-            Ok(_) if !actions::PRESETS.contains(&body.action.as_str()) => {
+            Ok(set) if !set.has(&body.action) => {
                 res.reason = format!("this device has no action {:?}", body.action);
             }
             Ok(set) => {
@@ -1055,7 +1069,7 @@ impl Service {
                 } else if !self.acts.lock().unwrap().allow(&from.key, uptime::wall_ms()) {
                     res.reason = "too many actions: at most one a second and 30 a minute from one device".into();
                 } else {
-                    res = self.run_action(&body);
+                    res = self.run_action(&body, &set.get(&body.action).command);
                 }
             }
         }
@@ -1085,8 +1099,11 @@ impl Service {
         res
     }
 
-    /// Runs a preset that passed the checks.
-    fn run_action(&self, body: &crate::records::Command) -> wire::CommandResult {
+    /// Runs an action that passed the checks: the user's own (command) and,
+    /// but on Linux, the presets of the system in the signed-in user's
+    /// session through CBB's agent, as Go's sessionRunner; on Linux the
+    /// presets through logind.
+    fn run_action(&self, body: &crate::records::Command, command: &[String]) -> wire::CommandResult {
         let mut res = wire::CommandResult {
             id: body.id.clone(),
             by: String::new(),
@@ -1102,12 +1119,71 @@ impl Service {
             });
             return res;
         }
-        match actions::run(&body.action) {
+        let ran = if body.action == actions::LAYOUT {
+            self.next_keyboard_layout()
+        } else if !command.is_empty() || !cfg!(target_os = "linux") {
+            self.in_session(&body.action, command)
+        } else {
+            actions::run(&body.action)
+        };
+        match ran {
             Ok(()) => {}
             Err(actions::Failure::Refused(why)) => (res.status, res.reason) = ("refused".into(), why),
             Err(actions::Failure::Failed(e)) => (res.status, res.reason) = ("failed".into(), e.for_log()),
         }
         res
+    }
+
+    /// Hands the action name, with command the user's own, to an agent
+    /// that offers to run the actions as the user at the screen, as Go's
+    /// sessionRunner: the first that answers decides.
+    fn in_session(&self, name: &str, command: &[String]) -> std::result::Result<(), actions::Failure> {
+        let ws: Vec<(Option<u32>, SyncSender<ToWatcher>)> =
+            self.watchers.lock().unwrap().iter().filter(|w| w.act).map(|w| (w.uid, w.tx.clone())).collect();
+        if ws.is_empty() {
+            return Err(actions::Failure::Refused(
+                "nobody is signed in here with CBB's agent running, and the actions run in the user's session".into(),
+            ));
+        }
+        let ws: Vec<SyncSender<ToWatcher>> = ws
+            .into_iter()
+            .filter(|(uid, _)| peer::may_take(*uid, ACT, peer::at_screen) == peer::Verdict::Allowed)
+            .map(|(_, tx)| tx)
+            .collect();
+        if ws.is_empty() {
+            return Err(actions::Failure::Refused(
+                "CBB's agent runs here only as users who are not signed in at the screen, and the actions run in that user's session".into(),
+            ));
+        }
+        let mut reasons: Vec<String> = Vec::new();
+        for tx in ws {
+            let (done, answer) = mpsc::sync_channel(1);
+            let a = Act { name: name.into(), command: command.to_vec(), done };
+            if tx.try_send(ToWatcher::Act(a)).is_err() {
+                continue;
+            }
+            let Ok((status, reason)) = answer.recv_timeout(crate::admin::ACTION_WAIT) else {
+                return Err(actions::Failure::Failed(Error::msg("the agent did not answer")));
+            };
+            match status.as_str() {
+                "done" => return Ok(()),
+                "refused" => return Err(actions::Failure::Refused(reason)),
+                _ => reasons.push(reason),
+            }
+        }
+        if reasons.is_empty() {
+            return Err(actions::Failure::Failed(Error::msg("the agent is busy")));
+        }
+        reasons.dedup();
+        Err(actions::Failure::Failed(Error::msg(reasons.join("; "))))
+    }
+
+    /// The keyboard-layout preset: the Bluetooth keyboard types in the next
+    /// layout.
+    fn next_keyboard_layout(&self) -> std::result::Result<(), actions::Failure> {
+        Err(actions::Failure::Refused(
+            "this device has no Bluetooth keyboard of CBB's: cbb keyboard runs on a full member".into(),
+        ))
     }
 
     /// Turns every quick action off here; the rights the user granted stay
@@ -1128,33 +1204,58 @@ impl Service {
         let [a] = h.actions.as_slice() else {
             return Err(Error::msg("set one quick action at a time"));
         };
-        if !a.command.is_empty() {
-            return Err(Error::msg(
-                "the lite member has only the presets reboot, cancel-shutdown and restart; actions of your own need a full member",
-            ));
-        }
-        if !actions::PRESETS.contains(&a.name.as_str()) {
-            return Err(Error::msg(format!(
-                "this device has no action {:?}: the lite member has reboot, cancel-shutdown and restart",
-                a.name
-            )));
-        }
-        for k in &a.by {
-            if !actions::KINDS.contains(&k.as_str()) {
-                return Err(Error::msg(format!("{k:?} is not a kind of admin: root, phone, computer or watch")));
-            }
-        }
+        let by = actions::parse_kinds(&a.by.join(","))?;
         let mut set = actions::load(&self.state_dir)?;
-        set.set(actions::Action {
-            name: a.name.clone(),
-            on: a.on,
-            by: a.by.clone(),
-            any_key: a.any_key,
-            ..Default::default()
-        });
+        let command = if !a.command.is_empty() {
+            if let Some(why) = actions::check_own(&a.name, &a.command) {
+                return Err(Error::msg(why));
+            }
+            if !set.has(&a.name) && set.own().len() >= actions::MAX_OWN {
+                return Err(Error::msg(format!(
+                    "this device has {} actions of its user's own already, the most it keeps",
+                    actions::MAX_OWN
+                )));
+            }
+            a.command.clone()
+        } else if actions::PRESETS.contains(&a.name.as_str()) {
+            Vec::new()
+        } else if set.has(&a.name) {
+            set.get(&a.name).command // enable or disable keeps it
+        } else {
+            return Err(Error::msg(format!(
+                "this device has no action {:?}; the presets are {}, and cbb action add adds your own",
+                a.name,
+                actions::PRESETS.join(", ")
+            )));
+        };
+        set.set(actions::Action { name: a.name.clone(), on: a.on, by: by.clone(), any_key: a.any_key, command });
         actions::save(&self.state_dir, &set).map_err(|e| e.context("saving the quick actions"))?;
         node.set_actions(set.on());
-        (self.log)(&format!("cbb: the action {} is {} here", a.name, if a.on { "on" } else { "off" }));
+        (self.log)(&format!(
+            "cbb: the action {} is {} here (by {by:?}, any key {})",
+            a.name,
+            if a.on { "on" } else { "off" },
+            a.any_key
+        ));
+        Ok(self.action_reply(&set))
+    }
+
+    /// cbb action remove: the user's own action goes.
+    fn remove_action(&self, h: &Header) -> Result<Message> {
+        let node = self.node()?;
+        let mut set = actions::load(&self.state_dir)?;
+        if !set.remove(&h.name) {
+            if actions::PRESETS.contains(&h.name.as_str()) {
+                return Err(Error::msg(format!(
+                    "{} is a preset, which stays; cbb action disable {} turns it off",
+                    h.name, h.name
+                )));
+            }
+            return Err(Error::msg(format!("this device has no action of its user's own named {:?}", h.name)));
+        }
+        actions::save(&self.state_dir, &set).map_err(|e| e.context("saving the quick actions"))?;
+        node.set_actions(set.on());
+        (self.log)(&format!("cbb: the action {} is removed here", h.name));
         Ok(self.action_reply(&set))
     }
 
@@ -1879,7 +1980,7 @@ impl Service {
                 self.admin(|a| a.action_on(&h.device, &h.name))?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
             }
-            "action-remove" => Err(Error::msg("the lite member has only presets, which cbb action disable turns off")),
+            "action-remove" => self.remove_action(h),
             "paste-on" => self.paste_on(h, &m.payload),
             "mute" | "unmute" => {
                 self.mute_op(h)?;
@@ -2117,13 +2218,20 @@ impl Service {
         // Whether the user is at the screen is asked at each paste; a user
         // the system does not name, or a console helper that is not root,
         // never takes one.
-        let uid = if target.is_empty() { None } else { peer::uid(&out) };
+        let mut act = m.header.act;
+        let uid = if target.is_empty() && !act { None } else { peer::uid(&out) };
         let keyboard = target == CONSOLE || target == NEXT;
         if !target.is_empty() && (uid.is_none() || keyboard && !uid.is_some_and(peer::privileged)) {
             (self.log)(&format!(
                 "cbb: a watcher offers the paste target {target} as a user that may not take it; it gets no remote pastes"
             ));
             target.clear();
+        }
+        if act && uid.is_none() {
+            (self.log)(
+                "cbb: a watcher offers to run the quick actions as a user the system does not name; it runs none",
+            );
+            act = false;
         }
         let board = !m.header.paste_only && target != TMUX && !keyboard;
         let (images, files, html) = (m.header.images, m.header.files, m.header.html);
@@ -2145,7 +2253,17 @@ impl Service {
             let _ = tx.try_send(ToWatcher::Write(w));
         }
         let id = self.next_watcher.fetch_add(1, Ordering::SeqCst);
-        self.watchers.lock().unwrap().push(Watcher { id, target: target.clone(), board, uid, images, files, html, tx });
+        self.watchers.lock().unwrap().push(Watcher {
+            id,
+            target: target.clone(),
+            board,
+            uid,
+            act,
+            images,
+            files,
+            html,
+            tx,
+        });
         let waiting: Arc<Mutex<Waiting>> = Arc::default();
         {
             let waiting = waiting.clone();
@@ -2182,6 +2300,20 @@ impl Service {
                                 i.text.into_bytes(),
                             )
                         }
+                        ToWatcher::Act(a) => {
+                            seq += 1;
+                            waiting.lock().unwrap().insert(seq, a.done);
+                            Message::new(
+                                Header {
+                                    op: "act".into(),
+                                    seq,
+                                    name: a.name,
+                                    command: a.command,
+                                    ..Default::default()
+                                },
+                                Vec::new(),
+                            )
+                        }
                     };
                     if control::write(&mut out, &m).is_err() {
                         // The paste waiting, if any, hears that the
@@ -2193,7 +2325,7 @@ impl Service {
             });
         }
         while let Ok(Some(m)) = r.read() {
-            if m.header.op == "injected" {
+            if m.header.op == "injected" || m.header.op == "acted" {
                 if let Some(done) = waiting.lock().unwrap().remove(&m.header.seq) {
                     let _ = done.try_send(injected(&m.header));
                 }
@@ -2243,7 +2375,7 @@ fn injected(h: &Header) -> (String, String) {
 fn action_status(set: &actions::Settings) -> Vec<control::Action> {
     set.all()
         .into_iter()
-        .map(|a| control::Action { name: a.name, on: a.on, by: a.by, any_key: a.any_key, ..Default::default() })
+        .map(|a| control::Action { name: a.name, on: a.on, by: a.by, any_key: a.any_key, command: a.command })
         .collect()
 }
 

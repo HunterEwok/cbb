@@ -969,8 +969,7 @@ fn paste_line(p: &control::Paste) -> String {
     line
 }
 
-const ACTION_USAGE: &str =
-    "usage: cbb action [enable NAME [-by root,phone,computer,watch] [-any-key] [-yes] | disable NAME | off]";
+const ACTION_USAGE: &str = "usage: cbb action [enable NAME [-by root,phone,computer,watch] [-any-key] [-yes] | disable NAME | off |\n                   add NAME [-by KINDS] [-any-key] [-yes] -- PROGRAM ARGS | remove NAME]";
 
 /// cbb action: shows this device's quick actions and sets them, as on a
 /// full member (docs/design.md, "Quick actions"). Enabling says what it lets
@@ -1005,29 +1004,39 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             println!("The quick actions are off here.");
             return Ok(());
         }
-        [v, name, ..] if v == "enable" || v == "disable" => (v.as_str(), name.clone()),
+        [v, name] if v == "remove" => {
+            let h = control::Header { op: "action-remove".into(), name: name.clone(), ..Default::default() };
+            let m = request(g, &control::Message::new(h, Vec::new()))?;
+            grant(&m)?;
+            println!("{name} is removed.");
+            return Ok(());
+        }
+        [v, name, ..] if v == "enable" || v == "disable" || v == "add" => (v.as_str(), name.clone()),
         _ => return Err(usage()),
     };
-    let mut a = control::Action { name, on: verb == "enable", ..Default::default() };
+    let mut a = control::Action { name, on: verb != "disable", ..Default::default() };
     let mut yes = false;
     let mut rest = args[2..].iter();
     while let Some(arg) = rest.next() {
         match flag(arg) {
+            _ if arg == "--" && verb == "add" => {
+                a.command = rest.by_ref().cloned().collect();
+                break;
+            }
             Some("by") if a.on => a.by = actions::parse_kinds(rest.next().ok_or_else(usage)?)?,
             Some("any-key") if a.on => a.any_key = true,
             Some("yes") if a.on => yes = true,
             _ => return Err(usage()),
         }
     }
-    if !actions::PRESETS.contains(&a.name.as_str()) {
-        return Err(Error::msg(format!(
-            "this device has no action {:?}: the lite member has reboot, cancel-shutdown and restart",
-            a.name
-        )));
+    if verb == "add"
+        && let Some(why) = actions::check_own(&a.name, &a.command)
+    {
+        return Err(Error::msg(why));
     }
     if a.on && rootless::is() && !actions::rights(std::slice::from_ref(&a.name)).is_empty() {
         return Err(Error::msg(format!(
-            "{} needs a polkit rule, which only root writes; this device is installed without root, so it has restart only",
+            "{} needs a polkit rule, which only root writes; this device is installed without root, so it runs only the actions that need none",
             a.name
         )));
     }
@@ -1088,9 +1097,19 @@ fn action_line(a: &control::Action) -> String {
 /// here.
 fn action_warning(a: &control::Action) -> String {
     let what = match a.name.as_str() {
+        actions::LOCK => "lock this device's screen",
+        actions::SLEEP => "put this device to sleep",
         actions::REBOOT => "reboot this device, a minute after they ask",
-        actions::CANCEL => "cancel a reboot that is pending",
-        _ => "restart the CBB service here",
+        actions::SHUTDOWN => "shut this device down, a minute after they ask",
+        actions::CANCEL => "cancel a reboot or shutdown that is pending",
+        actions::RESTART => "restart the CBB service here",
+        actions::LAYOUT => "switch the layout this device's Bluetooth keyboard types in",
+        _ => "run this action here",
+    };
+    let what = if a.command.is_empty() {
+        what.to_string()
+    } else {
+        format!("run {} here as the user signed in", a.command.join(" "))
     };
     let mut who = if a.by.is_empty() {
         "the group's admins".to_string()
