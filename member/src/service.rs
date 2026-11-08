@@ -597,7 +597,7 @@ pub fn run(cfg: Config) -> Result<()> {
                     Err(_) => {}
                     Ok(_) => failed.clear(),
                 }
-                std::thread::sleep(CLAIM_CHECK);
+                node.records_nap(CLAIM_CHECK);
             }
         });
     }
@@ -1265,11 +1265,7 @@ impl Service {
                 "nobody is signed in here with CBB's agent running, and the actions run in the user's session".into(),
             ));
         }
-        let ws: Vec<SyncSender<ToWatcher>> = ws
-            .into_iter()
-            .filter(|(uid, _)| peer::may_take(*uid, ACT, peer::at_screen) == peer::Verdict::Allowed)
-            .map(|(_, tx)| tx)
-            .collect();
+        let ws = act_takers(ws, peer::at_screen);
         if ws.is_empty() {
             return Err(actions::Failure::Refused(
                 "CBB's agent runs here only as users who are not signed in at the screen, and the actions run in that user's session".into(),
@@ -1541,29 +1537,13 @@ impl Service {
         }
         // Only the user at the screen takes them, and a secret only where
         // the system tells who that is.
-        let secret = body.paste_kind == "secret";
-        let mut why = "";
-        let targets: Vec<(String, Option<peer::Who>, SyncSender<ToWatcher>)> = targets
-            .into_iter()
-            .filter(|(t, uid, _)| match peer::may_take(*uid, t, peer::at_screen) {
-                peer::Verdict::Allowed => true,
-                peer::Verdict::Unchecked if !secret => true,
-                peer::Verdict::Unchecked => {
-                    why = "this device cannot tell which user is at its screen, so it takes no secret pastes; send it as a paste or a typed text";
-                    false
-                }
-                peer::Verdict::Refused => {
-                    if why.is_empty() {
-                        why = "the paste targets here run as users who are not at the screen";
-                    }
-                    false
-                }
-            })
-            .collect();
-        if targets.is_empty() {
-            res.reason = why.into();
-            return res;
-        }
+        let targets = match paste_takers(targets, body.paste_kind == "secret", peer::at_screen) {
+            Ok(t) => t,
+            Err(why) => {
+                res.reason = why.into();
+                return res;
+            }
+        };
         let wait = if body.mode == "type" { INJECT_WAIT + TYPE_WAIT * text.len() as u32 } else { INJECT_WAIT };
         let mut reasons: Vec<String> = Vec::new();
         for (target, uid, tx) in targets {
@@ -1618,37 +1598,17 @@ impl Service {
     /// Makes the grant of a remote paste for uid, a desktop session's user,
     /// valid for wait, as Go's grantKeys.
     fn grant_keys(&self, uid: peer::Who, enter: bool, wait: Duration) -> String {
-        let mut b = [0u8; 16];
-        if getrandom::fill(&mut b).is_err() {
-            return String::new();
-        }
-        let token: String = b.iter().map(|x| format!("{x:02x}")).collect();
-        let now = Instant::now();
-        let mut grants = self.grants.lock().unwrap();
-        grants.retain(|_, g| g.until > now);
-        grants.insert(token.clone(), Grant { uid, enter, pasted: false, done: false, until: now + wait });
-        token
+        grant_keys(&mut self.grants.lock().unwrap(), uid, enter, wait)
     }
 
     /// Answers the uinput helper's keys (Go's takeKeys): whether it may
     /// press the keys req, paste or enter, for the user uid under the grant.
     fn take_keys(&self, grant: &str, req: &str, uid: &str) -> Result<()> {
-        let mut grants = self.grants.lock().unwrap();
-        let ok = match grants.get_mut(grant) {
-            Some(g) if g.until > Instant::now() && g.uid.to_string() == uid => match req {
-                "paste" if !g.pasted => {
-                    g.pasted = true;
-                    true
-                }
-                "enter" if g.enter && g.pasted && !g.done => {
-                    g.done = true;
-                    true
-                }
-                _ => false,
-            },
-            _ => false,
-        };
-        if ok { Ok(()) } else { Err(Error::msg("no remote paste asked for these keys now")) }
+        if take_keys(&mut self.grants.lock().unwrap(), grant, req, uid) {
+            Ok(())
+        } else {
+            Err(Error::msg("no remote paste asked for these keys now"))
+        }
     }
 
     /// Carries out a paste of the group's copy of images or files that body
@@ -3324,8 +3284,175 @@ fn devices(node: &Node, hubs: &[String]) -> Vec<Device> {
     out
 }
 
+/// Makes a grant of a remote paste for uid, a desktop session's user,
+/// valid for wait, as Go's grantKeys; its token, empty when none.
+fn grant_keys(grants: &mut HashMap<String, Grant>, uid: peer::Who, enter: bool, wait: Duration) -> String {
+    let mut b = [0u8; 16];
+    if getrandom::fill(&mut b).is_err() {
+        return String::new();
+    }
+    let token: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    let now = Instant::now();
+    grants.retain(|_, g| g.until > now);
+    grants.insert(token.clone(), Grant { uid, enter, pasted: false, done: false, until: now + wait });
+    token
+}
+
+/// Whether the uinput helper may press the keys req, paste or enter, for
+/// the user uid under the grant, as Go's takeKeys: the paste keys once,
+/// then Enter once when the paste asked for it.
+fn take_keys(grants: &mut HashMap<String, Grant>, grant: &str, req: &str, uid: &str) -> bool {
+    match grants.get_mut(grant) {
+        Some(g) if g.until > Instant::now() && g.uid.to_string() == uid => match req {
+            "paste" if !g.pasted => {
+                g.pasted = true;
+                true
+            }
+            "enter" if g.enter && g.pasted && !g.done => {
+                g.done = true;
+                true
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// A paste target: its kind, its user, and what reaches it.
+type Target<T> = (String, Option<peer::Who>, T);
+
+/// The paste targets that take a remote paste: those of the user at the
+/// screen, as at_screen tells, and of root and the service's own user, and
+/// where the system cannot tell who is at the screen, those that are no
+/// secret's. None left, it gives why, as Go's.
+fn paste_takers<T>(
+    targets: Vec<Target<T>>,
+    secret: bool,
+    at_screen: impl Fn(peer::Who, &str) -> peer::Verdict + Copy,
+) -> std::result::Result<Vec<Target<T>>, &'static str> {
+    let mut why = "";
+    let out: Vec<_> = targets
+        .into_iter()
+        .filter(|(t, uid, _)| match peer::may_take(*uid, t, at_screen) {
+            peer::Verdict::Allowed => true,
+            peer::Verdict::Unchecked if !secret => true,
+            peer::Verdict::Unchecked => {
+                why = "this device cannot tell which user is at its screen, so it takes no secret pastes; send it as a paste or a typed text";
+                false
+            }
+            peer::Verdict::Refused => {
+                if why.is_empty() {
+                    why = "the paste targets here run as users who are not at the screen";
+                }
+                false
+            }
+        })
+        .collect();
+    if out.is_empty() { Err(why) } else { Ok(out) }
+}
+
+/// The agents that run the quick actions: only those of the user at the
+/// screen, as Go's sessionRunner, never where the system cannot tell.
+fn act_takers<T>(
+    agents: Vec<(Option<peer::Who>, T)>,
+    at_screen: impl Fn(peer::Who, &str) -> peer::Verdict + Copy,
+) -> Vec<T> {
+    agents
+        .into_iter()
+        .filter(|(uid, _)| peer::may_take(*uid, ACT, at_screen) == peer::Verdict::Allowed)
+        .map(|(_, tx)| tx)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
+    use super::{CONSOLE, DESKTOP, TMUX, act_takers, grant_keys, paste_takers, peer, take_keys};
+
+    /// Users that the tests' fake system names, far from real accounts', as
+    /// Go's uidAtScreen and friends.
+    #[cfg(unix)]
+    const AT_SCREEN: peer::Who = 2_000_000_000;
+    #[cfg(unix)]
+    const AWAY: peer::Who = 2_000_000_001;
+    #[cfg(unix)]
+    const UNKNOWN: peer::Who = 2_000_000_002;
+
+    #[cfg(unix)]
+    fn fake_screen(uid: peer::Who, _: &str) -> peer::Verdict {
+        match uid {
+            AT_SCREEN => peer::Verdict::Allowed,
+            UNKNOWN => peer::Verdict::Unchecked,
+            _ => peer::Verdict::Refused,
+        }
+    }
+
+    /// As Go's TestPasteTargetUser: pastes go only to the user at the
+    /// screen, a console's only to root, a secret only where the system
+    /// tells who is at the screen, and none to another user or to a
+    /// connection whose user the system does not name.
+    #[cfg(unix)]
+    #[test]
+    fn paste_goes_to_the_user_at_the_screen() {
+        let t = |target: &str, uid: Option<peer::Who>, n: u8| (target.to_string(), uid, n);
+        let others = vec![t(DESKTOP, Some(AWAY), 1), t(CONSOLE, Some(AWAY), 2), t(TMUX, None, 3)];
+        let why = paste_takers(others.clone(), false, fake_screen).unwrap_err();
+        assert!(why.contains("not at the screen"), "{why}");
+
+        let mut unknown = others.clone();
+        unknown.push(t(DESKTOP, Some(UNKNOWN), 4));
+        let got: Vec<u8> =
+            paste_takers(unknown.clone(), false, fake_screen).unwrap().into_iter().map(|x| x.2).collect();
+        assert_eq!(got, [4]);
+        let why = paste_takers(unknown.clone(), true, fake_screen).unwrap_err();
+        assert!(why.contains("takes no secret pastes"), "{why}");
+
+        let mut screen = unknown;
+        screen.push(t(DESKTOP, Some(AT_SCREEN), 5));
+        let got: Vec<u8> = paste_takers(screen.clone(), true, fake_screen).unwrap().into_iter().map(|x| x.2).collect();
+        assert_eq!(got, [5]);
+        let got: Vec<u8> = paste_takers(screen, false, fake_screen).unwrap().into_iter().map(|x| x.2).collect();
+        assert_eq!(got, [4, 5]);
+
+        // Root takes the console.
+        let got = paste_takers(vec![t(CONSOLE, Some(0), 6)], true, fake_screen).unwrap();
+        assert_eq!(got.len(), 1);
+    }
+
+    /// As Go's TestKeysGrant: the helper presses keys only under a grant
+    /// the service made, for its user, the paste keys once and Enter once
+    /// when the paste asked for it, and none once the grant is gone.
+    #[cfg(unix)]
+    #[test]
+    fn keys_only_under_a_grant() {
+        for enter in [true, false] {
+            let mut gs = std::collections::HashMap::new();
+            let g = grant_keys(&mut gs, AT_SCREEN, enter, std::time::Duration::from_secs(60));
+            assert!(!g.is_empty());
+            let (me, away) = (AT_SCREEN.to_string(), AWAY.to_string());
+            assert!(!take_keys(&mut gs, &g, "paste", &away), "another user's paste keys");
+            assert!(!take_keys(&mut gs, &g, "enter", &me), "Enter before the paste");
+            assert!(take_keys(&mut gs, &g, "paste", &me), "the paste keys");
+            assert!(!take_keys(&mut gs, &g, "paste", &me), "the paste keys again");
+            assert_eq!(take_keys(&mut gs, &g, "enter", &me), enter, "Enter");
+            assert!(!take_keys(&mut gs, &g, "enter", &me), "Enter again");
+            gs.remove(&g);
+            assert!(!take_keys(&mut gs, &g, "paste", &me), "after the session answered");
+            assert!(!take_keys(&mut gs, "00", "paste", &me), "a grant the service did not make");
+        }
+        let mut gs = std::collections::HashMap::new();
+        let g = grant_keys(&mut gs, AT_SCREEN, false, std::time::Duration::ZERO);
+        assert!(!take_keys(&mut gs, &g, "paste", &AT_SCREEN.to_string()), "an ended grant");
+    }
+
+    /// As Go's TestActionsAgentUser: the actions go only to an agent of the
+    /// user at the screen, not where the system cannot tell.
+    #[cfg(unix)]
+    #[test]
+    fn actions_go_to_the_agent_at_the_screen() {
+        assert!(act_takers(vec![(Some(AWAY), 1), (Some(UNKNOWN), 2), (None, 3)], fake_screen).is_empty());
+        assert_eq!(act_takers(vec![(Some(AWAY), 1), (Some(AT_SCREEN), 2)], fake_screen), [2]);
+    }
+
     #[cfg(unix)]
     use super::ControlUsers;
     use super::{MAX_CONTROL_PER_USER, accept_control};

@@ -218,6 +218,8 @@ pub struct Node {
     paused: AtomicBool,
     /// Wakes the dial loops early: the member resumed or found an address.
     kick: (Mutex<u64>, Condvar),
+    /// Counts the times new records came, for records_nap.
+    changed: (Mutex<u64>, Condvar),
     /// Counts redial: the records may let in devices refused until now.
     redials: AtomicUsize,
     /// The commands this member sent, by ID, waiting for their results.
@@ -419,6 +421,7 @@ impl Node {
             keep_identity: None,
             paused: AtomicBool::new(false),
             kick: (Mutex::new(0), Condvar::new()),
+            changed: (Mutex::new(0), Condvar::new()),
             redials: AtomicUsize::new(0),
             waiting: Mutex::new(HashMap::new()),
             passed: Mutex::new(HashMap::new()),
@@ -806,6 +809,18 @@ impl Node {
     /// Waits up to d, or until kick; reports whether it was kicked.
     pub fn nap(&self, d: Duration) -> bool {
         let (m, cv) = &self.kick;
+        let g = m.lock().unwrap();
+        let start = *g;
+        let (g, _) = cv.wait_timeout_while(g, d, |n| *n == start && !self.is_closed()).unwrap();
+        *g != start
+    }
+
+    /// Waits up to d, or until new records come; reports whether they
+    /// did. What follows from the records (the server credentials, a
+    /// takeover) is brought up to date at once, as Go does in
+    /// settleRecords.
+    pub fn records_nap(&self, d: Duration) -> bool {
+        let (m, cv) = &self.changed;
         let g = m.lock().unwrap();
         let start = *g;
         let (g, _) = cv.wait_timeout_while(g, d, |n| *n == start && !self.is_closed()).unwrap();
@@ -1399,6 +1414,7 @@ impl Node {
     pub fn close(&self) {
         self.closed.store(true, Ordering::SeqCst);
         self.kick();
+        self.changed.1.notify_all();
         for c in self.conns.lock().unwrap().values() {
             c.close(true);
         }
@@ -1752,13 +1768,6 @@ impl Node {
                 let mut peer = peer_of(&c.id, &m.role, &body, c.records_only);
                 peer.chain = c.chain.iter().map(|x| x.der.clone()).collect();
                 *c.peer.lock().unwrap() = Some(peer.clone());
-                if !c.records_only
-                    && let Some(f) = self.on_hello.read().unwrap().as_ref()
-                {
-                    for out in f(&c.id, &peer, &c.chain) {
-                        self.enqueue(c, Out::Message(out));
-                    }
-                }
                 if !c.records_only {
                     let out = self
                         .engine
@@ -1774,6 +1783,16 @@ impl Node {
                     }
                 }
                 drop(st);
+                // After the records, as Go's: the credentials and the offers
+                // that follow are checked against them, and a device that
+                // just joined finds its own device record there.
+                if !c.records_only
+                    && let Some(f) = self.on_hello.read().unwrap().as_ref()
+                {
+                    for out in f(&c.id, &peer, &c.chain) {
+                        self.enqueue(c, Out::Message(out));
+                    }
+                }
                 if !c.records_only {
                     for e in self.evidence.read().unwrap().iter() {
                         self.enqueue(c, Out::Message(wire::evidence(e)));
@@ -2156,6 +2175,11 @@ impl Node {
             fresh
         };
         self.apply_copy_rules();
+        {
+            let (m, cv) = &self.changed;
+            *m.lock().unwrap() += 1;
+            cv.notify_all();
+        }
         // A thaw lets in devices refused until now, and a claim, a resolve,
         // a settings, a checkpoint or a recovery record may, as Go's
         // updateRecords.
