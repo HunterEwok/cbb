@@ -46,10 +46,10 @@ func TestCleanReason(t *testing.T) {
 // The sender gets what a receiver answers as plain, short text.
 func TestResultReasonCleaned(t *testing.T) {
 	evil := "\x1b]52;c;ZXZpbA==\x07\x1b[2J\x1b[Hdone" + strings.Repeat("x", 1000)
-	b := newMember(t, Full, func(_ *clip.Config, nc *Config) {
+	b := newMember(t, Member, func(_ *clip.Config, nc *Config) {
 		nc.OnCommand = func(group.DeviceID, group.Record) Result { return Result{Status: ResultFailed, Reason: evil} }
 	})
-	a := newMember(t, Full)
+	a := newMember(t, Member)
 	link(t, a, b)
 	waitPeers(t, a, 1)
 	id := group.NewCommandID()

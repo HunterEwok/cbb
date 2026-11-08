@@ -116,13 +116,13 @@ func TestGoActionVectors(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		lite, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(g), TimeMS: 2, Device: string(selfID), Name: "pi", Role: RoleLite, OS: OSLinux, Key: &selfKey}, pg.root.Key)
+		lite, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(g), TimeMS: 2, Device: string(selfID), Name: "pi", Role: RoleMember, Caps: []string{CapDials}, OS: OSLinux, Key: &selfKey}, pg.root.Key)
 		if err != nil {
 			t.Fatal(err)
 		}
 		tpmMember := member(t, tpm)
 		tpmKey, tpmAdmin := KeyHashOf(tpmMember), KeyHashOf(tpm.Cert)
-		tpmRecord, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(g), TimeMS: 3, Device: string(DeviceID(tpmMember.Subject.CommonName)), Name: "tpm pc", Role: RoleFull, OS: OSLinux, Key: &tpmKey,
+		tpmRecord, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(g), TimeMS: 3, Device: string(DeviceID(tpmMember.Subject.CommonName)), Name: "tpm pc", Role: RoleMember, Caps: AllCaps, OS: OSLinux, Key: &tpmKey,
 			Admin: &tpmAdmin, Store: StoreHardware, Powers: computerPowers(false), Commands: authority.Commands}, pg.root.Key)
 		if err != nil {
 			t.Fatal(err)
@@ -155,11 +155,11 @@ func TestGoActionVectors(t *testing.T) {
 			{Name: "lock by the admin phone", Command: sign(phone, []*x509.Certificate{phone.Cert}, CommandAction, "lock"), OK: true, Action: "lock",
 				Signer: actionSigner{Role: RolePhone, Store: StoreHardware, Found: true}},
 			{Name: "reboot by an admin computer with its keys in a file", Command: sign(pc, []*x509.Certificate{pc.Cert}, CommandAction, "reboot"), OK: true, Action: "reboot",
-				Signer: actionSigner{Role: RoleFull, Store: StoreFile, Found: true}},
+				Signer: actionSigner{Role: RoleMember, Store: StoreFile, Found: true}},
 			{Name: "shutdown by an admin computer with its keys in a TPM", Command: sign(tpm, []*x509.Certificate{tpm.Cert}, CommandAction, "shutdown"), OK: true, Action: "shutdown",
-				Signer: actionSigner{Role: RoleFull, Store: StoreHardware, Found: true}},
+				Signer: actionSigner{Role: RoleMember, Store: StoreHardware, Found: true}},
 			{Name: "actions-off by an admin computer", Command: sign(pc, []*x509.Certificate{pc.Cert}, CommandActionsOff, ""), OK: true,
-				Signer: actionSigner{Role: RoleFull, Store: StoreFile, Found: true}},
+				Signer: actionSigner{Role: RoleMember, Store: StoreFile, Found: true}},
 			{Name: "a key of another group", Command: sign(newRoot(t), nil, CommandAction, "reboot")},
 		}}
 	}

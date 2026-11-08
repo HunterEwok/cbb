@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/clip"
@@ -83,18 +84,33 @@ const (
 type Role string
 
 const (
-	Full  Role = "full"  // a computer with the service: Linux, Windows or macOS
-	Phone Role = "phone" // a phone app: only dials, never dialed
-	Lite  Role = "lite"  // a lite member for small devices
+	Member Role = "member" // a computer, a board or a router with the service or the firmware
+	Phone  Role = "phone"  // a phone app: dials every member
 )
 
 // known reports whether a peer may claim the role in its hello.
 func (r Role) known() bool {
 	switch r {
-	case Full, Phone, Lite:
+	case Member, Phone:
 		return true
 	}
 	return false
+}
+
+// maxCaps is how many names of a hello's caps a receiver reads.
+const maxCaps = 32
+
+// cleanCaps returns the capabilities of a hello it knows, sorted, each
+// once (docs/protocol.md, section 4, "Capabilities").
+func cleanCaps(caps []string) []string {
+	var out []string
+	for _, c := range caps[:min(len(caps), maxCaps)] {
+		if slices.Contains(group.AllCaps, c) && !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // message is one frame of the member protocol. The hello and the event are
@@ -299,6 +315,9 @@ type helloBody struct {
 	// ALPN version (FeatureMedia); a receiver ignores names it does not
 	// know.
 	Features []string `json:"features,omitempty"`
+	// Caps are what a member says it can do (group.CapHub and the
+	// others); a receiver ignores names it does not know.
+	Caps []string `json:"caps,omitempty"`
 	// Seal is the sender's public key for sealed messages.
 	Seal []byte `json:"seal,omitempty"`
 	// ReleaseSeq is the seq of the channel file of the signed release
@@ -347,6 +366,8 @@ type helloOut struct {
 	// Features are what this member supports beyond the protocol of its
 	// ALPN version.
 	Features []string `json:"features,omitempty"`
+	// Caps are what this member can do (group.CapHub and the others).
+	Caps []string `json:"caps,omitempty"`
 	// GroupCA is the group's first root, DER, which a full member sends
 	// on a records-only connection with a device no record names yet, as a
 	// new phone restoring the group with the recovery key: so it builds

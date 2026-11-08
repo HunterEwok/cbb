@@ -108,12 +108,13 @@ Commands:
   pair -invite file    Join with a remote invitation from cbb invite on the
                        group's hub, through its tunnel; sync away from home
                        goes on.
-  pair -full ...       Join as a computer with the service, a full member
-                       that may become an admin, rather than a lite member.
+  pair -caps list ...  Join as a member that can do list, a comma-separated
+                       subset of admin,dials,hub (the default: all three;
+                       the Next's Pi: admin,dials).
   agent                Link this session's clipboard with the service
                        (started at sign-in), through cbb-helper.
   service [-name name] [-port port] [-peer host:port]... [-no-mdns]
-          [-no-listen] [-tunnel-via host:port] [-full] [-state dir]
+          [-no-listen] [-tunnel-via host:port] [-caps list] [-state dir]
           [-socket path] [-user name]
                        Run the service (started by systemd, procd, launchd,
                        an rc script or Windows' service manager): it
@@ -122,7 +123,8 @@ Commands:
                        -tunnel-via: the tunnel to the hub sends its packets
                        there, a local UDP port that leads to the hub (cbb
                        next link -udp on the ZX Spectrum Next).
-                       -full: as a computer's service, a full member.
+                       -caps: what this member says it can do in its
+                       hellos (as for pair; its device record decides).
                        -state and -socket as before the command; -user:
                        started as root, open the mDNS sockets, then run
                        as this user (FreeBSD's rc script).
@@ -307,7 +309,7 @@ pub(crate) fn flag(a: &str) -> Option<&str> {
 fn host_name() -> String {
     let name = sys::host_name();
     let name: String = name.split('.').next().unwrap_or("").chars().take(64).collect();
-    if records::valid_name(&name) { name } else { "lite".into() }
+    if records::valid_name(&name) { name } else { "member".into() }
 }
 
 pub(crate) fn resolve(s: &str) -> Result<SocketAddr> {
@@ -322,6 +324,30 @@ fn join_host_port(host: &str, port: u16) -> String {
     if host.contains(':') && !host.starts_with('[') { format!("[{host}]:{port}") } else { format!("{host}:{port}") }
 }
 
+/// What a member can do unless told otherwise: everything on a computer,
+/// a Raspberry Pi or a router; the Pi inside a ZX Spectrum Next, which is
+/// on only while the Next is and reaches the network through it, is never
+/// a hub (docs/protocol.md, section 4, "Capabilities").
+fn default_caps(for_next: bool) -> Vec<String> {
+    let all = cbb_core::authority::CAPS.iter();
+    all.filter(|c| !for_next || **c != cbb_core::authority::CAP_HUB).map(|c| (*c).to_string()).collect()
+}
+
+/// Reads -caps: names of cbb_core::authority::CAPS joined by commas, or
+/// none for an empty list; sorted, each once.
+fn parse_caps(list: &str) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    for c in list.split(',').map(str::trim).filter(|c| !c.is_empty() && *c != "none") {
+        if !cbb_core::authority::CAPS.contains(&c) {
+            return Err(Error::msg(format!("-caps: {c:?} is none of admin, dials and hub")));
+        }
+        out.push(c.to_string());
+    }
+    out.sort();
+    out.dedup();
+    Ok(out)
+}
+
 /// The member port: 8764, or CBB_PORT.
 fn member_port() -> u16 {
     std::env::var("CBB_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8764)
@@ -334,17 +360,13 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut port = member_port();
     let mut addrs = Vec::new();
     let mut code_addr = None;
+    let mut caps = default_caps(for_next);
     let mut invite = None;
-    let mut full = false;
     let mut i = 0;
     while i < args.len() {
         let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(tr!("{} needs a value", args[i])));
         match flag(&args[i]) {
-            Some("full") if !for_next => {
-                full = true;
-                i += 1;
-                continue;
-            }
+            Some("caps") if !for_next => caps = parse_caps(&next()?)?,
             Some("name") => name = next()?,
             Some("port") => port = next()?.parse().context("the port is a number")?,
             Some("addr") => addrs.push(next()?),
@@ -358,10 +380,8 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         Some(path) => Some(invite_consent(&path)?),
         None => None,
     };
-    let (mut joiner, save) = joiner(&g.state, &name)?;
-    if full {
-        joiner = joiner.as_computer(admin::os_name());
-    }
+    let (joiner, save) = joiner(&g.state, &name)?;
+    let joiner = joiner.as_member(admin::os_name(), &caps.iter().map(String::as_str).collect::<Vec<_>>());
     let save = &*save;
     let id = match (invite, code_addr) {
         (Some((path, text)), _) => {
@@ -569,7 +589,7 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
         mdns: true,
         port: Some(member_port()),
         tunnel_via: None,
-        full: false,
+        caps: default_caps(false),
     };
     let mut run_user = None;
     let mut i = 0;
@@ -595,11 +615,7 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
                 i += 1;
                 continue;
             }
-            Some("full") => {
-                cfg.full = true;
-                i += 1;
-                continue;
-            }
+            Some("caps") => cfg.caps = parse_caps(&next()?)?,
             _ => return Err(Error::msg(format!("unknown argument {:?}; see cbb help", args[i]))),
         }
         i += 2;

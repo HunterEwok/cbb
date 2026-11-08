@@ -166,9 +166,9 @@ private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
             item(R.string.rename) { renaming = true }()
             if (d.frozen) item(R.string.unfreeze) { thawing = true }()
             if (d.canMakeAdmin) item(R.string.make_admin) { promoting = true }()
-            // An admin computer, or one the root makes an admin first; this phone is the hub under Settings.
-            // A computer that is no admin can be a hub that only passes the copies on.
-            if (!d.isSelf && d.online && !d.throughHub && d.role == "full" && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
+            // An admin member that may be a hub, or one the root makes an admin first; this phone is the hub under Settings.
+            // A member that is no admin can be a hub that only passes the copies on.
+            if (!d.isSelf && d.online && !d.throughHub && d.can("hub") && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
                 item(R.string.make_hub) { hubbing = true }()
             }
             if (!d.isSelf) item(R.string.remove, danger = true) { removing = true }()
@@ -238,8 +238,8 @@ private fun IconRow(model: AppModel, d: LiveGroup.Device) {
     var acting by remember { mutableStateOf(false) }
     var muting by remember { mutableStateOf(false) }
     Row(horizontalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-        // Computers, lite members and Android phones take pastes; iPhones cannot.
-        if (!d.isSelf && (d.role == "full" || d.role == "lite" || (d.role == "phone" && d.os == "android"))) {
+        // Members and Android phones take pastes; iPhones cannot.
+        if (!d.isSelf && (d.role == "member" || (d.role == "phone" && d.os == "android"))) {
             IconLabel("⌨", stringResource(R.string.paste_on_it)) { pasting = true }
         }
         // An admin mutes any device for the whole group, or ends its mute (docs/design.md, "Muting a device").
@@ -248,8 +248,8 @@ private fun IconRow(model: AppModel, d: LiveGroup.Device) {
         } else {
             IconLabel("🔇", stringResource(R.string.mute)) { muting = true }
         }
-        // Computers run quick actions; the lite member reboots and restarts.
-        if (!d.isSelf && d.online && (d.role == "full" || d.role == "lite")) {
+        // Members run quick actions.
+        if (!d.isSelf && d.online && d.role == "member") {
             IconLabel("⚡", stringResource(R.string.quick_actions)) { acting = true }
         }
     }
@@ -335,9 +335,8 @@ private fun Summary(d: LiveGroup.Device) {
 /** A rootless install is never an admin or a hub (D-79), so its role says so. */
 private fun roleTitle(role: String, rootless: Boolean) = when (role) {
     "phone" -> R.string.role_phone
-    "lite" -> if (rootless) R.string.role_lite_rootless else R.string.role_lite
     "watch" -> R.string.kind_watch
-    else -> if (rootless) R.string.role_full_rootless else R.string.role_full
+    else -> if (rootless) R.string.role_member_rootless else R.string.role_member
 }
 
 /**

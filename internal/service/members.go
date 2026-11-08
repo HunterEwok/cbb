@@ -100,12 +100,12 @@ type dialer struct {
 	wake chan struct{}
 }
 
-// found handles the members that discovery found. Of two full members the
-// one with the lower device ID dials, and the other one too when no
-// connection between them has come up for fallbackAfter, since a firewall
-// may keep the first from reaching it; node keeps the connection the lower
-// ID dialed. The lite members (TXT r=lite) dial the full members, and the
-// phones dial everyone. A member's dialer takes its new addresses or port on
+// found handles the members that discovery found. Of two members that
+// dial, the one with the lower device ID dials, and the other one too when
+// no connection between them has come up for fallbackAfter, since a
+// firewall may keep the first from reaching it; node keeps the connection
+// the lower ID dialed. Every member that dials dials those that do not
+// (TXT r=listen), and the phones dial everyone. A member's dialer takes its new addresses or port on
 // its next round.
 func (s *Service) found(peers []mdns.Peer) {
 	s.mu.Lock()
@@ -134,10 +134,17 @@ func (s *Service) found(peers []mdns.Peer) {
 		} else {
 			s.nearby[id] = uptime.Now()
 		}
-		if r, _ := p.TXTValue("r"); strings.EqualFold(r, "lite") || strings.EqualFold(r, "phone") {
-			continue // it dials the full members
+		r, _ := p.TXTValue("r")
+		switch {
+		case strings.EqualFold(r, "phone"):
+			continue // the phone that is the hub dials the members
+		case strings.EqualFold(r, "listen"):
+			// A member that does not dial waits for every other member.
+			want[id] = target{addresses(p), false}
+		default:
+			// Of two members that dial, the lower ID dials first.
+			want[id] = target{addresses(p), id < s.id.ID}
 		}
-		want[id] = target{addresses(p), id < s.id.ID}
 	}
 	for id, d := range s.dialers {
 		if t, ok := want[id]; !ok || t.later != d.later {

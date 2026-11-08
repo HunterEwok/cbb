@@ -573,10 +573,6 @@
 <context>
     <name>devices</name>
     <message>
-        <source>lite member</source>
-        <translation>mwanachama mwepesi</translation>
-    </message>
-    <message>
         <source>device</source>
         <translation>kifaa</translation>
     </message>
@@ -591,10 +587,6 @@
     <message>
         <source>Board</source>
         <translation>Bodi</translation>
-    </message>
-    <message>
-        <source>Lite member</source>
-        <translation>Mwanachama mwepesi</translation>
     </message>
     <message>
         <source>Computer</source>

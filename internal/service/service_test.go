@@ -13,6 +13,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -359,6 +360,19 @@ func (s *testService) logf(t *testing.T, f string, a ...any) {
 }
 
 // logged reports whether the service logged a line that contains part.
+// count returns how many of the service's log lines hold part.
+func (s *testService) count(part string) int {
+	s.logMu.Lock()
+	defer s.logMu.Unlock()
+	n := 0
+	for _, l := range s.lines {
+		if strings.Contains(l, part) {
+			n++
+		}
+	}
+	return n
+}
+
 func (s *testService) logged(part string) bool {
 	s.logMu.Lock()
 	defer s.logMu.Unlock()
@@ -455,7 +469,7 @@ func startIn(t *testing.T, h *hub, s *testService) *testService {
 	s.cancel = cancel
 	name := s.name
 	cfg := Config{
-		StateDir: s.dir, Socket: s.socket, Role: node.Full, OS: s.os, Name: name, Discover: h.discover,
+		StateDir: s.dir, Socket: s.socket, Role: node.Member, OS: s.os, Name: name, Discover: h.discover,
 		Logf: func(f string, a ...any) { s.logf(t, f, a...) },
 		listen: func() (net.Listener, error) {
 			ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -716,8 +730,12 @@ func TestOneConnectionBetweenTwo(t *testing.T) {
 	if n := low.accepted.Load() - pairing[low]; n != 0 {
 		t.Errorf("the member with the lower ID accepted %d member connections", n)
 	}
-	if n := high.accepted.Load() - pairing[high]; n != 1 {
-		t.Errorf("the member with the higher ID accepted %d member connections, want 1", n)
+	// A first connection that met records not yet counting the joiner's
+	// device (a slow machine) exchanges records only, and the lower ID dials
+	// again once they let it in: one more connection, from the same side.
+	again := int32(low.count("it connects again as a member") + high.count("it connects again as a member"))
+	if n := high.accepted.Load() - pairing[high]; n != 1+again {
+		t.Errorf("the member with the higher ID accepted %d member connections, want %d", n, 1+again)
 	}
 	// The skew comes from the hello, which the engine may take only after
 	// the peer shows in the status: it is no sign of a new connection.
@@ -726,7 +744,7 @@ func TestOneConnectionBetweenTwo(t *testing.T) {
 	for i := range now {
 		now[i].SkewMS = 0
 	}
-	if len(now) != 1 || now[0] != since {
+	if len(now) != 1 || !reflect.DeepEqual(now[0], since) {
 		t.Errorf("the connection changed: %+v, then %+v", since, now)
 	}
 }
@@ -1326,7 +1344,7 @@ func listBox(t *testing.T, dir string, admin *group.Identity, dev group.DeviceID
 		adminCA = chain[0]
 	}
 	r, err := recs.Sign(group.RecordBody{Type: group.RecordDevice, TimeMS: time.Now().UnixMilli(), Device: string(dev), Name: "box",
-		Role: group.RoleFull, OS: group.OSLinux, Key: &key}, ca.Key, adminCA)
+		Role: group.RoleMember, Caps: group.AllCaps, OS: group.OSLinux, Key: &key}, ca.Key, adminCA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1416,7 +1434,7 @@ func TestDevicesAndRevoke(t *testing.T) {
 	}
 	waitFor(t, "the Mac connects to both", func() bool { return len(mac.status(t).Peers) == 2 })
 	for _, d := range mac.devices(t) {
-		if d.Admin || d.Root != (d.Name == "pi") || !d.Online || d.Role != "full" {
+		if d.Admin || d.Root != (d.Name == "pi") || !d.Online || d.Role != "member" {
 			t.Errorf("on the Mac: %+v", d)
 		}
 		if d.Self != (d.Name == "mac") {
@@ -2011,7 +2029,7 @@ func TestRecordsTheSystem(t *testing.T) {
 	waitFor(t, "pi records Windows", func() bool {
 		for _, d := range pi.devices(t) {
 			if d.Name == "pc" {
-				return d.OS == group.OSWindows && !d.Online && !d.Admin && d.Role == group.RoleFull
+				return d.OS == group.OSWindows && !d.Online && !d.Admin && d.Role == group.RoleMember
 			}
 		}
 		return false
@@ -2083,11 +2101,11 @@ func TestPairingAcrossARenewal(t *testing.T) {
 	}
 }
 
-// startRust runs s on the Rust service as a computer's (-full), on a port
+// startRust runs s on the Rust service as a computer's, on a port
 // of its own, which addr reads from its log once it is in a group.
 func startRust(t *testing.T, bin string, s *testService) *testService {
 	t.Helper()
-	r := startLiteEnv(t, bin, s.dir, []string{"CBB_TEST_ELSEWHERE=" + elsewhereDir()}, "-full", "-port", "0", "-name", s.name)
+	r := startLiteEnv(t, bin, s.dir, []string{"CBB_TEST_ELSEWHERE=" + elsewhereDir()}, "-port", "0", "-name", s.name)
 	r.name, r.os, r.rust = s.name, s.os, true
 	// It ends with an error after cbb leave, for systemd to start it again,
 	// where Go's Run returns ErrLeft.

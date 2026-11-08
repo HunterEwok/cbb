@@ -42,7 +42,7 @@ func TestCommandSignerByRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	dev, root, ok := s.CommandSigner(cmd)
-	if !ok || root || dev.ID != DeviceID(pcMember.Subject.CommonName) || dev.Role != RoleFull || dev.Store != StoreFile {
+	if !ok || root || dev.ID != DeviceID(pcMember.Subject.CommonName) || dev.Role != RoleMember || dev.Store != StoreFile {
 		t.Fatalf("the signer: ok %v, root %v, %+v", ok, root, dev)
 	}
 }

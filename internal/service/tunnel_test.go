@@ -741,7 +741,7 @@ func TestHubWait(t *testing.T) {
 	for _, d := range []struct {
 		id   group.DeviceID
 		role string
-	}{{phone, group.RolePhone}, {pc, group.RoleFull}} {
+	}{{phone, group.RolePhone}, {pc, group.RoleMember}} {
 		key, _ := group.NewKey()
 		leaf, err := ca.IssueMember(d.id, &key.PublicKey, now)
 		if err != nil {

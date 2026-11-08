@@ -73,7 +73,7 @@ func (s *Records) CheckCopy(c *clip.Sealed, now time.Time) error {
 
 // Readers returns the devices a copy is sealed to by the records
 // (docs/protocol.md, section 4, "Readers"): those with a key that stands,
-// a key for sealed messages, the role full, phone or lite, not frozen, and
+// a key for sealed messages, the role member or phone, not frozen, and
 // not only passing copies on; for a secret, none that the records keep
 // secrets from. The same is cbb_core::copy::readers.
 func (s *Records) Readers(secret bool) []clip.Reader {
@@ -81,7 +81,7 @@ func (s *Records) Readers(secret bool) []clip.Reader {
 	for _, d := range s.Devices() {
 		switch {
 		case len(d.Keys) == 0, len(d.Seal) == 0, d.Frozen, d.ForwardOnly:
-		case d.Role != RoleFull && d.Role != RolePhone && d.Role != RoleLite:
+		case d.Role != RoleMember && d.Role != RolePhone:
 		case secret && s.NoSecretsTo(d.ID):
 		default:
 			out = append(out, clip.Reader{ID: string(d.ID), Seal: d.Seal})

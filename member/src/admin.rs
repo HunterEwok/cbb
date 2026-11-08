@@ -137,7 +137,15 @@ pub fn new_group(dir: &Path, name: &str) -> Result<(Identity, String)> {
             Vec::new()
         }
     };
-    let own = admit::OwnDevice { name, os: os_name(), role: "full", member_point: &point, store, seal };
+    let own = admit::OwnDevice {
+        name,
+        os: os_name(),
+        role: authority::ROLE_MEMBER,
+        caps: &authority::CAPS,
+        member_point: &point,
+        store,
+        seal,
+    };
     let now_ms = uptime::wall_ms();
     let mut g = admit::new_group(&root, &own, now_ms)?;
     if store != "hardware" {
@@ -297,7 +305,7 @@ pub fn finish_takeover(dir: &Path, node: &Node, name: &str) -> Result<bool> {
         let me = ident.id.to_string();
         let store = if ident.external.is_some() { "hardware" } else { "file" };
         let seal = sealkey::load(dir).ok().and_then(|k| cbb_core::seal::public_key(&k).ok()).unwrap_or_default();
-        let own = Own { name, role: "full", os: os_name(), store, seal: &seal };
+        let own = Own { name, role: authority::ROLE_MEMBER, caps: node.caps(), os: os_name(), store, seal: &seal };
         let s = Signer { ca: &claim_cert, key: &key, me: &me };
         let done = takeover::finished(node, &s, &own)?;
         ident.with_cert_from(&done.cert, None)?;
@@ -544,6 +552,7 @@ impl Admin<'_> {
                 device: d.id.clone(),
                 name: name.into(),
                 role: d.role.clone(),
+                caps: d.caps.clone(),
                 os: d.os.clone(),
                 key: Some(Hash(d.key)),
                 admin: d.admin_key.map(Hash),
@@ -575,7 +584,8 @@ impl Admin<'_> {
         let new_os = !peer.os.is_empty() && d.os != peer.os;
         let rootless = peer.key_store == "rootless" && d.store != "rootless";
         let new_store = d.store == "file" && peer.key_store == "hardware" || rootless;
-        let changed = d.role == "full" && (new_os || new_store) || d.role == "lite" && rootless;
+        // Its capabilities stay those it was admitted with.
+        let changed = d.role == authority::ROLE_MEMBER && (new_os || new_store);
         if !changed || self.root_device() != self.me() {
             return Ok(());
         }
@@ -588,6 +598,7 @@ impl Admin<'_> {
             device: d.id.clone(),
             name: d.name.clone(),
             role: d.role.clone(),
+            caps: d.caps.clone(),
             os: if new_os { peer.os.clone() } else { d.os.clone() },
             key: Some(Hash(d.key)),
             admin: d.admin_key.map(Hash),
@@ -705,8 +716,11 @@ impl Admin<'_> {
         if d.id == self.me() {
             return Err(Error::msg("this device is the group's root, which is more than an admin"));
         }
-        if d.role != "full" {
-            return Err(Error::msg(format!("{} is no computer with the service; only those can be admins", d.name)));
+        if !d.can(authority::CAP_ADMIN) {
+            return Err(Error::msg(format!(
+                "{} cannot hold an admin key; only a member with the cap admin can be an admin",
+                d.name
+            )));
         }
         if d.admin {
             return Err(Error::msg(format!("{} is already an admin", d.name)));
@@ -732,7 +746,11 @@ impl Admin<'_> {
         let (store, kind, proof) = if d.store == "proven" {
             (d.store.clone(), d.kind.clone(), d.proof.clone())
         } else {
-            (cbb_core::command::store_of(&peer.key_store, "full").to_string(), String::new(), String::new())
+            (
+                cbb_core::command::store_of(&peer.key_store, authority::ROLE_MEMBER).to_string(),
+                String::new(),
+                String::new(),
+            )
         };
         level_allows(
             &self.key_level(),
@@ -769,7 +787,8 @@ impl Admin<'_> {
                 kind: authority::TYPE_DEVICE.into(),
                 device: d.id.clone(),
                 name: d.name.clone(),
-                role: "full".into(),
+                role: d.role.clone(),
+                caps: d.caps.clone(),
                 os: d.os.clone(),
                 key: Some(Hash(d.key)),
                 admin: Some(admin),
@@ -1047,8 +1066,11 @@ impl Admin<'_> {
                 d.name
             )));
         }
-        if d.role != "full" {
-            return Err(Error::msg(format!("{} is no computer; only a computer only passes copies on", d.name)));
+        if !d.can(authority::CAP_HUB) {
+            return Err(Error::msg(format!(
+                "{} cannot be a hub; only a member with the cap hub only passes copies on",
+                d.name
+            )));
         }
         if d.store == "rootless" {
             return Err(Error::msg(format!(
@@ -1067,6 +1089,7 @@ impl Admin<'_> {
                 device: d.id.clone(),
                 name: d.name.clone(),
                 role: d.role.clone(),
+                caps: d.caps.clone(),
                 os: d.os.clone(),
                 key: Some(Hash(d.key)),
                 store: d.store.clone(),
@@ -1106,8 +1129,11 @@ impl Admin<'_> {
         let mut ids: Vec<String> = Vec::new();
         for t in targets {
             let d = find_device(self.node, t)?;
-            if d.role != "full" && d.role != "phone" {
-                return Err(Error::msg(format!("{} cannot be a hub: only a computer or a phone can", d.name)));
+            if !d.may_hub() {
+                return Err(Error::msg(format!(
+                    "{} cannot be a hub: only a phone or a member with the cap hub can",
+                    d.name
+                )));
             }
             // Naming it in the table is the user's consent to a key in a
             // file, where the level allows one.
@@ -1590,7 +1616,7 @@ mod tests {
         assert_eq!(st.root_device, ident.id.as_str());
         assert_eq!(st.key_level, "files");
         let me = rs.devices().into_iter().find(|d| d.id == ident.id.as_str()).unwrap();
-        assert_eq!((me.role.as_str(), me.name.as_str(), me.store.as_str()), ("full", "desk", "file"));
+        assert_eq!((me.role.as_str(), me.name.as_str(), me.store.as_str()), ("member", "desk", "file"));
         assert!(new_group(&dir, "desk").err().expect("a second group").to_string().contains("already in a group"));
         let _ = std::fs::remove_dir_all(&dir);
     }

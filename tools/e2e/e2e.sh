@@ -22,11 +22,8 @@ set -eu
 
 bin=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 cli=$bin
-# The Rust service runs as a computer's (-full), as the Go one always does.
-full=
 if [ $# -gt 1 ]; then
 	cli=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
-	full=-full
 fi
 # The containers' mounts: the service, its helper when it has one, the
 # commands' program.
@@ -90,7 +87,7 @@ for m in $members; do
 	# shellcheck disable=SC2046 # mounts prints several flags
 	docker run -d --rm --name "$run-$m" --hostname "host-$m" --network "$net" \
 		-e CBB_SOCKET=/tmp/c.sock $(mounts) -v "$cover:/cover" -e GOCOVERDIR=/cover "$image" \
-		/cb/cbb service $full -state /tmp -socket /tmp/c.sock >/dev/null
+		/cb/cbb service -state /tmp -socket /tmp/c.sock >/dev/null
 done
 for m in $members; do
 	eventually "$m starts" cb "$m" status
@@ -139,7 +136,7 @@ eventually "avahi browses the members" sh -c "[ \$(docker exec $run-avahi avahi-
 say "a wrong code does not join"
 # shellcheck disable=SC2046 # mounts prints several flags
 docker run -d --rm --name "$run-d" --network "$net" -e CBB_SOCKET=/tmp/c.sock \
-	$(mounts) -v "$cover:/cover" -e GOCOVERDIR=/cover "$image" /cb/cbb service $full -state /tmp -socket /tmp/c.sock >/dev/null
+	$(mounts) -v "$cover:/cover" -e GOCOVERDIR=/cover "$image" /cb/cbb service -state /tmp -socket /tmp/c.sock >/dev/null
 members="$members d"
 eventually "d starts" cb d status
 admin=${members%% *}

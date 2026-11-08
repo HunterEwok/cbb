@@ -243,7 +243,7 @@ func ParseKinds(s string) ([]string, error) {
 // records show it (group.Records.CommandSigner).
 type Signer struct {
 	Root  bool   // the group's root key signed it
-	Role  string // the device's role, group.RolePhone, group.RoleFull or group.RoleWatch; "" when no record names it
+	Role  string // the device's role, group.RolePhone, group.RoleMember or group.RoleWatch; "" when no record names it
 	Store string // where its keys live, group.StoreFile and the others; "" when unknown
 }
 
@@ -257,7 +257,7 @@ func (s Signer) Kinds() []string {
 	switch s.Role {
 	case group.RolePhone:
 		out = append(out, ByPhone)
-	case group.RoleFull:
+	case group.RoleMember:
 		out = append(out, ByComputer)
 	case group.RoleWatch:
 		out = append(out, ByWatch)

@@ -343,6 +343,7 @@ fn peer_json(p: &Peer) -> Value {
         "reach": p.reach.iter().map(ToString::to_string).collect::<Vec<_>>(),
         "records_only": p.records_only,
         "features": p.features,
+        "caps": p.caps,
         "chain": p.chain.iter().map(|c| b64(c)).collect::<Vec<_>>(),
     })
 }
@@ -388,6 +389,8 @@ struct DeviceAnswer {
     device: String,
     name: String,
     role: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    caps: Vec<String>,
     os: String,
     admin: bool,
     root: bool,
@@ -742,6 +745,7 @@ impl Member {
                         device: d.id,
                         name: d.name,
                         role: d.role,
+                        caps: d.caps,
                         os: d.os,
                         admin: d.admin,
                         root: d.root,
@@ -875,7 +879,8 @@ impl Member {
                     let seal = a.seal.clone().unwrap_or_default();
                     let os = if a.os.is_empty() { "ios" } else { a.os.as_str() };
                     let name = if a.name.trim().is_empty() { "Phone" } else { a.name.trim() };
-                    let own = cbb_core::takeover::Own { name, role: "phone", os, store: &a.store, seal: &seal };
+                    let own =
+                        cbb_core::takeover::Own { name, role: "phone", caps: &[], os, store: &a.store, seal: &seal };
                     let s = Signer { ca: &root, key: &key, me: &me };
                     let cert = self.node.finish_takeover(&s, &own)?;
                     return Ok(json!({ "state": "effective", "cert": b64(&cert) }));

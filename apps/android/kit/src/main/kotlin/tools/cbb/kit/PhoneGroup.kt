@@ -176,12 +176,14 @@ class PhoneGroup internal constructor(
         commands: List<String>? = null,
         seal: ByteArray? = null,
         forwardOnly: Boolean = false,
+        caps: List<String>? = null,
     ): Member.Record {
         if (!isAdmin) throw Failure("this phone is no admin")
         val b = Records.Body.of("device", caSigner, now)
         b.device = device
         b.name = name
         b.role = role
+        b.caps = caps
         b.os = os
         b.key = key
         b.admin = admin
@@ -207,6 +209,7 @@ class PhoneGroup internal constructor(
             d.commands.takeIf { admin != null && admin.contentEqualsOrNull(d.adminKey) && it.isNotEmpty() },
             d.seal,
             d.forwardOnly,
+            d.caps,
         )
 
     /**
@@ -483,11 +486,11 @@ class PhoneGroup internal constructor(
         if (!isAdmin) throw Failure("this phone is no admin")
         val d = devices.firstOrNull { it.id == device } ?: throw Failure("unknown device")
         if (d.forwardOnly) return null
-        if (d.role != "full") throw Failure("not a computer")
+        if (!d.can("hub")) throw Failure("not a member that may be a hub")
         if (d.frozen) throw Failure("frozen: unfreeze it or remove it")
         if (d.store == Records.ROOTLESS) throw Rootless()
         if (d.adminKey != null || device == records.rootDevice) throw ReadsCopies()
-        return record(d.id, d.name, d.role, d.key, caSigner, now, null, d.os, d.store, d.kind, d.proof, seal = d.seal, forwardOnly = true)
+        return record(d.id, d.name, d.role, d.key, caSigner, now, null, d.os, d.store, d.kind, d.proof, seal = d.seal, forwardOnly = true, caps = d.caps)
     }
 
     /** The key for sealed messages that the device record of to names, which an admin's commands for it are sealed to (section 15, "Sealed commands"); null when it has none. */
@@ -607,7 +610,7 @@ class PhoneGroup internal constructor(
     ): Pair<ByteArray, Member.Record> {
         if (!isRoot) throw Failure("only the root makes admins")
         val d = devices.firstOrNull { it.id == device } ?: throw Failure("unknown device")
-        if (d.role != "full") throw Failure("not a computer")
+        if (!d.can("admin")) throw Failure("not a member that may be an admin")
         if (d.frozen) throw Failure("frozen: unfreeze it or remove it")
         val proven = d.store == Records.PROVEN
         val store = if (proven) d.store else Records.storeOf(keyStore, d.role)
@@ -617,7 +620,7 @@ class PhoneGroup internal constructor(
         val ca = GroupCertificates.adminCA(device, adminKey, currentRoot, rootSigner)
         val r = record(
             device, d.name, d.role, d.key, rootSigner, now, Records.keyHashOfCert(ca), d.os, store,
-            d.kind.takeIf { proven }, d.proof.takeIf { proven }, seal = d.seal,
+            d.kind.takeIf { proven }, d.proof.takeIf { proven }, seal = d.seal, caps = d.caps,
         )
         computerAdmins[device] = ca
         return ca to r
@@ -720,9 +723,9 @@ class PhoneGroup internal constructor(
      */
     fun watchActions(device: String): List<WatchAction> {
         val d = devices.firstOrNull { it.id == device } ?: return emptyList()
-        if (device == records.rootDevice || (d.role != "full" && d.role != "lite")) return emptyList()
+        if (device == records.rootDevice || d.role != "member") return emptyList()
         val out = mutableListOf<WatchAction>()
-        if (d.adminKey != null && d.role == "full" && !d.frozen) out.add(WatchAction.FREEZE)
+        if (d.adminKey != null && !d.frozen) out.add(WatchAction.FREEZE)
         if (d.adminKey == null && !d.admin) out.add(WatchAction.REMOVE)
         return out + listOf(WatchAction.PASTE_OFF, WatchAction.ACTIONS_OFF, WatchAction.AWAY_OFF, WatchAction.ACTION)
     }
@@ -885,8 +888,7 @@ class PhoneGroup internal constructor(
         }
         computers.removeAll { it.device == admitted.device }
         computers.add(Computer(admitted.device, admitted.info.name, admitted.info.os, admitted.cert, now, addrs.filter(JoinCode::isHome)))
-        val role = if (admitted.info.role == Pairing.Info.LITE) "lite" else "full"
-        record(admitted.device, name, role, key, caSigner, now, os = admitted.info.os, seal = admitted.info.seal)
+        record(admitted.device, name, "member", key, caSigner, now, os = admitted.info.os, seal = admitted.info.seal, caps = admitted.info.caps)
         return admitted
     }
 

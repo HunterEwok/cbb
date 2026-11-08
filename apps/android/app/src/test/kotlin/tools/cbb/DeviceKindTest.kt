@@ -8,7 +8,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class DeviceKindTest {
-    private fun device(role: String = "full", os: String? = null, info: Member.DeviceInfo? = null) =
+    private fun device(role: String = "member", os: String? = null, info: Member.DeviceInfo? = null) =
         LiveGroup.Device("a", "deck", online = true, role = role, os = os, device = info)
 
     /** The hello's form first; else the role and the system, as on the iPhone. */
@@ -17,7 +17,7 @@ class DeviceKindTest {
         assertEquals(DeviceKind.CONSOLE, device(os = "linux", info = Member.DeviceInfo(form = "console")).kind)
         assertEquals(DeviceKind.LAPTOP, device(os = "macos").kind)
         assertEquals(DeviceKind.DESKTOP, device(os = "windows").kind)
-        assertEquals(DeviceKind.BOARD, device(role = "lite").kind)
+        assertEquals(DeviceKind.BOARD, device(os = "none").kind)
         assertEquals(DeviceKind.PHONE, device(role = "phone", os = "android").kind)
         assertEquals(DeviceKind.DESKTOP, device(info = Member.DeviceInfo(form = "toaster")).kind)
     }

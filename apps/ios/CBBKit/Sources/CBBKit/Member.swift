@@ -40,10 +40,10 @@ public enum Member {
     /// Texts are at most this many bytes of UTF-8.
     public static let maxText = 1 << 20
 
-    /// What kind of member is at the other end.
-    /// What a member does: `full` is a computer with the service (Linux,
-    /// Windows or macOS); its system is the hello's `os`.
-    public enum Role: String, Codable, Sendable { case full, phone, lite }
+    /// What kind of member is at the other end: `member` is any device
+    /// with the service or the firmware, `phone` a phone's app; its system
+    /// is the hello's `os`.
+    public enum Role: String, Codable, Sendable { case member, phone }
 
     /// The kind of an event: a secret is kept only briefly (section 5);
     /// media is images or files, of which the kit takes the text.
