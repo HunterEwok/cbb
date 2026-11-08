@@ -205,6 +205,11 @@ fi
 
 install -d -m 0755 "${cbb%/*}"
 install -m 0755 "$bin" "$cbb"
+# cbb-helper, when the archive has it, goes beside cbb, where cbb looks for
+# it; root owns both, as cbb requires of its helper's program and folder.
+if [ -f "$(dirname "$bin")/cbb-helper" ]; then
+	install -m 0755 "$(dirname "$bin")/cbb-helper" "${cbb%/*}/cbb-helper"
+fi
 install -d -m 0755 "${sysusers%/*}"
 # SteamOS may drop /etc/group's changes with an update, so the sysusers
 # file says who is in the group too: the user who ran sudo, and those it

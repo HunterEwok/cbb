@@ -83,6 +83,7 @@ type Window struct {
 	expires   time.Duration // on the uptime clock
 	busy      bool          // an attempt is running
 	committed bool          // the running attempt is sending the welcome
+	closing   bool          // Close came while committed: the window closes if the attempt fails
 	cancel    context.CancelFunc
 	failures  int
 	idle      map[string]int // attempts by address that ended before they counted
@@ -181,7 +182,8 @@ func (w *Window) Close() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.committed {
-		return // succeed closes the window
+		w.closing = true
+		return // succeed closes the window, or release if the attempt fails
 	}
 	w.closeLocked(ErrClosed)
 	if w.cancel != nil {
@@ -249,6 +251,12 @@ func (w *Window) release(failed bool, addr string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.busy, w.cancel = false, nil
+	if w.committed {
+		w.committed = false
+		if w.closing {
+			w.closeLocked(ErrClosed)
+		}
+	}
 	if !failed && addr != "" {
 		if w.idle == nil {
 			w.idle = map[string]int{}

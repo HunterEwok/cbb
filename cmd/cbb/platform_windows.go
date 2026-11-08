@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -108,19 +107,6 @@ func agentLog(stderr io.Writer) (io.Writer, func(), error) {
 		return stderr, func() {}, err
 	}
 	return l, func() { l.Close() }, nil
-}
-
-// firstAgent reports whether no other agent runs in this session. Its
-// mutex stays open until the agent exits, so a second agent sees it and
-// leaves.
-func firstAgent() bool {
-	name, _ := windows.UTF16PtrFromString(`Local\cbb-agent`)
-	h, err := windows.CreateMutex(nil, false, name)
-	if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
-		windows.CloseHandle(h)
-		return false
-	}
-	return true // without a mutex, running twice beats not running
 }
 
 func defaultStateDir() string {

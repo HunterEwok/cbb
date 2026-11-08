@@ -165,6 +165,10 @@ else
 	fi
 	install -d -m 0755 /usr/local/bin
 	install -m 0755 "$bin" "$run"
+	# cbb-helper, when the archive has it, beside cbb for the agent.
+	if [ -f "$(dirname "$bin")/cbb-helper" ]; then
+		install -m 0755 "$(dirname "$bin")/cbb-helper" /usr/local/bin/cbb-helper
+	fi
 fi
 # The socket's directory: members of the group may reach the socket, and
 # only the service its state.
@@ -177,6 +181,11 @@ service="/Library/Application Support/cbb/bin/cbb"
 install -d -o root -g wheel -m 0755 "/Library/Application Support/cbb/bin"
 install -o root -g wheel -m 0755 "$run" "$service.new"
 mv -f "$service.new" "$service"
+# Its helper beside it, root's as well, as cbb requires of its helper.
+if [ -f "${run%/*}/cbb-helper" ]; then
+	install -o root -g wheel -m 0755 "${run%/*}/cbb-helper" "${service%/*}/cbb-helper.new"
+	mv -f "${service%/*}/cbb-helper.new" "${service%/*}/cbb-helper"
+fi
 
 daemon=tools.cbb
 agent=tools.cbb.agent

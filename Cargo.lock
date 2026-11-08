@@ -234,6 +234,7 @@ dependencies = [
 name = "cbb-lite"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "base64 0.23.1",
  "blake2 0.11.0",
  "bytes",
@@ -242,6 +243,7 @@ dependencies = [
  "chacha20poly1305 0.11.0",
  "getrandom 0.4.3",
  "gotatun",
+ "hkdf",
  "hmac 0.13.0",
  "if-addrs",
  "libc",
@@ -253,6 +255,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "smoltcp",
+ "windows-sys",
 ]
 
 [[package]]
@@ -704,6 +707,7 @@ dependencies = [
  "digest 0.11.3",
  "ff",
  "group",
+ "hkdf",
  "hybrid-array",
  "pkcs8",
  "rand_core 0.10.1",
