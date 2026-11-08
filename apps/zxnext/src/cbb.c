@@ -1464,6 +1464,7 @@ static const char no_file[] = SITE " has no such file; are its files in place?";
 
 extern uint8_t http_rx(uint16_t n) __z88dk_fastcall;
 extern uint8_t *http_dst;
+extern void pi_tx(uint16_t n) __z88dk_fastcall;
 
 // Asks for size bytes of name from offset on the open connection; 0 with
 // the bytes in text[] when they all came.
@@ -1990,8 +1991,8 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
         if (strcmp(line, "CBBGO") == 0) break;
     }
     while ((n = esx_f_read(fh, text, CHUNK)) > 0) {
-        uint16_t i;
-        for (i = 0; i < n; i++) link_send(text[i]);
+        http_dst = text;
+        pi_tx(n);
         sent += n;
         progress(row, sent, it->size, start);
     }
