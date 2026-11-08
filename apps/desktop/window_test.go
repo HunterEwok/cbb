@@ -740,7 +740,7 @@ func newFakeService(t *testing.T) *fakeService {
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	s := &fakeService{t: t, path: filepath.Join(dir, "c.sock"),
-		status: control.Status{Device: "self", Group: "cbb-7f3a", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Mode: "shared"},
+		status: control.Status{Device: "self", Group: "cbb-7f3a", Role: "member", OS: "linux", Mode: "shared"},
 		devices: []control.Device{
 			{ID: "self", Name: "This PC", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Admin: true, Root: true, Self: true, Online: true, Listed: true},
 			{ID: "mac", Name: "MacBook", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "macos", OSVersion: "26.1", Online: true, Listed: true, MayHub: true},
@@ -749,7 +749,7 @@ func newFakeService(t *testing.T) *fakeService {
 			{ID: "pixel", Name: "Pixel", Role: "phone", OS: "android", Online: true, Listed: true},
 			{ID: "ipad", Name: "iPad", Role: "phone", OS: "ios", Form: "tablet", Listed: true},
 			{ID: "tv", Name: "Living room TV", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Form: "tv", Online: true, Listed: true},
-			{ID: "nano", Name: "Nano", Role: "member", Listed: true},
+			{ID: "nano", Name: "Nano", Role: "member", OS: "none", Listed: true},
 			{ID: "srv", Name: "Home server", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Form: "server", Online: true, Listed: true, Hub: true},
 			{ID: "gate", Name: "Router", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Form: "router", Listed: true},
 			{ID: "deck", Name: "Steam Deck", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Form: "console", Online: true, Listed: true},
