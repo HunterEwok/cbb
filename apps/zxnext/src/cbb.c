@@ -1992,9 +1992,10 @@ static uint32_t pi_seconds(struct item *it, uint32_t speed)
 }
 
 // The speed the Pi's cbb goes at first, which the Pi's tty takes for the
-// copy only; then a step slower each time it does not come whole, which
-// the probe tells in a second.
-#define PI_FAST_SPEED 2000000UL
+// copy only; then a step slower each time it does not come whole. Not 2M:
+// there a Pi Zero that unpacks the copy as well loses bytes, and 921600
+// carries about as many a second.
+#define PI_FAST_SPEED 921600UL
 
 // Waits a few frames, for the UART to send what it holds.
 static void wait_frames(uint8_t n)
@@ -2022,6 +2023,10 @@ static void wait_frames(uint8_t n)
 // Pi's tty takes for the copy and leaves after, or with speed 0 at the
 // line's own. 0 when sent, 2 when the Pi did not say it was ready (its
 // tty may not take the speed), else 1 with the message shown.
+// pi_send()'s command's ends, in this page: zcc keeps string literals
+// in MAIN.
+static const char ps_save[] = "s=$(stty -g); ";
+static const char ps_end[] = "; timeout 1 cat >/dev/null; printf '\\r\\nCBBEND\\r\\n'; stty $s\n";
 static int pi_send(struct item *it, uint8_t row, uint32_t speed)
 {
     uint8_t fh, err;
@@ -2037,11 +2042,14 @@ static int pi_send(struct item *it, uint8_t row, uint32_t speed)
     // CR first ends the line the rest of the echo left, which the Next
     // hears garbled at that speed. The Pi Zero starts head only after
     // CBBGO: the Next waits for it (pi_ready()).
-    sprintf(line,
-            "s=$(stty -g); stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && timeout %lu head -c %lu%s >" PI_DIR
-            "/cbb.new; printf '\\r\\nCBBEND\\r\\n'; stty $s\n",
+    // A second's cat after head takes the filler pi_check() sent beyond
+    // what head wanted, which the shell would read as lines otherwise. In
+    // parts, for line[].
+    link_send_str(ps_save);
+    sprintf(line, "stty %lu raw -echo -iexten && sleep 1 && printf '\\r\\nCBBGO\\r\\n' && timeout %lu head -c %lu%s >" PI_DIR "/cbb.new",
             speed ? speed : 115200UL, pi_seconds(it, speed), it->size, it->pi == 2 ? " | gzip -dc" : "");
     link_send_str(line);
+    link_send_str(ps_end);
     if (speed) {
         wait_frames(2);
         link_speed(speed);
@@ -2952,9 +2960,9 @@ int pi_check(void)
     uint8_t n, lost = 0;
     // Bytes lost on the way keep head waiting for more: filler after each
     // two quiet seconds ends it, and the copy is damaged then. The filler
-    // is newlines, so that bytes no head reads any more only give the
-    // shell empty lines.
-    memset(text, '\n', 4096);
+    // is spaces: what the Pi's cat after head does not take only puts
+    // spaces before the next command.
+    memset(text, ' ', 4096);
     for (n = 0; n < 32;) {
         if (!link_line(line, sizeof line, 2)) {
             if (strcmp(line, pc_end_w) == 0) break;

@@ -261,7 +261,7 @@ fn installs_then_finds_all_current() {
         o.screen
     );
     // The site's files from 460800 down a step at a time, to a speed the
-    // Next reads whole; the Pi's cbb gzipped at 2M, which the played Pi's
+    // Next reads whole; the Pi's cbb gzipped at 921600, which the played Pi's
     // tty takes.
     let fetch: Vec<u32> = o
         .esp()
@@ -277,9 +277,9 @@ fn installs_then_finds_all_current() {
         fetch.windows(2).all(|w| w[1] == w[0] || w[1] == step(w[0])),
         "{fetch:?}"
     );
-    let at_2m: Vec<_> = o.pi().log.iter().filter(|l| l.contains("stty 2000000 raw")).collect();
+    let at_fast: Vec<_> = o.pi().log.iter().filter(|l| l.contains("stty 921600 raw")).collect();
     assert!(
-        at_2m.len() == 1 && at_2m[0].contains("| gzip -dc >"),
+        at_fast.len() == 1 && at_fast[0].contains("| gzip -dc >"),
         "{:?}",
         o.pi().log
     );

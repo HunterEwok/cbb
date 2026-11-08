@@ -490,7 +490,7 @@ pub struct Pi {
     /// when the Next sends at another speed), and when it gives up.
     speed_in: Option<(usize, Vec<u8>, u64)>,
     /// What the raw copy's command says once its bytes came, at its speed:
-    /// CBBEND after the Pi's cbb, the probe's sha256sum.
+    /// CBBEND after the Pi's cbb.
     raw_end: RawEnd,
     /// Whether the raw copy goes through gzip -dc.
     raw_gz: bool,
