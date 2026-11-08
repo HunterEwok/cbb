@@ -64,6 +64,8 @@ impl Away {
         self.turn_on()
     }
 
+    pub fn serve_if_first(&self, _node: &std::sync::Arc<Node>) {}
+
     pub fn stop_hub(&self, _node: &Node, _anyway: bool) -> Result<()> {
         Err(Error::msg("this device is no hub of the group"))
     }

@@ -125,6 +125,18 @@ impl Away {
         Ok(keys)
     }
 
+    /// Serves at once when this device is a hub with no hub above it in the
+    /// group's order, as after cbb global hub, rather than when the loop
+    /// next looks; a hub with hubs above tries them first.
+    pub fn serve_if_first(&self, node: &Arc<Node>) {
+        let st = self.st.lock().unwrap().clone();
+        if let Some(st) = st.filter(|s| s.is_hub && s.relay.is_none())
+            && st.hubs_above(&node.hub_order(), self.me.as_str()).is_empty()
+        {
+            self.serve(node, &st);
+        }
+    }
+
     /// Makes this device, a hub, stop being one, as Go's stopHub: without
     /// anyway it refuses while the group has no other hub. The connected
     /// clients get the next hub's offer first and leave this one's tunnel.
@@ -250,6 +262,9 @@ impl Away {
     /// other hubs once it starts; on an error it fails closed, and status
     /// says why.
     pub(super) fn serve(&self, node: &Arc<Node>, st: &State) {
+        // One start at a time: the loop and cbb global hub both start it.
+        static STARTING: Mutex<()> = Mutex::new(());
+        let _one = STARTING.lock().unwrap_or_else(|e| e.into_inner());
         if self.serving.lock().unwrap().is_some() {
             return;
         }

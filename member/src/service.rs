@@ -832,6 +832,7 @@ impl Service {
             "hub" => {
                 crate::admin::may_be_hub(&self.state_dir, &node)?;
                 node.set_tunnel_key(Some(away.make_hub(h)?));
+                away.serve_if_first(&node);
                 // The members connect again, so their hellos carry the key
                 // and get the hub's offer.
                 node.reconnect();
