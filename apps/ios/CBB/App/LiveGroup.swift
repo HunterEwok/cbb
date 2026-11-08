@@ -1444,17 +1444,17 @@ final class LiveGroup: GroupController {
         // group's other hubs and passes their offers on; it is no client
         // itself (D-64; docs/protocol.md, section 11, "Several hubs").
         let awayState = AwayKeychain.load()
-        let hub = HubOnPhone(device: g.device, tunnels: GoHubTunnels(), state: HubKeychain.load(), save: { try HubKeychain.save($0) },
+        let hub = HubOnPhone(device: g.device, tunnels: RustHubTunnels(), state: HubKeychain.load(), save: { try HubKeychain.save($0) },
                              log: { what, error in hubLog.error("\(what, privacy: .public): \(error.map { String(reflecting: $0) } ?? "", privacy: .public)") })
         let isHub = g.isAdmin && hub.isOn
-        if !isHub, let s = awayState, let key = try? GoTunnels().publicKey(s.key) { try node.setTunnelKey(key, psk: s.psk) }
+        if !isHub, let s = awayState, let key = try? RustTunnels().publicKey(s.key) { try node.setTunnelKey(key, psk: s.psk) }
         let relay = Relay(group: g.tag, device: g.device)
         relay.allowed = Self.allowed(g)
         // Through the tunnel the phone dials the hub's member port at its
         // loopback port, with the same TLS as at home, and only while the
         // hub is not found here.
         let away = AwayFromHome(
-            device: g.device, tunnels: GoTunnels(), state: awayState, save: { try AwayKeychain.save($0) },
+            device: g.device, tunnels: RustTunnels(), state: awayState, save: { try AwayKeychain.save($0) },
             atHome: { hub in await relay.atHome(hub) },
             dial: { port, hub in try await Self.reach(node, key: "away", port: port, device: hub) },
             serve: { link, _ in try await (link as? Link)?.served() },
@@ -1465,7 +1465,7 @@ final class LiveGroup: GroupController {
         // At a blind relay the phone dials the device the relay joined at
         // the relay link's loopback port, while it is not found here.
         let blindRelay = RelayOnPhone(
-            device: g.device, links: GoRelayLinks(), settings: RelayKeychain.load(), save: { try RelayKeychain.save($0) },
+            device: g.device, links: RustRelayLinks(), settings: RelayKeychain.load(), save: { try RelayKeychain.save($0) },
             dial: { port, peer in try await Self.reach(node, key: "relay:\(peer)", port: port, device: peer) },
             serve: { link, _ in try await (link as? Link)?.served() },
             elsewhere: { relay.found($0) },
@@ -1936,7 +1936,7 @@ final class LiveGroup: GroupController {
     }
 
     /// The project's forwarder at the address its name has now, IPv4 first,
-    /// as cbbtun takes it; nil when the name cannot be looked up.
+    /// as the hub takes it; nil when the name cannot be looked up.
     nonisolated static func projectForwarder() async -> HubState.Forwarder? {
         let hostPort = HubState.Forwarder.projectHost
         return await Task.detached { () -> HubState.Forwarder? in

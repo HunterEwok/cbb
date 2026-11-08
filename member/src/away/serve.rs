@@ -335,6 +335,8 @@ impl Away {
             vless_id: None,
             records: Arc::new(Mutex::new(records)),
             send: hub.sender(),
+            ways: Default::default(),
+            learned: Default::default(),
         };
         let report = Arc::new(Mutex::new(Report::default()));
         let registration = Registration::start(cfg, report.clone(), self.log.clone());

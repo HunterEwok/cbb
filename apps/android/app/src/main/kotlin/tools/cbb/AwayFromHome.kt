@@ -7,6 +7,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import tools.cbb.kit.FrameTransport
 import tools.cbb.kit.Member
+import tools.cbb.kit.RustTunnel
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -109,7 +110,7 @@ interface OpenTunnel {
     fun close()
 }
 
-/** Makes keys and tunnels; the app's comes from mobile/cbbtun, the tests' from a fake. */
+/** Makes keys and tunnels; the app's come from the Rust core, the tests' from a fake. */
 interface Tunnels {
     fun newKey(): ByteArray
     fun publicKey(private: ByteArray): ByteArray
@@ -123,17 +124,17 @@ interface Tunnels {
     ): OpenTunnel
 }
 
-/** The tunnel of mobile/cbbtun, WireGuard in the app's process. */
-object GoTunnels : Tunnels {
-    override fun newKey(): ByteArray = cbbtun.Cbbtun.newKey()
-    override fun publicKey(private: ByteArray): ByteArray = cbbtun.Cbbtun.publicKey(private)
+/** The phones' tunnel in the Rust core (the kit's RustTunnel), WireGuard in the app's process. */
+object CoreTunnels : Tunnels {
+    override fun newKey(): ByteArray = RustTunnel.newKey()
+    override fun publicKey(private: ByteArray): ByteArray = RustTunnel.publicKey(private)
     override fun start(
         private: ByteArray, psk: ByteArray, hubKey: ByteArray, device: String, hub: String, endpoint: String,
         obfuscation: String, vless: String,
     ): OpenTunnel {
-        val t = cbbtun.Cbbtun.start(private, psk, hubKey, device, hub, endpoint, obfuscation, vless)
+        val t = RustTunnel.start(private, psk, hubKey, device, hub, endpoint, obfuscation, vless)
         return object : OpenTunnel {
-            override val port: Int = t.port().toInt()
+            override val port: Int = t.port
             override fun setEndpoint(endpoint: String) = t.setEndpoint(endpoint)
             override fun close() {
                 t.close()
