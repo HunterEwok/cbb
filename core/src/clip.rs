@@ -966,10 +966,10 @@ fn add_seen(st: &mut Inner, id: &str) {
     if st.seen.contains(id) {
         return;
     }
-    if st.seen_order.len() >= SEEN_IDS {
-        if let Some(old) = st.seen_order.pop_front() {
-            st.seen.remove(&old);
-        }
+    if st.seen_order.len() >= SEEN_IDS
+        && let Some(old) = st.seen_order.pop_front()
+    {
+        st.seen.remove(&old);
     }
     st.seen.insert(id.to_string());
     st.seen_order.push_back(id.to_string());
@@ -983,10 +983,11 @@ fn add_written(st: &mut Inner, sum: Sum, now: Duration) {
 }
 
 fn add_secret(st: &mut Inner, sum: Sum, now: Duration) {
-    if !st.secrets.contains_key(&sum) && st.secrets.len() >= MAX_SECRETS {
-        if let Some(oldest) = st.secrets.iter().min_by_key(|(_, at)| **at).map(|(s, _)| *s) {
-            st.secrets.remove(&oldest);
-        }
+    if !st.secrets.contains_key(&sum)
+        && st.secrets.len() >= MAX_SECRETS
+        && let Some(oldest) = st.secrets.iter().min_by_key(|(_, at)| **at).map(|(s, _)| *s)
+    {
+        st.secrets.remove(&oldest);
     }
     st.secrets.insert(sum, now);
 }
