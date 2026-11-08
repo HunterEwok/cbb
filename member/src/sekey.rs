@@ -205,7 +205,9 @@ mod enclave {
 
     impl Cf {
         fn new(r: CFTypeRef) -> Option<Cf> {
-            (!r.is_null()).then_some(Cf(r))
+            // Never a Cf of NULL, even for a moment: dropping it would
+            // CFRelease(NULL), which stops the process.
+            if r.is_null() { None } else { Some(Cf(r)) }
         }
     }
 
