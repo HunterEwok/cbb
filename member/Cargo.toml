@@ -46,7 +46,7 @@ getrandom = { version = "0.4", features = ["std"] }
 blake2 = { version = "0.10.6", optional = true }
 chacha20 = { version = "0.10.2", optional = true }
 hmac = { version = "0.13", optional = true }
-chacha20poly1305 = { version = "0.10.1", optional = true }
+chacha20poly1305 = { version = "0.11.0", optional = true }
 base64 = { version = "0.23.1", optional = true }
 # The way over VLESS (src/vless.rs): rustls with the core's provider, and
 # its standard library's connections and system time.
