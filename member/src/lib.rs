@@ -98,99 +98,133 @@ use cbb_core::{certs, clip, hlc};
 use error::{Context, Error, Result};
 use identity::Stored as _;
 
-const USAGE: &str = "Usage: cbb [-state dir] [-socket path] [-debug] <command> [arguments]
+const USAGE: &str = "Usage: cbb <command> [arguments]
 
 Commands:
-  pair [-name name] [-port port] [-addr host[:port]]...
-                       Join a group: show a QR code for the phone app to scan
-                       (-addr: where the phone reaches this device, when the
-                       code would name the wrong addresses).
-  pair -code host:port Join with the code from cbb pair on a full member.
-  pair -invite file    Join with a remote invitation from cbb invite on the
-                       group's hub, through its tunnel; sync away from home
-                       goes on.
-  pair -full ...       Join as a computer with the service, a full member
-                       that may become an admin, rather than a lite member.
-  pair [-admin]        In a group, on its root or an admin: show a code for a
-                       new computer, or with -admin for a phone that becomes
-                       an admin.
-  pair -qr [-admin]    In a group: admit the device that shows a code and
-                       waits; type its code, or paste its QR code's text.
-  invite [-for 1h] [-o file]
-                       Invite a device from afar: run on the group's hub.
-  agent                Link this session's clipboard with the service
-                       (started at sign-in), through cbb-helper.
-  service [-name name] [-port port] [-peer host:port]... [-no-mdns]
-          [-no-listen] [-tunnel-via host:port] [-full] [-state dir]
-          [-socket path] [-user name]
-                       Run the service (started by systemd, procd, launchd,
-                       an rc script or Windows' service manager): it
-                       dials the computers, and phones and other lite
-                       members dial it on the member port (8764, CBB_PORT).
-                       -tunnel-via: the tunnel to the hub sends its packets
-                       there, a local UDP port that leads to the hub (cbb
-                       next link -udp on the ZX Spectrum Next).
-                       -full: as a computer's service, a full member.
-                       -state and -socket as before the command; -user:
-                       started as root, open the mDNS sockets, then run
-                       as this user (FreeBSD's rc script).
-  copy [-secret]       Send standard input to the group.
+  copy [-secret]          Send standard input to the group.
+  copy [-text TEXT] FILE...
+                          Send files and folders to the group; -type png|jpeg|html FILE
+                          sends one image or HTML as clipboard data.
   paste [-terminal [-lines] [-secret]]
-                       Print this member's clipboard text; -terminal makes
-                       it safe to paste into a terminal: no control
-                       characters, only the first line unless -lines, and
-                       no secret unless -secret.
-  status               Show this device, its group and the group's devices.
-  leave [-yes]         Leave the group: delete this device's keys and the
-                       group's files, keep the settings, turn remote paste
-                       and the quick actions off; then cbb pair joins this
-                       group or another one.
+                          Print this member's clipboard text; -terminal makes it
+                          safe to paste into a terminal.
+  paste -o DIR            Save the clipboard's images or files in the folder DIR.
+  paste -on DEVICE [-type] [-enter] [-secret]
+                          On an admin: put standard input, or this clipboard, where the
+                          focus is on another device that allows remote paste.
+  paste-receive [on [-enter] [-console] [-no-lock-check] | off]
+                          Show, or turn on or off, remote paste on this device;
+                          off -on DEVICE or off -all on an admin turns it off elsewhere.
+  watch [-0]              Print every text the group sends here, one per line
+                          (with -0, each followed by a zero byte).
+  keyboard [on [-layout us|ru] [-rate N] [-pastes] | off | pair | type [TEXT]]
+                          Make this Linux computer a Bluetooth keyboard for a TV, a tablet
+                          or a computer near it: pair shows it to a new one for two minutes,
+                          type types TEXT or standard input there.
+  remote [add [-appletv | -roku -consent] [-name NAME] ADDRESS | code CODE | cancel
+         | remove TV | pastes TV on|off | type [-tv TV] [TEXT]]
+                          Be the remote of a TV on the home network: an Android TV, a
+                          Google TV or an Apple TV pairs with the code it shows, a Roku over
+                          plain HTTP; type types TEXT or standard input in its text field.
+  action [enable NAME [-by KINDS] [-any-key] | disable NAME | off]
+                          Show this device's quick actions, or turn one on or off here.
+  action -on DEVICE NAME  On an admin: run the quick action NAME on another device;
+                          action off -on DEVICE or -all turns them off elsewhere.
+  status                  Show this device, its group and the group's devices.
+  remove <name or ID>     Remove a device from the group.
+  rename <name or ID> <new name>
+                          Give a device of the group another name (on an admin).
+  admin <name or ID>      Make a computer an admin of the group (on the group's root).
+  takeover <name or ID>   Claim the group from its lost root computer (on an admin); it waits.
+  takeover -delay <duration>
+                          Set how long such a claim waits, 0s to 168h (on the root; 72h by default).
+  keys [proven|hardware|files]
+                          Show or set which keys may be the group's root, an admin or a hub
+                          (on the root; hardware by default, files for a root with a key in a file).
+  incoming [duration]     Show or set how long a copy from another device stays live after it
+                          arrives, 5s to 1h (on the root or an admin; 1m by default): it goes
+                          into the clipboard until then, and never after.
+  recovery [-yubikey]     Claim the group with its recovery key, typed from the sheet or on a
+                          YubiKey, when every phone with the group is lost; it waits as a
+                          takeover does.
+  handover <name or ID>   Let an admin take the group over at once, as a new phone (on the root).
+  freeze <name or ID>     Stop an admin computer, as a stolen one, until the root decides.
+  unfreeze <name or ID>   Make a frozen admin computer an admin again (on the group's root).
+  resolve                 Void both histories of a key that signed two (on the group's root).
+  global [on|off]         Show, or turn on or off, sync over the internet on this device;
+                          cbb global -h lists the rest (hub, move, relay, allow, entries).
+  global hub address:port Make this device the group's hub for sync over the internet.
+  global relay address:port
+                          Meet the group's other devices over the internet at a relay.
+  global hubs <name or ID>...
+                          Set the group's main hubs, in the order they serve, before the
+                          others (on the root, or an admin that may be a hub).
+  forward                 Run a forwarder for hubs that clients cannot reach directly
+                          (cbb-forward, beside cbb).
+  relay -group TAG        Run a blind relay for groups without a hub (cbb-relay, beside cbb).
+  new                     Create a group with this computer as its root.
+  leave [-yes]            Leave the group: delete this device's keys and the group's files,
+                          keep the settings; then it can join this group or another one.
   sync [on | off [-for DURATION]]
-                       Show sync, or turn it on or off here: off, the
-                       clipboard is this device's own, for a while or until
-                       cbb sync on (cbb copy and cbb paste work either way).
-  global [on|off]      Show sync away from home, or turn it on or off here:
-                       through the group's own WireGuard tunnel to its hub.
-  watch [-0]           Print every text the group sends here, one per line
-                       (with -0, each followed by a zero byte).
-  paste-receive [on [-enter] [-console] | off]
-                       Show remote paste here, or turn it on or off: whether
-                       the group's admins may put a text into tmux, or with
-                       -console into the active text console, here (-enter:
-                       and press Enter after it).
-  action [enable NAME [-by root,phone,computer,watch] [-any-key] [-yes] |
-         disable NAME | off]
-                       Show the quick actions here, or turn one on or off
-                       for the group's admins: reboot (a minute later, and
-                       only for keys in hardware unless -any-key),
-                       cancel-shutdown and restart. enable, with sudo, writes
-                       the polkit rule that lets the service reboot.
-  paste-helper tmux|console
-                       The paste targets: tmux starts the one for tmux, the
-                       cbb-console unit the one for the console.
-  next paste|copy|pair The same for the ZX Spectrum Next's .cbb dot command,
-                       in frames its Z80 reads (member/README.md).
-  update [-check]      Install the newest signed release, with sudo; -check
-                       only says whether there is one. The previous version
-                       goes back when the new one does not start.
-  update -auto [on|off]
-                       Show, or turn on or off, updating once a day by
-                       itself (a systemd timer, or cron on OpenWrt).
+                          Show or set whether this clipboard syncs with the group; off
+                          for a while, or until cbb sync on. A new device syncs.
+  sync -on DEVICE on|off  On an admin: turn sync on or off on another device of the group.
+  mute -on DEVICE [-for DURATION]
+                          On an admin: keep a device's copies from the group for a
+                          while, or until another admin's cbb unmute -on.
+  unmute -on DEVICE       On an admin: end a device's mute.
+  config [max-copy|max-copy-away SIZE]
+                          Show or set the largest copy of images and files this device
+                          sends or fetches, at home and away from home.
+  pair [-name name] [-port port] [-addr host[:port]]...
+                          In no group: join one by the phone's QR code, shown here (-addr:
+                          where the phone reaches this device, when the code would name
+                          the wrong addresses); -full joins as a computer that may become
+                          an admin.
+  pair [-admin]           In a group, on its root or an admin: show a code for a new
+                          computer, or with -admin for a phone that becomes an admin.
+  pair -qr [-admin]       In a group: admit the new device that shows a code and waits;
+                          type its code, or paste its QR code's text.
+  pair -code [address]    Join with the code from cbb pair on the root or an admin.
+  pair -invite file       Join from afar with an invitation from cbb invite.
+  invite [-for 1h] [-o file]
+                          Invite a device from afar: run on the group's hub.
+  update [-check]         Install the newest signed release, as root or administrator;
+                          -check only says whether there is one. The previous version
+                          goes back when the new one does not start.
+  update -auto [on|off]   Show, or turn on or off, updating once a day by itself.
   update -mirror [URL|default]
-                       Show or set where updates come from: GitHub, then
-                       dl.cbb.tools, or another https:// mirror.
-  version              Print the version and that this is the lite member.
-  help                 Print this help.
+                          Show or set where updates come from: GitHub, then dl.cbb.tools,
+                          or another https:// mirror.
+  version                 Print the version and the platform.
+  help                    Print this help.
 
-The commands that change the group (new, remove, rename, admin, takeover,
-keys, incoming, handover, freeze, unfreeze, resolve, mute, unmute, config,
-network, global hubs) work as on the Go cbb. The state directory is
-/var/lib/cbb (CBB_STATE), the control socket /run/cbb/control.sock
-(CBB_SOCKET); on OpenWrt /etc/cbb/state and
-/var/run/cbb/control.sock; installed without root (install.sh
---rootless, CBB_ROOTLESS=1), ~/.local/state/cbb and
-$XDG_RUNTIME_DIR/cbb/control.sock. CBB_INTERFACES limits the member
-port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the details of errors.
+Rarely needed:
+  network                 Take the network this computer is on now as one where the group
+                          is: it publishes itself and takes connections only on those.
+  install [options]       Windows, after winget: install the service from this copy
+                          (the options of install.ps1, such as -Express).
+  service [-name name] [-port port] [-peer host:port]... [-no-mdns] [-no-listen]
+          [-tunnel-via host:port] [-full] [-user name]
+                          Run the service (started by systemd, procd, launchd, an rc script
+                          or Windows); -tunnel-via sends the tunnel's packets to a local UDP
+                          port that leads to the hub (cbb next link -udp on the ZX Spectrum
+                          Next); -user: started as root, open the mDNS sockets, then run as
+                          this user (FreeBSD's rc script).
+  agent                   Link this desktop's clipboard to the service (started at sign-in).
+  paste-helper tmux|console
+                          Take remote pastes into tmux (started by cbb.conf)
+                          or the Linux text console (the cbb-console unit).
+  next paste|copy|pair    The same for the ZX Spectrum Next's .cbb dot command, in frames
+                          its Z80 reads (member/README.md).
+
+The state directory is /var/lib/cbb (CBB_STATE), the control socket /run/cbb/control.sock
+(CBB_SOCKET); on OpenWrt /etc/cbb/state and /var/run/cbb/control.sock; installed without
+root (install.sh --rootless, CBB_ROOTLESS=1), ~/.local/state/cbb and
+$XDG_RUNTIME_DIR/cbb/control.sock. CBB_INTERFACES limits the member port and mDNS to the
+network devices it names. Before the command, -state DIR and -socket PATH name others, and
+-debug, or CBB_DEBUG=1, shows the details of errors.
+The design is in docs/design.md.
 ";
 
 /// Reports whether this is an OpenWrt router, whose /var is in RAM and
@@ -274,6 +308,7 @@ pub fn main() {
                 "config" => cli::config(&g, rest),
                 "network" => cli::network(&g, rest),
                 "forward" | "relay" => servers::run(&g, cmd, rest),
+                "install" => servers::install(rest),
                 "version" | "-version" | "--version" => {
                     println!(
                         "cbb {} ({}/{}), the lite member",

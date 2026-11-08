@@ -51,3 +51,31 @@ fn beside(program: &str) -> Option<PathBuf> {
     let p = exe.with_file_name(format!("{program}{}", std::env::consts::EXE_SUFFIX));
     Path::is_file(&p).then_some(p)
 }
+
+/// cbb install, on Windows after winget: runs the installer beside this
+/// copy, packaging/windows/install.ps1, with args, and ends with its exit
+/// code, as the Go cbb's cmdInstall.
+pub(crate) fn install(args: &[String]) -> Result<()> {
+    if !cfg!(windows) {
+        eprintln!(
+            "cbb: cbb install is for Windows; on Linux and macOS run packaging/<os>/install.sh from the release archive, or use Homebrew"
+        );
+        std::process::exit(2);
+    }
+    let exe = std::env::current_exe().map_err(|e| Error::msg(format!("cannot find this program: {e}")))?;
+    let exe = std::fs::canonicalize(&exe).unwrap_or(exe);
+    let script = exe.with_file_name("packaging").join("windows").join("install.ps1");
+    if !script.is_file() {
+        return Err(Error::msg(format!(
+            "this copy of cbb has no installer beside it ({}); install from the release's zip",
+            script.display()
+        )));
+    }
+    let st = Command::new("powershell.exe")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(&script)
+        .args(args)
+        .status()
+        .map_err(|e| Error::msg(format!("running {}: {e}", script.display())))?;
+    std::process::exit(st.code().unwrap_or(1))
+}

@@ -68,6 +68,10 @@ func TestRustCommandLine(t *testing.T) {
 	misuse("takeover", "-delay")
 	misuse("recovery", "now")
 
+	want("Usage: cbb <command> [arguments]", "help")
+	if out, code := run("install"); code != 2 || !strings.Contains(out, "is for Windows") {
+		t.Fatalf("cbb install exited with %d: %s", code, out)
+	}
 	want("Sync away from home: off (cbb global on turns it on).", "global")
 	misuse("global", "sideways")
 	for _, args := range [][]string{{"global", "hub", "-forward-only"}, {"global", "relay", "198.51.100.9:8765", "-key", "default"}} {

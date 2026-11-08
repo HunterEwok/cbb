@@ -29,7 +29,8 @@ All notable changes to cbb are documented in this file. The format follows
   drop-in, the Windows Firewall rule); the Rust service's status names those servers.
   `cbb forward` and `cbb relay` run `cbb-forward` and `cbb-relay`, Go programs of their own
   beside `cbb`, in its place, so that their systemd units keep them apart from the service and
-  from the keys of `cbb-helper`. An unknown command exits with 2, as in the Go cbb.
+  from the keys of `cbb-helper`. An unknown command exits with 2, as in the Go cbb, `cbb help`
+  lists the commands as the Go cbb's does, and `cbb install` runs the Windows installer beside it.
   `cbb mute` and `cbb unmute` go through the administrator's socket, as in the Go service, and
   a command that does not reach a device names why.
 - The Go service's tests run on the Rust service (`CBB_TEST_RUST_SERVICE` names its
