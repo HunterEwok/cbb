@@ -31,6 +31,69 @@ struct Next {
     select: u8,
     esp: Uart,
     pi: Uart,
+    /// The Next registers, the one selected, and the 8K banks MMU6 shows.
+    nr: [u8; 256],
+    nr_sel: u8,
+    banks: std::collections::HashMap<u8, Vec<u8>>,
+    /// Layer 2's palette (9-bit entries), its index, a first byte waiting.
+    pal: [u16; 256],
+    pal_first: Option<u8>,
+    clip: [u8; 4],
+    clip_index: usize,
+    port_l2: u8,
+    border: Vec<u8>,
+    /// The keyboard's reads: a key is down from the read keys_at for 10.
+    key_reads: usize,
+    keys_at: usize,
+    /// The palette, resolution and Layer 2 when the key went down.
+    shown: Option<([u16; 256], u8, u8)>,
+}
+
+const MMU6: u16 = 0xC000;
+
+impl Next {
+    fn mapped(&self, a: u16) -> bool {
+        (MMU6..0xE000).contains(&a) && self.nr[0x56] != 0
+    }
+    fn nr_read(&mut self, r: u8) -> u8 {
+        match r {
+            // A read leaves the index; a write moves it on.
+            0x18 => self.clip[self.clip_index],
+            0x41 => (self.pal[self.nr[0x40] as usize] >> 1) as u8,
+            0x44 => (self.pal[self.nr[0x40] as usize] & 1) as u8,
+            r => self.nr[r as usize],
+        }
+    }
+    fn nr_write(&mut self, r: u8, v: u8) {
+        match r {
+            0x18 => {
+                self.clip[self.clip_index] = v;
+                self.clip_index = (self.clip_index + 1) % 4;
+            }
+            0x1C => {
+                if v & 1 != 0 {
+                    self.clip_index = 0;
+                }
+            }
+            0x40 => {
+                self.nr[0x40] = v;
+                self.pal_first = None;
+            }
+            0x44 => match self.pal_first.take() {
+                None => self.pal_first = Some(v),
+                Some(f) => {
+                    let i = self.nr[0x40];
+                    self.pal[i as usize] = (f as u16) << 1 | (v & 1) as u16;
+                    self.nr[0x40] = i.wrapping_add(1);
+                }
+            },
+            0x56 => {
+                self.banks.entry(v).or_insert_with(|| vec![0xAA; 8192]);
+                self.nr[0x56] = v;
+            }
+            r => self.nr[r as usize] = v,
+        }
+    }
 }
 
 impl Next {
@@ -45,9 +108,17 @@ impl Next {
 
 impl Machine for Next {
     fn peek(&mut self, a: u16) -> u8 {
+        if self.mapped(a) {
+            return self.banks[&self.nr[0x56]][(a - MMU6) as usize];
+        }
         self.mem[a as usize]
     }
     fn poke(&mut self, a: u16, v: u8) {
+        if self.mapped(a) {
+            let b = self.nr[0x56];
+            self.banks.get_mut(&b).unwrap()[(a - MMU6) as usize] = v;
+            return;
+        }
         self.mem[a as usize] = v;
     }
     fn port_in(&mut self, a: u16) -> u8 {
@@ -61,6 +132,19 @@ impl Machine for Next {
             }
             0x143B => self.uart().rx.pop_front().unwrap_or(0),
             0x153B => self.select,
+            0x253B => {
+                let r = self.nr_sel;
+                self.nr_read(r)
+            }
+            0x123B => self.port_l2,
+            a if a & 0xFF == 0xFE => {
+                self.key_reads += 1;
+                let down = (self.keys_at..self.keys_at + 10).contains(&self.key_reads);
+                if down && self.shown.is_none() {
+                    self.shown = Some((self.pal, self.nr[0x70], self.port_l2));
+                }
+                if down { 0xFE } else { 0xFF }
+            }
             _ => panic!("the driver read port {a:#06x}"),
         }
     }
@@ -73,6 +157,13 @@ impl Machine for Next {
                 u.tx.push(v);
             }
             0x153B => self.select = v,
+            0x243B => self.nr_sel = v,
+            0x253B => {
+                let r = self.nr_sel;
+                self.nr_write(r, v)
+            }
+            0x123B => self.port_l2 = v,
+            a if a & 0xFF == 0xFE => self.border.push(v & 7),
             _ => panic!("the driver wrote port {a:#06x}"),
         }
     }
@@ -107,6 +198,18 @@ impl Driver {
                 select: 0x40,
                 esp,
                 pi: Uart::default(),
+                nr: [0; 256],
+                nr_sel: 0,
+                banks: Default::default(),
+                pal: [0; 256],
+                pal_first: None,
+                clip: [0, 159, 0, 255],
+                clip_index: 0,
+                port_l2: 0,
+                border: Vec::new(),
+                key_reads: 0,
+                keys_at: usize::MAX - 20,
+                shown: None,
             },
         }
     }
@@ -121,7 +224,7 @@ impl Driver {
         self.next.mem[0x3EFE] = DONE as u8;
         self.next.mem[0x3EFF] = (DONE >> 8) as u8;
         self.cpu.registers().set16(Reg16::SP, 0x3EFE);
-        for _ in 0..2_000_000 {
+        for _ in 0..20_000_000 {
             if self.cpu.registers().pc() == DONE {
                 return;
             }
@@ -231,7 +334,7 @@ fn hello_clock_and_the_esp_both_ways() {
         (5 + 8u16).to_le_bytes(),
         "the bytes taken from the Pi"
     );
-    assert_eq!(f[2].1, b"cbb.drv 0.2");
+    assert_eq!(f[2].1, b"cbb.drv 0.3");
     assert_eq!(
         f[3].1,
         [0x62, 0x5D, 0xC7, 0x0B],
@@ -624,4 +727,103 @@ fn the_line_has_room_for_255_bytes() {
     }
     d.call(0xE000, 0x0900, 0x0100 | b'x' as u16);
     assert!(d.cpu.registers().get_flag(iz80::Flag::C));
+}
+
+/// The bytes of a test image: 81920 of pixels, then the palette.
+fn test_image(hi: bool) -> Vec<u8> {
+    let mut b: Vec<u8> = (0..81920u32).map(|i| (i * 7 + i / 256) as u8).collect();
+    let n = if hi { 16 } else { 256 };
+    for i in 0..n {
+        b.push(i as u8 ^ 0x5A);
+        b.push((i & 1) as u8);
+    }
+    b
+}
+
+fn head(mode: u8, bytes: &[u8]) -> Vec<u8> {
+    let sum = bytes.iter().fold(0u16, |s, &b| s.wrapping_add(b as u16));
+    frame(b'J', &[mode, sum as u8, (sum >> 8) as u8])
+}
+
+/// What the driver must put back after an image.
+fn screen_before(d: &mut Driver) {
+    for (i, r) in [0x12u8, 0x14, 0x15, 0x16, 0x17, 0x43, 0x6B, 0x70, 0x71].into_iter().enumerate() {
+        d.next.nr[r as usize] = 0x11 + i as u8;
+    }
+    d.next.nr[0x56] = 0; // MMU6 as the program left it (0: not banked here)
+    d.next.clip = [8, 150, 4, 250];
+    d.next.port_l2 = 0x01;
+    for (i, e) in d.next.pal.iter_mut().enumerate() {
+        *e = (i as u16 * 3) & 0x1FF;
+    }
+    d.next.mem[23624] = 5 << 3; // BORDCR: a cyan border
+}
+
+#[test]
+fn shows_an_image_over_the_program_and_puts_the_screen_back() {
+    let mut d = Driver::new();
+    d.on();
+    d.interrupt();
+    d.pi_frames();
+    screen_before(&mut d);
+    let (pal, clip) = (d.next.pal, d.next.clip);
+    let regs = d.next.nr;
+    d.call(0xE000, 0x0A00, 0x1F28); // call 10: banks 40-49, state 31
+    assert_eq!(d.cpu.registers().get16(Reg16::DE), 0, "no banks before");
+    let img = test_image(false);
+    d.next.pi.rx.extend(frame(b'I', &[]));
+    d.next.pi.rx.extend(head(b'L', &img));
+    d.next.pi.rx.extend(img.iter());
+    d.next.keys_at = 5000;
+    d.interrupt();
+    assert!(kinds(&d.pi_frames()).contains('i'), "it asks for the image");
+    assert!(d.next.pi.rx.is_empty(), "every byte read");
+    for k in 0..10u8 {
+        let bank = &d.next.banks[&(40 + k)];
+        assert_eq!(&bank[..], &img[k as usize * 8192..(k as usize + 1) * 8192], "bank {}", 40 + k);
+    }
+    let (shown, res, l2) = d.next.shown.expect("a key was waited for");
+    assert_eq!(res, 0x10, "320x256");
+    assert_eq!(l2, 0x02, "Layer 2 on");
+    for i in 0..256 {
+        assert_eq!(shown[i], (img[81920 + 2 * i] as u16) << 1 | img[81921 + 2 * i] as u16, "colour {i}");
+    }
+    // A column a flip: 320 flips of blue and yellow, then the blinking.
+    assert!(d.next.border.windows(2).filter(|w| w == &[1, 6]).count() >= 150);
+    // The screen as it was.
+    assert_eq!(d.next.pal, pal);
+    assert_eq!(d.next.clip, clip);
+    assert_eq!(d.next.port_l2, 0x01);
+    for r in [0x12usize, 0x14, 0x15, 0x16, 0x17, 0x43, 0x6B, 0x70, 0x71, 0x56] {
+        assert_eq!(d.next.nr[r], regs[r], "register {r:#04x}");
+    }
+    assert_eq!(*d.next.border.last().unwrap(), 5, "the border BASIC set");
+    // Off: the banks come back, and an image waits for none.
+    d.call(0xE000, 0x0A00, 0);
+    assert_eq!(d.cpu.registers().get16(Reg16::DE), 0x1F28);
+    d.next.pi.rx.extend(frame(b'I', &[]));
+    d.interrupt();
+    assert!(!kinds(&d.pi_frames()).contains('i'));
+}
+
+#[test]
+fn a_damaged_image_is_not_shown() {
+    let mut d = Driver::new();
+    d.on();
+    d.interrupt();
+    d.pi_frames();
+    screen_before(&mut d);
+    let pal = d.next.pal;
+    d.call(0xE000, 0x0A00, 0x1F28);
+    let img = test_image(true);
+    let mut bad = img.clone();
+    bad[1000] ^= 1;
+    d.next.pi.rx.extend(frame(b'I', &[]));
+    d.next.pi.rx.extend(head(b'H', &img));
+    d.next.pi.rx.extend(bad.iter().take(81920 + 32));
+    d.next.keys_at = 10;
+    d.interrupt();
+    assert!(d.next.shown.is_none(), "no key waited for");
+    assert_eq!(d.next.pal, pal);
+    assert_eq!(d.next.port_l2, 0x01);
 }

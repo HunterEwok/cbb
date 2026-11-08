@@ -98,6 +98,9 @@ fn kit(name: &str) -> Option<Kit> {
             sha256::hex(&data)
         );
     }
+    // The Pi's cbb gzipped, which an install fetches; the signed list
+    // names only the Pi's cbb as it is.
+    std::fs::copy(build.join("CBBPI.GZ"), site.join("cbb.gz")).unwrap();
     sign_list(&site, &list);
     Some(Kit {
         dot,
@@ -256,6 +259,29 @@ fn installs_then_finds_all_current() {
         o.has("SERVICE FETCHED") && o.has("TO PI   DONE"),
         "{}",
         o.screen
+    );
+    // The site's files from 460800 down a step at a time, to a speed the
+    // Next reads whole; the Pi's cbb gzipped at 921600, which the played Pi's
+    // tty takes.
+    let fetch: Vec<u32> = o
+        .esp()
+        .log
+        .iter()
+        .filter_map(|l| l.split("AT+UART_CUR=").nth(1))
+        .map(|r| r.split(',').next().unwrap().parse().unwrap())
+        .filter(|&b| b != 115_200 && b != 19_200)
+        .collect();
+    assert_eq!(fetch.first(), Some(&460_800), "{fetch:?}");
+    let step = |b: u32| if b > 921_600 { 921_600 } else { b / 2 };
+    assert!(
+        fetch.windows(2).all(|w| w[1] == w[0] || w[1] == step(w[0])),
+        "{fetch:?}"
+    );
+    let at_fast: Vec<_> = o.pi().log.iter().filter(|l| l.contains("stty 921600 raw")).collect();
+    assert!(
+        at_fast.len() == 1 && at_fast[0].contains("| gzip -dc >"),
+        "{:?}",
+        o.pi().log
     );
     assert!(
         o.has("CBB.DRV IS INSTALLED.") && o.has("DONE."),
@@ -465,6 +491,7 @@ fn run_with(kit: &Kit, args: &str, esp: Esp, pi: Pi) -> Run {
     let card = card(&format!("plain-{}-{n}", args.replace(' ', "-")));
     std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
     std::fs::copy(kit.site.join("CBB.DRV"), card.join("cbb/CBB.DRV")).unwrap();
+    std::fs::copy(kit.site.join("CBB.OVL"), card.join("cbb/CBB.OVL")).unwrap();
     let run = run_on(kit, &card, args, esp, pi, Vec::new());
     let _ = std::fs::remove_dir_all(&card);
     run
@@ -504,7 +531,9 @@ fn run_after(
         u16::from_str_radix(table.split('$').nth(1).unwrap().get(..4).unwrap(), 16).unwrap();
     run.overlay_logical = kit.pages.clone();
     let mut t = 0;
-    while !run.done && t < 60 {
+    // A tape takes some eight minutes.
+    let limit = if args.contains("-tape") { 700 } else { 120 };
+    while !run.done && t < limit {
         run.run(1.0);
         t += 1;
     }
@@ -522,10 +551,12 @@ fn run_after(
         .map(|b| format!("{:#06x}: {}", b.pc, b.what))
         .collect();
     assert!(breaches.is_empty(), "breaches:\n{}", breaches.join("\n"));
-    // Only an installed driver keeps its bank.
+    // Only an installed driver keeps its bank, and while the network
+    // runs the eleven for its images.
+    let images = if run.hw.img_banks != 0 { 11 } else { 0 };
     assert_eq!(
         run.hw.ours.iter().filter(|&&p| p).count(),
-        run.hw.drivers.len() - earlier,
+        run.hw.drivers.len() - earlier + images,
         "pages still taken"
     );
     run
@@ -874,6 +905,25 @@ fn leaves_the_group_after_y() {
 }
 
 #[test]
+fn says_when_the_pi_keeps_its_group() {
+    let Some(kit) = kit("leavekept") else { return };
+    let (card, mut pi) = installed(&kit, "leavekept");
+    pi.in_group = true;
+    pi.leave_keeps = true;
+    let y = vec![Key {
+        from: 3_000_000,
+        until: 3_400_000,
+        row: 0xDF,
+        bit: 4,
+    }];
+    let run = run_on(&kit, &card, "leave", Esp::new(kit.site.clone()), pi, y);
+    let s = run.hw.screen_text();
+    assert!(s.contains("did not leave") && !s.contains("Left."), "{s}");
+    assert!(!s.contains("is removed"), "{s}");
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
 fn says_when_there_is_no_group_to_leave() {
     let Some(kit) = kit("leavenone") else { return };
     let (card, pi) = installed(&kit, "leavenone");
@@ -1052,7 +1102,7 @@ fn installs_then_pairs() {
     let Some(kit) = kit("thenpair") else { return };
     let (card, pi) = installed(&kit, "thenpair");
     std::fs::copy(kit.site.join("CBB.OVL"), card.join("cbb/CBB.OVL")).unwrap();
-    let keys = (0..6)
+    let keys = (0..20)
         .map(|i| Key {
             from: 8_000_000 + i * 5_000_000,
             until: 8_300_000 + i * 5_000_000,
@@ -1088,12 +1138,12 @@ fn updates_itself_in_dot() {
         "update",
         Esp::new(kit.site.clone()),
         pi,
-        120.0,
+        200.0,
         None,
     );
     assert!(o.has("CBB AND ITS FILES ARE NEW"), "{}", o.screen);
     // The new CBB and its CBB.OVL on one bar, their sizes summed.
-    assert!(o.has("64K OF    64K"), "{}", o.screen);
+    assert!(o.has("72K OF    72K"), "{}", o.screen);
     assert_eq!(std::fs::read(card.join("dot/CBB")).unwrap(), newer);
     assert!(!card.join("dot/CBB.NEW").exists());
     let _ = std::fs::remove_dir_all(&card);
@@ -1178,7 +1228,7 @@ fn says_when_there_are_no_updates() {
         "update",
         Esp::new(kit.site.clone()),
         pi,
-        60.0,
+        90.0,
         None,
     );
     assert!(o.has("NO UPDATES"), "{}", o.screen);
@@ -1208,6 +1258,10 @@ fn leaves_the_start_to_the_driver_after_power_on() {
         "{line:?}"
     );
     assert_eq!(run.hw.boot_state, 1);
+    // The driver holds ten banks in a row and one more for showing images.
+    let (base, state) = (run.hw.img_banks as u8 as usize, (run.hw.img_banks >> 8) as usize);
+    assert!(base != 0 && base % 2 == 0, "{:#06x}", run.hw.img_banks);
+    assert!((base..base + 10).chain([state]).all(|b| run.hw.ours[b]));
     let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
     assert!(
         !pi.log.iter().any(|l| l.contains("next link")),
@@ -1217,6 +1271,10 @@ fn leaves_the_start_to_the_driver_after_power_on() {
     let waiting = |run: &mut Run| {
         run.hw.boot_state = 1;
         run.hw.drivers.push((124, Vec::new()));
+        for b in (40..50).chain([31]) {
+            run.hw.ours[b] = true;
+        }
+        run.hw.img_banks = 0x1F28;
     };
     for (args, says) in [
         ("text hello", "TRY AGAIN THEN"),
@@ -1236,7 +1294,123 @@ fn leaves_the_start_to_the_driver_after_power_on() {
         assert!(s.contains(says), "{args}: {s}");
         if args == "net off" {
             assert_eq!(run.hw.boot_state, 0, "net off ends it");
+            assert_eq!(run.hw.img_banks, 0, "and takes the driver's banks back");
+            assert!((40..50).chain([31]).all(|b| !run.hw.ours[b]));
         }
     }
     let _ = std::fs::remove_dir_all(&card);
+}
+
+/// An image as cbb next image sends it: 320×256 in Layer 2's order, then
+/// 256 palette entries of two bytes.
+fn image_frame() -> (Vec<u8>, Vec<u16>) {
+    let mut b: Vec<u8> = (0..81920u32).map(|i| (i * 7 / 3) as u8).collect();
+    let pal: Vec<u16> = (0..256u16).map(|i| (i * 2 + 1) & 0x1FF).collect();
+    for &c in &pal {
+        b.push((c >> 1) as u8);
+        b.push((c & 1) as u8);
+    }
+    (b, pal)
+}
+
+/// ENTER from `at` seconds for half a second.
+fn enter_at(at: f64) -> Vec<Key> {
+    vec![Key {
+        from: (at * 1e6) as u64,
+        until: (at * 1e6) as u64 + 500_000,
+        row: 0xBF,
+        bit: 0,
+    }]
+}
+
+/// Checks a run of .cbb show: the picture as sent, Layer 2 off again.
+fn check_shown(run: &Run, frame: &[u8], pal: &[u16]) {
+    let s = run.hw.screen_text();
+    let (pixels, shown_pal) = run.hw.shown.as_ref().unwrap_or_else(|| panic!("nothing shown:\n{s}"));
+    assert!(pixels[..] == frame[..81920], "the pixels differ");
+    assert_eq!(&shown_pal[..], pal);
+    assert_eq!(run.hw.layer2 & 2, 0, "Layer 2 still shows");
+    assert_eq!(run.hw.clip, [0, 255, 0, 191], "the clip window stays the image's");
+    // The stripes followed the bytes: one flip every 32.
+    assert!(run.hw.border_changes > 2000, "{}", run.hw.border_changes);
+    assert!(!s.contains("cbb:"), "{s}");
+}
+
+#[test]
+fn shows_the_groups_image() {
+    let Some(kit) = kit("show") else { return };
+    let (frame, pal) = image_frame();
+    let mut pi = Pi::new();
+    pi.image = Some(('L', frame.clone()));
+    let card = card("show");
+    std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
+    let run = run_on(&kit, &card, "show", Esp::new(kit.site.clone()), pi, enter_at(14.0));
+    check_shown(&run, &frame, &pal);
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
+fn shows_the_groups_image_through_the_driver() {
+    let Some(kit) = kit("showvia") else { return };
+    let (frame, pal) = image_frame();
+    let (card, mut pi) = installed(&kit, "showvia");
+    pi.image = Some(('L', frame.clone()));
+    let run = run_after(&kit, &card, "show", Esp::new(kit.site.clone()), pi, enter_at(25.0), |run| {
+        run.hw.drivers.push((124, vec![0; 512]));
+        run.hw.net = true;
+        run.hw.via = true;
+    });
+    assert!(run.hw.net, "the network stopped");
+    check_shown(&run, &frame, &pal);
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+/// show -tape: the Pi plays the image as a tape through EAR, which the
+/// Next loads with the ROM's timings at 3.5 MHz, column by column.
+#[test]
+fn shows_the_groups_image_from_a_tape() {
+    let Some(kit) = kit("showtape") else { return };
+    let (frame, pal) = image_frame();
+    let mut pi = Pi::new();
+    pi.image = Some(('L', frame.clone()));
+    let card = card("showtape");
+    std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
+    std::fs::copy(kit.site.join("CBB.OVL"), card.join("cbb/CBB.OVL")).unwrap();
+    let run = run_on(&kit, &card, "show -tape", Esp::new(kit.site.clone()), pi, enter_at(560.0));
+    check_shown(&run, &frame, &pal);
+    assert_eq!(run.hw.nr[0x07], 0, "the CPU's speed as it was");
+    assert_eq!(run.hw.nr[0xA2] & 1, 0, "EAR back to the jack");
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
+fn says_when_the_group_has_no_image() {
+    let Some(kit) = kit("noimage") else { return };
+    let run = run_plain(&kit, "show", Pi::new());
+    let s = run.hw.screen_text();
+    assert!(s.contains("holds no imag"), "{s}");
+    assert!(run.hw.shown.is_none());
+}
+
+#[test]
+fn says_which_speeds_carry_the_bytes_whole() {
+    let Some(kit) = kit("speed") else { return };
+    let mut pi = Pi::new();
+    pi.line_max = 921_600;
+    let run = run_plain(&kit, "speed", pi);
+    let s = run.hw.screen_text();
+    // Each way from 2M down, to the first speed that keeps the bytes whole.
+    let mut rest = s.as_str();
+    for line in [
+        "Pi to the Next:",
+        "2000000: DAMAGED",
+        "921600: whole",
+        "The Next to the Pi:",
+        "2000000: no answer",
+        "921600: whole",
+    ] {
+        let at = rest.find(line).unwrap_or_else(|| panic!("{line}:\n{s}"));
+        rest = &rest[at + line.len()..];
+    }
+    assert!(!s.contains("460800"), "{s}");
 }

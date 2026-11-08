@@ -131,6 +131,9 @@ pub enum Msg {
     /// What the command `.cbb` runs wrote, and its end.
     CommandOut(Vec<u8>),
     CommandEnded,
+    /// The group has a new image, and the Next's image of it, made from it.
+    Image,
+    ImageReady(u8, Vec<u8>),
 }
 
 /// The link without its threads: bytes and connections in, frames out.
@@ -176,6 +179,12 @@ pub struct Link<W: Write> {
     pub start: Option<Vec<String>>,
     pub input: Vec<u8>,
     pub stop: bool,
+    /// For run(): make the Next's image of the group's latest.
+    pub make_image: bool,
+    /// That image: its mode and bytes; and once the driver asked for it,
+    /// the bytes on the wire before its head.
+    image: Option<(u8, Vec<u8>)>,
+    image_at: Option<usize>,
     /// Logs the bytes to and from the ESP (`-trace`).
     pub trace: bool,
     log: Box<dyn FnMut(&str) + Send>,
@@ -213,6 +222,9 @@ impl<W: Write> Link<W> {
             start: None,
             input: Vec::new(),
             stop: false,
+            make_image: false,
+            image: None,
+            image_at: None,
             log,
         }
     }
@@ -259,6 +271,13 @@ impl<W: Write> Link<W> {
                     self.answer_cbb(&b);
                 }
             }
+            Msg::Image => self.make_image = true,
+            Msg::ImageReady(mode, bytes) => {
+                self.image = Some((mode, bytes));
+                if self.hello {
+                    self.wire.extend(frame::encode(frame::IMAGE, &[]));
+                }
+            }
             Msg::CommandEnded => {
                 self.command = false;
                 self.input.clear();
@@ -301,6 +320,10 @@ impl<W: Write> Link<W> {
                 },
                 frame::QUIT => self.quit = true,
                 frame::CBB_OUT => self.cbb_bytes(&f.data),
+                // The head goes after what waits now, then the bytes.
+                frame::IMAGE_GO if self.image.is_some() && self.image_at.is_none() => {
+                    self.image_at = Some(self.wire.len())
+                }
                 _ => {}
             }
         }
@@ -339,7 +362,7 @@ impl<W: Write> Link<W> {
                     self.command = true;
                 }
                 None => {
-                    self.answer_cbb(b"CBBERR the network runs only cbb next paste and copy\r");
+                    self.answer_cbb(b"CBBERR the network runs only cbb next paste, image and copy\r");
                     self.answer_cbb(PROMPT);
                 }
             }
@@ -549,15 +572,36 @@ impl<W: Write> Link<W> {
         // An ack past what was sent counts a byte that was not a frame's
         // (a stray LF the driver took): nothing is waiting then.
         let ahead = (self.sent.wrapping_sub(self.acked) as i16).max(0) as usize;
-        let room = frame::WINDOW.saturating_sub(ahead).min(self.wire.len());
-        if room == 0 {
-            return;
+        let mut room = frame::WINDOW.saturating_sub(ahead).min(self.wire.len());
+        if let Some(at) = self.image_at {
+            room = room.min(at);
+            self.image_at = Some(at - room);
         }
-        let chunk: Vec<u8> = self.wire.drain(..room).collect();
-        if self.out.write_all(&chunk).and_then(|()| self.out.flush()).is_err() {
+        if room > 0 {
+            let chunk: Vec<u8> = self.wire.drain(..room).collect();
+            if self.out.write_all(&chunk).and_then(|()| self.out.flush()).is_err() {
+                self.quit = true;
+            }
+            self.sent = self.sent.wrapping_add(room as u16);
+        }
+        if self.image_at == Some(0) {
+            self.image_at = None;
+            self.send_image();
+        }
+    }
+
+    /// The image the driver froze the program for: its head, counted in
+    /// the window, then its bytes raw, which the driver reads straight.
+    fn send_image(&mut self) {
+        let Some((mode, bytes)) = self.image.take() else { return };
+        let sum = bytes.iter().fold(0u16, |s, &b| s.wrapping_add(b as u16));
+        let head = frame::encode(frame::IMAGE_HEAD, &[mode, sum as u8, (sum >> 8) as u8]);
+        let ok = self.out.write_all(&head).and_then(|()| self.out.write_all(&bytes)).and_then(|()| self.out.flush());
+        if ok.is_err() {
             self.quit = true;
         }
-        self.sent = self.sent.wrapping_add(room as u16);
+        self.sent = self.sent.wrapping_add(head.len() as u16);
+        (self.log)(&format!("sent the Next an image of {} bytes", bytes.len()));
     }
 
     /// Whether a command of `.cbb`'s runs.
@@ -572,7 +616,7 @@ impl<W: Write> Link<W> {
 }
 
 /// The arguments for this program of a command line `.cbb` types: `cbb
-/// [-debug] next paste|copy ...`, and nothing else.
+/// [-debug] next paste|image|copy ...`, and nothing else.
 fn command_args(line: &str) -> Option<Vec<String>> {
     let words: Vec<&str> = line.split_whitespace().collect();
     let (&first, mut rest) = words.split_first()?;
@@ -585,7 +629,7 @@ fn command_args(line: &str) -> Option<Vec<String>> {
         rest = &rest[1..];
     }
     match rest {
-        ["next", "paste" | "copy", ..] => {
+        ["next", "paste" | "copy" | "image", ..] => {
             args.extend(rest.iter().map(|w| w.to_string()));
             Some(args)
         }
@@ -708,6 +752,14 @@ struct NextKeys(mpsc::Sender<Msg>);
 impl crate::pastehelper::Target for NextKeys {
     fn name(&self) -> &'static str {
         crate::service::NEXT
+    }
+
+    fn images(&self) -> bool {
+        true
+    }
+
+    fn image(&self) {
+        self.0.send(Msg::Image).ok();
     }
 
     fn inject(
@@ -893,6 +945,20 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
                     link.handle(Msg::CommandEnded, now);
                 }
             }
+        }
+        if std::mem::take(&mut link.make_image) {
+            let (g, tx) = (g.clone(), tx.clone());
+            std::thread::spawn(move || {
+                let made = crate::next::latest_image(&g).and_then(|(kind, data)| {
+                    let img = crate::nextimage::decode(&kind, &data)?;
+                    let f = crate::nextimage::convert(&img, None);
+                    Ok((f.mode.letter() as u8, f.bytes()))
+                });
+                match made {
+                    Ok((mode, bytes)) => tx.send(Msg::ImageReady(mode, bytes)).ok(),
+                    Err(e) => tx.send(Msg::Log(format!("no image for the Next: {}", e.for_log()))).ok(),
+                };
+            });
         }
         if !link.input.is_empty() {
             let input = std::mem::take(&mut link.input);
@@ -1313,6 +1379,34 @@ mod tests {
     }
 
     /// Keys go 50 a second, whatever the driver's window allows.
+    /// A new image: the link tells the driver, and once the driver froze
+    /// the program, sends what waits, the head and the bytes raw, outside
+    /// the window.
+    #[test]
+    fn sends_the_driver_an_image() {
+        let (mut link, _, now) = new_link();
+        link.handle(Msg::Uart(encode(frame::HELLO, b"")), now);
+        link.handle(Msg::Image, now);
+        assert!(std::mem::take(&mut link.make_image));
+        let at = link.output().len();
+        let img: Vec<u8> = (0..81952u32).map(|i| i as u8).collect();
+        link.handle(Msg::ImageReady(b'H', img.clone()), now);
+        let wire = link.output()[at..].to_vec();
+        let kinds: Vec<u8> = Decoder::new().push(&wire).iter().map(|f| f.kind).collect();
+        assert!(kinds.contains(&frame::IMAGE), "{kinds:?}");
+        let at = link.output().len();
+        link.handle(Msg::Uart(encode(frame::IMAGE_GO, b"")), now);
+        let out = &link.output()[at..];
+        let sum = img.iter().fold(0u16, |s, &b| s.wrapping_add(b as u16));
+        let head = encode(frame::IMAGE_HEAD, &[b'H', sum as u8, (sum >> 8) as u8]);
+        let i = out.windows(head.len()).position(|w| w == head).expect("the head");
+        assert_eq!(&out[i + head.len()..], &img[..]);
+        // Asked again, with no image waiting: nothing.
+        let at = link.output().len();
+        link.handle(Msg::Uart(encode(frame::IMAGE_GO, b"")), now);
+        assert!(!link.output()[at..].windows(head.len()).any(|w| w == head));
+    }
+
     #[test]
     fn keys_paced() {
         let (mut link, mut next, now) = new_link();

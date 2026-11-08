@@ -1866,7 +1866,8 @@ impl Service {
         // The parts are fetched as Go's setMedia does, whether or not a
         // watcher takes them, and a copy over the limit is refused.
         let node = self.node().ok();
-        let takers = node.is_some() && self.watchers.lock().unwrap().iter().any(|x| x.board && x.takes(&m));
+        let takers = node.is_some()
+            && self.watchers.lock().unwrap().iter().any(|x| (x.board || x.target == NEXT) && x.takes(&m));
         if let Some(node) = node {
             let svc = self.clone();
             let (alt, m) = (alt.clone(), m.clone());
@@ -1902,12 +1903,23 @@ impl Service {
                 if takers {
                     let whole = fetched.is_ok().then_some(w);
                     svc.send_writes(|x| if x.takes(&m) { whole.clone().or_else(|| alt.clone()) } else { None });
+                    if let Some(w) = whole {
+                        svc.tell_next(&m, w);
+                    }
                 }
             });
         }
         let Some(alt) = alt else { return };
         if !self.send_writes(|x| if x.takes(&m) && takers { None } else { Some(alt.clone()) }) && !takers {
             *self.pending.lock().unwrap() = Some(alt);
+        }
+    }
+
+    /// Tells the Next's link of a copy of images it fetched, which the Next
+    /// shows over the program in front (docs: apps/zxnext/README.md).
+    fn tell_next(&self, m: &Manifest, w: WriteReq) {
+        for x in self.watchers.lock().unwrap().iter().filter(|x| x.target == NEXT && x.takes(m)) {
+            let _ = x.tx.try_send(ToWatcher::Write(w.clone()));
         }
     }
 
