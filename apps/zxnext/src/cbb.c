@@ -3360,7 +3360,7 @@ static void img_wait(void)
 static int img_speed(void)
 {
     uint32_t len, crc;
-    uint16_t start, frames, k, kbs;
+    uint16_t start, frames, kbs;
     uint8_t i, err, s, lost, out;
     char *e;
     if (img_via) return fail(s_net_runs, 0);
@@ -3402,7 +3402,8 @@ static int img_speed(void)
             for (i = 0; i < IMG_BANKS && !lost; i++) {
                 bank_in(i);
                 if (out) {
-                    for (k = 0; k < 8192; k++) link_send(((uint8_t *)WINDOW)[k]);
+                    http_dst = (uint8_t *)WINDOW;
+                    pi_tx(8192);
                     img_border ^= 7;
                     z80_outp(0xFE, img_border);
                 } else {

@@ -305,6 +305,35 @@ _rom_char:
    pop ix
    ret
 
+SECTION code_dot
+
+; void pi_tx(uint16_t n) __z88dk_fastcall
+;
+; The Pi's cbb on its way, and .cbb speed's bytes: n bytes from http_dst to the selected UART, each
+; as soon as it has room (about 70 T-states a byte), where link_send() in
+; C sent some 32K a second at most. OUT (C),A, not OUTI, whose port's high
+; byte emulators do not agree on.
+_pi_tx:
+   ex de,hl
+   ld hl,(_http_dst)
+   ld bc,0x133b
+pt_next:
+   ld a,d
+   or e
+   ret z
+pt_wait:
+   in a,(c)
+   and 2                        ; still sending
+   jr nz,pt_wait
+   ld a,(hl)
+   out (c),a
+   inc hl
+   dec de
+   jr pt_next
+
+_http_dst:
+   defw 0
+
 SECTION PAGE_13
 
 ; uint8_t http_rx(uint16_t n) __z88dk_fastcall
@@ -354,32 +383,6 @@ hr_end:
    pop ix
    ret
 
-; void pi_tx(uint16_t n) __z88dk_fastcall
-;
-; The Pi's cbb on its way: n bytes from http_dst to the selected UART, each
-; as soon as it has room (about 70 T-states a byte), where link_send() in
-; C sent some 32K a second at most. OUT (C),A, not OUTI, whose port's high
-; byte emulators do not agree on.
-_pi_tx:
-   ex de,hl
-   ld hl,(_http_dst)
-   ld bc,0x133b
-pt_next:
-   ld a,d
-   or e
-   ret z
-pt_wait:
-   in a,(c)
-   and 2                        ; still sending
-   jr nz,pt_wait
-   ld a,(hl)
-   out (c),a
-   inc hl
-   dec de
-   jr pt_next
-
-_http_dst:
-   defw 0
 hr_rounds:
    defb 0
 
