@@ -4,13 +4,16 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
-// Settings (docs/apps.md, "Screens", Settings): the language, sync away from
-// home, the notifications, and about the app; seven taps on the version
-// show the switch for the error details.
+// Settings (docs/apps.md, "Screens", Settings): the language, the
+// notifications, leaving the group, and about the app; seven taps on the
+// version show the switch for the error details. Everywhere, sync away from
+// home, is the globe on Home.
 // The colours follow the phone's ambience, as every Silica app's do.
 Page {
     id: page
     property int taps: 0
+
+    RemorsePopup { id: remorse }
 
     SilicaFlickable {
         anchors.fill: parent
@@ -47,46 +50,6 @@ Page {
                 onClicked: app.errorDetails = !app.errorDetails
             }
 
-            SectionHeader {
-                visible: app.member.running
-                text: qsTr("Away from home")
-            }
-
-            // Sync away from home (docs/protocol.md, section 11), as on the
-            // other phones: through the group's own hub only, off until the
-            // user turns it on.
-            TextSwitch {
-                visible: app.member.running
-                text: qsTr("Sync away from home")
-                description: qsTr("When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.")
-                automaticCheck: false
-                checked: app.member.awayOn
-                onClicked: app.member.setAway(!checked)
-            }
-            Label {
-                visible: app.member.running && app.member.awayOn
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                font.pixelSize: Theme.fontSizeSmall
-                color: app.member.awayStatus === "connected" ? Theme.highlightColor : Theme.secondaryColor
-                text: app.member.awayStatus === "home" ? qsTr("At home: syncing directly.")
-                    : app.member.awayStatus === "connecting" ? qsTr("Connecting to the hub through the tunnel…")
-                    : app.member.awayStatus === "connected"
-                      ? (app.member.awayHub !== "" ? qsTr("Connected to the hub %1 through the tunnel.").arg(app.member.awayHub)
-                                                   : qsTr("Connected to the hub through the tunnel."))
-                    : qsTr("Waiting for the hub: open the app at home once, near a computer of the group.")
-            }
-            Label {
-                visible: app.member.running && app.member.awayError !== ""
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                font.pixelSize: Theme.fontSizeExtraSmall
-                color: Theme.errorColor
-                text: app.member.awayError
-            }
-
             SectionHeader { text: qsTr("Notifications") }
 
             // One switch for each kind of the group's events (src/events.h),
@@ -107,6 +70,20 @@ Page {
                         checked = app.events.isOn(modelData.kind)
                     }
                 }
+            }
+
+            SectionHeader {
+                visible: app.group !== ""
+                text: qsTr("Group")
+            }
+            // The root's key goes with it: the group then has no root until
+            // an admin phone takes it over.
+            Button {
+                visible: app.group !== ""
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Leave the group")
+                onClicked: remorse.execute(app.root ? qsTr("Leaving the group and deleting its root key")
+                                                    : qsTr("Leaving the group"), function() { app.leave(); pageStack.pop() })
             }
 
             SectionHeader { text: qsTr("About") }

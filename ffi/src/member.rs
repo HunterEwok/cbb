@@ -385,6 +385,10 @@ struct DeviceAnswer {
     #[serde(rename = "self")]
     this: bool,
     listed: bool,
+    sync: String,
+    version: String,
+    os_version: String,
+    mac: String,
 }
 
 /// The app's callback and its context, called from the member's threads.
@@ -730,6 +734,10 @@ impl Member {
                         online: d.online,
                         this: d.this,
                         listed: d.listed,
+                        sync: d.sync,
+                        version: d.version,
+                        os_version: d.os_version,
+                        mac: d.mac,
                     })
                     .collect();
                 Ok(json!({ "devices": ds }))
@@ -843,6 +851,8 @@ impl Member {
                 "renew" => return Ok(json!({ "renewed": self.node.renew(&s)? })),
                 "mute" => return order(Order::Mute(a.for_ms)),
                 "unmute" => return order(Order::Unmute),
+                "sync_on" => return order(Order::Sync(true)),
+                "sync_off" => return order(Order::Sync(false)),
                 other => return Err(Error::msg(format!("there is no action {other:?}"))),
             }
             Ok(json!({}))

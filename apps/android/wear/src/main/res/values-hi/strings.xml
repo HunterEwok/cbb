@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<resources>
+    <string name="no_group">समूह बनाने या उससे जुड़ने के लिए फ़ोन पर CBB खोलें।</string>
+    <string name="online_count">%2$d में से %1$d ऑनलाइन</string>
+    <string name="away">हर जगह</string>
+    <string name="sync">सिंक</string>
+    <string name="away_off">बंद</string>
+    <string name="away_at_home">घर पर: सीधे सिंक हो रहा है।</string>
+    <string name="away_connecting">हब से जुड़ रहा है…</string>
+    <string name="away_connected">आपके हब के ज़रिए।</string>
+    <string name="away_waiting">हब का इंतज़ार।</string>
+    <string name="devices">डिवाइस</string>
+    <string name="latest">नवीनतम</string>
+    <string name="online">ऑनलाइन</string>
+    <string name="watch_phone">इस घड़ी का फ़ोन</string>
+    <string name="offline">ऑफ़लाइन</string>
+    <string name="stale">जैसा फ़ोन ने पिछली बार बताया।</string>
+    <string name="no_phone">फ़ोन जुड़ा नहीं है। उसे पास लाएँ, फिर दोबारा कोशिश करें।</string>
+    <string name="no_answer">फ़ोन ने जवाब नहीं दिया। दोबारा कोशिश करें।</string>
+    <string name="watch_admin">यह घड़ी समूह की एडमिन है।</string>
+    <string name="act_freeze">इस एडमिन को फ़्रीज़ करें</string>
+    <string name="act_remove">समूह से हटाएँ</string>
+    <string name="act_paste_off">रिमोट पेस्ट बंद करें</string>
+    <string name="act_actions_off">त्वरित क्रियाएँ बंद करें</string>
+    <string name="act_away_off">घर से दूर सिंक बंद करें</string>
+    <string name="ask_freeze">%1$s को फ़्रीज़ करें? वह नाम के लिए एडमिन रहता है, पर रूट के अनफ़्रीज़ करने तक उसके किसी हस्ताक्षर की गिनती नहीं होती।</string>
+    <string name="ask_remove">%1$s को समूह से हटाएँ?</string>
+    <string name="ask_paste_off">%1$s पर रिमोट पेस्ट बंद करें?</string>
+    <string name="ask_actions_off">%1$s पर हर त्वरित क्रिया बंद करें?</string>
+    <string name="ask_away_off">%1$s पर घर से दूर सिंक बंद करें?</string>
+    <string name="ask_action">%2$s पर %1$s चलाएँ?</string>
+    <string name="done">हो गया।</string>
+    <string name="not_done">फ़ोन ने यह नहीं किया। दोबारा कोशिश करें।</string>
+    <string name="not_done_because">फ़ोन ने यह नहीं किया।</string>
+    <string name="not_signed">क्रिया पर हस्ताक्षर नहीं हुए। घड़ी अनलॉक करें, फिर दोबारा कोशिश करें।</string>
+</resources>

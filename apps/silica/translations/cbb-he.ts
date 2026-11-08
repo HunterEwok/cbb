@@ -180,86 +180,6 @@
         <translation>בדיקת המפתח שוב</translation>
     </message>
     <message>
-        <source>Join a group</source>
-        <translation>הצטרפות לקבוצה</translation>
-    </message>
-    <message>
-        <source>Last copy</source>
-        <translation>ההעתקה האחרונה</translation>
-    </message>
-    <message>
-        <source>Leave the group</source>
-        <translation>יציאה מהקבוצה</translation>
-    </message>
-    <message>
-        <source>Leaving the group</source>
-        <translation>יוצא מהקבוצה</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>הצטרפות לקבוצה כמנהל</translation>
-    </message>
-    <message>
-        <source>For 15 minutes</source>
-        <translation>ל־15 דקות</translation>
-    </message>
-    <message>
-        <source>For an hour</source>
-        <translation>לשעה</translation>
-    </message>
-    <message>
-        <source>For 8 hours</source>
-        <translation>ל־8 שעות</translation>
-    </message>
-    <message>
-        <source>Until I turn it on</source>
-        <translation>עד שאפעיל</translation>
-    </message>
-    <message>
-        <source>Taking copies</source>
-        <translation>מקבל עותקים</translation>
-    </message>
-    <message>
-        <source>Not taking copies until %1</source>
-        <translation>לא מקבל עותקים עד %1</translation>
-    </message>
-    <message>
-        <source>Not taking copies</source>
-        <translation>לא מקבל עותקים</translation>
-    </message>
-    <message>
-        <source>Tap to take no copies from the group, or again; hold it for a time</source>
-        <translation>הקש כדי לא לקבל עותקים מהקבוצה, או כדי לקבל שוב; החזק כדי לבחור זמן</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
-        <translation>מנהל השתיק את הטלפון הזה עד %1: העותקים שלו לא מגיעים לקבוצה.</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
-        <translation>מנהל השתיק את הטלפון הזה: העותקים שלו לא מגיעים לקבוצה עד שמנהל יבטל את ההשתקה.</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>בקבוצה</translation>
-    </message>
-    <message>
-        <source>Admin</source>
-        <translation>מנהל</translation>
-    </message>
-    <message>
-        <source>Member</source>
-        <translation>חבר</translation>
-    </message>
-    <message>
-        <source>The phone has no key yet. Pull down to check it again.</source>
-        <translation>לטלפון עדיין אין מפתח. משכו למטה כדי לבדוק שוב.</translation>
-    </message>
-    <message>
-        <source>Devices</source>
-        <translation>מכשירים</translation>
-    </message>
-    <message>
         <source>Settings</source>
         <translation>הגדרות</translation>
     </message>
@@ -272,60 +192,124 @@
         <translation>הצגת המכשירים כרשימה</translation>
     </message>
     <message>
-        <source>Add a device</source>
-        <translation>הוספת מכשיר</translation>
+        <source>Scan a code</source>
+        <translation>סריקת קוד</translation>
     </message>
     <message>
-        <source>Make a group</source>
+        <source>Create a group</source>
         <translation>יצירת קבוצה</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>עוזב את הקבוצה ומוחק את מפתח השורש שלה</translation>
+        <source>Join a group</source>
+        <translation>הצטרפות לקבוצה</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one or make one.</source>
-        <translation>הטלפון עדיין לא בקבוצה. משכו למטה כדי להצטרף לקבוצה או ליצור אחת.</translation>
+        <source>Join a group as an admin</source>
+        <translation>הצטרפות לקבוצה כמנהל</translation>
     </message>
     <message>
-        <source>Root</source>
-        <translation>שורש</translation>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>לטלפון עדיין אין מפתח. משכו למטה כדי לבדוק שוב.</translation>
     </message>
     <message>
-        <source>Sync the clipboard</source>
-        <translation>סנכרון לוח ההעתקה</translation>
+        <source>%1 of %2 online</source>
+        <translation>%1 מתוך %2 מחוברים</translation>
     </message>
     <message>
-        <source>Sync</source>
-        <translation>סנכרון</translation>
+        <source>Sync is on</source>
+        <translation>הסנכרון פועל</translation>
     </message>
     <message>
-        <source>Fetching…</source>
-        <translation>מביא…</translation>
+        <source>Sync is off until %1</source>
+        <translation>הסנכרון כבוי עד %1</translation>
+    </message>
+    <message>
+        <source>Sync is off</source>
+        <translation>הסנכרון כבוי</translation>
+    </message>
+    <message>
+        <source>Everywhere is off</source>
+        <translation>״בכל מקום״ כבוי</translation>
+    </message>
+    <message>
+        <source>Everywhere waits while sync is off</source>
+        <translation>״בכל מקום״ ממתין כל עוד הסנכרון כבוי</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>בבית: מסתנכרן ישירות.</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>מתחבר לרכזת דרך המנהרה…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>מחובר לרכזת %1 דרך המנהרה.</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>מחובר לרכזת דרך המנהרה.</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>ממתין לרכזת: פתח את האפליקציה פעם אחת בבית, ליד מחשב של הקבוצה.</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>כיבוי הסנכרון</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>הפעלת הסנכרון</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere off</source>
+        <translation>כיבוי ״בכל מקום״</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere on</source>
+        <translation>הפעלת ״בכל מקום״</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>מנהל השתיק את הטלפון הזה עד %1: העותקים שלו לא מגיעים לקבוצה.</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>מנהל השתיק את הטלפון הזה: העותקים שלו לא מגיעים לקבוצה עד שמנהל יבטל את ההשתקה.</translation>
+    </message>
+    <message>
+        <source>Lost phone?</source>
+        <translation>הטלפון אבד?</translation>
+    </message>
+    <message>
+        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
+        <translation>הפכו טלפון שני למנהל: בו הקישו ״הצטרפות לקבוצה כמנהל״, ואז סרקו את הקוד שלו כאן דרך ״סריקת קוד״. הקישו לסגירה.</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>מכשירים</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>כיבוי ל־15 דקות</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>כיבוי לשעה</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>כיבוי ל־8 שעות</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>כיבוי עד שאפעיל</translation>
     </message>
 </context>
 <context>
     <name>DevicePage</name>
-    <message>
-        <source>System</source>
-        <translation>מערכת</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>בקבוצה</translation>
-    </message>
-    <message>
-        <source>Type</source>
-        <translation>סוג</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>מצב</translation>
-    </message>
-    <message>
-        <source>Device ID</source>
-        <translation>מזהה מכשיר</translation>
-    </message>
     <message>
         <source>Remove</source>
         <translation>הסרה</translation>
@@ -333,6 +317,14 @@
     <message>
         <source>Removing %1</source>
         <translation>מסיר את %1</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>הפיכה למנהל</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>הופך את %1 למנהל</translation>
     </message>
     <message>
         <source>Unfreeze</source>
@@ -351,24 +343,52 @@
         <translation>השתקה עד ביטול</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>השתקה לשעה</translation>
-    </message>
-    <message>
         <source>Muting %1</source>
         <translation>משתיק את %1</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>השתקה לשעה</translation>
     </message>
     <message>
         <source>Rename</source>
         <translation>שינוי שם</translation>
     </message>
     <message>
-        <source>Make an admin</source>
-        <translation>הפיכה למנהל</translation>
+        <source>Sync</source>
+        <translation>סנכרון</translation>
     </message>
     <message>
-        <source>Making %1 an admin</source>
-        <translation>הופך את %1 למנהל</translation>
+        <source>Sync is off</source>
+        <translation>הסנכרון כבוי</translation>
+    </message>
+    <message>
+        <source>Sync is on</source>
+        <translation>הסנכרון פועל</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>עוד</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>סוג</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>בקבוצה</translation>
+    </message>
+    <message>
+        <source>System version</source>
+        <translation>גרסת המערכת</translation>
+    </message>
+    <message>
+        <source>MAC address</source>
+        <translation>כתובת MAC</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>מזהה מכשיר</translation>
     </message>
 </context>
 <context>
@@ -396,6 +416,42 @@
     <message>
         <source>Puts the error itself under each error message</source>
         <translation>מציג את השגיאה עצמה מתחת לכל הודעת שגיאה</translation>
+    </message>
+    <message>
+        <source>Notifications</source>
+        <translation>התראות</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>מכשירים מצטרפים או עוזבים</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>מכשיר הופך למנהל</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>מכשיר מוקפא או מופשר</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>טלפון אחר משתלט על הקבוצה</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>קבוצה</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>יציאה מהקבוצה</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>עוזב את הקבוצה ומוחק את מפתח השורש שלה</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>יוצא מהקבוצה</translation>
     </message>
     <message>
         <source>About</source>
@@ -438,64 +494,8 @@
         <translation>טביעת האצבע של המפתח</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>קבוצה</translation>
-    </message>
-    <message>
         <source>Device</source>
         <translation>מכשיר</translation>
-    </message>
-    <message>
-        <source>Notifications</source>
-        <translation>התראות</translation>
-    </message>
-    <message>
-        <source>Devices join or leave</source>
-        <translation>מכשירים מצטרפים או עוזבים</translation>
-    </message>
-    <message>
-        <source>A device becomes an admin</source>
-        <translation>מכשיר הופך למנהל</translation>
-    </message>
-    <message>
-        <source>A device is frozen or unfrozen</source>
-        <translation>מכשיר מוקפא או מופשר</translation>
-    </message>
-    <message>
-        <source>Another phone takes the group over</source>
-        <translation>טלפון אחר משתלט על הקבוצה</translation>
-    </message>
-    <message>
-        <source>Away from home</source>
-        <translation>מחוץ לבית</translation>
-    </message>
-    <message>
-        <source>Sync away from home</source>
-        <translation>סנכרון מחוץ לבית</translation>
-    </message>
-    <message>
-        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
-        <translation>כשהטלפון אינו ברשת הביתית, הוא מסתנכרן דרך מנהרת ה-WireGuard של הרכזת שלך, מחשב בקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם מפתחות הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. כיבוי גורם לטלפון לשכוח את מפתח המנהרה שלו.</translation>
-    </message>
-    <message>
-        <source>At home: syncing directly.</source>
-        <translation>בבית: מסתנכרן ישירות.</translation>
-    </message>
-    <message>
-        <source>Connecting to the hub through the tunnel…</source>
-        <translation>מתחבר לרכזת דרך המנהרה…</translation>
-    </message>
-    <message>
-        <source>Connected to the hub %1 through the tunnel.</source>
-        <translation>מחובר לרכזת %1 דרך המנהרה.</translation>
-    </message>
-    <message>
-        <source>Connected to the hub through the tunnel.</source>
-        <translation>מחובר לרכזת דרך המנהרה.</translation>
-    </message>
-    <message>
-        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
-        <translation>ממתין לרכזת: פתח את האפליקציה פעם אחת בבית, ליד מחשב של הקבוצה.</translation>
     </message>
 </context>
 <context>
@@ -666,8 +666,8 @@
         <translation>מושתק</translation>
     </message>
     <message>
-        <source>Paused</source>
-        <translation>מושהה</translation>
+        <source>Sync is off</source>
+        <translation>הסנכרון כבוי</translation>
     </message>
     <message>
         <source>Looking for devices</source>
@@ -835,6 +835,21 @@
     <message>
         <source>%1 files</source>
         <translation>%1 קבצים</translation>
+    </message>
+</context>
+<context>
+    <name>AwayDialog</name>
+    <message>
+        <source>Turn Everywhere on?</source>
+        <translation>להפעיל ״בכל מקום״?</translation>
+    </message>
+    <message>
+        <source>Turn on</source>
+        <translation>הפעלה</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>כשהטלפון אינו ברשת הביתית, הוא מסתנכרן דרך מנהרת ה-WireGuard של הרכזת שלך, מחשב בקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם מפתחות הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. כיבוי גורם לטלפון לשכוח את מפתח המנהרה שלו.</translation>
     </message>
 </context>
 </TS>

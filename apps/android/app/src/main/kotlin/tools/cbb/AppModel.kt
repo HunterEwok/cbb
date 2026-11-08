@@ -40,7 +40,7 @@ import java.time.Instant
  * state is Compose state, changed on the main thread.
  */
 class AppModel(private val app: Context) {
-    enum class Phase { START, JOINING, JOINING_COMPUTER, HOME }
+    enum class Phase { START, JOINING, HOME }
 
     /** One line about the last action, in plain words, and the error underneath when details are on. */
     data class Note(@StringRes val text: Int, val detail: String? = null, val error: Boolean = false)
@@ -86,7 +86,10 @@ class AppModel(private val app: Context) {
     init {
         loadArrangement()
         // A command from an admin changes this phone's mode on the node's thread.
-        group.onModeChanged = { Handler(Looper.getMainLooper()).post { devices = group.devices } }
+        group.onModeChanged = {
+            Handler(Looper.getMainLooper()).post { devices = group.devices }
+            SyncTileService.changed(app)
+        }
     }
     val computers: List<LiveGroup.Device> get() = devices.filter { !it.isSelf }
     var message by mutableStateOf<Note?>(null)
@@ -117,10 +120,6 @@ class AppModel(private val app: Context) {
 
     /** What the group's records stop and what ends it. */
     var alerts by mutableStateOf<List<GroupAlert>>(emptyList())
-        private set
-
-    /** The one-time note on the Start screen that this phone is ready. */
-    var welcome by mutableStateOf(false)
         private set
 
     var color by mutableStateOf(settings.color)
@@ -323,26 +322,19 @@ class AppModel(private val app: Context) {
         }
     }
 
-    /** At the first launch: makes this phone's own key and says so once, with what to do next. */
+    /** At the first launch: makes this phone's own key, once. */
     suspend fun prepare() {
-        if (phase != Phase.START || settings.welcomed) return
+        if (phase != Phase.START || settings.prepared) return
         try {
             withContext(Dispatchers.IO) { group.prepare() }
-            welcome = true
+            settings.prepared = true
         } catch (e: Exception) {
             message = describe(e)
         }
     }
 
-    /** Hides the note for good. */
-    fun dismissWelcome() {
-        welcome = false
-        settings.welcomed = true
-    }
-
-    /** Opens the screen that joins another phone's group. */
+    /** Opens the screen that joins another device's group. */
     fun startJoining() {
-        dismissWelcome()
         message = null
         phase = Phase.JOINING
     }
@@ -366,36 +358,6 @@ class AppModel(private val app: Context) {
         }
     }
 
-    /** Opens the screen that joins a computer's group with the code cbb pair shows. */
-    fun startJoiningComputer() {
-        dismissWelcome()
-        message = null
-        phase = Phase.JOINING_COMPUTER
-    }
-
-    /**
-     * Joins a computer's group with the code the user typed from cbb pair on
-     * the group's root, then goes Home. A wrong code may be typed again: the
-     * computer's window takes three attempts.
-     */
-    suspend fun joinComputer(code: String) {
-        busy = true
-        message = null
-        try {
-            group.joinComputer(code)
-            update()
-            phase = Phase.HOME
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: PairingJoiner.Failure) {
-            message = describe(e, if (e.code == Pairing.ErrorCode.WRONG_CODE) R.string.error_join_wrong_code else R.string.error_join_computer)
-        } catch (e: Exception) {
-            message = describe(e)
-        } finally {
-            busy = false
-        }
-    }
-
     /** Leaves the join screen without joining. */
     fun cancelJoin() {
         joinCode = null
@@ -414,6 +376,7 @@ class AppModel(private val app: Context) {
                 is LiveGroup.Got.Files -> {}
                 null -> {}
             }
+            sendFailed = false
             message = if (fetched is LiveGroup.Got.Files) Note(if (fetched.gallery) R.string.saved_to_gallery else R.string.files_saved) else Note(
                 when (result) {
                     LiveGroup.SyncResult.SENT -> R.string.sent
@@ -430,6 +393,23 @@ class AppModel(private val app: Context) {
             update()
         }
     }
+
+    /**
+     * What the app does as it opens (docs/apps.md, Home): sends what was
+     * copied, or takes a newer copy, without a button; it says something
+     * only when a copy went one way or the other, or failed.
+     */
+    suspend fun sendOnOpen() {
+        if (!group.hasGroup || busy || syncOff != null || phase != Phase.HOME) return
+        val before = message
+        sync()
+        sendFailed = message?.error == true
+        if (message?.text == R.string.nothing_new) message = before
+    }
+
+    /** Whether sending as the app opened failed, so that Home offers a button for it. */
+    var sendFailed by mutableStateOf(false)
+        private set
 
     /**
      * The one button without the app: the tile, the notification, Share
@@ -874,19 +854,17 @@ class AppModel(private val app: Context) {
         update()
     }
 
-    /** Sets a device's sync mode, this phone's own without a command; the reason a device refused, if it does, shows under the message. */
-    /** This phone's pause of the group's copies; null while it takes them. */
-    val pause: LiveGroup.Hold? get() = devices.firstOrNull { it.isSelf }?.paused
+    /** Until when this phone's sync is off; null while it syncs. */
+    val syncOff: LiveGroup.Hold? get() = devices.firstOrNull { it.isSelf }?.syncOff
 
     /**
-     * Keeps the group's copies out of this phone for forMS milliseconds, 0
-     * for until the user takes them again; null takes them again now. Its
-     * own copies still go out.
+     * The house: turns this phone's sync on, or off for forMS
+     * milliseconds, 0 for until the user turns it on again.
      */
-    suspend fun pauseReceiving(forMS: Long?) {
+    suspend fun turnSync(on: Boolean, forMS: Long = 0) {
         message = try {
-            withContext(Dispatchers.IO) { group.pauseReceiving(forMS) }
-            Note(if (forMS == null) R.string.pause_off else R.string.pause_on)
+            withContext(Dispatchers.IO) { group.setSync(on, forMS) }
+            Note(if (on) R.string.sync_turned_on else R.string.sync_turned_off)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -913,10 +891,12 @@ class AppModel(private val app: Context) {
         update()
     }
 
-    suspend fun setMode(id: String, mode: String) {
+    /** An admin turns another device's sync on or off with a command; this phone's own is the house. The reason a device refused, if it does, shows under the message. */
+    suspend fun setSync(id: String, on: Boolean) {
+        if (devices.firstOrNull { it.id == id }?.isSelf == true) return turnSync(on)
         message = try {
-            if (devices.firstOrNull { it.id == id }?.isSelf == true) withContext(Dispatchers.IO) { group.setOwnMode(mode) } else group.setMode(id, mode)
-            Note(R.string.mode_set)
+            group.setMode(id, if (on) "shared" else "own")
+            Note(if (on) R.string.sync_turned_on else R.string.sync_turned_off)
         } catch (e: CancellationException) {
             throw e
         } catch (e: LiveGroup.CommandRefused) {

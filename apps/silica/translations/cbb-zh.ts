@@ -180,86 +180,6 @@
         <translation>重新检查密钥</translation>
     </message>
     <message>
-        <source>Join a group</source>
-        <translation>加入群组</translation>
-    </message>
-    <message>
-        <source>Last copy</source>
-        <translation>最近的复制内容</translation>
-    </message>
-    <message>
-        <source>Leave the group</source>
-        <translation>退出群组</translation>
-    </message>
-    <message>
-        <source>Leaving the group</source>
-        <translation>正在退出群组</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>以管理员身份加入群组</translation>
-    </message>
-    <message>
-        <source>For 15 minutes</source>
-        <translation>15 分钟</translation>
-    </message>
-    <message>
-        <source>For an hour</source>
-        <translation>1 小时</translation>
-    </message>
-    <message>
-        <source>For 8 hours</source>
-        <translation>8 小时</translation>
-    </message>
-    <message>
-        <source>Until I turn it on</source>
-        <translation>直到我打开</translation>
-    </message>
-    <message>
-        <source>Taking copies</source>
-        <translation>正在接收副本</translation>
-    </message>
-    <message>
-        <source>Not taking copies until %1</source>
-        <translation>在 %1 之前不接收副本</translation>
-    </message>
-    <message>
-        <source>Not taking copies</source>
-        <translation>不接收副本</translation>
-    </message>
-    <message>
-        <source>Tap to take no copies from the group, or again; hold it for a time</source>
-        <translation>轻点以不接收群组的副本或重新接收；长按可选择时长</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
-        <translation>管理员已将此手机静音至 %1：它的副本不会到达群组。</translation>
-    </message>
-    <message>
-        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
-        <translation>管理员已将此手机静音：在管理员取消静音之前，它的副本不会到达群组。</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>在群组中</translation>
-    </message>
-    <message>
-        <source>Admin</source>
-        <translation>管理员</translation>
-    </message>
-    <message>
-        <source>Member</source>
-        <translation>成员</translation>
-    </message>
-    <message>
-        <source>The phone has no key yet. Pull down to check it again.</source>
-        <translation>手机还没有密钥。下拉可再次检查。</translation>
-    </message>
-    <message>
-        <source>Devices</source>
-        <translation>设备</translation>
-    </message>
-    <message>
         <source>Settings</source>
         <translation>设置</translation>
     </message>
@@ -272,60 +192,124 @@
         <translation>以列表显示设备</translation>
     </message>
     <message>
-        <source>Add a device</source>
-        <translation>添加设备</translation>
+        <source>Scan a code</source>
+        <translation>扫描代码</translation>
     </message>
     <message>
-        <source>Make a group</source>
+        <source>Create a group</source>
         <translation>创建群组</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>正在退出群组并删除其根密钥</translation>
+        <source>Join a group</source>
+        <translation>加入群组</translation>
     </message>
     <message>
-        <source>The phone is in no group yet. Pull down to join one or make one.</source>
-        <translation>手机尚未加入群组。下拉以加入或创建一个群组。</translation>
+        <source>Join a group as an admin</source>
+        <translation>以管理员身份加入群组</translation>
     </message>
     <message>
-        <source>Root</source>
-        <translation>根</translation>
+        <source>The phone has no key yet. Pull down to check it again.</source>
+        <translation>手机还没有密钥。下拉可再次检查。</translation>
     </message>
     <message>
-        <source>Sync the clipboard</source>
-        <translation>同步剪贴板</translation>
+        <source>%1 of %2 online</source>
+        <translation>%2 台中 %1 台在线</translation>
     </message>
     <message>
-        <source>Sync</source>
-        <translation>同步</translation>
+        <source>Sync is on</source>
+        <translation>同步已开启</translation>
     </message>
     <message>
-        <source>Fetching…</source>
-        <translation>正在获取…</translation>
+        <source>Sync is off until %1</source>
+        <translation>同步已关闭，直到 %1</translation>
+    </message>
+    <message>
+        <source>Sync is off</source>
+        <translation>同步已关闭</translation>
+    </message>
+    <message>
+        <source>Everywhere is off</source>
+        <translation>“随处”已关闭</translation>
+    </message>
+    <message>
+        <source>Everywhere waits while sync is off</source>
+        <translation>同步关闭时，“随处”暂停</translation>
+    </message>
+    <message>
+        <source>At home: syncing directly.</source>
+        <translation>在家：直接同步。</translation>
+    </message>
+    <message>
+        <source>Connecting to the hub through the tunnel…</source>
+        <translation>正在通过隧道连接中枢…</translation>
+    </message>
+    <message>
+        <source>Connected to the hub %1 through the tunnel.</source>
+        <translation>已通过隧道连接到中枢 %1。</translation>
+    </message>
+    <message>
+        <source>Connected to the hub through the tunnel.</source>
+        <translation>已通过隧道连接到中枢。</translation>
+    </message>
+    <message>
+        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
+        <translation>正在等待中枢：在家里、在群组的一台电脑附近打开一次应用。</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>关闭同步</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>开启同步</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere off</source>
+        <translation>关闭“随处”</translation>
+    </message>
+    <message>
+        <source>Turn Everywhere on</source>
+        <translation>开启“随处”</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone until %1: its copies do not reach the group.</source>
+        <translation>管理员已将此手机静音至 %1：它的副本不会到达群组。</translation>
+    </message>
+    <message>
+        <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
+        <translation>管理员已将此手机静音：在管理员取消静音之前，它的副本不会到达群组。</translation>
+    </message>
+    <message>
+        <source>Lost phone?</source>
+        <translation>手机丢了？</translation>
+    </message>
+    <message>
+        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
+        <translation>让第二部手机成为管理员：在那部手机上点按“以管理员身份加入群组”，然后在这里用“扫描代码”扫描它的代码。点按即可关闭。</translation>
+    </message>
+    <message>
+        <source>Devices</source>
+        <translation>设备</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>关闭 15 分钟</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>关闭 1 小时</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>关闭 8 小时</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>关闭，直到我打开</translation>
     </message>
 </context>
 <context>
     <name>DevicePage</name>
-    <message>
-        <source>System</source>
-        <translation>系统</translation>
-    </message>
-    <message>
-        <source>In the group</source>
-        <translation>在群组中</translation>
-    </message>
-    <message>
-        <source>Type</source>
-        <translation>类型</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>状态</translation>
-    </message>
-    <message>
-        <source>Device ID</source>
-        <translation>设备 ID</translation>
-    </message>
     <message>
         <source>Remove</source>
         <translation>移除</translation>
@@ -333,6 +317,14 @@
     <message>
         <source>Removing %1</source>
         <translation>正在移除 %1</translation>
+    </message>
+    <message>
+        <source>Make an admin</source>
+        <translation>设为管理员</translation>
+    </message>
+    <message>
+        <source>Making %1 an admin</source>
+        <translation>正在将 %1 设为管理员</translation>
     </message>
     <message>
         <source>Unfreeze</source>
@@ -351,24 +343,52 @@
         <translation>静音直到取消</translation>
     </message>
     <message>
-        <source>Mute for an hour</source>
-        <translation>静音一小时</translation>
-    </message>
-    <message>
         <source>Muting %1</source>
         <translation>正在静音 %1</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>静音一小时</translation>
     </message>
     <message>
         <source>Rename</source>
         <translation>重命名</translation>
     </message>
     <message>
-        <source>Make an admin</source>
-        <translation>设为管理员</translation>
+        <source>Sync</source>
+        <translation>同步</translation>
     </message>
     <message>
-        <source>Making %1 an admin</source>
-        <translation>正在将 %1 设为管理员</translation>
+        <source>Sync is off</source>
+        <translation>同步已关闭</translation>
+    </message>
+    <message>
+        <source>Sync is on</source>
+        <translation>同步已开启</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>更多</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>类型</translation>
+    </message>
+    <message>
+        <source>In the group</source>
+        <translation>在群组中</translation>
+    </message>
+    <message>
+        <source>System version</source>
+        <translation>系统版本</translation>
+    </message>
+    <message>
+        <source>MAC address</source>
+        <translation>MAC 地址</translation>
+    </message>
+    <message>
+        <source>Device ID</source>
+        <translation>设备 ID</translation>
     </message>
 </context>
 <context>
@@ -396,6 +416,42 @@
     <message>
         <source>Puts the error itself under each error message</source>
         <translation>在每条错误消息下显示错误本身</translation>
+    </message>
+    <message>
+        <source>Notifications</source>
+        <translation>通知</translation>
+    </message>
+    <message>
+        <source>Devices join or leave</source>
+        <translation>设备加入或离开</translation>
+    </message>
+    <message>
+        <source>A device becomes an admin</source>
+        <translation>设备成为管理员</translation>
+    </message>
+    <message>
+        <source>A device is frozen or unfrozen</source>
+        <translation>设备被冻结或解冻</translation>
+    </message>
+    <message>
+        <source>Another phone takes the group over</source>
+        <translation>另一台手机接管群组</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>群组</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>退出群组</translation>
+    </message>
+    <message>
+        <source>Leaving the group and deleting its root key</source>
+        <translation>正在退出群组并删除其根密钥</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>正在退出群组</translation>
     </message>
     <message>
         <source>About</source>
@@ -438,64 +494,8 @@
         <translation>密钥指纹</translation>
     </message>
     <message>
-        <source>Group</source>
-        <translation>群组</translation>
-    </message>
-    <message>
         <source>Device</source>
         <translation>设备</translation>
-    </message>
-    <message>
-        <source>Notifications</source>
-        <translation>通知</translation>
-    </message>
-    <message>
-        <source>Devices join or leave</source>
-        <translation>设备加入或离开</translation>
-    </message>
-    <message>
-        <source>A device becomes an admin</source>
-        <translation>设备成为管理员</translation>
-    </message>
-    <message>
-        <source>A device is frozen or unfrozen</source>
-        <translation>设备被冻结或解冻</translation>
-    </message>
-    <message>
-        <source>Another phone takes the group over</source>
-        <translation>另一台手机接管群组</translation>
-    </message>
-    <message>
-        <source>Away from home</source>
-        <translation>离家在外</translation>
-    </message>
-    <message>
-        <source>Sync away from home</source>
-        <translation>离家时同步</translation>
-    </message>
-    <message>
-        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
-        <translation>手机不在家庭网络中时，它通过你自己的中枢的 WireGuard 隧道同步；中枢是群组中用 cbb global hub 设置的一台电脑，它的端口可从互联网访问，但只能通过带有群组密钥的 WireGuard。中枢会在这部手机下次在家连接时回应它。数据不会去往别处，没有隧道就没有连接。关闭它会让这部手机忘记它的隧道密钥。</translation>
-    </message>
-    <message>
-        <source>At home: syncing directly.</source>
-        <translation>在家：直接同步。</translation>
-    </message>
-    <message>
-        <source>Connecting to the hub through the tunnel…</source>
-        <translation>正在通过隧道连接中枢…</translation>
-    </message>
-    <message>
-        <source>Connected to the hub %1 through the tunnel.</source>
-        <translation>已通过隧道连接到中枢 %1。</translation>
-    </message>
-    <message>
-        <source>Connected to the hub through the tunnel.</source>
-        <translation>已通过隧道连接到中枢。</translation>
-    </message>
-    <message>
-        <source>Waiting for the hub: open the app at home once, near a computer of the group.</source>
-        <translation>正在等待中枢：在家里、在群组的一台电脑附近打开一次应用。</translation>
     </message>
 </context>
 <context>
@@ -666,8 +666,8 @@
         <translation>已静音</translation>
     </message>
     <message>
-        <source>Paused</source>
-        <translation>已暂停</translation>
+        <source>Sync is off</source>
+        <translation>同步已关闭</translation>
     </message>
     <message>
         <source>Looking for devices</source>
@@ -835,6 +835,21 @@
     <message>
         <source>%1 files</source>
         <translation>%1 个文件</translation>
+    </message>
+</context>
+<context>
+    <name>AwayDialog</name>
+    <message>
+        <source>Turn Everywhere on?</source>
+        <translation>开启“随处”？</translation>
+    </message>
+    <message>
+        <source>Turn on</source>
+        <translation>开启</translation>
+    </message>
+    <message>
+        <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
+        <translation>手机不在家庭网络中时，它通过你自己的中枢的 WireGuard 隧道同步；中枢是群组中用 cbb global hub 设置的一台电脑，它的端口可从互联网访问，但只能通过带有群组密钥的 WireGuard。中枢会在这部手机下次在家连接时回应它。数据不会去往别处，没有隧道就没有连接。关闭它会让这部手机忘记它的隧道密钥。</translation>
     </message>
 </context>
 </TS>

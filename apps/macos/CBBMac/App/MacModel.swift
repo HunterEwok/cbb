@@ -27,6 +27,9 @@ final class MacModel: ObservableObject {
     /// once cbb wrote it.
     @Published private(set) var joining = false
     @Published private(set) var join: JoinCode?
+    /// The window asks before Everywhere turns on (D-82); the menu bar's
+    /// item sets it and opens the window.
+    @Published var askingAway = false
     private var joinFile: URL?
     private var joinCancelled = false
     /// Whether macOS lets the app press keys for remote paste.
@@ -186,27 +189,23 @@ final class MacModel: ObservableObject {
         pasteAllowed = Injector.allowed
     }
 
-    /// Sends what the pasteboard holds to the group, as a copy on this Mac.
-    func send() async {
-        guard let text = NSPasteboard.general.string(forType: .string), !text.isEmpty else {
-            message = String(localized: "The clipboard holds no text.")
-            return
-        }
-        await act {
-            _ = try await self.client.request(.init(op: "copy"), payload: Data(text.utf8))
-            return String(localized: "Sent to the group.")
-        }
+    /// Makes a new group with this Mac as its root, as cbb new does as the
+    /// administrator.
+    func createGroup() async {
+        await admin(["new"], done: String(localized: "The group is made: this Mac is its root. Add a device with the + button."))
     }
 
-    /// Puts the group's latest text into the pasteboard.
-    func fetch() async {
-        await act {
-            let (_, body) = try await self.client.request(.init(op: "paste"))
-            guard !body.isEmpty else { return String(localized: "The group has no text yet.") }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(String(decoding: body, as: UTF8.self), forType: .string)
-            return String(localized: "Fetched from the group.")
-        }
+    /// Installs the newest signed release the group passed around, as cbb
+    /// update does as the administrator.
+    func update() async { await admin(["update"], done: String(localized: "CBB is updated.")) }
+
+    /// Claims the group with its recovery key, typed from the sheet or its
+    /// QR code's text, on cbb recovery's standard input; the claim waits as
+    /// a takeover does.
+    func recover(_ key: String) async {
+        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        await admin(["recovery"], input: key + "\n", done: String(localized: "The claim is made: it takes effect after the group's takeover delay."))
     }
 
     func rename(_ id: String, to name: String) async {
@@ -295,9 +294,9 @@ final class MacModel: ObservableObject {
 
     /// Turns sync on or off: this Mac's with id nil, or on an admin another
     /// device's, which cbb sends it as a signed command.
-    func setMode(_ mode: SyncMode, on id: String? = nil) async {
-        guard let id else { return await turnSync(mode == .shared) }
-        await admin(["sync", "-on", id, mode == .shared ? "on" : "off"], done: String(localized: "Sync is set."))
+    func setSync(_ on: Bool, on id: String? = nil) async {
+        guard let id else { return await turnSync(on) }
+        await admin(["sync", "-on", id, on ? "on" : "off"], done: String(localized: "Sync is set."))
     }
 
     /// Turns sync away from home on or off; on needs the user's yes to the
@@ -308,7 +307,7 @@ final class MacModel: ObservableObject {
 
     /// Whether sync is off on this Mac now, and until when, nil for until
     /// it is turned on again.
-    var syncOff: Bool { status?.mode == SyncMode.own.rawValue }
+    var syncOff: Bool { status?.mode == "own" }
     var syncOffUntil: Date? { Self.date(ms: status?.syncUntilMS) }
     /// Whether an admin muted this Mac, and until when.
     var muted: Bool { status?.muted == true }
@@ -353,12 +352,21 @@ final class MacModel: ObservableObject {
         var ends = Date()
 
         private enum CodingKeys: String, CodingKey { case qr, expires, port }
+
+        /// The six digits in the code, as "123 456", for a computer of the
+        /// group to type; nil when the code holds none.
+        var digits: String? {
+            let code = URLComponents(string: qr)?.queryItems?.first { $0.name == "code" }?.value ?? ""
+            guard code.count == 6, code.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+            return String(code.prefix(3)) + " " + String(code.suffix(3))
+        }
     }
 
-    /// Joins the group of the phone that scans the QR code: cbb runs as the
+    /// Joins the group of the device that admits this Mac: a phone scans the
+    /// QR code, a computer of the group takes the six digits. cbb runs as the
     /// administrator and writes the code into a file the app made, which
     /// the app reads while cbb waits; cancelJoin removes the file.
-    func joinPhone() async {
+    func joinGroup() async {
         guard !joining, !busy else { return }
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-join-\(UUID().uuidString).json")
         guard FileManager.default.createFile(atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
@@ -395,24 +403,35 @@ final class MacModel: ObservableObject {
         joining = false
     }
 
-    /// Ends the wait for the phone: cbb sees its file gone and hangs up.
+    /// Ends the wait: cbb sees its file gone and hangs up.
     func cancelJoin() {
         guard let file = joinFile else { return }
         joinCancelled = true
         try? FileManager.default.removeItem(at: file)
     }
 
-    /// Admits the device whose QR code says text, such as a phone with
-    /// Aurora OS or Sailfish OS that waits: cbb pair -qr as the
-    /// administrator, the text on its standard input; with asAdmin, on the
-    /// group's root, a phone that asks to be an admin becomes one.
-    func admitByQR(_ text: String, asAdmin: Bool = false) async {
-        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard Self.isWaitingJoiner(text) else {
-            message = String(localized: "This QR code is not of a device that waits to join.")
+    /// Admits the new device that shows a code and waits: the six digits it
+    /// shows, typed here, or its QR code's text; cbb pair -qr does it as the
+    /// administrator with the code on its standard input, finding the device
+    /// by its digits on the home network. With asAdmin, on the group's root,
+    /// a phone that asks to be an admin becomes one.
+    func admit(_ text: String, asAdmin: Bool = false) async {
+        var text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let digits = Self.shownCode(text) {
+            text = digits
+        } else if !Self.isWaitingJoiner(text) {
+            message = String(localized: "Type the six digits the new device shows.")
             return
         }
         await admin(["pair", "-qr"] + (asAdmin ? ["-admin"] : []), input: text + "\n", done: String(localized: "It joined the group."))
+    }
+
+    /// The six digits a new device shows, as typed: spaces and dashes
+    /// between them are fine; nil when text is not such a code.
+    nonisolated static func shownCode(_ text: String) -> String? {
+        let kept = text.filter { $0 != " " && $0 != "-" }
+        guard kept.count == 6, kept.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+        return kept
     }
 
     /// Whether text is the QR code of a device that listens for the member

@@ -112,7 +112,7 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `evidence` | `evidence`: the attestations of the phone's keys | `{}`: every peer gets them after its hello (protocol.md, section 17) |
 | `disconnect` | `device` | `{}`: the connection to it ends with a goodbye; it is dialed again later |
 | `records` | none | `{"records"}` |
-| `devices` | none | `{"devices"}`: every device of the group as the app shows it, `[{device, name, role, caps, os, admin, root, frozen, online, self, listed}]`: the group's device records, whether it is connected and whether it is this phone, then the connected members no record lists yet (`listed` false) |
+| `devices` | none | `{"devices"}`: every device of the group as the app shows it, `[{device, name, role, caps, os, admin, root, frozen, online, self, listed, sync, version, os_version, mac}]`: the group's device records, whether it is connected and whether it is this phone, its house from a connected member's hello (`sync`: `on` for shared, `off` for own, empty otherwise) with the versions and MAC address the hello names, then the connected members no record lists yet (`listed` false) |
 | `alerts` | none | `{"alerts"}`: what the group's records stop and what ends it, for the alerts card (`cbb_core::manage::alerts`, as the kits' `GroupAlert`), `[{kind, names, devices, records, left_ms, count}]`, kind `stopped`, `secrets_stopped`, `two_histories`, `admins`, `claims`, `claim_pending`, `claim_stopped` or `newer`; the root ends one with `cbb_member_manage`'s `resolve` of its records, or by removing one of its devices |
 | `away`, `away_status` | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it on the lite member (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
 | `add_records` | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
@@ -154,7 +154,8 @@ through the same callback, as the phone kits' `PhoneGroup` does: a removal (ever
 device, its admin key among them; not the phone itself, nor the root's phone, which is taken
 over instead), a new name (a device record like its newest; an admin renames only a device the
 root did not record, since a root's record beats an admin's), a thaw of a frozen admin, which
-the member adds to its records and sends to the group, or a mute or an unmute, a command sealed
+the member adds to its records and sends to the group, or a mute, an unmute or a turn of the
+device's sync (`sync_on`, `sync_off`: a `mode` command, shared or own), a command sealed
 to the device's key when its record names one, which the member sends and whose result it
 answers. As the root it makes a connected computer an admin (`make_admin`: an admin CA for the
 admin key its hello offers, its device record again, and the admin message), and as any admin it

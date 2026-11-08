@@ -155,7 +155,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
          */
         val muted: Hold? = null,
         /** This phone takes no copies from the group for now; only on its own entry. */
-        val paused: Hold? = null,
+        val syncOff: Hold? = null,
     ) {
         /** Whether it is a member with the capability c. */
         fun can(c: String): Boolean = role == "member" && c in caps
@@ -283,13 +283,22 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** This phone as a remote paste target: its switches, limits and log. */
     val pastes = PasteReceiver(context, file.parentFile!!, keyboard)
 
-    /** The sync mode: own, shared, receive or send. */
+    /**
+     * The sync mode: own, shared, receive or send; shared when there is
+     * none, as a new device syncs. Sync turned off for a while (own with
+     * a time in mute.json's "sync") reads as shared once that time passes.
+     */
     val syncMode: String
-        get() = runCatching { modeFile.readText().trim() }.getOrNull()?.takeIf { it in Member.MODES } ?: "own"
+        get() {
+            val m = runCatching { modeFile.readText().trim() }.getOrNull()?.takeIf { it in Member.MODES } ?: "shared"
+            if (m != "own") return m
+            val until = synchronized(muteLock) { readMute("sync") }
+            return if (until != null && until > 0 && until <= System.currentTimeMillis()) "shared" else m
+        }
 
     /**
-     * An admin's mute of this phone and its user's pause of receiving, as
-     * Go's service keeps them in mute.json: until when in Unix
+     * An admin's mute of this phone and until when its user turned sync
+     * off, as Go's service keeps them in mute.json: until when in Unix
      * milliseconds, 0 for until it is lifted. Its own lock, as the node
      * reads the mute under its own.
      */
@@ -301,9 +310,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }.getOrNull()
 
     private fun writeMute(key: String, until: Long?) = synchronized(muteLock) {
-        val other = if (key == "mute") "pause" else "mute"
+        val old = runCatching { Json.parseToJsonElement(muteFile.readText()) as? JsonObject }.getOrNull() ?: JsonObject(emptyMap())
         val m = buildMap {
-            readMute(other)?.let { put(other, JsonPrimitive(it)) }
+            putAll(old.filterKeys { it != key })
             until?.let { put(key, JsonPrimitive(it)) }
         }
         muteFile.parentFile?.mkdirs()
@@ -315,8 +324,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** Until when an admin muted this phone, 0 for until an admin unmutes it; null while it is not muted. */
     val mutedUntilMS: Long? get() = synchronized(muteLock) { readMute("mute") }?.takeIf { Hold.of(it) != null }
 
-    /** Until when this phone takes no copies from the group, 0 for until its user turns them on again; null while it takes them. */
-    val pausedUntilMS: Long? get() = synchronized(muteLock) { readMute("pause") }?.takeIf { Hold.of(it) != null }
+    /** Until when this phone's sync is off, 0 for until its user turns it on; null while it syncs. */
+    val syncOffUntilMS: Long?
+        get() = if (syncMode != "own") null else (synchronized(muteLock) { readMute("sync") } ?: 0L)
 
     /** The IDs of the commands carried out, until they expire: the replay cache (docs/protocol.md, section 15). */
     private val commands = mutableMapOf<String, Long>()
@@ -409,7 +419,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     },
                     throughHub = it.id != g.device && it.id !in online && it.id in reached,
                     muted = Hold.of(if (it.id == g.device) mutedUntilMS else mutes[it.id]),
-                    paused = if (it.id == g.device) Hold.of(pausedUntilMS) else null,
+                    syncOff = if (it.id == g.device) syncOffUntilMS?.let(Hold::of) else null,
                 )
             }
         }
@@ -1243,10 +1253,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         published(listOf(r))
     }
 
-    /** Gives a phone that just made or joined a group the sync mode of a new device, own (receive on a TV), unless it has one from an earlier group. */
+    /** Gives a phone that just made or joined a group the sync mode of a new device, shared (receive on a TV), unless it has one from an earlier group. */
     private fun newDeviceMode() {
         // A TV receives the group's copies and sends none of its own (docs/roadmap.md, item 25).
-        if (!modeFile.exists()) setOwnMode(if (Tv.isTv(context)) "receive" else "own")
+        if (!modeFile.exists()) setOwnMode(if (Tv.isTv(context)) "receive" else "shared")
         // The credentials and the keys for the servers of an earlier group are of no use.
         credentialStore = null
         credentialsFile.delete()
@@ -1495,13 +1505,16 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * Keeps the group's copies out of this phone for forMS milliseconds, 0
-     * for until its user takes them again, or with null takes them again
-     * now (design.md, "Muting a device"); its own copies still go out.
-     * Needs no rights.
+     * Turns this phone's sync on, or off for forMS milliseconds, 0 for
+     * until its user turns it on again (docs/apps.md, the house). Off,
+     * nothing goes out or comes in. Needs no rights.
      */
-    fun pauseReceiving(forMS: Long?) {
-        writeMute("pause", forMS?.let { if (it > 0) System.currentTimeMillis() + it else 0 })
+    fun setSync(on: Boolean, forMS: Long = 0) {
+        val now = System.currentTimeMillis()
+        writeMute("sync", if (on) null else if (forMS > 0) now + forMS else 0)
+        setOwnMode(if (on) "shared" else "own", tell = false)
+        currentNode?.let { n -> runCatching { n.setSync(on, if (on) 0 else forMS) }.onFailure { Log.w(TAG, "turning sync", it) } }
+        onModeChanged?.invoke()
     }
 
     /**
@@ -2179,7 +2192,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         runCatching {
             n.addRecords(g.records.records)
-            n.setSync(syncMode != "own")
+            n.setSync(syncMode != "own", syncOffUntilMS?.takeIf { it > 0 }?.let { it - System.currentTimeMillis() }?.coerceAtLeast(1) ?: 0)
             n.setMute(mutedUntilMS)
             n.setTunnelKey(if (isHub) null else a.keys)
             n.setEvidence(ownEvidence())
@@ -2267,10 +2280,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * A live copy from another device (docs/design.md, "The one button");
      * an older one, as a hello brings it on connecting, would overwrite what
      * the phone copied since. Only in a sync mode that takes the group's
-     * copies, and not while its user paused them.
+     * copies, and only while its sync is on.
      */
     private fun copyArrived(n: CoreMember, c: CoreMember.Copy, me: String) {
-        if (c.unread || c.origin == me || c.ageMS >= incomingMS || !Member.receives(syncMode) || c.isFiles || pausedUntilMS != null) return
+        if (c.unread || c.origin == me || c.ageMS >= incomingMS || !Member.receives(syncMode) || c.isFiles) return
         val image = Images.part(c.media)
         if (image != null) {
             // Fetched off the events' thread, which the next events wait for.

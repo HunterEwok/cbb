@@ -6,20 +6,92 @@
     },
     "NSCameraUsageDescription": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمسح CBB رمز QR الذي يعرضه الحاسوب، لإضافته إلى مجموعتك."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB escanea el código QR que muestra un ordenador para añadirlo a tu grupo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB סורק את קוד ה-QR שמחשב מציג, כדי להוסיף אותו לקבוצה שלכם."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB किसी कंप्यूटर का दिखाया QR कोड स्कैन करता है, ताकि उसे आपके समूह में जोड़ सके।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "CBB сканирует QR-код, который показывает компьютер, чтобы добавить его в вашу группу."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB huchanganua msimbo wa QR unaoonyeshwa na kompyuta, ili kuiongeza kwenye kikundi chako."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB 扫描电脑显示的二维码，以将其添加到你的群组。"
           }
         }
       }
     },
     "NSFaceIDUsageDescription": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يطلب CBB بصمة الوجه قبل التوقيع بمفتاح مجموعتك، لإضافة جهاز أو إزالته."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB pide Face ID antes de firmar con la clave de tu grupo, para añadir o quitar un dispositivo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB מבקש Face ID לפני שהוא חותם עם המפתח של הקבוצה שלכם, כדי להוסיף או להסיר מכשיר."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी डिवाइस को जोड़ने या हटाने के लिए आपके समूह की कुंजी से हस्ताक्षर करने से पहले CBB Face ID माँगता है।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "CBB спрашивает Face ID перед подписью ключом вашей группы: чтобы добавить или удалить устройство."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB huomba Face ID kabla ya kutia sahihi kwa ufunguo wa kikundi chako, ili kuongeza au kuondoa kifaa."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB 在用群组密钥签名前会请求 Face ID，用于添加或移除设备。"
           }
         }
       }
@@ -31,25 +103,133 @@
             "state": "translated",
             "value": "CBB добавляет в «Фото» изображение или видео, которое прислал ваш компьютер."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB añade a Fotos una imagen o un vídeo que te envió tu ordenador."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB 将你的电脑发送的图片或视频添加到“照片”。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يضيف CBB إلى الصور صورة أو فيديو أرسله حاسوبك."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB מוסיף לתמונות תמונה או סרטון שהמחשב שלכם שלח."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB आपके कंप्यूटर से भेजी गई छवि या वीडियो को फ़ोटो में जोड़ता है।"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB huongeza kwenye Picha picha au video ambayo kompyuta yako ilituma."
+          }
         }
       }
     },
     "NSLocalNetworkUsageDescription": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعثر CBB على حواسيبك في الشبكة المنزلية ويبقي حافظتها متزامنة مع هذا الهاتف."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB encuentra tus ordenadores en la red de casa y mantiene su portapapeles sincronizado con este teléfono."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB מוצא את המחשבים שלכם ברשת הביתית ושומר את הלוח שלהם מסונכרן עם הטלפון הזה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB घर के नेटवर्क पर आपके कंप्यूटर ढूँढता है और उनके क्लिपबोर्ड को इस फ़ोन के साथ सिंक में रखता है।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "CBB находит ваши компьютеры в домашней сети и синхронизирует их буфер обмена с этим телефоном."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB hupata kompyuta zako kwenye mtandao wa nyumbani na huweka ubao wao wa kunakili sawa na simu hii."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB 在家庭网络中查找你的电脑，并让它们的剪贴板与这部手机保持同步。"
           }
         }
       }
     },
     "NFCReaderUsageDescription": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يضع CBB مفتاح استرداد مجموعتك على YubiKey، ويستعيد المجموعة به."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB guarda la clave de recuperación de tu grupo en una YubiKey y restaura el grupo con ella."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB שומר את מפתח השחזור של הקבוצה שלכם ב-YubiKey, ומשחזר איתו את הקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB आपके समूह की रिकवरी कुंजी को YubiKey पर रखता है, और उससे समूह को बहाल करता है।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "CBB записывает ключ восстановления вашей группы на YubiKey и восстанавливает группу с ним."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB huweka ufunguo wa urejeshaji wa kikundi chako kwenye YubiKey, na hurejesha kikundi kwa ufunguo huo."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB 将群组的恢复密钥存入 YubiKey，并用它恢复群组。"
           }
         }
       }

@@ -3,6 +3,8 @@
 
 package tools.cbb
 
+import androidx.annotation.StringRes
+import android.content.Context
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -108,7 +110,6 @@ fun Root(model: AppModel) {
                 when (model.phase) {
                     AppModel.Phase.START -> StartScreen(model)
                     AppModel.Phase.JOINING -> JoinScreen(model)
-                    AppModel.Phase.JOINING_COMPUTER -> JoinComputerScreen(model)
                     AppModel.Phase.HOME -> HomeScreen(model)
                 }
             }
@@ -133,9 +134,9 @@ private fun LocalNetworkPermission(model: AppModel) {
 // Start
 
 /**
- * No group yet: what cbb does, the note that this phone is
- * ready (once), connecting a device, and joining the group of a phone that
- * already uses cbb. Theme and language are a tap away.
+ * No group yet (docs/apps.md, Start): settings and the language at the
+ * top, the logo, "Create a group", "Join a group" and a small link to
+ * restore with the recovery key.
  */
 @Composable
 private fun StartScreen(model: AppModel) {
@@ -161,9 +162,7 @@ private fun StartScreen(model: AppModel) {
         verticalArrangement = Arrangement.spacedBy(Tokens.spacingLarge),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            // The system's own language, not the one the app shows.
-            val system = remember { android.content.res.Resources.getSystem().configuration.locales[0] }
-            if (LanguageChoice.offeredOnStart(system)) StartLanguageMenu(model)
+            StartLanguageMenu(model)
             Spacer(Modifier.weight(1f))
             IconText("⚙", stringResource(R.string.settings)) { settings = true }
         }
@@ -185,66 +184,32 @@ private fun StartScreen(model: AppModel) {
             model.message?.let { NoteText(it) }
             return@Column
         }
-        if (model.welcome) WelcomeCard(model)
         Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            AccentButton(stringResource(R.string.connect_device), onClick = {
-                model.dismissWelcome()
-                adding = true
-            })
-            Text(
-                stringResource(R.string.connect_hint),
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Center,
-                color = palette.textDim,
-            )
+        AccentButton(stringResource(R.string.create_group), onClick = { adding = true }, modifier = Modifier.widthIn(max = 480.dp))
+        QuietButton(stringResource(R.string.join_group), onClick = { model.startJoining() })
+        TextButton(onClick = { restoring = true }) {
+            Text(stringResource(R.string.restore_link), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
         }
-        QuietButton(stringResource(R.string.join_other), onClick = { model.startJoining() })
-        QuietButton(stringResource(R.string.join_computer), onClick = { model.startJoiningComputer() })
-        QuietButton(stringResource(R.string.restore), onClick = {
-            model.dismissWelcome()
-            restoring = true
-        })
         model.message?.let { NoteText(it) }
     }
 }
 
-/**
- * The language menu next to the gear when the system's language has no
- * translation; the app shows English then, so English is the one chosen.
- */
+/** The language menu across from the gear: the system's language or one of the translations. */
 @Composable
 private fun StartLanguageMenu(model: AppModel) {
     val activity = LocalActivity.current
     var open by remember { mutableStateOf(false) }
-    val chosen = model.settings.language.takeIf { it != LanguageChoice.SYSTEM } ?: LanguageChoice.EN
     Box {
-        TextButton(onClick = { open = true }, modifier = Modifier.card()) {
-            Text("${chosen.ownName} ▾", color = LocalPalette.current.text)
-        }
+        IconText("🌐", stringResource(R.string.language)) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            for (l in LanguageChoice.translations) {
-                DropdownMenuItem(text = { Text(l.ownName ?: "") }, onClick = {
+            for (l in listOf(LanguageChoice.SYSTEM) + LanguageChoice.translations) {
+                DropdownMenuItem(text = { Text(l.ownName ?: stringResource(R.string.language_system)) }, onClick = {
                     open = false
                     model.settings.language = l
                     activity?.recreate()
                 })
             }
         }
-    }
-}
-
-/** Said once, at the first launch: this phone has its own key now, and the next step is to connect a device. */
-@Composable
-private fun WelcomeCard(model: AppModel) {
-    val palette = LocalPalette.current
-    Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("✓ ", color = palette.accent, fontWeight = FontWeight.Bold)
-            Text(stringResource(R.string.welcome_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            IconText("✕", stringResource(R.string.close), small = true) { model.dismissWelcome() }
-        }
-        Text(stringResource(R.string.welcome_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
     }
 }
 
@@ -292,62 +257,6 @@ private fun JoinScreen(model: AppModel) {
         model.message?.let { NoteText(it) }
         Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
         QuietButton(stringResource(R.string.cancel), onClick = { model.cancelJoin() })
-    }
-}
-
-/**
- * Joining a computer's group: the six-digit code that cbb pair shows on
- * the group's root, typed here; the phone finds the computer by itself.
- */
-@Composable
-private fun JoinComputerScreen(model: AppModel) {
-    val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    var code by rememberSaveable { mutableStateOf("") }
-    var job by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    val leave = {
-        job?.cancel()
-        model.cancelJoin()
-    }
-    BackHandler { leave() }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Tokens.spacingLarge),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(Tokens.spacingLarge),
-    ) {
-        Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
-        Text(
-            stringResource(R.string.join_computer_title),
-            style = MaterialTheme.typography.headlineMedium,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            color = palette.accent,
-            textAlign = TextAlign.Center,
-        )
-        Text(stringResource(R.string.join_computer_hint), textAlign = TextAlign.Center, color = palette.textDim)
-        OutlinedTextField(
-            value = code,
-            onValueChange = { v -> code = v.filter(Char::isDigit).take(6) },
-            singleLine = true,
-            enabled = !model.busy,
-            label = { Text(stringResource(R.string.join_computer_code)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-            textStyle = MaterialTheme.typography.headlineSmall.copy(fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center),
-            modifier = Modifier.widthIn(max = 240.dp),
-        )
-        if (model.busy) {
-            CircularProgressIndicator(color = palette.accent)
-            Text(stringResource(R.string.join_computer_searching), color = palette.textDim)
-        } else {
-            AccentButton(
-                stringResource(R.string.join_computer_go),
-                enabled = code.length == 6,
-                onClick = { job = scope.launch { model.joinComputer(code) } },
-            )
-        }
-        model.message?.let { NoteText(it) }
-        Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
-        QuietButton(stringResource(R.string.cancel), onClick = leave)
     }
 }
 
@@ -522,45 +431,50 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
 
 // Settings
 
-/** Theme and colour, language, sending copies by themselves, sync away from home, notifications, about. */
+/**
+ * Settings (docs/apps.md, Settings): the basic ones first (the look,
+ * notifications, sending copies by themselves, the watch, the recovery key
+ * on the root), then the switch for the advanced ones (away from home, the
+ * group's rules for admins), leaving the group and about. No long text
+ * under an item: a tip says it once, until it is closed.
+ */
 @Composable
 internal fun SettingsScreen(model: AppModel, back: () -> Unit) {
     val palette = LocalPalette.current
     val context = LocalContext.current
-    val activity = LocalActivity.current
+    val home = model.phase == AppModel.Phase.HOME
+    var advanced by remember { mutableStateOf(model.settings.advanced) }
     BackHandler { back() }
     Page(stringResource(R.string.settings), back) {
-        Section(stringResource(R.string.theme)) {
-            for (a in Appearance.entries) {
-                Choice(stringResource(a.title), model.appearance == a) { model.choose(a) }
-            }
-        }
-        Section(stringResource(R.string.color)) { ColorSwatches(model.color) { model.choose(it) } }
-        Section(stringResource(R.string.language)) {
-            for (l in LanguageChoice.entries) {
-                Choice(l.ownName ?: stringResource(R.string.language_system), model.settings.language == l) {
-                    if (model.settings.language != l) {
-                        model.settings.language = l
-                        activity?.recreate()
-                    }
-                }
-            }
-        }
+        Section(stringResource(R.string.appearance)) { Appearance(model) }
+        if (home) Notifications(model.notifier)
         // A TV sends no copies of its own: the service there is only the paste target.
-        if (model.phase == AppModel.Phase.HOME && !model.isTv) AutoSend()
-        if (model.phase == AppModel.Phase.HOME && !model.isTv) ShareAsk(model)
-        if (model.phase == AppModel.Phase.HOME) RemotePasteSection(model.group.pastes, model.isTv)
-        // A TV has nothing near it to type into.
-        if (model.phase == AppModel.Phase.HOME && !model.isTv) KeyboardSection(model.group.keyboard, model.settings.showsErrorDetails)
-        if (model.phase == AppModel.Phase.HOME) model.hub?.let { HubSection(model, it) }
-        if (model.phase == AppModel.Phase.HOME) model.away?.let { if (model.hub?.on != true) AwayFromHomeSection(model, it) }
-        if (model.phase == AppModel.Phase.HOME) model.blindRelay?.let { BlindRelaySection(model, it) }
-        if (WatchLink.available && model.phase == AppModel.Phase.HOME && model.devices.any { it.isSelf && it.isRoot }) WatchSection(model)
-        if (model.phase == AppModel.Phase.HOME && model.isRoot) RecoverySection(model)
-        if (model.phase == AppModel.Phase.HOME) model.keyLevel?.let { KeyLevelSection(model, it) }
-        if (model.phase == AppModel.Phase.HOME) model.incomingMS?.let { IncomingSection(model, it) }
-        if (model.phase == AppModel.Phase.HOME) Notifications(model.notifier)
-        if (model.phase == AppModel.Phase.HOME) LeaveSection(model)
+        if (home && !model.isTv) AutoSend()
+        if (WatchLink.available && home && model.devices.any { it.isSelf && it.isRoot }) WatchSection(model)
+        if (home && model.isRoot) RecoverySection(model)
+        if (home) {
+            Row(
+                Modifier.fillMaxWidth().card().focusRing().clickable(role = Role.Switch) {
+                    advanced = !advanced
+                    model.settings.advanced = advanced
+                }.padding(Tokens.spacingMedium),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.advanced_settings), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                Switch(checked = advanced, onCheckedChange = null)
+            }
+        }
+        if (home && advanced) {
+            model.hub?.let { HubSection(model, it) }
+            model.blindRelay?.let { BlindRelaySection(model, it) }
+            if (!model.isTv) ShareAsk(model)
+            RemotePasteSection(model.group.pastes, model.isTv)
+            // A TV has nothing near it to type into.
+            if (!model.isTv) KeyboardSection(model.group.keyboard, model.settings.showsErrorDetails)
+            model.incomingMS?.let { IncomingSection(model, it) }
+            model.keyLevel?.let { KeyLevelSection(model, it) }
+        }
+        if (home) LeaveSection(model)
         UpdateSection(model)
         Section(stringResource(R.string.about)) {
             val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "" }
@@ -594,7 +508,7 @@ internal fun SettingsScreen(model: AppModel, back: () -> Unit) {
                         Text(stringResource(R.string.error_details_switch), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                         Switch(checked = details, onCheckedChange = null)
                     }
-                    Text(stringResource(R.string.error_details_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+                    Tip(R.string.error_details_body)
                 }
             }
             HorizontalDivider(color = palette.grid)
@@ -656,7 +570,7 @@ private fun UpdateSection(model: AppModel) {
                 Text(stringResource(R.string.update_auto), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                 Switch(checked = auto, onCheckedChange = null)
             }
-            Text(stringResource(R.string.update_auto_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+            Tip(R.string.update_auto_body)
         }
     }
 }
@@ -674,7 +588,7 @@ private fun ShareAsk(model: AppModel) {
                 runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
             }.sorted()
             Text(if (names.isEmpty()) stringResource(R.string.share_allowed_none) else names.joinToString(", "), style = MaterialTheme.typography.bodyMedium)
-            Text(stringResource(R.string.share_ask_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+            Tip(R.string.share_ask_body)
             if (allowed.isNotEmpty()) {
                 TextButton(onClick = {
                     model.settings.allowedApps = emptySet()
@@ -699,7 +613,7 @@ private fun AutoSend() {
                 color = if (on) palette.accent else palette.textDim,
                 fontWeight = FontWeight.SemiBold,
             )
-            Text(stringResource(R.string.auto_send_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+            Tip(R.string.auto_send_body)
             if (!on) {
                 TextButton(onClick = {
                     context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -752,7 +666,7 @@ private fun RemotePasteSection(pastes: PasteReceiver, tv: Boolean) {
                     Switch(checked = set.enter, onCheckedChange = null)
                 }
             }
-            Text(stringResource(R.string.remote_paste_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+            Tip(R.string.remote_paste_body)
             if (set.on && (!service || stopped)) {
                 val why = when {
                     stopped -> R.string.remote_paste_service_stopped
@@ -764,48 +678,6 @@ private fun RemotePasteSection(pastes: PasteReceiver, tv: Boolean) {
                     context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }) { Text(stringResource(R.string.open_accessibility), color = palette.accent) }
             }
-        }
-    }
-}
-
-/** Sync away from home: what it does, the switch, and where it stands. */
-@Composable
-private fun AwayFromHomeSection(model: AppModel, away: AppModel.Away) {
-    val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    Section(stringResource(R.string.away_title)) {
-        Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            Row(
-                Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch, enabled = !busy) {
-                    busy = true
-                    scope.launch {
-                        model.setAway(!away.on)
-                        busy = false
-                    }
-                },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.away_switch), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                Switch(checked = away.on, onCheckedChange = null, enabled = !busy)
-            }
-            val status = when {
-                !away.on -> R.string.away_off
-                away.status == AwayFromHome.Status.AT_HOME -> R.string.away_at_home
-                away.status == AwayFromHome.Status.CONNECTING -> R.string.away_connecting
-                away.status == AwayFromHome.Status.CONNECTED -> R.string.away_connected
-                else -> R.string.away_waiting
-            }
-            val inUse = model.devices.firstOrNull { it.hub == LiveGroup.HubMark.IN_USE }
-            val line = if (away.on && away.status == AwayFromHome.Status.CONNECTED && inUse != null) {
-                stringResource(R.string.away_connected_to, inUse.name)
-            } else {
-                stringResource(status)
-            }
-            Text(line, color = if (away.status == AwayFromHome.Status.CONNECTED) palette.accent else palette.textDim)
-            away.error?.let { NoteText(it) }
-            model.awayNote?.let { NoteText(it) }
-            Text(stringResource(R.string.away_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
         }
     }
 }
@@ -897,7 +769,7 @@ private fun BlindRelaySection(model: AppModel, relay: AppModel.BlindRelay) {
                 onClick = { if (empty) save() else asking = true },
             )
             model.relayNote?.let { NoteText(it) }
-            Text(stringResource(R.string.relay_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+            Tip(R.string.relay_body)
         }
     }
     if (asking) {
@@ -997,7 +869,7 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                 for (d in HubOnPhone.Disguise.entries) {
                     Choice(disguiseName(d), hub.disguise == d) { if (!busy && d != hub.disguise) disguiseTo = d }
                 }
-                Text(stringResource(R.string.hub_disguise_body), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
+                Tip(R.string.hub_disguise_body)
                 disguiseTo?.let { d ->
                     Confirm(
                         stringResource(R.string.hub_disguise_title), stringResource(R.string.hub_disguise_confirm), stringResource(R.string.hub_disguise_change),
@@ -1015,11 +887,10 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                     Text(stringResource(R.string.hub_background), modifier = Modifier.weight(1f))
                     Switch(checked = hub.background, onCheckedChange = null, enabled = !busy)
                 }
-                if (hub.status == HubOnPhone.Status.REGISTERED) InviteFromAfar(model)
                 if (hub.computers.isNotEmpty()) MoveHub(model, hub)
             }
             model.hubNote?.let { NoteText(it) }
-            Text(stringResource(R.string.hub_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+            Tip(R.string.hub_body)
         }
     }
 }
@@ -1049,7 +920,7 @@ private fun MoveHub(model: AppModel, hub: AppModel.Hub) {
         AccentButton(stringResource(R.string.hub_suggest_yes), enabled = ready, onClick = { asking = s })
         QuietButton(stringResource(R.string.hub_suggest_keep), onClick = { scope.launch { model.keepPhoneHub() } })
     }
-    Text(stringResource(R.string.hub_move_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+    Tip(R.string.hub_move_body)
     for (c in hub.computers.filter { it != hub.suggested }) {
         QuietButton(stringResource(R.string.hub_move_to, c.second), enabled = ready, onClick = { asking = c })
     }
@@ -1073,6 +944,22 @@ private fun MoveHub(model: AppModel, hub: AppModel.Hub) {
 }
 
 /**
+ * Home's + "Send an invitation": made on the group's hub, so on this phone
+ * while it is the hub; otherwise it says where to make one.
+ */
+@Composable
+internal fun InviteSection(model: AppModel) {
+    val hub = model.hub
+    Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
+        if (hub != null && hub.on && hub.status == HubOnPhone.Status.REGISTERED) {
+            InviteFromAfar(model)
+        } else {
+            Text(stringResource(R.string.invite_on_hub), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+/**
  * A remote invitation for a device far away (docs/protocol.md, section 12):
  * the button that opens it, then its file to share, and the question about
  * the device that used it, with the fingerprint to compare.
@@ -1085,7 +972,7 @@ private fun InviteFromAfar(model: AppModel) {
     Text(stringResource(R.string.invite_title), fontWeight = FontWeight.SemiBold)
     val invite = model.invite
     if (invite == null) {
-        Text(stringResource(R.string.invite_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+        Tip(R.string.invite_body)
         QuietButton(stringResource(R.string.invite_open), onClick = { scope.launch { model.openInvite() } })
     } else {
         val until = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).format(invite.expires.atZone(ZoneId.systemDefault()))
@@ -1154,6 +1041,78 @@ internal fun IconText(symbol: String, label: String, small: Boolean = false, onC
         contentAlignment = Alignment.Center,
     ) {
         Text(symbol, color = if (small) palette.textDim else palette.text, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+/**
+ * A tip in place of a long text under a setting: said once, until the
+ * user closes it (docs/apps.md, Settings).
+ */
+@Composable
+internal fun Tip(@StringRes text: Int, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val key = remember(text) { "tip." + context.resources.getResourceEntryName(text) }
+    val prefs = remember { context.getSharedPreferences("tips", Context.MODE_PRIVATE) }
+    var closed by remember(key) { mutableStateOf(prefs.getBoolean(key, false)) }
+    if (closed) return
+    val palette = LocalPalette.current
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(Tokens.radiusCard)).background(palette.accent.copy(alpha = 0.10f)).padding(Tokens.spacingSmall),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall),
+    ) {
+        Text("💡", modifier = Modifier.semantics { contentDescription = "" })
+        Text(stringResource(text), style = MaterialTheme.typography.bodySmall, color = palette.text, modifier = Modifier.weight(1f))
+        IconText("✕", stringResource(R.string.close_tip), small = true) {
+            closed = true
+            prefs.edit().putBoolean(key, true).apply()
+        }
+    }
+}
+
+/** The look: light, dark or the system's as icons, the colour, and the language. */
+@Composable
+private fun Appearance(model: AppModel) {
+    val palette = LocalPalette.current
+    val activity = LocalActivity.current
+    Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
+            for (a in Appearance.entries) {
+                val chosen = model.appearance == a
+                val title = stringResource(a.title)
+                Box(
+                    Modifier.size(48.dp).clip(CircleShape).background(if (chosen) palette.accent else palette.surface)
+                        .focusRing(CircleShape).clickable(role = Role.RadioButton) { model.choose(a) }
+                        .semantics {
+                            contentDescription = title
+                            selected = chosen
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(a.symbol, style = MaterialTheme.typography.titleMedium, color = if (chosen) palette.onAccent else palette.text)
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            var open by remember { mutableStateOf(false) }
+            Box {
+                val chosen = model.settings.language
+                TextButton(onClick = { open = true }) {
+                    Text("🌐 " + (chosen.ownName ?: stringResource(R.string.language_system)), color = palette.text)
+                }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    for (l in LanguageChoice.entries) {
+                        DropdownMenuItem(text = { Text(l.ownName ?: stringResource(R.string.language_system)) }, onClick = {
+                            open = false
+                            if (model.settings.language != l) {
+                                model.settings.language = l
+                                activity?.recreate()
+                            }
+                        })
+                    }
+                }
+            }
+        }
+        ColorSwatches(model.color) { model.choose(it) }
     }
 }
 
@@ -1226,7 +1185,7 @@ private fun Notifications(notifier: Notifier) {
             }
         }
     }
-    Text(stringResource(R.string.notifications_body), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
+    Tip(R.string.notifications_body)
 }
 
 /** Keeps the activity's window out of screenshots and the recent apps' preview while shown. */

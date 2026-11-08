@@ -23,11 +23,12 @@ let filter = null;
 let tr = {};
 let lang = "";
 
-// t translates an English text; %s and %d take the arguments in order.
+// t translates an English text; %s and %d take the arguments in order, and
+// %1$s, %2$d by their place, for a translation that puts them in another order.
 function t(s, ...args) {
-  let out = tr[s] ?? s;
-  for (const a of args) out = out.replace(/%[sd]/, String(a));
-  return out;
+  const out = tr[s] ?? s;
+  let next = 0;
+  return out.replace(/%(?:(\d+)\$)?[sd]/g, (_, place) => String(args[place ? place - 1 : next++] ?? ""));
 }
 
 async function loadLanguage(l) {
@@ -42,6 +43,8 @@ async function loadLanguage(l) {
     }
   }
   document.documentElement.lang = l;
+  // Arabic and Hebrew lay the window out right to left.
+  document.documentElement.dir = ["ar", "he"].includes(l) ? "rtl" : "ltr";
   for (const el of document.querySelectorAll("[data-t]")) {
     el.dataset.en ??= el.textContent;
     el.textContent = t(el.dataset.en);
@@ -403,7 +406,9 @@ function pickTime(title, text, forever) {
     $("mute-title").textContent = title;
     $("mute-text").textContent = text;
     $("mute-forever").textContent = forever;
-    dlg.onclose = () => resolve(dlg.returnValue === "" || dlg.returnValue === "cancel" ? null : Number(dlg.returnValue));
+    // A close event comes later than the close itself: one left over from
+    // the last time finds the dialog open again and is not this one's.
+    dlg.onclose = () => { if (!dlg.open) resolve(dlg.returnValue === "" || dlg.returnValue === "cancel" ? null : Number(dlg.returnValue)); };
     dlg.returnValue = "";
     dlg.showModal();
   });
@@ -595,7 +600,7 @@ function openMenu(ref, level) {
   const dlg = $("tile-menu");
   $("tile-menu-items").innerHTML = items.map(([v, label]) => `<button value="${esc(v)}" class="glass">${esc(label)}</button>`).join("");
   dlg.returnValue = "";
-  dlg.onclose = () => menuChoice(dlg.returnValue, ref, level);
+  dlg.onclose = () => { if (!dlg.open) menuChoice(dlg.returnValue, ref, level); };
   dlg.showModal();
 }
 
@@ -787,7 +792,9 @@ function ask(title, text, ok, field) {
     const input = $("confirm-input");
     input.hidden = field === undefined;
     input.value = field ?? "";
-    dlg.onclose = () => resolve(dlg.returnValue === "ok" ? (field === undefined ? true : input.value) : null);
+    // A close event comes later than the close itself: one left over from
+    // the last question finds the dialog open again and is not this one's.
+    dlg.onclose = () => { if (!dlg.open) resolve(dlg.returnValue === "ok" ? (field === undefined ? true : input.value) : null); };
     dlg.returnValue = "";
     dlg.showModal();
     if (field !== undefined) input.select();

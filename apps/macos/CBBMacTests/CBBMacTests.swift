@@ -28,7 +28,7 @@ final class CBBMacTests: XCTestCase {
         XCTAssertTrue(devices[0].online && devices[0].isSelf)
         XCTAssertEqual(devices[0].lastSeenMS, 5)
         XCTAssertTrue(devices[0].can("hub"))
-        XCTAssertEqual(devices[0].mode.flatMap(SyncMode.init(rawValue:)), .own)
+        XCTAssertEqual(devices[0].mode, "own")
         XCTAssertNil(devices[1].mode)
         XCTAssertEqual(devices[1].name, "cd34")
         XCTAssertFalse(devices[1].admin || devices[1].online)
@@ -68,6 +68,7 @@ final class CBBMacTests: XCTestCase {
         XCTAssertEqual(code.expires, 300)
         XCTAssertEqual(code.port, 8764)
         XCTAssertTrue(code.qr.hasPrefix("cbb://join?code=123456"))
+        XCTAssertEqual(code.digits, "123 456")
         let image = try XCTUnwrap(JoinSheet.qrImage(code.qr))
         XCTAssertGreaterThan(image.size.width, 20)
     }
@@ -95,6 +96,25 @@ final class CBBMacTests: XCTestCase {
         XCTAssertFalse(MacModel.isWaitingJoiner("cbb://join?code=123456"))
         XCTAssertFalse(MacModel.isWaitingJoiner("https://cbb.tools/join?code=1&addr=a:1&fp=x"))
         XCTAssertFalse(MacModel.isWaitingJoiner(""))
+    }
+
+    /// The six digits a new device shows are typed with or without a space
+    /// or a dash between them; anything else is no code.
+    func testShownCode() {
+        XCTAssertEqual(MacModel.shownCode("123456"), "123456")
+        XCTAssertEqual(MacModel.shownCode("123 456"), "123456")
+        XCTAssertEqual(MacModel.shownCode("123-456"), "123456")
+        XCTAssertNil(MacModel.shownCode("12345"))
+        XCTAssertNil(MacModel.shownCode("12a456"))
+        XCTAssertNil(MacModel.shownCode("1234567"))
+        XCTAssertNil(MacModel.shownCode("١٢٣٤٥٦"), "only ASCII digits")
+    }
+
+    /// The update the group passed around reads from the status.
+    func testUpdate() throws {
+        let line = #"{"op":"reply","status":{"device":"me","role":"member","version":"0.5.0","group":"g","update":"0.6.0"}}"#
+        let (header, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
+        XCTAssertEqual(header.status?.update, "0.6.0")
     }
 
     func testAdminFailure() {
