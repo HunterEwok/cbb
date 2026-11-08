@@ -4,7 +4,8 @@
     <string name="app_name" translatable="false">CBB</string>
     <string name="no_group">Open CBB on the phone to make or join a group.</string>
     <string name="online_count">%1$d of %2$d online</string>
-    <string name="away">Away from home</string>
+    <string name="away">Everywhere</string>
+    <string name="sync">Sync</string>
     <string name="away_off">Off</string>
     <string name="away_at_home">At home: syncing directly.</string>
     <string name="away_connecting">Connecting to the hub…</string>

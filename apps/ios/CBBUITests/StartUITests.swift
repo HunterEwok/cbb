@@ -3,8 +3,8 @@
 import XCTest
 
 /// The app's screens before a group, driven as a person would
-/// (docs/testbench-catalogue.md, A9, A14, A15, U12): the Start screen and
-/// its first-launch note, Settings before a group with the colours and
+/// (docs/testbench-catalogue.md, A9, A14, A15, U12): the Start screen,
+/// Settings before a group with the colours and
 /// themes kept across a launch, the error details switch behind seven taps
 /// on the version, and Russian. A group needs the Secure Enclave and a
 /// computer, which the bench's devices give.
@@ -25,30 +25,23 @@ final class StartUITests: XCTestCase {
         return app
     }
 
-    /// A14: the Start screen says what the app does and offers both ways in;
-    /// the first-launch note goes for good once closed.
+    /// A14: the Start screen says what the app does and offers the three
+    /// ways in, with the language and Settings at the top.
     func testStartScreen() {
-        let app = launch(["-welcomed", "NO"])
+        let app = launch()
         XCTAssertTrue(app.staticTexts["One clipboard for this phone and your computers."].waitForExistence(timeout: 30))
-        XCTAssertTrue(app.buttons["Connect a new device"].exists)
-        XCTAssertTrue(app.buttons["I already use CBB on another phone"].exists)
-        // Without the Secure Enclave the phone's key may not be made; the
-        // note then stays away, and an error says why instead.
-        if app.staticTexts["This phone is ready"].waitForExistence(timeout: 5) {
-            app.buttons["Close"].tap()
-            XCTAssertFalse(app.staticTexts["This phone is ready"].waitForExistence(timeout: 2))
-            app.terminate()
-            let again = launch()
-            XCTAssertTrue(again.buttons["Connect a new device"].waitForExistence(timeout: 30))
-            XCTAssertFalse(again.staticTexts["This phone is ready"].exists, "the first-launch note came back")
-        }
+        XCTAssertTrue(app.buttons["Create a group"].exists)
+        XCTAssertTrue(app.buttons["Join a group"].exists)
+        XCTAssertTrue(app.buttons["Restore with the recovery key"].exists)
+        XCTAssertTrue(languageMenu(app).exists, "no language menu on the Start screen")
+        XCTAssertTrue(app.buttons["Settings"].exists)
     }
 
-    /// A14: "I already use CBB on another phone" shows the code
-    /// the other phone scans.
+    /// A14: "Join a group" shows the code a phone of the group scans and
+    /// the digits a computer types.
     func testJoinFromStart() {
         let app = launch()
-        let join = app.buttons["I already use CBB on another phone"]
+        let join = app.buttons["Join a group"]
         XCTAssertTrue(join.waitForExistence(timeout: 30))
         join.tap()
         XCTAssertTrue(app.staticTexts["Join a group"].waitForExistence(timeout: 10))
@@ -119,28 +112,16 @@ final class StartUITests: XCTestCase {
         }
     }
 
-    /// A9: in Russian the Start screen and Settings are Russian; in a
-    /// language the app has no translation for, the Start screen offers the
-    /// language menu.
+    /// A9: in Russian the Start screen and Settings are Russian.
     func testLanguages() {
-        var app = launch(language: "ru")
-        XCTAssertTrue(app.buttons[ru("Connect a new device")].waitForExistence(timeout: 30))
+        let app = launch(language: "ru")
+        XCTAssertTrue(app.buttons[ru("Create a group")].waitForExistence(timeout: 30))
         XCTAssertTrue(app.staticTexts[ru("One clipboard for this phone and your computers.")].exists)
-        XCTAssertTrue(app.buttons[ru("I already use CBB on another phone")].exists)
+        XCTAssertTrue(app.buttons[ru("Join a group")].exists)
         app.buttons[ru("Settings")].tap()
         XCTAssertTrue(app.buttons[ru("Ocean")].waitForExistence(timeout: 10))
         XCTAssertTrue(app.segmentedControls.buttons[ru("Dark")].exists)
         XCTAssertTrue(app.buttons[ru("Done")].exists)
-        app.terminate()
-
-        app = launch(language: "de")
-        XCTAssertTrue(app.buttons["Connect a new device"].waitForExistence(timeout: 30))
-        XCTAssertTrue(languageMenu(app).exists, "no language menu for a language without a translation")
-        app.terminate()
-
-        app = launch(language: "en")
-        XCTAssertTrue(app.buttons["Connect a new device"].waitForExistence(timeout: 30))
-        XCTAssertFalse(languageMenu(app).exists, "the language menu shows in English")
     }
 
     /// The app's Russian text for an English one, from its string catalog,
@@ -155,7 +136,7 @@ final class StartUITests: XCTestCase {
         return text
     }
 
-    /// The Start screen's language menu, whose label also names the language chosen.
+    /// The Start screen's language menu.
     private func languageMenu(_ app: XCUIApplication) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Language")).firstMatch
     }

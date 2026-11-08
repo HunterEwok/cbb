@@ -10,6 +10,9 @@
 //! also lets the Aurora app run the same member in its own process
 //! (`ffi/`, feature `aurora`).
 
+#[macro_use]
+mod l10n;
+
 mod actions;
 mod admin;
 mod agent;
@@ -90,7 +93,9 @@ use cbb_core::{certs, clip, hlc};
 use error::{Context, Error, Result};
 use identity::Stored as _;
 
-const USAGE: &str = "Usage: cbb [-state dir] [-socket path] [-debug] <command> [arguments]
+/// The help, in the user's language.
+fn usage() -> &'static str {
+    tr!("Usage: cbb [-state dir] [-socket path] [-debug] <command> [arguments]
 
 Commands:
   pair [-name name] [-port port] [-addr host[:port]]...
@@ -175,7 +180,8 @@ remove, are not here, and pair only joins a group. The state directory is
 --rootless, CBB_ROOTLESS=1), ~/.local/state/cbb and
 $XDG_RUNTIME_DIR/cbb/control.sock. CBB_INTERFACES limits the member
 port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the details of errors.
-";
+")
+}
 
 /// The commands of a full member (cmd/cbb) that the lite member does not
 /// have, so that it says so instead of "unknown command".
@@ -220,7 +226,7 @@ pub fn main() {
     }
     let code = match args.first().map(String::as_str) {
         None => {
-            eprint!("{USAGE}");
+            eprint!("{}", usage());
             2
         }
         Some(cmd) => {
@@ -258,22 +264,26 @@ pub fn main() {
                 "network" => cli::network(&g, rest),
                 "version" | "-version" | "--version" => {
                     println!(
-                        "cbb {} ({}/{}), the lite member",
-                        service::VERSION,
-                        std::env::consts::OS,
-                        std::env::consts::ARCH
+                        "{}",
+                        tr!(
+                            "cbb {} ({}/{}), the lite member",
+                            service::VERSION,
+                            std::env::consts::OS,
+                            std::env::consts::ARCH
+                        )
                     );
                     println!("{}", core_version());
                     Ok(())
                 }
                 "help" | "-h" | "-help" | "--help" => {
-                    print!("{USAGE}");
+                    print!("{}", usage());
                     Ok(())
                 }
-                _ if FULL_ONLY.contains(&cmd) => Err(Error::msg(format!(
-                    "cbb {cmd} is a command of a full member; this device runs the lite member (see cbb help)"
+                _ if FULL_ONLY.contains(&cmd) => Err(Error::msg(tr!(
+                    "cbb {} is a command of a full member; this device runs the lite member (see cbb help)",
+                    cmd
                 ))),
-                _ => Err(Error::msg(format!("unknown command {cmd:?}; see cbb help"))),
+                _ => Err(Error::msg(tr!("unknown command {}; see cbb help", format!("{cmd:?}")))),
             };
             match res {
                 Ok(()) => 0,
@@ -326,7 +336,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut full = false;
     let mut i = 0;
     while i < args.len() {
-        let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(format!("{} needs a value", args[i])));
+        let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(tr!("{} needs a value", args[i])));
         match flag(&args[i]) {
             Some("full") if !for_next => {
                 full = true;
@@ -338,7 +348,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
             Some("addr") => addrs.push(next()?),
             Some("code") if !for_next => code_addr = Some(next()?),
             Some("invite") if !for_next => invite = Some(next()?),
-            _ => return Err(Error::msg(format!("unknown argument {:?}; see cbb help", args[i]))),
+            _ => return Err(Error::msg(tr!("unknown argument {}; see cbb help", format!("{:?}", args[i])))),
         }
         i += 2;
     }
@@ -354,9 +364,9 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let id = match (invite, code_addr) {
         (Some((path, text)), _) => {
             let shown = |fp: &str| {
-                println!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp));
-                println!("Whoever invited you sees it on the hub and admits this device if it matches.");
-                println!("Waiting for them; press Ctrl+C to give up.");
+                println!("{}", tr!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp)));
+                println!("{}", tr!("Whoever invited you sees it on the hub and admits this device if it matches."));
+                println!("{}", tr!("Waiting for them; press Ctrl+C to give up."));
                 std::io::stdout().flush().ok();
             };
             let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
@@ -366,7 +376,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
             id
         }
         (None, Some(a)) => {
-            print!("Pairing code: ");
+            print!("{}", tr!("Pairing code: "));
             std::io::stdout().flush().ok();
             let mut line = String::new();
             std::io::stdin().read_line(&mut line).context("cannot read the code")?;
@@ -400,11 +410,17 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                     out.flush().ok();
                     return;
                 }
-                println!("In the CBB app, tap \"Connect a new device\" and scan this:\n");
+                println!(
+                    "{}\n",
+                    tr!("On a phone of the group, tap + in the CBB app, then Scan a code, and scan this:")
+                );
                 print!("{}", qr(text));
-                println!("\nOr paste this into the app: {text}");
-                println!("\nWaiting up to 5 minutes. Press Ctrl+C to cancel.");
-                println!("Without a phone: run cbb pair on a full member and cbb pair -code <its address> here.");
+                println!("\n{}", tr!("Or paste this into the app: {}", text));
+                println!("\n{}", tr!("Waiting up to 5 minutes. Press Ctrl+C to cancel."));
+                println!(
+                    "{}",
+                    tr!("Without a phone: run cbb pair on a full member and cbb pair -code <its address> here.")
+                );
                 std::io::stdout().flush().ok();
             };
             let log = |s: &str| {
@@ -422,7 +438,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     if for_next {
         print!("CBB# joined the group {} as {}\r", id.tag(), id.id);
     } else {
-        println!("Joined the group {} as {}.", id.tag(), id.id);
+        println!("{}", tr!("Joined the group {} as {}.", id.tag(), id.id));
     }
     Ok(())
 }
@@ -556,7 +572,7 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
     let mut run_user = None;
     let mut i = 0;
     while i < args.len() {
-        let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(format!("{} needs a value", args[i])));
+        let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(tr!("{} needs a value", args[i])));
         match flag(&args[i]) {
             Some("name") => cfg.name = next()?,
             // As the Go service takes them, after the command too (launchd's
@@ -639,7 +655,7 @@ fn connect(g: &Global) -> Result<UnixStream> {
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             Err(Error::msg("no permission to use the CBB service; add your user to the cbb group and log in again"))
         }
-        c => c.context(format!("cannot reach the lite member's service at {}; {}", g.socket.display(), not_running())),
+        c => c.context(tr!("cannot reach the lite member's service at {}; {}", g.socket.display(), not_running())),
     }
 }
 
@@ -652,9 +668,9 @@ fn not_running() -> String {
 
 fn hint(systemd: bool, systemctl: &str) -> String {
     if systemd {
-        format!("is it running ({systemctl} status cbb)?")
+        tr!("is it running ({} status cbb)?", systemctl)
     } else {
-        "is it running (start it with cbb service)?".to_string()
+        tr!("is it running (start it with cbb service)?").to_string()
     }
 }
 
@@ -664,13 +680,11 @@ pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Messa
         let path = control::admin_socket(&g.socket);
         match UnixStream::connect(&path) {
             Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
-                return Err(Error::msg(
-                    "this command changes the group, so only the administrator may run it; run it with sudo",
-                ));
+                return Err(Error::msg(tr!(
+                    "this command changes the group, so only the administrator may run it; run it with sudo"
+                )));
             }
-            c => {
-                c.context(format!("cannot reach the lite member's service at {}; {}", path.display(), not_running()))?
-            }
+            c => c.context(tr!("cannot reach the lite member's service at {}; {}", path.display(), not_running()))?,
         }
     } else {
         connect(g)?
@@ -792,29 +806,38 @@ fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
         // As Go's writeStatus.
         println!("{}", s.version);
         if s.left_old_group {
-            println!("This device left its group, which was made before 0.6: groups are set up again from 0.6 on.");
+            println!(
+                "{}",
+                tr!("This device left its group, which was made before 0.6: groups are set up again from 0.6 on.")
+            );
         }
-        println!("Not in a group. Run cbb new here to start one, or cbb pair to join one.");
+        println!("{}", tr!("Not in a group. Run cbb new here to start one, or cbb pair to join one."));
         return Ok(());
     }
-    println!("device  {}\ngroup   {}\nrole    {}\nversion {}", s.device, s.group, s.role, s.version);
+    println!("{}", tr!("device  {}\ngroup   {}\nrole    {}\nversion {}", s.device, s.group, s.role, s.version));
     if !s.mode.is_empty() {
-        println!("mode    {}", s.mode);
+        println!("{}", tr!("mode    {}", s.mode));
     }
     match s.stop.as_str() {
         "full" => println!(
-            "The group is stopped: its members exchange records only, no clipboard, until the group's root decides."
+            "{}",
+            tr!(
+                "The group is stopped: its members exchange records only, no clipboard, until the group's root decides."
+            )
         ),
-        "secrets" => println!("The group sends no secrets until its root decides."),
+        "secrets" => println!("{}", tr!("The group sends no secrets until its root decides.")),
         _ => {}
     }
     if s.removed {
         println!(
-            "This device was removed from the group: its members refuse it. To join this group again or another one, leave it here first: sudo cbb leave, then cbb pair."
+            "{}",
+            tr!(
+                "This device was removed from the group: its members refuse it. To join this group again or another one, leave it here first: sudo cbb leave, then cbb pair."
+            )
         );
     }
     if s.peers.is_empty() {
-        println!("no members connected");
+        println!("{}", tr!("no members connected"));
     }
     print_away(s.away.as_ref());
     if s.group.is_empty() {
@@ -823,13 +846,13 @@ fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
     let devs =
         request(g, &control::Message::new(control::Header { op: "devices".into(), ..Default::default() }, Vec::new()))?;
     for d in devs.header.devices {
-        let mut marks = [(d.this, "this device"), (d.online, "online"), (d.admin, "admin")]
+        let mut marks = [(d.this, tr!("this device")), (d.online, tr!("online")), (d.admin, tr!("admin"))]
             .iter()
             .filter(|(on, _)| *on)
             .map(|(_, s)| s.to_string())
             .collect::<Vec<_>>();
         if let Some(p) = s.peers.iter().find(|p| p.id == d.id) {
-            marks.push(format!("clock {:+} ms", p.skew_ms));
+            marks.push(tr!("clock {} ms", format!("{:+}", p.skew_ms)));
         }
         println!("{}  {:<24} {:<8} {:<8} {}", d.id, d.name, os_name(&d.os), d.role, marks.join(", "));
     }
@@ -837,11 +860,12 @@ fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
 }
 
 /// The question cbb leave asks before it deletes the keys.
-const LEAVE_QUESTION: &str =
-    "This device leaves its group: its keys and the group's files here are deleted, remote paste
+fn leave_question() -> &'static str {
+    tr!("This device leaves its group: its keys and the group's files here are deleted, remote paste
 and the quick actions are turned off, and the rest of the settings stay. It can then join this
 group again or another one (cbb pair). The group keeps listing it until an admin removes it.
-Leave the group? [y/N] ";
+Leave the group? [y/N] ")
+}
 
 /// cbb leave (D-83): through the service, or by itself when the service
 /// does not run, as cbb pair joins.
@@ -857,12 +881,12 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
         return Err(Error::msg(leave::NOTHING_TO_LEAVE));
     }
     if !yes {
-        print!("{LEAVE_QUESTION}");
+        print!("{}", leave_question());
         std::io::stdout().flush().ok();
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).ok();
         if !matches!(line.trim().to_lowercase().as_str(), "y" | "yes") {
-            println!("Nothing changed. (cbb leave -yes leaves without the question.)");
+            println!("{}", tr!("Nothing changed. (cbb leave -yes leaves without the question.)"));
             std::process::exit(1);
         }
     }
@@ -875,13 +899,13 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
         .unwrap_or(true);
     if running {
         request(g, &control::Message::new(control::Header { op: "leave".into(), ..Default::default() }, Vec::new()))?;
-        println!("Left the group. The service restarts in no group: cbb pair joins one.");
+        println!("{}", tr!("Left the group. The service restarts in no group: cbb pair joins one."));
     } else {
         if identity::Identity::load(&g.state).ok().flatten().is_none() && !g.state.join(records::FILE_NAME).exists() {
             return Err(Error::msg(leave::NOTHING_TO_LEAVE));
         }
         leave::leave_group(&g.state)?;
-        println!("Left the group: cbb pair joins one.");
+        println!("{}", tr!("Left the group: cbb pair joins one."));
     }
     Ok(())
 }
@@ -900,9 +924,10 @@ fn cmd_sync(g: &Global, args: &[String]) -> Result<()> {
         match flag(a) {
             Some("for") if h.name == "off" => {
                 let d = it.next().ok_or_else(usage)?;
-                h.for_ms = parse_duration_ms(d).ok_or_else(|| Error::msg(format!("-for: {d:?} is no duration")))?;
+                h.for_ms =
+                    parse_duration_ms(d).ok_or_else(|| Error::msg(tr!("-for: {} is no duration", format!("{d:?}"))))?;
                 if h.for_ms == 0 {
-                    return Err(Error::msg("-for is from 1ms to 720h"));
+                    return Err(Error::msg(tr!("-for is from 1ms to 720h")));
                 }
             }
             _ => return Err(usage()),
@@ -970,14 +995,14 @@ pub(crate) fn go_duration_ms(s: &str) -> Option<i64> {
 /// What sync on or off means, as cbb sync on a full member says it.
 fn sync_line(mode: &str, until_ms: i64) -> String {
     match mode {
-        "shared" => "Sync is on: copies here go to the group, and the group's copies come here.".into(),
-        "own" if until_ms > 0 => format!(
+        "shared" => tr!("Sync is on: copies here go to the group, and the group's copies come here.").into(),
+        "own" if until_ms > 0 => tr!(
             "Sync is off for {} min more: the clipboard is this device's own; cbb paste prints the group's text, and cbb copy sends to the group.",
             ((until_ms - uptime::wall_ms()).max(0) + 59_999) / 60_000
         ),
-        "own" => "Sync is off until cbb sync on: the clipboard is this device's own; cbb paste prints the group's text, and cbb copy sends to the group.".into(),
-        "" => "This lite member's service does not know sync on and off yet; update it.".into(),
-        m => format!("Sync mode {m}."),
+        "own" => tr!("Sync is off until cbb sync on: the clipboard is this device's own; cbb paste prints the group's text, and cbb copy sends to the group.").into(),
+        "" => tr!("This lite member's service does not know sync on and off yet; update it.").into(),
+        m => tr!("Sync mode {}.", m),
     }
 }
 
@@ -1197,7 +1222,8 @@ fn action_warning(a: &control::Action) -> String {
 
 /// What a user agrees to before the lite member, whose keys sit in files,
 /// syncs away from home (docs/design.md, "Turning it on, step by step").
-const KEYS_WARNING: &str = "Sync away from home lets this device reach the group's hub from the internet,
+fn keys_warning() -> &'static str {
+    tr!("Sync away from home lets this device reach the group's hub from the internet,
 through the group's own WireGuard tunnel, with the clipboard encrypted end to end.
 
 This device keeps its keys in files, not in a security chip. Whoever copies those
@@ -1210,7 +1236,8 @@ the group. To keep that from happening:
   - remove the device at once (Remove on the phone, or cbb remove on a full
     member) when it is lost or someone else may have had root on it.
 
-";
+")
+}
 
 fn cmd_global(g: &Global, args: &[String]) -> Result<()> {
     let mut h = control::Header { op: "away".into(), ..Default::default() };
@@ -1218,13 +1245,13 @@ fn cmd_global(g: &Global, args: &[String]) -> Result<()> {
         // Only showing it needs no root: the status carries it.
         [] => h.op = "status".into(),
         [a] if a == "on" => {
-            print!("{KEYS_WARNING}Type yes to turn sync away from home on: ");
+            print!("{}{}", keys_warning(), tr!("Type yes to turn sync away from home on: "));
             std::io::stdout().flush().ok();
             let mut line = String::new();
             std::io::stdin().read_line(&mut line).context("cannot read the answer")?;
             if !line.trim().eq_ignore_ascii_case("yes") {
-                println!("Nothing changed.");
-                return Err(Error::msg("sync away from home stays as it was"));
+                println!("{}", tr!("Nothing changed."));
+                return Err(Error::msg(tr!("sync away from home stays as it was")));
             }
             h.name = "on".into();
             h.consent = true;
@@ -1241,27 +1268,26 @@ fn cmd_global(g: &Global, args: &[String]) -> Result<()> {
 /// Prints sync away from home as cbb global on a full member does.
 fn print_away(a: Option<&control::Away>) {
     let Some(a) = a else {
-        println!("Sync away from home: off (cbb global on turns it on).");
+        println!("{}", tr!("Sync away from home: off (cbb global on turns it on)."));
         return;
     };
-    match () {
-        _ if a.hub_device.is_empty() && !a.keys_in_file => println!("Sync away from home: off."),
+    let line = match () {
+        _ if a.hub_device.is_empty() && !a.keys_in_file => tr!("Sync away from home: off.").to_string(),
         _ if a.hub_device.is_empty() => {
-            println!("Sync away from home: on; waiting to meet the group's hub on the home network.")
+            tr!("Sync away from home: on; waiting to meet the group's hub on the home network.").to_string()
         }
-        _ if a.through => {
-            println!("Sync away from home: on; connected to the hub {} through the tunnel.", a.hub_device)
-        }
-        _ => println!(
+        _ if a.through => tr!("Sync away from home: on; connected to the hub {} through the tunnel.", a.hub_device),
+        _ => tr!(
             "Sync away from home: on; the hub is {}, at {}; not connected through the tunnel.",
             a.hub_device,
             a.endpoints.join(", ")
         ),
-    }
+    };
+    println!("{line}");
     if !a.error.is_empty() {
-        println!("  Last problem: {}.", a.error.trim_end_matches('.'));
+        println!("{}", tr!("  Last problem: {}.", a.error.trim_end_matches('.')));
         if !a.detail.is_empty() && error::show_details() {
-            println!("  Detail: {}", a.detail);
+            println!("{}", tr!("  Detail: {}", a.detail));
         }
     }
 }

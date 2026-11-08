@@ -881,6 +881,10 @@ func TestFFIPhoneRoot(t *testing.T) {
 	if got := manage(`{"action":"mute","device":"` + string(j.ID) + `","for_ms":60000,"timeout_ms":1000}`); !strings.Contains(got, "not connected") {
 		t.Fatalf("muting a computer that is not running: %s", got)
 	}
+	// The device's house is a command too: sync_off and sync_on are mode commands.
+	if got := manage(`{"action":"sync_off","device":"` + string(j.ID) + `","timeout_ms":1000}`); !strings.Contains(got, "not connected") {
+		t.Fatalf("turning the sync of a computer that is not running off: %s", got)
+	}
 	// The admin key comes from the computer's hello, so it must be connected.
 	if got := manage(`{"action":"make_admin","device":"` + string(j.ID) + `"}`); !strings.Contains(got, "not connected") {
 		t.Fatalf("making a computer that is not running an admin: %s", got)

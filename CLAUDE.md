@@ -12,7 +12,8 @@ page by its reader, and CONTRIBUTING's "Documentation" says where a change is wr
 
 - Talk to the owner in **Russian**. Everything in the repository is **English**: code,
   comments, docs, commit messages, PRs. The only exception is the apps' translations
-  (`*.xcstrings`, Android `values-xx/strings.xml` later); `tools/repocheck` enforces it.
+  (`*.xcstrings`, Android `values-xx/strings.xml`, the command line's `member/l10n/*.json`);
+  `tools/repocheck` enforces it.
 - Work through a task list in order without stopping to ask; ask only when a decision is
   genuinely the owner's.
 - Every change goes to `main` through a pull request: push a branch, open it as a draft,

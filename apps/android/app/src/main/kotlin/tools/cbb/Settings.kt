@@ -15,7 +15,13 @@ import java.util.Locale
 enum class LanguageChoice(val key: String) {
     SYSTEM("system"),
     EN("en"),
+    ZH("zh"),
+    ES("es"),
     RU("ru"),
+    AR("ar"),
+    SW("sw"),
+    HE("he"),
+    HI("hi"),
     ;
 
     /** The locale the app shows, null for the system's. */
@@ -37,12 +43,6 @@ enum class LanguageChoice(val key: String) {
 
         /** The languages the app is translated into, without System. */
         val translations = entries.filter { it != SYSTEM }
-
-        /**
-         * Whether the Start screen offers the language: only when the app
-         * has no translation for the system's language, so it shows English.
-         */
-        fun offeredOnStart(system: Locale): Boolean = translations.none { it.key == system.language }
     }
 }
 
@@ -91,10 +91,15 @@ class Settings(context: Context) {
         get() = prefs.getStringSet("allowedApps", null).orEmpty().toSet()
         set(v) = prefs.edit().putStringSet("allowedApps", v).remove("alwaysAllowShare").apply()
 
-    /** Whether the note that this phone is ready was closed. */
-    var welcomed: Boolean
-        get() = prefs.getBoolean("welcomed", false)
-        set(v) = prefs.edit().putBoolean("welcomed", v).apply()
+    /** Whether Settings shows the advanced ones. */
+    var advanced: Boolean
+        get() = prefs.getBoolean("advanced", false)
+        set(v) = prefs.edit().putBoolean("advanced", v).apply()
+
+    /** Whether this phone made its own key at the first launch. */
+    var prepared: Boolean
+        get() = prefs.getBoolean("prepared", false)
+        set(v) = prefs.edit().putBoolean("prepared", v).apply()
 
     /**
      * Whether a message names the error underneath, to find out what

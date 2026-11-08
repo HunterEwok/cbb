@@ -3,40 +3,322 @@
   "strings": {
     "Opens CBB and sends what this phone copied to your computers, or fetches what a computer copied a moment ago.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح CBB ويرسل ما نسخه هذا الهاتف إلى حواسيبك، أو يجلب ما نسخه حاسوب قبل لحظة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre CBB y envía a tus ordenadores lo que copió este teléfono, o trae lo que un ordenador copió hace un momento."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פותח את CBB ושולח למחשבים שלכם את מה שהטלפון הזה העתיק, או מביא את מה שמחשב העתיק לפני רגע."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB खोलता है और इस फ़ोन की कॉपी आपके कंप्यूटरों पर भेजता है, या किसी कंप्यूटर ने अभी जो कॉपी किया वह लाता है।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Открывает CBB и отправляет скопированное на телефоне на ваши компьютеры или забирает то, что компьютер скопировал только что."
           }
-        }
-      }
-    },
-    "Opens CBB and syncs the clipboard with your computers.": {
-      "localizations": {
-        "ru": {
+        },
+        "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Открывает CBB и синхронизирует буфер с вашими компьютерами."
+            "value": "Hufungua CBB na kutuma kwenye kompyuta zako kile simu hii ilinakili, au huleta kile kompyuta ilinakili muda mfupi uliopita."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 CBB 并将这部手机复制的内容发送到你的电脑，或获取电脑刚刚复制的内容。"
           }
         }
       }
     },
     "Sends what this phone copied to your computers, or fetches what a computer copied a moment ago.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يرسل ما نسخه هذا الهاتف إلى حواسيبك، أو يجلب ما نسخه حاسوب قبل لحظة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envía a tus ordenadores lo que copió este teléfono, o trae lo que un ordenador copió hace un momento."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שולח למחשבים שלכם את מה שהטלפון הזה העתיק, או מביא את מה שמחשב העתיק לפני רגע."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस फ़ोन की कॉपी आपके कंप्यूटरों पर भेजता है, या किसी कंप्यूटर ने अभी जो कॉपी किया वह लाता है।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Отправляет скопированное на телефоне на ваши компьютеры или забирает то, что компьютер скопировал только что."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hutuma kwenye kompyuta zako kile simu hii ilinakili, au huleta kile kompyuta ilinakili muda mfupi uliopita."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将这部手机复制的内容发送到你的电脑，或获取电脑刚刚复制的内容。"
           }
         }
       }
     },
     "Sync clipboard": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مزامنة الحافظة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizar portapapeles"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "סנכרון הלוח"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "क्लिपबोर्ड सिंक करें"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Синхронизировать буфер обмена"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sawazisha ubao wa kunakili"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步剪贴板"
+          }
+        }
+      }
+    },
+    "Sync": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronización"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المزامنة"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "סנכרון"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सिंक"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usawazishaji"
+          }
+        }
+      }
+    },
+    "On": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вкл."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activada"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مفعّلة"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מופעל"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चालू"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umewashwa"
+          }
+        }
+      }
+    },
+    "Off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выкл."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivada"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متوقفة"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "כבוי"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "बंद"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umezimwa"
+          }
+        }
+      }
+    },
+    "Turns sync on this phone on or off.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включает и выключает синхронизацию на этом телефоне."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa o desactiva la sincronización en este teléfono."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启或关闭此手机上的同步。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يشغّل المزامنة على هذا الهاتف أو يوقفها."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מפעיל או מכבה את הסנכרון בטלפון הזה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस फ़ोन पर सिंक चालू या बंद करता है।"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Huwasha au kuzima usawazishaji kwenye simu hii."
           }
         }
       }

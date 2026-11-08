@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<resources>
+    <string name="no_group">Fungua CBB kwenye simu ili kuunda kikundi au kujiunga nacho.</string>
+    <string name="online_count">%1$d kati ya %2$d mtandaoni</string>
+    <string name="away">Kila mahali</string>
+    <string name="sync">Sawazisha</string>
+    <string name="away_off">Kimezimwa</string>
+    <string name="away_at_home">Nyumbani: inasawazisha moja kwa moja.</string>
+    <string name="away_connecting">Inaunganisha na kitovu…</string>
+    <string name="away_connected">Kupitia kitovu chako.</string>
+    <string name="away_waiting">Inasubiri kitovu.</string>
+    <string name="devices">Vifaa</string>
+    <string name="latest">Karibuni zaidi</string>
+    <string name="online">mtandaoni</string>
+    <string name="watch_phone">Simu ya saa hii</string>
+    <string name="offline">nje ya mtandao</string>
+    <string name="stale">Kama simu ilivyosema mwisho.</string>
+    <string name="no_phone">Simu haijaunganishwa. Isogeze karibu, kisha ujaribu tena.</string>
+    <string name="no_answer">Simu haikujibu. Jaribu tena.</string>
+    <string name="watch_admin">Saa hii ni msimamizi wa kikundi.</string>
+    <string name="act_freeze">Gandisha msimamizi huyu</string>
+    <string name="act_remove">Ondoa kwenye kikundi</string>
+    <string name="act_paste_off">Zima kubandika kwa mbali</string>
+    <string name="act_actions_off">Zima vitendo vya haraka</string>
+    <string name="act_away_off">Zima kusawazisha ukiwa mbali na nyumbani</string>
+    <string name="ask_freeze">Gandisha %1$s? Kinabaki msimamizi kwa jina, lakini hakuna kitu kinachotia sahihi kinachohesabika hadi mzizi ukifungue.</string>
+    <string name="ask_remove">Uondoe %1$s kwenye kikundi?</string>
+    <string name="ask_paste_off">Uzime kubandika kwa mbali kwenye %1$s?</string>
+    <string name="ask_actions_off">Uzime kila kitendo cha haraka kwenye %1$s?</string>
+    <string name="ask_away_off">Uzime kusawazisha ukiwa mbali na nyumbani kwenye %1$s?</string>
+    <string name="ask_action">Uendeshe %1$s kwenye %2$s?</string>
+    <string name="done">Imekamilika.</string>
+    <string name="not_done">Simu haikufanya hivyo. Jaribu tena.</string>
+    <string name="not_done_because">Simu haikufanya hivyo.</string>
+    <string name="not_signed">Kitendo hakikutiwa sahihi. Fungua saa, kisha ujaribu tena.</string>
+</resources>

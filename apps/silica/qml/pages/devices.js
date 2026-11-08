@@ -92,6 +92,12 @@ function status(d) {
     return d.online ? qsTr("Online") : qsTr("Offline")
 }
 
+// One line for its card: its system and its CBB version.
+function line(d) {
+    var v = d.version ? "CBB " + d.version : ""
+    return [system(d), v].filter(function(s) { return s !== "" }).join(" · ")
+}
+
 // Its name, or the start of its ID when it has none.
 function name(d) {
     return d.name !== "" ? d.name : d.device.substring(0, 8)

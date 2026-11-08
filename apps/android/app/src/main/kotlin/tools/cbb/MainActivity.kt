@@ -9,6 +9,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 /** The app: one model for every screen, and later for the service and the tile. */
 class CBBApp : Application() {
@@ -35,6 +37,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         // The phone is the group's hub while the app is open (D-64).
         model.group.setForeground(true)
+        sentOnOpen = false
         model.apkUpdate.runIfDue()
     }
 
@@ -47,6 +50,17 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // The prompt before the group's keys sign needs an activity in front.
         model.group.activity = this
+    }
+
+    /** Whether the app sent what was copied since it came to the front. */
+    private var sentOnOpen = false
+
+    /** Android lets an app read the clipboard only while one of its windows has the focus: once each time the app comes to the front. */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus || sentOnOpen) return
+        sentOnOpen = true
+        lifecycleScope.launch { model.sendOnOpen() }
     }
 
     override fun onPause() {

@@ -99,6 +99,8 @@ DISTFILES += \
     qml/pages/RenameDevicePage.qml \
     qml/pages/DeviceTile.qml \
     qml/pages/SettingsPage.qml \
+    qml/pages/SwitchFace.qml \
+    qml/pages/AwayDialog.qml \
     qml/pages/devices.js \
     qml/cover/CoverPage.qml \
     qml/system/Notifier.qml \

@@ -59,6 +59,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+            <!-- A long press on the Quick Settings tile opens the app. -->
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
         </activity>
 
         <!-- The one button without the app's screens, from this app: tile, notification, widget. -->
@@ -137,10 +141,10 @@
         </receiver>
 
         <service
-            android:name=".SendTileService"
+            android:name=".SyncTileService"
             android:exported="true"
             android:icon="@drawable/ic_notification"
-            android:label="@string/tile_label"
+            android:label="@string/sync"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
