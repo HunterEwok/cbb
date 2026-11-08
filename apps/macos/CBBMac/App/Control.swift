@@ -140,7 +140,10 @@ enum Control {
     struct Device: Codable, Equatable, Identifiable {
         var id: String
         var name: String
+        /// "member", "phone" or "watch".
         var role: String
+        /// What a member can do: "admin", "dials" and "hub".
+        var caps: [String] = []
         var os: String?
         /// What its hello says about its device; nil when it says nothing
         /// or is not connected.
@@ -174,7 +177,7 @@ enum Control {
         var mutedUntilMS: Int64 = 0
 
         enum CodingKeys: String, CodingKey {
-            case id, name, role, os, form, version, mac, store, admin, root, frozen, online, mode, hub, muted
+            case id, name, role, caps, os, form, version, mac, store, admin, root, frozen, online, mode, hub, muted
             case mutedUntilMS = "muted_until_ms"
             case forwardOnly = "forward_only"
             case osVersion = "os_version"
@@ -183,18 +186,23 @@ enum Control {
             case mayHub = "may_hub"
         }
 
-        init(id: String, name: String, role: String = "full", os: String? = nil) {
+        init(id: String, name: String, role: String = "member", caps: [String] = [], os: String? = nil) {
             self.id = id
             self.name = name
             self.role = role
+            self.caps = caps
             self.os = os
         }
+
+        /// Whether it is a member with the capability c.
+        func can(_ c: String) -> Bool { role == "member" && caps.contains(c) }
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             id = try c.decode(String.self, forKey: .id)
             name = try c.decodeIfPresent(String.self, forKey: .name) ?? id
-            role = try c.decodeIfPresent(String.self, forKey: .role) ?? "full"
+            role = try c.decodeIfPresent(String.self, forKey: .role) ?? "member"
+            caps = try c.decodeIfPresent([String].self, forKey: .caps) ?? []
             os = try c.decodeIfPresent(String.self, forKey: .os)
             form = try c.decodeIfPresent(String.self, forKey: .form)
             osVersion = try c.decodeIfPresent(String.self, forKey: .osVersion)

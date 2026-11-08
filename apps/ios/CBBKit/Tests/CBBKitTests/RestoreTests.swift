@@ -25,7 +25,7 @@ final class RestoreTests: XCTestCase {
             root.records.clock = { t0 }
             computer.cert = try GroupCertificates.member(device: computer.device, publicKey: computer.key.publicKeyDER, ca: root.groupCA,
                                                          caSigner: rootKey, now: t0)
-            _ = try root.record(device: computer.device, name: "one", role: "full", key: computer.keyHash, caSigner: rootKey, now: t0)
+            _ = try root.record(device: computer.device, name: "one", role: "member", caps: Records.caps, key: computer.keyHash, caSigner: rootKey, now: t0)
             recovery = try root.makeRecovery(rootSigner: rootKey, now: t0)
         }
 
@@ -42,7 +42,7 @@ final class RestoreTests: XCTestCase {
         let (phone, pc) = Pipe.pair()
         phone.chain = chain
         let got = Task {
-            try await pc.write(Member.encode(.hello(.full, Member.Hello(wallMS: 0, name: "one", os: "linux", groupCA: groupCA))))
+            try await pc.write(Member.encode(.hello(.member, Member.Hello(wallMS: 0, name: "one", os: "linux", groupCA: groupCA))))
             func next() async throws -> Member.Message {
                 let (n, _) = try Member.header(try await pc.read(exactly: 4))
                 return try Member.decode(body: try await pc.read(exactly: n))

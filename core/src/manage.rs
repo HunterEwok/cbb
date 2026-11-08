@@ -144,6 +144,7 @@ fn change_body(rs: &Records, s: &Signer, device: &str, c: &Change, now_ms: i64) 
             b.device = d.id.clone();
             b.name = name.to_string();
             b.role = d.role.clone();
+            b.caps = d.caps.clone();
             b.os = d.os.clone();
             b.key = Some(Hash(d.key));
             b.admin = d.admin_key.map(Hash);
@@ -360,8 +361,8 @@ pub fn make_admin(
         return Err(Error::msg("only the group's root makes admins"));
     }
     let d = find(rs, device)?;
-    if d.role != "full" {
-        return Err(Error::msg("only a computer is made an admin this way"));
+    if !d.can(authority::CAP_ADMIN) {
+        return Err(Error::msg("only a member with the cap admin is made an admin this way"));
     }
     if d.frozen {
         return Err(Error::msg("the computer is frozen: unfreeze it or remove it"));
@@ -400,6 +401,7 @@ pub fn make_admin(
         device: d.id.clone(),
         name: d.name.clone(),
         role: d.role.clone(),
+        caps: d.caps.clone(),
         os: d.os.clone(),
         key: Some(Hash(d.key)),
         admin: Some(admin),

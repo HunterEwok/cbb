@@ -35,15 +35,15 @@ pub const MAX_FRAME: usize = 64 << 10;
 /// How many wrong codes a listening join takes.
 pub const MAX_FAILURES: u32 = 3;
 
-/// The joiner's CPace associated data. The role tells the admitting member
-/// that this is a lite member, which gets no CA keys and is listed as lite;
-/// a phone has none.
+/// The joiner's CPace associated data. The caps tell the admitting member
+/// what this member can do, which its device record names; a phone has
+/// none.
 #[derive(Serialize)]
 struct Info<'a> {
     name: &'a str,
     os: &'a str,
-    #[serde(skip_serializing_if = "str::is_empty")]
-    role: &'a str,
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    caps: &'a [String],
     #[serde(with = "certs::b64", skip_serializing_if = "<[u8]>::is_empty")]
     seal: &'a [u8],
     /// A phone's admin key, a SubjectPublicKeyInfo, and its proof over the
@@ -194,10 +194,10 @@ pub struct Joiner {
     /// for none.
     pub seal: Vec<u8>,
     name: String,
-    /// The system and role its info names: linux and lite for a lite
-    /// member, a phone's system and no role for a phone.
+    /// The system and the caps its info names: a member's system and
+    /// what it can do, or a phone's system and no caps.
     os: String,
-    role: String,
+    caps: Vec<String>,
     /// The device key when the core does not hold it.
     external: Option<Arc<dyn ExternalKey>>,
     /// A phone's admin key, which its info offers so that the root makes it
@@ -223,7 +223,7 @@ impl Joiner {
             seal: Vec::new(),
             name: name.to_string(),
             os: "linux".into(),
-            role: "lite".into(),
+            caps: Vec::new(),
             external: None,
             admin: None,
         })
@@ -250,7 +250,7 @@ impl Joiner {
             seal: Vec::new(),
             name: name.to_string(),
             os: os.to_string(),
-            role: String::new(),
+            caps: Vec::new(),
             external: Some(key),
             admin: None,
         })
@@ -267,11 +267,16 @@ impl Joiner {
         Ok(self)
     }
 
-    /// The device joining as a computer with the service, a full member
-    /// that may become an admin: no role, and its system.
-    pub fn as_computer(mut self, os: &str) -> Joiner {
-        self.role = String::new();
+    /// The device joining as a member on the system os that can do caps
+    /// (authority::CAPS), which its device record will name. A joiner
+    /// made with [`Joiner::new`] is a member on Linux that can do nothing
+    /// beyond syncing, as a board's firmware.
+    pub fn as_member(mut self, os: &str, caps: &[&str]) -> Joiner {
         self.os = os.into();
+        let mut caps: Vec<String> = caps.iter().map(|c| (*c).to_string()).collect();
+        caps.sort();
+        caps.dedup();
+        self.caps = caps;
         self
     }
 
@@ -279,8 +284,8 @@ impl Joiner {
     /// admins, on the group's root or an admin phone, admits it, and its
     /// Welcome carries the admin CA for that key.
     pub fn offering_admin_key(mut self, key: Arc<dyn ExternalKey>) -> Result<Joiner> {
-        if self.role == "lite" {
-            return Err(Error::msg("a lite member is never an admin"));
+        if !matches!(self.os.as_str(), "ios" | "android" | "aurora" | "sailfish") {
+            return Err(Error::msg("only a phone offers an admin key as it joins"));
         }
         self.admin = Some(key);
         Ok(self)
@@ -319,7 +324,7 @@ impl Joiner {
         let ad = serde_json::to_vec(&Info {
             name: &self.name,
             os: &self.os,
-            role: &self.role,
+            caps: &self.caps,
             seal: &self.seal,
             admin_key: &admin_key,
             admin_proof: &admin_proof,

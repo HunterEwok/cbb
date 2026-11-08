@@ -55,8 +55,9 @@ pub const PHONE_SYSTEMS: [&str; 4] = ["ios", "android", "aurora", "sailfish"];
 pub struct Info {
     pub name: String,
     pub os: String,
+    /// What a member can do, sorted (authority::CAPS); none from a phone.
     #[serde(default)]
-    pub role: String,
+    pub caps: Vec<String>,
     #[serde(with = "b64", default)]
     pub seal: Vec<u8>,
     #[serde(with = "b64", default)]
@@ -71,14 +72,15 @@ impl Info {
         PHONE_SYSTEMS.contains(&self.os.as_str())
     }
 
-    /// Checks it as Go's member does: a known system, a valid name, a
-    /// known role, a seal key of the right size, and an admin key only from
-    /// a phone, a P-256 one, with its proof.
+    /// Checks it as Go's member does: a known system, a valid name, known
+    /// caps, sorted, none from a phone, a seal key of the right size, and an
+    /// admin key only from a phone, a P-256 one, with its proof.
     fn check(&self) -> Result<()> {
-        let known = ["linux", "windows", "macos"].contains(&self.os.as_str())
-            || self.is_phone()
-            || (self.os == "none" && self.role == "lite");
-        if !known || !crate::command::valid_name(&self.name) || !(self.role.is_empty() || self.role == "lite") {
+        let known = ["linux", "windows", "macos", "none"].contains(&self.os.as_str()) || self.is_phone();
+        let caps = self.caps.iter().all(|c| authority::CAPS.contains(&c.as_str()))
+            && !self.caps.windows(2).any(|w| matches!(w, [a, b] if a >= b))
+            && !(self.is_phone() && !self.caps.is_empty());
+        if !known || !crate::command::valid_name(&self.name) || !caps {
             return Err(Error::msg("the joining device's description is not valid"));
         }
         if !self.seal.is_empty() && self.seal.len() != SEAL_KEY_SIZE {
@@ -583,7 +585,7 @@ pub fn refusal_frame(why: Refusal) -> Vec<u8> {
 /// The device record for a device this member admitted, signed by the CA
 /// key and ready to add to the records and send to the group: a phone as
 /// a phone with a hardware key, an admin with its role's powers when it
-/// got an admin CA; a computer as full, a lite member as lite. now_ms is
+/// got an admin CA; any other device as a member with the caps it offered. now_ms is
 /// the wall clock in Unix milliseconds.
 pub fn device_record(rs: &Records, admitter: &Admitter, a: &Admitted, now_ms: i64) -> Result<Record> {
     let cert = Cert::parse(&a.cert)?;
@@ -597,13 +599,8 @@ pub fn device_record(rs: &Records, admitter: &Admitter, a: &Admitted, now_ms: i6
         time_ms: now_ms,
         device: a.device.to_string(),
         name: a.info.name.clone(),
-        role: if phone {
-            "phone".into()
-        } else if a.info.role == "lite" {
-            "lite".into()
-        } else {
-            "full".into()
-        },
+        role: if phone { authority::ROLE_PHONE } else { authority::ROLE_MEMBER }.into(),
+        caps: if phone { Vec::new() } else { a.info.caps.clone() },
         os: a.info.os.clone(),
         key: Some(Hash(cert.key_hash())),
         store: if phone { "hardware".into() } else { String::new() },
@@ -632,13 +629,14 @@ pub struct NewGroup {
 }
 
 /// The own device in a group it makes: its name, system, role (`phone`,
-/// or `full` for a computer with the service), member key (a SEC1 point),
+/// or `member` for a computer with the service), its caps as a member, member key (a SEC1 point),
 /// where that key lives (`hardware` or `file`) and its key for sealed
 /// messages.
 pub struct OwnDevice<'a> {
     pub name: &'a str,
     pub os: &'a str,
     pub role: &'a str,
+    pub caps: &'a [&'a str],
     pub member_point: &'a [u8],
     pub store: &'a str,
     pub seal: Vec<u8>,
@@ -648,7 +646,7 @@ pub struct OwnDevice<'a> {
 /// PhoneGroup.create does: a root CA, a member certificate for the
 /// phone's member key, and the phone's device record, signed by the root.
 pub fn new_group(root_key: &dyn ExternalKey, own: &OwnDevice, now_ms: i64) -> Result<NewGroup> {
-    if own.role != "phone" && own.role != "full" {
+    if own.role != authority::ROLE_PHONE && own.role != authority::ROLE_MEMBER {
         return Err(Error::msg("a group's root is a phone or a computer with the service"));
     }
     let now = now_ms.div_euclid(1000);
@@ -667,6 +665,7 @@ pub fn new_group(root_key: &dyn ExternalKey, own: &OwnDevice, now_ms: i64) -> Re
         device: device.to_string(),
         name: own.name.into(),
         role: own.role.into(),
+        caps: own.caps.iter().map(|c| (*c).into()).collect(),
         os: own.os.into(),
         key: Some(Hash(cert.key_hash())),
         store: own.store.into(),

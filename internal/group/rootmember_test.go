@@ -49,9 +49,9 @@ func TestGoRootMemberVectors(t *testing.T) {
 		dev  DeviceID
 		role string
 	}{
-		{"a phone, then a computer", s1, []Record{own(s1, "phone a", RolePhone, s1.a), own(s1, "pc b", RoleFull, s1.b), deviceRecord(t, s1.root.Cert, s1.root, nil, member(t, s1.root), "plain pc", 1)}, dev(s1.b), RoleFull},
-		{"a computer, then a phone", s2, []Record{own(s2, "pc a", RoleFull, s2.a), own(s2, "phone b", RolePhone, s2.b)}, dev(s2.b), RolePhone},
-		{"one device as a phone, then as a computer", s3, []Record{own(s3, "as a phone", RolePhone, s3.a), own(s3, "as a pc", RoleFull, s3.a)}, dev(s3.a), RoleFull},
+		{"a phone, then a computer", s1, []Record{own(s1, "phone a", RolePhone, s1.a), own(s1, "pc b", RoleMember, s1.b), deviceRecord(t, s1.root.Cert, s1.root, nil, member(t, s1.root), "plain pc", 1)}, dev(s1.b), RoleMember},
+		{"a computer, then a phone", s2, []Record{own(s2, "pc a", RoleMember, s2.a), own(s2, "phone b", RolePhone, s2.b)}, dev(s2.b), RolePhone},
+		{"one device as a phone, then as a computer", s3, []Record{own(s3, "as a phone", RolePhone, s3.a), own(s3, "as a pc", RoleMember, s3.a)}, dev(s3.a), RoleMember},
 	} {
 		permute(len(c.recs), func(order []int) {
 			s := NewRecords(c.st.root.Cert)

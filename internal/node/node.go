@@ -55,8 +55,11 @@ const (
 type Config struct {
 	Identity *group.Identity
 	Role     Role
-	Name     string // this device's name, sent in the hello
-	OS       string // this device's operating system (group.OSLinux...), sent in the hello
+	// Caps is what this member can do (group.CapHub and the others),
+	// sent in the hello.
+	Caps []string
+	Name string // this device's name, sent in the hello
+	OS   string // this device's operating system (group.OSLinux...), sent in the hello
 	// KeyStore is where this device's keys live (group.StoreFile or
 	// group.StoreHardware or group.StoreRootless), sent in the hello; ""
 	// sends group.StoreFile.
@@ -264,6 +267,9 @@ func write(ev *clip.Event, seq uint64) Write {
 type Peer struct {
 	ID   group.DeviceID
 	Role Role
+	// Caps is what its hello says it can do, the names this member knows,
+	// sorted.
+	Caps []string
 	Name string // from its hello; "" when it sent none or an invalid one
 	OS   string // from its hello; "" when it sent none or an unknown one
 	// Device is what its hello says about its device, its invalid fields
@@ -581,10 +587,10 @@ func (n *Node) recordsOnly(ctx context.Context, tc *tls.Conn, id group.DeviceID,
 		_, err = tc.Write(f)
 		return err
 	}
-	out := helloOut{Hello: clip.Hello{Wall: n.cfg.Now().UnixMilli()}, Name: n.cfg.Name, OS: n.cfg.OS}
+	out := helloOut{Hello: clip.Hello{Wall: n.cfg.Now().UnixMilli()}, Name: n.cfg.Name, OS: n.cfg.OS, Caps: n.cfg.Caps}
 	if st != nil {
 		out.Records = st.Digest()
-		if g, ok := st.(interface{ GroupCA() *x509.Certificate }); ok && errors.Is(why, group.ErrNotListed) && n.cfg.Role == Full {
+		if g, ok := st.(interface{ GroupCA() *x509.Certificate }); ok && errors.Is(why, group.ErrNotListed) && n.cfg.Role == Member {
 			if ca := g.GroupCA(); ca != nil {
 				out.GroupCA = ca.Raw
 			}
@@ -777,11 +783,11 @@ func (n *Node) Peers() []Peer {
 	for _, c := range n.conns {
 		if role := c.role(); role != "" {
 			c.mu.Lock()
-			adminKey, device, mode, store, acts, media, sealKey := c.peerAdminKey, c.peerDevice, c.peerMode, c.peerKeyStore, c.peerActions, c.peerMedia, c.peerSeal
+			adminKey, device, mode, store, acts, media, sealKey, caps := c.peerAdminKey, c.peerDevice, c.peerMode, c.peerKeyStore, c.peerActions, c.peerMedia, c.peerSeal, c.peerCaps
 			muted, mutedUntil := c.peerMuted, c.peerMutedUntil
 			c.mu.Unlock()
 			local, _ := netip.ParseAddrPort(c.tc.LocalAddr().String())
-			out = append(out, Peer{ID: c.id, Role: role, Name: c.name(), OS: c.os(), Device: device, Key: group.KeyHashOf(c.peerCert), Chain: c.peerChain, AdminKey: adminKey,
+			out = append(out, Peer{ID: c.id, Role: role, Caps: caps, Name: c.name(), OS: c.os(), Device: device, Key: group.KeyHashOf(c.peerCert), Chain: c.peerChain, AdminKey: adminKey,
 				Mode: mode, Muted: muted, MutedUntil: mutedUntil, KeyStore: store, Actions: acts, Media: media, Seal: sealKey, Since: c.since, Local: local.Addr().Unmap()})
 		}
 	}
@@ -809,11 +815,11 @@ func (n *Node) RenewPeers() {
 
 // renewPeer sends the peer of c a renewed certificate if it is due, once
 // per connection: the connection keeps the certificate of its handshake.
-// An admin computer of a phone group renews only computers; the phones
+// An admin computer of a phone group renews only members; the phones
 // renew their own.
 func (n *Node) renewPeer(c *conn) {
 	id := n.identity()
-	if role := c.role(); id.AdminCA != nil && role != Full {
+	if role := c.role(); id.AdminCA != nil && role != Member {
 		return
 	}
 	cert, issuer, err := id.RenewMember(c.peerCert, n.cfg.Now())
@@ -1229,9 +1235,8 @@ func (n *Node) sendEntries(e *EntriesSet, from *conn) {
 }
 
 // takesRelease reports whether a peer of the role gets the group's
-// release: the computers and the lite members; the phones' apps update
-// from their stores.
-func takesRelease(r Role) bool { return r == Full || r == Lite }
+// release: the members; the phones' apps update from their stores.
+func takesRelease(r Role) bool { return r == Member }
 
 // takesEntries reports whether a peer of the role gets the signed entry
 // points: every member, the phones too, whose hubs register through them.
@@ -1290,7 +1295,7 @@ const maxReach = 256
 // connects only to a hub, which passes its commands on to the members
 // behind it, so that the phone shows them as online.
 func (n *Node) sendReach() {
-	if n.cfg.Role != Full {
+	if n.cfg.Role != Member {
 		return
 	}
 	n.mu.Lock()
@@ -1378,9 +1383,10 @@ type conn struct {
 	lowerDialed bool
 
 	mu       sync.Mutex
-	peerRole Role   // set by the peer's hello
-	peerName string // set by the peer's hello
-	peerOS   string // set by the peer's hello
+	peerRole Role     // set by the peer's hello
+	peerCaps []string // set by the peer's hello
+	peerName string   // set by the peer's hello
+	peerOS   string   // set by the peer's hello
 	// peerDevice is what the peer's hello says about its device.
 	peerDevice group.DeviceInfo
 	// peerAdminKey is the admin key that the peer's hello names.
@@ -1548,7 +1554,7 @@ func (c *conn) message(o outgoing) (*message, error) {
 			current = &s
 		}
 		h.Current = nil
-		out := helloOut{Hello: h, Current: current, Name: c.n.cfg.Name, OS: c.n.cfg.OS, Mode: c.n.cfg.Engine.Mode().String(), KeyStore: c.n.cfg.KeyStore}
+		out := helloOut{Hello: h, Current: current, Name: c.n.cfg.Name, OS: c.n.cfg.OS, Caps: c.n.cfg.Caps, Mode: c.n.cfg.Engine.Mode().String(), KeyStore: c.n.cfg.KeyStore}
 		if muted, left := c.n.cfg.Engine.MuteLeft(); muted {
 			out.Muted, out.MutedFor = true, left.Milliseconds()
 		}
@@ -1787,6 +1793,7 @@ func (c *conn) reader() error {
 				}
 			}
 			c.peerMedia = slices.Contains(extra.Features[:min(len(extra.Features), maxFeatures)], FeatureMedia)
+			c.peerCaps = cleanCaps(extra.Caps)
 			c.peerMode = ""
 			if _, err := clip.ParseMode(extra.Mode); err == nil {
 				c.peerMode = extra.Mode

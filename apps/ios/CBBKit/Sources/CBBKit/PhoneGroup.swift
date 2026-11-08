@@ -232,12 +232,12 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// Signs and adds a device record. A record that makes an admin gives
     /// it the powers of its role unless powers names them, and the root's
     /// record of its own device says that it holds the root.
-    mutating func record(device: String, name: String, role: String, os: String? = nil, key: Data, admin: Data? = nil,
+    mutating func record(device: String, name: String, role: String, caps: [String]? = nil, os: String? = nil, key: Data, admin: Data? = nil,
                          powers: [String]? = nil, commands: [String]? = nil, store: String? = nil, kind: String? = nil,
                          proof: String? = nil, seal: Data? = nil, forwardOnly: Bool = false, caSigner: CertificateSigner, now: Date) throws -> Member.Record {
         guard isAdmin else { throw Failure.notAdmin }
         var b = Records.Body(type: "device", signer: Self.signer(caSigner), timeMS: Records.ms(now))
-        (b.device, b.name, b.role, b.os, b.key, b.admin) = (device, name, role, os, key, admin)
+        (b.device, b.name, b.role, b.caps, b.os, b.key, b.admin) = (device, name, role, caps, os, key, admin)
         (b.store, b.kind, b.proof, b.seal) = (store, kind, proof, seal)
         if forwardOnly { b.forward_only = true }
         if admin != nil {
@@ -360,7 +360,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
             if d.id == lost {
                 revoke += d.keys
             } else if let admin = d.adminKey, !d.frozen {
-                out.append(try record(device: d.id, name: d.name, role: d.role, os: d.os, key: d.key, admin: admin, powers: d.powers,
+                out.append(try record(device: d.id, name: d.name, role: d.role, caps: d.caps, os: d.os, key: d.key, admin: admin, powers: d.powers,
                                       commands: d.commands, store: d.store, kind: d.kind, proof: d.proof, seal: d.seal, forwardOnly: d.forwardOnly, caSigner: rootSigner, now: now))
             }
         }
@@ -597,11 +597,11 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         guard isAdmin else { throw Failure.notAdmin }
         guard let d = devices.first(where: { $0.id == device }) else { throw Failure.unknownDevice }
         if d.forwardOnly { return nil }
-        guard d.role == "full" else { throw Failure.notAComputer }
+        guard d.can("hub") else { throw Failure.notAComputer }
         guard !d.frozen else { throw Failure.frozen }
         guard d.store != Records.rootless else { throw Failure.rootless }
         guard d.adminKey == nil, device != records.rootDevice else { throw Failure.readsCopies }
-        return try record(device: device, name: d.name, role: d.role, os: d.os, key: d.key, store: d.store, kind: d.kind, proof: d.proof,
+        return try record(device: device, name: d.name, role: d.role, caps: d.caps, os: d.os, key: d.key, store: d.store, kind: d.kind, proof: d.proof,
                           seal: d.seal, forwardOnly: true, caSigner: caSigner, now: now)
     }
 
@@ -610,7 +610,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         guard let d = devices.first(where: { $0.id == device }) else { throw Failure.unknownDevice }
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, Self.validName(name) == name else { throw Failure.invalidName }
-        return try record(device: device, name: name, role: d.role, os: d.os, key: d.key, admin: d.adminKey,
+        return try record(device: device, name: name, role: d.role, caps: d.caps, os: d.os, key: d.key, admin: d.adminKey,
                           powers: d.adminKey == nil ? nil : d.powers, commands: d.adminKey == nil ? nil : d.commands,
                           store: d.store, kind: d.kind, proof: d.proof, seal: d.seal, forwardOnly: d.forwardOnly, caSigner: caSigner, now: now)
     }
@@ -639,7 +639,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
                                    keyStore: String? = nil, allowFileKey: Bool = false) throws -> (adminCA: Data, record: Member.Record) {
         guard isRoot else { throw Failure.notRoot }
         guard let d = devices.first(where: { $0.id == device }) else { throw Failure.unknownDevice }
-        guard d.role == "full" else { throw Failure.notAComputer }
+        guard d.can("admin") else { throw Failure.notAComputer }
         guard !d.frozen else { throw Failure.frozen }
         let proven = d.store == Records.proven
         let store = proven ? d.store : Records.store(keyStore, role: d.role)
@@ -647,7 +647,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         guard Records.levelAllows(keyLevel, store: store, consent: true) else { throw Failure.belowKeyLevel }
         guard store != Records.file || allowFileKey else { throw Failure.fileKey }
         let ca = try GroupCertificates.adminCA(device: device, publicKey: adminKey, root: currentRoot, rootSigner: rootSigner)
-        let r = try record(device: device, name: d.name, role: d.role, os: d.os, key: d.key, admin: Records.keyHash(cert: ca),
+        let r = try record(device: device, name: d.name, role: d.role, caps: d.caps, os: d.os, key: d.key, admin: Records.keyHash(cert: ca),
                            store: store, kind: proven ? d.kind : nil, proof: proven ? d.proof : nil, seal: d.seal, caSigner: rootSigner, now: now)
         computerAdmins[device] = ca
         return (ca, r)
@@ -735,9 +735,9 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// root, a phone or a watch.
     public func watchActions(for device: String) -> [WatchAction] {
         guard let d = devices.first(where: { $0.id == device }), device != records.rootDevice,
-              d.role == "full" || d.role == "lite" else { return [] }
+              d.role == "member" else { return [] }
         var out: [WatchAction] = []
-        if d.adminKey != nil, d.role == "full", !d.frozen { out.append(.freeze) }
+        if d.adminKey != nil, !d.frozen { out.append(.freeze) }
         if d.adminKey == nil, !d.admin { out.append(.remove) }
         return out + [.pasteOff, .actionsOff, .awayOff, .action]
     }
@@ -814,14 +814,14 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
             // Revoked: the keys may still be in hardware, as the hello says,
             // but Google no longer vouches for the chain.
             guard d.store == Records.proven else { return nil }
-            return try record(device: device, name: d.name, role: d.role, os: d.os, key: d.key, admin: d.adminKey,
+            return try record(device: device, name: d.name, role: d.role, caps: d.caps, os: d.os, key: d.key, admin: d.adminKey,
                               powers: d.adminKey == nil ? nil : d.powers, commands: d.adminKey == nil ? nil : d.commands,
                               store: Records.hardware, kind: d.kind, proof: nil, seal: d.seal, forwardOnly: d.forwardOnly, caSigner: rootSigner, now: now)
         }
         if d.store == r.store, (d.kind ?? "") == r.kind { return nil }
         guard let first = e.chain.first else { return nil }
         let proof = r.store == Records.proven ? SHA256.hash(data: first).map { String(format: "%02x", $0) }.joined() : nil
-        return try record(device: device, name: d.name, role: d.role, os: d.os, key: d.key, admin: d.adminKey,
+        return try record(device: device, name: d.name, role: d.role, caps: d.caps, os: d.os, key: d.key, admin: d.adminKey,
                           powers: d.adminKey == nil ? nil : d.powers, commands: d.adminKey == nil ? nil : d.commands, store: r.store,
                           kind: r.kind.isEmpty ? nil : r.kind, proof: proof, seal: d.seal, forwardOnly: d.forwardOnly, caSigner: rootSigner, now: now)
     }
@@ -885,7 +885,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         computers.removeAll { $0.device == admitted.device }
         computers.append(Computer(device: admitted.device, name: admitted.info.name, os: admitted.info.os, cert: admitted.cert, admitted: now,
                                   addrs: addrs.filter(JoinCode.isHome)))
-        _ = try record(device: admitted.device, name: name, role: admitted.info.role == Pairing.Info.lite ? "lite" : "full",
+        _ = try record(device: admitted.device, name: name, role: "member", caps: admitted.info.caps,
                        os: admitted.info.os, key: key, seal: admitted.info.seal, caSigner: caSigner, now: now)
         return admitted
     }

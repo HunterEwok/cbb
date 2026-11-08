@@ -255,12 +255,16 @@ final class PhoneJoinTests: XCTestCase {
             XCTAssertFalse(Pairing.Info(name: bad, os: "linux").isValid, "a name is printable, as in Go: \(bad.unicodeScalars.map { String($0.value, radix: 16) })")
         }
         XCTAssertFalse(Pairing.Info(name: "mac", os: "darwin").isValid)
-        XCTAssertFalse(Pairing.Info(name: "pi", os: "none").isValid)
+        XCTAssertTrue(Pairing.Info(name: "board", os: "none").isValid, "a member's firmware")
         var pixel = proved
         pixel.os = "android"
         XCTAssertTrue(pixel.isValid, "an Android phone joins as a phone")
-        XCTAssertTrue(Pairing.Info(name: "router", os: "linux", role: Pairing.Info.lite).isValid, "a lite member")
-        XCTAssertFalse(Pairing.Info(name: "router", os: "linux", role: "full").isValid)
+        XCTAssertTrue(Pairing.Info(name: "router", os: "linux", caps: ["dials"]).isValid, "a member that only dials")
+        XCTAssertFalse(Pairing.Info(name: "router", os: "linux", caps: ["full"]).isValid, "an unknown cap")
+        XCTAssertFalse(Pairing.Info(name: "router", os: "linux", caps: ["hub", "admin"]).isValid, "caps not sorted")
+        XCTAssertFalse(Pairing.Info(name: "Pixel", os: "android", caps: ["dials"]).isValid, "caps from a phone")
+        let next = Pairing.Info(name: "next", os: "linux", caps: ["admin", "dials"])
+        XCTAssertEqual(try JSONDecoder().decode(Pairing.Info.self, from: JSONEncoder().encode(next)), next)
         // A computer's Info is encoded as before, without the admin key.
         let json = String(decoding: try JSONEncoder().encode(Pairing.Info(name: "pi", os: "linux")), as: UTF8.self)
         XCTAssertFalse(json.contains("admin_key"))

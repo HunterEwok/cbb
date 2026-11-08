@@ -149,9 +149,8 @@ private fun Summary(d: LiveGroup.Device) {
 /** A rootless install is never an admin or a hub (D-79), so its role says so. */
 private fun roleTitle(role: String, rootless: Boolean) = when (role) {
     "phone" -> R.string.role_phone
-    "lite" -> if (rootless) R.string.role_lite_rootless else R.string.role_lite
     "watch" -> R.string.kind_watch
-    else -> if (rootless) R.string.role_full_rootless else R.string.role_full
+    else -> if (rootless) R.string.role_member_rootless else R.string.role_member
 }
 
 /** The sync modes, in the order the apps show them (docs/design.md, Sync modes). */
@@ -241,9 +240,9 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
             HorizontalDivider(color = palette.line)
             Action("★", stringResource(R.string.make_admin)) { promoting = true }
         }
-        // An admin computer, or one the root makes an admin first; this phone is the hub under Settings.
-        // A computer that is no admin can be a hub that only passes the copies on.
-        if (!d.isSelf && d.online && !d.throughHub && d.role == "full" && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
+        // An admin member that may be a hub, or one the root makes an admin first; this phone is the hub under Settings.
+        // A member that is no admin can be a hub that only passes the copies on.
+        if (!d.isSelf && d.online && !d.throughHub && d.can("hub") && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
             HorizontalDivider(color = palette.line)
             Action("⌁", stringResource(R.string.make_hub)) { hubbing = true }
         }
@@ -251,13 +250,13 @@ private fun Actions(model: AppModel, d: LiveGroup.Device) {
             HorizontalDivider(color = palette.line)
             Action("⇄", stringResource(R.string.sync_mode)) { choosingMode = true }
         }
-        // Computers, lite members and Android phones take pastes; iPhones cannot.
-        if (!d.isSelf && (d.role == "full" || d.role == "lite" || (d.role == "phone" && d.os == "android"))) {
+        // Members and Android phones take pastes; iPhones cannot.
+        if (!d.isSelf && (d.role == "member" || (d.role == "phone" && d.os == "android"))) {
             HorizontalDivider(color = palette.line)
             Action("⌨", stringResource(R.string.paste_on_it)) { pasting = true }
         }
-        // Computers run quick actions; the lite member reboots and restarts.
-        if (!d.isSelf && d.online && (d.role == "full" || d.role == "lite")) {
+        // Members run quick actions.
+        if (!d.isSelf && d.online && d.role == "member") {
             HorizontalDivider(color = palette.line)
             Action("⚡", stringResource(R.string.quick_actions)) { acting = true }
         }

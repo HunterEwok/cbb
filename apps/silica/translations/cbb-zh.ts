@@ -501,10 +501,6 @@
 <context>
     <name>devices</name>
     <message>
-        <source>lite member</source>
-        <translation>轻量成员</translation>
-    </message>
-    <message>
         <source>device</source>
         <translation>设备</translation>
     </message>
@@ -519,10 +515,6 @@
     <message>
         <source>Board</source>
         <translation>开发板</translation>
-    </message>
-    <message>
-        <source>Lite member</source>
-        <translation>轻量成员</translation>
     </message>
     <message>
         <source>Computer</source>

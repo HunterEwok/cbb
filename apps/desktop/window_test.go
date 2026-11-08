@@ -740,22 +740,22 @@ func newFakeService(t *testing.T) *fakeService {
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	s := &fakeService{t: t, path: filepath.Join(dir, "c.sock"),
-		status: control.Status{Device: "self", Group: "cbb-7f3a", Role: "full", OS: "linux", Mode: "shared"},
+		status: control.Status{Device: "self", Group: "cbb-7f3a", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Mode: "shared"},
 		devices: []control.Device{
-			{ID: "self", Name: "This PC", Role: "full", OS: "linux", Admin: true, Root: true, Self: true, Online: true, Listed: true},
-			{ID: "mac", Name: "MacBook", Role: "full", OS: "macos", OSVersion: "26.1", Online: true, Listed: true, MayHub: true},
-			{ID: "win", Name: "Windows PC", Role: "full", OS: "windows", Admin: true, Frozen: true, Listed: true},
+			{ID: "self", Name: "This PC", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Admin: true, Root: true, Self: true, Online: true, Listed: true},
+			{ID: "mac", Name: "MacBook", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "macos", OSVersion: "26.1", Online: true, Listed: true, MayHub: true},
+			{ID: "win", Name: "Windows PC", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "windows", Admin: true, Frozen: true, Listed: true},
 			{ID: "iphone", Name: "iPhone", Role: "phone", OS: "ios", Admin: true, Online: true, Listed: true},
 			{ID: "pixel", Name: "Pixel", Role: "phone", OS: "android", Online: true, Listed: true},
 			{ID: "ipad", Name: "iPad", Role: "phone", OS: "ios", Form: "tablet", Listed: true},
-			{ID: "tv", Name: "Living room TV", Role: "full", OS: "linux", Form: "tv", Online: true, Listed: true},
-			{ID: "nano", Name: "Nano", Role: "lite", Listed: true},
-			{ID: "srv", Name: "Home server", Role: "full", OS: "linux", Form: "server", Online: true, Listed: true, Hub: true},
-			{ID: "gate", Name: "Router", Role: "full", OS: "linux", Form: "router", Listed: true},
-			{ID: "deck", Name: "Steam Deck", Role: "full", OS: "linux", Form: "console", Online: true, Listed: true},
+			{ID: "tv", Name: "Living room TV", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Form: "tv", Online: true, Listed: true},
+			{ID: "nano", Name: "Nano", Role: "member", Listed: true},
+			{ID: "srv", Name: "Home server", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Form: "server", Online: true, Listed: true, Hub: true},
+			{ID: "gate", Name: "Router", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Form: "router", Listed: true},
+			{ID: "deck", Name: "Steam Deck", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Form: "console", Online: true, Listed: true},
 			{ID: "watch", Name: "Watch", Role: "watch", OS: "watchos", Listed: true},
-			{ID: "next", Name: "ZX Next", Role: "lite", Form: "retro", Listed: true},
-			{ID: "box", Name: "Box", Role: "full", OS: "linux", Form: "other", Listed: true},
+			{ID: "next", Name: "ZX Next", Role: "member", Form: "retro", Listed: true},
+			{ID: "box", Name: "Box", Role: "member", Caps: []string{"admin", "dials", "hub"}, OS: "linux", Form: "other", Listed: true},
 		}}
 	s.start()
 	t.Cleanup(s.stop)

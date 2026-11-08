@@ -51,8 +51,10 @@ struct File {
 pub struct Device {
     pub id: String,
     pub name: String,
-    /// `full`, `phone`, `lite` or `watch`.
+    /// `member`, `phone` or `watch`.
     pub role: String,
+    /// What a member can do: `admin`, `dials` and `hub`, sorted.
+    pub caps: Vec<String>,
     /// Its operating system; empty when its record does not tell.
     pub os: String,
     /// The member key of its newest counting record.
@@ -86,6 +88,17 @@ impl Device {
     /// Whether the device is an admin with the power p.
     pub fn may(&self, p: &str) -> bool {
         self.admin && self.powers.iter().any(|q| q == p)
+    }
+
+    /// Whether it is a member with the capability c.
+    pub fn can(&self, c: &str) -> bool {
+        self.role == authority::ROLE_MEMBER && authority::has_cap(&self.caps, c)
+    }
+
+    /// Whether it may be one of the group's hubs: a phone, or a member
+    /// with the cap hub.
+    pub fn may_hub(&self) -> bool {
+        self.role == authority::ROLE_PHONE || self.can(authority::CAP_HUB)
     }
 }
 
@@ -436,6 +449,7 @@ impl Records {
                     id: d.device.clone(),
                     name: d.name.clone(),
                     role: d.role.clone(),
+                    caps: d.caps.clone(),
                     os: d.os.clone(),
                     key,
                     store: store_of(&d.store, &d.role).to_string(),
@@ -648,7 +662,9 @@ impl Records {
         let mut hubs: Vec<(u8, bool, String)> = self
             .devices()
             .into_iter()
-            .filter(|d| root.as_deref() == Some(d.id.as_str()) || d.may(authority::POWER_HUB) || d.forward_only)
+            .filter(|d| {
+                d.may_hub() && (root.as_deref() == Some(d.id.as_str()) || d.may(authority::POWER_HUB) || d.forward_only)
+            })
             .map(|d| {
                 let is_root = root.as_deref() == Some(d.id.as_str());
                 let part = if d.role == "phone" {

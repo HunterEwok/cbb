@@ -95,6 +95,9 @@ fn device_value(d: &Device, s: &Records) -> Value {
     m.insert("device".into(), Value::from(d.id.as_str()));
     m.insert("name".into(), Value::from(d.name.as_str()));
     m.insert("role".into(), Value::from(d.role.as_str()));
+    if !d.caps.is_empty() {
+        m.insert("caps".into(), Value::from(d.caps.clone()));
+    }
     if !d.os.is_empty() {
         m.insert("os".into(), Value::from(d.os.as_str()));
     }

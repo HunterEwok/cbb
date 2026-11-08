@@ -146,8 +146,8 @@ func TestMemberInteropVectors(t *testing.T) {
 		return msg(t, &message{Type: typeEvent, Event: data})
 	}
 	v := memberVectors{Frames: []json.RawMessage{
-		hello(Full, helloOut{Hello: clip.Hello{Wall: 1761024000500}, Current: sealed(text), Records: "q83vEjRWeJA=", Name: "pi", OS: group.OSLinux}),
-		hello(Full, helloOut{Hello: clip.Hello{Wall: 1761024000500}, Current: sealed(mark), OS: group.OSMacOS}),
+		hello(Member, helloOut{Hello: clip.Hello{Wall: 1761024000500}, Current: sealed(text), Records: "q83vEjRWeJA=", Name: "pi", OS: group.OSLinux}),
+		hello(Member, helloOut{Hello: clip.Hello{Wall: 1761024000500}, Current: sealed(mark), OS: group.OSMacOS}),
 		hello(Phone, helloOut{Hello: clip.Hello{Wall: 0}, OS: group.OSiOS}),
 		event(text),
 		event(secret),
@@ -170,12 +170,12 @@ func TestMemberInteropVectors(t *testing.T) {
 		msg(t, &message{Type: typeTun, Tunnel: &TunnelOffer{HubKey: vecBytes(8), PSK: vecBytes(9), Endpoints: []string{"203.0.113.9:8764"},
 			VLESS: json.RawMessage(`{"endpoint":"203.0.113.9:443","public_key":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk=",` +
 				`"short_id":"0123456789abcdef","server_name":"www.example.com","id":"5f0c1e2d-3b4a-4c5d-8e6f-7a8b9c0d1e2f"}`)}}),
-		hello(Full, helloOut{Hello: clip.Hello{Wall: 1761024000500}, OS: group.OSMacOS,
+		hello(Member, helloOut{Hello: clip.Hello{Wall: 1761024000500}, OS: group.OSMacOS,
 			Device: &group.DeviceInfo{Form: "laptop", OSVersion: "15.1", Version: "0.5.0", MAC: "a4:83:e7:01:02:0f"}}),
 		// Images and files (frames 16 to 18).
 		event(files),
 		event(image),
-		hello(Full, helloOut{Hello: clip.Hello{Wall: 1761024000500}, Current: sealed(image), OS: group.OSLinux, Features: []string{FeatureMedia}}),
+		hello(Member, helloOut{Hello: clip.Hello{Wall: 1761024000500}, Current: sealed(image), OS: group.OSLinux, Features: []string{FeatureMedia}}),
 		// The members a computer reaches (frame 19).
 		msg(t, &message{Type: typeReach, Reach: []group.DeviceID{vecDevice, "fedcba9876543210fedcba9876543210"}}),
 	}}
@@ -243,9 +243,9 @@ func TestMemberInteropVectors(t *testing.T) {
 
 	// Numbers: only integers as in signed bodies, anywhere in a frame.
 	for _, s := range []string{
-		`{"t":"hello","role":"full","hello":{"wall_ms":0}}`,
-		`{"t":"hello","role":"full","hello":{"wall_ms":-0}}`,
-		`{"t":"hello","role":"full","hello":{"wall_ms":1761024000500.0}}`,
+		`{"t":"hello","role":"member","hello":{"wall_ms":0}}`,
+		`{"t":"hello","role":"member","hello":{"wall_ms":-0}}`,
+		`{"t":"hello","role":"member","hello":{"wall_ms":1761024000500.0}}`,
 		`{"t":"event","event":{"id":"fedcba9876543210fedcba9876543210","origin":"0123456789abcdef0123456789abcdef","time":"1.0","age_ms":-0,"kind":"text","text":"x"}}`,
 		`{"t":"event","event":{"id":"fedcba9876543210fedcba9876543210","origin":"0123456789abcdef0123456789abcdef","time":"1.0","age_ms":0,"kind":"text","text":"x","extra":-0}}`,
 		`{"t":"ping","extra":-1}`,

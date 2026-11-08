@@ -134,10 +134,17 @@ func (s *Service) found(peers []mdns.Peer) {
 		} else {
 			s.nearby[id] = uptime.Now()
 		}
-		if r, _ := p.TXTValue("r"); strings.EqualFold(r, "lite") || strings.EqualFold(r, "phone") {
-			continue // it dials the full members
+		r, _ := p.TXTValue("r")
+		switch {
+		case strings.EqualFold(r, "phone"):
+			continue // the phone that is the hub dials the members
+		case strings.EqualFold(r, "listen"):
+			// A member that does not dial waits for every other member.
+			want[id] = target{addresses(p), false}
+		default:
+			// Of two members that dial, the lower ID dials first.
+			want[id] = target{addresses(p), id < s.id.ID}
 		}
-		want[id] = target{addresses(p), id < s.id.ID}
 	}
 	for id, d := range s.dialers {
 		if t, ok := want[id]; !ok || t.later != d.later {

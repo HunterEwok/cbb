@@ -29,9 +29,14 @@ function system(d) {
     case "sailfish": return "Sailfish OS"
     case "watchos": return "watchOS"
     case "wearos": return "Wear OS"
-    case "": return d.role === "lite" ? qsTr("lite member") : ""
+    case "": return ""
     default: return qsTr("device")
     }
+}
+
+// Whether it is a member with the capability c: admin, dials or hub.
+function can(d, c) {
+    return d.role === "member" && (d.caps || []).indexOf(c) >= 0
 }
 
 // Its kind, from its role and system.
@@ -40,8 +45,8 @@ function kind(d) {
         return qsTr("Phone")
     if (d.role === "watch")
         return qsTr("Watch")
-    if (d.role === "lite")
-        return d.os === "none" ? qsTr("Board") : qsTr("Lite member")
+    if (d.os === "none")
+        return qsTr("Board")
     return qsTr("Computer")
 }
 
@@ -52,7 +57,7 @@ function icon(d) {
         return "image://theme/icon-m-phone"
     if (d.role === "watch")
         return "image://theme/icon-m-watch"
-    if (d.role === "lite")
+    if (d.os === "none")
         return "image://theme/icon-m-device"
     return "image://theme/icon-m-computer"
 }

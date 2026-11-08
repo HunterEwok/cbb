@@ -501,10 +501,6 @@
 <context>
     <name>devices</name>
     <message>
-        <source>lite member</source>
-        <translation>חבר קל</translation>
-    </message>
-    <message>
         <source>device</source>
         <translation>מכשיר</translation>
     </message>
@@ -519,10 +515,6 @@
     <message>
         <source>Board</source>
         <translation>לוח</translation>
-    </message>
-    <message>
-        <source>Lite member</source>
-        <translation>חבר קל</translation>
     </message>
     <message>
         <source>Computer</source>

@@ -327,6 +327,7 @@ fn peer_json(p: &Peer) -> Value {
         "reach": p.reach.iter().map(ToString::to_string).collect::<Vec<_>>(),
         "records_only": p.records_only,
         "features": p.features,
+        "caps": p.caps,
         "chain": p.chain.iter().map(|c| b64(c)).collect::<Vec<_>>(),
     })
 }
@@ -372,6 +373,8 @@ struct DeviceAnswer {
     device: String,
     name: String,
     role: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    caps: Vec<String>,
     os: String,
     admin: bool,
     root: bool,
@@ -717,6 +720,7 @@ impl Member {
                         device: d.id,
                         name: d.name,
                         role: d.role,
+                        caps: d.caps,
                         os: d.os,
                         admin: d.admin,
                         root: d.root,

@@ -27,6 +27,8 @@ public enum Records {
         public var device: String?
         public var name: String?
         public var role: String?
+        /// What a member can do: Records.caps, sorted; only with the role "member".
+        public var caps: [String]?
         public var os: String?
         public var key: Data?
         public var admin: Data?
@@ -78,6 +80,7 @@ public enum Records {
             try put(device, .device)
             try put(name, .name)
             try put(role, .role)
+            try put(caps?.sorted(), .caps)
             try put(os, .os)
             try put(key, .key)
             try put(admin, .admin)
@@ -102,10 +105,14 @@ public enum Records {
         }
 
         private enum Key: String, CodingKey {
-            case v, alg, type, signer, time_ms, device, name, role, os, key, admin, powers, commands, store, kind, proof, holds_root, seal, forward_only
+            case v, alg, type, signer, time_ms, device, name, role, caps, os, key, admin, powers, commands, store, kind, proof, holds_root, seal, forward_only
             case keys, records, root, cert, takeover_delay_ms, key_level, hubs, incoming_ms
         }
     }
+
+    /// What a member can do (docs/protocol.md, section 4, "Capabilities"),
+    /// sorted: hold an admin key, dial other members, be a hub.
+    public static let caps = ["admin", "dials", "hub"]
 
     /// The powers an admin may have (docs/protocol.md, section 10, "Who signs what"):
     /// what the apps give an admin phone.
@@ -225,8 +232,10 @@ public struct RecordSet: Codable, Equatable, Sendable {
     public struct Device: Decodable, Equatable, Sendable, Identifiable {
         public var id: String
         public var name: String
-        /// "full", "phone", "lite" or "watch".
+        /// "member", "phone" or "watch".
         public var role: String
+        /// What a member can do: "admin", "dials" and "hub".
+        public var caps: [String] = []
         /// Its operating system; nil when its record does not tell.
         public var os: String?
         /// The member key of its newest counting record.
@@ -260,8 +269,14 @@ public struct RecordSet: Codable, Equatable, Sendable {
         /// Whether it is an admin with the power p.
         public func may(_ p: String) -> Bool { admin && powers.contains(p) }
 
+        /// Whether it is a member with the capability c.
+        public func can(_ c: String) -> Bool { role == "member" && caps.contains(c) }
+
+        /// Whether it may be one of the group's hubs: a phone, or a member with the cap hub.
+        public var mayHub: Bool { role == "phone" || can("hub") }
+
         private enum CodingKeys: String, CodingKey {
-            case id = "device", name, role, os, key, store, kind, proof, seal, forwardOnly = "forward_only", admin, adminKey = "admin_key", powers, commands, frozen, freezes, keys
+            case id = "device", name, role, caps, os, key, store, kind, proof, seal, forwardOnly = "forward_only", admin, adminKey = "admin_key", powers, commands, frozen, freezes, keys
         }
 
         public init(from decoder: Decoder) throws {
@@ -269,6 +284,7 @@ public struct RecordSet: Codable, Equatable, Sendable {
             id = try c.decode(String.self, forKey: .id)
             name = try c.decode(String.self, forKey: .name)
             role = try c.decode(String.self, forKey: .role)
+            caps = try c.decodeIfPresent([String].self, forKey: .caps) ?? []
             os = try c.decodeIfPresent(String.self, forKey: .os)
             key = try c.decode(Data.self, forKey: .key)
             store = try c.decodeIfPresent(String.self, forKey: .store) ?? Records.file

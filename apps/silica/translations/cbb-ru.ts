@@ -501,10 +501,6 @@
 <context>
     <name>devices</name>
     <message>
-        <source>lite member</source>
-        <translation>лёгкий участник</translation>
-    </message>
-    <message>
         <source>device</source>
         <translation>устройство</translation>
     </message>
@@ -519,10 +515,6 @@
     <message>
         <source>Board</source>
         <translation>Плата</translation>
-    </message>
-    <message>
-        <source>Lite member</source>
-        <translation>Лёгкий участник</translation>
     </message>
     <message>
         <source>Computer</source>

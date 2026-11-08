@@ -501,10 +501,6 @@
 <context>
     <name>devices</name>
     <message>
-        <source>lite member</source>
-        <translation>miembro ligero</translation>
-    </message>
-    <message>
         <source>device</source>
         <translation>dispositivo</translation>
     </message>
@@ -519,10 +515,6 @@
     <message>
         <source>Board</source>
         <translation>Placa</translation>
-    </message>
-    <message>
-        <source>Lite member</source>
-        <translation>Miembro ligero</translation>
     </message>
     <message>
         <source>Computer</source>

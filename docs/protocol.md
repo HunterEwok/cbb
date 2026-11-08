@@ -34,8 +34,9 @@ keep the group safe. Sentences in the plain present tense describe what the code
 repository does; another implementation may do it differently where nothing marked with
 these words depends on it.
 
-- **Peer, member.** A member is a device of the group with a member certificate: a full
-  member (a computer with the service), a lite member, or a phone with the app. A peer is
+- **Peer, member.** A member is a device of the group with a member certificate: a
+  member with the role `member` (a computer, board or router with the service or the
+  firmware, section 4, "Capabilities"), or a phone with the app. A peer is
   the other end of a connection.
 - **JSON.** [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259) objects. A receiver MUST
   ignore fields it does not know, unless a section says otherwise.
@@ -158,7 +159,7 @@ these words depends on it.
 | Group tag | first 8 bytes of SHA-256 over the group CA certificate (DER), as 16 lowercase hex characters | `group.Tag` |
 | Member host name | `cb-<device ID>.local` (mDNS host name and the only DNS name in the member certificate) | `DeviceID.HostName` |
 | Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
-| Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Full and lite members listen on it; phones only while they are the hub. CBB's only port: it also serves pairing, and a listening join waits there | `internal/service/service.go`, `internal/service/members.go` |
+| Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Members listen on it; phones only while they are the hub. CBB's only port: it also serves pairing, and a listening join waits there | `internal/service/service.go`, `internal/service/members.go` |
 | mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `internal/mdns/mdns.go` |
 | Member ALPN | `cbb/3` | `group.MemberProtocol` |
 | Pairing ALPN | `cbb-pair/2` | `pair.Protocol` |
@@ -221,7 +222,7 @@ already expired cannot be renewed this way, since the handshake fails; the devic
 
 ## 3. Discovery (mDNS)
 
-Full members (Linux, FreeBSD, Windows and macOS computers) and lite members publish and browse;
+Members (computers, boards and routers with the service or the firmware) publish and browse;
 phones and joining devices only browse, except a phone that is the group's hub, which
 publishes `v=1`, `g=<tag>`, `r=phone` while its app is open (design.md, "The phone as the
 hub"), and a device that listens to join (section 6, "The joiner listens"), which publishes
@@ -231,18 +232,19 @@ its new device ID as the instance, its listening port in the SRV record and `v=1
 [RFC 6763](https://www.rfc-editor.org/rfc/rfc6763) apply where this section is silent. Source: `internal/mdns`; a lite
 member publishes and browses with the `mdns-sd` crate (`member/src/discovery.rs`), which
 follows the same RFCs but not every detail below: it publishes the PTR, SRV, TXT and A/AAAA
-records of the table (the TXT with `r=lite`), with the addresses of its interfaces except
+records of the table (the TXT with `r=listen` when it does not dial), with the addresses of its interfaces except
 loopback. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
 resolve the members to their addresses and hand those to the member in the Rust core, which
 starts with its own mDNS off; a phone that is the hub publishes its home port the same way
 (`BonjourPublisher`, `NsdPublisher`).
 
-A full member SHOULD publish, answer queries and take connections on the member port only on
+A member SHOULD publish, answer queries and take connections on the member port only on
 an interface whose network it knows (design.md, "Known networks"); elsewhere it only
 browses, and connections to its member port there are closed at once, except while a pairing
-window is open. The lite member publishes on every interface.
+window is open. Publishing on every network is a local setting of the device, not a role:
+the lite member (the Rust program) publishes on every interface.
 
-### Records a full member publishes
+### Records a member publishes
 
 | Name | Type | Data | TTL | Cache-flush |
 |------|------|------|-----|-------------|
@@ -262,14 +264,14 @@ TXT strings (each at most 255 bytes):
 | `p` | `1` | present only while a computer pairing window is open |
 | `j` | `1` | present only on a device that listens to join; it has no `g`, so no member dials it as one |
 | `f` | fingerprint | with `j`: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp` |
-| `r` | `lite` or `phone` | `lite` on a lite member, which the full members do not dial (section 4); `phone` on a phone that is the group's hub while its app is open, which the full and lite members do not dial, since it dials them; the other phones dial it |
+| `r` | `listen` or `phone` | `listen` on a member without the capability `dials` (section 4, "Capabilities"), which every member dials since it dials none; `phone` on a phone that is the group's hub while its app is open, which the members do not dial, since it dials them; the other phones dial it |
 
 The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
-lite member publishes `v=1`, `g=<tag>`, `r=lite`. A receiver MUST ignore keys it does not
+member without `dials` publishes `v=1`, `g=<tag>`, `r=listen`. A receiver MUST ignore keys it does not
 know, MUST match keys without regard to case, and MUST take as the value what follows the first `=`.
 A member MUST NOT dial a peer whose `g` is not its group's tag.
 
-Note: browsers check only `g` (when dialing), `r` (when dialing, on full and lite members)
+Note: browsers check only `g` (when dialing), `r` (when dialing, on members)
 and `p` (when joining); nothing checks `v` (`internal/service/members.go`,
 `internal/service/socket.go`, `member/src/discovery.rs`).
 
@@ -335,21 +337,20 @@ Source: `internal/node`, `internal/clip`, `internal/group/tls.go`,
 
 ### Who dials whom
 
-- A full member (Linux, FreeBSD, Windows or macOS) MUST dial every found full member whose device ID is
-  greater than its own and whose `g` matches its group tag; the other side accepts. When no
-  connection to a found full member with a lower device ID has been up for 30 s, it dials
-  that one as well, since a firewall may keep the other from reaching it. Of two
-  connections between the same two members, the one the lower device ID dialed stays: a
-  member MUST refuse a new connection when the one the lower ID dialed is up and the new one
-  is not that, and otherwise the new one replaces the old. It MUST NOT dial a lite member
-  (TXT `r=lite`): they dial it.
-- A lite member MUST dial every found full member with a matching `g`, and every found lite
-  member whose device ID is greater than its own; it accepts the others and phones.
+- Of two members that both have the capability `dials` (below, "Capabilities"), the one with
+  the lower device ID MUST dial the other when it finds it with a matching `g`; the other
+  side accepts. When no connection to a found member with a lower device ID has been up for
+  30 s, the higher one dials it as well, since a firewall may keep the other from reaching
+  it. Of two connections between the same two members, the one the lower device ID dialed
+  stays: a member MUST refuse a new connection when the one the lower ID dialed is up and the
+  new one is not that, and otherwise the new one replaces the old.
+- A member without `dials` (TXT `r=listen`) dials no one; every member with `dials` that
+  finds it dials it, whatever the device IDs. It accepts the members and the phones.
 - A phone app MUST dial every found member with a matching `g`. Phones accept nothing and
-  never connect to each other; so a phone syncs with a lite member or any one computer with
-  no other on. A phone that is the group's hub is the exception: while its app is open it
-  accepts members on the home network and through the tunnel, publishes `r=phone`, and the
-  other phones dial it; the full and lite members do not, since it dials them.
+  never connect to each other; so a phone syncs with any one member with no other on. A
+  phone that is the group's hub is the exception: while its app is open it accepts members
+  on the home network and through the tunnel, publishes `r=phone`, and the other phones
+  dial it; the members do not, since it dials them.
 - Members on another network than the home one (another subnet, where mDNS does not reach)
   reach the hub through the group's WireGuard tunnel (section 11; design.md, "Sync away from
   home"); so do the phone apps and the lite member on Linux, as clients. A lite member can
@@ -412,7 +413,7 @@ Message object:
 | Field | Type | In | Meaning |
 |-------|------|----|---------|
 | `t` | string | all | `hello`, `event`, `ping`, `bye`, `cert`, `records`, `admin`, `tunnel` or `hubs` (section 11), `command` or `result` (section 15), `evidence` (section 17), `credentials` (section 18), `release` (section 16), `get` or `missing` ("Content", below) |
-| `role` | string | hello | `full` (a computer with the service: Linux, FreeBSD, Windows or macOS), `phone` (a phone app) or `lite` (a lite member) |
+| `role` | string | hello | `member` (any device with the service or the firmware) or `phone` (a phone app) |
 | `hello` | object | hello | Hello (below) |
 | `event` | object | event | Event (below) |
 | `cert` | string | cert | a renewed member certificate for the receiver, DER in base64 (section 2) |
@@ -429,7 +430,7 @@ Message object:
 | `result` | object | result | the answer to a command (section 15) |
 
 ```json
-{"t":"hello","role":"full","hello":{"os":"linux","wall_ms":1761024000000,"current":{"id":"9f0c...","origin":"3b1e...","time":"1761023990000.0","age_ms":10000,"cert":"MIIB...","wraps":[...],"payload":"...","sig":"MEUC..."}}}
+{"t":"hello","role":"member","hello":{"caps":["admin","dials","hub"],"os":"linux","wall_ms":1761024000000,"current":{"id":"9f0c...","origin":"3b1e...","time":"1761023990000.0","age_ms":10000,"cert":"MIIB...","wraps":[...],"payload":"...","sig":"MEUC..."}}}
 {"t":"event","event":{"id":"77aa...","origin":"3b1e...","time":"1761024001234.2","age_ms":15,"cert":"MIIB...","wraps":[...],"payload":"...","sig":"MEQC..."}}
 {"t":"ping"}
 {"t":"bye"}
@@ -468,11 +469,28 @@ Rules for the receiver:
 
 Roles: a `phone` member dials every member, publishes nothing and is never dialed, except
 while it is the group's hub: it then publishes `r=phone` (section 3) and other phones dial
-it. A `lite`
-member publishes itself with `r=lite`, dials the full members and accepts phones and lite
-members with a lower device ID (above, "Who dials whom"). A `full` member is any computer
-with the service, a Mac included: any of them can create a group and be its root, or be made
-an admin. Only the root and the admins admit devices.
+it. A `member` is any device with the service or the firmware: a computer (a Mac
+included), a Raspberry Pi, a router or a board. What it can do beyond syncing its
+capabilities say (below); any member with `admin` can create a group and be its root, or be
+made an admin. Only the root and the admins admit devices.
+
+### Capabilities
+
+A member's capabilities are a sorted list of distinct strings, each one of:
+
+| Capability | Meaning |
+|------------|---------|
+| `admin` | it can hold an admin key. The capability gives no rights: only an admin CA the root signs does (section 10, "Admins") |
+| `dials` | it dials other members ("Who dials whom") |
+| `hub` | it may be chosen as the group's hub (section 11). It says only that it may: the hubs table and the admins choose |
+
+A member says them in its hello (`caps`), its joiner Info when it pairs (section 6), and
+its `device` record names them (section 10), which is what counts. Only the role `member`
+has them; a phone and a watch have none, and the phone's hub needs no capability.
+Computers, Raspberry Pis and routers have all three. A board such as the ESP32 has none. A
+Raspberry Pi inside a ZX Spectrum Next, which reaches the network only through the Next's
+UART and is on only while the Next is, has `admin` and `dials` but not `hub`. A receiver
+MUST ignore a capability it does not know in a hello; a record or Info with one is invalid.
 
 ### Hello
 
@@ -490,7 +508,7 @@ depends on a version number.
 | `records` | string or absent | the digest of the sender's records (section 10) |
 | `name` | string or absent | the sender's device name, 1-64 bytes; a receiver ignores an invalid one |
 | `os` | string or absent | the sender's operating system: `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish` or `none` (firmware without one); shown, never trusted; a receiver ignores an unknown one. A watch's device record says `watchos` or `wearos` (section 10) |
-| `admin_key` | string or absent | from a full member that is neither the root nor an admin yet, or an admin whose admin CA is from a root before the current one: the SubjectPublicKeyInfo of its admin key, DER in base64 (section 10, "Admins") |
+| `admin_key` | string or absent | from a member with the capability `admin` that is neither the root nor an admin yet, or an admin whose admin CA is from a root before the current one: the SubjectPublicKeyInfo of its admin key, DER in base64 (section 10, "Admins") |
 | `tunnel_key` | string or absent | the sender's WireGuard public key, 32 bytes in base64, for the group's hubs (section 11) |
 | `tunnel_psk` | string or absent | always with `tunnel_key`, which a receiver ignores without it: the WireGuard preshared key the sender chose for its tunnels, 32 bytes in base64, which every hub of the group uses for it (section 11, "Several hubs") |
 | `mode` | string or absent | the sender's sync: `shared` (on) or `own` (off; design.md, "Sync on and off"); shown, never trusted; a receiver ignores an unknown one. It changes only what the sender itself does with its clipboard, so a receiver handles the sender's events the same either way |
@@ -503,8 +521,9 @@ depends on a version number.
 | `release_keys_seq` | integer or absent | with `release_seq`: the `seq` of that release's `keys.json`; absent when it holds none |
 | `entries_seq` | integer or absent | the `seq` of the newest signed `entries.json` the sender holds (section 16, "Entry points"); absent when it holds none |
 | `entries_keys_seq` | integer or absent | with `entries_seq`: the `seq` of the `keys.json` it came with; absent when it holds none |
+| `caps` | array of strings or absent | from a `member`: its capabilities ("Capabilities" above), sorted, each once; absent when it has none and from a phone. A receiver reads the first 32 names and keeps those it knows; only the sender's `device` record counts for what the group lets it do |
 | `features` | array of strings or absent | what the sender supports beyond the protocol of its ALPN version, each name once: `media` from a member that serves the content of media events ("Content", below), so others may send it `get`. A receiver reads the first 32 names and ignores those it does not know, so a later release adds a feature without a new ALPN version |
-| `group_ca` | string or absent | from a full member on a connection that carries records only with a device no `device` record names ("Records only" in the exchange): the group's first root, DER in base64, so that a new phone restoring the group with the recovery key builds the group's path from the records (section 10, "The recovery key"). Every other hello leaves it out |
+| `group_ca` | string or absent | from a Go member on a connection that carries records only with a device no `device` record names ("Records only" in the exchange): the group's first root, DER in base64, so that a new phone restoring the group with the recovery key builds the group's path from the records (section 10, "The recovery key"). Every other hello leaves it out |
 | `seal` | string or absent | the sender's public key for sealed messages, 1216 bytes in base64 (an X-Wing key, `internal/seal`), which the group's root puts in the sender's device record (`seal`, section 10) so that commands for it can be sealed (section 15); a key of another size is ignored; absent from the phones for now |
 
 ### Device
@@ -592,7 +611,7 @@ wraps open only under the header they were made with.
 #### Readers
 
 The origin seals every copy to each device of its state's `devices` list (section 10, "The
-state") that has a key that stands, a `seal` key, a role `full`, `phone` or `lite`, and no
+state") that has a key that stands, a `seal` key, a role `member` or `phone`, and no
 `forward_only`: itself too, so that a copy it gets back after a restart opens there. A watch
 reads the copies through its phone (design.md, "Watches"). A device that joins after a copy
 was made gets no wrap in it and reads the group's next copy. An origin whose records are
@@ -944,18 +963,18 @@ Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
 | PRS (password) | the six ASCII digits of the code, or a remote invitation's secret (its raw bytes) |
 | CI (channel identifier) | `"cbb pair v2"` + one zero byte + SHA-256(member certificate DER) + SHA-256(joiner certificate DER); 23 + 1 + 32 + 32 = 88 bytes |
 | sid | 32 bytes of TLS exporter output, label `EXPERIMENTAL-cbb-pair-v2`, empty context |
-| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"\|"aurora"\|"sailfish"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone, `aurora` for Aurora OS, `sailfish` for Sailfish OS) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER), and `"admin_proof"`, that key's ECDSA signature (SHA-256, DER; bytes) over the ASCII `cbb pairing admin key`, a zero byte and `sid`; a lite member adds `"role":"lite"` and may say `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits the phones' systems (`ios`, `android`, `aurora`, `sailfish`) as phones and records a lite member with role `lite`; a computer admits `linux`, `windows`, `macos` and lite members, phones that offer no admin key as members, and, only on the group's root, phones that offer one ("A phone joins a computer's group" below) |
+| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"\|"aurora"\|"sailfish"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone, `aurora` for Aurora OS, `sailfish` for Sailfish OS) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER), and `"admin_proof"`, that key's ECDSA signature (SHA-256, DER; bytes) over the ASCII `cbb pairing admin key`, a zero byte and `sid`; a member adds `"caps"`, its capabilities (section 4, "Capabilities"), sorted, unless it has none, and firmware without a system says `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits the phones' systems (`ios`, `android`, `aurora`, `sailfish`) as phones and records any other joiner with role `member` and its `caps`; a computer admits `linux`, `windows`, `macos` and `none` as members with their `caps`, phones that offer no admin key as members, and, only on the group's root, phones that offer one ("A phone joins a computer's group" below) |
 | ADb (member) | JSON `{"device":"<member device ID>","group":"<group tag>"}` |
 | Ya, Yb | 32-byte X25519 u-coordinates |
 | Tags Ta, Tb | HMAC-SHA-512, 64 bytes |
 
 The AD bytes are used exactly as they travel in the `ad` field. The member MUST check ADa: `os`
-is `linux`, `windows` or `macos`, `none` with `role` `lite`, or one of the phones' `ios`,
+is `linux`, `windows`, `macos`, `none`, or one of the phones' `ios`,
 `android`, `aurora` and `sailfish`; `name` is 1 to 64 bytes of
 printable UTF-8; `admin_key`, when present, comes with a phone's system and is a P-256 key, and
-`admin_proof` comes with it; `role`,
-when present, is `lite`; `seal`, when present, comes from no phone and is 1216 bytes. A lite member (a Linux device without CA keys) gets
-no CA keys and is recorded with role `lite`. A Go member that is not the root
+`admin_proof` comes with it; `caps`,
+when present, is a sorted list of distinct known capabilities and comes from no phone; `seal`, when present, comes from no phone and is 1216 bytes. A member is recorded
+with role `member` and the `caps` its Info says. A Go member that is not the root
 refuses a phone that offers `admin_key`: only the root makes a phone an admin.
 
 ### Frames
@@ -1428,12 +1447,12 @@ job checks it from 0.5.0.
 
 ### Admins
 
-Any full member can be an admin, in a group a phone created and in one a computer created.
+Any member with the capability `admin` can be an admin, in a group a phone created and in one a computer created.
 Its admin key is in its TPM or a Mac's Secure Enclave (section 17) and otherwise a file next
 to its identity, so a thief with such a computer can act as an admin until another admin
 removes it.
 
-- Every full member that is not the root makes a P-256 admin key when it starts in a group
+- Every member with `admin` that is not the root makes a P-256 admin key when it starts in a group
   and keeps it in the identity file (`admin_key`,
   PKCS #8, or `admin_key_tpm`, section 17). Until it holds an admin CA, and while the admin CA
   it holds is from a root before the current one, its hello carries `admin_key`: the key's
@@ -1452,7 +1471,7 @@ removes it.
   The `device` record names the admin key in `admin` and what it may do in `powers` and
   `commands` ("Who signs what").
 - From then on it acts as an admin phone does, with its admin CA: it opens pairing windows
-  (`cbb pair`) and admits computers and lite members, never phones, with a Welcome that
+  (`cbb pair`) and admits members, never phones, with a Welcome that
   carries `issuer` and `roots` and no CA keys; it signs the `device` record of each device it
   admits and `revoke` records (`cbb remove`) of devices; it renews its own certificate and
   those of the computers it is connected to. It never removes the root or another admin and
@@ -1521,7 +1540,7 @@ and `a`-`f`.
 
 | `type` | Fields | Meaning |
 |--------|--------|---------|
-| `device` | `device`, `name`, `role`, `os`, `key`, `admin`, `powers`, `commands`, `store`, `kind`, `proof`, `holds_root`, `seal`, `forward_only` | a device in the group, or a change of its name or powers |
+| `device` | `device`, `name`, `role`, `caps`, `os`, `key`, `admin`, `powers`, `commands`, `store`, `kind`, `proof`, `holds_root`, `seal`, `forward_only` | a device in the group, or a change of its name or powers |
 | `revoke` | `keys`, `seen` | removes keys from the group |
 | `freeze` | `keys`, `seen` | stops admins until the root or an admin with `thaw` ends it |
 | `thaw` | `records` | ends the `freeze` records it names |
@@ -1540,7 +1559,8 @@ and `a`-`f`.
 |-------|-----------|-----------|--------|
 | `device` | string | `device` | a device ID |
 | `name` | string | `device` | 1 to 64 bytes of UTF-8, no control character (U+0000 to U+001F, U+007F to U+009F) |
-| `role` | string | `device` | `full`, `phone`, `lite` or `watch` |
+| `role` | string | `device` | `member`, `phone` or `watch` |
+| `caps` | array of strings | none | sorted, each once; from `admin`, `dials`, `hub` (section 4, "Capabilities"); only with role `member`. A `member` record that names `admin` MUST have `admin` in `caps` |
 | `os` | string | none | `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `watchos`, `wearos` or `none` |
 | `key` | string | `device` | a key hash: the member key (for a watch, its admin key) |
 | `admin` | string | `recovery`, `handover` | a key hash: the admin key its admin CA certifies; only in a record a root's own key signed |
@@ -1549,7 +1569,7 @@ and `a`-`f`.
 | `store`, `kind`, `proof` | string | none | as in section 17 |
 | `holds_root` | bool | none | `true`: this device holds the signer's root key; only in a record a root's own key signed |
 | `seal` | string | none | the device's public key for sealed messages, base64: 1216 bytes, an X-Wing key (HPKE KEM `0x647a`). The rules check only its size; a member checks the whole key before it seals a message to it |
-| `forward_only` | bool | none | `true`: the device passes the group's copies on as a hub but reads none, so no copy is sealed to it (section 4, "Readers"); only with role `full` and never with `admin`; absent means `false`, and `false` is written by leaving it out |
+| `forward_only` | bool | none | `true`: the device passes the group's copies on as a hub but reads none, so no copy is sealed to it (section 4, "Readers"); only with role `member` that has `hub` in `caps`, never with `admin` or `holds_root`; absent means `false`, and `false` is written by leaving it out |
 | `keys` | array of strings | `revoke`, `freeze`, one at least | sorted key hashes |
 | `seen` | array of objects | `revoke`, `freeze`, `claim`, one at least | sorted by `key`, each key once: `{"key": key hash of a signer, "seq": the highest seq of that signer the author held, 0 or more}`; `seq` here is never left out, 0 included |
 | `records` | array of strings | `thaw`, `resolve`, one at least | sorted record IDs |
@@ -1740,7 +1760,7 @@ roots' the later root on the path, then the higher `seq`; of two admins' the lat
 then the smaller signer, then the higher `seq`. Between admins this trusts each signer's
 clock: an admin whose clock runs ahead keeps its table until the root signs one, which beats
 any admin's. The state lists in `hubs` the devices of that table that are devices of the state
-with the role `full` or `phone`, in its order; a member puts first those of them that may be
+and may be hubs: a phone, or a member with `hub` in `caps`, in its order; a member puts first those of them that may be
 hubs by the records (the root's own device, an admin with `hub`, or a device with
 `forward_only`), so a table naming a removed device or one that lost `hub` does not stop the
 others. A device the table does not
@@ -1920,7 +1940,7 @@ it fetches the records, signs its claim with what it holds as `seen`, and leaves
 the claim takes effect, its new root certifies the device as a member.
 
 Such a phone holds no root of the group before it connects: the recovery sheet's QR code carries
-the group's tag and the key's admin CA only. It dials a full member that browsing finds with that
+the group's tag and the key's admin CA only. It dials a member that browsing finds with that
 tag, presenting its member certificate and the admin CA as the chain, and takes the server's
 certificate unchecked during the handshake. The member's hello carries `group_ca` (section 4,
 "Hello"), and the phone MUST check, before it signs anything: the tag of `group_ca` is the
@@ -2016,7 +2036,7 @@ and returns the state as one canonical JSON object:
 |-------|------|---------|
 | `roots` | array of strings | the path: the root certificates' key hashes from the group CA to the current root |
 | `root_device` | string | the root's own device ID; absent when there is none |
-| `devices` | array of objects | sorted by `device`: `device`, `name`, `role`, `os`, `keys` (sorted member key hashes that stand), the newest record's `store`, `kind`, `proof`, `seal` and `forward_only` when it has them, and, for an admin, `admin`, `powers`, `commands`, `frozen` (true when frozen) |
+| `devices` | array of objects | sorted by `device`: `device`, `name`, `role`, `caps` (a member's, when it has any), `os`, `keys` (sorted member key hashes that stand), the newest record's `store`, `kind`, `proof`, `seal` and `forward_only` when it has them, and, for an admin, `admin`, `powers`, `commands`, `frozen` (true when frozen) |
 | `revoked` | array of strings | sorted key hashes the records remove |
 | `claims` | array of objects | sorted by `record`: `record`, `claimant` (admin key hash), `root` (new root key hash), `state` (`pending`, `effective`, `cancelled`, `void`, `competing` or `disputed`), `left_ms` while pending |
 | `conflicts` | array of objects | sorted by the first record ID: `kind` (`admins`, `claims`, `two_histories`), `records` (sorted record IDs), `signers` (sorted key hashes) |
@@ -2026,7 +2046,7 @@ and returns the state as one canonical JSON object:
 | `newer` | array of strings | sorted IDs of the records of a later version the member keeps, at most 16 |
 | `ignored` | array of objects | `{record, why}`: the records of the set that do not count and why, sorted by ID, at most 64; records listed in `newer` are not, nor a claim that took effect on the path, nor what the checkpoint that counts leaves out |
 | `checkpoint` | string | the ID of the root's checkpoint that counts ("Checkpoints"): a member may delete the records it leaves out |
-| `hubs` | array of strings | the main hubs of the `hubs` record that counts ("The hubs table"): its devices that are in `devices` with the role `full` or `phone`, in its order |
+| `hubs` | array of strings | the main hubs of the `hubs` record that counts ("The hubs table"): its devices that are in `devices` and may be hubs (a phone, or a member with `hub`), in its order |
 | `recovery` | string | the key hash of the recovery key ("The recovery key"), while it is neither removed nor frozen |
 | `key_level` | string | the `key_level` of the current root's newest counting `settings` record; absent when it has none (then `hardware`), so a claim's new root starts without one and signs the old root's settings again |
 | `incoming_ms` | integer | the `incoming_ms` of the `copies` record that counts ("The copies setting"); absent when none counts (then 60 000) |
@@ -2084,7 +2104,7 @@ beyond) and check the same bytes.
   hubs). It closes the connection once the records let the peer in, and the side that
   dialed connects again at once as a member, or when no records came for 5 seconds. Every
   member keeps such a connection while the state stops the exchange with the peer, so that
-  the root's decision reaches it; for the other cases only full members keep it, and the
+  the root's decision reaches it; for the other cases only the Go members keep it, and the
   lite member and the phones refuse the peer and take the records from the others.
 - After adding records that refuse a certificate a member first queues the new records for
   its peers, then closes every connection whose peer certificate is now refused
@@ -2097,7 +2117,7 @@ beyond) and check the same bytes.
   stops the exchange ("Stopping the exchange"), a member applies it to every connection at
   once.
 - A member that holds the root's key records every device it admits (its name and `os` from
-  the pairing Info, role `full` or `lite`), and itself and every connected peer that has no
+  the pairing Info, role `member` and its `caps`), and itself and every connected peer that has no
   record yet, with the name and `os` from the peer's hello (or the role and the first 8
   characters of its ID). When a computer's hello states an `os` that its record does not, it
   signs a new record for it with that `os` and the rest of the record unchanged.
@@ -2106,10 +2126,10 @@ beyond) and check the same bytes.
 
 | `op` | Request | Answers |
 |------|---------|---------|
-| `devices` | none | `{devices: [{id, name, role, os, form, os_version, version, mac, admin, root, frozen, old_keys, online, last_seen_ms, self, listed, muted, muted_until_ms, ignored, ignored_until_ms}], done}`: the listed devices, then this device and the connected peers that have no record yet (`listed` false). `last_seen_ms` is when this member last saw the device connected; `form`, `os_version`, `version` and `mac` are what its hello says (section 4, "Device"), for this device and the connected ones only, and so are `muted` and `muted_until_ms` (Unix milliseconds, 0 for until it is lifted) |
+| `devices` | none | `{devices: [{id, name, role, caps, os, form, os_version, version, mac, admin, root, frozen, old_keys, online, last_seen_ms, self, listed, muted, muted_until_ms, ignored, ignored_until_ms}], done}`: the listed devices, then this device and the connected peers that have no record yet (`listed` false). `last_seen_ms` is when this member last saw the device connected; `form`, `os_version`, `version` and `mac` are what its hello says (section 4, "Device"), for this device and the connected ones only, and so are `muted` and `muted_until_ms` (Unix milliseconds, 0 for until it is lifted) |
 | `away` | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate?, vless?, keep?, consent?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?, forward_only?}`, `{name: "hub-off", device?, force?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status, done}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (section 11, "Several hubs"); with `forward_only` `true` the member may be any computer that is not an admin, and an admin with `hub` first signs it a device record with `forward_only` (section 11, "Two kinds of hub"); reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins (`default` for the project's relay, section 14), in place of a hub or its offer (section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; `obfuscate` and `vless` with `hub` are the settings of section 11, and `keep` on a hub keeps its addresses, port and forwarder where the message gives none; `consent` with `hub` turns sync away from home on first where it is off; `hub-off` makes this device, a hub, stop being one, or with `device`, on an admin, sends that hub a `hub` command with a stop order, and refuses while the group has no other hub unless `force` (section 11, "Stopping a hub"). Members connect again afterwards, so their hellos carry the change (section 11) |
 | `revoke` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`takeover`) |
-| `admin` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root computer: makes the connected full member an admin ("Admins") |
+| `admin` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root computer: makes the connected member with `admin` an admin ("Admins") |
 | `takeover` | `{name}`: the lost root, a device ID or a name (case-insensitive) | `{name, done}` or an error. Only on an admin computer of a group whose root is a computer: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it ("Handing the group over") |
 | `takeover-delay` | `{value}`: a duration from `0s` to `168h` | `{done}` or an error. Only on the group's root: signs a `settings` record with `takeover_delay_ms`, how long a claim waits on each member, and the `key_level` its newest one had |
 | `key-level` | `{value}`: `proven`, `hardware` or `files` | `{below, done}` or an error. Only on the group's root, and never a level its own key does not pass: signs a `settings` record with `key_level` and the `takeover_delay_ms` its newest one had; `below` names the admins and hubs whose keys the new level would not let in, which stay until removed. `cbb new` signs `files` itself when the root's keys are in a file, as a computer's CA keys are (section 17) |
@@ -3401,7 +3421,7 @@ it checks what it downloads.
   `seq` of the release it holds. After a peer's hello, a member that holds a newer release
   sends it (one whose `keys.json` has a higher `seq`, or the same `keys.json` and a channel
   file with a higher `seq`), when the peer is
-  a `full` or `lite` member (phones update from their stores), a `release` message: `{"t":"release","release":{"keys":...,"channel":...,"release":...}}`.
+  a `member` (phones update from their stores), a `release` message: `{"t":"release","release":{"keys":...,"channel":...,"release":...}}`.
 - A member MUST take a `release` only when its three files pass the check above for the `stable`
   channel, with the `keys` and channel `seq` of the release it holds, and it is newer in the
   same order. It keeps the files (`release.json` in the service's state directory) and
@@ -3485,7 +3505,7 @@ far.
   its Secure Enclave `hardware`, a rootless
   install (below) `rootless`, the other computers and the lite member `file`. A device that
   cannot tell sends `file`.
-- **Rootless installs** (D-79). A full member or a lite member installed and run without root, as its
+- **Rootless installs** (D-79). A member installed and run without root, as its
   user's own service, keeps its keys in a file that every program of that user may read. Its
   hello says `rootless`; a computer that is the group's root records such a
   member with `store` `rootless`, without `admin`, `kind` or `proof`, also over a record that
@@ -3854,8 +3874,9 @@ frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 
 | Name | Values | Section |
 |---|---|---|
-| Role (hello) | `full`, `lite`, `phone` | 4 |
-| Role (device record) | `full`, `lite`, `phone`, `watch` | 10 |
+| Role (hello) | `member`, `phone` | 4 |
+| Role (device record) | `member`, `phone`, `watch` | 10 |
+| Capabilities (hello `caps`, record `caps`, ADa `caps`) | `admin`, `dials`, `hub` | 4 |
 | System (`os`) | `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `watchos`, `wearos`, `none` | 4, 10 |
 | Device form | `laptop`, `desktop`, `phone`, `tablet`, `tv`, `board`, `server`, `router`, `console`, `watch`, `retro`, `other` | 4 |
 | Event `kind` | `text`, `secret`, `media` | 4 |
@@ -3863,7 +3884,7 @@ frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 | Media part `type` | `image/png`, `image/jpeg`, `text/html` | 4 |
 | Sync mode | `shared` (sync on), `own` (sync off) | 4, 15 |
 | Key store | `file`, `hardware`, `rootless`, `proven` (records only); proof kinds `android-tee`, `android-strongbox`, `tpm` | 17 |
-| mDNS TXT keys | `v`, `g`, `p`, `j`, `f`, `r` (`lite`, `phone`) | 3 |
+| mDNS TXT keys | `v`, `g`, `p`, `j`, `f`, `r` (`listen`, `phone`) | 3 |
 | Record `type` | `device`, `revoke`, `root`, `freeze`, `thaw` | 10 |
 | Command `type` | `mode`, `hub`, `paste`, `paste-off`, `action`, `actions-off`, `away-off` | 15 |
 | Command result `status` | `done`, `refused`, `failed` | 15 |

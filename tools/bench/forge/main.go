@@ -183,7 +183,7 @@ func run(state, signerDir string, to group.DeviceID, addr, system string, cases 
 		return fmt.Errorf("%s holds no admin key", signerDir)
 	}
 	eng := clip.New(clip.Config{Self: string(id.ID), Clock: hlc.NewClock(nil, hlc.Timestamp{}, nil)})
-	n := node.New(node.Config{Identity: id, Role: node.Full, Engine: eng, Name: "forge", OS: system})
+	n := node.New(node.Config{Identity: id, Role: node.Member, Caps: group.AllCaps, Engine: eng, Name: "forge", OS: system})
 	defer n.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

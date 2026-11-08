@@ -39,7 +39,7 @@ func TestSwiftMemberTLS(t *testing.T) {
 		t.Skip("CBB_SWIFT_INTEROP_TLS names no cbb-interop binary")
 	}
 	var store memContent
-	server := newMember(t, Full, withContent(&store))
+	server := newMember(t, Member, withContent(&store))
 	server.blobs = &store
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -109,7 +109,7 @@ func TestSwiftMemberTLS(t *testing.T) {
 	}
 	serverKey, phoneKey := group.KeyHashOf(server.id.Cert), group.KeyHashOf(cert)
 	recs, err := json.Marshal([]group.Record{
-		server.record(t, group.RecordBody{Type: group.RecordDevice, Device: string(server.id.ID), Name: "pi", Role: group.RoleFull, Key: &serverKey, Seal: serverSeal}),
+		server.record(t, group.RecordBody{Type: group.RecordDevice, Device: string(server.id.ID), Name: "pi", Role: group.RoleMember, Caps: group.AllCaps, Key: &serverKey, Seal: serverSeal}),
 		server.record(t, group.RecordBody{Type: group.RecordDevice, Device: string(phoneID), Name: "iPhone", Role: group.RolePhone, Key: &phoneKey, Seal: phoneSeal}),
 	})
 	if err != nil {

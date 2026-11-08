@@ -41,7 +41,7 @@ final class RootTests: XCTestCase {
             var one = Computer(), two = Computer()
             one.cert = try GroupCertificates.member(device: one.device, publicKey: one.key.publicKeyDER, ca: root.groupCA,
                                                     caSigner: rootKey, now: now)
-            _ = try root.record(device: one.device, name: "one", role: "full", key: one.keyHash, caSigner: rootKey, now: now)
+            _ = try root.record(device: one.device, name: "one", role: "member", caps: Records.caps, key: one.keyHash, caSigner: rootKey, now: now)
             var b = PhoneGroup(device: bDevice, groupCA: root.groupCA, memberCert: bCert, computers: [])
             // The members held every record since now.
             root.records.clock = { now }
@@ -49,7 +49,7 @@ final class RootTests: XCTestCase {
             (b.isRoot, b.adminCA) = (false, adminCA)
             b.add(root.records.records)
             two.cert = try GroupCertificates.member(device: two.device, publicKey: two.key.publicKeyDER, ca: adminCA, caSigner: adminKey, now: now)
-            _ = try b.record(device: two.device, name: "two", role: "full", key: two.keyHash, caSigner: adminKey, now: now)
+            _ = try b.record(device: two.device, name: "two", role: "member", caps: Records.caps, key: two.keyHash, caSigner: adminKey, now: now)
             root.add(b.records.records)
             root.records.clock = { Date() }
             (self.root, self.b, self.rootKey, self.adminKey, self.adminCA, self.one, self.two) = (root, b, rootKey, adminKey, adminCA, one, two)
@@ -180,7 +180,7 @@ final class RootTests: XCTestCase {
         three.cert = try GroupCertificates.member(device: three.device, publicKey: three.key.publicKeyDER, ca: g.b.currentRoot,
                                                   caSigner: g.newRootKey, now: t0)
         XCTAssertEqual(try GroupCertificates.verifyMember(chain: [three.cert], roots: g.b.trusted, now: t0), three.device)
-        _ = try g.b.record(device: three.device, name: "three", role: "full", key: three.keyHash, caSigner: g.newRootKey, now: Date())
+        _ = try g.b.record(device: three.device, name: "three", role: "member", caps: Records.caps, key: three.keyHash, caSigner: g.newRootKey, now: Date())
         XCTAssertNil(g.b.records.refused(chain: [three.cert]))
         let later = t0.addingTimeInterval(500 * 24 * 3600)
         let renewed = try XCTUnwrap(g.b.renewal(chain: [g.one.cert], caSigner: g.newRootKey, now: later)).cert
@@ -259,7 +259,7 @@ final class RootTests: XCTestCase {
         let otherRoot = try GroupCertificates.groupCA(signer: SoftwareSigner(), now: t0, pathLength: 1)
         var claim = Records.Body(type: "claim", signer: Records.keyHash(spki: thiefKey.publicKeyDER), timeMS: Records.ms(Date()))
         claim.root = otherRoot
-        set.add(try set.sign(.device(stolen.device, name: "stolen", role: "full", key: stolen.keyHash, signer: g.rootKey, now: Date()),
+        set.add(try set.sign(.device(stolen.device, name: "stolen", role: "member", key: stolen.keyHash, signer: g.rootKey, now: Date()),
                              with: g.rootKey), groupCA: g.root.groupCA)
         set.add(try set.sign(claim, with: thiefKey, adminCA: thiefCA), groupCA: g.root.groupCA)
         XCTAssertEqual(set.devices.map(\.name), ["B", "one", "two"])

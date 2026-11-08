@@ -95,7 +95,7 @@ func TestLiteRoot(t *testing.T) {
 	}
 	waitFor(t, "the Rust root in its group", func() bool {
 		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
-		return err == nil && st.Status != nil && st.Status.Group != "" && st.Status.Role == "full"
+		return err == nil && st.Status != nil && st.Status.Group != "" && st.Status.Role == "member"
 	})
 
 	// A Go computer shows its QR code and waits; the Rust root admits it.
@@ -348,7 +348,7 @@ func (s *testService) isAdmin(t *testing.T) bool {
 }
 
 // TestLiteTakeover: the Rust service joins a Go computer's group as a
-// full member (cbb pair -full), offers an admin key, and the Go root makes
+// member (cbb pair), offers an admin key, and the Go root makes
 // it an admin; with the root lost, it takes the group over (cbb takeover)
 // after the root's delay of 0s, becomes the root, and a Go computer of the
 // group follows it.
@@ -368,11 +368,11 @@ func TestLiteTakeover(t *testing.T) {
 
 	c, code := openWindow(t, desk)
 	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
 	join.Stdin = strings.NewReader(code + "\n")
 	join.Stderr = testWriter{t, "rust join: ", nil}
 	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair -full: %v; %s", err, out)
+		t.Fatalf("cbb pair: %v; %s", err, out)
 	}
 	if m, err := c.Receive(); err != nil || m.Name != "rust" {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
@@ -384,10 +384,10 @@ func TestLiteTakeover(t *testing.T) {
 	}
 	port := free.Addr().(*net.TCPAddr).Port
 	free.Close()
-	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-port", strconv.Itoa(port), "-peer", desk.addr(), "-peer", laptop.addr())
+	rust := startLite(t, bin, dir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", desk.addr(), "-peer", laptop.addr())
 	waitFor(t, "the Rust member connected to both", func() bool {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
-		return err == nil && st.Status != nil && len(st.Status.Peers) == 2 && st.Status.Role == "full"
+		return err == nil && st.Status != nil && len(st.Status.Peers) == 2 && st.Status.Role == "member"
 	})
 
 	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
@@ -576,20 +576,20 @@ func TestLiteHub(t *testing.T) {
 	pairWith(t, desk, laptop)
 	c, code := openWindow(t, desk)
 	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
 	join.Stdin = strings.NewReader(code + "\n")
 	join.Stderr = testWriter{t, "rust join: ", nil}
 	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair -full: %v; %s", err, out)
+		t.Fatalf("cbb pair: %v; %s", err, out)
 	}
 	if m, err := c.Receive(); err != nil || m.Name != "rust" {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
 	}
 	c.Close()
-	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
 	waitFor(t, "the Rust member connected to both", func() bool {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
-		return err == nil && st.Status != nil && len(st.Status.Peers) == 2 && st.Status.Role == "full"
+		return err == nil && st.Status != nil && len(st.Status.Peers) == 2 && st.Status.Role == "member"
 	})
 	port := freeUDP(t)
 	hubAt := []string{fmt.Sprintf("127.0.0.1:%d", port)}
@@ -624,7 +624,7 @@ func TestLiteHub(t *testing.T) {
 	// The laptop leaves home: it reaches the Rust hub only through the
 	// tunnel, which the hub admitted its key for.
 	rust.stop()
-	rust = startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr())
+	rust = startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr())
 	laptopID := laptop.status(t).Device
 	laptop.stop()
 	h.hide(laptopID)
@@ -676,11 +676,11 @@ func TestLiteHubs(t *testing.T) {
 	pairWith(t, desk, laptop)
 	c, code := openWindow(t, desk)
 	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
 	join.Stdin = strings.NewReader(code + "\n")
 	join.Stderr = testWriter{t, "rust join: ", nil}
 	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair -full: %v; %s", err, out)
+		t.Fatalf("cbb pair: %v; %s", err, out)
 	}
 	if m, err := c.Receive(); err != nil || m.Name != "rust" {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
@@ -688,7 +688,7 @@ func TestLiteHubs(t *testing.T) {
 	c.Close()
 	deskAddr := desk.addr()
 	env := []string{"CBB_STANDBY_GRACE=2"}
-	rust := startLiteEnv(t, bin, dir, env, "-no-mdns", "-full", "-no-listen", "-peer", deskAddr, "-peer", laptop.addr())
+	rust := startLiteEnv(t, bin, dir, env, "-no-mdns", "-no-listen", "-peer", deskAddr, "-peer", laptop.addr())
 	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
 		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
 	}
@@ -796,17 +796,17 @@ func TestLiteHubCommands(t *testing.T) {
 	pairWith(t, desk, laptop)
 	c, code := openWindow(t, desk)
 	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
 	join.Stdin = strings.NewReader(code + "\n")
 	join.Stderr = testWriter{t, "rust join: ", nil}
 	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair -full: %v; %s", err, out)
+		t.Fatalf("cbb pair: %v; %s", err, out)
 	}
 	if m, err := c.Receive(); err != nil || m.Name != "rust" {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
 	}
 	c.Close()
-	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
 	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
 		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
 	}
@@ -934,17 +934,17 @@ func TestLiteHubForwarder(t *testing.T) {
 	pairWith(t, desk, laptop)
 	c, code := openWindow(t, desk)
 	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-full", "-name", "rust", "-code", desk.addr())
+	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
 	join.Stdin = strings.NewReader(code + "\n")
 	join.Stderr = testWriter{t, "rust join: ", nil}
 	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair -full: %v; %s", err, out)
+		t.Fatalf("cbb pair: %v; %s", err, out)
 	}
 	if m, err := c.Receive(); err != nil || m.Name != "rust" {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
 	}
 	c.Close()
-	rust := startLite(t, bin, dir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
 	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
 		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
 	}
@@ -1025,11 +1025,11 @@ func TestLiteForwardOnly(t *testing.T) {
 			at = admin.addr()
 		}
 		dir := t.TempDir()
-		cmd := exec.Command(bin, "-state", dir, "pair", "-full", "-name", name, "-code", at)
+		cmd := exec.Command(bin, "-state", dir, "pair", "-name", name, "-code", at)
 		cmd.Stdin = strings.NewReader(code + "\n")
 		cmd.Stderr = testWriter{t, name + " join: ", nil}
 		if out, err := cmd.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-			t.Fatalf("cbb pair -full: %v; %s", err, out)
+			t.Fatalf("cbb pair: %v; %s", err, out)
 		}
 		if m, err := c.Receive(); err != nil || m.Name != name {
 			t.Fatalf("pair on %s ended with %+v, %v", admin.name, m, err)
@@ -1044,13 +1044,13 @@ func TestLiteForwardOnly(t *testing.T) {
 	}
 	rustAt := free.Addr().String()
 	free.Close()
-	rust := startLite(t, bin, rustDir, "-no-mdns", "-full", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
+	rust := startLite(t, bin, rustDir, "-no-mdns", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
 	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "rust"); err != nil {
 		t.Fatalf("cbb admin on the desk: %v\n%s", err, out)
 	}
 	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
 	boardDir := join(rust, rustAt, "board")
-	board := startLite(t, bin, boardDir, "-no-mdns", "-full", "-no-listen", "-peer", desk.addr(), "-peer", rustAt)
+	board := startLite(t, bin, boardDir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", rustAt)
 	if _, err := board.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}

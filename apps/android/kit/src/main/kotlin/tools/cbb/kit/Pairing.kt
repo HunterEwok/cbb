@@ -3,6 +3,7 @@
 
 package tools.cbb.kit
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -107,12 +108,12 @@ object Pairing {
     /** The joiner's CPace associated data. */
     data class Info(
         val name: String,
-        /** "linux", "windows", "macos", "ios" for an iPhone with the app, "android", "aurora", "sailfish", or "none" for a lite member's firmware. */
+        /** "linux", "windows", "macos", "ios" for an iPhone with the app, "android", "aurora", "sailfish", or "none" for a member's firmware. */
         val os: String,
         /** A phone's admin key, a SubjectPublicKeyInfo, for the admin CA the root may issue it; only from a phone. */
         val adminKey: ByteArray? = null,
-        /** LITE for a lite member, which only dials and never holds CA keys; null for a full device. */
-        val role: String? = null,
+        /** What a member can do, sorted (Records.CAPS), which its device record names; empty from a phone. */
+        val caps: List<String> = emptyList(),
         /** The joiner's public key for sealed messages, which the phone that admits it puts in its device record (docs/protocol.md, section 15). */
         val seal: ByteArray? = null,
         /** The admin key's signature (ECDSA with SHA-256, DER) over adminProofMessage of this connection's session ID; it comes with adminKey. */
@@ -131,32 +132,29 @@ object Pairing {
 
         /**
          * Checks it as the member does: a known OS, a printable name of 1
-         * to 64 bytes, a known role, and an admin key only from a phone, a
-         * P-256 one.
+         * to 64 bytes, known caps, sorted, none from a phone, and an admin
+         * key only from a phone, a P-256 one.
          */
         val isValid: Boolean
             get() {
-                if ((os !in OSES && !(os == "none" && role == LITE)) || name.isEmpty() || name.toByteArray().size > 64 || !printable(name)) return false
-                if (role != null && role != LITE) return false
+                if ((os !in OSES && os != "none") || name.isEmpty() || name.toByteArray().size > 64 || !printable(name)) return false
+                if (caps.any { it !in Records.CAPS } || caps != caps.sorted().distinct() || (isPhone(os) && caps.isNotEmpty())) return false
                 if (seal != null && seal.size != SEAL_KEY_SIZE) return false
                 if ((adminKey == null) != (adminProof == null)) return false
                 val k = adminKey ?: return true
                 return isPhone(os) && p256PublicKey(k) != null
             }
 
-        fun encode(): ByteArray = Wire.encode(Wire.obj("name" to Wire.str(name), "os" to Wire.str(os), "admin_key" to Wire.bytes(adminKey), "admin_proof" to Wire.bytes(adminProof), "role" to Wire.str(role), "seal" to Wire.bytes(seal)))
+        fun encode(): ByteArray = Wire.encode(Wire.obj("name" to Wire.str(name), "os" to Wire.str(os), "admin_key" to Wire.bytes(adminKey), "admin_proof" to Wire.bytes(adminProof), "caps" to caps.takeIf { it.isNotEmpty() }?.let { l -> JsonArray(l.map { JsonPrimitive(it) }) }, "seal" to Wire.bytes(seal)))
 
         override fun equals(other: Any?): Boolean =
-            other is Info && name == other.name && os == other.os && adminKey.contentEqualsOrNull(other.adminKey) && role == other.role &&
+            other is Info && name == other.name && os == other.os && adminKey.contentEqualsOrNull(other.adminKey) && caps == other.caps &&
                 seal.contentEqualsOrNull(other.seal) && adminProof.contentEqualsOrNull(other.adminProof)
 
         override fun hashCode(): Int = name.hashCode()
 
         companion object {
             val OSES = setOf("linux", "windows", "macos", "ios", "android", "aurora", "sailfish")
-
-            /** The role of a lite member. */
-            const val LITE = "lite"
 
             /** The size of a key for sealed messages (an X-Wing public key). */
             const val SEAL_KEY_SIZE = 1216
@@ -173,7 +171,7 @@ object Pairing {
             fun decode(data: ByteArray): Info? {
                 val o = Wire.parse(data) ?: return null
                 return try {
-                    Info(o.optString("name") ?: return null, o.optString("os") ?: return null, o.optBytes("admin_key"), o.optString("role"), o.optBytes("seal"), o.optBytes("admin_proof"))
+                    Info(o.optString("name") ?: return null, o.optString("os") ?: return null, o.optBytes("admin_key"), o.capsList(), o.optBytes("seal"), o.optBytes("admin_proof"))
                 } catch (e: WireTypeException) {
                     null
                 }
@@ -370,4 +368,11 @@ data class JoinCode(val code: String, val addrs: List<String>, val fingerprint: 
             return sb.toString()
         }
     }
+}
+
+/** The caps of a joiner's Info: an array of strings, empty when absent; anything else makes the Info not decode. */
+private fun JsonObject.capsList(): List<String> {
+    val v = this["caps"] ?: return emptyList()
+    val a = v as? JsonArray ?: throw WireTypeException("caps")
+    return a.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: throw WireTypeException("caps") }
 }

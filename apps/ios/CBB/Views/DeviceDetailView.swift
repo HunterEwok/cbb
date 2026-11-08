@@ -212,10 +212,9 @@ struct DeviceDetailView: View {
     private func roleText(_ d: AppModel.Computer) -> Text {
         switch d.role {
         case "phone": Text("Phone app")
-        case "lite": d.rootless ? Text("Lite member, rootless") : Text("Lite member")
         case "watch": Text("Watch")
         // A rootless install is never an admin or a hub (D-79).
-        default: d.rootless ? Text("Full member, rootless") : Text("Full member")
+        default: d.rootless ? Text("Member, rootless") : Text("Member")
         }
     }
 
@@ -238,11 +237,11 @@ struct DeviceDetailView: View {
                     Divider().overlay(palette.line)
                     action(Text("Make it an admin"), "person.badge.key") { promoting = true }
                 }
-                // An admin computer, or one the root makes an admin first;
-                // this phone is the hub under Settings.
-                // A computer that is no admin can be a hub that only passes
+                // An admin member that may be a hub, or one the root makes an
+                // admin first; this phone is the hub under Settings.
+                // A member that is no admin can be a hub that only passes
                 // the copies on.
-                if !d.isSelf, d.online, !d.throughHub, d.role == "full", !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin || !d.admin {
+                if !d.isSelf, d.online, !d.throughHub, d.can("hub"), !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin || !d.admin {
                     Divider().overlay(palette.line)
                     action(Text("Make it a hub"), "antenna.radiowaves.left.and.right") { hubbing = true }
                 }
@@ -250,13 +249,13 @@ struct DeviceDetailView: View {
                     Divider().overlay(palette.line)
                     modeMenu(d)
                 }
-                // Computers, lite members and Android phones take pastes; iPhones cannot.
-                if !d.isSelf, d.role == "full" || d.role == "lite" || (d.role == "phone" && d.os == "android") {
+                // Members and Android phones take pastes; iPhones cannot.
+                if !d.isSelf, d.role == "member" || (d.role == "phone" && d.os == "android") {
                     Divider().overlay(palette.line)
                     action(Text("Paste on it…"), "keyboard") { pasting = true }
                 }
-                // Computers run quick actions; the lite member reboots and restarts.
-                if !d.isSelf, d.online, d.role == "full" || d.role == "lite" {
+                // Members run quick actions.
+                if !d.isSelf, d.online, d.role == "member" {
                     Divider().overlay(palette.line)
                     actionMenu(d)
                 }

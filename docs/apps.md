@@ -911,7 +911,7 @@ the app on real devices.
   `testdata/interop/` (`go test ./internal/group ./internal/pair ./internal/phone ./internal/node -update`
   regenerates them), and CI runs it against the Go code: pairing over plain TCP on Linux,
   pairing and a member connection over real TLS on macOS.
-- The app finds the full members by browsing `_cbb._tcp` (CBBKit's
+- The app finds the members by browsing `_cbb._tcp` (CBBKit's
   `BonjourBrowser` on iOS) and hands their addresses to its member in the Rust core
   (`CoreMember`, docs/core-api.md, "The member"), which keeps one connection to each member
   of its group. iOS asks once for local network access: the Info.plist lists

@@ -42,8 +42,8 @@ func (s *Service) makeAdmin(target string, allowFileKey bool) (string, error) {
 		return "", errors.New("only the group's root makes admins: run cbb admin on the computer that created the group, or use \"Make it an admin\" on the root phone")
 	case d.Self:
 		return "", errors.New("this device is the group's root, which is more than an admin")
-	case d.Role != group.RoleFull:
-		return "", fmt.Errorf("%s is no computer with the service; only those can be admins", d.Name)
+	case !d.Can(group.CapAdmin):
+		return "", fmt.Errorf("%s cannot hold an admin key; only a member with the cap admin can be an admin", d.Name)
 	case d.Admin:
 		return "", fmt.Errorf("%s is already an admin", d.Name)
 	}
@@ -62,7 +62,7 @@ func (s *Service) makeAdmin(target string, allowFileKey bool) (string, error) {
 	case peer.AdminKey == nil:
 		return "", fmt.Errorf("%s offers no admin key: it runs an older CBB, or in a container that may not hold the group's keys (its log says so)", d.Name)
 	}
-	store, kind, proof := group.StoreOf(peer.KeyStore, group.RoleFull), "", ""
+	store, kind, proof := group.StoreOf(peer.KeyStore, group.RoleMember), "", ""
 	if rec := s.deviceRecord(peer.ID); rec != nil && rec.Key == peer.Key && rec.Store == group.StoreProven {
 		store, kind, proof = rec.Store, rec.Kind, rec.Proof
 	}
@@ -104,8 +104,8 @@ func (s *Service) makeAdmin(target string, allowFileKey bool) (string, error) {
 		sealKey = rec.Seal
 	}
 	s.awaitRecords(id)
-	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(peer.ID), Name: d.Name, Role: group.RoleFull,
-		OS: d.OS, Key: &peer.Key, Admin: &adminKey, Store: store, Kind: kind, Proof: proof, Seal: sealKey})
+	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(peer.ID), Name: d.Name, Role: group.RoleMember,
+		Caps: d.Caps, OS: d.OS, Key: &peer.Key, Admin: &adminKey, Store: store, Kind: kind, Proof: proof, Seal: sealKey})
 	if err != nil {
 		undo()
 		return "", err
@@ -169,8 +169,8 @@ func (s *Service) renewAdminCAs(peers []node.Peer) {
 		listed := s.records.AdminUnder(root, *admin)
 		s.recMu.Unlock()
 		if d := s.deviceRecord(p.ID); !listed && d != nil {
-			r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(d.ID), Name: d.Name, Role: group.RoleFull,
-				OS: d.OS, Key: &d.Key, Admin: admin, Powers: d.Powers, Commands: d.Commands, Store: d.Store, Kind: d.Kind, Proof: d.Proof, Seal: d.Seal})
+			r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(d.ID), Name: d.Name, Role: group.RoleMember,
+				Caps: d.Caps, OS: d.OS, Key: &d.Key, Admin: admin, Powers: d.Powers, Commands: d.Commands, Store: d.Store, Kind: d.Kind, Proof: d.Proof, Seal: d.Seal})
 			if err != nil {
 				s.logf("cbb: recording the admin %s under this root: %v", p.ID, err)
 				continue
@@ -276,7 +276,7 @@ func (s *Service) computerRooted() bool {
 	root := s.records.RootDevice()
 	for _, d := range s.records.Devices() {
 		if d.ID == root {
-			return d.Role == group.RoleFull
+			return d.Role == group.RoleMember
 		}
 	}
 	return false
@@ -400,8 +400,8 @@ func (s *Service) setHubs(targets []string) error {
 		if err != nil {
 			return err
 		}
-		if d.Role != group.RoleFull && d.Role != group.RolePhone {
-			return fmt.Errorf("%s cannot be a hub: only a computer or a phone can", d.Name)
+		if d.Role != group.RolePhone && !d.Can(group.CapHub) {
+			return fmt.Errorf("%s cannot be a hub: only a phone or a member with the cap hub can", d.Name)
 		}
 		// Naming it in the table is the user's consent to a key in a file,
 		// where the level allows one.
@@ -555,15 +555,15 @@ func (s *Service) afterTakeover(oldRoot group.KeyHash) {
 		case dev.ID == lost:
 			revoke.Keys = append(revoke.Keys, dev.Keys...)
 		case dev.AdminKey != nil && !dev.Frozen:
-			bodies = append(bodies, group.RecordBody{Type: group.RecordDevice, Device: string(dev.ID), Name: dev.Name, Role: dev.Role, OS: dev.OS,
+			bodies = append(bodies, group.RecordBody{Type: group.RecordDevice, Device: string(dev.ID), Name: dev.Name, Role: dev.Role, Caps: dev.Caps, OS: dev.OS,
 				Key: &dev.Key, Admin: dev.AdminKey, Powers: dev.Powers, Commands: dev.Commands, Store: dev.Store, Kind: dev.Kind, Proof: dev.Proof, Seal: dev.Seal})
 		}
 	}
 	if !group.ValidName(name) {
-		name = defaultName(group.RoleFull, id.ID)
+		name = defaultName(group.RoleMember, id.ID)
 	}
 	key := group.KeyHashOf(id.Cert)
-	bodies = append([]group.RecordBody{{Type: group.RecordDevice, Device: string(id.ID), Name: name, Role: group.RoleFull, OS: s.cfg.OS, Key: &key, Store: group.KeyStoreOf(id.Key), Seal: s.sealPublic}}, bodies...)
+	bodies = append([]group.RecordBody{{Type: group.RecordDevice, Device: string(id.ID), Name: name, Role: group.RoleMember, Caps: group.AllCaps, OS: s.cfg.OS, Key: &key, Store: group.KeyStoreOf(id.Key), Seal: s.sealPublic}}, bodies...)
 	if len(revoke.Keys) > 0 {
 		revoke.Keys = uniqueKeys(revoke.Keys)
 		bodies = append(bodies, revoke)

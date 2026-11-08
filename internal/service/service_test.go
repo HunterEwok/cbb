@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -261,7 +262,7 @@ func startIn(t *testing.T, h *hub, s *testService) *testService {
 	s.cancel = cancel
 	name := s.name
 	cfg := Config{
-		StateDir: s.dir, Socket: s.socket, Role: node.Full, OS: s.os, Name: name, Discover: h.discover,
+		StateDir: s.dir, Socket: s.socket, Role: node.Member, OS: s.os, Name: name, Discover: h.discover,
 		Logf: func(f string, a ...any) { s.logf(t, f, a...) },
 		listen: func() (net.Listener, error) {
 			ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -505,7 +506,7 @@ func TestOneConnectionBetweenTwo(t *testing.T) {
 	for i := range now {
 		now[i].SkewMS = 0
 	}
-	if len(now) != 1 || now[0] != since {
+	if len(now) != 1 || !reflect.DeepEqual(now[0], since) {
 		t.Errorf("the connection changed: %+v, then %+v", since, now)
 	}
 }
@@ -1086,7 +1087,7 @@ func listBox(t *testing.T, dir string, admin *group.Identity, dev group.DeviceID
 		adminCA = chain[0]
 	}
 	r, err := recs.Sign(group.RecordBody{Type: group.RecordDevice, TimeMS: time.Now().UnixMilli(), Device: string(dev), Name: "box",
-		Role: group.RoleFull, OS: group.OSLinux, Key: &key}, ca.Key, adminCA)
+		Role: group.RoleMember, Caps: group.AllCaps, OS: group.OSLinux, Key: &key}, ca.Key, adminCA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1176,7 +1177,7 @@ func TestDevicesAndRevoke(t *testing.T) {
 	}
 	waitFor(t, "the Mac connects to both", func() bool { return len(mac.status(t).Peers) == 2 })
 	for _, d := range mac.devices(t) {
-		if d.Admin || d.Root != (d.Name == "pi") || !d.Online || d.Role != "full" {
+		if d.Admin || d.Root != (d.Name == "pi") || !d.Online || d.Role != "member" {
 			t.Errorf("on the Mac: %+v", d)
 		}
 		if d.Self != (d.Name == "mac") {
@@ -1771,7 +1772,7 @@ func TestRecordsTheSystem(t *testing.T) {
 	waitFor(t, "pi records Windows", func() bool {
 		for _, d := range pi.devices(t) {
 			if d.Name == "pc" {
-				return d.OS == group.OSWindows && !d.Online && !d.Admin && d.Role == group.RoleFull
+				return d.OS == group.OSWindows && !d.Online && !d.Admin && d.Role == group.RoleMember
 			}
 		}
 		return false

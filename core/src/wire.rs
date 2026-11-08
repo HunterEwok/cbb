@@ -126,6 +126,27 @@ pub fn with_features(mut m: Message, features: &[&str]) -> Message {
     m
 }
 
+/// The hello m with what a member can do (crate::authority::CAPS; section
+/// 4, "Capabilities").
+pub fn with_caps(mut m: Message, caps: &[String]) -> Message {
+    if !caps.is_empty()
+        && let Some(Value::Object(h)) = m.hello.as_mut()
+    {
+        h.insert("caps".into(), to_value(caps));
+    }
+    m
+}
+
+/// The capabilities of a hello this member knows, of its first 32 names,
+/// sorted, each once.
+pub fn clean_caps(caps: &[String]) -> Vec<String> {
+    let mut out: Vec<String> =
+        caps.iter().take(32).filter(|c| crate::authority::CAPS.contains(&c.as_str())).cloned().collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// The answer to a command (section 15): `done`, `refused` or `failed`, and
 /// why for the last two.
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
@@ -209,6 +230,10 @@ pub struct HelloBody {
     /// one that serves the content of media events.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub features: Vec<String>,
+    /// What a member says it can do: `admin`, `dials`, `hub` (section 4,
+    /// "Capabilities"); a receiver keeps those it knows (clean_caps).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub caps: Vec<String>,
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -306,10 +331,10 @@ pub struct TunnelOffer {
 
 /// The roles a peer may claim.
 pub fn known_role(r: &str) -> bool {
-    matches!(r, "full" | "phone" | "lite")
+    matches!(r, "member" | "phone")
 }
 
-/// A hello message from a lite member running on `os` (`"linux"`, or
+/// A hello message from a member running on `os` (`"linux"`, or
 /// `"none"` for firmware) with what it says about its device, with its
 /// tunnel key and its own preshared key while sync away from home is on,
 /// the quick actions that are on there, and where its keys live:
@@ -364,6 +389,7 @@ pub fn hello(
         entries_seq: entries.1,
         entries_keys_seq: if entries.1 == 0 { 0 } else { entries.0 },
         features: Vec::new(),
+        caps: Vec::new(),
     };
     Message { kind: "hello".into(), role: role.into(), hello: Some(to_value(&body)), ..Default::default() }
 }

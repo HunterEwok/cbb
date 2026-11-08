@@ -98,8 +98,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   `TLSTransport` (pairing), `KeychainIdentity`, `SecKeySigner`, `AwayFromHome` (sync away from
   home through `RustTunnel`); `cbb-interop` plays the phone in Go tests.
 - The Rust workspace (`Cargo.toml` at the top, its crates beside `cmd/` and `internal/`): `member/` is
-  the lite member in Rust (its command is `cbb` too): no CA keys, joins by the phone's QR code,
-  dials the Linux members and listens for phones and Macs (mDNS TXT `r=lite`). Its protocol core is the crate `core/` (`cbb_core`: `certs`,
+  the lite member in Rust (its command is `cbb` too): joins by a QR code,
+  a member like the others, whose capabilities (`-caps`: `admin`, `dials`, `hub`) say what it does (mDNS TXT `r=listen` without `dials`). Its protocol core is the crate `core/` (`cbb_core`: `certs`,
   `command` (the commands' bodies), `authority` (records `v:2` and their evaluation, docs/protocol.md section 10), `group` (the set of records `v:2` a member keeps), `api` (the one entry point, docs/core-api.md), `clip`, `hlc`, `wire`, `pair`, `identity`, `store`, `keyboard` (the layouts' keys), `rule` (which incoming copies are written), `vless` (VLESS and XHTTP's bytes for the lite member's tunnel), CPace under `src/third_party`, the
   interop vectors, and with the `tls` feature `tls`: rustls unbuffered with a RustCrypto
   provider, the peer checks, a sans-I/O `Session`, the pairing exporter from the key log;

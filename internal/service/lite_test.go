@@ -36,22 +36,22 @@ import (
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
 
-// publishLite puts a lite member on the fake network, as the real one
-// publishes itself: TXT r=lite, at 127.0.0.1 and port.
-func publishLite(h *hub, id, tag string, port int) {
+// publishMember puts a member on the fake network, as the real one
+// publishes itself: TXT v, g and the extra strings, at 127.0.0.1 and port.
+func publishMember(h *hub, id, tag string, port int, extra ...string) {
 	h.mu.Lock()
 	if h.ghosts == nil {
 		h.ghosts = map[string]mdns.Peer{}
 	}
-	h.ghosts[id] = mdns.Peer{ID: id, Port: uint16(port), TXT: []string{"v=1", "g=" + tag, "r=lite"},
+	h.ghosts[id] = mdns.Peer{ID: id, Port: uint16(port), TXT: append([]string{"v=1", "g=" + tag}, extra...),
 		Addrs: []netip.Addr{netip.MustParseAddr("127.0.0.1")}}
 	h.mu.Unlock()
 	h.update()
 }
 
-// TestLiteNotDialed: the full members, a Mac too, leave a lite member they
-// find to dial them, whatever the device IDs.
-func TestLiteNotDialed(t *testing.T) {
+// TestListenDialed: the members, a Mac too, dial a member that does not
+// dial (TXT r=listen) as soon as they find it, whatever the device IDs.
+func TestListenDialed(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -72,12 +72,9 @@ func TestLiteNotDialed(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	mac := startRole(t, &h, "mac", group.OSMacOS)
 	pairWith(t, pi, mac) // the group exists from here
-	// The greatest device ID: a full member would dial a full member with it.
-	publishLite(&h, strings.Repeat("f", 32), pi.status(t).Group, ln.Addr().(*net.TCPAddr).Port)
-	time.Sleep(2 * time.Second)
-	if n := dialed.Load(); n != 0 {
-		t.Fatalf("the full members dialed the lite member %d times", n)
-	}
+	// The lowest device ID: a member that dials would wait 30 s for it to dial.
+	publishMember(&h, strings.Repeat("0", 32), pi.status(t).Group, ln.Addr().(*net.TCPAddr).Port, "r=listen")
+	waitFor(t, "the members dialed the member that listens", func() bool { return dialed.Load() > 0 })
 }
 
 // startLite runs the lite member (Rust, member/) with the state in
@@ -186,7 +183,7 @@ func TestEmbassyJoiner(t *testing.T) {
 		t.Fatalf("esp32-on-linux showed %q, not a QR code with its address", qr)
 	}
 	res := dialJoiner(t, pi.dir, qr)
-	if res.Info.Name != "board" || res.Info.Role != pair.RoleLite || !res.Confirmed {
+	if res.Info.Name != "board" || len(res.Info.Caps) != 0 || !res.Confirmed {
 		t.Fatalf("the board joined as %+v", res)
 	}
 	var rest strings.Builder
@@ -783,7 +780,7 @@ func TestFFIJoinerAdmin(t *testing.T) {
 	waitFor(t, "the root lists the computer the phone admitted", func() bool {
 		for _, d := range pi.devices(t) {
 			if d.Name == "laptop" {
-				return d.Role == group.RoleFull && d.OS == group.OSLinux && !d.Admin
+				return d.Role == group.RoleMember && d.OS == group.OSLinux && !d.Admin
 			}
 		}
 		return false
@@ -1026,7 +1023,7 @@ func TestLiteMember(t *testing.T) {
 		return err == nil
 	})
 	st := lite.status(t)
-	if st.Group != pi.status(t).Group || st.Role != "lite" {
+	if st.Group != pi.status(t).Group || st.Role != "member" {
 		t.Fatalf("lite status %+v, want the group %s", st, pi.status(t).Group)
 	}
 	waitFor(t, "the lite member connected", func() bool { return len(lite.status(t).Peers) == 3 })
@@ -1076,7 +1073,7 @@ func TestLiteMember(t *testing.T) {
 		waitFor(t, s.name+" lists the lite member", func() bool {
 			for _, d := range s.devices(t) {
 				if d.ID == st.Device {
-					return d.Role == group.RoleLite && !d.Admin && d.Name == "lite"
+					return d.Role == group.RoleMember && !d.Admin && d.Name == "lite"
 				}
 			}
 			return false
@@ -1133,9 +1130,9 @@ func TestLiteMember(t *testing.T) {
 		t.Errorf("cbb sync on on the lite member: %v", err)
 	}
 
-	// The lite member dials a Mac as it dials every full member; with the
-	// other computers off the two still sync.
-	publishLite(&h, st.Device, st.Group, port)
+	// The lite member and the Mac dial each other, the lower device ID first;
+	// with the other computers off the two still sync.
+	publishMember(&h, st.Device, st.Group, port)
 	waitFor(t, "the Mac connected to all three", func() bool { return len(mac.status(t).Peers) == 3 })
 	pi.stop()
 	laptop.stop()
@@ -1654,7 +1651,7 @@ func TestLiteRootless(t *testing.T) {
 	waitFor(t, "lite recorded as rootless", func() bool {
 		for _, d := range pi.devices(t) {
 			if d.Name == "lite" {
-				return d.Store == group.StoreRootless && d.Role == group.RoleLite
+				return d.Store == group.StoreRootless && d.Role == group.RoleMember
 			}
 		}
 		return false

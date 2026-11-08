@@ -84,10 +84,13 @@ const kinds = {
   server: "Server", router: "Router", console: "Game console", watch: "Watch", retro: "Retro computer", other: "Device",
 };
 
+// can says whether d is a member with the capability c: admin, dials or hub.
+export const can = (d, c) => d.role === "member" && (d.caps ?? []).includes(c);
+
 export function kindOf(d) {
   if (d.form && kinds[d.form]) return d.form;
   if (d.role === "phone") return "phone";
-  if (d.role === "lite") return "board";
+  if (d.os === "none") return "board";
   if (d.role === "watch") return "watch";
   if (d.os === "macos") return "laptop";
   if (["ios", "android", "aurora", "sailfish"].includes(d.os)) return "phone";
@@ -173,11 +176,12 @@ const tunnelName = (m) => ({ plain: "WireGuard", obfuscate: "AmneziaWG", vless: 
 const hubTunnel = (a) => a?.vless ? "vless" : a?.obfuscated ? "obfuscate" : "plain";
 
 // noHub says why d cannot be a hub, "" when it can: a phone only from its
-// own app, never a lite member, a watch or a computer without root, and a
+// own app, never a member without the cap hub, a watch or a computer without root, and a
 // computer only as the root or an admin with the hub power.
 function noHub(d, me) {
-  const never = { phone: "A phone is a hub only from its own app's Settings, while the app is open.", lite: "A lite member is never a hub.", watch: "A watch is never a hub." }[d.role];
+  const never = { phone: "A phone is a hub only from its own app's Settings, while the app is open.", watch: "A watch is never a hub." }[d.role];
   if (never) return t(never);
+  if (!can(d, "hub")) return t("This device is never a hub.");
   if (d.store === "rootless") return t("It runs without administrator rights, so it is never a hub.");
   if (d.frozen) return t("It is frozen: the root unfreezes it first.");
   // A hub that reads the copies is the root or an admin; an admin makes any
@@ -719,7 +723,7 @@ function renderDetail() {
   const lines = [[t("Type"), t(kinds[kind])]];
   if (d.mac) lines.push([t("MAC address"), d.mac, true]);
   else if (kind === "phone" || kind === "tablet") lines.push([t("MAC address"), t("hidden by the system")]);
-  lines.push([t("Role"), t({ phone: "Phone app", lite: "Lite member" }[d.role] ?? "Full member")]);
+  lines.push([t("Role"), t({ phone: "Phone app", watch: "Watch" }[d.role] ?? "Member")]);
   if (d.forward_only) lines.push([t("Copies"), t("Passes them on, reads none")]);
   if (d.hub) lines.push([t("Away from home"), state.status?.away?.hub_device === d.id ? t("The group's hub, in use now") : t("The group's hub")]);
   if (d.muted) lines.push([t("Copies"), muteUntil(d.muted_until_ms)]);
@@ -730,9 +734,9 @@ function renderDetail() {
   const me = state.devices.find((x) => x.self);
   const busy = state.busy ? "disabled" : "";
   // The house: this computer's own sync, or, on an admin, another
-  // computer's that is online; the phones and lite members refuse.
+  // member's that is online; the phones refuse.
   const syncOn = d.self ? state.status?.mode !== "own" : d.mode !== "own";
-  const mayTurn = d.self || (me?.admin && d.online && d.role === "full");
+  const mayTurn = d.self || (me?.admin && d.online && d.role === "member");
   const house = (d.self || d.mode) ? `<label class="switch row-switch"><span>${icon("house", 18)} ${esc(t("Sync"))}</span>` +
     `<input type="checkbox" data-sync-for="${esc(d.self ? "" : d.id)}" ${syncOn ? "checked" : ""} ${mayTurn && !state.busy ? "" : "disabled"}></label>` : "";
   // The row of icons: mute.
@@ -746,8 +750,8 @@ function renderDetail() {
   if (me?.admin) {
     actions.push(["rename", t("Rename")]);
     if (d.frozen && me.root) actions.push(["unfreeze", t("Unfreeze")]);
-    if (!d.self && d.admin && !d.root && !d.frozen && d.role === "full") actions.push(["freeze", t("Freeze"), true]);
-    if (me.root && !d.admin && !d.frozen && d.role === "full") actions.push(["admin", t("Make it an admin")]);
+    if (!d.self && d.admin && !d.root && !d.frozen && d.role === "member") actions.push(["freeze", t("Freeze"), true]);
+    if (me.root && !d.admin && !d.frozen && can(d, "admin")) actions.push(["admin", t("Make it an admin")]);
     if (!d.self) actions.push(["remove", t("Remove"), true]);
   }
   // Any computer leaves by itself; the root only when it is alone, which the service checks.

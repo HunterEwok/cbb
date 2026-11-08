@@ -881,12 +881,12 @@
         }
       }
     },
-    "Full member": {
+    "Member": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Полный участник"
+            "value": "Участник"
           }
         }
       }
@@ -1017,16 +1017,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Список"
-          }
-        }
-      }
-    },
-    "Lite member": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Лёгкий участник"
           }
         }
       }
@@ -2351,12 +2341,12 @@
         }
       }
     },
-    "A lite member is never a hub.": {
+    "This device is never a hub.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Лёгкий участник не бывает хабом."
+            "value": "Это устройство не бывает хабом."
           }
         }
       }

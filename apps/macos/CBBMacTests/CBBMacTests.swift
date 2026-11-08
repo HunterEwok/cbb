@@ -16,7 +16,7 @@ final class CBBMacTests: XCTestCase {
     /// An answer is read only once all of it has come, and its devices
     /// keep what the service leaves out as false.
     func testDecode() throws {
-        let line = #"{"op":"reply","len":3,"devices":[{"id":"ab12","name":"deck","role":"full","os":"linux","online":true,"self":true,"os_version":"Ubuntu 24.04","last_seen_ms":5,"mode":"own"},{"id":"cd34"}]}"#
+        let line = #"{"op":"reply","len":3,"devices":[{"id":"ab12","name":"deck","role":"member","caps":["admin","dials","hub"],"os":"linux","online":true,"self":true,"os_version":"Ubuntu 24.04","last_seen_ms":5,"mode":"own"},{"id":"cd34"}]}"#
         let whole = Data((line + "\nxyz").utf8)
         XCTAssertNil(try Control.decode(whole.prefix(10)))
         XCTAssertNil(try Control.decode(whole.dropLast()))
@@ -27,6 +27,7 @@ final class CBBMacTests: XCTestCase {
         XCTAssertEqual(devices[0].osVersion, "Ubuntu 24.04")
         XCTAssertTrue(devices[0].online && devices[0].isSelf)
         XCTAssertEqual(devices[0].lastSeenMS, 5)
+        XCTAssertTrue(devices[0].can("hub"))
         XCTAssertEqual(devices[0].mode.flatMap(SyncMode.init(rawValue:)), .own)
         XCTAssertNil(devices[1].mode)
         XCTAssertEqual(devices[1].name, "cd34")
@@ -42,7 +43,7 @@ final class CBBMacTests: XCTestCase {
         var h = Control.Header(op: "mute")
         h.forMS = 900_000
         XCTAssertEqual(String(decoding: try Control.encode(h), as: UTF8.self), "{\"for_ms\":900000,\"len\":0,\"op\":\"mute\"}\n")
-        let line = #"{"op":"reply","status":{"device":"me","role":"full","version":"dev","group":"g","mode":"own","sync_until_ms":1700000000000,"muted":true,"muted_until_ms":0},"devices":[{"id":"ab12","muted":true,"muted_until_ms":1700000000000},{"id":"cd34"}]}"#
+        let line = #"{"op":"reply","status":{"device":"me","role":"member","version":"dev","group":"g","mode":"own","sync_until_ms":1700000000000,"muted":true,"muted_until_ms":0},"devices":[{"id":"ab12","muted":true,"muted_until_ms":1700000000000},{"id":"cd34"}]}"#
         let (header, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
         let st = try XCTUnwrap(header.status)
         XCTAssertEqual(st.muted, true)
@@ -56,7 +57,7 @@ final class CBBMacTests: XCTestCase {
         let alerts = GroupAlerts.lines(st)
         XCTAssertEqual(alerts.count, 1)
         XCTAssertTrue(alerts[0].unmute)
-        XCTAssertTrue(GroupAlerts.lines(Control.Status(device: "me", group: "g", role: "full", version: "dev")).isEmpty)
+        XCTAssertTrue(GroupAlerts.lines(Control.Status(device: "me", group: "g", role: "member", version: "dev")).isEmpty)
     }
 
     /// What cbb pair -app writes reads as the join's code, and its QR code
@@ -110,7 +111,7 @@ final class CBBMacTests: XCTestCase {
         phone.form = "tablet"
         XCTAssertEqual(phone.kind, .tablet)
         XCTAssertEqual(Control.Device(id: "2", name: "mac", os: "macos").kind, .laptop)
-        XCTAssertEqual(Control.Device(id: "3", name: "pi", role: "lite").kind, .board)
+        XCTAssertEqual(Control.Device(id: "3", name: "board", os: "none").kind, .board)
     }
 
     func testOrbitSpots() {
@@ -157,11 +158,11 @@ final class CBBMacTests: XCTestCase {
         let model = MacModel(defaults: defaults)
         // CBB's Control, not Carbon's.
         func device(_ id: String, me: Bool = false) -> CBB.Control.Device {
-            var d = Control.Device(id: id, name: id, role: "full")
+            var d = Control.Device(id: id, name: id, role: "member")
             d.isSelf = me
             return d
         }
-        let status = Control.Status(device: "me", group: "g1", role: "full", version: "dev")
+        let status = Control.Status(device: "me", group: "g1", role: "member", version: "dev")
         model.show(status: status, devices: [device("me", me: true), device("a"), device("b"), device("c")])
         XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a", "d:b", "d:c"])
         XCTAssertNil(defaults.data(forKey: MacModel.arrangementKey))
@@ -176,7 +177,7 @@ final class CBBMacTests: XCTestCase {
         let stored = Arrangement.decode(defaults.data(forKey: MacModel.arrangementKey), group: "g1")
         XCTAssertEqual(stored.items.count, 3)
         // Another group starts afresh.
-        model.show(status: Control.Status(device: "me", group: "g2", role: "full", version: "dev"), devices: [device("me", me: true), device("a")])
+        model.show(status: Control.Status(device: "me", group: "g2", role: "member", version: "dev"), devices: [device("me", me: true), device("a")])
         XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a"])
         defaults.removePersistentDomain(forName: "cbb-mac-arrange-test")
     }

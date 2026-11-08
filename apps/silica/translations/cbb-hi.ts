@@ -501,10 +501,6 @@
 <context>
     <name>devices</name>
     <message>
-        <source>lite member</source>
-        <translation>लाइट सदस्य</translation>
-    </message>
-    <message>
         <source>device</source>
         <translation>डिवाइस</translation>
     </message>
@@ -519,10 +515,6 @@
     <message>
         <source>Board</source>
         <translation>बोर्ड</translation>
-    </message>
-    <message>
-        <source>Lite member</source>
-        <translation>लाइट सदस्य</translation>
     </message>
     <message>
         <source>Computer</source>

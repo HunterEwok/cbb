@@ -295,14 +295,14 @@ fn go_envelopes() {
 fn stores() {
     use crate::command::store_of;
     for (store, role, want) in [
-        ("file", "full", "file"),
-        ("hardware", "full", "hardware"),
+        ("file", "member", "file"),
+        ("hardware", "member", "hardware"),
         ("proven", "phone", "proven"),
-        ("rootless", "full", "rootless"),
+        ("rootless", "member", "rootless"),
         ("", "phone", "hardware"),
         ("", "watch", "hardware"),
-        ("", "full", "file"),
-        ("disk", "lite", "file"),
+        ("", "member", "file"),
+        ("disk", "member", "file"),
     ] {
         assert_eq!(store_of(store, role), want, "{store:?} {role:?}");
     }
@@ -444,7 +444,7 @@ fn go_sealed_commands() {
     }
 }
 
-/// A lite member's hello names the quick actions that are on there, and
+/// A member's hello names the quick actions that are on there, and
 /// leaves the field out when none is.
 #[test]
 fn hello_actions() {
@@ -453,7 +453,7 @@ fn hello_actions() {
         wire::hello(
             &h,
             String::new(),
-            "lite",
+            "member",
             "pi",
             "linux",
             &wire::DeviceInfo::default(),

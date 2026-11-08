@@ -56,10 +56,10 @@ final class CommandTests: XCTestCase {
         for m in [Member.Message.command(c), .result(Member.CommandResult(id: "ab", status: "refused", reason: "why"))] {
             XCTAssertEqual(try Member.decode(body: Data(Member.encode(m).dropFirst(4))), m)
         }
-        let h = try Member.decode(body: Data(#"{"t":"hello","role":"full","hello":{"wall_ms":1,"mode":"receive"}}"#.utf8))
+        let h = try Member.decode(body: Data(#"{"t":"hello","role":"member","hello":{"wall_ms":1,"mode":"receive"}}"#.utf8))
         guard case let .hello(_, hello) = h else { return XCTFail("not a hello") }
         XCTAssertEqual(hello.mode, "receive")
-        let odd = try Member.decode(body: Data(#"{"t":"hello","role":"full","hello":{"wall_ms":1,"mode":"everything"}}"#.utf8))
+        let odd = try Member.decode(body: Data(#"{"t":"hello","role":"member","hello":{"wall_ms":1,"mode":"everything"}}"#.utf8))
         guard case let .hello(_, oddHello) = odd else { return XCTFail("not a hello") }
         XCTAssertNil(oddHello.mode)
     }
@@ -382,7 +382,7 @@ final class CommandTests: XCTestCase {
         XCTAssertEqual(try Member.decode(body: h.dropFirst(4)), .hello(.phone, hello))
         let none = try Member.encode(.hello(.phone, Member.Hello(wallMS: 1)))
         XCTAssertFalse(String(decoding: none.dropFirst(4), as: UTF8.self).contains("muted"))
-        let long = Data(#"{"t":"hello","role":"full","hello":{"wall_ms":1,"muted":true,"muted_for_ms":99999999999}}"#.utf8)
+        let long = Data(#"{"t":"hello","role":"member","hello":{"wall_ms":1,"muted":true,"muted_for_ms":99999999999}}"#.utf8)
         guard case let .hello(_, got) = try Member.decode(body: long) else { return XCTFail("no hello") }
         XCTAssertTrue(got.muted)
         XCTAssertEqual(got.mutedForMS, Commands.maxMuteMS)

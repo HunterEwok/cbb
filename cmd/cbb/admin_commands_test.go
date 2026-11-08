@@ -122,7 +122,7 @@ func TestSyncAndNetwork(t *testing.T) {
 	}
 	runCommandCases(t, []commandCase{
 		{name: "sync", args: []string{"sync"}, answer: inG(control.Status{Mode: "shared"}), check: sent(control.OpStatus, nil), stdout: "Sync is on"},
-		{name: "sync in no group", args: []string{"sync"}, answer: control.Header{Status: &control.Status{Role: "full", OS: "linux"}},
+		{name: "sync in no group", args: []string{"sync"}, answer: control.Header{Status: &control.Status{Role: "member", OS: "linux"}},
 			check: sent(control.OpStatus, nil), code: 1, stderr: "in no group"},
 		{name: "sync with no status", args: []string{"sync"}, check: sent(control.OpStatus, nil), code: 1, stderr: "sent no status"},
 		{name: "sync off", args: []string{"sync", "off"}, answer: inG(control.Status{Mode: "own"}),
@@ -176,7 +176,7 @@ func TestActionCommands(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		prog = `C:\Tools\backup.exe`
 	}
-	list := control.Header{Status: &control.Status{Role: "full", OS: "linux", Group: "g", Actions: []control.Action{
+	list := control.Header{Status: &control.Status{Role: "member", OS: "linux", Group: "g", Actions: []control.Action{
 		{Name: "lock", On: true},
 		{Name: "reboot", On: true, By: []string{"root", "phone"}},
 		{Name: "shutdown", On: true, AnyKey: true},

@@ -32,6 +32,9 @@ object Records {
         var device: String? = null
         var name: String? = null
         var role: String? = null
+
+        /** What a member can do: Records.CAPS, sorted; only with the role "member". */
+        var caps: List<String>? = null
         var os: String? = null
         var key: ByteArray? = null
         var admin: ByteArray? = null
@@ -91,6 +94,7 @@ object Records {
                 "device" to s(device),
                 "name" to s(name),
                 "role" to s(role),
+                "caps" to strs(caps?.sorted()),
                 "os" to s(os),
                 "key" to b(key),
                 "admin" to b(admin),
@@ -118,6 +122,9 @@ object Records {
             fun of(type: String, signer: CertificateSigner, now: Instant): Body = Body(type, keyHash(signer.publicKeyDER), now.toEpochMilli())
         }
     }
+
+    /** What a member can do (docs/protocol.md, section 4, "Capabilities"), sorted: hold an admin key, dial other members, be a hub. */
+    val CAPS = listOf("admin", "dials", "hub")
 
     /** The powers an admin may have (docs/protocol.md, section 10, "Who signs what"): what the apps give an admin phone. */
     val POWERS = listOf("admit", "freeze", "hub", "remove", "remove-admins", "renew", "takeover", "thaw")
@@ -244,7 +251,7 @@ class RecordSet {
     class Device(
         val id: String,
         val name: String,
-        /** "full", "phone", "lite" or "watch". */
+        /** "member", "phone" or "watch". */
         val role: String,
         /** The member key of its newest counting record. */
         val key: ByteArray,
@@ -271,16 +278,24 @@ class RecordSet {
         val seal: ByteArray? = null,
         /** A hub that only passes copies on, which no copy is sealed to. */
         val forwardOnly: Boolean = false,
+        /** What a member can do: "admin", "dials" and "hub". */
+        val caps: List<String> = emptyList(),
     ) {
         /** Whether it is an admin with the power p. */
         fun may(p: String): Boolean = admin && p in powers
+
+        /** Whether it is a member with the capability c. */
+        fun can(c: String): Boolean = role == "member" && c in caps
+
+        /** Whether it may be one of the group's hubs: a phone, or a member with the cap hub. */
+        val mayHub: Boolean get() = role == "phone" || can("hub")
 
         override fun equals(other: Any?): Boolean =
             other is Device && id == other.id && name == other.name && role == other.role && os == other.os && store == other.store &&
                 kind == other.kind && proof == other.proof && key.contentEquals(other.key) && admin == other.admin &&
                 adminKey.contentEqualsOrNull(other.adminKey) && frozen == other.frozen && keys.sameAs(other.keys) &&
                 powers == other.powers && commands == other.commands && freezes.sameAs(other.freezes) &&
-                forwardOnly == other.forwardOnly
+                forwardOnly == other.forwardOnly && caps == other.caps
 
         override fun hashCode(): Int = id.hashCode()
 
@@ -308,6 +323,7 @@ class RecordSet {
                     freezes = o.optBytesList("freezes").orEmpty(),
                     seal = o.optBytes("seal"),
                     forwardOnly = o.optBool("forward_only") ?: false,
+                    caps = o.strings("caps"),
                 )
             }
         }

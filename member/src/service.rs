@@ -135,9 +135,9 @@ pub struct Config {
     /// Where the tunnel sends its packets instead of the hub's addresses: a
     /// local UDP port that leads to the hub, such as `cbb next link -udp`.
     pub tunnel_via: Option<SocketAddr>,
-    /// It runs as a computer's service, a full member that may become an
-    /// admin, even before its own device record arrives.
-    pub full: bool,
+    /// What this member says it can do in its hellos (cbb_core::authority::
+    /// CAPS) until its own device record names its caps.
+    pub caps: Vec<String>,
 }
 
 struct Service {
@@ -307,7 +307,7 @@ pub fn run(cfg: Config) -> Result<()> {
     let tag = ident.tag();
     let away =
         Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()).via(cfg.tunnel_via));
-    let presence = presence_of(&ident, &records, &cfg.name, cfg.full);
+    let presence = presence_of(&ident, &records, &cfg.name, &cfg.caps);
     let node = {
         let svc = svc.clone();
         Arc::new(
@@ -343,7 +343,7 @@ pub fn run(cfg: Config) -> Result<()> {
     }
     // A computer that is no admin offers an admin key for the root to
     // certify, and keeps the admin CA the root sends for it.
-    if node.role() == "full" {
+    if node.can(cbb_core::authority::CAP_ADMIN) {
         match crate::admin::admin_key_offer(&cfg.state_dir, &node.identity()) {
             Ok(offer) => node.offer_admin_key(offer),
             Err(e) => log(&format!("cbb: making the admin key: {}", e.for_log())),
@@ -450,10 +450,6 @@ pub fn run(cfg: Config) -> Result<()> {
     Ok(())
 }
 
-/// How this member presents itself in its hellos: as a computer with the
-/// service (`full`) when its own device record says so, as the group's
-/// root on a computer made it; as a lite member otherwise. Its keys are in
-/// the hardware when cbb-helper holds the device key.
 /// How often the claims to take the group over are looked at again.
 const CLAIM_CHECK: Duration = Duration::from_secs(2);
 
@@ -464,12 +460,17 @@ fn claim_states(node: &Node) -> String {
     st.claims.iter().map(|c| format!("{}={} ", cbb_core::certs::hex(&c.record.0), c.state)).collect()
 }
 
-fn presence_of(ident: &Identity, records: &Records, name: &str, computer: bool) -> crate::node::Presence {
-    let full = computer || records.devices().iter().any(|d| d.id == ident.id.as_str() && d.role == "full");
+/// How this member presents itself in its hellos: as a member with the
+/// caps its own device record names, or those it was started with while
+/// no record names it. Its keys are in the hardware when cbb-helper holds
+/// the device key.
+fn presence_of(ident: &Identity, records: &Records, name: &str, caps: &[String]) -> crate::node::Presence {
+    let own = records.devices().into_iter().find(|d| d.id == ident.id.as_str());
     crate::node::Presence {
-        role: if full { "full" } else { "lite" }.into(),
+        role: "member".into(),
+        caps: own.map(|d| d.caps).unwrap_or_else(|| caps.to_vec()),
         name: name.to_string(),
-        os: if full { crate::admin::os_name() } else { "linux" }.into(),
+        os: crate::admin::os_name().into(),
         key_store: if ident.external.is_some() {
             "hardware"
         } else if crate::rootless::is() {
@@ -1550,8 +1551,8 @@ impl Service {
             "version" => Ok(control::reply(
                 Header {
                     status: Some(Status {
-                        role: "lite".into(),
-                        os: "linux".into(),
+                        role: "member".into(),
+                        os: crate::admin::os_name().into(),
                         version: VERSION.into(),
                         ..Default::default()
                     }),
@@ -1627,6 +1628,7 @@ impl Service {
                         id: d.id,
                         name: d.name,
                         role: d.role,
+                        caps: d.caps,
                         admin: d.admin,
                         ..Default::default()
                     })
@@ -1637,6 +1639,7 @@ impl Service {
                             id: p.id.to_string(),
                             name: p.name,
                             role: p.role,
+                            caps: p.caps,
                             os: p.os,
                             online: true,
                             ..Default::default()
@@ -1872,7 +1875,7 @@ impl Service {
         let status = Status {
             device: ident.id.to_string(),
             group: ident.tag(),
-            role: "full".into(),
+            role: "member".into(),
             os: crate::admin::os_name().into(),
             version: VERSION.into(),
             key_level: if ident.external.is_some() { "hardware" } else { "files" }.into(),

@@ -68,12 +68,33 @@ type Addrs = Arc<Mutex<Option<Vec<SocketAddr>>>>;
 /// connection that came up ended, and after a round of failures 1 s,
 /// doubling to 30 s.
 fn dial_loop(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>) {
+    dial_loop_after(node, addrs, peer, false)
+}
+
+/// The wait before a member dials a member with a lower device ID that
+/// should have dialed it (docs/protocol.md, section 4, "Who dials whom").
+const FALLBACK: Duration = Duration::from_secs(30);
+
+/// As dial_loop; with fallback, only once no connection to peer has been
+/// up for FALLBACK, since the peer, with the lower device ID, dials this
+/// member, unless a firewall here keeps it out.
+fn dial_loop_after(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, fallback: bool) {
     let mut wait = FIRST_WAIT;
+    let mut last_up = std::time::Instant::now();
     loop {
         if node.is_closed() {
             return;
         }
         let Some(list) = addrs.lock().unwrap().clone() else { return };
+        if let Some(p) = peer.as_ref().filter(|_| fallback) {
+            if node.connected(p) {
+                last_up = std::time::Instant::now();
+            }
+            if last_up.elapsed() < FALLBACK {
+                node.nap(Duration::from_secs(1));
+                continue;
+            }
+        }
         // A connection up to the peer is left alone; a loopback address
         // (the tunnel's, a relay's) replaces one at home (Node::connected_for).
         if node.is_paused() || peer.as_ref().is_some_and(|p| list.first().is_some_and(|a| node.connected_for(p, a))) {
@@ -321,16 +342,17 @@ fn browse(
         let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
     }
     let me = node.identity().id.clone();
-    // A computer with the service publishes itself as a full member does,
-    // without a role.
-    let full = node.role() == "full";
-    // The protocol version, the group tag, the role, and p=1 while a
-    // pairing window is open, which a joiner looks for.
+    // A member that dials publishes itself without a role; one that does
+    // not says so, and every other member dials it.
+    let dials = node.can(cbb_core::authority::CAP_DIALS);
+    // The protocol version, the group tag, r=listen on a member that does
+    // not dial, and p=1 while a pairing window is open, which a joiner
+    // looks for.
     let publish = |window: bool| -> Result<(), mdns_sd::Error> {
         let Some(port) = port else { return Ok(()) };
         let mut txt = vec![("v", "1"), ("g", tag)];
-        if !full {
-            txt.push(("r", "lite"));
+        if !dials && !as_phone {
+            txt.push(("r", "listen"));
         }
         if window {
             txt.push(("p", "1"));
@@ -364,16 +386,9 @@ fn browse(
         match ev {
             mdns_sd::ServiceEvent::ServiceResolved(info) => {
                 let Some(id) = instance_id(&info.fullname) else { continue };
-                // Members of another group, or of a replaced CA, are ignored;
-                // of two lite members the one with the lower ID dials; a
-                // phone dials them all.
+                // Members of another group, or of a replaced CA, are ignored.
                 let r = info.get_property_val_str("r");
-                if id == me || info.get_property_val_str("g") != Some(tag) || (lite(r) && id < me && !as_phone) {
-                    continue;
-                }
-                // As Go's full members: the lite members dial this one, and
-                // of two full members the one with the lower ID dials.
-                if full && (lite(r) || id < me) {
+                if id == me || info.get_property_val_str("g") != Some(tag) {
                     continue;
                 }
                 // A phone that is the hub publishes itself while its app is
@@ -384,6 +399,14 @@ fn browse(
                     }
                     continue;
                 }
+                // A phone dials every member, and a member that dials
+                // every member that does not; of two members that dial, the
+                // lower ID dials, and the other only when no connection has
+                // come up for FALLBACK. A member that does not dial waits.
+                if !as_phone && !dials {
+                    continue;
+                }
+                let fallback = !as_phone && !listens_only(r) && id < me;
                 let addrs = order(info.get_addresses().iter().map(|ip| match ip {
                     mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
                         SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, v6.scope_id().index))
@@ -407,7 +430,7 @@ fn browse(
                         let cur: Addrs = Arc::new(Mutex::new(Some(addrs)));
                         found.insert(id.clone(), cur.clone());
                         let node = node.clone();
-                        std::thread::spawn(move || dial_loop(node, cur, Some(id)));
+                        std::thread::spawn(move || dial_loop_after(node, cur, Some(id), fallback));
                     }
                 }
             }
@@ -426,10 +449,11 @@ fn browse(
     Ok(())
 }
 
-/// Reports whether a TXT `r` value names a lite member; keys and values
-/// are compared without regard to case.
-fn lite(r: Option<&str>) -> bool {
-    r.is_some_and(|v| v.eq_ignore_ascii_case("lite"))
+/// Reports whether a TXT `r` value names a member that does not dial,
+/// which every other member dials; keys and values are compared without
+/// regard to case.
+fn listens_only(r: Option<&str>) -> bool {
+    r.is_some_and(|v| v.eq_ignore_ascii_case("listen"))
 }
 
 /// Reports whether a TXT `r` value names a phone, the group's hub while its
@@ -492,10 +516,15 @@ mod tests {
     }
 
     #[test]
-    fn lite_role() {
-        assert!(lite(Some("lite")) && lite(Some("LITE")));
-        assert!(phone(Some("phone")) && phone(Some("Phone")) && !phone(Some("lite")) && !phone(None));
-        assert!(!lite(None) && !lite(Some("linux")) && !lite(Some("")));
+    fn txt_roles() {
+        assert!(
+            listens_only(Some("listen"))
+                && listens_only(Some("LISTEN"))
+                && !listens_only(Some("lite"))
+                && !listens_only(None)
+        );
+        assert!(phone(Some("phone")) && phone(Some("Phone")) && !phone(Some("listen")) && !phone(None));
+        assert!(!listens_only(Some("linux")) && !listens_only(Some("")));
     }
 
     #[test]

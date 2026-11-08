@@ -98,7 +98,27 @@ pub const STOP_NONE: &str = "none";
 pub const STOP_SECRETS: &str = "secrets";
 pub const STOP_FULL: &str = "full";
 
-const ROLES: [&str; 4] = ["full", "phone", "lite", "watch"];
+/// The roles a device record may name: a member (any device with the
+/// service or the firmware), a phone with the app, or a watch with an
+/// admin key of its own.
+pub const ROLE_MEMBER: &str = "member";
+pub const ROLE_PHONE: &str = "phone";
+pub const ROLE_WATCH: &str = "watch";
+const ROLES: [&str; 3] = [ROLE_MEMBER, ROLE_PHONE, ROLE_WATCH];
+
+/// What a member can do (docs/protocol.md, section 4, "Capabilities"): be
+/// one of the group's hubs, hold an admin key, and dial other members. A
+/// capability gives no right: only a record a root or an admin signed does.
+pub const CAP_ADMIN: &str = "admin";
+pub const CAP_DIALS: &str = "dials";
+pub const CAP_HUB: &str = "hub";
+/// Every capability, sorted.
+pub const CAPS: [&str; 3] = [CAP_ADMIN, CAP_DIALS, CAP_HUB];
+
+/// Reports whether caps holds c.
+pub fn has_cap(caps: &[String], c: &str) -> bool {
+    caps.iter().any(|x| x == c)
+}
 const OSES: [&str; 10] =
     ["linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "watchos", "wearos", "none"];
 
@@ -199,6 +219,9 @@ pub struct Body {
     pub name: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub role: String,
+    /// What a member can do, sorted (CAPS); only with the role member.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub caps: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub os: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -269,6 +292,7 @@ fn allowed(kind: &str) -> Option<&'static [&'static str]> {
             "device",
             "name",
             "role",
+            "caps",
             "os",
             "key",
             "admin",
@@ -306,6 +330,7 @@ impl Body {
         add(!self.device.is_empty(), "device");
         add(!self.name.is_empty(), "name");
         add(!self.role.is_empty(), "role");
+        add(!self.caps.is_empty(), "caps");
         add(!self.os.is_empty(), "os");
         add(self.key.is_some(), "key");
         add(self.admin.is_some(), "admin");
@@ -376,6 +401,7 @@ impl Body {
 
     /// Puts the body's arrays in the order the canonical form wants.
     pub fn sort(&mut self) {
+        self.caps.sort();
         self.powers.sort();
         self.commands.sort();
         self.keys.sort();
@@ -495,8 +521,17 @@ impl Body {
         if self.admin.is_none() && (!self.powers.is_empty() || !self.commands.is_empty()) {
             return Err(Error::msg("powers and commands come only with admin"));
         }
-        if self.forward_only && (self.role != "full" || self.admin.is_some() || self.holds_root) {
-            return Err(Error::msg("only a computer that is no admin passes copies on without reading them"));
+        if !self.caps.is_empty() && self.role != ROLE_MEMBER {
+            return Err(Error::msg("only a member has caps"));
+        }
+        sorted_of(&self.caps, &CAPS, "caps")?;
+        if self.admin.is_some() && self.role == ROLE_MEMBER && !has_cap(&self.caps, CAP_ADMIN) {
+            return Err(Error::msg("an admin member without the admin cap"));
+        }
+        if self.forward_only && (!has_cap(&self.caps, CAP_HUB) || self.admin.is_some() || self.holds_root) {
+            return Err(Error::msg(
+                "only a member that may be a hub and is no admin passes copies on without reading them",
+            ));
         }
         if !self.seal.is_empty() && self.seal.len() != seal::PUBLIC_KEY_SIZE {
             return Err(Error::msg(format!(
@@ -833,6 +868,8 @@ pub struct Device {
     pub device: String,
     pub name: String,
     pub role: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub caps: Vec<String>,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub os: String,
     pub keys: Vec<Hash>,
@@ -854,6 +891,19 @@ pub struct Device {
     pub commands: Vec<String>,
     #[serde(skip_serializing_if = "is_false")]
     pub frozen: bool,
+}
+
+impl Device {
+    /// Reports whether it is a member with the capability c.
+    pub fn can(&self, c: &str) -> bool {
+        self.role == ROLE_MEMBER && has_cap(&self.caps, c)
+    }
+
+    /// Reports whether it may be one of the group's hubs: a phone, or a
+    /// member with the cap hub.
+    pub fn may_hub(&self) -> bool {
+        self.role == ROLE_PHONE || self.can(CAP_HUB)
+    }
 }
 
 /// A claim of the state.
@@ -2132,15 +2182,15 @@ impl<'a> Epoch<'a> {
     /// The main hubs of the hubs record that counts: a root's beats an
     /// admin's, a later root's an earlier one's, then the higher seq; among
     /// admins the later time_ms, then the smaller signer, then the higher
-    /// seq. Only the devices it names that are among devices with the role
-    /// full or phone are kept.
+    /// seq. Only the devices it names that are among the phones and the
+    /// members with the cap hub are kept.
     fn hubs(&self, devices: &[Device]) -> Vec<String> {
         let Some(best) = self.best(TYPE_HUBS) else { return Vec::new() };
         self.r(best)
             .b()
             .hubs
             .iter()
-            .filter(|h| devices.iter().any(|d| &d.device == *h && (d.role == "full" || d.role == "phone")))
+            .filter(|h| devices.iter().any(|d| &d.device == *h && d.may_hub()))
             .cloned()
             .collect()
     }
@@ -2214,6 +2264,7 @@ impl<'a> Epoch<'a> {
             device: String::from(id),
             name: n.name.clone(),
             role: n.role.clone(),
+            caps: n.caps.clone(),
             os: n.os.clone(),
             keys: keys.into_iter().collect(),
             store: n.store.clone(),
@@ -2343,7 +2394,7 @@ mod tests {
             }
         }
         assert!(n > 0);
-        let good = r#"{"alg":"es256","device":"0123456789abcdef0123456789abcdef","group":"g","key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","name":"Laptop","role":"full","seq":1,"signer":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","time_ms":1,"type":"device","v":2}"#;
+        let good = r#"{"alg":"es256","caps":["admin","dials","hub"],"device":"0123456789abcdef0123456789abcdef","group":"g","key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","name":"Laptop","role":"member","seq":1,"signer":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","time_ms":1,"type":"device","v":2}"#;
         Body::parse(good.as_bytes()).unwrap();
         for bad in [
             good.replace(r#"{"#, r#"{"aaa":1,"#),
@@ -2353,7 +2404,11 @@ mod tests {
             good.replace(r#""key""#, r#""holds_root":false,"key""#),
             good.replace(r#""v":2"#, r#""v":1"#),
             good.replace(r#""seq":1"#, r#""seq":2"#),
-            good.replace(r#""role":"full""#, r#""role":"linux""#),
+            good.replace(r#""role":"member""#, r#""role":"linux""#),
+            good.replace(r#""role":"member""#, r#""role":"full""#),
+            good.replace(r#""caps":["admin","dials","hub"]"#, r#""caps":["dials","admin","hub"]"#),
+            good.replace(r#""caps":["admin","dials","hub"]"#, r#""caps":["admin","relay"]"#),
+            good.replace(r#""role":"member""#, r#""role":"phone""#),
             good.replace(r#""name""#, r#""keys":["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="],"name""#),
             good.replace(r#"{"#, r#"{ "#),
         ] {

@@ -66,14 +66,14 @@ impl Away {
     /// What this device shares with peer, as Go's hubShare: on a hub, its
     /// offer, whether it serves and its clients, itself among them, for a
     /// peer that may be a hub; on a device that stopped being one, that it
-    /// is none, for the computers and the devices that may be hubs.
+    /// is none, for the members and the devices that may be hubs.
     pub(super) fn share_for(&self, node: &Node, peer: &DeviceId) -> Option<Message> {
         let may = node.records().lock().unwrap().may_host(peer.as_str());
-        let full = node.devices().iter().any(|d| d.id == peer.as_str() && d.role == "full");
+        let member = node.devices().iter().any(|d| d.id == peer.as_str() && d.role == "member");
         let cur = self.st.lock().unwrap();
         let st = cur.as_ref()?;
         let share = if !st.is_hub && st.retired {
-            if !may && !full {
+            if !may && !member {
                 return None;
             }
             Share { stopped: true, ..Default::default() }

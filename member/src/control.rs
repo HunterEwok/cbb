@@ -325,6 +325,10 @@ pub struct Device {
     pub name: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub role: String,
+    /// What a member can do, from its record, or from its hello while no
+    /// record lists it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub caps: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub os: String,
     #[serde(default, skip_serializing_if = "is_zero_i")]

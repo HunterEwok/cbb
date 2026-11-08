@@ -1291,6 +1291,16 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The roles `full` and `lite` are one role, `member`, with capabilities (D-88; docs/protocol.md
+  section 4, "Capabilities"): `admin` (it can hold an admin key), `dials` (it dials other
+  members) and `hub` (it may be chosen as the hub), in its hello (`caps`), its device record
+  and its pairing Info. Of two members that dial, the lower device ID dials and the other
+  does after 30 s; a member that does not dial publishes `r=listen` in place of `r=lite`, and
+  every member dials it. Computers, Raspberry Pis and routers have all three; the Rust `cbb`
+  takes `-caps` (all three by default, `admin,dials` for the ZX Next's Pi), and an ESP32 has
+  none. The apps show "Member" and decide what a device can do from its capabilities. Groups
+  set up during development whose records name `full` or `lite` are set up again: no release
+  carried those records.
 - The tile of the device an app runs on comes first by default, and moves as the other tiles
   do, into a collection too (docs/apps.md, "Collections and the order of the tiles"); on
   Aurora, which cannot move tiles yet, it stays first. A tile's system and its mark ("this

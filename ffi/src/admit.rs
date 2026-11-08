@@ -68,6 +68,8 @@ struct DeviceAnswer {
     name: String,
     os: String,
     role: &'static str,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    caps: Vec<String>,
     admin: bool,
 }
 
@@ -156,18 +158,13 @@ impl Admit {
                 if let Err(e) = self.node.record_admitted(&self.admitter, &a) {
                     out.error = Some(crate::join::ErrorAnswer::of(&e.context("the device's record")));
                 }
-                let role = if a.info.is_phone() {
-                    "phone"
-                } else if a.info.role == "lite" {
-                    "lite"
-                } else {
-                    "full"
-                };
+                let role = if a.info.is_phone() { "phone" } else { "member" };
                 out.device = Some(DeviceAnswer {
                     device: a.device.to_string(),
                     name: a.info.name.clone(),
                     os: a.info.os.clone(),
                     role,
+                    caps: if a.info.is_phone() { Vec::new() } else { a.info.caps.clone() },
                     admin: a.admin_ca.is_some(),
                 });
             }

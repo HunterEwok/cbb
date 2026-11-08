@@ -530,7 +530,7 @@ pub fn readers(records: &Records, secret: bool) -> Vec<(String, Vec<u8>)> {
         .filter(|d| {
             !d.keys.is_empty()
                 && !d.seal.is_empty()
-                && matches!(d.role.as_str(), "full" | "phone" | "lite")
+                && matches!(d.role.as_str(), "member" | "phone")
                 && !d.frozen
                 && !d.forward_only
                 && !(secret && records.no_secrets_to(&d.id))

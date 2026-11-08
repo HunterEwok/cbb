@@ -16,11 +16,13 @@ object V2 {
         admin: ByteArray? = null,
         powers: List<String>? = null,
         holdsRoot: Boolean = false,
+        caps: List<String>? = if (role == "member") Records.CAPS else null,
     ): Records.Body {
         val b = Records.Body.of("device", signer, now)
         b.device = device
         b.name = name
         b.role = role
+        b.caps = caps
         b.key = key
         b.admin = admin
         if (admin != null) {

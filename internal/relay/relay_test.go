@@ -499,7 +499,7 @@ func TestRemovedAdmin(t *testing.T) {
 		d.cert.Certificate = append(d.cert.Certificate, root.Cert.Raw)
 		k := group.KeyHashOf(d.cert.Leaf)
 		r := grouptest.Sign(t, group.RecordBody{Type: group.RecordDevice, Group: tag, TimeMS: time.Now().UnixMilli(),
-			Device: d.id, Name: "pc", Role: group.RoleFull, Key: &k}, admin.Key, adminCert)
+			Device: d.id, Name: "pc", Role: group.RoleMember, Caps: group.AllCaps, Key: &k}, admin.Key, adminCert)
 		return d, r
 	}
 	gone, goneRec := certified()

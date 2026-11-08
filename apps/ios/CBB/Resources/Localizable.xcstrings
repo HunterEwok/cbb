@@ -2124,12 +2124,12 @@
         }
       }
     },
-    "Full member": {
+    "Member": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Полный участник"
+            "value": "Участник"
           }
         }
       }
@@ -2144,12 +2144,12 @@
         }
       }
     },
-    "Full member, rootless": {
+    "Member, rootless": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Полный участник, rootless"
+            "value": "Участник, rootless"
           }
         }
       }
@@ -2360,26 +2360,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Список"
-          }
-        }
-      }
-    },
-    "Lite member": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Лёгкий участник"
-          }
-        }
-      }
-    },
-    "Lite member, rootless": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Лёгкий участник, rootless"
           }
         }
       }

@@ -509,7 +509,7 @@ class AppModel(private val app: Context) {
                     error?.let { Note(R.string.hub_failed, if (settings.showsErrorDetails) it else null, error = true) },
                     h.forwarder, h.background, group.onHomeNetwork, h.clients.size,
                     computers = if (h.isOn) {
-                        group.computers.filter { it.online && !it.throughHub && it.role == "full" && (it.admin || it.canMakeAdmin) }.map { it.id to it.name }
+                        group.computers.filter { it.online && !it.throughHub && it.can("hub") && (it.admin || it.canMakeAdmin) }.map { it.id to it.name }
                     } else {
                         emptyList()
                     },

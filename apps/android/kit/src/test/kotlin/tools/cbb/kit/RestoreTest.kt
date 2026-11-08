@@ -31,7 +31,7 @@ class RestoreTest {
 
         init {
             root.records.clock = { t0 }
-            root.record(computer.device, "one", "full", computer.keyHash, rootKey, t0)
+            root.record(computer.device, "one", "member", computer.keyHash, rootKey, t0, caps = Records.CAPS)
             recovery = root.makeRecovery(rootKey, t0)
         }
 
@@ -47,7 +47,7 @@ class RestoreTest {
         val (phone, pc) = Pipe.pair()
         phone.peerChain = chain
         val got = Background<List<Member.Record>> {
-            pc.write(Member.encode(Member.Message.Hello(Member.Role.FULL, Member.Hello(0, name = "one", os = "linux", groupCA = groupCA))))
+            pc.write(Member.encode(Member.Message.Hello(Member.Role.MEMBER, Member.Hello(0, name = "one", os = "linux", groupCA = groupCA))))
             val first = Member.decode(pc.read(Member.header(pc.read(4)).first))
             assertIs<Member.Message.Hello>(first)
             assertNull(first.hello.records, "the phone holds no records yet")

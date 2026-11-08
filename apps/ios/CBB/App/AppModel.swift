@@ -228,8 +228,10 @@ final class AppModel: ObservableObject {
         /// home, which passes commands on to it (docs/protocol.md, section
         /// 4, "Reach"); a hub command still needs it connected here.
         var throughHub = false
-        /// "full", "phone", "lite" or "watch".
-        var role = "full"
+        /// "member", "phone" or "watch".
+        var role = "member"
+        /// What a member can do: "admin", "dials" and "hub".
+        var caps: [String] = []
         /// Its operating system; nil when its record does not tell.
         var os: String?
         var isSelf = false
@@ -266,6 +268,9 @@ final class AppModel: ObservableObject {
         /// This phone takes no copies from the group for now; only on its
         /// own entry.
         var paused: Hold?
+
+        /// Whether it is a member with the capability c.
+        func can(_ c: String) -> Bool { role == "member" && caps.contains(c) }
     }
 
     /// A mute or a pause that holds: until when, nil for until it is lifted.
