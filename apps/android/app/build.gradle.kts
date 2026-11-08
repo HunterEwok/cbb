@@ -46,7 +46,7 @@ android {
         }
     }
 
-    // The tunnel's NDK (see bindTunnel): one version, so that the same tag gives the same APK.
+    // The core's NDK (see bindCore): one version, so that the same tag gives the same APK.
     ndkVersion = ndkPinned
 
     // A reproducible APK: without Google's encrypted block of the dependencies, which
@@ -125,22 +125,9 @@ fun Exec.withPinnedNdk() {
     }
 }
 
-// The tunnel for sync away from home: mobile/cbbtun, bound by gomobile into an AAR. It
-// needs Go and the pinned NDK.
-val tunnelAar = layout.buildDirectory.file("cbbtun/cbbtun.aar")
-val bindTunnel = tasks.register<Exec>("bindTunnel") {
-    val repo = rootDir.resolve("../..")
-    inputs.files(repo.resolve("go.mod"), repo.resolve("go.sum"))
-    inputs.dir(repo.resolve("mobile"))
-    inputs.dir(repo.resolve("internal/tunnel"))
-    outputs.file(tunnelAar)
-    workingDir = repo
-    commandLine("sh", "mobile/cbbtun/bind.sh", "android", tunnelAar.get().asFile.path)
-    withPinnedNdk()
-}
-
-// The group's rules: the Rust core's entry point (ffi/, docs/core-api.md), which the
-// kit calls through JNA, as libcbb_ffi.so for each ABI. It needs the Rust of cbb.rust in
+// The group's rules, the member and the tunnel for sync away from home: the Rust core's
+// entry point (ffi/, docs/core-api.md), which the kit calls through JNA, as libcbb_ffi.so
+// for each ABI. It needs the Rust of cbb.rust in
 // ../gradle.properties with the Android targets, cargo-ndk and the pinned NDK (ffi/bind.sh).
 val coreLibs = layout.buildDirectory.dir("cbbcore")
 val bindCore = tasks.register<Exec>("bindCore") {
@@ -149,6 +136,8 @@ val bindCore = tasks.register<Exec>("bindCore") {
     inputs.files(repo.resolve("core/Cargo.toml"), repo.resolve("ffi/Cargo.toml"), repo.resolve("ffi/bind.sh"))
     inputs.dir(repo.resolve("core/src"))
     inputs.dir(repo.resolve("ffi/src"))
+    inputs.files(repo.resolve("member/Cargo.toml"))
+    inputs.dir(repo.resolve("member/src"))
     outputs.dir(coreLibs)
     workingDir = repo
     commandLine("sh", "ffi/bind.sh", "android", coreLibs.get().asFile.path)
@@ -161,7 +150,6 @@ android.sourceSets.getByName("main").jniLibs.srcDir(coreLibs.get().dir("jniLibs"
 tasks.named("preBuild") { dependsOn(bindCore) }
 
 dependencies {
-    implementation(files(tunnelAar).builtBy(bindTunnel))
     implementation("tools.cbb:kit:0")
     // JNA with its native parts, through which the kit calls the Rust core.
     implementation("net.java.dev.jna:jna:5.19.1@aar")

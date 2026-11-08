@@ -148,15 +148,20 @@ All notable changes to cbb are documented in this file. The format follows
   with the full member.
 - The phones' tunnel in Rust (ffi/, `cbb_tunnel`, feature `tunnel`): the lite member's
   WireGuard with AmneziaWG and VLESS with XHTTP behind a loopback port, for the iPhone and
-  Android apps in place of the Go tunnel (`TestRustPhoneTunnel` against the Go hub); the phone
-  as the group's hub (`hub_start`, `TestRustPhoneHub` with Go clients), its remote invitations
+  Android apps (`TestRustPhoneTunnel` against the Go hub); the phone
+  as the group's hub (`hub_start`, `TestRustPhoneHub` with Go clients, which reach only the
+  app's member listener: `TestRustPhoneHubReachesOnlyTheMemberListener`), its remote invitations
   with a guest tunnel to the pairing window (`hub_invite`, `TestRustPhoneHubInvite`), and its
   registration with the forwarder, signed by the app's member key (`cbb_tunnel_register`,
-  `TestRustPhoneHubForwarder` against the Go forwarder), and its link to the blind relay
+  `TestRustPhoneHubForwarder` against the Go forwarder), inside VLESS with XHTTP when the
+  forwarder's TCP port does not answer, through the way its last answer gave, then the
+  project's ways in (`hub_set_project_ways`, `TestRustPhoneHubOverXHTTP`), and its link to the blind relay
   (`cbb_tunnel_relay`, `TestRustPhoneRelay` against the Go relay and Go members), with the
   group's server credentials in place of the member certificate once the period lists the
-  phone (`cbb_tunnel_relay_credentials`, `TestRustPhoneRelayCredentials`). The apps move to it
-  once their node runs in Rust.
+  phone (`cbb_tunnel_relay_credentials`, `TestRustPhoneRelayCredentials`). Both apps run it
+  through their kits (`RustTunnels`, `RustHubTunnels` and `RustRelayLinks` in Swift,
+  `RustTunnel` in Kotlin), with `set_endpoint`, `new_obfuscation` and `new_vless_id`; it is
+  built into the core's library, so neither app's build needs Go any more.
 - CI's job "go test with the Rust core" runs the whole Go suite as the release builds are
   made, with the core as WebAssembly (`-tags cbbwasm`), so that what ships is what is tested.
 - The phones' member in the Rust core, for the iPhone and Android apps to move onto from
@@ -422,7 +427,7 @@ All notable changes to cbb are documented in this file. The format follows
   tray app and the Mac app and under "This phone as the hub" on both phones. The computers
   run `cbb global hub -keep`, new: it keeps the hub's addresses, port and forwarder where the
   command gives none. A phone hub makes its AmneziaWG settings and VLESS user ID with the new
-  `NewObfuscation` and `NewVLESSID` of `mobile/cbbtun`, keeps them in its state, starts its
+  `new_obfuscation` and `new_vless_id` of the phones' tunnel, keeps them in its state, starts its
   tunnel with them and registers with its forwarder over VLESS when asked.
 - **VLESS over XHTTP behind a web server**, beside REALITY: `cbb forward -vless-xhttp
   cbb.tools` listens on the loopback address (`-vless-listen`, default `127.0.0.1:3276`) and
@@ -1309,7 +1314,7 @@ All notable changes to cbb are documented in this file. The format follows
   signs a new period while the user's last Face ID or fingerprint lasts, and the lists with a
   period key in the Secure Enclave or the Keystore. Once the members' credential lists a
   phone's server key, the phone registers with a relay by the credentials too, under its
-  pseudonym (cbbtun's `Relay.SetCredentials`).
+  pseudonym (`cbb_tunnel_relay_credentials`).
 - The hub takes a new WireGuard key for its clients with each period of the server
   credentials (docs/protocol.md, section 11, "The hub's key"): its offers give the next key
   three days ahead, then it serves with it and registers again with its forwarder, so the

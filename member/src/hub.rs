@@ -171,7 +171,15 @@ impl Hub {
     /// forwarder go; one that cannot go out now is dropped.
     pub fn sender(&self) -> crate::forward::SendFn {
         let out = self.out.clone();
-        Arc::new(move |to, data| {
+        let v6 = out.local_addr().is_ok_and(|a| a.is_ipv6());
+        Arc::new(move |to: SocketAddr, data: &[u8]| {
+            // An IPv4 address, as the loopback port of the way over VLESS,
+            // goes mapped from the hub's IPv6 socket, which not every system
+            // takes as it is.
+            let to = match to {
+                SocketAddr::V4(a) if v6 => SocketAddr::new(a.ip().to_ipv6_mapped().into(), a.port()),
+                a => a,
+            };
             let _ = out.send_to(data, to);
         })
     }

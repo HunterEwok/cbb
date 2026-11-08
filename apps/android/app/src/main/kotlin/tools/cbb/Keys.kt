@@ -270,7 +270,7 @@ class KeystoreSigner(
         }
     }
 
-    /** An ECDSA signature, ASN.1 DER, of a SHA-256 digest: the member key signs the hub's TLS to its forwarder so (cbbtun's Signer). */
+    /** An ECDSA signature, ASN.1 DER, of a SHA-256 digest: the member key signs the hub's TLS to its forwarder so. */
     fun signDigest(digest: ByteArray): ByteArray =
         Signature.getInstance("NONEwithECDSA").run {
             initSign(privateKey)

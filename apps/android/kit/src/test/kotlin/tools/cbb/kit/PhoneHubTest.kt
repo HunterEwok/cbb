@@ -92,7 +92,7 @@ class PhoneHubTest {
         assertFailsWith<PhoneHub.Refused> { hub.admit(b, ByteArray(31)) }
         assertFailsWith<PhoneHub.Refused> { hub.admit("B", key(4)) }
 
-        // The clients go to cbbtun as JSON and come back from it.
+        // The clients go to the tunnel as JSON and come back from it.
         hub.admit(b, key(4))
         val back = PhoneHub.clientsFromJson(hub.clientsJson)
         assertEquals(listOf(a, b), back.map { it.device })
@@ -131,7 +131,7 @@ class PhoneHubTest {
         assertTrue(hub.admit(b, key(7), key(6)).second, "met now")
         assertTrue(hub.clients.all { it.met })
         assertEquals(hub.clients.map { it.met }, PhoneHub.clientsFromJson(JsonArray(hub.clients.map { it.toJson(keep = true) }).toString()).map { it.met })
-        assertFalse(PhoneHub.clientsFromJson(hub.clientsJson).any { it.met }, "cbbtun gets no met")
+        assertFalse(PhoneHub.clientsFromJson(hub.clientsJson).any { it.met }, "the tunnel gets no met")
 
         // Another hub's offer goes to the clients with their own preshared keys.
         hub.setOther(other, Member.TunnelOffer(key(10), ByteArray(0), listOf("198.51.100.1:8764")))

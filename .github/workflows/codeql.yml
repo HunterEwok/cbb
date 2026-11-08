@@ -55,8 +55,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        # The Android app binds the phones' tunnel (mobile/cbbtun) with gomobile as it builds.
-        if: matrix.language == 'go' || matrix.language == 'java-kotlin'
+        if: matrix.language == 'go'
         with:
           go-version-file: go.mod
           cache: false

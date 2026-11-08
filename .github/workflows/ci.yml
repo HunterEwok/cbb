@@ -204,7 +204,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      COVERPKG: ./cmd/...,./internal/...,./mobile/...
+      COVERPKG: ./cmd/...,./internal/...
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -220,7 +220,7 @@ jobs:
       - name: go test across packages
         env:
           CBB_TPM_REQUIRED: "1"
-        run: go test -coverpkg="$COVERPKG" -coverprofile=cover-go-all.out ./cmd/... ./internal/... ./mobile/...
+        run: go test -coverpkg="$COVERPKG" -coverprofile=cover-go-all.out ./cmd/... ./internal/...
       - name: the desktop clipboards under headless sway and Xvfb
         run: |
           go test -c -cover -coverpkg="$COVERPKG" -o "$RUNNER_TEMP/desktop.test" ./internal/desktop
@@ -750,7 +750,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh mobile/cbbtun/bind.sh ffi/bind.sh wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
+        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh ffi/bind.sh wasm/build.sh .github/ci-changes.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
       - name: the software bills of materials, as the release makes them (tools/sbom)
@@ -1561,8 +1561,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: bind the phones' tunnel, which the app links
-        run: mobile/cbbtun/bind.sh ios apps/ios/Cbbtun.xcframework
       - name: build the Rust core, which the kit links
         run: sh ffi/bind.sh ios apps/ios/CbbCore
       - name: generate the Xcode project
@@ -1832,7 +1830,7 @@ jobs:
           CBB_SWIFT_INTEROP="$tool" go test ./internal/pair -run 'TestSwiftMemberAdmitsGoJoiner$' -v
           CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/pair -run 'TestSwiftMemberAdmitsGoJoinerTLS|TestSwiftHubAdmitsInvitedGoJoiner|TestSwiftJoinsComputerRoot' -v
           CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/node -run 'TestSwiftMemberTLS|TestSwiftRestoresWithRecoveryKey' -v
-      - name: the NDK the tunnel and the core are built with
+      - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
       - name: the Rust the core is built with, and cargo-ndk
@@ -1880,7 +1878,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: the NDK the tunnel and the core are built with
+      - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
       - name: the Rust the core is built with, and cargo-ndk
@@ -2003,11 +2001,7 @@ jobs:
         with:
           persist-credentials: false
           path: one
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: one/go.mod
-          cache: false
-      - name: the NDK the tunnel and the core are built with
+      - name: the NDK the core is built with
         working-directory: one/apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
       - name: the Rust the core is built with, and cargo-ndk
@@ -2491,41 +2485,6 @@ jobs:
           rustup default stable
           apps/silica/ci.sh "$RUNNER_TEMP/psdk" "$ARCH" "$RUNNER_TEMP/rpm"
 
-  phonetunnel:
-    name: phone tunnel (${{ matrix.target }})
-    needs: changes
-    if: needs.changes.outputs.core == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: android
-            os: ubuntu-latest
-            out: cbbtun.aar
-          - target: ios
-            os: macos-latest
-            out: Cbbtun.xcframework
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: bind the tunnel with gomobile
-        # gomobile and gobind come from go.mod's tools; the runner images have
-        # the Android NDK and Xcode. The Android app's build binds it too.
-        env:
-          TARGET: ${{ matrix.target }}
-          OUT: ${{ matrix.out }}
-        run: |
-          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-}"
-          mobile/cbbtun/bind.sh "$TARGET" "$OUT"
-          ls -la "$OUT"
-
   phonecore:
     name: phone core (${{ matrix.target }})
     needs: changes
@@ -2740,7 +2699,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gowithcore, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonetunnel, phonecore, lite, litemips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gowithcore, gocover, coverage, build, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, lite, litemips, esp32, zxnext, silica, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
