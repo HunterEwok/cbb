@@ -17,7 +17,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -289,11 +288,9 @@ func TestHubKeyRotation(t *testing.T) {
 	every, ahead := renewEvery, hubKeyAhead
 	renewEvery, hubKeyAhead = 200*time.Millisecond, 24*time.Hour
 	t.Cleanup(func() { renewEvery, hubKeyAhead = every, ahead })
-	var skew atomic.Int64
+	clock := newTestClock(t, 0)
 	var h hub
-	pi := startWith(t, &h, "pi", group.OSLinux, func(c *Config) {
-		c.now = func() time.Time { return time.Now().Add(time.Duration(skew.Load())) }
-	})
+	pi := startEnv(t, &h, "pi", func(c *Config) { c.now = clock.now }, clock.env())
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	for _, s := range []*testService{pi, deck} {
@@ -339,7 +336,7 @@ func TestHubKeyRotation(t *testing.T) {
 	deckID := deck.status(t).Device
 	deck.stop()
 	h.hide(deckID)
-	skew.Store(int64(25 * time.Hour))
+	clock.set(t, 25*time.Hour)
 	waitFor(t, "the hub serves with the new key", func() bool {
 		st := load(pi)
 		return st.Next.IsZero() && st.ServingKey().Public() == next

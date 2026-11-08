@@ -2097,7 +2097,7 @@ func TestPairingAcrossARenewal(t *testing.T) {
 // of its own, which addr reads from its log once it is in a group.
 func startRust(t *testing.T, bin string, s *testService) *testService {
 	t.Helper()
-	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir(), fmt.Sprintf("CBB_TEST_RENEW_EVERY=%d", renewEvery.Milliseconds())}, s.env...)
+	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir(), fmt.Sprintf("CBB_TEST_RENEW_EVERY=%d", renewEvery.Milliseconds()), fmt.Sprintf("CBB_HUB_KEY_AHEAD=%d", int64(hubKeyAhead.Seconds()))}, s.env...)
 	r := startLiteEnv(t, bin, s.dir, env, "-full", "-port", "0", "-name", s.name)
 	r.name, r.os, r.rust, r.cfg, r.env = s.name, s.os, true, s.cfg, s.env
 	// It ends with an error after cbb leave or an admin's restart, for
