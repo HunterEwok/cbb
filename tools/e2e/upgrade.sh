@@ -72,7 +72,7 @@ eventually() {
 # start runs a member on a version, with its state in its own volume.
 # The commands run the member's own binary, or path/to/cli when it is given.
 start() { # member, binary
-	flags= mounts="-v $2:/cb/cbb:ro -v ${cli:-$2}:/cb/cli:ro"
+	flags='' mounts="-v $2:/cb/cbb:ro -v ${cli:-$2}:/cb/cli:ro"
 	if [ -n "$cli" ] && [ "$2" = "$new" ]; then
 		flags=-full
 		if [ -f "$(dirname "$new")/cbb-helper" ]; then

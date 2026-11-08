@@ -626,14 +626,16 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
-          v=$("$RUNNER_TEMP/cbb" version | sed -n 's/^[a-z]* v\([0-9][0-9.]*\).*/\1/p')
-          next="${v%.*}.$((${v##*.} + 1))"
-          mkdir -p "$RUNNER_TEMP/rust"
-          CBB_VERSION=$next cargo build --locked --release -p cbb-lite
+          # Both sides are 0.6, so the group stays: the Go service as 0.6.0,
+          # the Rust one and its helper as 0.6.1.
+          mkdir -p "$RUNNER_TEMP/go6" "$RUNNER_TEMP/rust"
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v0.6.0" \
+            -o "$RUNNER_TEMP/go6/cbb" ./cmd/cbb
+          CBB_VERSION=0.6.1 cargo build --locked --release -p cbb-lite
           cp target/release/cbb "$RUNNER_TEMP/rust/cbb"
-          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$next" \
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v0.6.1" \
             -o "$RUNNER_TEMP/rust/cbb-helper" ./cmd/cbb-helper
-          sh tools/e2e/upgrade.sh "$RUNNER_TEMP/cbb" "$RUNNER_TEMP/rust/cbb" "$RUNNER_TEMP/cbb"
+          sh tools/e2e/upgrade.sh "$RUNNER_TEMP/go6/cbb" "$RUNNER_TEMP/rust/cbb" "$RUNNER_TEMP/go6/cbb"
 
   avahi:
     name: mdns with avahi

@@ -231,6 +231,10 @@ pub struct Status {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub peers: Vec<Device>,
     pub version: String,
+    /// The device left a group made before 0.6 when it started, and is in
+    /// no group now (Go's LeftOldGroup).
+    #[serde(default, skip_serializing_if = "core::ops::Not::not")]
+    pub left_old_group: bool,
     /// The sync mode: shared (sync on) or own (sync off); empty when in no
     /// group. While sync is off, sync_until_ms is when it turns on again,
     /// in Unix milliseconds, 0 for until cbb sync on.

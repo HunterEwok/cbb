@@ -255,7 +255,7 @@ vm)
 		for i in $(seq 30); do logread -e cbb | grep -q "work only on br-lan" && break; sleep 1; done
 		logread -e cbb | grep -q "work only on br-lan"
 		grep -qx br-lan /var/run/cbb/interfaces
-		cbb status 2>&1 | grep -q "no group"
+		cbb status 2>&1 | grep -q "Not in a group"
 		sh /usr/share/cbb/uninstall.sh --purge
 	'
 	run "$removed"

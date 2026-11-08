@@ -773,6 +773,15 @@ fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
     let m =
         request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))?;
     let s = m.header.status.unwrap_or_default();
+    if s.group.is_empty() {
+        // As Go's writeStatus.
+        println!("{}", s.version);
+        if s.left_old_group {
+            println!("This device left its group, which was made before 0.6: groups are set up again from 0.6 on.");
+        }
+        println!("Not in a group. Run cbb new here to start one, or cbb pair to join one.");
+        return Ok(());
+    }
     println!("device  {}\ngroup   {}\nrole    {}\nversion {}", s.device, s.group, s.role, s.version);
     if !s.mode.is_empty() {
         println!("mode    {}", s.mode);

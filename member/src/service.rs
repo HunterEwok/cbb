@@ -217,6 +217,9 @@ struct Service {
     /// Whether it is a computer's service (Config::full), for the role a
     /// join asks for.
     full: bool,
+    /// The device left a group made before 0.6 at this start, which status
+    /// says while it is in no group, as Go's leftOld.
+    left_old: bool,
     /// One cbb new at a time, so two requests cannot make two groups.
     creating: Mutex<()>,
     /// The pairing running here: a window for a code, or an admission by
@@ -282,7 +285,8 @@ pub fn run(cfg: Config) -> Result<()> {
     }
     std::fs::create_dir_all(&cfg.state_dir).context(format!("cannot create {}", cfg.state_dir.display()))?;
     let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(log_line);
-    if crate::records::leave_version1_group(&cfg.state_dir)? {
+    let left_old = crate::records::leave_version1_group(&cfg.state_dir)?;
+    if left_old {
         log(&format!(
             "cbb: this device's group was made before 0.6, whose records 0.6 does not read, so it left that group (its files are in {}); set the group up again and join it with the phone's QR code",
             crate::records::OLD_GROUP_DIR
@@ -311,6 +315,7 @@ pub fn run(cfg: Config) -> Result<()> {
         helper: crate::helper::shared(),
         name: cfg.name.clone(),
         full: cfg.full,
+        left_old,
         creating: Mutex::new(()),
         pairing: Mutex::new(None),
         port: Mutex::new(None),
@@ -2022,6 +2027,7 @@ impl Service {
                             os: crate::admin::os_name().into(),
                             keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
                             tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
+                            left_old_group: self.left_old,
                             ..Default::default()
                         };
                         return Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()));
@@ -2049,6 +2055,7 @@ impl Service {
                     os: node.os().into(),
                     peers,
                     version: VERSION.into(),
+                    left_old_group: false,
                     mode: node.engine.mode().name().into(),
                     muted: node.engine.mute_left().is_some(),
                     muted_until_ms: node.engine.mute_left().filter(|l| *l > 0).map_or(0, |l| uptime::wall_ms() + l),

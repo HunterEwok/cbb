@@ -165,19 +165,19 @@ fn program_data() -> std::path::PathBuf {
 }
 
 /// A socket's handle as the system's poll takes it.
-#[cfg(unix)]
+#[cfg(all(unix, feature = "tunnel"))]
 pub type RawSock = std::os::fd::RawFd;
-#[cfg(windows)]
+#[cfg(all(windows, feature = "tunnel"))]
 pub type RawSock = std::os::windows::io::RawSocket;
 
 /// The handle of a socket, for [`poll`].
-#[cfg(unix)]
+#[cfg(all(unix, feature = "tunnel"))]
 pub fn raw<T: std::os::fd::AsRawFd>(s: &T) -> RawSock {
     s.as_raw_fd()
 }
 
 /// The handle of a socket, for [`poll`].
-#[cfg(windows)]
+#[cfg(all(windows, feature = "tunnel"))]
 pub fn raw<T: std::os::windows::io::AsRawSocket>(s: &T) -> RawSock {
     s.as_raw_socket()
 }
@@ -185,7 +185,7 @@ pub fn raw<T: std::os::windows::io::AsRawSocket>(s: &T) -> RawSock {
 /// Waits until one of the sockets can be read (the first flag) or written
 /// (the second), or the timeout passes; an error counts as the timeout,
 /// since the caller looks at every socket again anyway.
-#[cfg(unix)]
+#[cfg(all(unix, feature = "tunnel"))]
 pub fn poll(socks: &[(RawSock, bool, bool)], timeout: Duration) {
     let mut fds: Vec<libc::pollfd> = socks
         .iter()
@@ -205,7 +205,7 @@ pub fn poll(socks: &[(RawSock, bool, bool)], timeout: Duration) {
 /// Waits until one of the sockets can be read (the first flag) or written
 /// (the second), or the timeout passes; an error counts as the timeout,
 /// since the caller looks at every socket again anyway.
-#[cfg(windows)]
+#[cfg(all(windows, feature = "tunnel"))]
 pub fn poll(socks: &[(RawSock, bool, bool)], timeout: Duration) {
     use windows_sys::Win32::Networking::WinSock::{POLLRDNORM, POLLWRNORM, WSAPOLLFD, WSAPoll};
     let mut fds: Vec<WSAPOLLFD> = socks
@@ -227,7 +227,7 @@ pub fn poll(socks: &[(RawSock, bool, bool)], timeout: Duration) {
 
 /// The process's effective user id; on Windows, where users have no number,
 /// 0, which only the tables of /proc compare against.
-#[cfg(unix)]
+#[cfg(all(unix, feature = "tunnel"))]
 pub fn euid() -> u32 {
     // SAFETY: geteuid has no preconditions and cannot fail.
     unsafe { libc::geteuid() }
@@ -235,7 +235,7 @@ pub fn euid() -> u32 {
 
 /// The process's effective user id; on Windows, where users have no number,
 /// 0, which only the tables of /proc compare against.
-#[cfg(windows)]
+#[cfg(all(windows, feature = "tunnel"))]
 pub fn euid() -> u32 {
     0
 }
