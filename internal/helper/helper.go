@@ -45,13 +45,15 @@ type Server struct {
 	version  string
 	handlers map[string]Handler
 
-	mu sync.Mutex // one answer at a time on the channel
+	mu     sync.Mutex    // one answer at a time on the channel
+	closed chan struct{} // closed when cbb closes the channel
+	once   sync.Once
 }
 
 // New returns a server that answers hello with version and the operations
 // handed to Handle.
 func New(version string) *Server {
-	s := &Server{version: version, handlers: map[string]Handler{}}
+	s := &Server{version: version, handlers: map[string]Handler{}, closed: make(chan struct{})}
 	s.handlers[OpHello] = s.hello
 	return s
 }
@@ -79,6 +81,9 @@ func (s *Server) Serve(r io.Reader, w io.Writer) error {
 	rd := control.NewReader(r)
 	var wg sync.WaitGroup
 	defer wg.Wait()
+	// Before the wait: a request that runs until the channel closes, such
+	// as agent, ends then.
+	defer s.once.Do(func() { close(s.closed) })
 	var werr error
 	for {
 		req, err := rd.Read()

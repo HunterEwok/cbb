@@ -135,6 +135,9 @@ if ! pw usershow cbb >/dev/null 2>&1; then
 	pw useradd cbb -g cbb -d /nonexistent -s /usr/sbin/nologin -c "CBB"
 fi
 install -m 0755 "$bin" /usr/local/bin/cbb
+if [ -f "$(dirname "$bin")/cbb-helper" ]; then
+	install -m 0755 "$(dirname "$bin")/cbb-helper" /usr/local/bin/cbb-helper
+fi
 install -d -m 0755 /usr/local/etc/rc.d /usr/local/share/cbb /usr/local/etc/cbb
 install -m 0555 "$here/cbb" /usr/local/etc/rc.d/cbb
 install -d -o cbb -g cbb -m 0700 /var/db/cbb

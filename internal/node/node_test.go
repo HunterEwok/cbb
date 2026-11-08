@@ -774,7 +774,9 @@ func TestTheConnectionTheLowerIDDialedStays(t *testing.T) {
 		low, high = b, a
 	}
 	cd, _ := link(t, low, high)
+	// Both sides hold the first connection before the second comes.
 	waitPeers(t, high, 1)
+	waitPeers(t, low, 1)
 	hd, ld := link(t, high, low)
 	if err := wait(t, ld, "the low member to refuse the second connection"); !errors.Is(err, errOtherConn) {
 		t.Fatalf("the low member's side of the second connection: %v, want errOtherConn", err)

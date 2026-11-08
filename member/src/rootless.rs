@@ -82,8 +82,12 @@ pub fn unit_dir() -> PathBuf {
 /// The control socket, in the user's runtime directory, which the user
 /// unit's RuntimeDirectory makes.
 pub fn socket() -> PathBuf {
+    #[cfg(unix)]
     // SAFETY: getuid has no preconditions and cannot fail.
-    socket_in(std::env::var_os("XDG_RUNTIME_DIR"), unsafe { libc::getuid() })
+    let uid = unsafe { libc::getuid() };
+    #[cfg(not(unix))]
+    let uid = 0;
+    socket_in(std::env::var_os("XDG_RUNTIME_DIR"), uid)
 }
 
 fn socket_in(run: Option<std::ffi::OsString>, uid: u32) -> PathBuf {

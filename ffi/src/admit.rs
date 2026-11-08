@@ -180,6 +180,14 @@ impl Admit {
                 out.wrong_code = wrong_code;
                 out.error = Some(crate::join::ErrorAnswer::of(&error));
             }
+            // Only a remote invitation's window asks its admin, and the
+            // phones' windows here take a code.
+            Outcome::Confirm(_) => {
+                out.state = "failed";
+                out.error = Some(crate::join::ErrorAnswer::of(&cbb_core::error::Error::msg(
+                    "this window takes no remote invitation",
+                )));
+            }
         }
         answer(Ok(out))
     }

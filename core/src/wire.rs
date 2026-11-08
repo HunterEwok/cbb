@@ -55,6 +55,10 @@ pub struct Message {
     /// (section 16, "Entry points"), decoded on their own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entries: Option<Value>,
+    /// In a release message, the signed release `{keys, channel, release}`
+    /// (section 16, "In the group"), decoded on their own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release: Option<Value>,
     /// In a reach message, the members a computer is connected to (section
     /// 4, "Reach"), kept as it came: the lite member shows no devices.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -122,6 +126,18 @@ pub fn with_features(mut m: Message, features: &[&str]) -> Message {
         && let Some(Value::Object(h)) = m.hello.as_mut()
     {
         h.insert("features".into(), to_value(features));
+    }
+    m
+}
+
+/// m, a hello, naming the release the sender holds by its keys.json and
+/// channel seqs (section 16, "In the group"); (0, 0) for none.
+pub fn with_release(mut m: Message, order: (u64, u64)) -> Message {
+    if order.1 != 0
+        && let Some(Value::Object(h)) = m.hello.as_mut()
+    {
+        h.insert("release_seq".into(), order.1.into());
+        h.insert("release_keys_seq".into(), order.0.into());
     }
     m
 }
@@ -205,6 +221,12 @@ pub struct HelloBody {
     pub entries_seq: u64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub entries_keys_seq: u64,
+    /// The channel and keys.json seqs of the signed release the sender
+    /// holds (section 16, "In the group"); 0 for none.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub release_seq: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub release_keys_seq: u64,
     /// What the sender supports beyond its protocol version: `media` from
     /// one that serves the content of media events.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -232,6 +254,23 @@ pub struct DeviceInfo {
     pub version: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub mac: String,
+    /// The release archive this device updates from with cbb update
+    /// (cbb-linux-arm64.tar.gz), for its group's hub to fetch (section 16).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub archive: String,
+}
+
+/// Whether name is a release archive's, as packaging/archive.sh makes
+/// them: cbb and two or three dash-separated words of up to 16 lowercase
+/// letters and digits, then .tar.gz or .zip.
+pub fn archive_name_valid(name: &str) -> bool {
+    let Some(stem) = name.strip_suffix(".tar.gz").or_else(|| name.strip_suffix(".zip")) else { return false };
+    let Some(rest) = stem.strip_prefix("cbb-") else { return false };
+    let words: Vec<&str> = rest.split('-').collect();
+    (2..=3).contains(&words.len())
+        && words
+            .iter()
+            .all(|w| (1..=16).contains(&w.len()) && w.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()))
 }
 
 /// The forms a device may name, for its icon.
@@ -256,6 +295,7 @@ impl DeviceInfo {
             os_version: short(&self.os_version),
             version: short(&self.version),
             mac: if mac_ok { self.mac.clone() } else { String::new() },
+            archive: if archive_name_valid(&self.archive) { self.archive.clone() } else { String::new() },
         }
     }
 
@@ -363,6 +403,8 @@ pub fn hello(
         seal: seal.map(<[u8]>::to_vec),
         entries_seq: entries.1,
         entries_keys_seq: if entries.1 == 0 { 0 } else { entries.0 },
+        release_seq: 0,
+        release_keys_seq: 0,
         features: Vec::new(),
     };
     Message { kind: "hello".into(), role: role.into(), hello: Some(to_value(&body)), ..Default::default() }
@@ -389,6 +431,11 @@ pub fn event(s: &Sealed) -> Message {
 /// An entries message, which passes the signed entry points on.
 pub fn entries(set: &Value) -> Message {
     Message { kind: "entries".into(), entries: Some(set.clone()), ..Default::default() }
+}
+
+/// A release message, which passes the signed release on.
+pub fn release(set: &Value) -> Message {
+    Message { kind: "release".into(), release: Some(set.clone()), ..Default::default() }
 }
 
 /// A command message: a command an admin signed for its receiver
@@ -496,7 +543,29 @@ pub fn frame_len(head: [u8; 4], max: usize) -> Result<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CommandResult, decode};
+    use super::{CommandResult, DeviceInfo, archive_name_valid, decode};
+
+    /// A hello's archive is kept only when it is named as
+    /// packaging/archive.sh names them, as Go's archivePattern.
+    #[test]
+    fn archive_names() {
+        for ok in ["cbb-linux-arm64.tar.gz", "cbb-windows-amd64.zip", "cbb-lite-linux-mipsle.tar.gz"] {
+            assert!(archive_name_valid(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "cbb.tar.gz",
+            "cbb-linux.tar.gz",
+            "cbb-a-b-c-d.tar.gz",
+            "cbb-Linux-arm64.zip",
+            "cbb-linux-arm64.tgz",
+            "../cbb-linux-arm64.zip",
+        ] {
+            assert!(!archive_name_valid(bad), "{bad}");
+        }
+        let d = DeviceInfo { archive: "cbb-linux-arm64.tar.gz/..".into(), ..Default::default() };
+        assert!(d.cleaned().archive.is_empty());
+    }
 
     /// A hub command's result keeps the new hub's offer, so a phone that
     /// passes it back, and its app, read it (section 11, "Moving the hub").

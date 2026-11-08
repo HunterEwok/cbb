@@ -236,6 +236,24 @@ impl Identity {
     /// issuer is given, from that admin CA under a root. It must name this
     /// device and its key and end later than the current one.
     pub fn with_cert_from(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<Identity> {
+        let next = self.with_cert_any_end(der, issuer)?;
+        if next.cert.not_after <= self.cert.not_after {
+            return Err(Error::msg("the renewed certificate does not end later than the current one"));
+        }
+        Ok(next)
+    }
+
+    /// Returns the identity with the member certificate that the root an
+    /// admin's takeover made issued it, as Go's TakenOver: it may end when
+    /// the current one does, as one issued in the same second.
+    pub fn with_cert_of_takeover(&self, der: &[u8]) -> Result<Identity> {
+        let mut next = self.with_cert_any_end(der, None)?;
+        next.issuer = None;
+        next.check()?;
+        Ok(next)
+    }
+
+    fn with_cert_any_end(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<Identity> {
         let mut next = self.clone();
         next.cert = Cert::parse(der).wrap("the renewed certificate")?;
         if let Some(i) = issuer {
@@ -250,9 +268,6 @@ impl Identity {
             if next.check().is_err() {
                 return Err(e);
             }
-        }
-        if next.cert.not_after <= self.cert.not_after {
-            return Err(Error::msg("the renewed certificate does not end later than the current one"));
         }
         Ok(next)
     }

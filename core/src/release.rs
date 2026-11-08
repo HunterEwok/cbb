@@ -479,7 +479,7 @@ pub(crate) fn decode_release(body: &[u8]) -> Result<Release> {
     Ok(r)
 }
 
-pub(crate) fn decode_channel(body: &[u8]) -> Result<Channel> {
+pub fn decode_channel(body: &[u8]) -> Result<Channel> {
     let c: Channel = decode(body, "channel")?;
     if !is_channel(&c.channel) || c.seq == 0 {
         return Err(Error::msg("the channel file is not valid"));

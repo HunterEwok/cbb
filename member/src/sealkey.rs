@@ -86,7 +86,7 @@ pub fn secret() -> Option<&'static [u8]> {
     KEYS.get().map(|(s, _)| s.as_slice())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;

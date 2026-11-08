@@ -85,6 +85,7 @@ class Cbb < Formula
 
   def install
     bin.install "cbb"
+    bin.install "cbb-helper" if File.exist?("cbb-helper")
     pkgshare.install "packaging"
   end
 

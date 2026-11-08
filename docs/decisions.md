@@ -30,7 +30,6 @@ replaced ones are its history. `tools/repocheck` checks the register: every numb
 | ID | Status | Decision |
 |---|---|---|
 | D-1 | accepted | License: AGPL-3.0-only. Code contributions are not accepted, so no contributor agreement is needed, and the one author can also offer a commercial license without the AGPL's obligations (README, "License"). |
-| D-2 | accepted | Language: Go, for reliable ARMv6 builds, TLS and networking in the standard library, and development speed. |
 | D-3 | accepted | A group of equal members instead of a central server; any member may be off. |
 | D-4 | accepted | Encryption with the project's own TLS and pairing instead of an overlay VPN, which on iOS would conflict with other VPN apps. |
 | D-5 | accepted | At home, members find each other on one network; away from home they reach the hub through the group's own tunnel (D-38). |
@@ -108,6 +107,7 @@ replaced ones are its history. `tools/repocheck` checks the register: every numb
 | D-85 | accepted | Every device follows one clipboard rule: a copy from another device goes into the clipboard while it is live, for the group's live window after it was copied (one minute by default, 5 seconds to an hour, set by the root or any admin in a signed `copies` record), counted in durations; once it has passed, the copy is gone and the device's own copy of any age is what its button sends. There is no rejoin window and no separate fetch, and a copy from a removed device is dropped even before it is written. |
 | D-86 | accepted | The iPhone and Android apps run the Rust core's member (ffi/, docs/core-api.md, "The member") in place of their own Swift and Kotlin nodes: one implementation of the member protocol, the clipboard rule and the button for every phone, as the Aurora app runs it. The apps keep what is theirs: finding the members (Bonjour, NSD) and handing their addresses in, the keys and Face ID or BiometricPrompt, pairing, the records they sign, the tunnel and the relay (whose loopback ports they hand in), and the answers to commands, renewals and tunnel keys, which the member asks of them by its events. |
 | D-87 | accepted | The phones run one tunnel, the lite member's in Rust (`ffi/src/tunnel.rs`), for the client, the phone as the hub with its forwarder and invitations, and the blind relay, in place of a Go tunnel bound by gomobile: one WireGuard, AmneziaWG and VLESS for the lite member and every phone, and app builds without Go. The phones reach a forwarder over VLESS with XHTTP behind a web server only; REALITY stays on the Go servers, whose ClientHello rustls cannot hide. |
+| D-88 | accepted | The computers run the Rust `cbb` (member/) as their service and command line, on every member; Go stays only in `cbb-helper`, the child it starts over inherited pipes for what needs Go (keys in the TPM, the agent, the peripherals), and in the relay's and forwarder's servers until they move. Go code that moves into the helper's packages takes its tests with it, and what the Rust service does itself is tested there. It replaces D-2 for the service; D-12 and D-32 hold, with the Rust `cbb`'s own mDNS code in place of Go's, and D-38 and D-40 too, WireGuard and AmneziaWG inside the Rust `cbb` and VLESS with REALITY in `cbb-helper`. |
 | D-90 | accepted | A device's role says only how it behaves on the network; its rights come from an admin key alone. Any admin with `admit` admits a phone that offers no admin key as a plain member, as it admits a computer; only the root makes a phone an admin and signs the `admins`, `clock` and `root` records. Ruled out: the earlier rule that only the root signs a phone's device record, which kept an admin from adding a phone without an admin key, such as a TV or the Aurora app, when the root phone was away. |
 
 ## Replaced decisions
@@ -116,6 +116,7 @@ Kept so that the code, the changelog and older documents that cite them still ma
 
 | ID | Status | Decision |
 |---|---|---|
+| D-2 | replaced by D-88 | Language: Go, for reliable ARMv6 builds, TLS and networking in the standard library, and development speed. |
 | D-10 | replaced by D-80 | The iPhone trusts a separate CA restricted by name constraints; the token is shown only after that trust is in place. |
 | D-13 | replaced by D-53 | Only Linux members hold `cbb.local`; Macs never hold it (since D-46 they listen too). |
 | D-19 | replaced by D-85 | The group state is last-writer-wins; the protection of copies made during a disconnect applies only to writing the local clipboard (live window 60 s, rejoin window 30 s). The first version kept that rule in the group state, and a review showed that the group could then split for good. |

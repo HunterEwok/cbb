@@ -15,6 +15,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/node"
+	"github.com/HunterEwok/cbb/internal/peripheral"
 )
 
 // Quick actions (design.md, "Quick actions"; docs/protocol.md, section
@@ -107,7 +108,11 @@ func (s *Service) runAction(body group.CommandBody, a actions.Action) node.Resul
 	defer cancel()
 	var err error
 	if body.Action == actions.Layout {
-		err = s.nextKeyboardLayout()
+		err = s.host.NextKeyboardLayout()
+		var r *peripheral.Refusal
+		if errors.As(err, &r) {
+			err = &actions.Refusal{Reason: r.Reason}
+		}
 	} else if len(a.Command) > 0 {
 		err = sessionRunner{s}.run(ctx, body.Action, a.Command)
 	} else {
