@@ -48,11 +48,11 @@ struct StartView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(palette.textDim)
             Spacer()
-            Button { model.dismissWelcome(); adding = true } label: { Text("Create a group") }
+            Button { adding = true } label: { Text("Create a group") }
                 .buttonStyle(AccentButtonStyle())
             Button { model.startJoining() } label: { Text("Join a group") }
                 .buttonStyle(GlassButtonStyle())
-            Button { model.dismissWelcome(); restoring = true } label: { Text("Restore with the recovery key") }
+            Button { restoring = true } label: { Text("Restore with the recovery key") }
                 .font(.footnote)
                 .foregroundStyle(palette.textDim)
         }

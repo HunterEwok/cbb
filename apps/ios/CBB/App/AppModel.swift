@@ -358,8 +358,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var handedOver = false
     /// The group removed this phone; the app offers to leave.
     @Published private(set) var removed = false
-    /// The one-time note on the Start screen that this phone is ready.
-    @Published private(set) var welcome = false
 
     /// Sync away from home as Settings shows it: nil without a group.
     struct Away: Equatable {
@@ -478,7 +476,7 @@ final class AppModel: ObservableObject {
     /// The running app's model notifies of the group's events and tells the
     /// watch; the tests' and previews' do neither.
     private let notifies: Bool
-    static let welcomedKey = "welcomed"
+    static let preparedKey = "prepared"
 
     /// nil means PendingGroup, made here because a default argument is
     /// evaluated outside the main actor.
@@ -532,27 +530,19 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// At the first launch: makes this phone's own key and says so once,
-    /// with what to do next.
+    /// At the first launch: makes this phone's own key, once.
     func prepare() {
-        guard phase == .start, !defaults.bool(forKey: Self.welcomedKey) else { return }
+        guard phase == .start, !defaults.bool(forKey: Self.preparedKey) else { return }
         do {
             try group.prepare()
-            welcome = true
+            defaults.set(true, forKey: Self.preparedKey)
         } catch {
             message = Self.describe(error)
         }
     }
 
-    /// Hides the note for good.
-    func dismissWelcome() {
-        welcome = false
-        defaults.set(true, forKey: Self.welcomedKey)
-    }
-
-    /// Opens the screen that joins another phone's group.
+    /// Opens the screen that joins a group.
     func startJoining() {
-        dismissWelcome()
         message = nil
         phase = .joining
     }

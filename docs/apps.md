@@ -25,26 +25,34 @@ they look, so both apps are built to the same plan.
 
 ## Screens
 
-1. **Start** (no group yet): one sentence, the big button "Connect a new device" with a hint
-   below it (on a computer, run `cbb pair` and scan the code it shows), and a second button, "I already use
-   Copy Beyond Borders on another phone", which joins that phone's group, and a third, "My group was
-   made on a computer", where the user types the six-digit code that `cbb pair -admin` shows on
-   the group's root and the phone joins that group as an admin. The camera opens at once;
-   after the scan the app creates the group key in the Secure Enclave or StrongBox, admits
-   the device and goes to Home. At the first launch the app makes this phone's own key and
-   says so once, in a card: "This phone is ready", what the key is for in plain words, and
-   that the next step is to connect a device. A gear opens Settings (theme and language)
-   before there is a group; when the system's language has no translation, a language menu
-   sits next to it, with English chosen.
-2. **Home**: the one big button (send what this phone holds or fetch the computer's recent
-   copy, by the rule of design.md, "The one button"; when the phone's clipboard holds something the
-   app cannot read as text, it is left as it is and the line says so), the result in one
-   line, and every device of the group under it, as tiles or as a list (the "…" menu
-   switches them and opens Settings). A tile shows the device's icon (laptop, computer,
+1. **Start** (no group yet), the same on the iPhone, Android and Aurora: settings and the
+   language at the top, the name and one sentence, then **Create a group** (the main button:
+   the camera opens, and after the scan the app creates the group key in the Secure Enclave
+   or StrongBox, becomes the group's root, admits the device and goes to Home), **Join a
+   group** (one screen: this phone's QR code and six digits; a phone of the group scans the
+   code, a computer of the group types the digits after "+", docs/protocol.md, section 6),
+   and, small, **Restore with the recovery key**. Admin rights come from the device that
+   admits the phone, not from a separate button.
+2. **Home**: how many devices are online, with the two switches beside it: the **house**
+   (sync on this phone: a tap turns it off or on, touching and holding it turns it off for
+   15 minutes, an hour, 8 hours or until turned on; off, the clipboard is this phone's own
+   both ways, `mute.json` keeping the time across restarts, docs/design.md, "Sync on and
+   off") and the **globe** ("Everywhere", sync away from home, which asks once and waits
+   while sync is off). Under them an alert card only when there is something to say, then
+   every device of the group as tiles or as a list (the "…" menu switches them, arranges
+   them and opens Settings). There is no send button: what was copied goes out as the app
+   opens, and a copy from another device that waits comes in. On the iPhone a note at the
+   first Home asks once for the clipboard, so that Settings, CBB lists "Paste from Other
+   Apps", and opens Settings there to set it to Allow; the system's paste button (an icon
+   only) shows on Home only when iOS refuses the app the clipboard or the user chose
+   "Later". On Android the tile, the widget, "Send" in the notification and Share stay. A
+   tile shows the device's icon (laptop, computer,
    phone, tablet, TV, board, server, router, game console, watch, retro computer or other;
    SF Symbols on the iPhone), a live dot, its name, its system and its mark ("this phone",
-   "root", "admin", "frozen"); a tap opens the device (Devices, below). A "+"
-   adds a device (camera). The same button is the app's "Sync clipboard" action, which
+   "root", "admin", "frozen"); a tap opens the device (Devices, below). "+" scans the code a
+   new device shows, and its menu sends an invitation to a device far away. The one admin of
+   the group sees "Lost a phone?" once, as a card it closes. The phone's sync is also the
+   app's "Sync clipboard" action, which
    Shortcuts and Spotlight offer as soon as the app is installed (App Intents with an
    App Shortcut): Back Tap or the Action button runs it without opening the app; it waits
    a few seconds for a computer to connect and says what it did in one line. The same
@@ -68,12 +76,8 @@ they look, so both apps are built to the same plan.
    under Face ID or the fingerprint: remove the device of a claim or one of the two admins,
    or void both histories; on any other device it says that the root decides.
 
-   **Muting** (docs/design.md, "Muting a device"): under the button a quick switch says
-   whether the phone takes the group's copies. A tap keeps them out of the clipboard, or takes
-   them again; a long press keeps them out for 15 minutes, an hour, 8 hours or until it is
-   turned on. The phone's own copies still go out, and the pause lasts across restarts in
-   `mute.json` beside the group's file, as on the computers. On an admin phone a device's page
-   has "Mute" with the same times ("Until an admin unmutes it" for the last), a `mute` command
+   **Muting** (docs/design.md, "Muting a device"): on an admin phone a device's card
+   has "Mute" with the house's times ("Until an admin unmutes it" for the last), a `mute` command
    signed after Face ID or the fingerprint, and "Unmute"; a muted device says so on its tile,
    its row and its page. A phone takes both commands: muted, its copies stay on it, and Home
    says so until an admin unmutes it, an admin phone itself on its own page.
@@ -88,13 +92,15 @@ they look, so both apps are built to the same plan.
    Received, on the iPhone; it saves a copy once. Android's Share sends a single image as an
    image and anything else as files, up to 100 MiB together. A copy over 100 MiB stays on
    the computers.
-3. **Add a device**: the camera with a frame; the device appears in the list when it has
-   joined. Fallback: type the six digits. Another phone joins the same way: it shows its own
-   QR code ("I already use CBB on another phone" on its Start screen) and this phone
-   scans it.
-4. **Devices** (the tiles of Home, and a device's page): on its page a summary (type,
-   operating system, role, its place in the group, online or not) and the actions below
-   it; Back returns to Home. The whole group, one tile per device: its name, an icon and the name of its
+3. **Add a device**: the camera with a frame on the QR code the new device shows ("Join a
+   group" on its Start screen, or `cbb pair` on a computer); the device appears in the list
+   when it has joined. Fallback: type the six digits.
+4. **Devices** (the tiles of Home, and a device's card): the card has its icon, name,
+   online dot and badges (this phone, root, admin, hub, frozen), one line of its system and
+   CBB version, the house (its sync: this phone's own, or on an admin phone a connected
+   computer's), a row of icons (paste on it, mute, quick actions), the rest (type, MAC
+   address, role, ID) under More, and "…" with rename, make it an admin or a hub, unfreeze
+   and remove; Back returns to Home. The whole group, one tile per device: its name, an icon and the name of its
    system (Linux, Windows, macOS, iOS, Android, or "device" for firmware; a lite member is
    marked so), a "root", "admin" or "frozen" mark, a live dot when it is online and
    "seen 5 min ago" otherwise, and "this phone" on its own row. The list is the group's
@@ -108,8 +114,8 @@ they look, so both apps are built to the same plan.
    "A computer as admin"): it asks once, warns that the key is a file on the computer, needs
    Face ID, and the computer then adds and removes devices with `cbb pair` and
    `cbb remove`. If the removed phone held the root, this phone
-   takes it over in the same step. A connected computer's page shows its sync mode and, on an admin phone,
-   offers "Sync mode": the phone signs a `mode` command (docs/protocol.md, section 15) after
+   takes it over in the same step. On an admin phone a connected computer's house turns its sync
+   on or off: the phone signs a `mode` command (docs/protocol.md, section 15) after
    Face ID or the fingerprint and sends it to that computer, which answers done or why it refused.
    An admin phone also offers "Make it a hub" for a connected computer that is an admin, or that
    the root phone makes one first: after Face ID or the fingerprint it signs a `hub` command
@@ -133,12 +139,18 @@ they look, so both apps are built to the same plan.
    fingerprint; reboot and shut down ask again first. "Turn all off" signs `actions-off`,
    after which only the device's own user turns them on again. A phone that is not an admin shows the list without
    actions and says which phones are admins.
-5. **Settings**: the theme (System, Dark or Light) and one of ten colours, language, about (seven taps on the version show the switch "Show
-   error details", which puts the error itself under each error message; it is on in debug
-   builds, and the launch argument or extra `ShowErrorDetails` sets it too), and once there
-   is a group, "Away from home": one
-   switch that turns sync away from home on for this phone (docs/design.md, "Sync away from
-   home"), the words of the design on what changes, and where it stands: waiting for the
+5. **Settings**, the same on the iPhone, Android and Aurora: first the basic ones, the theme
+   (System, Dark or Light) as icons with the language in a row and the ten colours, without
+   a heading, the notifications, the watch, the recovery key on the root, the switch
+   "Advanced settings", leaving the group, and about (seven taps on the version show the
+   switch "Show error details", which puts the error itself under each error message; it is
+   on in debug builds, and the launch argument or extra `ShowErrorDetails` sets it too).
+   The advanced ones: away from home (the hub, moving it to a computer, the tunnel disguise,
+   the blind relay) and, for admins, the group ("Copy lifetime", "Security level": root,
+   admins, hubs). No long text sits under an item: a hard one has a tip of a sentence or
+   two, shown from the first launch until the user closes it (TipKit on the iPhone). Sync
+   away from home is turned on by the globe on Home (docs/design.md, "Sync away from
+   home"); Settings show where it stands: waiting for the
    hub's answer, which comes on the next connection at home; at home, syncing directly;
    connecting; connected through the tunnel. Turning it off forgets the phone's tunnel key.
    On Android the WireGuard key sits in the app's files, encrypted with a Keystore key that
@@ -268,11 +280,11 @@ ordinary app no sockets, so it works only through its iPhone, over WatchConnecti
 (`WatchLink` on the phone, `WatchModel` on the watch). It shows, in the phone's colour:
 
 - how many devices are online, and each device with its icon and live dot;
-- the switch for sync away from home, which turns the phone's own away mode on and off as
-  Settings does, and where it stands;
+- the phone's two switches as on its Home: the house (sync on the phone) and the globe
+  (sync away from home, waiting while sync is off), and where away from home stands;
 - the latest events of the group.
 
-The phone sends the watch its state (`WatchState`: devices, away, events, colour; never
+The phone sends the watch its state (`WatchState`: devices, sync, away, events, colour; never
 the clipboard) whenever it changes; the watch shows the last one it got and says so when
 the phone does not answer. The notifications of the group's events reach the watch as
 every iPhone notification does.
@@ -951,22 +963,17 @@ the app on real devices.
   admins and removes the lost phone. The kit keeps the records file and asks the Rust core
   what it says (`RecordSet`, docs/core-api.md, "The record set"); the Android kit does the
   same, with its root key in the Keystore behind BiometricPrompt.
-- A phone joins a computer's group from its Start screen ("My group was made on a computer";
-  docs/protocol.md, section 6, "A phone joins a computer's group"): it browses up to 10 s for
-  a computer announcing a pairing window (`p=1`), then 2 s more, and refuses when two
-  announce one; it dials that window with its own self-signed certificate, confirms the code
-  first (`PairingJoiner.join`) and checks the Welcome, whose admin CA the root issued for the
-  admin key it offered. A window of a plain `cbb pair`, or of an admin computer that is not the
-  root, refuses a phone that offers an admin key, and the app says to run `cbb pair -admin` on
-  the computer that created the group.
+- A phone joins a computer's group as it joins a phone's: "Join a group" shows its QR code
+  and six digits, and the root or an admin computer types the digits after "+" (`cbb pair
+  -qr`, with `-admin` on the root to make the phone an admin).
 - When the root hands the group to this phone (`cbb handover` on the root computer, a
   `handover` record naming this phone's admin key, which `group_view` reports as `handed_to`),
   Home shows "The group is yours to take". Its button makes a new root key (the Secure Enclave
   or the Keystore, behind Face ID or BiometricPrompt), signs the claim with the admin key
   (`takeHandedOver`), which takes effect at once, and finishes the takeover as after a lost
   root; the computer is not removed.
-- A new phone restores the group with the recovery key from its Start screen ("I have the
-  group's recovery sheet"; docs/protocol.md, section 10, "The recovery key"). It scans the
+- A new phone restores the group with the recovery key from its Start screen ("Restore with
+  the recovery key"; docs/protocol.md, section 10, "The recovery key"). It scans the
   sheet's QR code (the typed key carries no admin CA, so a new phone needs the QR code; a
   computer of the group takes the typed key with `cbb recovery`), finds the group's computers
   by their tag and lets the recovery key issue its member certificate (`Restore`). A computer

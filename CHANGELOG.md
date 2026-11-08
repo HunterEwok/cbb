@@ -1307,6 +1307,17 @@ All notable changes to cbb are documented in this file. The format follows
   line, the house and mute, the rest under More; Settings has the appearance as icons, the
   colour, the language, "Open at sign-in", "Advanced settings" and error details after seven
   clicks on the version.
+- The iPhone app has the house and the globe beside how many devices are online, and no
+  send button: what was copied goes out as the app opens, after a note at the first Home
+  that sends the user to Settings to allow pasting from other apps; the system's paste
+  button stays only when iOS refuses the clipboard. "+" scans the new device's code or sends
+  an invitation; "Lost a phone?" is a card closed once. The Start screen has Create a group,
+  Join a group and Restore with the recovery key. Settings have the look in a row, the
+  advanced settings behind a switch and tips instead of long texts ("Copy lifetime",
+  "Security level", "Tunnel disguise", "Blind relay"); the globe on Home replaces the away
+  switch there. A device's card shows its badges, one line, the house, a row of icons and
+  the rest under More. The phone's sync off replaces its pause of receiving and may last for
+  a time; a phone that joins syncs at once. The Apple Watch has the house beside the globe.
 - One switch, sync, replaces the four sync modes and the device's own "not listening" switch
   (design.md, "Sync on and off"): on by default, so a device that joins syncs at once; off,
   for a time or until turned on, the clipboard is the device's own, both ways. `cbb sync [on

@@ -372,37 +372,22 @@ final class AppModelTests: XCTestCase {
         return UserDefaults(suiteName: name)!
     }
 
-    func testWelcomeOnce() {
+    /// The phone's own key is made once, at the first launch without a
+    /// group.
+    func testPreparedOnce() {
         let defaults = freshDefaults()
         let g = FakeGroup()
-        let m = AppModel(group: g, defaults: defaults)
-        m.prepare()
-        XCTAssertTrue(m.welcome)
+        AppModel(group: g, defaults: defaults).prepare()
         XCTAssertEqual(g.prepared, 1)
-        m.dismissWelcome()
-        XCTAssertFalse(m.welcome)
-        let again = AppModel(group: g, defaults: defaults)
-        again.prepare()
-        XCTAssertFalse(again.welcome, "the note shows only at the first launch")
-        XCTAssertEqual(g.prepared, 1)
+        AppModel(group: g, defaults: defaults).prepare()
+        XCTAssertEqual(g.prepared, 1, "the key is made only at the first launch")
     }
 
-    func testNoWelcomeWithAGroup() {
+    func testNotPreparedWithAGroup() {
         let g = FakeGroup()
         g.hasGroup = true
-        let m = AppModel(group: g, defaults: freshDefaults())
-        m.prepare()
-        XCTAssertFalse(m.welcome)
+        AppModel(group: g, defaults: freshDefaults()).prepare()
         XCTAssertEqual(g.prepared, 0)
-    }
-
-    func testJoiningEndsTheWelcome() {
-        let defaults = freshDefaults()
-        let m = AppModel(group: FakeGroup(), defaults: defaults)
-        m.prepare()
-        m.startJoining()
-        XCTAssertFalse(m.welcome)
-        XCTAssertTrue(defaults.bool(forKey: AppModel.welcomedKey))
     }
 
     func testLanguageChoice() {
