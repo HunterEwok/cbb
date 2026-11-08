@@ -336,7 +336,8 @@ type testService struct {
 	done     chan error
 	accepted atomic.Int32 // member connections accepted
 	cfg      func(*Config)
-	rust     bool // the Rust service (CBB_TEST_RUST_SERVICE)
+	env      []string // cfg's settings for the Rust service, when it has them
+	rust     bool     // the Rust service (CBB_TEST_RUST_SERVICE)
 
 	mu         sync.Mutex
 	memberAddr string // where the member port listens
@@ -412,10 +413,24 @@ func startWith(t *testing.T, h *hub, name string, system string, cfg func(*Confi
 	return startIn(t, h, &testService{name: name, dir: dir, os: system, cfg: cfg})
 }
 
+// startEnv is startWith for settings the Rust service has too: where the
+// tests run it (CBB_TEST_RUST_SERVICE), it starts with env, the same
+// settings as its environment variables, in place of the Go service with
+// cfg.
+func startEnv(t *testing.T, h *hub, name string, cfg func(*Config), env ...string) *testService {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "cb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	return startIn(t, h, &testService{name: name, dir: dir, os: group.OSLinux, cfg: cfg, env: env})
+}
+
 // restartService starts a stopped service again with its state.
 func restartService(t *testing.T, h *hub, old *testService) *testService {
 	t.Helper()
-	return startIn(t, h, &testService{name: old.name, dir: old.dir, os: old.os, cfg: old.cfg})
+	return startIn(t, h, &testService{name: old.name, dir: old.dir, os: old.os, cfg: old.cfg, env: old.env})
 }
 
 // countingListener counts the connections it accepts.
@@ -440,7 +455,7 @@ func rustService() string { return os.Getenv("CBB_TEST_RUST_SERVICE") }
 
 func startIn(t *testing.T, h *hub, s *testService) *testService {
 	t.Helper()
-	if bin := rustService(); bin != "" && s.cfg == nil && s.os == group.OSLinux {
+	if bin := rustService(); bin != "" && (s.cfg == nil || s.env != nil) && s.os == group.OSLinux {
 		r := startRust(t, bin, s)
 		h.mu.Lock()
 		if h.rust == nil {
@@ -2087,8 +2102,9 @@ func TestPairingAcrossARenewal(t *testing.T) {
 // of its own, which addr reads from its log once it is in a group.
 func startRust(t *testing.T, bin string, s *testService) *testService {
 	t.Helper()
-	r := startLiteEnv(t, bin, s.dir, []string{"CBB_TEST_ELSEWHERE=" + elsewhereDir()}, "-full", "-port", "0", "-name", s.name)
-	r.name, r.os, r.rust = s.name, s.os, true
+	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir()}, s.env...)
+	r := startLiteEnv(t, bin, s.dir, env, "-full", "-port", "0", "-name", s.name)
+	r.name, r.os, r.rust, r.cfg, r.env = s.name, s.os, true, s.cfg, s.env
 	// It ends with an error after cbb leave, for systemd to start it again,
 	// where Go's Run returns ErrLeft.
 	inner := r.done

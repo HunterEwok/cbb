@@ -12,6 +12,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"os"
 	"path/filepath"
 	"slices"
@@ -49,6 +50,23 @@ func (s *releaseSigner) roots(t *testing.T) [][]byte {
 		t.Fatal(err)
 	}
 	return [][]byte{der}
+}
+
+// rootsEnv is roots for the Rust service: CBB_RELEASE_ROOTS names a PEM
+// file of them.
+func (s *releaseSigner) rootsEnv(t *testing.T) string {
+	t.Helper()
+	var b bytes.Buffer
+	for _, der := range s.roots(t) {
+		if err := pem.Encode(&b, &pem.Block{Type: "PUBLIC KEY", Bytes: der}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "roots.pem")
+	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return "CBB_RELEASE_ROOTS=" + path
 }
 
 // sign returns the signed files of version on the stable channel at seq.
@@ -93,8 +111,8 @@ func TestReleaseSpreads(t *testing.T) {
 	roots := signer.roots(t)
 	withRoots := func(c *Config) { c.ReleaseRoots = roots }
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", withRoots)
-	pc := startWith(t, &h, "pc", "linux", withRoots)
+	pi := startEnv(t, &h, "pi", withRoots, signer.rootsEnv(t))
+	pc := startEnv(t, &h, "pc", withRoots, signer.rootsEnv(t))
 	pairWith(t, pi, pc)
 	waitFor(t, "pc is connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -123,7 +141,7 @@ func TestReleaseSpreads(t *testing.T) {
 		t.Errorf("pc holds %q after the refused ones", got)
 	}
 
-	mac := startWith(t, &h, "mac", "linux", withRoots)
+	mac := startEnv(t, &h, "mac", withRoots, signer.rootsEnv(t))
 	pairWith(t, pi, mac)
 	waitFor(t, "mac, joining later, holds 0.6.1", func() bool { return mac.status(t).Release == "0.6.1" })
 
@@ -143,8 +161,8 @@ func TestReleaseUnderNewKeys(t *testing.T) {
 	roots := signer.roots(t)
 	withRoots := func(c *Config) { c.ReleaseRoots = roots }
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", withRoots)
-	pc := startWith(t, &h, "pc", "linux", withRoots)
+	pi := startEnv(t, &h, "pi", withRoots, signer.rootsEnv(t))
+	pc := startEnv(t, &h, "pc", withRoots, signer.rootsEnv(t))
 	pairWith(t, pi, pc)
 	waitFor(t, "pc is connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -171,8 +189,8 @@ func TestReleaseArchives(t *testing.T) {
 	signer := newReleaseSigner(t)
 	withRoots := func(c *Config) { c.ReleaseRoots = signer.roots(t) }
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", withRoots)
-	pc := startWith(t, &h, "pc", "linux", withRoots)
+	pi := startEnv(t, &h, "pi", withRoots, signer.rootsEnv(t))
+	pc := startEnv(t, &h, "pc", withRoots, signer.rootsEnv(t))
 	pairWith(t, pi, pc)
 	waitFor(t, "pc is connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -280,7 +298,7 @@ func TestWantedReleaseFiles(t *testing.T) {
 
 	signer := newReleaseSigner(t)
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", func(c *Config) { c.ReleaseRoots = signer.roots(t) })
+	pi := startEnv(t, &h, "pi", func(c *Config) { c.ReleaseRoots = signer.roots(t) }, signer.rootsEnv(t))
 	if _, err := pi.do(t, control.Header{Op: control.OpRelease}, releaseJSON(t, signer.sign(t, "0.6.1", 2))); err != nil {
 		t.Fatal(err)
 	}

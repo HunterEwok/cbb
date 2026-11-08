@@ -58,8 +58,8 @@ func TestEntriesSpread(t *testing.T) {
 	signer := newReleaseSigner(t)
 	withRoots := func(c *Config) { c.ReleaseRoots = signer.roots(t) }
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", withRoots)
-	pc := startWith(t, &h, "pc", "linux", withRoots)
+	pi := startEnv(t, &h, "pi", withRoots, signer.rootsEnv(t))
+	pc := startEnv(t, &h, "pc", withRoots, signer.rootsEnv(t))
 	pairWith(t, pi, pc)
 	waitFor(t, "pc is connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -146,7 +146,7 @@ func TestLiteEntries(t *testing.T) {
 	}
 	signer := newReleaseSigner(t)
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", func(c *Config) { c.ReleaseRoots = signer.roots(t) })
+	pi := startEnv(t, &h, "pi", func(c *Config) { c.ReleaseRoots = signer.roots(t) }, signer.rootsEnv(t))
 	dir := joinLite(t, bin, pi)
 	pemFile := filepath.Join(t.TempDir(), "roots.pem")
 	if err := os.WriteFile(pemFile, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.roots(t)[0]}), 0o644); err != nil {
