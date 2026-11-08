@@ -10,6 +10,26 @@ All notable changes to cbb are documented in this file. The format follows
 - The bench's time-scaled build of the Rust `cbb` (`cargo build -p cbb-lite --features
   benchtime`, never released), as the Go one's: certificates, renewals, credential periods and
   the hub key's handover run 100000 times faster, and `CBB_TEST_CLOCK` moves the wall clock.
+- The ZX Spectrum Next shows the group's latest image: `.cbb show` asks the lite member on the
+  Pi (`cbb next image`), which fits the PNG or JPEG to Layer 2 in 320×256 with 256 colours or
+  640×256 with 16, whichever shows it closer, with dithering from the Next's 512 colours; the
+  Next shows it column by column as it arrives and gives the screen back on a key.
+  `.cbb speed` (`cbb next speed`, `speed-in`) finds the fastest speed of the Pi's line that
+  keeps 80K whole each way, from 2M down a step at a time. `.cbb install` and `update` go the
+  same way: the site's files through the ESP from 460800, and the Pi's `cbb` from 921600, down
+  to the first speed that brings them whole; the Next's UART divisor is rounded, not cut.
+  The Next checks the files' SHA-256 in assembly, some five times faster than in C.
+  `.cbb leave` gives the Pi's service a second to end first, calls the Pi's `cbb` by its
+  path, and says when the Pi keeps its keys instead of saying it left.
+  The install fetches the Pi's `cbb` gzipped (`cbb.gz`, under half the bytes), which the Pi
+  unpacks, and asks the site for 56K at a time instead of 8K. `.cbb net on` no longer waits out a second
+  of silence after each step.
+  `.cbb show -tape` loads it as a real tape instead, from the Pi's sound through EAR, with
+  the cassette's stripes on the border (some 8 minutes).
+  While the network runs, the driver shows each new image of the group by itself over the
+  program in front, which it freezes until a key and then gives its screen back.
+- The iPhone and Android apps give a device two minutes to join instead of 30 seconds, so a
+  slow one (the ZX Next, which gets the group's records through its ESP) confirms in time.
 - Taking the group over is in the Rust core (`cbb_core::takeover`), each signature through the
   app's or the service's key: the claim from a lost root, as the admin the root handed the
   group to, or with the recovery key; where it stands; the new root's certificate and records

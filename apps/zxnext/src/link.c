@@ -39,7 +39,9 @@ static uint8_t nextreg(uint8_t reg)
 // Sets the selected UART's speed.
 static void set_speed(uint32_t speed)
 {
-    uint32_t prescaler = clocks[nextreg(NR_VIDEO_TIMING) & 7] / speed;
+    // Rounded, not cut: at 921600 and 2M a cut divisor runs up to five per cent fast in
+    // some video timings, more than the UARTs at both ends take.
+    uint32_t prescaler = (clocks[nextreg(NR_VIDEO_TIMING) & 7] + speed / 2) / speed;
     z80_outp(PORT_RX_BAUD, (uint8_t)(prescaler & 0x7F));
     z80_outp(PORT_RX_BAUD, (uint8_t)(((prescaler >> 7) & 0x7F) | 0x80));
 }
@@ -133,7 +135,8 @@ uint8_t link_recv(uint8_t *c, uint16_t seconds)
         *c = IO_UART_RX;
         return LINK_OK;
     }
-    rounds = seconds * ROUNDS_PER_SECOND;
+    // 0: a fifth of a second, for a quiet line.
+    rounds = seconds ? seconds * ROUNDS_PER_SECOND : ROUNDS_PER_SECOND / 5;
     for (;;) {
         if (z80_inp(PORT_TX_STATUS) & STATUS_RX_AVAIL) {
             *c = z80_inp(PORT_RX_BAUD);
@@ -161,11 +164,10 @@ uint8_t link_line(char *buf, uint8_t max, uint16_t seconds)
     return LINK_OK;
 }
 
-// Throws away what is waiting, until the line is quiet for a moment.
-static void drain(void)
+void link_drain(void)
 {
     uint8_t c;
-    while (link_recv(&c, 1) == LINK_OK) {
+    while (link_recv(&c, 0) == LINK_OK) {
     }
 }
 
@@ -190,14 +192,14 @@ uint8_t link_shell(void)
     uint8_t tries;
     if (link_via_send) return 0;
     for (tries = 0; tries < 3; tries++) {
-        drain();
+        link_drain();
         if (tries) {
             link_send(3); // Ctrl-C: stop what runs
             link_send(4); // Ctrl-D: NextPi restarts its supervisor shell
         }
         link_send('\n');
         if (wait_prompt(3)) {
-            drain();
+            link_drain();
             return 0;
         }
     }
@@ -207,5 +209,5 @@ uint8_t link_shell(void)
 void link_prompt(void)
 {
     wait_prompt(2);
-    drain();
+    link_drain();
 }
