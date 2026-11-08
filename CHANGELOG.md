@@ -1848,6 +1848,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The lite member fetches a copy's images or files once when two requests want them at the
+  same time (`cbb paste -o` while the copy is fetched in the background); the second waited on
+  chunks the first had taken and could fail.
 - The Rust service no longer renames itself in mDNS ("ID (2)") when its pairing window
   opens or closes, which kept the other members from finding it: the registration is
   updated in place rather than taken back and made again.
