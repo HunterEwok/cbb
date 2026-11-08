@@ -1707,6 +1707,8 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A file or an image from the group reaches a phone whose Downloads has no `CBB` folder yet:
+  the member makes the folder, where it failed with "No such file or directory" on Aurora.
 - When a joining phone refused the code an admin typed, the admin's side of the core's
   admission said only that pairing failed; it now says the code was wrong, as the other
   failures of a wrong code do.
