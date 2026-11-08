@@ -535,6 +535,9 @@
     <string name="mute_ever">حتى يلغي مشرف كتمه</string>
     <string name="create_group">إنشاء مجموعة</string>
     <string name="join_group">الانضمام إلى مجموعة</string>
+    <string name="join_admin">الانضمام كمشرف</string>
+    <string name="join_admin_title">الانضمام كمشرف</string>
+    <string name="join_admin_hint">على الهاتف الجذر للمجموعة، اضغط + وامسح هذا الرمز: الجذر وحده يضيف هاتفًا كمشرف. أبقِ هذه الشاشة مفتوحة.</string>
     <string name="restore_link">الاستعادة بمفتاح الاسترداد</string>
     <string name="sync_on">المزامنة تعمل</string>
     <string name="sync_off">المزامنة متوقفة</string>

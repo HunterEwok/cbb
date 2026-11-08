@@ -535,6 +535,9 @@
     <string name="mute_ever">עד שמנהל יבטל את ההשתקה</string>
     <string name="create_group">יצירת קבוצה</string>
     <string name="join_group">הצטרפות לקבוצה</string>
+    <string name="join_admin">הצטרפות כמנהל</string>
+    <string name="join_admin_title">הצטרפות כמנהל</string>
+    <string name="join_admin_hint">בטלפון השורש של הקבוצה, הקישו על + וסרקו את הקוד הזה: רק השורש מוסיף טלפון כמנהל. השאירו את המסך הזה פתוח.</string>
     <string name="restore_link">שחזור עם מפתח השחזור</string>
     <string name="sync_on">הסנכרון פועל</string>
     <string name="sync_off">הסנכרון כבוי</string>

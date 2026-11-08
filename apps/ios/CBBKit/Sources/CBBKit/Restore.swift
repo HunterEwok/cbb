@@ -10,9 +10,10 @@ import Foundation
 /// under its own admin CA; a computer of the group takes it on a connection
 /// that carries records only and sends the group's first root in its hello.
 /// The phone checks the records, then claims the group for a new root of
-/// its own; the claim waits the group's delay, unless the root cancels it,
-/// and PhoneGroup.finishTakeOver then makes the phone the root. The
-/// recovery key is not kept: the claim is the one thing it signs.
+/// its own through the core's member; the claim waits the group's delay,
+/// unless the root cancels it, and CoreMember.finishTakeover and
+/// PhoneGroup.becameRoot then make the phone the root. The recovery key
+/// is not kept: the claim is the one thing it signs.
 public struct Restore: Sendable {
     public enum Kind: Sendable {
         /// The key was typed: a new phone needs the QR code, which carries
@@ -142,16 +143,18 @@ public struct Restore: Sendable {
     }
 
     /// Claims group, which group(_:now:) returned, for newRoot, a root CA
-    /// for a new key of this phone, with the recovery key: the record to
-    /// send.
-    /// with is the recovery key again, as a YubiKey held to the phone a
-    /// second time gives it.
-    public func claim(_ group: inout PhoneGroup, newRoot: Data, now: Date, with: (any CertificateSigner)? = nil) throws -> Member.Record {
+    /// for a new key of this phone (CoreMember.rootCA), with the recovery
+    /// key, through member, the core's member running as this phone, which
+    /// adds the claim to its records and sends it. with is the recovery key
+    /// again, as a YubiKey held to the phone a second time gives it.
+    public func claim(_ group: inout PhoneGroup, member: CoreMember, newRoot: Data, with: (any CertificateSigner)? = nil) throws {
         let s: any CertificateSigner = with ?? signer
         guard s.publicKeyDER == signer.publicKeyDER else {
             throw Failure(kind: .notTheKey, message: "this is another key than the one that issued this phone's certificate")
         }
-        return try group.claimWithRecovery(recoverySigner: s, newRoot: newRoot, now: now)
+        try group.checkRecovery()
+        try member.claim(.recover, rootCA: newRoot, public: s.publicKeyDER, ca: adminCA, sign: { try s.signature(digest: $0) })
+        group.claimed(newRoot: newRoot, lost: group.records.rootDevice)
     }
 
     /// Exchanges records with a computer on a connection that carries

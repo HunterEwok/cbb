@@ -7,6 +7,28 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Taking the group over is in the Rust core (`cbb_core::takeover`), each signature through the
+  app's or the service's key: the claim from a lost root, as the admin the root handed the
+  group to, or with the recovery key; where it stands; the new root's certificate and records
+  once it took effect; and new admin CAs from the new root. The Rust `cbb` service takes the
+  group over through it, `cbb_member_manage` offers it to the phones' apps, and the Aurora app
+  takes a lost root's group over from the root's page, its admin key in the TEE becoming the
+  new root (`TestFFIPhoneTakeover`).
+- The tiles' order and collections are in the Rust core (`cbb_core::arrange`, checked against
+  the same vectors as the tray app and the kits), and the Aurora app has them: a long press on
+  a tile or a row moves it, puts it into a collection or a new one and takes it out, a drag
+  carries a tile over the others, a
+  collection's tile shows how many of its devices are online and opens its page, and the
+  pull-down menu has New collection… and Back to the group's order.
+- The Aurora app can be a Bluetooth keyboard: as the Linux computer, it registers the HID over
+  GATT service with the phone's BlueZ, and types the clipboard into a TV, a tablet or a
+  computer paired with it, in the device's layout (US or Russian) and at 10, 20 or 40
+  characters a second. The reports come from the core's new `keyboard` call. It takes remote
+  pastes too, typed there once the phone's user turned remote paste on (Aurora lets no app type
+  into another); the phone's member checks and opens a command for the app with the new
+  member call `check_command`.
+- The Aurora app puts one received image in Pictures/CBB and one video in Videos/CBB, an album
+  in the gallery; other files still go to Downloads/CBB.
 - The Rust `cbb` takes the group commands of the command line, with the Go cbb's words and
   exit codes (2 for a wrong use): `new`, `remove`, `rename`, `takeover -delay`, `incoming`,
   `keys`, `global hubs`, `freeze`, `unfreeze`, `admin`, `resolve`, `handover`, `mute`,
@@ -1430,8 +1452,8 @@ All notable changes to cbb are documented in this file. The format follows
 - Building the Rust crates needs Rust 1.95 or later: `core` and `embassy` declared 1.87, which
   no build checked, and CI now checks the workspace on 1.95.
 - The tile of the device an app runs on comes first by default, and moves as the other tiles
-  do, into a collection too (docs/apps.md, "Collections and the order of the tiles"); on
-  Aurora, which cannot move tiles yet, it stays first. A tile's system and its mark ("this
+  do, into a collection too (docs/apps.md, "Collections and the order of the tiles"), on Aurora
+  too, where the core's arrangement follows the same rule. A tile's system and its mark ("this
   phone", "hub", "muted") take two lines where one is too narrow, and Aurora shows two tiles
   in a row, as the other phones do, so neither is cut.
 - The tray app on Linux and Windows has the house (sync) and the globe (Everywhere, sync away
@@ -1499,6 +1521,20 @@ All notable changes to cbb are documented in this file. The format follows
 - The Rust code is one workspace at the top of the repository: the core in `core/`, the
   member's program `cbb` in `member/`, and `ffi/`, `embassy/`, `esp32/`, `ring-shim/` and
   `wasm/` beside them, instead of all under `lite/`. Nothing changes for an installed member.
+- The Android and iPhone apps take the group over through their member in the Rust core, as
+  the Aurora app does (ffi's `cbb_member_manage`: `root_ca`, `take_over`, `take_handed_over`,
+  `recover`, `finish_takeover`): from a lost root phone, when the root hands the group over,
+  and with the recovery key, on a YubiKey too. The kits no longer sign the claim and the new
+  root's records themselves (`PhoneGroup.takeOver`, `takeHandedOver`, `finishTakeOver` are
+  gone; `CoreMember.claim` and `finishTakeover` take their place).
+- The Android and iPhone apps make their group, admit a phone or a computer and join another
+  phone's group through the Rust core's admission (ffi's `cbb_group_new`, `cbb_admit_*`
+  and `cbb_join_*`, each kit's `CorePairing`), as the Aurora app does, in place of the kits'
+  own pairing code for these. Their Start screens have two buttons, as protocol.md section 6
+  says: "Join" ("I already use CBB on another phone" on the iPhone), which any admin of the
+  group can answer, and "Join as an admin", which offers an admin key and only the root phone
+  can answer. Joining a computer's group by dialing it and the hub's remote invitations stay
+  on the kits' pairing for now.
 - The iPhone and Android apps sync through the phones' member in the Rust core (D-86), as
   the Aurora app does, in place of their own Swift and Kotlin nodes: one implementation of
   the member protocol, the clipboard rule and the button for every phone. The apps still
@@ -1896,6 +1932,18 @@ All notable changes to cbb are documented in this file. The format follows
 - The lite member fetches a copy's images or files once when two requests want them at the
   same time (`cbb paste -o` while the copy is fetched in the background); the second waited on
   chunks the first had taken and could fail.
+- A lite member away from home reaches a hub that answers only one of its ways, as over VLESS
+  when its UDP port is blocked: a tunnel link that ended before the hub answered left the next
+  one to start at the same dead endpoint, and a dial gave up just as a link moved on to the
+  next, so the member never got through. The next link now starts at the endpoint after it.
+- A hub whose hellos go to its forwarder over VLESS registers again when the forwarder sees
+  none of them for 20 seconds. The local way carries the hellos in one flow, and a flow whose
+  first request over XHTTP got no answer carried nothing for as long as the hub kept sending.
+- A file or an image from the group reaches a phone whose Downloads has no `CBB` folder yet:
+  the member makes the folder, where it failed with "No such file or directory" on Aurora.
+- When a joining phone refused the code an admin typed, the admin's side of the core's
+  admission said only that pairing failed; it now says the code was wrong, as the other
+  failures of a wrong code do.
 - The Rust service no longer renames itself in mDNS ("ID (2)") when its pairing window
   opens or closes, which kept the other members from finding it: the registration is
   updated in place rather than taken back and made again.

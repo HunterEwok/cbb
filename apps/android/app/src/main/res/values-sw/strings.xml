@@ -535,6 +535,9 @@
     <string name="mute_ever">Hadi msimamizi akiondolee unyamazishaji</string>
     <string name="create_group">Unda kikundi</string>
     <string name="join_group">Jiunge na kikundi</string>
+    <string name="join_admin">Jiunge kama msimamizi</string>
+    <string name="join_admin_title">Jiunge kama msimamizi</string>
+    <string name="join_admin_hint">Kwenye simu ya mzizi ya kikundi, gusa + na uchanganue msimbo huu: mzizi pekee ndio huongeza simu kama msimamizi. Acha skrini hii wazi.</string>
     <string name="restore_link">Rejesha kwa ufunguo wa urejeshaji</string>
     <string name="sync_on">Usawazishaji umewashwa</string>
     <string name="sync_off">Usawazishaji umezimwa</string>

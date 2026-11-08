@@ -211,6 +211,16 @@ public struct RecordSet: Codable, Equatable, Sendable {
 
     public init() {}
 
+    /// The set of a records file the core wrote (docs/core-api.md, "The
+    /// record set") for the group of groupCA.
+    public static func fromFile(groupCA: Data, file: Data) -> RecordSet {
+        var s = RecordSet()
+        s.groupCA = groupCA
+        s.file = file.isEmpty ? nil : file
+        s.refresh()
+        return s
+    }
+
     /// A set read back asks the core again, so what it says follows the
     /// rules of this version.
     public init(from decoder: Decoder) throws {

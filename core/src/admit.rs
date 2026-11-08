@@ -554,7 +554,13 @@ impl Admission {
     /// device in an invitation's window, else issues and sends the Welcome.
     fn confirm(&mut self, f: In, st: Box<cpace::State>, joiner: Joiner, now_ms: i64) -> Result<Outcome> {
         if !f.error.is_empty() {
-            return Err(Error::with(format!("pair: {}", Refusal::of(&f.error)), Refusal::of(&f.error)));
+            // The joiner checks the code with the tag this side sent first:
+            // its refusal is how a wrong code reaches the admin.
+            let refusal = Refusal::of(&f.error);
+            return Ok(Outcome::Failed {
+                error: Error::with(format!("pair: {refusal}"), refusal),
+                wrong_code: refusal == Refusal::WrongCode,
+            });
         }
         if st.verify(&f.tag.unwrap_or_default()).is_err() {
             self.send(&Out { error: "wrong-code", ..Default::default() });

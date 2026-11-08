@@ -535,6 +535,9 @@
     <string name="mute_ever">Hasta que un administrador le quite el silencio</string>
     <string name="create_group">Crear un grupo</string>
     <string name="join_group">Unirse a un grupo</string>
+    <string name="join_admin">Unirse como administrador</string>
+    <string name="join_admin_title">Unirse como administrador</string>
+    <string name="join_admin_hint">En el teléfono raíz del grupo, toca + y escanea este código: solo la raíz añade un teléfono como administrador. Mantén esta pantalla abierta.</string>
     <string name="restore_link">Restaurar con la clave de recuperación</string>
     <string name="sync_on">La sincronización está activada</string>
     <string name="sync_off">La sincronización está desactivada</string>

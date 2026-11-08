@@ -108,9 +108,16 @@ void cbb_member_stop(cbb_member *m);
  * "records","public","admin_ca","timeout_ms"}, action remove, rename, thaw,
  * make_admin (the root, for a computer connected), mute, unmute, sync_on,
  * sync_off (the device's house, a mode command), renew (every
- * member certificate due, no device) or resolve (the root voids the records an
- * alert of the member's alerts op names); the answer {}, {"result"} for a
- * command, or {"renewed": count}. A command blocks on the network.
+ * member certificate due, and as the root every admin CA from an earlier root;
+ * no device) or resolve (the root voids the records an alert of the member's
+ * alerts op names); the answer {}, {"result"} for a command, or {"renewed":
+ * count}. A command blocks on the network. Taking the group over
+ * (src/takeover.rs): root_ca, public the new key, answers {"root_ca"}, which
+ * the app keeps; take_over (device the lost root), take_handed_over or recover
+ * (the recovery key) claims the group for "root_ca"; finish_takeover with
+ * "root_ca", public its key, "name", "os", "store", "seal" answers
+ * {"state","left_ms"} while the claim waits, signing nothing, and
+ * {"state":"effective","cert"} once it made the phone the root.
  */
 uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                            size_t *answer_len);

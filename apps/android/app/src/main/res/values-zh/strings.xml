@@ -535,6 +535,9 @@
     <string name="mute_ever">直到管理员取消静音</string>
     <string name="create_group">创建群组</string>
     <string name="join_group">加入群组</string>
+    <string name="join_admin">以管理员身份加入</string>
+    <string name="join_admin_title">以管理员身份加入</string>
+    <string name="join_admin_hint">在群组的根手机上轻点 + 并扫描此代码：只有根能将手机添加为管理员。请保持此屏幕打开。</string>
     <string name="restore_link">用恢复密钥恢复</string>
     <string name="sync_on">同步已开启</string>
     <string name="sync_off">同步已关闭</string>

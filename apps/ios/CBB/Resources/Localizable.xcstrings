@@ -277,6 +277,282 @@
         }
       }
     },
+    "Join as an admin": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти как админ"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirse como administrador"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以管理员身份加入"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الانضمام كمشرف"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jiunge kama msimamizi"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הצטרפות כמנהל"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एडमिन के रूप में जुड़ें"
+          }
+        }
+      }
+    },
+    "On the group's root phone, tap + and scan this code: only the root adds a phone as an admin. Keep this screen open.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На корневом телефоне группы нажмите + и отсканируйте этот код: добавить телефон админом может только корень. Не закрывайте этот экран."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En el teléfono raíz del grupo, toca + y escanea este código: solo la raíz añade un teléfono como administrador. Mantén esta pantalla abierta."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在群组的根手机上轻点 + 并扫描此代码：只有根能将手机添加为管理员。请保持此屏幕打开。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على الهاتف الجذر للمجموعة، اضغط + وامسح هذا الرمز: الجذر وحده يضيف هاتفًا كمشرف. أبقِ هذه الشاشة مفتوحة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwenye simu ya mzizi ya kikundi, gusa + na uchanganue msimbo huu: mzizi pekee ndio huongeza simu kama msimamizi. Acha skrini hii wazi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בטלפון השורש של הקבוצה, הקישו על + וסרקו את הקוד הזה: רק השורש מוסיף טלפון כמנהל. השאירו את המסך הזה פתוח."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के रूट फ़ोन पर + दबाएँ और यह कोड स्कैन करें: केवल रूट ही किसी फ़ोन को एडमिन के रूप में जोड़ता है। यह स्क्रीन खुली रखें।"
+          }
+        }
+      }
+    },
+    "Join a group as an admin": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти в группу как админ"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirse a un grupo como administrador"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以管理员身份加入群组"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الانضمام إلى مجموعة كمشرف"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jiunge na kikundi kama msimamizi"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הצטרפות לקבוצה כמנהל"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एडमिन के रूप में समूह से जुड़ें"
+          }
+        }
+      }
+    },
+    "The code did not match. Scan the device's code again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код не совпал. Отсканируйте код устройства ещё раз."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El código no coincidió. Escanea de nuevo el código del dispositivo."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代码不匹配。请再次扫描设备的代码。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يتطابق الرمز. امسح رمز الجهاز مرة أخرى."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Msimbo haukulingana. Changanua msimbo wa kifaa tena."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הקוד לא תאם. סרקו שוב את הקוד של המכשיר."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कोड मेल नहीं खाया। डिवाइस का कोड फिर से स्कैन करें।"
+          }
+        }
+      }
+    },
+    "This phone asks to join as an admin, which only the group's root phone can grant. Scan it with the root phone, or join on it without asking to be an admin.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон просится в группу админом, а это может разрешить только корневой телефон группы. Отсканируйте код корневым телефоном или войдите на нём, не прося прав админа."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este teléfono pide unirse como administrador, algo que solo el teléfono raíz del grupo puede conceder. Escanéalo con el teléfono raíz, o únete en él sin pedir ser administrador."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这部手机请求以管理员身份加入，只有群组的根手机才能批准。请用根手机扫描它，或在它上面加入而不请求管理员身份。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يطلب هذا الهاتف الانضمام كمشرف، ولا يمنح ذلك إلا الهاتف الجذر للمجموعة. امسحه بالهاتف الجذر، أو انضم عليه دون طلب أن يكون مشرفًا."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Simu hii inaomba kujiunga kama msimamizi, jambo ambalo simu ya mzizi ya kikundi pekee inaweza kuruhusu. Ichanganue kwa simu ya mzizi, au ujiunge kwayo bila kuomba kuwa msimamizi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הטלפון הזה מבקש להצטרף כמנהל, ורק טלפון השורש של הקבוצה יכול לאשר זאת. סרקו אותו בטלפון השורש, או הצטרפו בו בלי לבקש להיות מנהל."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह फ़ोन एडमिन के रूप में जुड़ना चाहता है, जिसकी अनुमति केवल समूह का रूट फ़ोन दे सकता है। इसे रूट फ़ोन से स्कैन करें, या एडमिन बनने का अनुरोध किए बिना इस पर जुड़ें।"
+          }
+        }
+      }
+    },
+    "The device refused to join. Try again on it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство отказалось войти. Попробуйте ещё раз на нём."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El dispositivo rechazó unirse. Inténtalo de nuevo en él."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备拒绝加入。请在该设备上重试。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رفض الجهاز الانضمام. حاول مرة أخرى عليه."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kilikataa kujiunga. Jaribu tena kwenye kifaa hicho."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המכשיר סירב להצטרף. נסו שוב בו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "डिवाइस ने जुड़ने से मना कर दिया। उस पर फिर से कोशिश करें।"
+          }
+        }
+      }
+    },
     "Mute a device": {
       "localizations": {
         "ar": {

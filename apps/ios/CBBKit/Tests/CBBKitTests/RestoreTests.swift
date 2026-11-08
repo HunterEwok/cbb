@@ -10,9 +10,26 @@ import XCTest
 /// lost, and a new phone scans the sheet, takes the records from a
 /// computer of the group and claims the group.
 final class RestoreTests: XCTestCase {
-    /// When the group was made: long enough ago that a claim made then
-    /// took effect by now.
-    let t0 = Date().addingTimeInterval(-100 * 3600)
+    /// When the group was made.
+    let t0 = Date().addingTimeInterval(-3600)
+
+    /// The new phone's member in the Rust core, as the app starts it once
+    /// Restore.group gave it the group; it stops, and its folder goes, when
+    /// the test ends.
+    func member(_ r: Restore, group: PhoneGroup, key: SoftwareSigner) throws -> CoreMember {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-restore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let m = try CoreMember(.init(dir: dir, name: "New", osVersion: "26", version: "0.6.0", device: r.device, publicKeyDER: key.publicKeyDER,
+                                     seal: CoreGroup.seal, cert: r.memberCert, issuer: r.adminCA, groupCA: group.groupCA, roots: group.trusted)) {
+            try key.signature(digest: $0)
+        }
+        addTeardownBlock {
+            m.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+        try m.addRecords(group.records.records)
+        return m
+    }
 
     struct Group {
         let rootKey = SoftwareSigner()
@@ -22,7 +39,6 @@ final class RestoreTests: XCTestCase {
 
         init(t0: Date) throws {
             root = try PhoneGroup.create(caSigner: rootKey, memberKey: SoftwareSigner().publicKeyDER, name: "Lost", now: t0)
-            root.records.clock = { t0 }
             computer.cert = try GroupCertificates.member(device: computer.device, publicKey: computer.key.publicKeyDER, ca: root.groupCA,
                                                          caSigner: rootKey, now: t0)
             _ = try root.record(device: computer.device, name: "one", role: "member", caps: Records.caps, key: computer.keyHash, caSigner: rootKey, now: t0)
@@ -69,33 +85,44 @@ final class RestoreTests: XCTestCase {
         let fetched = try await Restore.exchange(phone, name: "New", os: "ios", now: t0, quiet: 0.3)
         _ = try await pc.value
         var group = try r.group(fetched, now: t0)
-        group.records.clock = { self.t0 }
         XCTAssertFalse(group.isRoot)
         XCTAssertEqual(group.tag, g.root.tag)
         XCTAssertFalse(group.devices.contains { $0.id == r.device }, "no record names the new phone yet")
         guard case .notListed = group.records.verdict(chain: r.chain) else { return XCTFail("the computers take its chain for records only") }
 
+        let m = try member(r, group: group, key: memberKey)
         let newRootKey = SoftwareSigner()
-        let newRoot = try GroupCertificates.groupCA(signer: newRootKey, now: t0, pathLength: 1)
-        let claim = try r.claim(&group, newRoot: newRoot, now: t0)
+        let newRoot = try m.rootCA(public: newRootKey.publicKeyDER) { try newRootKey.signature(digest: $0) }
+        try r.claim(&group, member: m, newRoot: newRoot)
+        group.add(try m.records())
         XCTAssertEqual(group.claimState, "pending")
-        XCTAssertTrue(try group.finishTakeOver(rootSigner: newRootKey, now: t0).isEmpty, "the claim waits")
+        let finish = {
+            try m.finishTakeover(rootCA: newRoot, public: newRootKey.publicKeyDER, name: "New", store: Records.hardware, seal: nil) {
+                try newRootKey.signature(digest: $0)
+            }
+        }
+        XCTAssertEqual(try finish().state, "pending", "the claim waits")
 
-        // The claim reaches the computer on the next exchange.
+        // The claim goes out on a records-only connection, as the app sends it.
+        let claim = try XCTUnwrap(group.claimRecord(in: try m.records()))
         let (phone2, pc2) = computer(g.root.records.records, groupCA: g.root.groupCA, chain: [g.computer.cert])
         _ = try await Restore.exchange(phone2, name: "New", os: "ios", now: t0, send: [claim], quiet: 0.3)
         let sent = try await pc2.value
         XCTAssertEqual(sent, [claim])
 
-        // Once the delay ran out, the phone is the root.
-        group.records.clock = { Date() }
-        let rs = try group.finishTakeOver(rootSigner: newRootKey, now: Date(), name: "New")
+        // Once the delay ran out (the root set none here), the phone is the root.
+        var root = g.root
+        let none = try root.setTakeoverDelay(ms: 0, rootSigner: g.rootKey, now: Date())
+        group.add([none])
+        try m.addRecords([none])
+        let done = try finish()
+        XCTAssertEqual(done.state, "effective")
+        group.becameRoot(cert: try XCTUnwrap(done.cert), records: try m.records())
         XCTAssertTrue(group.isRoot)
         XCTAssertNil(group.memberIssuer)
         XCTAssertNil(group.adminCA)
         XCTAssertEqual(group.records.rootDevice, r.device)
         XCTAssertEqual(group.devices.map(\.name).sorted(), ["New", "one"], "the lost root's device goes")
-        XCTAssertFalse(rs.isEmpty)
         XCTAssertEqual(try GroupCertificates.verifyMember(chain: group.memberChain, roots: [newRoot], now: Date()), r.device)
         XCTAssertEqual(try CertificateInfo(der: r.memberCert).publicKey, try CertificateInfo(der: group.memberCert).publicKey, "the same member key")
         XCTAssertEqual(group.records.verdict(chain: group.memberChain), .ok)
@@ -117,17 +144,22 @@ final class RestoreTests: XCTestCase {
         let keys = try Piv.recoveryKeys(card)
         XCTAssertEqual(keys.count, 1)
         let spki = try CertificateInfo(der: keys[0].cert).publicKey
+        let memberKey = SoftwareSigner()
         let r = try Restore(card: Piv.Signer(card: card, slot: keys[0].slot, publicKeyDER: spki, pin: "123456"), adminCA: keys[0].cert,
-                            memberKey: SoftwareSigner().publicKeyDER, now: t0)
+                            memberKey: memberKey.publicKeyDER, now: t0)
         let (phone, pc) = computer(g.root.records.records, groupCA: g.root.groupCA, chain: [g.computer.cert])
         let fetched = try await Restore.exchange(phone, name: "New", os: "ios", now: t0, quiet: 0.3)
         _ = try await pc.value
         var group = try r.group(fetched, now: t0)
-        group.records.clock = { self.t0 }
-        let newRoot = try GroupCertificates.groupCA(signer: SoftwareSigner(), now: t0, pathLength: 1)
-        XCTAssertThrowsError(try r.claim(&group, newRoot: newRoot, now: t0, with: SoftwareSigner()))
+        let m = try member(r, group: group, key: memberKey)
+        let newRootKey = SoftwareSigner()
+        let newRoot = try m.rootCA(public: newRootKey.publicKeyDER) { try newRootKey.signature(digest: $0) }
+        XCTAssertThrowsError(try r.claim(&group, member: m, newRoot: newRoot, with: SoftwareSigner())) {
+            XCTAssertEqual(($0 as? Restore.Failure)?.kind, .notTheKey)
+        }
         try Piv.select(card)
-        _ = try r.claim(&group, newRoot: newRoot, now: t0, with: Piv.Signer(card: card, slot: keys[0].slot, publicKeyDER: spki, pin: "123456"))
+        try r.claim(&group, member: m, newRoot: newRoot, with: Piv.Signer(card: card, slot: keys[0].slot, publicKeyDER: spki, pin: "123456"))
+        group.add(try m.records())
         XCTAssertEqual(group.claimState, "pending")
         XCTAssertEqual(card.signed, 2)
     }

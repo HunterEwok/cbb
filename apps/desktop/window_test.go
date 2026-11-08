@@ -648,23 +648,26 @@ func (w *window) switches(t *testing.T) {
 	w.open("en")
 	w.wait(`!$q("#switches").hidden && $q("#sync").getAttribute("aria-pressed") === "true" && !$q("#away").disabled`)
 
+	// Each step waits for its action's message, not only for the switch: the
+	// switch follows the service's state, which changes before the action
+	// ends, and the window takes one action at a time.
 	w.eval(`$click("#sync")`, nil)
-	w.wait(`$q("#sync").getAttribute("aria-pressed") === "false" && $q("#away").disabled`)
+	w.wait(`$q("#sync").getAttribute("aria-pressed") === "false" && $q("#away").disabled && $q("#message").textContent.startsWith("Sync is off here")`)
 	if h := w.svc.lastSync(); h.Name != "off" || h.ForMS != 0 {
 		t.Errorf("the house sent %+v", h)
 	}
 	w.eval(`$click("#sync")`, nil)
-	w.wait(`$q("#sync").getAttribute("aria-pressed") === "true"`)
+	w.wait(`$q("#sync").getAttribute("aria-pressed") === "true" && $q("#message").textContent.startsWith("Sync is on here")`)
 	// Held, it asks for how long.
 	w.eval(`$q("#sync").dispatchEvent(new MouseEvent("contextmenu", {bubbles: true, cancelable: true})); true`, nil)
 	w.wait(`$q("#mute-dialog").open`)
 	w.eval(`$clickText("#mute-dialog .menu-items button", "For an hour")`, nil)
-	w.wait(`$q("#sync").getAttribute("aria-pressed") === "false"`)
+	w.wait(`$q("#sync").getAttribute("aria-pressed") === "false" && $q("#message").textContent.startsWith("Sync is off here")`)
 	if h := w.svc.lastSync(); h.Name != "off" || h.ForMS != 3600000 {
 		t.Errorf("an hour sent %+v", h)
 	}
 	w.eval(`$click("#sync")`, nil)
-	w.wait(`$q("#sync").getAttribute("aria-pressed") === "true"`)
+	w.wait(`$q("#sync").getAttribute("aria-pressed") === "true" && $q("#message").textContent.startsWith("Sync is on here")`)
 
 	// The globe asks first; Cancel runs nothing.
 	w.eval(`$click("#away")`, nil)

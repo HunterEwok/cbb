@@ -101,7 +101,8 @@ protocol GroupController: AnyObject {
     func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws
     /// Joins another phone's group: listens, hands show the QR code for the
     /// other phone to scan, and returns once this phone is in the group.
-    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws
+    /// With asAdmin it offers an admin key, which only the root grants.
+    func join(asAdmin: Bool, show: @escaping @MainActor (JoinCode) -> Void) async throws
     /// Joins a computer's group with the code cbb pair shows on its root.
     func joinComputer(code: String) async throws
     /// Restores the group on this new phone with the recovery key from the
@@ -553,9 +554,14 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Opens the screen that joins a group.
-    func startJoining() {
+    /// Whether the join screen asks to join as an admin, which only the
+    /// group's root grants.
+    @Published private(set) var joinAsAdmin = false
+
+    /// Opens the screen that joins a group; with admin, as an admin.
+    func startJoining(admin: Bool = false) {
         message = nil
+        joinAsAdmin = admin
         phase = .joining
     }
 
@@ -564,7 +570,7 @@ final class AppModel: ObservableObject {
     /// task, so leaving the screen cancels it and stops listening.
     func join() async {
         do {
-            try await group.join { [weak self] code in self?.joinCode = code }
+            try await group.join(asAdmin: joinAsAdmin) { [weak self] code in self?.joinCode = code }
             computers = group.computers
             devices = group.devices
             isAdmin = group.isAdmin
@@ -1442,6 +1448,15 @@ final class AppModel: ObservableObject {
         if let f = error as? PendingGroup.Failure {
             return f == .notReady ? String(localized: "Adding a computer is not ready yet.", bundle: .app) : String(localized: "No computers connected.", bundle: .app)
         }
+        if let f = error as? CorePairing.Failure {
+            if f.wrongCode {
+                return String(localized: "The code did not match. Scan the device's code again.", bundle: .app)
+            }
+            if f.message.contains("add it as an admin") {
+                return String(localized: "This phone asks to join as an admin, which only the group's root phone can grant. Scan it with the root phone, or join on it without asking to be an admin.", bundle: .app)
+            }
+            return String(localized: "The device refused to join. Try again on it.", bundle: .app)
+        }
         if let f = error as? PairingMember.Failure {
             if case .refused(.wrongCode) = f {
                 return String(localized: "The code did not match. Run cbb pair on the computer again and scan the new code.", bundle: .app)
@@ -1568,7 +1583,7 @@ final class PendingGroup: GroupController {
     func remove(_ id: String) async throws {}
     func makeAdmin(_ id: String) async throws {}
     func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws { throw Failure.notReady }
-    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws { throw Failure.notReady }
+    func join(asAdmin: Bool, show: @escaping @MainActor (JoinCode) -> Void) async throws { throw Failure.notReady }
     func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { throw Failure.noComputers }
     func refresh() async {}
 }

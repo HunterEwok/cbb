@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>Mzizi wa kikundi umeghairi ombi; simu inabaki kuwa msimamizi.</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>Ombi la kuchukua kikundi limebatilika; simu inabaki kuwa msimamizi.</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>Unganisha simu kwenye Wi-Fi ya nyumbani ili ujiunge na kikundi.</translation>
     </message>
@@ -176,6 +184,22 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>Andika ubao wa kunakili kwenye %1</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>kifaa cha kibodi</translation>
+    </message>
+    <message>
+        <source>Back to the group's order</source>
+        <translation>Rudi kwenye mpangilio wa kikundi</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Mkusanyiko mpya…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>Kagua ufunguo tena</translation>
     </message>
@@ -311,6 +335,30 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Take the group over</source>
+        <translation>Chukua kikundi</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>Inachukua kikundi kutoka %1</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>Kuchukua kikundi</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>Inasubiri, zimebaki saa %1</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>Inasubiri kikundi kipokee ombi</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>Kuna mzozo: mzizi wa kikundi umejibu ombi</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>Ondoa</translation>
     </message>
@@ -393,6 +441,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>Kibodi ya Bluetooth</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>Fanya kazi kama kibodi ya Bluetooth</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Imezimwa</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>Imeunganishwa</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>Haifanyi kazi</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Imewashwa</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>Mipangilio</translation>
@@ -798,6 +870,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>Video</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>Picha</translation>
     </message>
@@ -825,6 +901,10 @@
 <context>
     <name>Notifier</name>
     <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>%1 kutoka kikundi iko kwenye matunzio</translation>
+    </message>
+    <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>Imehifadhi %1 kutoka kikundi kwenye Vipakuliwa</translation>
     </message>
@@ -835,6 +915,275 @@
     <message>
         <source>%1 files</source>
         <translation>faili %1</translation>
+    </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>Imebandikwa kutoka %1</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>Panga</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>Hamishia mwanzo</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>Sogeza mbele</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>Sogeza nyuma</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>Hamishia mwisho</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>Hamishia %1</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>Mkusanyiko mpya…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>Toa kwenye mkusanyiko</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Badilisha jina la mkusanyiko…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>Vunja mkusanyiko</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>Unda</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Badilisha jina</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>Mkusanyiko mpya</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>Badilisha jina la mkusanyiko</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Jina</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>Ofisi, Nyumbani, Televisheni…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 kati ya %2 mtandaoni</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 kati ya %2 mtandaoni</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>Vunja mkusanyiko</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>Badilisha jina la mkusanyiko…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 kati ya %2 mtandaoni</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>Bado hakuna vifaa kwenye mkusanyiko huu. Shikilia kigae cha kifaa kwenye ukurasa mkuu ili kukihamishia hapa.</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>Bluetooth ya simu haikujibu. Huenda CBB hairuhusiwi kuitumia.</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>Bluetooth ya simu hii haiwezi kufanya kazi kama kibodi.</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>Bluetooth imezimwa. Iwashe kwenye mipangilio ya simu, kisha uwashe kibodi tena.</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>Simu haikuweza kuwa kibodi.</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>Bluetooth ya simu haikukubali kibodi.</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>Simu haikuweza kutangaza kibodi.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>Hakuna kifaa kilichounganishwa. Unganisha na simu hii kutoka kwenye kifaa, katika mipangilio yake ya Bluetooth.</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>Ubao wa kunakili hauna maandishi.</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>Maandishi yana herufi zaidi ya %1, zaidi ya kibodi inavyoandika.</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>Mpangilio wa kifaa hauna kitufe cha: %1. Chagua mpangilio wake hapo juu.</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>Kifaa kiliondoka; maandishi hayakuandikwa yote.</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>Kibodi ya Bluetooth</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>Fanya kazi kama kibodi ya Bluetooth</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>Simu hii huandika kwenye TV, kompyuta kibao, konsoli au kompyuta iliyooanishwa nayo, bila kusakinisha chochote huko: ubao wa kunakili, ukigusa.</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>Inajiandaa…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>Imeunganishwa na %1.</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>Kifaa kimeunganishwa.</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>Hakuna kifaa kilichounganishwa. Unganisha na simu hii kutoka kwenye kifaa, katika mipangilio yake ya Bluetooth.</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>Inaonekana kwa sekunde %1</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>Fanya simu hii ionekane</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>Ikiwa inaonekana, kifaa kipya huipata simu hii kama “CBB keyboard” kwenye mipangilio yake ya Bluetooth.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Jaribu tena</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>Mpangilio wa kibodi wa kifaa</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>Kiingereza (Marekani)</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>Kirusi</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Kasi</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>Herufi %1 kwa sekunde</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>Inaandika…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>Andika ubao wa kunakili</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>Kubandika kwa mbali</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>Ruhusu wasimamizi wa kikundi kubandika huko</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>Kisha msimamizi wa kikundi huandika maandishi kupitia simu hii kwenye kifaa kilichounganishwa nayo, kutoka programu yake au kwa cbb paste. Simu hii huonyesha aliyebandika, na huweka kumbukumbu ya ubandikaji wa mwisho bila maandishi yake.</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>Ruhusu ubandikaji kubonyeza Enter</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>Maandishi yenye mstari mpya yanahitaji pia: kibodi huandika mstari mpya kama Enter.</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>Ubandikaji wa mwisho</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>(haijathibitishwa)</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>baiti %1</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>imekataliwa</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>imeshindwa</translation>
     </message>
 </context>
 <context>

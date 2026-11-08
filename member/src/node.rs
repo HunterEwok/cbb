@@ -205,16 +205,16 @@ pub struct Node {
     home: Mutex<HashMap<DeviceId, Duration>>,
     /// The signed entry points this member holds and passes on.
     entries: Arc<Entries>,
-    /// The newest signed release the group passed around (section 16).
-    releases: Arc<Releases>,
-    /// The release archive each peer's hello says it updates from, which
-    /// a hub fetches for them.
-    archives: Mutex<HashMap<DeviceId, String>>,
     /// One fetch of a blob at a time, by its SHA-256: a second one (cbb
     /// paste -o while the copy is fetched in the background) waits for the
     /// first, then finds the blob held, as both would write one file and
     /// the peer's chunks go to one sink.
     fetching: Mutex<HashMap<[u8; 32], Arc<Mutex<()>>>>,
+    /// The newest signed release the group passed around (section 16).
+    releases: Arc<Releases>,
+    /// The release archive each peer's hello says it updates from, which
+    /// a hub fetches for them.
+    archives: Mutex<HashMap<DeviceId, String>>,
     /// Keeps the identity when it changes (a renewed certificate, a new
     /// root), where identity.json cannot: a phone's app whose key is
     /// outside the core keeps its own file.
@@ -417,9 +417,9 @@ impl Node {
             actions: RwLock::new(Vec::new()),
             home: Mutex::new(HashMap::new()),
             entries,
+            fetching: Mutex::new(HashMap::new()),
             releases,
             archives: Mutex::new(HashMap::new()),
-            fetching: Mutex::new(HashMap::new()),
             keep_identity: None,
             paused: AtomicBool::new(false),
             kick: (Mutex::new(0), Condvar::new()),
@@ -893,6 +893,14 @@ impl Node {
         Err(last)
     }
 
+    /// The lock that keeps fetches of the blob sum one at a time; it is
+    /// dropped from the table when no fetch holds or waits for it.
+    fn fetch_lock(&self, sum: &[u8; 32]) -> Arc<Mutex<()>> {
+        let mut m = self.fetching.lock().unwrap();
+        m.retain(|_, l| Arc::strong_count(l) > 1);
+        Arc::clone(m.entry(*sum).or_default())
+    }
+
     /// Fetches the archive sha of the release held from the connected peers
     /// that serve content, unless this member holds it whole, as Go's
     /// fetchReleaseFile.
@@ -934,14 +942,6 @@ impl Node {
         }
         let _ = std::fs::remove_file(&part);
         Err(last)
-    }
-
-    /// The lock that keeps fetches of the blob sum one at a time; it is
-    /// dropped from the table when no fetch holds or waits for it.
-    fn fetch_lock(&self, sum: &[u8; 32]) -> Arc<Mutex<()>> {
-        let mut m = self.fetching.lock().unwrap();
-        m.retain(|_, l| Arc::strong_count(l) > 1);
-        Arc::clone(m.entry(*sum).or_default())
     }
 
     /// Fetches the blob sum from one peer into the partial file at path,

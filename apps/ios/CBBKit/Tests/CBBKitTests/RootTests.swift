@@ -6,11 +6,12 @@ import XCTest
 
 /// Handing the group over (docs/protocol.md, section 10, "Handing the group over"):
 /// the root phone is lost, and admin phone B claims the group for a new
-/// root, which takes effect after the delay.
+/// root through its member in the Rust core, which takes effect after the
+/// delay; the tests that need it to take effect set the delay to 0.
 final class RootTests: XCTestCase {
-    /// When the group was made: long enough ago that a claim made then
-    /// took effect by now.
-    let t0 = Date().addingTimeInterval(-100 * 3600)
+    /// When the group was made, for the certificates of the computers and
+    /// the stolen root key.
+    let t0 = Date().addingTimeInterval(-3600)
 
     /// A computer: its device ID, key and member certificate.
     struct Computer {
@@ -21,15 +22,17 @@ final class RootTests: XCTestCase {
     }
 
     /// The group before the loss: the root phone, which admitted computer
-    /// one itself, and admin phone B, which admitted computer two.
+    /// one itself, and admin phone B, which admitted computer two; B's
+    /// member runs in the Rust core, in dir.
     struct Group {
         var root: PhoneGroup, b: PhoneGroup
         let rootKey: SoftwareSigner, adminKey: SoftwareSigner, newRootKey = SoftwareSigner()
         /// B's admin CA, under the old root.
         let adminCA: Data
         let one: Computer, two: Computer
+        let member: CoreMember
 
-        init(now: Date) throws {
+        init(now: Date, dir: URL) throws {
             let rootKey = SoftwareSigner(), adminKey = SoftwareSigner()
             var root = try PhoneGroup.create(caSigner: rootKey, memberKey: SoftwareSigner().publicKeyDER, name: "Lost", now: now)
             let bDevice = Member.newID(), bKey = SoftwareSigner()
@@ -43,59 +46,114 @@ final class RootTests: XCTestCase {
                                                     caSigner: rootKey, now: now)
             _ = try root.record(device: one.device, name: "one", role: "member", caps: Records.caps, key: one.keyHash, caSigner: rootKey, now: now)
             var b = PhoneGroup(device: bDevice, groupCA: root.groupCA, memberCert: bCert, computers: [])
-            // The members held every record since now.
-            root.records.clock = { now }
-            b.records.clock = { now }
             (b.isRoot, b.adminCA) = (false, adminCA)
             b.add(root.records.records)
             two.cert = try GroupCertificates.member(device: two.device, publicKey: two.key.publicKeyDER, ca: adminCA, caSigner: adminKey, now: now)
             _ = try b.record(device: two.device, name: "two", role: "member", caps: Records.caps, key: two.keyHash, caSigner: adminKey, now: now)
             root.add(b.records.records)
-            root.records.clock = { Date() }
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            member = try CoreMember(.init(dir: dir, name: "B", osVersion: "26", version: "0.6.0", device: bDevice, publicKeyDER: bKey.publicKeyDER,
+                                          seal: CoreGroup.seal, cert: bCert, issuer: nil, groupCA: root.groupCA, roots: root.trusted)) {
+                try bKey.signature(digest: $0)
+            }
+            try member.addRecords(b.records.records)
             (self.root, self.b, self.rootKey, self.adminKey, self.adminCA, self.one, self.two) = (root, b, rootKey, adminKey, adminCA, one, two)
+        }
+
+        /// Hands records the root signed to B and its member.
+        mutating func fromRoot(_ rs: Member.Record...) throws {
+            b.add(rs)
+            try member.addRecords(rs)
+        }
+
+        /// A root CA for B's new root key, from the member.
+        func newRoot() throws -> Data {
+            let k = newRootKey
+            return try member.rootCA(public: k.publicKeyDER) { try k.signature(digest: $0) }
+        }
+
+        /// B claims the group from the lost root phone for newRoot, as the
+        /// app does.
+        mutating func claim(_ newRoot: Data) throws {
+            try b.checkTakeOver(from: root.device)
+            let k = adminKey
+            try member.claim(.takeOver, rootCA: newRoot, public: k.publicKeyDER, ca: adminCA, sign: { try k.signature(digest: $0) }, lost: root.device)
+            b.claimed(newRoot: newRoot, lost: root.device)
+            b.add(try member.records())
+        }
+
+        /// Asks B's member to finish the claim for newRoot, and makes B the
+        /// root once it did.
+        mutating func finish(_ newRoot: Data) throws -> CoreMember.Takeover {
+            let k = newRootKey
+            let f = try member.finishTakeover(rootCA: newRoot, public: k.publicKeyDER, name: "B", store: Records.hardware, seal: nil) {
+                try k.signature(digest: $0)
+            }
+            if f.state == "effective" {
+                b.becameRoot(cert: try XCTUnwrap(f.cert), records: try member.records())
+            } else {
+                b.add(try member.records())
+            }
+            return f
+        }
+
+        /// B's claim record, as its member signed it.
+        func claimRecord() throws -> Member.Record {
+            try XCTUnwrap(try member.records().first { RootTests.type(of: $0) == "claim" })
         }
     }
 
-    /// What a phone hub shows its forwarder: the records of the root's own
-    /// device and of the admins, and every record that is no device record,
-    /// never the records that name the computers.
-    /// B's claim, made at t0, and B as the root once it took effect.
-    func takeOver(_ g: inout Group) throws -> (claim: Member.Record, records: [Member.Record]) {
-        let newRoot = try GroupCertificates.groupCA(signer: g.newRootKey, now: t0, pathLength: 1)
-        let claim = try g.b.takeOver(from: g.root.device, adminSigner: g.adminKey, newRoot: newRoot, now: t0)
-        XCTAssertEqual(g.b.claimState, "pending")
-        XCTAssertFalse(g.b.isRoot)
-        XCTAssertTrue(try g.b.finishTakeOver(rootSigner: g.newRootKey, now: t0).isEmpty, "the claim waits")
-        g.b.records.clock = { Date() }
-        let rs = try g.b.finishTakeOver(rootSigner: g.newRootKey, now: Date())
-        return (claim, rs)
+    /// The type of a record's body.
+    static func type(of r: Member.Record) -> String? {
+        (try? JSONSerialization.jsonObject(with: r.body) as? [String: Any])?["type"] as? String
+    }
+
+    /// A group whose member stops, and whose folder goes, when the test ends.
+    func group(now: Date? = nil) throws -> Group {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-root-\(UUID().uuidString)")
+        let g = try Group(now: now ?? t0, dir: dir)
+        let m = g.member
+        addTeardownBlock {
+            m.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+        return g
+    }
+
+    /// B's claim, and B as the root once it took effect at once: the
+    /// records the takeover added, the claim among them.
+    func takeOver(_ g: inout Group) throws -> [Member.Record] {
+        try g.fromRoot(try g.root.setTakeoverDelay(ms: 0, rootSigner: g.rootKey, now: Date()))
+        let before = Set(g.b.records.records.map(Records.id))
+        let newRoot = try g.newRoot()
+        try g.claim(newRoot)
+        XCTAssertEqual(try g.finish(newRoot).state, "effective")
+        return g.b.records.records.filter { !before.contains(Records.id($0)) }
     }
 
     /// The new root signs the old root's settings again, since the state
     /// counts only the current root's: the group keeps its delay and level.
     func testTakeOverKeepsSettings() throws {
-        var g = try Group(now: t0)
-        let rs = [try g.root.setTakeoverDelay(ms: 3_600_000, rootSigner: g.rootKey, now: t0),
-                  try g.root.setKeyLevel(Records.levelFiles, rootSigner: g.rootKey, now: t0)]
-        g.b.add(rs)
+        var g = try group()
+        try g.fromRoot(try g.root.setKeyLevel(Records.levelFiles, rootSigner: g.rootKey, now: Date()))
         XCTAssertEqual(g.b.keyLevel, Records.levelFiles)
-        let (_, after) = try takeOver(&g)
+        let after = try takeOver(&g)
         XCTAssertTrue(g.b.isRoot)
         XCTAssertEqual(g.b.keyLevel, Records.levelFiles)
         let mine = g.b.settings(of: PhoneGroup.signer(g.newRootKey))
-        XCTAssertEqual(mine.delay, 3_600_000)
+        XCTAssertEqual(mine.delay, 0)
         XCTAssertEqual(mine.level, Records.levelFiles)
-        XCTAssertEqual(after.filter { (try? JSONSerialization.jsonObject(with: $0.body) as? [String: Any])?["type"] as? String == "settings" }.count, 1)
+        XCTAssertEqual(after.filter { Self.type(of: $0) == "settings" }.count, 1)
     }
 
     /// Every record the set holds goes to a forwarder, which sees the same
     /// roots and the lost phone removed.
     func testAuthorityRecords() throws {
-        var g = try Group(now: t0)
-        let (claim, rs) = try takeOver(&g)
+        var g = try group()
+        let rs = try takeOver(&g)
         let after = g.b.records.authorityRecords
         let ids = Set(after.map(Records.id))
-        XCTAssertTrue((rs + [claim]).allSatisfy { ids.contains(Records.id($0)) }, "the takeover's records")
+        XCTAssertTrue(rs.allSatisfy { ids.contains(Records.id($0)) }, "the takeover's records")
         XCTAssertEqual(ids.count, after.count)
         var forwarder = RecordSet()
         forwarder.clock = { self.t0 }
@@ -111,19 +169,22 @@ final class RootTests: XCTestCase {
     /// member.
     func testHandedOver() throws {
         let now = Date()
-        var g = try Group(now: now)
+        var g = try group()
         XCTAssertFalse(g.b.handedToMe)
         var h = Records.Body(type: "handover", signer: PhoneGroup.signer(g.rootKey), timeMS: Records.ms(now))
         h.admin = try Records.keyHash(cert: g.adminCA)
-        g.b.add([try g.root.sign(h, caSigner: g.rootKey)])
+        try g.fromRoot(try g.root.sign(h, caSigner: g.rootKey))
         XCTAssertTrue(g.b.handedToMe)
         XCTAssertFalse(g.root.handedToMe, "the root is no admin to hand the group to")
-        let newRoot = try GroupCertificates.groupCA(signer: g.newRootKey, now: now, pathLength: 1)
-        _ = try g.b.takeHandedOver(adminSigner: g.adminKey, newRoot: newRoot, now: now)
+        try g.b.checkHandedOver()
+        let newRoot = try g.newRoot()
+        let k = g.adminKey
+        try g.member.claim(.takeHandedOver, rootCA: newRoot, public: k.publicKeyDER, ca: g.adminCA, sign: { try k.signature(digest: $0) })
+        g.b.claimed(newRoot: newRoot, lost: nil)
+        g.b.add(try g.member.records())
         XCTAssertFalse(g.b.handedToMe, "it claimed the group")
         XCTAssertEqual(g.b.claimState, "effective", "a handed group needs no wait")
-        let rs = try g.b.finishTakeOver(rootSigner: g.newRootKey, now: now)
-        XCTAssertEqual(rs.count, 1, "B's own device; nothing removed")
+        XCTAssertEqual(try g.finish(newRoot).state, "effective")
         XCTAssertTrue(g.b.isRoot)
         XCTAssertEqual(g.b.records.rootDevice, g.b.device)
         XCTAssertNil(g.b.records.handedTo, "the new root handed nothing")
@@ -131,22 +192,29 @@ final class RootTests: XCTestCase {
         XCTAssertNil(g.b.records.refused(chain: [g.root.memberCert]), "the old root stays a member")
 
         // A handover to another admin key is not this phone's.
-        var other = try Group(now: now)
+        var other = try group()
         var o = Records.Body(type: "handover", signer: PhoneGroup.signer(other.rootKey), timeMS: Records.ms(now))
         o.admin = Records.keyHash(spki: SoftwareSigner().publicKeyDER)
-        other.b.add([try other.root.sign(o, caSigner: other.rootKey)])
+        try other.fromRoot(try other.root.sign(o, caSigner: other.rootKey))
         XCTAssertFalse(other.b.handedToMe)
-        XCTAssertThrowsError(try other.b.takeHandedOver(adminSigner: other.adminKey, newRoot: newRoot, now: now)) {
+        XCTAssertThrowsError(try other.b.checkHandedOver()) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .notHandedOver)
+        }
+        let ok = other.adminKey
+        XCTAssertThrowsError(try other.member.claim(.takeHandedOver, rootCA: try other.newRoot(), public: ok.publicKeyDER, ca: other.adminCA,
+                                                    sign: { try ok.signature(digest: $0) })) {
+            XCTAssertTrue($0 is Core.Refusal, "\($0)")
         }
     }
 
     func testTakeOver() throws {
-        var g = try Group(now: t0)
+        var g = try group()
         let lost = g.root.device
         XCTAssertEqual(g.b.records.rootDevice, lost)
-        let (_, rs) = try takeOver(&g)
-        XCTAssertEqual(rs.count, 2, "B's own device and the removal of the lost phone")
+        let rs = try takeOver(&g)
+        let types = rs.map { Self.type(of: $0) }
+        XCTAssertTrue(types.contains("claim") && types.contains("device") && types.contains("revoke"),
+                      "the claim, B's own device and the removal of the lost phone: \(types)")
         XCTAssertTrue(g.b.isRoot)
         XCTAssertNil(g.b.adminCA)
         XCTAssertNil(g.b.claim)
@@ -160,6 +228,8 @@ final class RootTests: XCTestCase {
         XCTAssertNil(set.refused(chain: [g.one.cert]), "the computer the old root admitted")
         XCTAssertNil(set.refused(chain: [g.two.cert, g.adminCA]), "the computer B admitted")
         XCTAssertNil(set.refused(chain: g.b.memberChain), "B itself")
+        XCTAssertEqual(try GroupCertificates.verifyMember(g.b.memberCert, groupCA: g.b.currentRoot, now: Date()), g.b.device,
+                       "B's certificate is from the new root")
 
         // A computer that gets the records in any order, and the claim
         // times with them, sees the same.
@@ -169,38 +239,49 @@ final class RootTests: XCTestCase {
         XCTAssertEqual(computer.digest, g.b.records.digest)
         XCTAssertEqual(computer.roots, g.b.roots)
         XCTAssertEqual(computer.devices.map(\.name), ["B", "one", "two"])
-        // Without them, it waits the delay itself.
-        var late = RecordSet()
-        late.addAll(g.b.records.records, groupCA: g.root.groupCA)
-        XCTAssertEqual(late.roots, [])
-        XCTAssertEqual(late.claims.map(\.state), ["pending"])
 
         // The new root admits and renews.
+        let now = Date()
         var three = Computer()
         three.cert = try GroupCertificates.member(device: three.device, publicKey: three.key.publicKeyDER, ca: g.b.currentRoot,
-                                                  caSigner: g.newRootKey, now: t0)
-        XCTAssertEqual(try GroupCertificates.verifyMember(chain: [three.cert], roots: g.b.trusted, now: t0), three.device)
-        _ = try g.b.record(device: three.device, name: "three", role: "member", caps: Records.caps, key: three.keyHash, caSigner: g.newRootKey, now: Date())
+                                                  caSigner: g.newRootKey, now: now)
+        XCTAssertEqual(try GroupCertificates.verifyMember(chain: [three.cert], roots: g.b.trusted, now: now), three.device)
+        _ = try g.b.record(device: three.device, name: "three", role: "member", caps: Records.caps, key: three.keyHash, caSigner: g.newRootKey, now: now)
         XCTAssertNil(g.b.records.refused(chain: [three.cert]))
-        let later = t0.addingTimeInterval(500 * 24 * 3600)
+        let later = now.addingTimeInterval(500 * 24 * 3600)
         let renewed = try XCTUnwrap(g.b.renewal(chain: [g.one.cert], caSigner: g.newRootKey, now: later)).cert
         XCTAssertEqual(try GroupCertificates.verifyMember(renewed, groupCA: g.b.currentRoot, now: later), g.one.device)
     }
 
+    /// Without a delay of the root's, the claim waits 72 hours, and the
+    /// member signs nothing meanwhile.
+    func testClaimWaits() throws {
+        var g = try group()
+        let newRoot = try g.newRoot()
+        try g.claim(newRoot)
+        XCTAssertEqual(g.b.claimState, "pending")
+        let f = try g.finish(newRoot)
+        XCTAssertEqual(f.state, "pending")
+        XCTAssertGreaterThan(f.leftMS, 71 * 3600 * 1000, "the group's delay")
+        XCTAssertNil(f.cert)
+        XCTAssertFalse(g.b.isRoot)
+        XCTAssertEqual(g.b.records.rootDevice, g.root.device)
+    }
+
     /// The root cancels a claim while it waits, and the claimant stays an admin.
     func testClaimCancelled() throws {
-        var g = try Group(now: t0)
-        let newRoot = try GroupCertificates.groupCA(signer: g.newRootKey, now: t0, pathLength: 1)
-        let claim = try g.b.takeOver(from: g.root.device, adminSigner: g.adminKey, newRoot: newRoot, now: t0)
-        XCTAssertThrowsError(try g.b.takeOver(from: g.root.device, adminSigner: g.adminKey, newRoot: newRoot, now: t0)) {
+        var g = try group()
+        let newRoot = try g.newRoot()
+        try g.claim(newRoot)
+        XCTAssertThrowsError(try g.b.checkTakeOver(from: g.root.device)) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .claimWaiting)
         }
+        let claim = try g.claimRecord()
         g.root.add([claim])
         XCTAssertEqual(g.root.records.claims.map(\.state), ["pending"])
-        let cancel = try g.root.resolve([Records.id(claim)], rootSigner: g.rootKey, now: Date())
-        g.b.add([cancel])
-        g.b.records.clock = { Date() }
-        XCTAssertTrue(try g.b.finishTakeOver(rootSigner: g.newRootKey, now: Date()).isEmpty)
+        try g.fromRoot(try g.root.resolve([Records.id(claim)], rootSigner: g.rootKey, now: Date()))
+        XCTAssertEqual(try g.finish(newRoot).state, "cancelled")
+        XCTAssertTrue(g.b.dropEndedClaim())
         XCTAssertNil(g.b.claim, "a cancelled claim is dropped")
         XCTAssertFalse(g.b.isRoot)
         XCTAssertEqual(g.b.records.rootDevice, g.root.device)
@@ -209,7 +290,7 @@ final class RootTests: XCTestCase {
     /// The root and an admin set how long a copy from another device stays
     /// live; the root's record beats an admin's.
     func testIncoming() throws {
-        var g = try Group(now: t0)
+        var g = try group()
         XCTAssertEqual(g.b.incomingMS, Records.defaultIncomingMS)
         XCTAssertThrowsError(try g.root.setIncoming(ms: 4_000, caSigner: g.rootKey, now: Date())) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .invalidIncoming)
@@ -224,24 +305,22 @@ final class RootTests: XCTestCase {
 
     /// The root sets how long a claim waits.
     func testTakeoverDelay() throws {
-        var g = try Group(now: t0)
+        var g = try group()
         XCTAssertThrowsError(try g.root.setTakeoverDelay(ms: 8 * 24 * 3600 * 1000, rootSigner: g.rootKey, now: Date())) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .invalidDelay)
         }
         XCTAssertThrowsError(try g.b.setTakeoverDelay(ms: 0, rootSigner: g.adminKey, now: Date())) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .notRoot)
         }
-        let r = try g.root.setTakeoverDelay(ms: 0, rootSigner: g.rootKey, now: Date())
-        g.b.add([r])
-        g.b.records.clock = { Date() }
-        let newRoot = try GroupCertificates.groupCA(signer: g.newRootKey, now: t0, pathLength: 1)
-        _ = try g.b.takeOver(from: g.root.device, adminSigner: g.adminKey, newRoot: newRoot, now: Date())
-        XCTAssertFalse(try g.b.finishTakeOver(rootSigner: g.newRootKey, now: Date()).isEmpty, "no delay")
+        try g.fromRoot(try g.root.setTakeoverDelay(ms: 0, rootSigner: g.rootKey, now: Date()))
+        let newRoot = try g.newRoot()
+        try g.claim(newRoot)
+        XCTAssertEqual(try g.finish(newRoot).state, "effective", "no delay")
         XCTAssertTrue(g.b.isRoot)
     }
 
     func testOldRootKeyAfterTakeOver() throws {
-        var g = try Group(now: t0)
+        var g = try group()
         _ = try takeOver(&g)
         var set = g.b.records
         // Whoever has the lost phone's root key signs a computer, an admin
@@ -268,13 +347,18 @@ final class RootTests: XCTestCase {
     }
 
     func testTakeOverRefused() throws {
-        var g = try Group(now: t0)
-        let newRoot = try GroupCertificates.groupCA(signer: g.newRootKey, now: t0, pathLength: 1)
-        XCTAssertThrowsError(try g.b.takeOver(from: g.one.device, adminSigner: g.adminKey, newRoot: newRoot, now: t0)) {
+        let g = try group()
+        XCTAssertThrowsError(try g.b.checkTakeOver(from: g.one.device)) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .notRoot)
         }
-        XCTAssertThrowsError(try g.root.takeOver(from: g.root.device, adminSigner: g.rootKey, newRoot: newRoot, now: t0)) {
+        XCTAssertThrowsError(try g.root.checkTakeOver(from: g.root.device)) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .notAdmin)
+        }
+        // The member refuses a claim from a device that does not hold the root too.
+        let k = g.adminKey
+        XCTAssertThrowsError(try g.member.claim(.takeOver, rootCA: try g.newRoot(), public: k.publicKeyDER, ca: g.adminCA,
+                                                sign: { try k.signature(digest: $0) }, lost: g.one.device)) {
+            XCTAssertTrue($0 is Core.Refusal, "\($0)")
         }
         // A claim that hands the group to a computer's group CA, or to no
         // root at all, never takes effect.
@@ -293,8 +377,9 @@ final class RootTests: XCTestCase {
     /// A welcome after the takeover names the new root and carries the
     /// claim times, and a phone that joins checks it.
     func testWelcomeAfterTakeOver() throws {
-        var g = try Group(now: t0)
+        var g = try group()
         _ = try takeOver(&g)
+        let t0 = Date()
         let joiner = Member.newID(), key = SoftwareSigner()
         let selfSigned = try GroupCertificates.selfSigned(device: joiner, signer: key)
         var w = Pairing.Welcome(cert: try GroupCertificates.member(device: joiner, publicKey: key.publicKeyDER, ca: g.b.currentRoot,
@@ -307,14 +392,10 @@ final class RootTests: XCTestCase {
         bad.welcome.roots = nil
         XCTAssertThrowsError(try PairingJoiner.check(bad, info: info, memberCert: g.b.memberCert, joinerCert: selfSigned, now: t0))
         // A root that no record leads to, as one an admin made up and named
-        // in the Welcome, is refused; so is one whose claim still waits
-        // for the joiner, without the claim times.
+        // in the Welcome, is refused.
         var made = j
         made.welcome.records = nil
         XCTAssertThrowsError(try PairingJoiner.check(made, info: info, memberCert: g.b.memberCert, joinerCert: selfSigned, now: t0))
-        var early = j
-        early.welcome.claimTimes = nil
-        XCTAssertThrowsError(try PairingJoiner.check(early, info: info, memberCert: g.b.memberCert, joinerCert: selfSigned, now: t0))
         XCTAssertEqual(PhoneGroup.joined(j).roots, g.b.roots)
     }
 
@@ -429,7 +510,7 @@ final class RootTests: XCTestCase {
     /// not one of them, so a revocation of an admin's key that a watch
     /// signs counts for nothing, while the root's does.
     func testGoWatch() throws {
-        var g = try Group(now: t0)
+        var g = try group()
         let watchKey = SoftwareSigner(), watch = Member.newID()
         let (ca, _) = try g.root.addWatch(device: watch, name: "Watch", os: "watchos", adminKey: watchKey.publicKeyDER,
                                           rootSigner: g.rootKey, now: t0.addingTimeInterval(1))
@@ -446,10 +527,10 @@ final class RootTests: XCTestCase {
     }
 
     /// Writes swift-root.json for internal/group's TestSwiftRoot: a takeover
-    /// as this kit signs it.
+    /// as the core's member signs it for this kit.
     func testTakeOverForGo() throws {
         guard let dir = ProcessInfo.processInfo.environment["CBB_INTEROP_OUT"] else { return }
-        var g = try Group(now: t0)
+        var g = try group()
         _ = try takeOver(&g)
         struct Out: Encodable {
             var group_ca: Data
