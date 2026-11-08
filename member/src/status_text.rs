@@ -14,7 +14,7 @@ use crate::control::{Away, Device, Media, Status};
 const CERT_WARNING_MS: i64 = 30 * 24 * 3600 * 1000;
 
 /// The whole status, as Go's writeStatus; now_ms is the wall clock.
-pub fn write_status(st: &Status, devs: &[Device], now_ms: i64) -> String {
+pub fn write_status(st: &Status, devs: &[Device], now_ms: i64, limit: &str) -> String {
     let mut w = String::new();
     let _ = writeln!(w, "{}", st.version);
     if !st.update.is_empty() {
@@ -42,7 +42,7 @@ pub fn write_status(st: &Status, devs: &[Device], now_ms: i64) -> String {
             w,
             "{by}, an admin, took the group over from this computer, its root, while it was away. If this computer is not lost, sudo cbb remove {by} undoes it; otherwise the group is {by}'s now."
         );
-    } else if let Some(c) = cert_line(st.cert_ends_ms, now_ms) {
+    } else if let Some(c) = renewal_line(st.cert_ends_ms, now_ms) {
         let _ = writeln!(w, "{c}");
     }
     for l in stop_lines(st) {
@@ -67,7 +67,7 @@ pub fn write_status(st: &Status, devs: &[Device], now_ms: i64) -> String {
             st.quiet.join(", ")
         );
     }
-    write_away(&mut w, st.away.as_ref());
+    write_away(&mut w, st.away.as_ref(), limit);
     write_media(&mut w, st.media.as_ref());
     if st.peers.is_empty() {
         w.push_str("No members connected.\n");
@@ -106,7 +106,7 @@ fn local_date(ms: i64) -> String {
 
 /// Warns when this device's member certificate has ended or ends soon, as
 /// Go's certLine.
-fn cert_line(ends_ms: i64, now_ms: i64) -> Option<String> {
+fn renewal_line(ends_ms: i64, now_ms: i64) -> Option<String> {
     if ends_ms == 0 {
         return None;
     }
@@ -206,11 +206,13 @@ pub fn sync_line(st: &Status) -> String {
 
 /// Sync away from home, as Go's writeAway, with the underlying error in
 /// debug mode.
-pub fn write_away(w: &mut String, a: Option<&Away>) {
+pub fn write_away(w: &mut String, a: Option<&Away>, limit: &str) {
     let Some(a) = a else {
         w.push_str("Sync away from home: off (cbb global on turns it on).\n");
+        w.push_str(limit);
         return;
     };
+    w.push_str(limit);
     let detail = |w: &mut String, d: &str| {
         if !d.is_empty() && crate::error::show_details() {
             let _ = writeln!(w, "  Detail: {d}");
@@ -523,7 +525,7 @@ mod tests {
     fn no_group() {
         let st = Status { version: "cbb dev".into(), ..Default::default() };
         assert_eq!(
-            write_status(&st, &[], 0),
+            write_status(&st, &[], 0, ""),
             "cbb dev\nNot in a group. Run cbb new here to start one, or cbb pair to join one.\n"
         );
     }

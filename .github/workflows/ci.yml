@@ -2220,8 +2220,9 @@ jobs:
             sleep 0.5
           done
           echo "$out" | grep -q 'Not in a group'
-          out=$(sudo cbb invite 2>&1) || true
-          echo "$out" | grep -q 'command of a full member'
+          # The lite archive carries no forwarder: cbb forward says what it runs.
+          out=$(sudo cbb forward -show-key 2>&1) || true
+          echo "$out" | grep -q 'runs cbb-forward, which is not beside this cbb'
           # The full member cannot take over the lite member's keys.
           go build -o "$RUNNER_TEMP/cbb-full" ./cmd/cbb
           if sudo CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/cbb-full"; then

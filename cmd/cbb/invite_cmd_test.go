@@ -156,14 +156,6 @@ func TestForwardXHTTPPath(t *testing.T) {
 	}
 }
 
-func TestPortOf(t *testing.T) {
-	for in, want := range map[string]string{"[::]:8765": "8765", "0.0.0.0:443": "443", "8764": "8764"} {
-		if got := portOf(in); got != want {
-			t.Errorf("portOf(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 // TestUpdateUsage: the flags of cbb update that are refused before it looks
 // at anything on the system.
 func TestUpdateUsage(t *testing.T) {

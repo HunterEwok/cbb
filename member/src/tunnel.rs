@@ -232,6 +232,43 @@ impl Hub {
 }
 
 impl State {
+    /// The addresses on the internet this device's tunnel reaches, as Go's
+    /// State.Destinations: a hub's forwarder, the hubs it keeps offers of
+    /// and the forwarders it reaches over VLESS, or the relay. A hub answers
+    /// its clients wherever they are, but only those that proved the
+    /// group's keys.
+    pub fn destinations(&self) -> Vec<std::net::IpAddr> {
+        let mut out = Vec::new();
+        let mut add = |ep: SocketAddr| {
+            let a = ep.ip().to_canonical();
+            if !out.contains(&a) {
+                out.push(a);
+            }
+        };
+        let vless = |v: &Option<serde_json::Value>| {
+            v.as_ref().and_then(|v| v.get("endpoint")?.as_str()?.parse::<SocketAddr>().ok())
+        };
+        if let Some(r) = &self.relay {
+            add(r.endpoint);
+            return out;
+        }
+        if let Some(f) = self.forwarder.as_ref().filter(|_| self.is_hub) {
+            add(f.endpoint);
+            if let Some(ep) = vless(&f.vless) {
+                add(ep);
+            }
+        }
+        for h in &self.hubs {
+            for ep in &h.endpoints {
+                add(*ep);
+            }
+            if let Some(ep) = vless(&h.vless) {
+                add(ep);
+            }
+        }
+        out
+    }
+
     /// A new state with a new key and preshared key.
     pub fn new(group: &str) -> Result<State> {
         Ok(State { version: 1, group: group.to_string(), key: random_key()?, psk: random_key()?, ..State::empty() })

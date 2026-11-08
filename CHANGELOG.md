@@ -23,6 +23,13 @@ All notable changes to cbb are documented in this file. The format follows
   says until when sync is off as the Go cbb does.
   `cbb keyboard` and `cbb remote` (the Bluetooth keyboard and a TV's remote) work from the
   Rust cbb too, and `cbb recovery` claims the group with the recovery key or its YubiKey.
+  `cbb global` does all that the Go cbb's does: `hub` (with `-on`, `-forward-only`, `off`,
+  `-keep`, `-away-on` and the hub's port in the firewall), `move`, `relay`, `allow`, `entries`,
+  and it lets the service reach the group's servers through the system's limit (the systemd
+  drop-in, the Windows Firewall rule); the Rust service's status names those servers.
+  `cbb forward` and `cbb relay` run `cbb-forward` and `cbb-relay`, Go programs of their own
+  beside `cbb`, in its place, so that their systemd units keep them apart from the service and
+  from the keys of `cbb-helper`. An unknown command exits with 2, as in the Go cbb.
   `cbb mute` and `cbb unmute` go through the administrator's socket, as in the Go service, and
   a command that does not reach a device names why.
 - The Go service's tests run on the Rust service (`CBB_TEST_RUST_SERVICE` names its

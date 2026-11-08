@@ -68,6 +68,17 @@ func TestRustCommandLine(t *testing.T) {
 	misuse("takeover", "-delay")
 	misuse("recovery", "now")
 
+	want("Sync away from home: off (cbb global on turns it on).", "global")
+	misuse("global", "sideways")
+	for _, args := range [][]string{{"global", "hub", "-forward-only"}, {"global", "relay", "198.51.100.9:8765", "-key", "default"}} {
+		if out, code := run(args...); code != 2 {
+			t.Fatalf("cbb %s exited with %d: %s; want 2", strings.Join(args, " "), code, out)
+		}
+	}
+	if out, code := run("nope"); code != 2 || !strings.Contains(out, "unknown command") {
+		t.Fatalf("cbb nope exited with %d: %s", code, out)
+	}
+
 	want("This device is the remote of no TV", "remote")
 	misuse("remote", "-tv", "x", "add", "10.0.0.5")
 	misuse("keyboard", "off", "-rate", "20")

@@ -409,6 +409,11 @@ pub struct Away {
     /// The underlying error, for debugging.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub detail: String,
+    /// The group's servers the service may reach beyond the home network:
+    /// its hub, forwarder and relay, which cbb global lets through the
+    /// system's limit.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allow: Vec<String>,
 }
 
 /// A hub's registration with its forwarder, as Go's control.Forwarder.

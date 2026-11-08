@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::certs::{Cert, DeviceId, Usage};
 use cbb_core::copy::{self, Content, Sealed};
@@ -928,7 +928,9 @@ impl Node {
             wire::get(wire::Get { sha256: sum.to_vec(), offset: offset as i64, length: length as i64 })
         };
         let mut asked = have;
-        let mut idle = Duration::ZERO;
+        // Measured, not counted in waits: a wait may end early, as under
+        // an emulator.
+        let mut last = Instant::now();
         let res = loop {
             while asked < size && asked - have < FETCH_AHEAD {
                 let len = (size - asked).min(wire::MAX_GET as u64);
@@ -948,13 +950,12 @@ impl Node {
                         break Err(Error::msg(format!("keep a fetch: {e}")));
                     }
                     have += n as u64;
-                    idle = Duration::ZERO;
+                    last = Instant::now();
                 }
                 Ok(Piece::Chunk(_)) => {}
                 Ok(Piece::Missing) => break Err(Error::msg("it does not hold the blob")),
                 Err(_) => {
-                    idle += Duration::from_secs(1);
-                    if idle >= FETCH_IDLE {
+                    if last.elapsed() >= FETCH_IDLE {
                         break Err(Error::msg("no chunk came for 15 s"));
                     }
                 }

@@ -19,6 +19,7 @@ mod away;
 #[cfg(not(feature = "tunnel"))]
 #[path = "away_off.rs"]
 mod away;
+mod awaynet;
 #[cfg(feature = "tunnel")]
 mod awg;
 pub mod button;
@@ -35,9 +36,11 @@ pub mod error;
 pub mod files;
 #[cfg(feature = "tunnel")]
 pub mod forward;
+mod global_cli;
 pub mod helper;
 #[cfg(feature = "tunnel")]
 pub mod hub;
+mod hubport;
 pub mod identity;
 mod interfaces;
 mod keys;
@@ -70,6 +73,7 @@ mod status_text;
 mod third_party {
     pub mod pcsclite;
 }
+mod servers;
 mod service;
 mod signed;
 mod sync;
@@ -189,10 +193,6 @@ $XDG_RUNTIME_DIR/cbb/control.sock. CBB_INTERFACES limits the member
 port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the details of errors.
 ";
 
-/// The commands of a full member (cmd/cbb) that the lite member does not
-/// have, so that it says so instead of "unknown command".
-const FULL_ONLY: &[&str] = &["forward", "relay"];
-
 /// Reports whether this is an OpenWrt router, whose /var is in RAM and
 /// which keeps /etc across upgrades.
 pub(crate) fn openwrt() -> bool {
@@ -252,7 +252,7 @@ pub fn main() {
                 "paste" => cmd_paste(&g, rest),
                 "status" => cmd_status(&g, rest),
                 "leave" => cmd_leave(&g, rest),
-                "global" => cmd_global(&g, rest),
+                "global" => global_cli::global(&g, rest),
                 "watch" => cmd_watch(&g, rest),
                 "sync" => cmd_sync(&g, rest),
                 "paste-receive" => cmd_paste_receive(&g, rest),
@@ -273,6 +273,7 @@ pub fn main() {
                 "mute" | "unmute" => cli::mute(&g, rest, cmd == "unmute"),
                 "config" => cli::config(&g, rest),
                 "network" => cli::network(&g, rest),
+                "forward" | "relay" => servers::run(&g, cmd, rest),
                 "version" | "-version" | "--version" => {
                     println!(
                         "cbb {} ({}/{}), the lite member",
@@ -287,10 +288,19 @@ pub fn main() {
                     print!("{USAGE}");
                     Ok(())
                 }
-                _ if FULL_ONLY.contains(&cmd) => Err(Error::msg(format!(
-                    "cbb {cmd} is a command of a full member; this device runs the lite member (see cbb help)"
-                ))),
-                _ => Err(Error::msg(format!("unknown command {cmd:?}; see cbb help"))),
+                // cbb cbb status: the program's name typed twice, as after a
+                // path to cbb.exe.
+                "cbb" if !rest.is_empty() => {
+                    eprintln!(
+                        "cbb: unknown command \"cbb\"; the command comes right after the program: cbb {}",
+                        rest.join(" ")
+                    );
+                    std::process::exit(2)
+                }
+                _ => {
+                    eprintln!("cbb: unknown command {cmd:?}; cbb help lists the commands");
+                    std::process::exit(2)
+                }
             };
             match res {
                 Ok(()) => 0,
@@ -535,7 +545,7 @@ fn wait_for_group(g: &Global) {
 
 /// Draws text as a QR code with half blocks, black on white whatever the
 /// terminal's colors, as cbb pair does.
-fn qr(text: &str) -> String {
+pub(crate) fn qr(text: &str) -> String {
     let Ok(code) = qrcode::QrCode::with_error_correction_level(text, qrcode::EcLevel::M) else {
         return String::new();
     };
@@ -835,7 +845,8 @@ fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
     };
     let s = ask("status")?.header.status.ok_or_else(|| Error::msg("the service sent no status"))?;
     let devs = if s.group.is_empty() { Vec::new() } else { ask("devices")?.header.devices };
-    print!("{}", status_text::write_status(&s, &devs, uptime::wall_ms()));
+    let limit = awaynet::limit_note(&awaynet::Net::system(), s.away.as_ref());
+    print!("{}", status_text::write_status(&s, &devs, uptime::wall_ms(), &limit));
     Ok(())
 }
 
@@ -1228,51 +1239,6 @@ fn action_warning(a: &control::Action) -> String {
         }
     }
     s + "Any admin can turn it off from afar, and only you turn it on again.\n\n"
-}
-
-/// What a user agrees to before the lite member, whose keys sit in files,
-/// syncs away from home (docs/design.md, "Turning it on, step by step").
-const KEYS_WARNING: &str = "Sync away from home lets this device reach the group's hub from the internet,
-through the group's own WireGuard tunnel, with the clipboard encrypted end to end.
-
-This device keeps its keys in files, not in a security chip. Whoever copies those
-files (with root on this device, from its disk or memory card, or from an
-unencrypted backup) can act as this device from anywhere until you remove it from
-the group. To keep that from happening:
-
-  - encrypt the disk or memory card where you can (LUKS);
-  - keep the service's state directory out of unencrypted backups;
-  - remove the device at once (Remove on the phone, or cbb remove on a full
-    member) when it is lost or someone else may have had root on it.
-
-";
-
-fn cmd_global(g: &Global, args: &[String]) -> Result<()> {
-    let mut h = control::Header { op: "away".into(), ..Default::default() };
-    match args {
-        // Only showing it needs no root: the status carries it.
-        [] => h.op = "status".into(),
-        [a] if a == "on" => {
-            print!("{KEYS_WARNING}Type yes to turn sync away from home on: ");
-            std::io::stdout().flush().ok();
-            let mut line = String::new();
-            std::io::stdin().read_line(&mut line).context("cannot read the answer")?;
-            if !line.trim().eq_ignore_ascii_case("yes") {
-                println!("Nothing changed.");
-                return Err(Error::msg("sync away from home stays as it was"));
-            }
-            h.name = "on".into();
-            h.consent = true;
-        }
-        [a] if a == "off" => h.name = "off".into(),
-        [a, rest @ ..] if a == "hubs" => return cli::hubs(g, rest),
-        _ => return Err(cli::usage("cbb global [on|off]")),
-    }
-    let m = request(g, &control::Message::new(h, Vec::new()))?;
-    let mut out = String::new();
-    status_text::write_away(&mut out, m.header.status.and_then(|s| s.away).as_ref());
-    print!("{out}");
-    Ok(())
 }
 
 fn cmd_watch(g: &Global, args: &[String]) -> Result<()> {

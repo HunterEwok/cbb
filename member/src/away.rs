@@ -311,7 +311,8 @@ impl Away {
             // Off, unless the state could not be read.
             return error.map(|(e, d)| control::Away { error: e, detail: d, ..Default::default() });
         };
-        let mut a = control::Away { keys_in_file: true, ..Default::default() };
+        let allow = st.destinations().iter().map(ToString::to_string).collect();
+        let mut a = control::Away { keys_in_file: true, allow, ..Default::default() };
         if let Some(r) = &st.relay {
             let (relay, through) = self.meeting_status(r);
             (a.relay, a.through) = (Some(relay), through);
