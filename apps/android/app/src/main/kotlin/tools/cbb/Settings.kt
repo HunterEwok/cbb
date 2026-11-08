@@ -15,7 +15,13 @@ import java.util.Locale
 enum class LanguageChoice(val key: String) {
     SYSTEM("system"),
     EN("en"),
+    ZH("zh"),
+    ES("es"),
     RU("ru"),
+    AR("ar"),
+    SW("sw"),
+    HE("he"),
+    HI("hi"),
     ;
 
     /** The locale the app shows, null for the system's. */

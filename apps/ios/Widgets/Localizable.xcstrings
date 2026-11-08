@@ -3,40 +3,184 @@
   "strings": {
     "Opens CBB and sends what this phone copied to your computers, or fetches what a computer copied a moment ago.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح CBB ويرسل ما نسخه هذا الهاتف إلى حواسيبك، أو يجلب ما نسخه حاسوب قبل لحظة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre CBB y envía a tus ordenadores lo que copió este teléfono, o trae lo que un ordenador copió hace un momento."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פותח את CBB ושולח למחשבים שלכם את מה שהטלפון הזה העתיק, או מביא את מה שמחשב העתיק לפני רגע."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB खोलता है और इस फ़ोन की कॉपी आपके कंप्यूटरों पर भेजता है, या किसी कंप्यूटर ने अभी जो कॉपी किया वह लाता है।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Открывает CBB и отправляет скопированное на телефоне на ваши компьютеры или забирает то, что компьютер скопировал только что."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hufungua CBB na kutuma kwenye kompyuta zako kile simu hii ilinakili, au huleta kile kompyuta ilinakili muda mfupi uliopita."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 CBB 并将这部手机复制的内容发送到你的电脑，或获取电脑刚刚复制的内容。"
           }
         }
       }
     },
     "Opens CBB and syncs the clipboard with your computers.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح CBB ويزامن الحافظة مع حواسيبك."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre CBB y sincroniza el portapapeles con tus ordenadores."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פותח את CBB ומסנכרן את הלוח עם המחשבים שלכם."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB खोलता है और आपके कंप्यूटरों के साथ क्लिपबोर्ड सिंक करता है।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Открывает CBB и синхронизирует буфер с вашими компьютерами."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hufungua CBB na kusawazisha ubao wa kunakili na kompyuta zako."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 CBB 并与你的电脑同步剪贴板。"
           }
         }
       }
     },
     "Sends what this phone copied to your computers, or fetches what a computer copied a moment ago.": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يرسل ما نسخه هذا الهاتف إلى حواسيبك، أو يجلب ما نسخه حاسوب قبل لحظة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envía a tus ordenadores lo que copió este teléfono, o trae lo que un ordenador copió hace un momento."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שולח למחשבים שלכם את מה שהטלפון הזה העתיק, או מביא את מה שמחשב העתיק לפני רגע."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस फ़ोन की कॉपी आपके कंप्यूटरों पर भेजता है, या किसी कंप्यूटर ने अभी जो कॉपी किया वह लाता है।"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Отправляет скопированное на телефоне на ваши компьютеры или забирает то, что компьютер скопировал только что."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hutuma kwenye kompyuta zako kile simu hii ilinakili, au huleta kile kompyuta ilinakili muda mfupi uliopita."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将这部手机复制的内容发送到你的电脑，或获取电脑刚刚复制的内容。"
           }
         }
       }
     },
     "Sync clipboard": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مزامنة الحافظة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizar portapapeles"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "סנכרון הלוח"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "क्लिपबोर्ड सिंक करें"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Синхронизировать буфер обмена"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sawazisha ubao wa kunakili"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步剪贴板"
           }
         }
       }

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<resources>
+    <string name="no_group">פתחו את CBB בטלפון כדי ליצור קבוצה או להצטרף לאחת.</string>
+    <string name="online_count">%1$d מתוך %2$d מחוברים</string>
+    <string name="away">בכל מקום</string>
+    <string name="sync">סנכרון</string>
+    <string name="away_off">כבוי</string>
+    <string name="away_at_home">בבית: מסנכרן ישירות.</string>
+    <string name="away_connecting">מתחבר לרכזת…</string>
+    <string name="away_connected">דרך הרכזת שלכם.</string>
+    <string name="away_waiting">ממתין לרכזת.</string>
+    <string name="devices">מכשירים</string>
+    <string name="latest">האחרון</string>
+    <string name="online">מחובר</string>
+    <string name="watch_phone">הטלפון של השעון הזה</string>
+    <string name="offline">לא מחובר</string>
+    <string name="stale">כפי שהטלפון אמר לאחרונה.</string>
+    <string name="no_phone">הטלפון לא מחובר. קרבו אותו ונסו שוב.</string>
+    <string name="no_answer">הטלפון לא ענה. נסו שוב.</string>
+    <string name="watch_admin">השעון הזה הוא מנהל בקבוצה.</string>
+    <string name="act_freeze">הקפאת המנהל הזה</string>
+    <string name="act_remove">הסרה מהקבוצה</string>
+    <string name="act_paste_off">כיבוי הדבקה מרחוק</string>
+    <string name="act_actions_off">כיבוי הפעולות המהירות</string>
+    <string name="act_away_off">כיבוי הסנכרון מחוץ לבית</string>
+    <string name="ask_freeze">להקפיא את %1$s? הוא נשאר מנהל בשם, אבל שום דבר שהוא חותם עליו לא נחשב עד שהשורש יפשיר אותו.</string>
+    <string name="ask_remove">להסיר את %1$s מהקבוצה?</string>
+    <string name="ask_paste_off">לכבות הדבקה מרחוק ב-%1$s?</string>
+    <string name="ask_actions_off">לכבות את כל הפעולות המהירות ב-%1$s?</string>
+    <string name="ask_away_off">לכבות את הסנכרון מחוץ לבית ב-%1$s?</string>
+    <string name="ask_action">להפעיל את %1$s ב-%2$s?</string>
+    <string name="done">בוצע.</string>
+    <string name="not_done">הטלפון לא עשה זאת. נסו שוב.</string>
+    <string name="not_done_because">הטלפון לא עשה זאת.</string>
+    <string name="not_signed">הפעולה לא נחתמה. בטלו את נעילת השעון ונסו שוב.</string>
+</resources>

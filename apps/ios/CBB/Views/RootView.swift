@@ -22,6 +22,7 @@ struct RootView: View {
         }
         .environment(\.palette, palette)
         .environment(\.locale, language.locale ?? .autoupdatingCurrent)
+        .environment(\.layoutDirection, language.layoutDirection)
         .tint(palette.accent)
         .foregroundStyle(palette.text)
         .preferredColorScheme(appearance.scheme)

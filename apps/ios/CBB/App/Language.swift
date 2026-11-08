@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import Foundation
+import SwiftUI
 
 /// The language the user picks on the Start screen or in Settings; System
 /// follows the system's (and the per-app choice in the system's Settings).
 enum LanguageChoice: String, CaseIterable, Identifiable {
     case system
     case en
+    case zh = "zh-Hans"
+    case es
     case ru
+    case ar
+    case sw
+    case he
+    case hi
 
     static let key = "language"
 
@@ -23,6 +30,12 @@ enum LanguageChoice: String, CaseIterable, Identifiable {
 
     /// The locale the views use, nil for System.
     var locale: Locale? { self == .system ? nil : Locale(identifier: rawValue) }
+
+    /// Right to left for Arabic and Hebrew; System keeps the system's.
+    var layoutDirection: LayoutDirection {
+        let code = (locale ?? .autoupdatingCurrent).language.languageCode?.identifier ?? ""
+        return Locale.Language(identifier: code).characterDirection == .rightToLeft ? .rightToLeft : .leftToRight
+    }
 
     /// Each language by its own name ("English", "Russian" in Russian), so
     /// that it can be found whichever language the app shows now.

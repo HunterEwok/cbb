@@ -908,12 +908,14 @@ the app on real devices.
 - Every user-facing string comes from the platform's catalog from the first screen on: a
   String Catalog (`Localizable.xcstrings`) on iOS, `strings.xml` resources on Android. No
   string literal in views.
-- English is the source language; Russian is the first translation. Plurals, numbers and
+- English is the source language, translated into the languages of the website: Chinese
+  (Simplified), Spanish, Russian, Arabic, Swahili, Hebrew and Hindi. Plurals, numbers and
   dates use the platform's formatters.
 - The layout survives longer translations and right-to-left scripts (no fixed widths for
   text; leading and trailing, not left and right).
-- The language follows the system, with an in-app choice (System, English, Russian) in
+- The language follows the system, with an in-app choice (System or one of the eight) in
   Settings, and on the Start screen when the system's language has no translation.
+  Arabic and Hebrew lay the screens out right to left, the tray app too.
 
 ## Themes
 

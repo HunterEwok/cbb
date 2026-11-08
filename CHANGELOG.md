@@ -1335,6 +1335,10 @@ All notable changes to cbb are documented in this file. The format follows
   Russian, Arabic, Swahili, Hebrew, Hindi; English otherwise): its help, its questions and what
   `status`, `sync`, `global`, `pair` and `leave` print (`member/l10n/`, every text checked
   in every language by a test). `cbb pair` names the phones' + and Scan a code.
+- The iPhone, Apple Watch, Android, Wear OS, Mac and tray apps in Chinese, Spanish, Arabic,
+  Swahili, Hebrew and Hindi as well as English and Russian, all of them in Settings'
+  language choice where the app has one; Arabic and Hebrew right to left, the tray app too.
+  The new translations wait for a native speaker's reading before a release.
 - The Aurora app too: the house and the globe beside how many devices are online (the globe
   asks first and moves out of Settings), no Sync button or menu item, the Start screen with
   Create a group and the two Join buttons, Leave the group in Settings, "Lost phone?" on the

@@ -3,20 +3,92 @@
   "strings": {
     "${applicationName} sync": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المزامنة عبر ${applicationName}"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizar con ${applicationName}"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "סנכרון ב־${applicationName}"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName} से सिंक"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "${applicationName} синхронизировать"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sawazisha kwa ${applicationName}"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName} 同步"
           }
         }
       }
     },
     "Sync clipboard with ${applicationName}": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مزامنة الحافظة مع ${applicationName}"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizar portapapeles con ${applicationName}"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "סנכרון הלוח עם ${applicationName}"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName} के साथ क्लिपबोर्ड सिंक करें"
+          }
+        },
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Синхронизировать буфер обмена с ${applicationName}"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sawazisha ubao wa kunakili na ${applicationName}"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与 ${applicationName} 同步剪贴板"
           }
         }
       }

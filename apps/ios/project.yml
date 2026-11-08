@@ -47,7 +47,7 @@ targets:
       properties:
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ru]
+        CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
         UILaunchScreen: {}
         # AppDelegate keeps a phone upright and lets big screens turn.
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
@@ -103,7 +103,7 @@ targets:
       properties:
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ru]
+        CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
         NSBonjourServices: [_cbb._tcp]
         NSLocalNetworkUsageDescription: CBB finds your computers on the home network to send them what you share.
         NSExtension:
@@ -138,7 +138,7 @@ targets:
       properties:
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ru]
+        CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
@@ -159,7 +159,7 @@ targets:
       properties:
         CFBundleDisplayName: CBB
         CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ru]
+        CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
         WKApplication: true
         WKCompanionAppBundleIdentifier: $(CBB_BUNDLE_ID)
     settings:
