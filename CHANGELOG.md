@@ -1766,6 +1766,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A lite member away from home reaches a hub that answers only one of its ways, as over VLESS
+  when its UDP port is blocked: a tunnel link that ended before the hub answered left the next
+  one to start at the same dead endpoint, and a dial gave up just as a link moved on to the
+  next, so the member never got through. The next link now starts at the endpoint after it.
 - A hub whose hellos go to its forwarder over VLESS registers again when the forwarder sees
   none of them for 20 seconds. The local way carries the hellos in one flow, and a flow whose
   first request over XHTTP got no answer carried nothing for as long as the hub kept sending.
