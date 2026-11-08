@@ -310,12 +310,10 @@ pub fn main() {
                 "forward" | "relay" => servers::run(&g, cmd, rest),
                 "install" => servers::install(rest),
                 "version" | "-version" | "--version" => {
-                    println!(
-                        "cbb {} ({}/{}), the lite member",
-                        service::VERSION,
-                        std::env::consts::OS,
-                        std::env::consts::ARCH
-                    );
+                    // Without its helper beside it, cbb is the lite member
+                    // (installers tell the two apart by this line).
+                    let lite = if helper::locate().is_some() { "" } else { ", the lite member" };
+                    println!("cbb {} ({}/{}){lite}", service::VERSION, std::env::consts::OS, std::env::consts::ARCH);
                     println!("{}", core_version());
                     Ok(())
                 }

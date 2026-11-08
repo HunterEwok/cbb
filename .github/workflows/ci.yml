@@ -307,9 +307,17 @@ jobs:
           go run ./tools/coverage -floor tools/coverage/floor.json -summary "$GITHUB_STEP_SUMMARY" "$@"
 
   build:
-    name: build (Linux, FreeBSD, Windows)
+    name: build (${{ matrix.systems }})
     needs: changes
     if: needs.changes.outputs.core == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - systems: Linux
+            targets: linux/amd64 linux/arm64 linux/arm/7 linux/arm/6
+          - systems: FreeBSD, Windows
+            targets: freebsd/amd64/vet freebsd/arm64 windows/amd64/vet windows/arm64
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -320,23 +328,29 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
-      - name: the Rust core as WebAssembly, which cbb runs for the group's rules (internal/core)
+      - name: the Rust core as WebAssembly, which the Go programs run for the group's rules (internal/core)
         run: |
           sh wasm/build.sh
           sh member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
-      - name: go build and the release archive of each system and architecture, with the core as at a release
-        # One job for every target: Go builds for each from here, and a job per
-        # target spent more time starting than building. go vet runs once per
-        # operating system: the code differs by system, not by architecture,
-        # and the check job vets Linux. MIPS is for OpenWrt routers without an
-        # FPU (softfloat; the mips job runs the tests), ARMv6 for the Raspberry
-        # Pi Zero W.
+      - name: zig, which links cbb for FreeBSD and Windows, and the nightly Rust of FreeBSD's ARM64 build
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zig"
+          "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
+          echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
+      - name: cbb and the Go programs beside it, and the release archive of each target, as at a release
+        # Two jobs, each building cbb (Rust, member/packaging/build.sh) and the
+        # Go programs for its targets: Rust builds each target from the start.
+        # go vet runs once per operating system: the code differs by system,
+        # not by architecture, and the check job vets Linux. ARMv6 is for the
+        # Raspberry Pi Zero W; the routers' MIPS builds are the litemips job's.
         env:
           CGO_ENABLED: "0"
-        run: sh .github/build-targets.sh "$RUNNER_TEMP/core-notices" "$RUNNER_TEMP" \
-          linux/amd64 linux/arm64 linux/arm/7 linux/arm/6 linux/mips linux/mipsle \
-          freebsd/amd64/vet freebsd/arm64 windows/amd64/vet windows/arm64
+          TARGETS: ${{ matrix.targets }}
+        run: |
+          # shellcheck disable=SC2086 # the targets are words
+          sh .github/build-targets.sh "$RUNNER_TEMP/core-notices" "$RUNNER_TEMP" $TARGETS
       - name: keep the Windows archive for the installer test
+        if: contains(matrix.targets, 'windows/amd64')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-windows-amd64.zip
@@ -362,21 +376,24 @@ jobs:
         run: |
           sh wasm/build.sh
           sh member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
-      - name: go build and the release archives, with the core as at a release
+      - name: cbb, the Go programs beside it and the release archives, with the core as at a release
         env:
           CGO_ENABLED: "1"
         run: sh .github/build-targets.sh "$RUNNER_TEMP/core-notices" "$RUNNER_TEMP" darwin/arm64/vet darwin/amd64
-      - name: the agent has the pasteboard
-        # Without cgo the agent would start and fail; this build must link AppKit.
+      - name: the agent's helper has the pasteboard
+        # Without cgo the agent would start and fail; the helper must link AppKit.
         run: |
           for a in arm64 amd64; do
-            otool -L "$RUNNER_TEMP/darwin-$a/cbb" | grep -q AppKit.framework
+            otool -L "$RUNNER_TEMP/darwin-$a/cbb-helper" | grep -q AppKit.framework
           done
-      - name: cbb runs under the hardened runtime, as a release signs it (ad hoc here)
+      - name: the programs run under the hardened runtime, as a release signs them (ad hoc here)
         run: |
           for a in arm64 amd64; do
-            sh packaging/macos/sign.sh - "$RUNNER_TEMP/darwin-$a/cbb"
+            for f in cbb cbb-helper cbb-forward cbb-relay; do
+              sh packaging/macos/sign.sh - "$RUNNER_TEMP/darwin-$a/$f"
+            done
           done
+          "$RUNNER_TEMP/darwin-arm64/cbb" version
   mips:
     name: test (linux/mips under qemu)
     needs: changes
@@ -720,7 +737,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh ffi/bind.sh wasm/build.sh .github/ci-changes.sh .github/build-targets.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
+        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh member/packaging/build.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh ffi/bind.sh wasm/build.sh .github/ci-changes.sh .github/build-targets.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
       - name: the software bills of materials, as the release makes them (tools/sbom)

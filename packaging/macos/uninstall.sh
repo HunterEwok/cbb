@@ -60,9 +60,11 @@ rm -rf "/Library/Application Support/cbb-update" "/Library/Application Support/c
 if [ -f /usr/local/bin/cbb ] && [ ! -L /usr/local/bin/cbb ]; then
 	rm -f /usr/local/bin/cbb
 fi
-if [ -f /usr/local/bin/cbb-helper ] && [ ! -L /usr/local/bin/cbb-helper ]; then
-	rm -f /usr/local/bin/cbb-helper
-fi
+for f in cbb-helper cbb-forward cbb-relay; do
+	if [ -f "/usr/local/bin/$f" ] && [ ! -L "/usr/local/bin/$f" ]; then
+		rm -f "/usr/local/bin/$f"
+	fi
+done
 rm -rf /Library/Logs/cbb /usr/local/share/cbb /etc/cbb
 # The app the package installed; one put there by hand or from source stays.
 if pkgutil --pkg-info tools.cbb.pkg >/dev/null 2>&1; then

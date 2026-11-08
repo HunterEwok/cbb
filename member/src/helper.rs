@@ -223,15 +223,22 @@ impl Helper {
         }
         st.started = Some(Instant::now());
         let path = trusted(&self.path)?;
-        let mut child = Command::new(&path)
-            .env_clear()
+        let mut cmd = Command::new(&path);
+        cmd.env_clear()
             .envs(std::env::vars_os().filter(|(k, _)| self.whole_env || kept(k)))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             // Its log goes where cbb's goes.
-            .stderr(Stdio::inherit())
-            .spawn()
-            .context(format!("cannot start {}", path.display()))?;
+            .stderr(Stdio::inherit());
+        // Started by cbbw.exe, which has no console, the helper would open
+        // a console window of its own.
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        let mut child = cmd.spawn().context(format!("cannot start {}", path.display()))?;
         let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
             let _ = child.kill();
             let _ = child.wait();

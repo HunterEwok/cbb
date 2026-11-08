@@ -1433,6 +1433,11 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
+  programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
+  `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program
+  without a console window. `cbb version` names the lite member only when no `cbb-helper` is
+  beside `cbb`.
 - The Android and iPhone apps put one received image or video, and an image the button
   fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
   Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).
