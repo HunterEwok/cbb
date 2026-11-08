@@ -279,7 +279,7 @@ impl Away {
             chain,
             key,
             device: self.me.to_string(),
-            wg_key: st.private_key(),
+            wg_key: st.private_key()?,
             records: records.clone(),
             member_port: listener.addr.port(),
             credentials: credentials.clone(),
