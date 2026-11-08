@@ -1331,6 +1331,12 @@ All notable changes to cbb are documented in this file. The format follows
   advanced ones behind a switch and tips that close once instead of long texts, and the
   device's card with its badges, one line, the house, a row of icons and the rest under
   More. Wear OS has the house beside the globe.
+- The Aurora app too: the house and the globe beside how many devices are online (the globe
+  asks first and moves out of Settings), no Sync button or menu item, the Start screen with
+  Create a group and the two Join buttons, Leave the group in Settings, "Lost phone?" on the
+  one admin until closed, and the device's page with its marks, one line, the house (an
+  admin turns another device's through the core's new `sync_on` and `sync_off`) and the rest
+  under More. The core's `devices` names each connected device's sync, version and MAC.
 - One switch, sync, replaces the four sync modes and the device's own "not listening" switch
   (design.md, "Sync on and off"): on by default, so a device that joins syncs at once; off,
   for a time or until turned on, the clipboard is the device's own, both ways. `cbb sync [on

@@ -380,6 +380,10 @@ struct DeviceAnswer {
     #[serde(rename = "self")]
     this: bool,
     listed: bool,
+    sync: String,
+    version: String,
+    os_version: String,
+    mac: String,
 }
 
 /// The app's callback and its context, called from the member's threads.
@@ -724,6 +728,10 @@ impl Member {
                         online: d.online,
                         this: d.this,
                         listed: d.listed,
+                        sync: d.sync,
+                        version: d.version,
+                        os_version: d.os_version,
+                        mac: d.mac,
                     })
                     .collect();
                 Ok(json!({ "devices": ds }))

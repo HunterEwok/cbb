@@ -32,7 +32,9 @@ they look, so both apps are built to the same plan.
    group** (one screen: this phone's QR code and six digits; a phone of the group scans the
    code, a computer of the group types the digits after "+", docs/protocol.md, section 6),
    and, small, **Restore with the recovery key**. Admin rights come from the device that
-   admits the phone, not from a separate button.
+   admits the phone, not from a separate button. On Aurora the settings and the language are
+   in the pull-down menu, as in every Silica app, and the Start screen also has **Join a group
+   as an admin**.
 2. **Home**: how many devices are online, with the two switches beside it: the **house**
    (sync on this phone: a tap turns it off or on, touching and holding it turns it off for
    15 minutes, an hour, 8 hours or until turned on; off, the clipboard is this phone's own
