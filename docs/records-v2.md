@@ -62,8 +62,8 @@ Every rule of version 2 is in [protocol.md](protocol.md), section 10:
 
 ## Vectors and tests
 
-- `testdata/interop/v2-records.json` (and `v2-flood.json`, the sets at the limit on records,
-  apart for the size of a file), written by Go (`go test ./internal/authority -run
+- `testdata/interop/v2-records.json` (and `v2-flood.json`, the sets at the limit on records
+  and the checkpoint edges, apart for the size of a file), written by Go (`go test ./internal/authority -run
   TestV2Vectors -update`, from the evaluation tests' scenarios): record sets with the expected state, at
   least the cases of the audit findings of version 1 (each with every order): an admin that
   removes another after a claim took effect (X1 and X2 of the second verification), two admin

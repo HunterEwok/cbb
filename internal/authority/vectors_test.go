@@ -24,8 +24,9 @@ var update = flag.Bool("update", false, "write testdata/interop/v2-records.json 
 
 const (
 	vectorsPath = "../../testdata/interop/v2-records.json"
-	// floodPath holds the cases of sets at MaxRecords, apart so that
-	// neither file passes the repository's limit on a file's size.
+	// floodPath holds the cases of sets at MaxRecords, and the checkpoint
+	// edges, apart so that neither file passes the repository's limit on a
+	// file's size.
 	floodPath = "../../testdata/interop/v2-flood.json"
 )
 
