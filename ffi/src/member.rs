@@ -837,6 +837,8 @@ impl Member {
                 "renew" => return Ok(json!({ "renewed": self.node.renew(&s)? })),
                 "mute" => return order(Order::Mute(a.for_ms)),
                 "unmute" => return order(Order::Unmute),
+                "sync_on" => return order(Order::Sync(true)),
+                "sync_off" => return order(Order::Sync(false)),
                 other => return Err(Error::msg(format!("there is no action {other:?}"))),
             }
             Ok(json!({}))
