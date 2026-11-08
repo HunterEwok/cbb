@@ -1,6 +1,282 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Paste a picture…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставить картинку…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pegar una imagen…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴图片…"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لصق صورة…"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הדבקת תמונה…"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "तस्वीर पेस्ट करें…"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bandika picha…"
+          }
+        }
+      }
+    },
+    "Paste files…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставить файлы…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pegar archivos…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴文件…"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لصق ملفات…"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הדבקת קבצים…"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फ़ाइलें पेस्ट करें…"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bandika faili…"
+          }
+        }
+      }
+    },
+    "A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Cmd+V or Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Картинка или файлы уходят в группу копией, и компьютер вставляет их туда, где фокус, как Cmd+V или Ctrl+V: в чат, документ или папку. Enter, если включён, отправляет их в чате."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una imagen o archivos van al grupo como una copia, y el ordenador los pega donde tiene el foco, como lo haría Cmd+V o Ctrl+V: en un chat, un documento o una carpeta. Intro, si está activado, los envía en un chat."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片或文件作为一份拷贝发送到群组，电脑会像按 Cmd+V 或 Ctrl+V 一样把它们粘贴到焦点所在处：聊天、文档或文件夹中。如果开启了回车，会在聊天中发送它们。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تذهب الصورة أو الملفات إلى المجموعة كنسخة، ويلصقها الكمبيوتر حيث يكون التركيز، كما يفعل Cmd+V أو Ctrl+V: في محادثة أو مستند أو مجلد. مفتاح Enter، إن كان مفعّلًا، يرسلها في المحادثة."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "התמונה או הקבצים נשלחים לקבוצה כהעתקה, והמחשב מדביק אותם במקום שבו נמצא המיקוד, כמו Cmd+V או Ctrl+V: בצ׳אט, במסמך או בתיקייה. Enter, אם הוא מופעל, שולח אותם בצ׳אט."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "तस्वीर या फ़ाइलें ग्रुप में एक कॉपी के रूप में जाती हैं, और कंप्यूटर उन्हें वहाँ पेस्ट करता है जहाँ उसका फ़ोकस है, जैसे Cmd+V या Ctrl+V करता: किसी चैट, दस्तावेज़ या फ़ोल्डर में। Enter, अगर चालू है, तो उन्हें चैट में भेज देता है।"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Picha au faili huenda kwenye kikundi kama nakala, na kompyuta huzibandika mahali lengo lake lilipo, kama Cmd+V au Ctrl+V ingefanya: kwenye gumzo, hati au folda. Enter, ikiwa imewashwa, huzituma kwenye gumzo."
+          }
+        }
+      }
+    },
+    "The picture could not be read, or is larger than 100 MB.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Картинку не удалось прочитать, или она больше 100 МБ."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo leer la imagen, o pesa más de 100 MB."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取图片，或图片大于 100 MB。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّرت قراءة الصورة، أو حجمها أكبر من 100 ميغابايت."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא ניתן לקרוא את התמונה, או שהיא גדולה מ־100 MB."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "तस्वीर पढ़ी नहीं जा सकी, या वह 100 MB से बड़ी है।"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Picha haikuweza kusomwa, au ni kubwa kuliko MB 100."
+          }
+        }
+      }
+    },
+    "%@ could not be read.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось прочитать %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo leer %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取 %@。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّرت قراءة %@."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא ניתן לקרוא את %@."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ पढ़ी नहीं जा सकी।"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ haikuweza kusomwa."
+          }
+        }
+      }
+    },
+    "The files are larger than 100 MB together.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Файлы вместе больше 100 МБ."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los archivos pesan más de 100 MB en total."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些文件合计大于 100 MB。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حجم الملفات معًا أكبر من 100 ميغابايت."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הקבצים יחד גדולים מ־100 MB."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फ़ाइलें मिलाकर 100 MB से बड़ी हैं।"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faili kwa pamoja ni kubwa kuliko MB 100."
+          }
+        }
+      }
+    },
     "Mute a device": {
       "localizations": {
         "ar": {

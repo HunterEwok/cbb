@@ -5,6 +5,8 @@ package tools.cbb
 
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -388,6 +390,16 @@ private fun PasteOn(model: AppModel, d: LiveGroup.Device, dismiss: () -> Unit) {
     var enter by rememberSaveable { mutableStateOf(false) }
     var secret by rememberSaveable { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
+    // An image or files the user picks go as a copy that the computer pastes.
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        sending = true
+        scope.launch {
+            val done = model.pasteShared(d.id, uris, enter)
+            sending = false
+            if (done) dismiss()
+        }
+    }
     LaunchedEffect(Unit) { model.message = null }
     AlertDialog(
         onDismissRequest = dismiss,
@@ -406,6 +418,10 @@ private fun PasteOn(model: AppModel, d: LiveGroup.Device, dismiss: () -> Unit) {
                 Switch(stringResource(R.string.paste_enter), enter) { enter = it }
                 Switch(stringResource(R.string.paste_secret), secret) { secret = it }
                 Text(stringResource(R.string.paste_note), style = MaterialTheme.typography.bodySmall)
+                TextButton(enabled = !sending, onClick = { pick.launch(arrayOf("*/*")) }) {
+                    Text(stringResource(R.string.paste_pick), color = palette.accent)
+                }
+                Text(stringResource(R.string.paste_pick_note), style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = {

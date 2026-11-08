@@ -561,4 +561,6 @@
     <string name="badge_hub">हब</string>
     <string name="device_id">डिवाइस ID</string>
     <string name="saved_to_gallery">गैलरी में, CBB एल्बम में सहेजा गया।</string>
+    <string name="paste_pick">तस्वीर या फ़ाइलें पेस्ट करें…</string>
+    <string name="paste_pick_note">तस्वीर या फ़ाइलें ग्रुप में एक कॉपी के रूप में जाती हैं, और कंप्यूटर उन्हें वहाँ पेस्ट करता है जहाँ उसका फ़ोकस है, जैसे Ctrl+V करता: किसी चैट, दस्तावेज़ या फ़ोल्डर में। Enter, अगर चालू है, तो उन्हें चैट में भेज देता है।</string>
 </resources>

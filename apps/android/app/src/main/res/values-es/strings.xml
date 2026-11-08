@@ -561,4 +561,6 @@
     <string name="badge_hub">hub</string>
     <string name="device_id">ID del dispositivo</string>
     <string name="saved_to_gallery">Guardado en la galería, en el álbum CBB.</string>
+    <string name="paste_pick">Pegar una imagen o archivos…</string>
+    <string name="paste_pick_note">Una imagen o archivos van al grupo como una copia, y el ordenador los pega donde tiene el foco, como lo haría Ctrl+V: en un chat, un documento o una carpeta. Intro, si está activado, los envía en un chat.</string>
 </resources>

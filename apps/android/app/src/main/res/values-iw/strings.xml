@@ -561,4 +561,6 @@
     <string name="badge_hub">רכזת</string>
     <string name="device_id">מזהה מכשיר</string>
     <string name="saved_to_gallery">נשמר בגלריה, באלבום CBB.</string>
+    <string name="paste_pick">הדבקת תמונה או קבצים…</string>
+    <string name="paste_pick_note">התמונה או הקבצים נשלחים לקבוצה כהעתקה, והמחשב מדביק אותם במקום שבו נמצא המיקוד, כמו Ctrl+V: בצ׳אט, במסמך או בתיקייה. Enter, אם הוא מופעל, שולח אותם בצ׳אט.</string>
 </resources>

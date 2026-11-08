@@ -90,6 +90,8 @@ protocol GroupController: AnyObject {
     func setMuted(_ id: String, _ on: Bool, forMS: Int64) async throws
     /// Puts text where a computer's focus is; only an admin phone does.
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws
+    /// Pastes a picture or files where a computer's focus is; only an admin phone does.
+    func pasteMedia(_ id: String, parts: [CoreMember.Part], enter: Bool) async throws
     /// Runs a quick action on a device; only an admin phone does.
     func runAction(_ id: String, name: String) async throws
     /// Turns every quick action off on a device; only an admin phone does.
@@ -184,6 +186,7 @@ extension GroupController {
     func setSync(_ on: Bool, forMS: Int64) throws {}
     func setMuted(_ id: String, _ on: Bool, forMS: Int64) async throws {}
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async throws {}
+    func pasteMedia(_ id: String, parts: [CoreMember.Part], enter: Bool) async throws {}
     func runAction(_ id: String, name: String) async throws {}
     func actionsOff(_ id: String) async throws {}
     func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])? { nil }
@@ -1149,6 +1152,19 @@ final class AppModel: ObservableObject {
     func paste(_ id: String, text: String, method: String, enter: Bool, secret: Bool) async -> Bool {
         do {
             try await group.paste(id, text: text, method: method, enter: enter, secret: secret)
+            message = String(localized: "Pasted.", bundle: .app)
+            return true
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
+    }
+
+    /// Pastes a picture or files where a computer's focus is; true when it did.
+    @discardableResult
+    func pasteMedia(_ id: String, parts: [CoreMember.Part], enter: Bool) async -> Bool {
+        do {
+            try await group.pasteMedia(id, parts: parts, enter: enter)
             message = String(localized: "Pasted.", bundle: .app)
             return true
         } catch {

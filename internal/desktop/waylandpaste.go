@@ -108,6 +108,40 @@ func (w *Wayland) Inject(ctx context.Context, text, method string, enter, secret
 	return err
 }
 
+// InjectMedia pastes images or files (connector.MediaTarget): write puts
+// them into the clipboard, then Shift+Insert.
+func (w *Wayland) InjectMedia(ctx context.Context, write func() error, enter bool) error {
+	w.inj.mu.Lock()
+	defer w.inj.mu.Unlock()
+	if w.vkm == 0 {
+		if w.kb == nil {
+			return &connector.Refusal{Reason: "this compositor offers no virtual keyboard to paste with"}
+		}
+		return keysInjectMedia(ctx, w.kb, write, enter)
+	}
+	if why := lockcheck.Reason(connector.NoLockCheck(ctx)); why != "" {
+		return &connector.Refusal{Reason: why}
+	}
+	if w.inj.vk == 0 {
+		w.inj.vk = w.d.NewID(nil)
+		w.inj.start = time.Now()
+		if err := w.d.Send(w.vkm, vkmCreate, (&wl.Request{}).Uint(w.seat).Uint(w.inj.vk)); err != nil {
+			return err
+		}
+	}
+	if err := write(); err != nil {
+		return err
+	}
+	if err := w.sync(); err != nil { // the selection is set before the keys
+		return err
+	}
+	err := w.keys([]string{"Insert"}, modShift)
+	if err == nil && enter {
+		err = w.keys([]string{"Return"}, 0)
+	}
+	return err
+}
+
 func (w *Wayland) Holds(text string) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()

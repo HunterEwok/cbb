@@ -33,9 +33,18 @@ enum Control {
         /// own pause of receiving, and for how long, nil for until ended.
         var device: String?
         var forMS: Int64?
+        /// A watch request: the app pastes images, files and formatted
+        /// text too. paste-media: the copy of a remote paste, and its
+        /// answers' parts.
+        var images: Bool?
+        var files: Bool?
+        var html: Bool?
+        var value: String?
+        var part: Part?
 
         enum CodingKeys: String, CodingKey {
             case op, kind, len, error, detail, done, name, status, devices, inject, seq, method, enter, refused, device
+            case images, files, html, value, part
             case pasteOnly = "paste_only"
             case forMS = "for_ms"
         }
@@ -44,6 +53,14 @@ enum Control {
             self.op = op
             self.name = name
         }
+    }
+
+    /// A part of a copy of images or files, as paste-media sends it.
+    struct Part: Codable, Equatable {
+        var type: String?
+        var path: String?
+        var dir: Bool?
+        var size: Int64?
     }
 
     /// This device and its group, as cbb status shows them.

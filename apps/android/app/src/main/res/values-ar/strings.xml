@@ -561,4 +561,6 @@
     <string name="badge_hub">محور</string>
     <string name="device_id">معرّف الجهاز</string>
     <string name="saved_to_gallery">حُفظ في المعرض، في الألبوم CBB.</string>
+    <string name="paste_pick">لصق صورة أو ملفات…</string>
+    <string name="paste_pick_note">تذهب الصورة أو الملفات إلى المجموعة كنسخة، ويلصقها الكمبيوتر حيث يكون التركيز، كما يفعل Ctrl+V: في محادثة أو مستند أو مجلد. مفتاح Enter، إن كان مفعّلًا، يرسلها في المحادثة.</string>
 </resources>

@@ -1113,6 +1113,21 @@ final class LiveGroup: GroupController {
         if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
     }
 
+    /// Pastes a picture or files where a computer's focus is
+    /// (docs/protocol.md, section 15): they go to the group as a copy, then
+    /// a paste command of kind media names that copy; the computer fetches
+    /// it, puts it in its clipboard and presses the paste keys.
+    func pasteMedia(_ id: String, parts: [CoreMember.Part], enter: Bool) async throws {
+        guard let node else { throw CoreMember.Failure.notConnected }
+        let ca = try await caSigner(reason: String(localized: "Paste on a device", bundle: .app))
+        guard let g = state else { return }
+        let copy = try node.copyMedia(parts)
+        let c = try g.pasteCopyCommand(to: id, copyID: copy.id, enter: enter, caSigner: ca, now: Date())
+        // The computer waits up to 20 s for the copy, then 8 s for its desktop.
+        let r = try await node.command(c, timeout: .seconds(35))
+        if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
+    }
+
     /// Runs a quick action on a device (docs/protocol.md, section 15): an
     /// action command, signed with this phone's root or admin key after Face
     /// ID, names it; the device defines what it does and runs it only when
