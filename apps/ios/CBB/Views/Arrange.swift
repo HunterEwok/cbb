@@ -61,13 +61,12 @@ struct ArrangedDevices: View {
     }
 
     @ViewBuilder private var content: some View {
-        let items = model.arranged, me = model.devices.first(where: \.isSelf)
+        let items = model.arranged
         let refs = items.map(\.ref)
-        if items.isEmpty && me == nil {
+        if items.isEmpty {
             Text("No computers connected.").foregroundStyle(palette.textDim)
         } else if layout == .list {
             VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
-                if let me { DeviceCollection(devices: [me], layout: .list, select: select) }
                 ForEach(items) { item in
                     switch item {
                     case .device(let d):
@@ -79,7 +78,6 @@ struct ArrangedDevices: View {
             }
         } else {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Tokens.spacingMedium)], spacing: Tokens.spacingMedium) {
-                if let me { DeviceCollection.open(me, select: select) { DeviceTile(device: me) } }
                 ForEach(items) { item in
                     switch item {
                     case .device(let d):

@@ -175,16 +175,25 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 			return
 		}
 		reply(c, control.Header{Kind: kindName(kind), Done: true}, []byte(text))
-	case control.OpMode:
+	case control.OpSync:
+		on, err := parseSync(m.Name)
+		if err != nil {
+			fail(c, err)
+			return
+		}
 		if m.Device != "" {
-			if err := s.setModeOn(ctx, m.Device, m.Name); err != nil {
+			if m.ForMS != 0 {
+				fail(c, errors.New("a time works only for this device's own sync; another device's sync stays as an admin sets it"))
+				return
+			}
+			if err := s.setSyncOn(ctx, m.Device, on); err != nil {
 				fail(c, err)
 				return
 			}
 			reply(c, control.Header{Done: true}, nil)
 			return
 		}
-		if err := s.setMode(m.Name); err != nil {
+		if err := s.setSync(on, m.ForMS); err != nil {
 			fail(c, err)
 			return
 		}
@@ -341,6 +350,10 @@ func (s *Service) handleControl(ctx context.Context, c net.Conn, admin bool) {
 	case control.OpPair:
 		if len(m.Addrs) > 0 {
 			s.pairDial(ctx, c, m)
+			return
+		}
+		if m.Code != "" {
+			s.pairFind(ctx, c, m)
 			return
 		}
 		s.pair(ctx, c, r, m.Admins)
@@ -529,11 +542,11 @@ func (s *Service) status() *control.Status {
 		st.KeyProblem = group.WhyNotHardware()
 	}
 	st.Mode = s.eng.Mode().String()
+	if on, until := s.eng.Sync(); !on {
+		st.SyncUntilMS = unixMS(until)
+	}
 	if muted, until := s.eng.Muted(); muted {
 		st.Muted, st.MutedUntilMS = true, unixMS(until)
-	}
-	if paused, until := s.eng.ReceivingPaused(); paused {
-		st.Paused, st.PausedUntilMS = true, unixMS(until)
 	}
 	skews := s.eng.Skews()
 	for _, p := range s.nd.Peers() {
@@ -663,7 +676,39 @@ func (s *Service) pairDial(ctx context.Context, c net.Conn, m *control.Message) 
 		fail(c, errors.New("the QR code names no certificate fingerprint"))
 		return
 	}
-	w, _, end, err := s.openWindow(code, m.Admins)
+	s.admitJoiners(ctx, c, code, m.Admins, []joinTarget{{addrs: m.Addrs, fp: m.Fingerprint}})
+}
+
+// joinTarget is a device that listens to join: where, and the fingerprint
+// of its certificate's key.
+type joinTarget struct {
+	addrs []string
+	fp    string
+}
+
+// pairFind admits the device that shows the code m.Code and waits, found
+// by mDNS (docs/protocol.md section 6, "The joiner listens"): a computer
+// types the code a new device shows, where a phone scans its QR code. Each
+// device that announces that it waits is tried with the code, nearest
+// first, until one joins; a wrong one counts as a failed attempt.
+func (s *Service) pairFind(ctx context.Context, c net.Conn, m *control.Message) {
+	code, err := pair.NormalizeCode(m.Code)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	targets, err := s.findJoiners(ctx, s.cfg.browseFor)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	s.admitJoiners(ctx, c, code, m.Admins, targets)
+}
+
+// admitJoiners opens the window with code and dials each target in turn,
+// at addresses on the home network only, until one joins.
+func (s *Service) admitJoiners(ctx context.Context, c net.Conn, code string, admins bool, targets []joinTarget) {
+	w, _, end, err := s.openWindow(code, admins)
 	if err != nil {
 		fail(c, err)
 		return
@@ -674,22 +719,30 @@ func (s *Service) pairDial(ctx context.Context, c net.Conn, m *control.Message) 
 	d := net.Dialer{Timeout: handshakeTimeout, Control: netguard.ControlHome}
 	var tried []string
 	joined := false
-	for _, addr := range m.Addrs {
-		raw, err := d.DialContext(ctx, "tcp", addr)
-		if err != nil {
-			tried = append(tried, err.Error())
-			continue
+	for _, t := range targets {
+		for _, addr := range t.addrs {
+			raw, err := d.DialContext(ctx, "tcp", addr)
+			if err != nil {
+				tried = append(tried, err.Error())
+				continue
+			}
+			if err := w.Dial(ctx, raw, t.fp); err != nil {
+				tried = append(tried, fmt.Sprintf("%s: %v", addr, err))
+				if errors.Is(err, pair.ErrWrongCode) {
+					break // another device that waits: the next one
+				}
+				continue
+			}
+			joined = true
+			break
 		}
-		if err := w.Dial(ctx, raw, m.Fingerprint); err != nil {
-			tried = append(tried, fmt.Sprintf("%s: %v", addr, err))
-			continue
+		if joined || ctx.Err() != nil {
+			break
 		}
-		joined = true
-		break
 	}
 	if !joined {
 		end()
-		fail(c, fmt.Errorf("could not admit the device that shows the QR code: %s", strings.Join(tried, "; ")))
+		fail(c, fmt.Errorf("could not admit the device that shows the code: %s", strings.Join(tried, "; ")))
 		return
 	}
 	res, err := s.windowResult(w)
@@ -813,9 +866,6 @@ func (s *Service) createGroup() (*group.Identity, error) {
 	id, err := group.Create(time.Now())
 	if err == nil {
 		err = id.Save(s.cfg.StateDir)
-	}
-	if err == nil {
-		err = s.newDeviceMode()
 	}
 	if err == nil {
 		s.nets.learnAll() // a group is made where it is used
@@ -978,9 +1028,6 @@ func (s *Service) join(ctx context.Context, c net.Conn, r *control.Reader, m *co
 		id, err = s.dialMember(ctx, j, code, m.Address)
 	}
 	if err == nil {
-		err = s.newDeviceMode()
-	}
-	if err == nil {
 		if m.Invite == "" {
 			// Joined at home; a remote invitation comes from away, so the
 			// network it came through stays unknown.
@@ -1097,6 +1144,14 @@ func (s *Service) listenForMember(ctx context.Context, c net.Conn, j *pair.Joine
 	defer stop()
 	defer ln.Close()
 	port := uint16(ln.Addr().(*net.TCPAddr).Port)
+	// Announced, so that a computer finds it by the code alone.
+	if d, err := s.cfg.Discover(DiscoveryConfig{ID: string(j.ID), Port: port, TXT: joinTXT(fp), Only: s.only(), Logf: s.logf}); err != nil {
+		s.logf("cbb: announcing that this device waits to join: %v", err)
+	} else {
+		dctx, dstop := context.WithCancel(ctx)
+		defer dstop()
+		go d.Run(dctx)
+	}
 	reply(c, control.Header{Addrs: s.cfg.joinAddrs(port), Fingerprint: fp}, nil)
 	failures := 0
 	for {
@@ -1231,6 +1286,61 @@ func (s *Service) findPairing(ctx context.Context, browse time.Duration) ([]stri
 		return nil, errors.New("no member with an open pairing window found; run cbb pair on the group's root or an admin, or give its address")
 	}
 }
+
+// findJoiners returns the devices that announce that they wait to join
+// (TXT j=1 with their fingerprint f, docs/protocol.md section 3), browsing
+// for up to browse; once one is found it listens pairingSettle longer for
+// the others.
+func (s *Service) findJoiners(ctx context.Context, browse time.Duration) ([]joinTarget, error) {
+	ctx, cancel := context.WithTimeout(ctx, browse)
+	defer cancel()
+	found := make(chan []joinTarget, 1)
+	d, err := s.cfg.Discover(DiscoveryConfig{
+		ID: "browse-" + clip.NewID()[:16], BrowseOnly: true, Only: s.only(), Logf: s.logf,
+		OnPeers: func(peers []mdns.Peer) {
+			var waiting []joinTarget
+			for _, p := range peers {
+				j, _ := p.TXTValue("j")
+				fp, _ := p.TXTValue("f")
+				if j == "1" && fp != "" && len(p.Addrs) > 0 {
+					waiting = append(waiting, joinTarget{addrs: addresses(p), fp: fp})
+				}
+			}
+			if len(waiting) > 0 {
+				select {
+				case <-found:
+				default:
+				}
+				found <- waiting
+			}
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	go d.Run(ctx)
+	select {
+	case waiting := <-found:
+		settle := time.NewTimer(pairingSettle)
+		defer settle.Stop()
+		for more := true; more; {
+			select {
+			case waiting = <-found:
+			case <-settle.C:
+				more = false
+			case <-ctx.Done():
+				more = false
+			}
+		}
+		return waiting, nil
+	case <-ctx.Done():
+		return nil, errors.New("no device that waits to join was found; on the new device, choose to join a group (cbb pair there) and type the code it shows")
+	}
+}
+
+// joinTXT is what a device that listens to join publishes (docs/protocol.md
+// section 3): that it waits, and the fingerprint of its certificate's key.
+func joinTXT(fp string) []string { return []string{"v=1", "j=1", "f=" + fp} }
 
 // watcher is a desktop connector or pasteboard agent connected to the
 // socket, or a paste target without a clipboard: the tmux or console

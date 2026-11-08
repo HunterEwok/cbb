@@ -30,8 +30,8 @@ data class WatchState(
      * can: what this watch may do to it (the kit's PhoneGroup.WatchAction
      * keys); actions: the quick actions it has on, while connected;
      * collection: the name of the phone's collection it is in, if any;
-     * phone: the watch's own phone, which the phone lists first as every
-     * app lists the device it runs on.
+     * phone: the watch's own phone, first until the user moves it, as
+     * every app lists the device it runs on.
      */
     data class Device(
         val id: String,

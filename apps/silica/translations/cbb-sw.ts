@@ -149,8 +149,8 @@
         <translation>Inajiunga…</translation>
     </message>
     <message>
-        <source>On a phone or a computer of your group, add a device and scan this code. Keep this screen open.</source>
-        <translation>Kwenye simu au kompyuta ya kikundi chako, ongeza kifaa na uchanganue msimbo huu. Acha skrini hii wazi.</translation>
+        <source>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</source>
+        <translation>Kwenye simu ya kikundi, gusa + na uchanganue msimbo huu. Kwenye kompyuta ya kikundi, gusa + na uandike nambari. Acha skrini hii wazi.</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>

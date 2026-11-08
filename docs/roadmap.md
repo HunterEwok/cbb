@@ -32,7 +32,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **17.** Every phone joins through its app, with a key of its own, in 0.6 (D-80;
     [design](design.md#group-and-pairing)).
 - **18.** Remote paste, in 0.6 ([design](design.md#remote-paste)).
-- **19.** Sync modes, in 0.5 ([design](design.md#sync-modes)).
+- **19.** Sync on and off, in 0.6 ([design](design.md#sync-on-and-off)).
 - **20.** Images, files, folders and formatted text, in 0.6
     ([design](design.md#images-and-files)).
 - **21.** OpenWrt routers, in 0.6 ([design](design.md#openwrt-routers)).
@@ -364,7 +364,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       is a plan.
     - Done in 0.6: the README's trust model ("Who can read what": who holds which key, who
       reads the copies, who admits devices, what the hub, the forwarder and the relay see;
-      the pairing code as the only secret), the step `sudo cbb mode shared`, one line on what
+      the pairing code as the only secret), one line on what
       is tested, a security section with links, the comparison with KDE Connect, ClipCascade
       and Universal Clipboard with its weak points, an install that checks SHA256SUMS first,
       links to the ports and to removing it, and how the project is built. Still to do: a

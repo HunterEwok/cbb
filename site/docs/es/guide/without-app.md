@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 3f404cb443bd -->
+<!-- source: f88bc63a357c -->
 # Sin la app
 
 Un grupo de ordenadores no necesita la app del teléfono: un ordenador puede sostener el grupo.
@@ -26,7 +26,7 @@ sudo cbb pair
 
 Muestra un código de seis dígitos y espera. En el ordenador nuevo, ejecuta también `sudo cbb pair`: primero muestra un código QR para la app del teléfono, que puedes ignorar, y pide el código; escribe allí los seis dígitos. El ordenador nuevo se une en unos segundos.
 
-Después activa el uso compartido en cada ordenador, como en el [inicio rápido](quickstart.md#4-share-the-computers-clipboard): `sudo cbb mode shared`.
+Después cada ordenador se sincroniza, como en el [inicio rápido](quickstart.md#4-copy-on-one-paste-on-another).
 
 ## 3. No dependas de un solo ordenador
 

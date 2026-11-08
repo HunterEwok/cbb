@@ -65,27 +65,20 @@ In the app, tap **Connect a new device** and scan the code. The app makes the gr
 
 Add every other computer the same way: install, `sudo cbb pair`, and **+** in the app.
 
-## 4. Share the computer's clipboard
+## 4. Copy on one, paste on another
 
-A new computer keeps its clipboard to itself until you say otherwise. To make what you
-copy on it reach the group, and what the group copies reach it:
-
-```sh
-sudo cbb mode shared
-```
-
-On Windows, run `cbb mode shared` in the administrator terminal.
-
-Now copy on the computer and paste on the phone, or the other way round:
+What you copy on the computer reaches the group, and what the group copies reaches it.
+Copy on the computer and paste on the phone, or the other way round:
 
 - **Android** gets the computers' copies by itself. To send the phone's copies, tap the big
   button on the app's Home, the **Send clipboard** tile in Quick Settings or Send in the
   notification; or turn on **Send my copies by themselves** in the app to have it done for
   you.
-- **Between computers** in shared mode: copy on one, paste on another. Nothing to press.
+- **Between computers**: copy on one, paste on another. Nothing to press.
 
-Other modes (only receive, only send) are in [the commands](../reference/cli.md#cbb)
-(`cbb mode`), and the rest of what the apps do is in [The apps](apps.md).
+To keep a device's clipboard its own for a while, turn sync off: the house button on the
+app's first screen, or `cbb sync off` ([the commands](../reference/cli.md#cbb)). The rest of
+what the apps do is in [The apps](apps.md).
 
 ## 5. Recommended: let a computer that is always on help the phone
 

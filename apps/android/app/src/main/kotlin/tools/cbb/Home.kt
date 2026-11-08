@@ -633,7 +633,7 @@ internal fun DeviceRow(d: LiveGroup.Device, modifier: Modifier = Modifier, open:
     }
 }
 
-/** The system (or kind) of a device, then where it stands. */
+/** The system (or kind) of a device, then where it stands, on two lines when one is too narrow. */
 @Composable
 internal fun DeviceSubtitle(d: LiveGroup.Device) {
     val first = d.system ?: stringResource(d.kind.title)
@@ -651,11 +651,11 @@ internal fun DeviceSubtitle(d: LiveGroup.Device) {
                 append("$text · ")
                 withStyle(SpanStyle(color = palette.danger)) { append(stringResource(R.string.muted_mark)) }
             },
-            style = MaterialTheme.typography.bodySmall, color = palette.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodySmall, color = palette.textDim, maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
         return
     }
-    Text(text, style = MaterialTheme.typography.bodySmall, color = palette.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(text, style = MaterialTheme.typography.bodySmall, color = palette.textDim, maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
 
 /** One element for TalkBack, which says whether it is online. */

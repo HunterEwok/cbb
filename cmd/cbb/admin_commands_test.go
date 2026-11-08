@@ -115,38 +115,48 @@ func TestDeviceCommands(t *testing.T) {
 	})
 }
 
-func TestModeAndNetwork(t *testing.T) {
+func TestSyncAndNetwork(t *testing.T) {
 	inG := func(st control.Status) control.Header {
 		st.Role, st.OS, st.Group = "full", "linux", "g1"
 		return control.Header{Status: &st}
 	}
 	runCommandCases(t, []commandCase{
-		{name: "mode", args: []string{"mode"}, answer: inG(control.Status{Mode: "receive"}), check: sent(control.OpStatus, nil), stdout: "Sync mode receive"},
-		{name: "mode in no group", args: []string{"mode"}, answer: control.Header{Status: &control.Status{Role: "full", OS: "linux"}},
+		{name: "sync", args: []string{"sync"}, answer: inG(control.Status{Mode: "shared"}), check: sent(control.OpStatus, nil), stdout: "Sync is on"},
+		{name: "sync in no group", args: []string{"sync"}, answer: control.Header{Status: &control.Status{Role: "full", OS: "linux"}},
 			check: sent(control.OpStatus, nil), code: 1, stderr: "in no group"},
-		{name: "mode with no status", args: []string{"mode"}, check: sent(control.OpStatus, nil), code: 1, stderr: "sent no status"},
-		{name: "mode set", args: []string{"mode", "send"}, answer: inG(control.Status{Mode: "send"}),
-			check: sent(control.OpMode, func(m *control.Message) bool { return m.Name == "send" && m.Device == "" }), stdout: "Sync mode send"},
-		{name: "mode set elsewhere", args: []string{"mode", "-on", "tv", "own"},
-			check: sent(control.OpMode, func(m *control.Message) bool { return m.Name == "own" && m.Device == "tv" }), stdout: "tv is in sync mode own now."},
-		{name: "mode -on without a mode", args: []string{"mode", "-on", "tv"}, code: 2, stderr: "usage: cbb mode"},
-		{name: "mode with two modes", args: []string{"mode", "own", "send"}, code: 2, stderr: "usage: cbb mode"},
+		{name: "sync with no status", args: []string{"sync"}, check: sent(control.OpStatus, nil), code: 1, stderr: "sent no status"},
+		{name: "sync off", args: []string{"sync", "off"}, answer: inG(control.Status{Mode: "own"}),
+			check: sent(control.OpSync, func(m *control.Message) bool { return m.Name == "off" && m.Device == "" && m.ForMS == 0 }), stdout: "Sync is off until cbb sync on"},
+		{name: "sync off for an hour", args: []string{"sync", "-for", "1h", "off"}, answer: inG(control.Status{Mode: "own", SyncUntilMS: 1}),
+			check: sent(control.OpSync, func(m *control.Message) bool { return m.Name == "off" && m.ForMS == 3600000 }), stdout: "Sync is off until"},
+		{name: "sync off, then the time", args: []string{"sync", "off", "-for", "15m"}, answer: inG(control.Status{Mode: "own", SyncUntilMS: 1}),
+			check: sent(control.OpSync, func(m *control.Message) bool { return m.Name == "off" && m.ForMS == 900000 }), stdout: "Sync is off until"},
+		{name: "sync on with a time", args: []string{"sync", "on", "-for", "15m"}, code: 2, stderr: "-for goes with cbb sync off"},
+		{name: "sync on", args: []string{"sync", "on"}, answer: inG(control.Status{Mode: "shared"}),
+			check: sent(control.OpSync, func(m *control.Message) bool { return m.Name == "on" }), stdout: "Sync is on"},
+		{name: "sync elsewhere", args: []string{"sync", "-on", "tv", "off"},
+			check: sent(control.OpSync, func(m *control.Message) bool { return m.Name == "off" && m.Device == "tv" }), stdout: "Sync is off on tv now."},
+		{name: "sync -on without on or off", args: []string{"sync", "-on", "tv"}, code: 2, stderr: "usage: cbb sync"},
+		{name: "sync with a mode", args: []string{"sync", "own"}, code: 2, stderr: "usage: cbb sync"},
+		{name: "sync on for a while", args: []string{"sync", "-for", "1h", "on"}, code: 2, stderr: "-for goes with cbb sync off"},
+		{name: "sync off elsewhere for a while", args: []string{"sync", "-on", "tv", "-for", "1h", "off"}, code: 2, stderr: "-for goes with cbb sync off"},
 		{name: "network", args: []string{"network"}, check: sent(control.OpNetwork, nil), stdout: "publishes itself and takes connections here"},
 		{name: "network refused", args: []string{"network"}, answer: control.Header{Error: "this network is not known"}, check: sent(control.OpNetwork, nil), code: 1, stderr: "not known"},
 		{name: "network with an argument", args: []string{"network", "x"}, code: 2, stderr: "usage: cbb network"},
 	})
 }
 
-func TestModeLine(t *testing.T) {
-	for mode, want := range map[string]string{
-		"own":     "keeps its clipboard to itself",
-		"shared":  "the group's copies come here.",
-		"receive": "copies here stay here",
-		"send":    "the group's copies do not come here",
-		"future":  "Sync mode future.",
+func TestSyncLine(t *testing.T) {
+	for _, tc := range []struct {
+		st   control.Status
+		want string
+	}{
+		{control.Status{Mode: "shared"}, "the group's copies come here."},
+		{control.Status{Mode: "own"}, "Sync is off until cbb sync on"},
+		{control.Status{Mode: "own", SyncUntilMS: 1_800_000_000_000}, "Sync is off until 20"},
 	} {
-		if got := modeLine(mode); !strings.Contains(got, want) {
-			t.Errorf("modeLine(%q) = %q, want %q in it", mode, got, want)
+		if got := syncLine(&tc.st); !strings.Contains(got, tc.want) {
+			t.Errorf("syncLine(%+v) = %q, want %q in it", tc.st, got, tc.want)
 		}
 	}
 }

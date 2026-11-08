@@ -56,10 +56,10 @@ func TestSealKeysRecorded(t *testing.T) {
 			deckID = d.ID
 		}
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpMode, Device: deckID, Name: "receive"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: deckID, Name: "off"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if deck.status(t).Mode != "receive" {
+	if deck.status(t).Mode != "own" {
 		t.Error("the deck did not take the sealed mode command")
 	}
 	if !deck.logged("opened a sealed mode command") {

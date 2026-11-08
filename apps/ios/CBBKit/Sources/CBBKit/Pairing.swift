@@ -222,6 +222,12 @@ public struct JoinCode: Equatable {
         (self.code, self.addrs, self.fingerprint) = (code, addrs, fingerprint)
     }
 
+    /// The code as the screen shows it, in two groups of three digits, for
+    /// a computer of the group to type.
+    public var grouped: String {
+        code.count == 6 ? "\(code.prefix(3)) \(code.suffix(3))" : code
+    }
+
     /// Parses the text of a join QR code; nil when it is not one. Unknown
     /// fields are ignored, and addresses without a port are dropped.
     public init?(qr text: String) {

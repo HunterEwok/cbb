@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1a79497966a1 -->
+<!-- source: 46c1b3ed05bb -->
 # Kuanza haraka
 
 Copy Beyond Borders huipa simu yako na kompyuta zako ubao mmoja wa kunakili: unanakili kwenye kimoja na kubandika kwenye kingine. Vifaa huunda **kikundi** kwenye mtandao wako wa nyumbani. Simu hushikilia ufunguo wa kikundi na kuruhusu kila kifaa kipya kuingia, kwa hiyo hakuna anayeweza kujiunga bila wewe.
@@ -49,22 +49,14 @@ Kwenye programu, gusa **Connect a new device** na uchanganue msimbo. Programu hu
 
 Ongeza kompyuta nyingine zote vivyo hivyo: sakinisha, `sudo cbb pair`, na **+** kwenye programu.
 
-## 4. Shiriki ubao wa kunakili wa kompyuta
+## 4. Nakili kwenye kimoja, bandika kwenye kingine
 
-Kompyuta mpya huuweka ubao wake wa kunakili kwake yenyewe hadi useme vinginevyo. Ili unachonakili juu yake kifike kwenye kikundi, na kile ambacho kikundi kinanakili kifike juu yake:
-
-```sh
-sudo cbb mode shared
-```
-
-Kwenye Windows, endesha `cbb mode shared` kwenye terminal ya msimamizi.
-
-Sasa nakili kwenye kompyuta na ubandike kwenye simu, au kinyume chake:
+Unachonakili kwenye kompyuta kinafika kwenye kikundi, na kikundi kinachonakili kinafika kwake. Nakili kwenye kompyuta na ubandike kwenye simu, au kinyume chake:
 
 - **Android** hupokea nakala za kompyuta zenyewe. Ili kutuma nakala za simu, gusa kitufe kikubwa kwenye Mwanzo wa programu, kigae cha **Send clipboard** kwenye Mipangilio ya Haraka, au Send kwenye arifa; au washa **Send my copies by themselves** kwenye programu ili ifanyike yenyewe.
-- **Kati ya kompyuta** katika hali ya ushiriki: nakili kwenye moja na ubandike kwenye nyingine. Hakuna cha kubonyeza.
+- **Kati ya kompyuta**: nakili kwenye moja, bandika kwenye nyingine. Hakuna cha kubonyeza.
 
-Hali nyingine (kupokea tu, kutuma tu) ziko katika [amri](../reference/cli.md#cbb) (`cbb mode`), na mengine ambayo programu zinafanya yako katika [Programu](apps.md).
+Ili ubao wa kunakili wa kifaa ubaki wake peke yake kwa muda, zima usawazishaji: kitufe cha nyumba kwenye skrini ya kwanza ya programu, au `cbb sync off` ([amri](../reference/cli.md#cbb)). Mengine ambayo programu hufanya yako katika [Programu](apps.md).
 
 ## 5. Inapendekezwa: acha kompyuta inayowaka kila wakati isaidie simu
 

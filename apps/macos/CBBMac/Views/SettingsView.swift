@@ -48,10 +48,10 @@ struct SettingsView: View {
                 Section {
                     Picker(selection: Binding(get: { mode }, set: { new in Task { await model.setMode(new) } })) {
                         ForEach(SyncMode.allCases) { m in Text(m.title).tag(m) }
-                    } label: { Text("Sync mode") }
+                    } label: { Text("Sync") }
                         .disabled(model.busy)
                 } header: { Text("This Mac's clipboard") } footer: {
-                    Text("Own keeps this Mac's copies here and the group's away from its clipboard; Fetch still brings the group's text. Shared sends copies to the group and takes the group's. Receive only takes them, Send only sends them.")
+                    Text("Off, the clipboard is this Mac's own; Fetch still brings the group's text.")
                 }
             }
             if model.inGroup {

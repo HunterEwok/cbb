@@ -324,13 +324,14 @@ type Engine struct {
 	secrets  secretMemory // texts recently known as secrets
 	seq      uint64       // counts writes, so the caller can apply them in order
 	mode     Mode
+	// offUntil is when sync turned off for a while turns on again, on the
+	// wall clock; the zero time while it is on, or off until turned on.
+	offUntil time.Time
 	skews    map[string]time.Duration // per connected peer, from its hello
 	// mute, an admin's, stops this member's own copies from reaching the
-	// group; pause, its user's, keeps the group's copies out of its
-	// clipboard (design.md, "Muting a device"). Each lasts until a time on
-	// the wall clock, the zero time for until it is lifted.
-	mute  *time.Time
-	pause *time.Time
+	// group (design.md, "Muting a device") until a time on the wall clock,
+	// the zero time for until it is lifted.
+	mute *time.Time
 
 	peers  map[string]int // open connections per peer
 	window time.Duration  // the live window
@@ -427,19 +428,49 @@ func (e *Engine) Forget(id string) bool {
 	return true
 }
 
-// Mode returns the sync mode.
+// Mode returns the sync mode: Shared while sync is on, Own while off.
 func (e *Engine) Mode() Mode {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.mode
+	return e.modeNow()
 }
 
-// SetMode changes the sync mode; it applies to the copies and events that
-// come after it.
-func (e *Engine) SetMode(m Mode) {
+// Sync reports whether sync is on, and, while it is off, when it turns on
+// again by itself: the zero time for until it is turned on.
+func (e *Engine) Sync() (bool, time.Time) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.mode = m
+	if e.modeNow() == Shared {
+		return true, time.Time{}
+	}
+	return false, e.offUntil
+}
+
+// SetMode turns sync on (Shared) or off (Own) until it is changed again;
+// it applies to the copies and events that come after it.
+func (e *Engine) SetMode(m Mode) {
+	e.SetSync(m == Shared, time.Time{})
+}
+
+// SetSync turns sync on, or off until until on the wall clock, the zero
+// time for until it is turned on again.
+func (e *Engine) SetSync(on bool, until time.Time) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if on {
+		e.mode, e.offUntil = Shared, time.Time{}
+		return
+	}
+	e.mode, e.offUntil = Own, until
+}
+
+// modeNow is the mode, after turning sync on again when its time off has
+// passed; e.mu is held.
+func (e *Engine) modeNow() Mode {
+	if e.mode == Own && !e.offUntil.IsZero() && !e.cfg.Wall().Before(e.offUntil) {
+		e.mode, e.offUntil = Shared, time.Time{}
+	}
+	return e.mode
 }
 
 // ErrMuted refuses a deliberate copy on a muted member.
@@ -492,42 +523,6 @@ func (e *Engine) muted() bool {
 		e.mute = nil
 	}
 	return e.mute != nil
-}
-
-// PauseReceiving keeps the group's copies out of this member's clipboard
-// until until on the wall clock, the zero time for until ResumeReceiving,
-// as a mode that does not receive does; its own copies still go out.
-func (e *Engine) PauseReceiving(until time.Time) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.pause = &until
-}
-
-// ResumeReceiving ends the pause.
-func (e *Engine) ResumeReceiving() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.pause = nil
-}
-
-// ReceivingPaused reports whether receiving is paused, and until when:
-// the zero time for until ResumeReceiving.
-func (e *Engine) ReceivingPaused() (bool, time.Time) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if !e.paused() {
-		return false, time.Time{}
-	}
-	return true, *e.pause
-}
-
-// paused reports whether the pause holds now, and forgets one that ended;
-// e.mu is held.
-func (e *Engine) paused() bool {
-	if !holds(e.pause, e.cfg.Wall()) {
-		e.pause = nil
-	}
-	return e.pause != nil
 }
 
 // Current returns the group's current event, with its age as of now. It
@@ -631,7 +626,7 @@ func (e *Engine) Copied(text string, kind Kind, via Via) (Event, bool, error) {
 		// A clipboard manager restores an earlier secret without its mark.
 		e.local = localText{}
 		return Event{}, false, nil
-	case !e.mode.Sends() || e.muted():
+	case !e.modeNow().Sends() || e.muted():
 		e.local = localText{text: text, kind: kind, at: now}
 		if kind == Secret {
 			e.secrets.add(sum, now)
@@ -725,7 +720,7 @@ func (e *Engine) CopiedMedia(m *Manifest, text string, via Via) (Event, bool, er
 	case via == Universal && e.live() && e.current.Kind == Media && e.current.key() == ev.key():
 		e.local = localText{text: e.current.Text, kind: Media, media: e.current.Media, at: e.copiedAt}
 		return Event{}, false, nil
-	case !e.mode.Sends() || e.muted():
+	case !e.modeNow().Sends() || e.muted():
 		e.local = localText{text: text, kind: Media, media: m, at: now}
 		return Event{}, false, nil
 	}
@@ -954,8 +949,8 @@ func (e *Engine) receive(ev Event) Result {
 func (e *Engine) decideWrite(res Result, now time.Duration) Result {
 	c := e.current
 	v, err := Decide(Incoming{
-		Receives: e.mode.Receives(), Paused: e.paused(),
-		Kind: c.Kind, Mark: c.IsMark(), Unread: c.Unread,
+		Receives: e.modeNow().Receives(),
+		Kind:     c.Kind, Mark: c.IsMark(), Unread: c.Unread,
 		HasText: c.Text != "", HasMedia: c.Media != nil, TakesMedia: true,
 		Held:  e.localHolds(c, now),
 		AgeMS: (now - e.copiedAt).Milliseconds(), WindowMS: e.window.Milliseconds(),

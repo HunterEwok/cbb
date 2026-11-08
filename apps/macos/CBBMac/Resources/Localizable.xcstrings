@@ -1,26 +1,6 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "This Mac takes no copies from the group now; its own still go out.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Этот Mac теперь не принимает копии группы; свои копии он по-прежнему отправляет."
-          }
-        }
-      }
-    },
-    "This Mac takes the group's copies again.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Этот Mac снова принимает копии группы."
-          }
-        }
-      }
-    },
     "Muted: its copies do not reach the group.": {
       "localizations": {
         "ru": {
@@ -37,46 +17,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Звук включён: его копии снова доходят до группы."
-          }
-        }
-      }
-    },
-    "Taking copies": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Копии принимаются"
-          }
-        }
-      }
-    },
-    "Click to take no copies from the group, or again; open the menu for a time": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Нажмите, чтобы не принимать копии группы или снова принимать; в меню можно выбрать время"
-          }
-        }
-      }
-    },
-    "Not taking copies": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Копии не принимаются"
-          }
-        }
-      }
-    },
-    "Not taking copies until %@": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Копии не принимаются до %@"
           }
         }
       }
@@ -451,32 +391,32 @@
         }
       }
     },
-    "A hub that only passes them on" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Хаб, который только пересылает"
+    "A hub that only passes them on": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб, который только пересылает"
           }
         }
       }
     },
-    "A hub that reads the copies" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Хаб, который читает копии"
+    "A hub that reads the copies": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб, который читает копии"
           }
         }
       }
     },
-    "A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware." : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Хаб, который читает копии, — это админ. Хаб, который только пересылает, прочитать их не может: они запечатаны только для ваших других устройств, поэтому его ключам не нужно оборудование."
+    "A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб, который читает копии, — это админ. Хаб, который только пересылает, прочитать их не может: они запечатаны только для ваших других устройств, поэтому его ключам не нужно оборудование."
           }
         }
       }
@@ -791,12 +731,12 @@
         }
       }
     },
-    "Copies" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Копии"
+    "Copies": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копии"
           }
         }
       }
@@ -1221,12 +1161,12 @@
         }
       }
     },
-    "Passes them on, reads none" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Пересылает, не читает"
+    "Passes them on, reads none": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пересылает, не читает"
           }
         }
       }
@@ -1871,76 +1811,6 @@
         }
       }
     },
-    "Own clipboard": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Свой буфер"
-          }
-        }
-      }
-    },
-    "Own keeps this Mac's copies here and the group's away from its clipboard; Fetch still brings the group's text. Shared sends copies to the group and takes the group's. Receive only takes them, Send only sends them.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "«Свой буфер» оставляет копии этого Мака при нём, а копии группы в его буфер не попадают; «Получить» всё равно приносит текст группы. «Общий» отправляет копии в группу и принимает копии группы. «Только приём» только принимает, «Только отправка» только отправляет."
-          }
-        }
-      }
-    },
-    "Receive only": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Только приём"
-          }
-        }
-      }
-    },
-    "Send only": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Только отправка"
-          }
-        }
-      }
-    },
-    "Shared": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Общий"
-          }
-        }
-      }
-    },
-    "Sync mode": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Режим синхронизации"
-          }
-        }
-      }
-    },
-    "The sync mode is set.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Режим синхронизации изменён."
-          }
-        }
-      }
-    },
     "This Mac's clipboard": {
       "localizations": {
         "ru": {
@@ -2371,12 +2241,12 @@
         }
       }
     },
-    "It is a hub now that only passes the copies on, and reads none of them." : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Теперь это хаб, который только пересылает копии и ни одной не читает."
+    "It is a hub now that only passes the copies on, and reads none of them.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Теперь это хаб, который только пересылает копии и ни одной не читает."
           }
         }
       }
@@ -2657,6 +2527,116 @@
           "stringUnit": {
             "state": "translated",
             "value": "Принять как админа: он сможет добавлять, удалять и продлевать устройства и после задержки забрать группу себе. Только для своего телефона."
+          }
+        }
+      }
+    },
+    "On": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вкл"
+          }
+        }
+      }
+    },
+    "Off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выкл"
+          }
+        }
+      }
+    },
+    "Sync": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация"
+          }
+        }
+      }
+    },
+    "Sync is set.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация изменена."
+          }
+        }
+      }
+    },
+    "Sync on": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация вкл"
+          }
+        }
+      }
+    },
+    "Sync off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация выкл"
+          }
+        }
+      }
+    },
+    "Sync off until %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация выкл до %@"
+          }
+        }
+      }
+    },
+    "Click to turn sync off or on; open the menu for a time": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нажмите, чтобы выключить или включить синхронизацию; в меню можно выбрать время"
+          }
+        }
+      }
+    },
+    "Sync is on here: copies go to the group and come from it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация включена: копии уходят в группу и приходят из неё."
+          }
+        }
+      }
+    },
+    "Sync is off here: the clipboard is this Mac's own.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация выключена: буфер обмена только этого Mac."
+          }
+        }
+      }
+    },
+    "Off, the clipboard is this Mac's own; Fetch still brings the group's text.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Когда выключено, буфер обмена только этого Mac; «Получить» всё равно приносит текст группы."
           }
         }
       }
