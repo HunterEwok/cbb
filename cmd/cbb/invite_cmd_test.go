@@ -13,6 +13,7 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
+	"github.com/HunterEwok/cbb/internal/relay"
 )
 
 // TestInvite writes the invitation to a file of its own, asks before each
@@ -153,6 +154,14 @@ func TestForwardXHTTPPath(t *testing.T) {
 	stderr.Reset()
 	if code := run([]string{"forward", "-key", key, "-vless-site", "www.example.com", "-vless-xhttp", "cbb.tools"}, strings.NewReader(""), &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "not both") {
 		t.Errorf("both transports: %d, %q", code, stderr.String())
+	}
+}
+
+func TestPortOf(t *testing.T) {
+	for in, want := range map[string]string{"[::]:8765": "8765", "0.0.0.0:443": "443", "8764": "8764"} {
+		if got := relay.PortOf(in); got != want {
+			t.Errorf("PortOf(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

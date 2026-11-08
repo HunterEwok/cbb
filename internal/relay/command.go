@@ -59,7 +59,7 @@ func Command(args []string, stdout, stderr io.Writer, defaultKey string) int {
 	if *open {
 		serving = "every group"
 	}
-	logf("cbb relay: listening on UDP and TCP port %s for %s; its key, for cbb global relay -key: %s", portOf(r.Addr().String()), serving, keys.Pin())
+	logf("cbb relay: listening on UDP and TCP port %s for %s; its key, for cbb global relay -key: %s", PortOf(r.Addr().String()), serving, keys.Pin())
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if os.Getenv("CBB_DEBUG") == "1" {
@@ -84,8 +84,8 @@ func Command(args []string, stdout, stderr io.Writer, defaultKey string) int {
 	return 0
 }
 
-// portOf returns the port of a host:port address.
-func portOf(addr string) string {
+// PortOf returns the port of a host:port address.
+func PortOf(addr string) string {
 	if i := strings.LastIndexByte(addr, ':'); i >= 0 {
 		return addr[i+1:]
 	}
