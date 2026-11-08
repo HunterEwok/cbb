@@ -17,7 +17,7 @@ use cbb_core::clip;
 use crate::error::{Context, Error, Result};
 use crate::{Global, control, request};
 
-const USAGE: &str = "usage: cbb next paste [-max bytes] | image [-mode auto|lo|hi] [-tape] | speed <baud> <bytes> | copy [-secret] <len> <crc32> | check-list <file> | pair [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
+const USAGE: &str = "usage: cbb next paste [-max bytes] | image [-mode auto|lo|hi] [-tape] | speed <baud> <bytes> | speed-in <baud> <bytes> | copy [-secret] <len> <crc32> | check-list <file> | pair [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
 
 /// How long copy waits for the next byte from the Next.
 const READ_TIMEOUT_DECISECONDS: u8 = 100;
@@ -30,6 +30,7 @@ pub fn run(g: &Global, args: &[String]) -> i32 {
         Some("copy") => copy(g, &args[1..]),
         Some("image") => image(g, &args[1..]),
         Some("speed") => speed(&args[1..]),
+        Some("speed-in") => speed_in(&args[1..]),
         Some("check-list") => check_list(&args[1..], &mut std::io::stdout()),
         Some("pair") => crate::join(g, &args[1..], true),
         // The link answers in frames, not in a status line.
@@ -306,13 +307,7 @@ const SPEEDS: [(u32, libc::speed_t); 9] = [
 /// of a fixed pseudo-random sequence at baud, then half a second later
 /// the line's own speed again and the status line.
 fn speed(args: &[String]) -> Result<()> {
-    let [baud, n] = args else { return Err(Error::msg(USAGE)) };
-    let baud: u32 = baud.parse().context("the speed is a number")?;
-    let n: usize = n.parse().context("the length is a number")?;
-    let &(_, b) = SPEEDS.iter().find(|s| s.0 == baud).ok_or_else(|| Error::msg("the Pi's line takes no such speed"))?;
-    if n > 1 << 20 {
-        return Err(Error::msg("at most 1 MiB"));
-    }
+    let (baud, b, n) = speed_args(args)?;
     let data = speed_bytes(n);
     let mut out = std::io::stdout();
     let _raw = RawTerminal::new(1, true);
@@ -328,6 +323,50 @@ fn speed(args: &[String]) -> Result<()> {
     }
     std::thread::sleep(std::time::Duration::from_millis(500));
     Ok(())
+}
+
+/// `.cbb speed`'s test of the other way: the line goes to baud, and half a
+/// second later `CBBGO` at it; then up to bytes from the Next, until a
+/// second passes without one; then the line's own speed again, half a
+/// second, and `CBBR <bytes got> <crc32>` before the status line.
+fn speed_in(args: &[String]) -> Result<()> {
+    let (_, b, n) = speed_args(args)?;
+    let mut data = vec![0u8; n];
+    let mut got = 0;
+    {
+        let _raw = RawTerminal::new(10, true);
+        let _speed = LineSpeed::set(b)?;
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let mut out = std::io::stdout();
+        out.write_all(b"\r\nCBBGO\r\n").and_then(|_| out.flush()).context("cannot answer the Next")?;
+        let mut stdin = std::io::stdin();
+        while got < n {
+            match stdin.read(&mut data[got..]) {
+                Ok(0) => break,
+                Ok(k) => got += k,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(Error::with("cannot read from the Next", e)),
+            }
+        }
+    }
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let mut out = std::io::stdout();
+    out.write_all(format!("CBBR {got} {:08x}\r", crc32(&data[..got])).as_bytes())
+        .and_then(|_| out.flush())
+        .context("cannot answer the Next")
+}
+
+/// The speed, as a number and as termios names it, and the length of a
+/// speed test.
+fn speed_args(args: &[String]) -> Result<(u32, libc::speed_t, usize)> {
+    let [baud, n] = args else { return Err(Error::msg(USAGE)) };
+    let baud: u32 = baud.parse().context("the speed is a number")?;
+    let n: usize = n.parse().context("the length is a number")?;
+    let &(_, b) = SPEEDS.iter().find(|s| s.0 == baud).ok_or_else(|| Error::msg("the Pi's line takes no such speed"))?;
+    if n > 1 << 20 {
+        return Err(Error::msg("at most 1 MiB"));
+    }
+    Ok((baud, b, n))
 }
 
 /// The bytes of the speed test: xorshift32 from 1, the low byte of each.

@@ -63,10 +63,11 @@ blue and yellow in the data at each edge of the sound, as with a cassette. Some 
 SPACE stops it. It needs `aplay` and NextPi's I2S sound on the Pi, which is not yet tried
 on a real Next.
 
-`speed` (only with the network off) has the Pi send the same 80K at 115200, 230400, 460800,
-921600 and 2000000 and prints for each whether it arrived whole (its CRC-32) and how fast.
-Not yet run on a real Next; the line's speed stays where it is until a run shows a faster one
-keeps the bytes whole.
+`speed` (only with the network off) tries the Pi's line each way, from 2000000 down a step at
+a time (921600, 460800, 230400, 115200) to the first speed that keeps the bytes whole: the Pi
+sends 80K and the Next checks their CRC-32, then the Next sends them back and the Pi says how
+many came and their CRC-32. It prints each speed it tried, whole, damaged or lost, and how
+fast. Not yet run on a real Next.
 
 SPACE stops a command that waits, such as `pair` while the phone has not scanned yet.
 
@@ -95,6 +96,13 @@ cbb.tools (`CBB.OVL`, `CBB.DRV` and the lite member for the Pi), then copies the
 UART to `/NextPi/nextpi`, where it writes a start script `cbb` that keeps the member's state
 in `/NextPi/nextpi/cbb-state` (NextPi's root is read-only). Nothing else on the card or the Pi
 changes; the Pi's copy is removed from the card once the Pi has it.
+
+The install goes as fast as the lines keep the bytes whole: the site's files through the ESP
+from 2000000 down a step at a time (921600, 460800, 230400, 115200) once bytes go missing or
+a file arrives damaged, and the Pi's `cbb` the same way, down a step when the Pi's tty does not
+take the speed or its SHA-256 does not match. The file's row says each new speed (`AT 921K`),
+and the speed found holds for the rest of the install. The signed list `.cbb update` fetches
+first, a few hundred bytes, comes at the ESP's own 115200.
 
 A line shows each download: the percentage, the kilobytes, the speed and the time left, and
 the border blinks while it runs. SPACE stops it, and `.cbb install` goes on from where a

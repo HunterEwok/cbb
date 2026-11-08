@@ -55,7 +55,6 @@ PUBLIC _crc_block
 PUBLIC _crc_ptr
 PUBLIC _crc_len
 PUBLIC _crc_state
-PUBLIC _img_crc_tab
 PUBLIC _crc_hi_at
 
 EXTERN __z_page_table
@@ -605,8 +604,5 @@ _crc_len:
 _crc_state:
    defs 4
 
-; The tables, from the first 256-byte boundary in here on.
-_img_crc_tab:
-   defs 1024 + 255
 _crc_hi_at:
    defw crc_hi + 1

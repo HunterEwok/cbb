@@ -11,7 +11,10 @@ All notable changes to cbb are documented in this file. The format follows
   Pi (`cbb next image`), which fits the PNG or JPEG to Layer 2 in 320×256 with 256 colours or
   640×256 with 16, whichever shows it closer, with dithering from the Next's 512 colours; the
   Next shows it column by column as it arrives and gives the screen back on a key.
-  `.cbb speed` (`cbb next speed`) measures which speeds of the Pi's line keep 80K whole.
+  `.cbb speed` (`cbb next speed`, `speed-in`) finds the fastest speed of the Pi's line that
+  keeps 80K whole each way, from 2M down a step at a time. `.cbb install` and `update` go the
+  same way: the site's files through the ESP and the Pi's `cbb` from 2M down to the first
+  speed that brings them whole.
   `.cbb show -tape` loads it as a real tape instead, from the Pi's sound through EAR, with
   the cassette's stripes on the border (some 8 minutes).
   While the network runs, the driver shows each new image of the group by itself over the

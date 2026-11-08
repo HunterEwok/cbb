@@ -740,13 +740,16 @@ static void link_quit(void)
 // overflows the Next's 512-byte buffer. 19200 is 1920 bytes a second.
 #define ESP_SPEED 115200UL
 #define ESP_NET_SPEED 19200UL
-// .cbb install's speed for the site's files: 23K a second, which .cbb at
-// 28 MHz reads as it comes (at 460800 the played Next's UART overflowed);
-// it asks for each chunk, so nothing more than one answer comes at a time.
-#define ESP_FETCH_SPEED 230400UL
+// .cbb install's speed for the site's files: 2M first, then a step slower
+// each time the bytes do not come whole (speed_down()), as far as the
+// Next reads them as they come at 28 MHz; it asks for each chunk, so
+// nothing more than one answer comes at a time.
+#define ESP_FETCH_TOP 2000000UL
 
-// The speeds the ESP may be at, which esp_answers() tries.
-static const uint32_t esp_speeds[] = {ESP_SPEED, ESP_NET_SPEED, ESP_FETCH_SPEED};
+// The speeds the ESP may be at, which esp_answers() tries: the fetch's
+// is the one it is at now.
+static uint32_t esp_speeds[] = {ESP_SPEED, ESP_NET_SPEED, ESP_FETCH_TOP};
+#define esp_fetch (esp_speeds[2])
 
 // Whether the ESP answers AT at speed; leaves it selected. The CR LF first
 // ends whatever an earlier try at the other speed left in its line.
@@ -1496,9 +1499,14 @@ static uint8_t http_range(const char *name, uint32_t from, uint16_t size)
     if (status != 206 && !(status == 200 && from == 0)) goto out;
     err = 253;
     if (length != size) goto out;
+    // Once the bytes come, they come without a pause: 251 when two seconds
+    // pass without one, which the Next lost to a speed it cannot read at.
     for (; got < size; got++) {
-        err = link_recv(&c, 10);
-        if (err) goto out;
+        err = link_recv(&c, 2);
+        if (err) {
+            if (err != LINK_BREAK) err = 251;
+            goto out;
+        }
         text[got] = c;
     }
     return 0;
@@ -1516,14 +1524,16 @@ out:
 #pragma bssseg bss_compiler
 #pragma dataseg data_compiler
 
-// Opens a passthrough connection to the site through the ESP; 0 when open.
+// Opens a passthrough connection to the site through the ESP; 0 when open,
+// 2 when the ESP does not answer at the fetch's speed.
 static const char *const http_cmds[] = {"AT+CIPMODE=0", "AT+CIPCLOSE", "AT+CIPMUX=0", "AT+CIPMODE=1",
                                         "AT+CIPSTART=\"TCP\",\"" SITE "\",80", "AT+CIPSEND"};
 
 static uint8_t http_open(void)
 {
     uint8_t i, c, reset = 0;
-    if (!esp_speed(ESP_FETCH_SPEED)) return 1;
+    // 2: the ESP does not answer at the speed.
+    if (!esp_speed(esp_fetch)) return 2;
 again:
     for (i = 0; i < sizeof http_cmds / sizeof http_cmds[0]; i++) {
         link_send_str(http_cmds[i]);
@@ -1548,7 +1558,7 @@ again:
                 // restarts, at its stock speed.
                 reset = 1;
                 esp_restart();
-                if (!esp_speed(ESP_FETCH_SPEED)) return 1;
+                if (!esp_speed(esp_fetch)) return 1;
                 goto again;
             }
             if (strcmp(line, "ERROR") == 0 || strncmp(line, "FAIL", 4) == 0) return 1;
@@ -1560,7 +1570,7 @@ again:
 // Leaves the passthrough connection: a second of quiet, +++, a second.
 static void http_close(void)
 {
-    esp_escape(ESP_FETCH_SPEED);
+    esp_escape(esp_fetch);
     link_send_str("AT+CIPCLOSE\r\n");
     while (link_line(line, sizeof line, 2) == LINK_OK) {
     }
@@ -1799,6 +1809,18 @@ static uint8_t matches(struct item *it, const char *path)
     return it->pi || strcmp(sha_out, it->sha256) == 0;
 }
 
+// The speeds, a step down: 2M, 921600, 460800, 230400, 115200; 1 when it
+// was the last. The row says the new one.
+static uint8_t speed_down(uint32_t *speed, uint8_t row, const char *label)
+{
+    char s[10];
+    if (*speed <= ESP_SPEED) return 1;
+    *speed = *speed > 921600UL ? 921600UL : *speed >> 1;
+    sprintf(s, "AT %luK", *speed / 1000);
+    file_state(row, label, s);
+    return 0;
+}
+
 // Fetches one item to its .PRT file, going on from what an earlier try
 // left there, and puts it in place once it is the one built with this CBB;
 // 0 when done.
@@ -1807,6 +1829,7 @@ static int fetch(struct item *it, uint8_t row)
     uint8_t fh, err, tries = 0;
     uint16_t n, start = FRAMES_LO;
     uint32_t got;
+again:
     // What an earlier try left.
     got = file_sha(it->part, 0);
     if (got > it->size) {
@@ -1832,13 +1855,16 @@ static int fetch(struct item *it, uint8_t row)
             return fail(no_file, line);
         }
         if (err) {
-            // The server may have closed the connection: open it again.
-            if (++tries > 5) {
+            // The server may have closed the connection: open it again,
+            // and a step slower when bytes were lost or the same chunk
+            // failed twice.
+            if (++tries > 6) {
                 esx_f_close(fh);
                 file_state(row, it->label, "BROKE OFF");
                 return fail("the download broke off; .cbb install goes on from here", line);
             }
             http_close();
+            if (tries > 1 || err == 251) speed_down(&esp_fetch, row, it->label);
             http_open();
             continue;
         }
@@ -1852,8 +1878,14 @@ static int fetch(struct item *it, uint8_t row)
     }
     esx_f_close(fh);
     if (!matches(it, it->part)) {
-        file_state(row, it->label, "DAMAGED");
         esx_f_unlink(it->part);
+        // Again from the start, a step slower.
+        http_close();
+        if (!speed_down(&esp_fetch, row, it->label)) {
+            http_open();
+            goto again;
+        }
+        file_state(row, it->label, "DAMAGED");
         return fail("the file arrived damaged; run .cbb install again", it->name);
     }
     // A newer CBB stays by the running one until the end (cbb_swap()).
@@ -1891,15 +1923,17 @@ static uint8_t pi_sha(char *sha)
 // the one built with this CBB before it takes the place of the old one. The
 // wrapper that NextPi's shell runs is written unless there is one.
 // How long head may wait for the Pi's cbb: twice the time the copy takes
-// at speed (0: 115200), and a minute.
+// at speed (0: 115200), and a minute; above 460800, as at that, since the
+// Next sends no faster than it reads the card.
 static uint32_t pi_seconds(struct item *it, uint32_t speed)
 {
+    if (speed > 460800UL) speed = 460800UL;
     return it->size / ((speed ? speed : 115200UL) / 20) + 60;
 }
 
-// The speed the Pi's cbb goes at, which the Pi's tty takes for the copy
-// only: four times NextPi's usual 115200.
-#define PI_FAST_SPEED 460800UL
+// The speed the Pi's cbb goes at first, which the Pi's tty takes for the
+// copy only; then a step slower each time it does not come whole.
+#define PI_FAST_SPEED 2000000UL
 
 // Waits a few frames, for the UART to send what it holds.
 static void wait_frames(uint8_t n)
@@ -1984,35 +2018,33 @@ static int pi_check(struct item *it)
     }
 }
 
-// The Pi's cbb to the Pi: fast, else at the line's speed, when the Pi's
-// tty does not take the speed or the copy came damaged.
+// The Pi's cbb to the Pi: from 2M a step slower each time the Pi's tty
+// does not take the speed or the copy came damaged.
 static int to_pi(struct item *it, uint8_t row)
 {
     uint8_t err;
     uint16_t start;
+    uint32_t speed = PI_FAST_SPEED;
     if (link_shell()) return pi_silent();
-    err = pi_send(it, row, PI_FAST_SPEED);
-    if (err == 2) {
-        // A tty that took the speed but lost CBBGO keeps head waiting,
-        // until its timeout at the most.
-        file_state(row, SEND_LABEL, "SLOWER");
-        start = FRAMES_LO;
-        while (link_shell()) {
-            if (link_stopped || (uint16_t)(FRAMES_LO - start) / 50 > pi_seconds(it, PI_FAST_SPEED) + 10)
-                return fail("the Pi did not get ready", "no CBBGO");
+    for (;;) {
+        err = pi_send(it, row, speed);
+        if (err == 2) {
+            // A tty that took the speed but lost CBBGO keeps head waiting,
+            // until its timeout at the most.
+            start = FRAMES_LO;
+            while (link_shell()) {
+                if (link_stopped || (uint16_t)(FRAMES_LO - start) / 50 > pi_seconds(it, speed) + 10)
+                    return fail("the Pi did not get ready", "no CBBGO");
+            }
+        } else if (!err) {
+            err = pi_check(it);
         }
-    } else if (!err) {
-        err = pi_check(it);
-        if (err == 3) {
-            link_prompt();
-            file_state(row, SEND_LABEL, "SLOWER");
-            err = 2;
+        if (err != 2 && err != 3) break;
+        if (err == 3) link_prompt();
+        if (speed_down(&speed, row, SEND_LABEL)) {
+            if (err == 2) return fail("the Pi did not get ready", "no CBBGO");
+            break;
         }
-    }
-    if (err == 2) {
-        err = pi_send(it, row, 0);
-        if (err == 2) return fail("the Pi did not get ready", "no CBBGO");
-        if (!err) err = pi_check(it);
     }
     if (err == 3) {
         // The card's copy is not the one built with this CBB.
@@ -2071,8 +2103,16 @@ static int install_files(uint8_t update)
     // .cbb update first fetches the site's signed list, which the Pi's cbb
     // checks (read_list()), then opens the site again for the files.
     if (update && !pi_answers) return pi_silent();
+    // The list, a few hundred bytes, at the ESP's own speed, which never
+    // loses them; the files from 2M down.
+    if (update) esp_fetch = ESP_SPEED;
     for (list_checked = !update;;) {
-        if (http_open()) {
+        // An ESP that does not answer at a speed, a step slower.
+        while ((err = http_open()) == 2) {
+            http_close();
+            if (speed_down(&esp_fetch, ITEM_ROW(0), items[0].label)) break;
+        }
+        if (err) {
             http_close();
             link_use(LINK_PI);
             if (link_stopped) return fail("stopped; .cbb install goes on from here", 0);
@@ -2081,6 +2121,7 @@ static int install_files(uint8_t update)
         if (list_checked) break;
         err = far_read_list();
         http_close();
+        esp_fetch = ESP_FETCH_TOP;
         link_use(LINK_PI);
         list_checked = 1;
         if (err || (link_shell() && pi_silent()) || far_read_list()) return 1;
@@ -2821,7 +2862,6 @@ extern void crc_block(void);
 extern const uint8_t *crc_ptr;
 extern uint16_t crc_len;
 extern uint32_t crc_state;
-extern uint8_t img_crc_tab[1024 + 255];
 extern uint8_t *crc_hi_at;
 extern uint8_t tape_block(void);
 extern uint8_t *tape_dst;
@@ -2858,7 +2898,14 @@ static const char s_speed_line[] = "%7lu: %s, %u.%u KB/s\n";
 static const char s_ok[] = "whole";
 static const char s_bad[] = "DAMAGED";
 static const char s_lost[] = "bytes lost";
-static const uint32_t speeds[] = {115200UL, 230400UL, 460800UL, 921600UL, 2000000UL};
+static const char s_silent[] = "no answer";
+static const char s_in_fmt[] = "speed-in %lu %lu";
+static const char s_cbbgo[] = "CBBGO";
+static const char s_cbbr[] = "CBBR ";
+static const char s_to_next[] = "Pi to the Next:\n";
+static const char s_to_pi[] = "The Next to the Pi:\n";
+// From the fastest down, to the first that keeps the bytes whole.
+static const uint32_t speeds[] = {2000000UL, 921600UL, 460800UL, 230400UL, 115200UL};
 
 // The ten banks, the first one even, as Layer 2 takes 16K banks.
 static uint8_t img_base;
@@ -3148,12 +3195,14 @@ static uint8_t img_pixels(void)
 }
 
 // crc_block()'s tables: byte k of each entry in the k-th 256, from a
-// 256-byte boundary, whose page crc_block() takes in its code.
+// 256-byte boundary, whose page crc_block() takes in its code. They are in
+// text[], which the image through the driver passes through, so each CRC
+// makes them again (a few milliseconds).
 static void crc_table_make(void)
 {
     uint32_t c;
     uint16_t n;
-    uint8_t k, *t = (uint8_t *)(((uint16_t)img_crc_tab + 255) & 0xFF00);
+    uint8_t k, *t = (uint8_t *)(((uint16_t)text + 255) & 0xFF00);
     *crc_hi_at = (uint16_t)t >> 8;
     for (n = 0; n < 256; n++) {
         c = n;
@@ -3175,6 +3224,7 @@ static void crc_add_block(const uint8_t *p, uint16_t n)
 static uint32_t img_crc(uint16_t pal_bytes)
 {
     uint8_t i;
+    crc_table_make();
     crc_state = 0xFFFFFFFFUL;
     for (i = 0; i < IMG_BANKS; i++) {
         bank_in(i);
@@ -3291,61 +3341,99 @@ static int img_show(uint8_t tape)
     return 0;
 }
 
-// Each speed: the Pi sends 80K at it, into the banks, which hold them for
-// the CRC-32; then the line's own speed again. Only straight to the Pi.
+// A few frames, for the UART to send what it holds.
+static void img_wait(void)
+{
+    uint16_t start = FRAMES_LO;
+    while ((uint16_t)(FRAMES_LO - start) < 2) {
+    }
+}
+
+// Each way, each speed from the fastest down, up to the first that keeps
+// the bytes whole: first the Pi sends 80K at it, into the banks, which hold
+// them for the CRC-32; then the Next sends the banks' 80K, and the Pi says
+// how many came and their CRC-32. The line's own speed again after each.
+// Only straight to the Pi.
 static int img_speed(void)
 {
     uint32_t len, crc;
-    uint16_t start, frames, kbs;
-    uint8_t i, err, s, lost;
+    uint16_t start, frames, k, kbs;
+    uint8_t i, err, s, lost, out;
     char *e;
     if (img_via) return fail(s_net_runs, 0);
     if (banks_take()) return fail(s_memory, 0);
-    for (s = 0; s < sizeof speeds / sizeof speeds[0]; s++) {
-        img_border = INK_RED;
-        sprintf(line, s_speed_fmt, speeds[s], IMG_PIXELS);
-        if (command(line)) break;
-        for (;;) {
-            err = img_line(ANSWER_SECONDS);
-            if (err || memcmp(line, s_cbbs, 5) == 0 || frame_line(line, &len, &crc) == LINE_ERR) break;
-        }
-        if (err || line[3] != 'S') {
-            if (!err) fail(line[6] ? line + 7 : s_failed, 0);
+    for (out = 0; out < 2; out++) {
+        printf(out ? s_to_pi : s_to_next);
+        for (s = 0; s < sizeof speeds / sizeof speeds[0]; s++) {
+            img_border = INK_RED;
+            sprintf(line, out ? s_in_fmt : s_speed_fmt, speeds[s], IMG_PIXELS);
+            if (command(line)) goto end;
+            // The Pi says CBBS at the line's speed, or CBBGO at the new one.
+            if (out) {
+                img_wait();
+                link_speed(speeds[s]);
+            }
+            do {
+                err = img_line(10);
+            } while (!err && memcmp(line, out ? s_cbbgo : s_cbbs, 5) && frame_line(line, &len, &crc) != LINE_ERR);
+            if (out && err) {
+                link_open();
+                if (err == LINK_BREAK) goto end;
+                printf(s_speed_line, speeds[s], s_silent, 0, 0);
+                continue;
+            }
+            if (err || line[3] != 'S' && !out) {
+                if (!err) fail(line[6] ? line + 7 : s_failed, 0);
+                link_prompt();
+                goto end;
+            }
+            if (!out) {
+                e = strchr(line + 5, ' ');
+                len = strtoul(e, &e, 10);
+                crc = strtoul(e, 0, 16);
+                link_speed(speeds[s]);
+            }
+            rx_border = INK_BLUE;
+            start = FRAMES_LO;
+            lost = 0;
+            for (i = 0; i < IMG_BANKS && !lost; i++) {
+                bank_in(i);
+                if (out) {
+                    for (k = 0; k < 8192; k++) link_send(((uint8_t *)WINDOW)[k]);
+                    img_border ^= 7;
+                    z80_outp(0xFE, img_border);
+                } else {
+                    rx_dst = (uint8_t *)WINDOW;
+                    rx_left = 8192;
+                    err = rx_block();
+                    lost = err != LINK_OK;
+                }
+                bank_out();
+            }
+            frames = FRAMES_LO - start;
+            if (out) img_wait();
+            link_open(); // the line's own speed again
+            if (err == LINK_BREAK) goto end;
+            if (out) {
+                do {
+                    err = img_line(ANSWER_SECONDS);
+                } while (!err && memcmp(line, s_cbbr, 5));
+                if (err) goto end;
+                lost = strtoul(line + 5, &e, 10) != IMG_PIXELS;
+                crc = strtoul(e, 0, 16);
+            }
+            // What the Pi still sends of lost bytes ends at its status line.
+            err = img_status();
             link_prompt();
-            break;
+            if (err && !lost) goto end;
+            // The time from the first byte waited for, so a little under the line's.
+            kbs = frames ? (uint16_t)(IMG_PIXELS * 500 / frames / 1024) : 0;
+            err = !lost && img_crc(0) == crc;
+            printf(s_speed_line, speeds[s], lost ? s_lost : err ? s_ok : s_bad, kbs / 10, kbs % 10);
+            if (err) break;
         }
-        e = strchr(line + 5, ' ');
-        len = strtoul(e, &e, 10);
-        crc = strtoul(e, 0, 16);
-        link_speed(speeds[s]);
-        rx_border = INK_BLUE;
-        start = FRAMES_LO;
-        lost = 0;
-        for (i = 0; i < IMG_BANKS && !lost; i++) {
-            bank_in(i);
-            rx_dst = (uint8_t *)WINDOW;
-            rx_left = 8192;
-            err = rx_block();
-            lost = err != LINK_OK;
-            bank_out();
-        }
-        frames = FRAMES_LO - start;
-        link_open(); // the line's own speed again
-        if (err == LINK_BREAK) break;
-        if (lost) {
-            // What the Pi still sends ends at its status line.
-            img_status();
-            link_prompt();
-            printf(s_speed_line, speeds[s], s_lost, 0, 0);
-            continue;
-        }
-        err = img_status();
-        link_prompt();
-        if (err) break;
-        // The time from the first byte waited for, so a little under the line's.
-        kbs = frames ? (uint16_t)(IMG_PIXELS * 500 / frames / 1024) : 0;
-        printf(s_speed_line, speeds[s], img_crc(0) == crc ? s_ok : s_bad, kbs / 10, kbs % 10);
     }
+end:
     zx_border(BORDCR >> 3 & 7);
     banks_free();
     return 0;
@@ -3356,7 +3444,6 @@ int show_run(void)
 {
     int err;
     img_base = NO_BANK;
-    crc_table_make();
     if (img_open()) return 1;
     err = strcmp(far_show_argv[0], "speed") == 0 ? img_speed() : img_show(far_show_tape);
     zx_border(BORDCR >> 3 & 7);

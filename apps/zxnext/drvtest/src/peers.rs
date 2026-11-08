@@ -486,6 +486,9 @@ pub struct Pi {
     baud: u32,
     /// A speed stty sets, and when.
     pending_baud: Option<(u64, u32)>,
+    /// cbb next speed-in: the bytes it waits for, those that came (noise
+    /// when the Next sends at another speed), and when it gives up.
+    speed_in: Option<(usize, Vec<u8>, u64)>,
 }
 
 impl Pi {
@@ -512,6 +515,7 @@ impl Pi {
             checks_lists: true,
             baud: 115_200,
             pending_baud: None,
+            speed_in: None,
         }
     }
 
@@ -529,6 +533,19 @@ impl Pi {
                 self.pending_baud = None;
             }
         }
+    }
+
+    /// cbb next speed-in's end: the line's own speed, and half a second
+    /// later what came.
+    fn speed_in_end(&mut self, now: u64) {
+        let Some((_, got, _)) = self.speed_in.take() else {
+            return;
+        };
+        self.later_bauds.push((now + 10_000, 115_200));
+        let t = now + 500_000;
+        let crc = crate::crc32(&got);
+        self.say(t, &format!("CBBR {} {crc:08x}\rCBBOK\r", got.len()));
+        self.prompt(t);
     }
 
     fn say(&mut self, now: u64, s: &str) {
@@ -649,6 +666,17 @@ impl Pi {
                     self.out.push(end + 10_000, b"CBBOK\r");
                     return self.prompt(end + 10_000);
                 }
+                ["speed-in", baud, n] => {
+                    // cbb next speed-in (member/src/next.rs): the line at
+                    // baud, if it takes it, and CBBGO half a second later.
+                    let baud: u32 = baud.parse().unwrap();
+                    let t = now + 50_000;
+                    let at = if baud <= self.line_max { baud } else { 115_200 };
+                    self.later_bauds.push((t + 300_000, at));
+                    self.out.push(t + 500_000, b"\r\nCBBGO\r\n");
+                    self.speed_in = Some((n.parse().unwrap(), Vec::new(), t + 1_500_000));
+                    return;
+                }
                 ["copy", rest @ ..] => {
                     let n = rest
                         .iter()
@@ -731,9 +759,24 @@ impl Default for Pi {
 }
 
 impl Peer for Pi {
-    fn rx(&mut self, now: u64, b: u8, _baud: u32) {
+    fn rx(&mut self, now: u64, b: u8, baud: u32) {
         self.apply_baud(now);
         if !self.answers {
+            return;
+        }
+        let line_baud = self.baud;
+        if let Some((n, got, deadline)) = &mut self.speed_in {
+            // The Next's speed is its clock over a whole divisor: near, not
+            // equal.
+            got.push(if baud.abs_diff(line_baud) < line_baud / 32 {
+                b
+            } else {
+                !b
+            });
+            *deadline = now + 1_000_000;
+            if got.len() >= *n {
+                self.speed_in_end(now);
+            }
             return;
         }
         if let Some(bytes) = self.tape_wait.take() {
@@ -810,6 +853,9 @@ impl Peer for Pi {
     }
     fn tx(&mut self, now: u64) -> Option<u8> {
         self.apply_baud(now);
+        if self.speed_in.as_ref().is_some_and(|s| now >= s.2) {
+            self.speed_in_end(now);
+        }
         self.out.pop(now)
     }
     fn baud(&self) -> u32 {

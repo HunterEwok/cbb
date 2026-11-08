@@ -257,6 +257,28 @@ fn installs_then_finds_all_current() {
         "{}",
         o.screen
     );
+    // The site's files from 2M down a step at a time, to a speed the Next
+    // reads whole (the played one loses bytes above 230400); the Pi's cbb
+    // at 2M, which the played Pi's tty takes.
+    let fetch: Vec<u32> = o
+        .esp()
+        .log
+        .iter()
+        .filter_map(|l| l.split("AT+UART_CUR=").nth(1))
+        .map(|r| r.split(',').next().unwrap().parse().unwrap())
+        .filter(|&b| b != 115_200 && b != 19_200)
+        .collect();
+    assert_eq!(fetch.first(), Some(&2_000_000), "{fetch:?}");
+    let step = |b: u32| if b > 921_600 { 921_600 } else { b / 2 };
+    assert!(
+        fetch.windows(2).all(|w| w[1] == w[0] || w[1] == step(w[0])),
+        "{fetch:?}"
+    );
+    assert!(
+        o.pi().log.iter().any(|l| l.contains("stty 2000000 raw")),
+        "{:?}",
+        o.pi().log
+    );
     assert!(
         o.has("CBB.DRV IS INSTALLED.") && o.has("DONE."),
         "{}",
@@ -1354,7 +1376,18 @@ fn says_which_speeds_carry_the_bytes_whole() {
     pi.line_max = 921_600;
     let run = run_plain(&kit, "speed", pi);
     let s = run.hw.screen_text();
-    for speed in ["115200: whole", "230400: whole", "460800: whole", "921600: whole", "2000000: DAMAGED"] {
-        assert!(s.contains(speed), "{speed}:\n{s}");
+    // Each way from 2M down, to the first speed that keeps the bytes whole.
+    let mut rest = s.as_str();
+    for line in [
+        "Pi to the Next:",
+        "2000000: DAMAGED",
+        "921600: whole",
+        "The Next to the Pi:",
+        "2000000: no answer",
+        "921600: whole",
+    ] {
+        let at = rest.find(line).unwrap_or_else(|| panic!("{line}:\n{s}"));
+        rest = &rest[at + line.len()..];
     }
+    assert!(!s.contains("460800"), "{s}");
 }
