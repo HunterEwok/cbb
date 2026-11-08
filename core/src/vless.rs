@@ -154,9 +154,8 @@ pub fn parse_id(s: &str) -> Result<[u8; 16]> {
     };
     let hex: Vec<u8> = b.iter().copied().filter(|&c| c != b'-').collect();
     let mut id = [0u8; 16];
-    for (out, pair) in id.iter_mut().zip(hex.chunks_exact(2)) {
-        let [h, l] = pair else { return Err(bad()) };
-        *out = d(*h).zip(d(*l)).map(|(h, l)| h << 4 | l).ok_or_else(bad)?;
+    for (out, &[h, l]) in id.iter_mut().zip(hex.as_chunks::<2>().0) {
+        *out = d(h).zip(d(l)).map(|(h, l)| h << 4 | l).ok_or_else(bad)?;
     }
     Ok(id)
 }

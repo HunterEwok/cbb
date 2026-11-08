@@ -24,7 +24,7 @@ object Media {
     /** The largest plain-text alternative of a media event, in bytes of UTF-8. */
     const val MAX_ALT_TEXT = 256 shl 10
 
-    val TYPES = setOf("image/png", "image/jpeg", "text/html")
+    val TYPES = setOf("image/png", "image/jpeg", "image/gif", "text/html")
 
     /** What a media event's content is. */
     data class Manifest(val size: Long, val parts: List<Part>) {

@@ -1552,9 +1552,29 @@ jobs:
           # before it gives up. A run with no test started after 150 seconds,
           # or one that exits before any test ran, is tried again on the
           # simulator erased and booted again; a run whose tests ran, failed ones included,
-          # counts as it is.
+          # counts as it is, except for one kind of failure below.
+          #
+          # XCTest can also connect and then fail to launch the app itself:
+          # "Failed to launch <XCUIApplicationImpl ...>: Timed out while
+          # launching application via Xcode", seen on the first launch on a
+          # simulator fresh from its data migration while the later tests
+          # launched it at once. When every failed test failed only so, those
+          # tests (and only they) run again on the simulator booted again; a
+          # failed assertion is never run again.
+          failed_tests() {
+            sed -nE "s/^Test Case '-\[([A-Za-z0-9_]+)\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\]' failed .*/\1\/\2\/\3/p" "$1" | sort -u
+          }
+          launch_failed() {
+            sed -nE "s/.*: error: -\[([A-Za-z0-9_]+)\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\] : Failed to launch <XCUIApplicationImpl.*/\1\/\2\/\3/p" "$1" | sort -u
+          }
+          only_launches() {
+            failed=$(failed_tests "$1")
+            [ -n "$failed" ] && [ "$failed" = "$(launch_failed "$1")" ] &&
+              ! grep -E ": error: " "$1" | grep -qv ": Failed to launch <XCUIApplicationImpl"
+          }
           test_on() {
             log="${RUNNER_TEMP:-/tmp}/test-$1.log"
+            only=()
             for attempt in 1 2 3; do
               xcrun simctl boot "$1" 2>/dev/null || true
               # A simulator can hang at boot ("Waiting on System App") for
@@ -1565,7 +1585,7 @@ jobs:
               kill "$boot" 2>/dev/null || true
               wait "$boot" || true
               xcodebuild test-without-building -project CBB.xcodeproj -scheme CBB -destination "id=$1" \
-                "${sign[@]}" >"$log" 2>&1 &
+                "${sign[@]}" "${only[@]}" >"$log" 2>&1 &
               pid=$!
               killed=
               for second in $(seq 600); do
@@ -1584,6 +1604,13 @@ jobs:
                 wait "$pid" || status=$?
               fi
               xcrun simctl shutdown "$1" || true
+              if [ "$status" -ne 0 ] && [ -z "$killed" ] && [ "$attempt" -lt 3 ] && only_launches "$log"; then
+                grep -E "error: |^Test Case .* failed" "$log" || true
+                only=()
+                for t in $(failed_tests "$log"); do only+=("-only-testing:$t"); done
+                echo "::warning::the app did not launch for some tests on $1 (attempt $attempt); running them again: ${only[*]}"
+                continue
+              fi
               if [ "$status" -eq 0 ] || grep -q "^Test Case " "$log"; then
                 # A failed assertion is printed where it happens, often
                 # long before the tail: show those lines first.
@@ -1996,7 +2023,7 @@ jobs:
         run: |
           rustup toolchain install nightly-2026-10-26 --profile minimal --component rust-src
           python3 -m venv "$RUNNER_TEMP/zig"
-          "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.15.2 cargo-zigbuild==0.24.0
+          "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
           echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
       - name: qemu from the cache
         id: qemu
@@ -2063,6 +2090,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross swtpm
           echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
+      - name: cargo check on the oldest Rust the crates declare (rust-version)
+        # Every crate of the workspace declares 1.95; the lock file must build there.
+        run: |
+          rustup toolchain install 1.95 --profile minimal
+          cargo +1.95 check --locked --workspace
       - name: cargo fmt
         run: cargo fmt --all --check
       - name: cargo clippy

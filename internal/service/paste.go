@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/node"
@@ -42,8 +43,13 @@ const (
 	typeWait   = 5 * time.Millisecond
 )
 
-// injectTime is how long a watcher may take to inject body's text.
+// injectTime is how long a watcher may take to inject body's text; for a
+// paste of images or files, how long the member may take to fetch them
+// and paste.
 func injectTime(body group.CommandBody) time.Duration {
+	if body.Kind == group.PasteMedia {
+		return copyWait + copyPasteWait
+	}
 	if body.Mode == group.PasteByTyping {
 		return injectWait + time.Duration(len(body.Text))*typeWait
 	}
@@ -181,12 +187,17 @@ func (s *Service) pasted(body group.CommandBody, c group.Record, from sender) no
 		res = refuse("this device takes pastes without Enter only; its user allows Enter with cbb paste-receive on -enter")
 	case !s.pastes.Allow(from.key, s.cfg.now()):
 		res = refuse("too many pastes: at most one a second and 30 a minute from one device")
+	case body.Kind == group.PasteMedia:
+		res = s.pasteCopy(body, set)
 	default:
 		res = s.inject(body, remotepaste.Clean(body.Text), set, s.stillAllowed(c, body))
 	}
-	if res.Status == node.ResultDone {
+	switch {
+	case res.Status == node.ResultDone && body.Kind == group.PasteMedia:
+		s.logf("cbb: %s pasted the group's copy %s here", from.who(body), body.Text)
+	case res.Status == node.ResultDone:
 		s.logf("cbb: %s pasted %d bytes here", from.who(body), len(body.Text))
-	} else {
+	default:
 		s.logf("cbb: a paste from %s: %s: %s", from.who(body), res.Status, res.Reason)
 	}
 	if body.Kind != "secret" {
@@ -434,6 +445,9 @@ func (s *Service) sendPaste(ctx context.Context, m *control.Message) error {
 	if kind == "" {
 		kind = control.KindText
 	}
+	if kind == control.KindMedia {
+		return s.sendCopyPaste(ctx, m)
+	}
 	text := remotepaste.Clean(string(m.Payload))
 	if text == "" {
 		return errors.New("nothing to paste: the text is empty or only control characters")
@@ -446,6 +460,31 @@ func (s *Service) sendPaste(ctx context.Context, m *control.Message) error {
 		return errors.New("remote paste is for another device; this one is where you type")
 	}
 	return s.commandOn(ctx, d, group.CommandBody{Type: group.CommandPaste, Mode: method, Enter: m.Enter, Kind: kind, Text: text})
+}
+
+// sendCopyPaste serves cbb paste --on with images or files: a paste
+// command that names the group's current copy, which must be images or
+// files that this device reads.
+func (s *Service) sendCopyPaste(ctx context.Context, m *control.Message) error {
+	if m.Method != "" && m.Method != group.PasteByClipboard {
+		return errors.New("images and files are pasted, not typed")
+	}
+	e := s.engine()
+	if e == nil {
+		return s.errNoGroup()
+	}
+	ev, ok := e.Current()
+	if !ok || ev.Kind != clip.Media || ev.Media == nil || ev.Unread {
+		return errors.New("the group's current copy is no images or files that this device reads")
+	}
+	d, err := s.findDevice(m.Device)
+	if err != nil {
+		return err
+	}
+	if d.Self {
+		return errors.New("remote paste is for another device; this one is where you type")
+	}
+	return s.commandOn(ctx, d, group.CommandBody{Type: group.CommandPaste, Mode: group.PasteByClipboard, Enter: m.Enter, Kind: group.PasteMedia, Text: ev.ID})
 }
 
 // commandOn signs body for the device d as this admin and sends it, through

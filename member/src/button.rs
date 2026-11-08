@@ -68,7 +68,7 @@ pub fn key_of(ev: &Event) -> Option<String> {
         (Kind::Media, Some(m)) => m
             .parts
             .iter()
-            .find(|p| p.kind == "image/png" || p.kind == "image/jpeg")
+            .find(|p| p.kind == "image/png" || p.kind == "image/jpeg" || p.kind == "image/gif")
             .and_then(|p| p.sha256.as_ref())
             .map(|sum| format!("\0image:{}", hex(sum))),
         _ if !ev.text.is_empty() => Some(ev.text.clone()),

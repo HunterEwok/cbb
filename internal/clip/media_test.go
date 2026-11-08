@@ -46,7 +46,7 @@ func TestManifestValidate(t *testing.T) {
 		"no parts":        {},
 		"mixed":           manifest(png, file),
 		"mixed the other": manifest(file, png),
-		"unknown type":    manifest(part("image/gif", "", "gif")),
+		"unknown type":    manifest(part("image/webp", "", "webp")),
 		"twice":           manifest(png, png),
 		"same path":       manifest(file, file),
 		"too many types":  manifest(tooMany...),

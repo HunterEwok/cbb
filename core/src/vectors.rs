@@ -176,19 +176,19 @@ fn swift_admin() {
     // Without its admin CA the certificate does not verify.
     assert!(certs::verify_member(&chain[..1], std::slice::from_ref(&ca), t, certs::Usage::Server).is_err());
     // The identity of the device it names holds together, with the key.
-    if let Ok(key) = STANDARD.decode(v["key"].as_str().unwrap()) {
-        if crate::identity::public_key(&key).is_ok() {
-            let id = Identity {
-                id: certs::DeviceId::parse(v["device"].as_str().unwrap()).unwrap(),
-                key,
-                external: None,
-                cert: leaf,
-                issuer: Some(admin),
-                group_ca: ca,
-                roots: vec![],
-            };
-            id.check().unwrap();
-        }
+    if let Ok(key) = STANDARD.decode(v["key"].as_str().unwrap())
+        && crate::identity::public_key(&key).is_ok()
+    {
+        let id = Identity {
+            id: certs::DeviceId::parse(v["device"].as_str().unwrap()).unwrap(),
+            key,
+            external: None,
+            cert: leaf,
+            issuer: Some(admin),
+            group_ca: ca,
+            roots: vec![],
+        };
+        id.check().unwrap();
     }
 }
 

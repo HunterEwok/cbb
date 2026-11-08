@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/HunterEwok/cbb/internal/control"
@@ -17,7 +18,9 @@ import (
 
 // cmdPasteOn has another member put a text where its focus is (design.md,
 // "Remote paste"): standard input, or this member's clipboard when standard
-// input is a terminal.
+// input is a terminal. With files, or -copy, it pastes images or files
+// instead: the files, copied to the group first, or the group's current
+// copy of images or files.
 func cmdPasteOn(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("paste", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -25,14 +28,19 @@ func cmdPasteOn(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	typed := fs.Bool("type", false, "type the text key by key instead of pasting it (at most 4 KiB)")
 	enter := fs.Bool("enter", false, "press Enter after the text, where the device's user allowed it")
 	secret := fs.Bool("secret", false, "send the text as a secret: not logged, and the clipboard there is cleared after")
+	image := fs.Bool("image", false, "paste the one file given, a PNG or JPEG, as an image rather than as a file")
+	current := fs.Bool("copy", false, "paste the group's current copy of images or files")
 	if fs.Parse(args) != nil {
 		return 2
 	}
-	if fs.NArg() != 0 || *on == "" {
-		fmt.Fprintln(stderr, "usage: cbb paste -on DEVICE [-type] [-enter] [-secret] < text")
+	if *on == "" || (fs.NArg() > 0 || *current || *image) && (*typed || *secret) || *current && fs.NArg() > 0 || *image && fs.NArg() != 1 {
+		fmt.Fprintln(stderr, "usage: cbb paste -on DEVICE [-type] [-enter] [-secret] < text\n       cbb paste -on DEVICE [-enter] [-image] FILE...\n       cbb paste -on DEVICE [-enter] -copy")
 		return 2
 	}
 	h := control.Header{Op: control.OpPasteOn, Device: *on, Method: group.PasteByClipboard, Enter: *enter, Kind: control.KindText}
+	if fs.NArg() > 0 || *current {
+		return pasteCopyOn(h, fs.Args(), *image, stdout, stderr)
+	}
 	if *typed {
 		h.Method = group.PasteByTyping
 	}
@@ -164,4 +172,34 @@ func pasteLine(p *control.Paste) string {
 		return line + " Nothing here can paste yet: the desktop connector, the Mac app or the tmux and console helpers do it."
 	}
 	return line
+}
+
+// pasteCopyOn has the member that h names paste images or files: paths,
+// copied to the group first, as an image with image, or else the group's
+// current copy.
+func pasteCopyOn(h control.Header, paths []string, image bool, stdout, stderr io.Writer) int {
+	if len(paths) > 0 {
+		typ := ""
+		if image {
+			ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(paths[0])), ".")
+			if ext != "png" && ext != "jpg" && ext != "jpeg" {
+				return fail(stderr, fmt.Errorf("-image takes a .png or .jpg file, not %s", paths[0]))
+			}
+			typ = ext
+		}
+		if code := copyMedia(paths, typ, "", stdout, stderr); code != 0 {
+			return code
+		}
+	}
+	h.Kind = control.KindMedia
+	c, err := control.DialFor(h.Op)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	defer c.Close()
+	if _, err := c.Do(&control.Message{Header: h}); err != nil {
+		return fail(stderr, err)
+	}
+	fmt.Fprintf(stdout, "Pasted on %s.\n", h.Device)
+	return 0
 }

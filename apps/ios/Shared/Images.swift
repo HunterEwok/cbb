@@ -16,9 +16,12 @@ enum Images {
     /// default limit at home.
     static let maxCopy: Int64 = 100 << 20
 
-    static let types = ["image/png", "image/jpeg"]
+    static let types = ["image/gif", "image/png", "image/jpeg"]
 
-    /// The image part of a media event, PNG before JPEG, or nil for files
+    /// The uniform types of the image types the group carries.
+    static let utis: [(UTType, String)] = [(.gif, "image/gif"), (.png, "image/png"), (.jpeg, "image/jpeg")]
+
+    /// The image part of a media event, GIF before PNG before JPEG, or nil for files
     /// and other data.
     static func part(of m: Media.Manifest?) -> Media.Part? {
         guard let m, !m.isFiles else { return nil }
@@ -39,21 +42,16 @@ enum Images {
         var key: String { Images.key(Data(SHA256.hash(data: data))) }
     }
 
-    /// The image on the pasteboard as PNG or JPEG: HEIC and other formats
-    /// become JPEG, or PNG when they have transparency. nil when there is
-    /// none, or it is too large.
+    /// The image on the pasteboard as GIF, PNG or JPEG: HEIC and other
+    /// formats become JPEG, or PNG when they have transparency. nil when
+    /// there is none, or it is too large.
     static func read(_ pb: UIPasteboard) -> Copied? {
         guard pb.hasImages else { return nil }
-        let copied: Copied?
-        if let d = pb.data(forPasteboardType: UTType.png.identifier) {
-            copied = Copied(type: "image/png", data: d)
-        } else if let d = pb.data(forPasteboardType: UTType.jpeg.identifier) {
-            copied = Copied(type: "image/jpeg", data: d)
-        } else if let image = pb.image {
-            copied = convert(image)
-        } else {
-            copied = nil
+        var copied: Copied?
+        for (uti, type) in utis where copied == nil {
+            if let d = pb.data(forPasteboardType: uti.identifier) { copied = Copied(type: type, data: d) }
         }
+        if copied == nil, let image = pb.image { copied = convert(image) }
         return copied.flatMap { Int64($0.data.count) <= maxCopy ? $0 : nil }
     }
 
@@ -69,10 +67,10 @@ enum Images {
         return image.jpegData(compressionQuality: 0.9).map { Copied(type: "image/jpeg", data: $0) }
     }
 
-    /// The image an item provider of Share holds, as PNG or JPEG, like
-    /// read; nil when it holds none, or it is too large.
+    /// The image an item provider of Share holds, as GIF, PNG or JPEG,
+    /// like read; nil when it holds none, or it is too large.
     static func load(_ p: NSItemProvider) async -> Copied? {
-        for (uti, type) in [(UTType.png, "image/png"), (UTType.jpeg, "image/jpeg")] where p.hasItemConformingToTypeIdentifier(uti.identifier) {
+        for (uti, type) in utis where p.hasItemConformingToTypeIdentifier(uti.identifier) {
             if let d = await data(p, uti), Int64(d.count) <= maxCopy { return Copied(type: type, data: d) }
         }
         guard p.hasItemConformingToTypeIdentifier(UTType.image.identifier), let d = await data(p, .image), let image = UIImage(data: d) else { return nil }
@@ -90,7 +88,7 @@ enum Images {
     /// plain-text alternative, next to it; local only, so Universal
     /// Clipboard does not carry it back to a Mac of the group.
     static func write(_ data: Data, type: String, alt: String) {
-        let uti = type == "image/png" ? UTType.png.identifier : UTType.jpeg.identifier
+        let uti = (utis.first { $0.1 == type }?.0 ?? .jpeg).identifier
         var item: [String: Any] = [uti: data]
         if !alt.isEmpty { item[UTType.plainText.identifier] = alt }
         UIPasteboard.general.setItems([item], options: [.localOnly: true])

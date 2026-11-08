@@ -237,6 +237,8 @@ func SavedName(p control.Part) (string, error) {
 		return "image.png", nil
 	case clip.TypeJPEG:
 		return "image.jpg", nil
+	case clip.TypeGIF:
+		return "image.gif", nil
 	case clip.TypeHTML:
 		return "clipboard.html", nil
 	}
