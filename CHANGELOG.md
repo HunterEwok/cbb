@@ -14,7 +14,8 @@ All notable changes to cbb are documented in this file. The format follows
   `.cbb speed` (`cbb next speed`, `speed-in`) finds the fastest speed of the Pi's line that
   keeps 80K whole each way, from 2M down a step at a time. `.cbb install` and `update` go the
   same way: the site's files through the ESP from 460800, and the Pi's `cbb` from 2M, down
-  to the first speed that brings them whole; the Next's UART divisor is rounded, not cut. The install
+  to the first speed that brings them whole; the Next's UART divisor is rounded, not cut.
+  The Next checks the files' SHA-256 in assembly, some five times faster than in C. The install
   fetches the Pi's `cbb` gzipped (`cbb.gz`, under half the bytes), which the Pi unpacks, and
   asks the site for 56K at a time instead of 8K. `.cbb net on` no longer waits out a second
   of silence after each step.

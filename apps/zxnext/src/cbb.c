@@ -38,7 +38,8 @@
 // The ROM's frame counter, 50 a second while interrupts run.
 #define FRAMES_LO (*(volatile uint16_t *)23672)
 
-static uint8_t text[MAX_TEXT];
+// Not static: sha256.asm keeps its scratch in the upper half.
+uint8_t text[MAX_TEXT];
 static char line[200];
 static uint8_t debug;
 
@@ -2739,7 +2740,8 @@ uint32_t sha_run(void)
     errno = 0;
     fh = esx_f_open(sha_path, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
     if (errno) return 0;
-    while ((n = esx_f_read(fh, text, CHUNK)) > 0) {
+    // Half of text[] at a time: the other is sha256.asm's.
+    while ((n = esx_f_read(fh, text, MAX_TEXT / 2)) > 0) {
         if (sha_digest) sha256_add(&sha_state, text, n);
         size += n;
     }

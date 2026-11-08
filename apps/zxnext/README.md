@@ -140,7 +140,8 @@ replaces the one it runs as, `C:/DOT/CBB` first.
 **What is checked.** The files come over plain HTTP, since neither `.http` nor the ESP has
 TLS. So each `CBB` carries the size and SHA-256 of the `CBB.OVL`, `CBB.DRV` and the Pi's
 `cbb` it was built with, and installs only those, whatever the site or the network serves: the Next
-checks the overlay and the driver, and the Pi checks its `cbb` with `sha256sum` before it replaces the old
+checks the overlay and the driver (SHA-256's compression in assembly, `src/sha256.asm`; the C one
+in `src/sha256.c` is the host tests'), and the Pi checks its `cbb` with `sha256sum` before it replaces the old
 one. What `CBB` itself is, nothing on the Next can check: the one `.http` fetches is as
 trustworthy as the network it came over. For an installation that does not trust the
 network, take `CBB` from the release instead, whose files are signed
