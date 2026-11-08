@@ -5,7 +5,6 @@ package service
 
 import (
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -286,14 +285,11 @@ func TestPasteLineBreaks(t *testing.T) {
 // refuses a command signed before it started, which it may have carried
 // out before.
 func TestCommandSignedBeforeStart(t *testing.T) {
-	var ahead atomic.Int64
-	ahead.Store(int64(time.Minute)) // deck starts a minute "later"
+	clock := newTestClock(t, time.Minute) // deck starts a minute "later"
 	var h hub
 	pi := startService(t, &h, "pi")
-	deck := startWith(t, &h, "deck", "linux", func(c *Config) {
-		c.now = func() time.Time { return time.Now().Add(time.Duration(ahead.Load())) }
-	})
-	ahead.Store(0)
+	deck := startEnv(t, &h, "deck", func(c *Config) { c.now = clock.now }, clock.env())
+	clock.set(t, 0)
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 	if _, err := pi.do(t, control.Header{Op: control.OpReceive, Name: "off", Device: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "started after the command was signed") {

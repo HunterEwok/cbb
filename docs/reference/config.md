@@ -105,6 +105,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_INTEROP_OUT` | the Swift and Kotlin kits' tests, Go's interop tests | A directory where the kits write fresh interop vectors and Go reads them; without it Go reads `testdata/interop`. |
 | `CBB_VERDICTS` | the verdict tests of all four implementations (`TestVerdicts`, `command::verdicts`, `VerdictTest`, `VerdictTests`) | A corpus of `tools/difffuzz gen` to write the verdicts on ([differential fuzzing](../differential.md)); without it each runs on a small corpus of its own. |
 | `CBB_VERDICTS_OUT` | the same tests | The file the verdicts go to, one line per case. |
+| `CBB_TEST_CLOCK` | the Rust service, in the Go service's tests | A file holding the milliseconds the service's wall clock is moved by, read each time; the tests write it to move the clock while the service runs (as the Go service's settings for tests). Never set by hand. |
 | `CBB_UPDATE_VECTORS` | the lite core's keyboard tests | `1` writes the keyboard layouts' vectors again (`cargo test -p cbb-core keyboard`). |
 | `CBB_ARCH` | the build of `cbb` in Rust (`member/packaging/build.sh`) | The architecture as the release's archives name it (`amd64`, `arm64`, `armv7`, `armv6`, `mips`, `mipsle`), which `cbb update` downloads for; set by `build.sh`, and without it the one Rust names. |
 | `CBB_SOURCE` | the Rust core's build | The commit the core is built from, which its `version` call names ([the core's entry point](../core-api.md)); empty when unset. |

@@ -15,7 +15,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use cbb_core::certs::{hex, sha256};
 use cbb_core::release::{self, File, Release, Seen};
@@ -115,7 +115,7 @@ pub fn due(st: &State, now_ms: i64) -> bool {
 }
 
 pub fn now_ms() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+    crate::uptime::wall_ms()
 }
 
 /// The release's archive for this device and the installed cbb

@@ -2122,3 +2122,32 @@ func startRust(t *testing.T, bin string, s *testService) *testService {
 	}()
 	return r
 }
+
+// testClock moves a service's wall clock: the Go service's Config.now,
+// and the Rust service's through the file CBB_TEST_CLOCK names, which it
+// reads each time, so that a test can move it while the service runs.
+type testClock struct {
+	file  string
+	ahead atomic.Int64 // nanoseconds
+}
+
+func newTestClock(t *testing.T, ahead time.Duration) *testClock {
+	t.Helper()
+	c := &testClock{file: filepath.Join(t.TempDir(), "clock")}
+	c.set(t, ahead)
+	return c
+}
+
+// set moves the clock to ahead of the real time.
+func (c *testClock) set(t *testing.T, ahead time.Duration) {
+	t.Helper()
+	c.ahead.Store(int64(ahead))
+	if err := os.WriteFile(c.file, []byte(strconv.FormatInt(ahead.Milliseconds(), 10)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (c *testClock) now() time.Time { return time.Now().Add(time.Duration(c.ahead.Load())) }
+
+// env is the Rust service's environment for the clock.
+func (c *testClock) env() string { return "CBB_TEST_CLOCK=" + c.file }
