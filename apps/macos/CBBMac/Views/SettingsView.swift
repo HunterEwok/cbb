@@ -83,12 +83,16 @@ struct SettingsView: View {
                 } header: { Text("Advanced") }
             }
             Section {
+                // The whole row takes the clicks, so that a short version
+                // is as easy to hit as a long one.
                 LabeledContent {
                     Text(verbatim: model.status?.version ?? "–").monospaced()
-                        .onTapGesture { versionClicks += 1 }
-                        .accessibilityIdentifier("version")
-                        .accessibilityAddTraits(.isButton)
                 } label: { Text("Version") }
+                    .contentShape(Rectangle())
+                    .onTapGesture { versionClicks += 1 }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("version")
+                    .accessibilityAddTraits(.isButton)
                 // Seven clicks on the version show the switch, as on the
                 // phones; it stays in sight while it is on.
                 if versionClicks >= 7 || errorDetails {

@@ -64,7 +64,9 @@ final class MacUITests: XCTestCase {
                 let version = app.descendants(matching: .any).matching(identifier: "version").firstMatch
                 XCTAssertTrue(version.waitForExistence(timeout: 10), "Settings has no version in \(app.debugDescription)")
                 XCTAssertFalse(toggle.exists, "the error details switch shows before seven clicks")
-                for _ in 0..<7 { version.click() }
+                // A click at the row's centre: the row is no control of its own,
+                // which XCUITest may call not hittable.
+                for _ in 0..<7 { version.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click() }
             }
             XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Settings has no error details switch in \(app.debugDescription)")
             let on = (toggle.value as? Int ?? Int(toggle.value as? String ?? "") ?? -1) == 1
