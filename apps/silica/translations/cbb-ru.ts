@@ -335,6 +335,22 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Hand the group over</source>
+        <translation>Передать группу</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>Передаём группу: %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>Группа передана</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>Его заявка забирает группу сразу</translation>
+    </message>
+    <message>
         <source>Take the group over</source>
         <translation>Забрать группу</translation>
     </message>
@@ -441,6 +457,62 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>Заявка на захват группы ждёт</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>Нисколько</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>1 час</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>1 день</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 дня</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 дней</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>Какие ключи может хранить админ</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>У некоторых админов ключи слабее; они остаются, пока их не удалят</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>Только проверенное железо</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>Железо</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>Железо или файл</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>Создан</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Нет</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>Bluetooth-клавиатура</translation>
@@ -1199,6 +1271,49 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Когда телефон не в домашней сети, он синхронизируется через туннель WireGuard вашего собственного хаба: компьютера группы, настроенного командой cbb global hub. Его порт доступен из интернета, но только через WireGuard с ключами группы. Хаб ответит этому телефону, когда тот в следующий раз подключится дома. Больше никуда ничего не уходит, а без туннеля нет и соединения. При выключении телефон забывает свой ключ туннеля.</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>Удалить ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>Удаляем ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>Создать новый ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>Создать ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>Заменяем ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>Запишите ключ или распечатайте эту страницу и храните в надёжном месте. Он показывается только один раз.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>У группы есть ключ восстановления. С ним компьютер группы или новый телефон заберёт группу, если этот телефон потеряется.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>Ключ восстановления позволит компьютеру группы или новому телефону забрать группу, если этот телефон потеряется. Потяните вниз, чтобы создать его.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>Я записал ключ</translation>
     </message>
 </context>
 </TS>

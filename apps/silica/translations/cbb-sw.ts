@@ -335,6 +335,22 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Hand the group over</source>
+        <translation>Kabidhi kikundi</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>Inakabidhi kikundi kwa %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>Kikundi kimekabidhiwa</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>Ombi lake linachukua kikundi mara moja</translation>
+    </message>
+    <message>
         <source>Take the group over</source>
         <translation>Chukua kikundi</translation>
     </message>
@@ -441,6 +457,62 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>Ombi la kuchukua kikundi linasubiri</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>Bila kusubiri</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>Saa 1</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>Siku 1</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>Siku 3</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>Siku 7</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>Funguo ambazo msimamizi anaweza kuweka</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>Baadhi ya wasimamizi wana funguo dhaifu zaidi; wanabaki hadi waondolewe</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>Vifaa vilivyothibitishwa tu</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>Vifaa</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>Vifaa au faili</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>Umeundwa</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Hakuna</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>Kibodi ya Bluetooth</translation>
@@ -1199,6 +1271,49 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Simu isipokuwa kwenye mtandao wa nyumbani, husawazisha kupitia handaki la WireGuard la kitovu chako mwenyewe, kompyuta ya kikundi iliyowekwa kwa cbb global hub; mlango wake unafikika kutoka intaneti, lakini kupitia WireGuard yenye funguo za kikundi pekee. Kitovu hujibu simu hii itakapounganika nyumbani wakati ujao. Hakuna kinachoenda kwingine, na bila handaki hakuna muunganisho. Kuzima husahaulisha simu hii ufunguo wake wa handaki.</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>Ondoa ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>Inaondoa ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>Unda ufunguo mpya wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>Unda ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>Inabadilisha ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>Andika ufunguo au chapisha ukurasa huu, na uuhifadhi salama. Unaonyeshwa mara moja tu.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>Kikundi kina ufunguo wa kurejesha. Kwa huo kompyuta ya kikundi au simu mpya huchukua kikundi simu hii ikipotea.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>Ufunguo wa kurejesha huruhusu kompyuta ya kikundi au simu mpya kuchukua kikundi simu hii ikipotea. Vuta chini kuunda mmoja.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>Nimeuandika</translation>
     </message>
 </context>
 </TS>

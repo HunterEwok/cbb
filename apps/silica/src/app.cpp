@@ -302,6 +302,19 @@ void App::resolve(const QStringList &records)
 
 void App::manage(const QString &action, const QString &device, const QString &name, int forMinutes)
 {
+    QJsonObject extra{
+        {QStringLiteral("name"), name},
+        {QStringLiteral("for_ms"), double(qint64(forMinutes) * 60 * 1000)},
+    };
+    // A resolve's records come joined in name, as QML hands them.
+    if (action == QStringLiteral("resolve"))
+        extra.insert(QStringLiteral("records"), QJsonArray::fromStringList(name.split(QLatin1Char(','), QString::SkipEmptyParts)));
+    runManage(action, device, extra, nullptr);
+}
+
+void App::runManage(const QString &action, const QString &device, const QJsonObject &extra,
+                    std::function<void(const QJsonObject &)> done)
+{
     if (!m_member.isAdmin() || !m_node.handle()) {
         show(Errors::shown({QCoreApplication::translate("Errors", "Only an admin of the group changes its devices."),
                             QStringLiteral("manage: not an admin or no member")}));
@@ -314,19 +327,14 @@ void App::manage(const QString &action, const QString &device, const QString &na
     emit keyChanged();
     auto *thread = new ManageThread;
     thread->member = m_node.handle();
-    thread->request = QJsonObject{
-        {QStringLiteral("action"), action},
-        {QStringLiteral("device"), device},
-        {QStringLiteral("name"), name},
-        {QStringLiteral("for_ms"), double(qint64(forMinutes) * 60 * 1000)},
-    };
-    // A resolve's records come joined in name, as QML hands them.
-    if (action == QStringLiteral("resolve"))
-        thread->request.insert(QStringLiteral("records"), QJsonArray::fromStringList(name.split(QLatin1Char(','), QString::SkipEmptyParts)));
+    thread->request = extra;
+    thread->request.insert(QStringLiteral("action"), action);
+    thread->request.insert(QStringLiteral("device"), device);
     if (!m_member.adminCa.isEmpty() && !m_member.root)
         thread->request.insert(QStringLiteral("admin_ca"), QString::fromLatin1(m_member.adminCa.toBase64()));
-    connect(thread, &QThread::finished, this, [this, thread, action, device]() {
+    connect(thread, &QThread::finished, this, [this, thread, action, device, done]() {
         const Failure failure = thread->failure;
+        const QJsonObject answer = thread->answer;
         thread->deleteLater();
         m_busy = false;
         emit keyChanged();
@@ -337,10 +345,69 @@ void App::manage(const QString &action, const QString &device, const QString &na
         }
         Errors::log(QStringLiteral("manage: %1 %2").arg(action, device));
         show(QString());
+        if (done)
+            done(answer);
         m_node.pollDevices();
         emit managed(action, device, true);
     });
     thread->start();
+}
+
+void App::setTakeoverDelay(int hours)
+{
+    if (!m_member.root)
+        return;
+    runManage(QStringLiteral("takeover_delay"), QString(),
+              QJsonObject{{QStringLiteral("delay_ms"), double(qint64(hours) * 3600 * 1000)}}, nullptr);
+}
+
+void App::setGroupKeyLevel(const QString &level)
+{
+    if (!m_member.root)
+        return;
+    runManage(QStringLiteral("key_level"), QString(), QJsonObject{{QStringLiteral("level"), level}},
+              [this](const QJsonObject &a) {
+                  m_belowLevel = a.value(QStringLiteral("below")).toVariant().toStringList();
+                  emit recoveryChanged();
+              });
+}
+
+void App::handOver(const QString &device)
+{
+    if (!m_member.root)
+        return;
+    runManage(QStringLiteral("hand_over"), device, QJsonObject(), nullptr);
+}
+
+void App::makeRecovery()
+{
+    if (!m_member.root)
+        return;
+    runManage(QStringLiteral("make_recovery"), QString(), QJsonObject(), [this](const QJsonObject &a) {
+        m_recoveryText = a.value(QStringLiteral("text")).toString();
+        m_recoveryModules.clear();
+        for (const QJsonValue &row : a.value(QStringLiteral("modules")).toArray())
+            m_recoveryModules.append(row.toString());
+        emit recoveryChanged();
+    });
+}
+
+void App::forgetRecovery()
+{
+    // The sheet is shown once; nothing of the key stays in the app.
+    m_recoveryText.fill(QLatin1Char('0'));
+    m_recoveryText.clear();
+    for (QString &row : m_recoveryModules)
+        row.fill(QLatin1Char('0'));
+    m_recoveryModules.clear();
+    emit recoveryChanged();
+}
+
+void App::removeRecovery()
+{
+    if (!m_member.root)
+        return;
+    runManage(QStringLiteral("remove_recovery"), QString(), QJsonObject(), nullptr);
 }
 
 void App::renew()

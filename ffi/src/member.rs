@@ -23,6 +23,7 @@ use cbb_core::error::{Error, Result};
 use cbb_core::identity::Identity;
 use cbb_core::manage::{Change, Order, Signer};
 use cbb_core::media::Part;
+use cbb_core::root::{self, Setting};
 use cbb_core::takeover::How;
 use cbb_core::wire::CommandResult;
 use cbb_lite::content::Source;
@@ -207,6 +208,13 @@ struct ManageArgs {
     store: String,
     #[serde(with = "certs::b64::opt", default)]
     seal: Option<Vec<u8>>,
+    /// With takeover_delay: how long a claim from a lost root waits, in
+    /// milliseconds.
+    #[serde(default)]
+    delay_ms: Option<i64>,
+    /// With key_level: proven, hardware or files.
+    #[serde(default)]
+    level: String,
 }
 
 fn hardware() -> String {
@@ -684,6 +692,8 @@ impl Member {
                 Ok(json!({ "peers": ps.iter().map(peer_json).collect::<Vec<_>>() }))
             }
             "records" => Ok(json!({ "records": n.records() })),
+            // The root's settings: {delay_ms, key_level, recovery, handed_to}.
+            "root_view" => Ok(serde_json::to_value(n.root_view()).map_err(|e| Error::msg(e.to_string()))?),
             // The phone's own part.
             "answer" => {
                 let a: AnswerArgs = args(a)?;
@@ -895,6 +905,39 @@ impl Member {
                 return Err(Error::msg("the key does not belong to the CA this phone signs with"));
             }
             let s = Signer { ca: &ca, key: &key, me: &me };
+            // The root's own records (cbb_core::root).
+            let rooted = |make: &dyn Fn(&cbb_core::group::Records, i64) -> Result<Record>| -> Result<Value> {
+                self.node.add_root_record(make)?;
+                Ok(json!({}))
+            };
+            match a.action.as_str() {
+                "takeover_delay" => {
+                    let ms = a.delay_ms.ok_or_else(|| Error::msg("the action needs delay_ms"))?;
+                    return rooted(&|rs, now| root::settings(rs, &s, &Setting::Delay(ms), now));
+                }
+                "key_level" => {
+                    rooted(&|rs, now| root::settings(rs, &s, &Setting::KeyLevel(&a.level), now))?;
+                    let below = self.node.below_level(&a.level);
+                    return Ok(json!({ "below": below }));
+                }
+                "hand_over" => return rooted(&|rs, now| root::hand_over(rs, &s, &a.device, now)),
+                "remove_recovery" => return rooted(&|rs, now| root::remove_recovery(rs, &s, now)),
+                // The sheet goes to the app once, with its QR code's
+                // modules to show; nothing of the key stays here.
+                "make_recovery" => {
+                    let made = std::cell::RefCell::new(None);
+                    rooted(&|rs, now| {
+                        let m = root::make_recovery(rs, &s, now)?;
+                        let r = m.record.clone();
+                        *made.borrow_mut() = Some(m);
+                        Ok(r)
+                    })?;
+                    let m = made.into_inner().ok_or_else(|| Error::msg("the recovery key was not made"))?;
+                    let modules = crate::join::modules(&m.qr)?;
+                    return Ok(json!({ "qr": m.qr, "text": m.text, "modules": modules }));
+                }
+                _ => {}
+            }
             let order = |o: Order| -> Result<Value> {
                 let res = self.node.order(&s, &a.device, &o, Duration::from_millis(a.timeout_ms.min(60_000)))?;
                 Ok(json!({ "result": res }))

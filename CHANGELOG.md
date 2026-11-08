@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The Aurora app's root sets how long a claim to take the group over waits and which keys an
+  admin may keep, hands the group to an admin (its claim then takes effect at once), and makes
+  or removes the group's recovery key, whose sheet it shows once. The core builds and signs
+  these records (`cbb_core::root`, `cbb_member_manage`'s `takeover_delay`, `key_level`,
+  `hand_over`, `make_recovery` and `remove_recovery`, and the member's `root_view`).
 - The ZX Spectrum Next shows the group's latest image: `.cbb show` asks the lite member on the
   Pi (`cbb next image`), which fits the PNG or JPEG to Layer 2 in 320×256 with 256 colours or
   640×256 with 16, whichever shows it closer, with dithering from the Next's 512 colours; the

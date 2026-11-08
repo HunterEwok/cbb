@@ -335,6 +335,22 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Hand the group over</source>
+        <translation>להעביר את הקבוצה</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>מעביר את הקבוצה אל %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>הקבוצה הועברה</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>הבקשה שלו משתלטת על הקבוצה מיד</translation>
+    </message>
+    <message>
         <source>Take the group over</source>
         <translation>השתלטות על הקבוצה</translation>
     </message>
@@ -441,6 +457,62 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>בקשה להשתלט על הקבוצה ממתינה</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>ללא המתנה</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>שעה אחת</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>יום אחד</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 ימים</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 ימים</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>מפתחות שמנהל רשאי לשמור</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>לחלק מהמנהלים יש מפתחות חלשים יותר; הם נשארים עד שיוסרו</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>חומרה מאומתת בלבד</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>חומרה</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>חומרה או קובץ</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>מפתח שחזור</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>נוצר</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>אין</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>מקלדת בלוטות'</translation>
@@ -1199,6 +1271,49 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>כשהטלפון אינו ברשת הביתית, הוא מסתנכרן דרך מנהרת ה-WireGuard של הרכזת שלך, מחשב בקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם מפתחות הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. כיבוי גורם לטלפון לשכוח את מפתח המנהרה שלו.</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>הסרת מפתח השחזור</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>מסיר את מפתח השחזור</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>יצירת מפתח שחזור חדש</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>יצירת מפתח שחזור</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>מחליף את מפתח השחזור</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>מפתח שחזור</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>רשמו את המפתח או הדפיסו את הדף ושמרו אותו במקום בטוח. הוא מוצג פעם אחת בלבד.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>לקבוצה יש מפתח שחזור. בעזרתו מחשב של הקבוצה או טלפון חדש משתלטים על הקבוצה אם הטלפון הזה אובד.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>מפתח שחזור מאפשר למחשב של הקבוצה או לטלפון חדש להשתלט על הקבוצה אם הטלפון הזה אובד. משכו למטה כדי ליצור אחד.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>רשמתי אותו</translation>
     </message>
 </context>
 </TS>

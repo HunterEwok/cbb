@@ -16,8 +16,11 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QVariantList>
+
+#include <functional>
 
 class App : public QObject
 {
@@ -58,6 +61,14 @@ class App : public QObject
     // group's order".
     Q_PROPERTY(bool hasArrangement READ hasArrangement NOTIFY arrangementChanged)
     Q_PROPERTY(bool languagePending READ languagePending NOTIFY settingsChanged)
+    // The recovery sheet the root just made, shown once (makeRecovery):
+    // the key as groups of four and the QR code's modules, a string of '1'
+    // (dark) and '0' a row; empty when there is none to show.
+    Q_PROPERTY(QString recoveryText READ recoveryText NOTIFY recoveryChanged)
+    Q_PROPERTY(QStringList recoveryModules READ recoveryModules NOTIFY recoveryChanged)
+    // The admins and hubs whose keys the key level set last does not let
+    // in, by device ID: they stay until the user removes them.
+    Q_PROPERTY(QStringList belowLevel READ belowLevel NOTIFY recoveryChanged)
 
 public:
     explicit App(QObject *parent = nullptr);
@@ -142,6 +153,21 @@ public:
     Q_INVOKABLE void takeOver(const QString &device);
     // The root's decision on an alert: voids the records it names.
     Q_INVOKABLE void resolve(const QStringList &records);
+    // The root's own records, built and signed in the core (cbb_core::root)
+    // with the root key, off the GUI thread: how long a claim from a lost
+    // root waits, in hours; which keys may be admins (proven, hardware or
+    // files); handing the group to the admin device, whose claim then takes
+    // effect at once; making the recovery key, whose sheet recoveryText and
+    // recoveryModules show once, until forgetRecovery; and removing it.
+    Q_INVOKABLE void setTakeoverDelay(int hours);
+    Q_INVOKABLE void setGroupKeyLevel(const QString &level);
+    Q_INVOKABLE void handOver(const QString &device);
+    Q_INVOKABLE void makeRecovery();
+    Q_INVOKABLE void forgetRecovery();
+    Q_INVOKABLE void removeRecovery();
+    QString recoveryText() const { return m_recoveryText; }
+    QStringList recoveryModules() const { return m_recoveryModules; }
+    QStringList belowLevel() const { return m_belowLevel; }
     // Leaves the group on this phone: stops the member and deletes the
     // membership. The group still lists the phone until an admin removes it.
     Q_INVOKABLE void leave();
@@ -155,9 +181,14 @@ signals:
     void managed(const QString &action, const QString &device, bool ok);
     void claimChanged();
     void arrangementChanged();
+    void recoveryChanged();
 
 private:
     void show(const QString &error);
+    // Signs action for device with extra in the request (manage's), then
+    // calls done with the member's answer when it worked.
+    void runManage(const QString &action, const QString &device, const QJsonObject &extra,
+                   std::function<void(const QJsonObject &)> done);
     // Starts the member once the phone has both its key and a group.
     void startMember();
     QString phoneName() const;
@@ -197,4 +228,7 @@ private:
     QString m_startLanguage;
     int m_arrangement = 0;
     QStringList m_arrangeIds; // the devices arranged was last given
+    QString m_recoveryText;
+    QStringList m_recoveryModules;
+    QStringList m_belowLevel;
 };

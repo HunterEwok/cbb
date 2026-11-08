@@ -967,6 +967,70 @@ func TestFFIPhoneRoot(t *testing.T) {
 	if got := manage(`{"action":"make_admin","device":"` + string(j.ID) + `"}`); !strings.Contains(got, "not connected") {
 		t.Fatalf("making a computer that is not running an admin: %s", got)
 	}
+	// The root's own records, built and signed in the core (cbb_core::root).
+	if got := manage(`{"action":"takeover_delay","delay_ms":3600000}`); got != `{"ok":{}}` {
+		t.Fatalf("setting the takeover delay: %s", got)
+	}
+	if got := manage(`{"action":"takeover_delay","delay_ms":-1}`); !strings.Contains(got, "from 0 to 7 days") {
+		t.Fatalf("a negative takeover delay: %s", got)
+	}
+	if got := manage(`{"action":"key_level","level":"files"}`); got != `{"ok":{"below":[]}}` {
+		t.Fatalf("setting the key level: %s", got)
+	}
+	if got := manage(`{"action":"hand_over","device":"` + string(j.ID) + `"}`); !strings.Contains(got, "no admin") {
+		t.Fatalf("handing the group to a computer that is no admin: %s", got)
+	}
+	if got := manage(`{"action":"remove_recovery"}`); !strings.Contains(got, "no recovery key") {
+		t.Fatalf("removing a recovery key the group does not have: %s", got)
+	}
+	var sheet struct {
+		OK struct {
+			QR      string   `json:"qr"`
+			Text    string   `json:"text"`
+			Modules []string `json:"modules"`
+		} `json:"ok"`
+	}
+	if got := manage(`{"action":"make_recovery"}`); json.Unmarshal([]byte(got), &sheet) != nil ||
+		!strings.HasPrefix(sheet.OK.QR, "cbb://recover?g="+made[1]+"&") || len(sheet.OK.Text) != 69 || len(sheet.OK.Modules) == 0 {
+		t.Fatalf("making the recovery key: %s", got)
+	}
+	fmt.Fprintln(in, `CALL {"op":"records"}`)
+	var recs struct {
+		OK struct {
+			Records []struct {
+				Body []byte `json:"body"`
+			} `json:"records"`
+		} `json:"ok"`
+	}
+	if err := json.Unmarshal([]byte(next("ANSWER ")), &recs); err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]bool{}
+	for _, r := range recs.OK.Records {
+		var b struct {
+			Type  string `json:"type"`
+			Delay int64  `json:"takeover_delay_ms"`
+			Level string `json:"key_level"`
+		}
+		if err := json.Unmarshal(r.Body, &b); err != nil {
+			t.Fatal(err)
+		}
+		kinds[b.Type] = true
+		// The key level's settings record keeps the delay set before it.
+		if b.Type == "settings" && b.Level == "files" && b.Delay != 3600000 {
+			t.Fatalf("the key level's settings record dropped the delay: %+v", b)
+		}
+	}
+	if !kinds["settings"] || !kinds["recovery"] {
+		t.Fatalf("the records hold no settings or recovery record: %v", kinds)
+	}
+	fmt.Fprintln(in, `CALL {"op":"root_view"}`)
+	if got := next("ANSWER "); got != `{"ok":{"delay_ms":3600000,"handed_to":null,"key_level":"files","recovery":true}}` {
+		t.Fatalf("the root's settings: %s", got)
+	}
+	if got := manage(`{"action":"remove_recovery"}`); got != `{"ok":{}}` {
+		t.Fatalf("removing the recovery key: %s", got)
+	}
 	// A group made a moment ago stops nothing.
 	fmt.Fprintln(in, `CALL {"op":"alerts"}`)
 	if got := next("ANSWER "); got != `{"ok":{"alerts":[]}}` {

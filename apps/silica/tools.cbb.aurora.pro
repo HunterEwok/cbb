@@ -101,6 +101,7 @@ DISTFILES += \
     qml/pages/DevicePage.qml \
     qml/pages/AlertsCard.qml \
     qml/pages/RenameDevicePage.qml \
+    qml/pages/RecoveryPage.qml \
     qml/pages/DeviceTile.qml \
     qml/pages/DeviceRow.qml \
     qml/pages/DeviceItems.qml \

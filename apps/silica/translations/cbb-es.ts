@@ -335,6 +335,22 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Hand the group over</source>
+        <translation>Entregar el grupo</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>Entregando el grupo a %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>El grupo está entregado</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>Su solicitud toma el grupo de inmediato</translation>
+    </message>
+    <message>
         <source>Take the group over</source>
         <translation>Tomar el grupo</translation>
     </message>
@@ -441,6 +457,62 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>Una solicitud para tomar el grupo espera</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>Nada</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>1 hora</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>1 día</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 días</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 días</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>Claves que puede guardar un administrador</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>Algunos administradores guardan claves más débiles; siguen hasta que se eliminen</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>Solo hardware verificado</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>Hardware</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>Hardware o un archivo</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>Creada</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Ninguna</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>Teclado Bluetooth</translation>
@@ -1199,6 +1271,49 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Cuando el teléfono no está en la red de casa, se sincroniza por el túnel WireGuard de tu propio hub, un ordenador del grupo configurado con cbb global hub; su puerto es accesible desde internet, pero solo por WireGuard con las claves del grupo. El hub responde a este teléfono la próxima vez que se conecte en casa. Nada va a ningún otro sitio y, sin el túnel, no hay conexión. Al desactivarlo, este teléfono olvida su clave del túnel.</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>Eliminar la clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>Eliminando la clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>Crear una nueva clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>Crear una clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>Reemplazando la clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>Anota la clave o imprime esta página y guárdala en un lugar seguro. Solo se muestra una vez.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>El grupo tiene una clave de recuperación. Con ella, un ordenador del grupo o un teléfono nuevo toma el grupo si se pierde este teléfono.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>Una clave de recuperación permite que un ordenador del grupo o un teléfono nuevo tome el grupo si se pierde este teléfono. Desliza hacia abajo para crear una.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>Ya la anoté</translation>
     </message>
 </context>
 </TS>

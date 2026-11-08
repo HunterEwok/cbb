@@ -335,6 +335,22 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Hand the group over</source>
+        <translation>تسليم المجموعة</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>جارٍ تسليم المجموعة إلى %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>تم تسليم المجموعة</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>طلبه يستولي على المجموعة فورًا</translation>
+    </message>
+    <message>
         <source>Take the group over</source>
         <translation>تولَّ المجموعة</translation>
     </message>
@@ -441,6 +457,62 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>ينتظر طلب الاستيلاء على المجموعة</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>لا وقت</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>ساعة واحدة</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>يوم واحد</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 أيام</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 أيام</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>المفاتيح التي يجوز للمشرف حفظها</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>بعض المشرفين يحفظون مفاتيح أضعف؛ ويبقون حتى تتم إزالتهم</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>عتاد مُثبَت فقط</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>عتاد</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>عتاد أو ملف</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>تم إنشاؤه</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>لا يوجد</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>لوحة مفاتيح بلوتوث</translation>
@@ -1199,6 +1271,49 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>عندما لا يكون الهاتف على الشبكة المنزلية، يُزامن عبر نفق WireGuard الخاص بالمحور الخاص بك، وهو حاسوب من المجموعة مُعدّ باستخدام cbb global hub؛ منفذه متاح من الإنترنت، ولكن فقط عبر WireGuard بمفاتيح المجموعة. يردّ المحور على هذا الهاتف في المرة التالية التي يتصل فيها في المنزل. لا يذهب شيء إلى أي مكان آخر، ومن دون النفق لا يوجد اتصال. إيقافه يجعل هذا الهاتف ينسى مفتاح النفق الخاص به.</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>إزالة مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>جارٍ إزالة مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>إنشاء مفتاح استرداد جديد</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>إنشاء مفتاح استرداد</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>جارٍ استبدال مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>اكتب المفتاح أو اطبع هذه الصفحة واحفظه في مكان آمن. يُعرض مرة واحدة فقط.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>لدى المجموعة مفتاح استرداد. به يستولي حاسوب من المجموعة أو هاتف جديد على المجموعة إذا فُقد هذا الهاتف.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>يتيح مفتاح الاسترداد لحاسوب من المجموعة أو هاتف جديد الاستيلاء على المجموعة إذا فُقد هذا الهاتف. اسحب للأسفل لإنشائه.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>لقد كتبته</translation>
     </message>
 </context>
 </TS>
