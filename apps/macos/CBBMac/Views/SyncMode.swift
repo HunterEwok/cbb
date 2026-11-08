@@ -2,19 +2,17 @@
 
 import SwiftUI
 
-/// What moves between a device's clipboard and the group (docs/design.md,
-/// "Sync modes").
+/// A device's sync, on (mode shared) or off (mode own; docs/design.md,
+/// "Sync on and off").
 enum SyncMode: String, CaseIterable, Identifiable {
-    case own, shared, receive, send
+    case shared, own
 
     var id: String { rawValue }
 
     var title: LocalizedStringKey {
         switch self {
-        case .own: "Own clipboard"
-        case .shared: "Shared"
-        case .receive: "Receive only"
-        case .send: "Send only"
+        case .shared: "On"
+        case .own: "Off"
         }
     }
 }

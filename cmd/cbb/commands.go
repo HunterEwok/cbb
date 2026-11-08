@@ -270,7 +270,7 @@ func writeStatus(w io.Writer, st *control.Status, devs []control.Device, now tim
 		fmt.Fprintln(w, l)
 	}
 	if st.Mode != "" {
-		fmt.Fprintln(w, modeLine(st.Mode))
+		fmt.Fprintln(w, syncLine(st))
 	}
 	for _, l := range muteLines(st) {
 		fmt.Fprintln(w, l)
@@ -339,7 +339,7 @@ func cmdNew(args []string, stdout, stderr io.Writer) int {
 	if m.Status.KeyLevel == "files" {
 		fmt.Fprintln(stdout, "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).")
 	}
-	fmt.Fprintln(stdout, "Add a computer: cbb pair here, then cbb pair on the new computer.")
+	fmt.Fprintln(stdout, "Add a device: on it, join a group, which shows a code; then type that code here with cbb pair -qr.")
 	return 0
 }
 
@@ -353,7 +353,7 @@ func cmdPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	adminPhone := fs.Bool("admin", false, "on the group's root: let the window make a phone with the app an admin")
 	typed := fs.Bool("code", false, "join with the code that cbb pair shows on the group's root or an admin, read from standard input")
 	invitation := fs.String("invite", "", "join from afar with the invitation file that cbb invite made on the group's hub")
-	qr := fs.Bool("qr", false, "in a group, on the root or an admin: admit the phone or device that shows a QR code and waits, the code's text read from standard input; with -admin, on the root, the phone becomes an admin")
+	qr := fs.Bool("qr", false, "in a group, on the root or an admin: admit the device that shows a code and waits, the code or its QR code's text read from standard input; with -admin, on the root, the phone becomes an admin")
 	forApp := fs.String("app", "", "for the desktop apps: join by the phone's QR code, write its text to this file, which must exist, and stop when the file is removed")
 	if fs.Parse(args) != nil {
 		return 2
@@ -400,7 +400,7 @@ func cmdPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		// From standard input, never the command line, where other users
 		// could read the code.
 		if f, ok := stdin.(*os.File); ok && isTerminal(f) {
-			fmt.Fprint(stdout, "The QR code's text (cbb://join?...): ")
+			fmt.Fprint(stdout, "The code the new device shows, or its QR code's text: ")
 		}
 		line, err := readLineUpTo(stdin, maxQRText)
 		if err != nil {
@@ -415,9 +415,10 @@ const pairUsage = `usage: cbb pair                  in a group: show a code for 
                                 in no group: join by the phone's QR code or a typed code
        cbb pair -admin          on the group's root: show a code for a phone with the app,
                                 which joins as an admin
-       cbb pair -qr [-admin]    on the root or an admin: admit the phone or device that
-                                shows a QR code and waits, its text read from standard input;
-                                with -admin, on the root, the phone becomes an admin
+       cbb pair -qr [-admin]    on the root or an admin: admit the device that shows a QR
+                                code and a code and waits, the code or the QR code's text read
+                                from standard input; with -admin, on the root, the phone
+                                becomes an admin
        cbb pair -code [address:port]   join with the code, read from standard input
        cbb pair -invite file    join from afar with an invitation
        cbb pair -app file       for the desktop apps: join by the QR code they show`
@@ -485,9 +486,12 @@ const maxQRText = 1024
 // on the root, a phone that offers an admin key becomes an admin, and the
 // user reads what that lets it do first.
 func admitByQR(text string, admins bool, stdout, stderr io.Writer) int {
+	if code, err := pair.NormalizeCode(text); err == nil {
+		return admitByCode(code, admins, stdout, stderr)
+	}
 	jc, ok := phone.ParseJoinQR(text)
 	if !ok || len(jc.Addrs) == 0 || jc.Fingerprint == "" {
-		return fail(stderr, errors.New("not the QR code of a device that waits to join: it starts with cbb://join? and names an address and a fingerprint"))
+		return fail(stderr, errors.New("neither the six-digit code nor the QR code of a device that waits to join (cbb://join?...)"))
 	}
 	c, err := control.DialFor(control.OpPair)
 	if err != nil {
@@ -502,6 +506,23 @@ func admitByQR(text string, admins bool, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stdout, "Admitting the device at %s with the code %s %s...\n", strings.Join(jc.Addrs, ", "), jc.Code[:min(3, len(jc.Code))], jc.Code[min(3, len(jc.Code)):])
 	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint, Admins: admins}})
+	if err != nil {
+		return fail(stderr, err)
+	}
+	fmt.Fprintf(stdout, "%s joined the group.\n", m.Name)
+	return 0
+}
+
+// admitByCode admits the device on the home network that shows code and
+// waits, which the service finds by mDNS.
+func admitByCode(code string, admins bool, stdout, stderr io.Writer) int {
+	c, err := control.DialFor(control.OpPair)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	defer c.Close()
+	fmt.Fprintf(stdout, "Looking for the device that shows the code %s %s...\n", code[:3], code[3:])
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPair, Code: code, Admins: admins}})
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -579,6 +600,9 @@ func joinByQR(stdin io.Reader, stdout, stderr io.Writer) int {
 	// The same code as text, for a phone without a camera, such as the
 	// app in the iOS simulator.
 	fmt.Fprintf(stdout, "\nOr paste this into the app: %s\n", text)
+	if jc, ok := phone.ParseJoinQR(text); ok && len(jc.Code) == 6 {
+		fmt.Fprintf(stdout, "On a computer of the group, run cbb pair -qr there and type the code %s %s.\n", jc.Code[:3], jc.Code[3:])
+	}
 	fmt.Fprintf(stdout, "\nWaiting up to %d minutes. Press Ctrl+C to cancel.\n", expires/60)
 	port, err := service.Port()
 	if err != nil {

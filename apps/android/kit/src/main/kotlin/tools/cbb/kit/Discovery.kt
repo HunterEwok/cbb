@@ -42,6 +42,15 @@ object Discovery {
         member(instance, txt.map { (k, v) -> "$k=${v?.toString(Charsets.UTF_8) ?: ""}" })
 
     /**
+     * The TXT record of a device that waits to join, listening with its QR
+     * code on screen: no group tag, so no member dials it, and the
+     * fingerprint of its certificate, which a computer of the group checks
+     * when it admits the device by the code typed there (docs/protocol.md,
+     * sections 3 and 6).
+     */
+    fun joinerTXT(fingerprint: String): Map<String, String> = mapOf("v" to "1", "j" to "1", "f" to fingerprint)
+
+    /**
      * The members to dial: those browsing found, and the devices of the
      * group with a known address that it did not find, as a member in
      * another subnet, which mDNS does not reach (docs/protocol.md, section 9).

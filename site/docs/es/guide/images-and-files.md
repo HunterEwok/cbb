@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: abde0b7cf4b6 -->
+<!-- source: 6f28736f9b01 -->
 # Imágenes, archivos y texto con formato
 
 Para quien copia algo más que texto sin formato. Una imagen, archivos de un gestor de archivos o texto con su formato, copiados en un dispositivo, pueden pegarse en los demás tal cual.
@@ -16,7 +16,7 @@ Una copia con un texto y una imagen se envía como texto. Un cortar en un gestor
 
 ## Cómo viaja
 
-La copia en sí se queda en el dispositivo donde se hizo. Los demás saben que hay una copia nueva, con su tamaño, y los que tienen un modo de sincronización que admite las copias del grupo la traen enseguida de ese dispositivo, o de otro que la tenga, por las mismas conexiones cifradas que el texto.
+La copia en sí se queda en el dispositivo donde se hizo. Los demás saben que hay una copia nueva, con su tamaño, y los que tienen la sincronización activada la traen enseguida de ese dispositivo, o de otro que la tenga, por las mismas conexiones cifradas que el texto.
 
 Fuera de casa, el hub trae cada copia y la transmite por el túnel del grupo, hasta su propio límite.
 

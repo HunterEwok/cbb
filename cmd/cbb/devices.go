@@ -27,7 +27,7 @@ func writeDevices(w io.Writer, devs, peers []control.Device, newest string, now 
 		skew[p.ID] = p.SkewMS
 	}
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tSYSTEM\tVERSION\tROLE\tADMIN\tKEYS\tMODE\tSEEN\tCLOCK\tID")
+	fmt.Fprintln(tw, "NAME\tSYSTEM\tVERSION\tROLE\tADMIN\tKEYS\tSYNC\tSEEN\tCLOCK\tID")
 	unlisted, old := false, false
 	for _, d := range devs {
 		name := d.Name
@@ -69,7 +69,7 @@ func writeDevices(w io.Writer, devs, peers []control.Device, newest string, now 
 		case d.Hub:
 			role += ", hub"
 		}
-		mode := d.Mode
+		mode := map[string]string{"shared": "on", "own": "off"}[d.Mode]
 		if d.Muted {
 			mode = strings.TrimSpace(mode + " muted")
 		}

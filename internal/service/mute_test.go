@@ -87,27 +87,19 @@ func TestMute(t *testing.T) {
 	}
 	waitFor(t, "gamma has beta's text", func() bool { return c.paste(t) == "from beta" })
 
-	// gamma pauses receiving: the group's copies stay out of its
-	// clipboard, its own still go out.
-	if _, err := c.do(t, control.Header{Op: control.OpMute, ForMS: time.Hour.Milliseconds()}, ""); err != nil {
+	// gamma turns sync off for an hour: the group's copies stay out of
+	// its clipboard and its own stay home.
+	if _, err := c.do(t, control.Header{Op: control.OpSync, Name: "off", ForMS: time.Hour.Milliseconds()}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if st := c.status(t); !st.Paused || st.Muted {
-		t.Fatalf("gamma's status after its pause: paused %v, muted %v", st.Paused, st.Muted)
+	if st := c.status(t); st.Mode != "own" || st.SyncUntilMS == 0 || st.Muted {
+		t.Fatalf("gamma's status with sync off: mode %q until %d, muted %v", st.Mode, st.SyncUntilMS, st.Muted)
 	}
 	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "beta again"); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "alpha has beta's text", func() bool { return a.paste(t) == "beta again" })
-	time.Sleep(300 * time.Millisecond)
-	if got := c.paste(t); got != "from beta" {
-		t.Fatalf("gamma took a copy while paused: %q", got)
-	}
-	if _, err := c.do(t, control.Header{Op: control.OpCopy}, "from gamma"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "alpha has gamma's text", func() bool { return a.paste(t) == "from gamma" })
-	if _, err := c.do(t, control.Header{Op: control.OpUnmute}, ""); err != nil {
+	if _, err := c.do(t, control.Header{Op: control.OpSync, Name: "on"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "beta heard"); err != nil {
@@ -116,8 +108,12 @@ func TestMute(t *testing.T) {
 	waitUpTo(t, 10*time.Second, "gamma has beta's text again", func() bool { return c.paste(t) == "beta heard" },
 		func() string { return links(t, a, b, c) })
 
+	// cbb mute names a device; this device's own sync is cbb sync.
+	if _, err := a.do(t, control.Header{Op: control.OpMute, ForMS: time.Hour.Milliseconds()}, ""); err == nil || !strings.Contains(err.Error(), "cbb sync off") {
+		t.Errorf("a mute without a device: %v", err)
+	}
 	// A mute longer than 30 days is refused.
-	if _, err := a.do(t, control.Header{Op: control.OpMute, ForMS: 31 * 24 * time.Hour.Milliseconds()}, ""); err == nil {
+	if _, err := a.do(t, control.Header{Op: control.OpMute, Device: "beta", ForMS: 31 * 24 * time.Hour.Milliseconds()}, ""); err == nil {
 		t.Error("a mute of 31 days was taken")
 	}
 }
@@ -144,7 +140,7 @@ func links(t *testing.T, all ...*testService) string {
 		for _, p := range st.Peers {
 			peers = append(peers, names[p.ID])
 		}
-		out = append(out, fmt.Sprintf("%s: peers %v, paused %v, text %q", s.name, peers, st.Paused, s.paste(t)))
+		out = append(out, fmt.Sprintf("%s: peers %v, mode %s, text %q", s.name, peers, st.Mode, s.paste(t)))
 	}
 	return strings.Join(out, "; ")
 }

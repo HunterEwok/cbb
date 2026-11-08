@@ -532,6 +532,14 @@ extension CorePairing {
             return await it.next()
         }
 
+        /// Publishes the listener by Bonjour under name with that TXT record,
+        /// in the type of the members (docs/protocol.md, section 3), as a
+        /// phone does while it waits to join, once it knows its device ID.
+        public func advertise(name: String, txt: [String: String]) {
+            listener.service = NWListener.Service(name: name, type: Discovery.serviceType, domain: nil,
+                                                  txtRecord: NWTXTRecord(txt))
+        }
+
         public func stop() { listener.cancel() }
     }
 }

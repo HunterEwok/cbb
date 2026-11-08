@@ -165,7 +165,6 @@ pub fn new_group(dir: &Path, name: &str) -> Result<(Identity, String)> {
     let mut fields = serde_json::Map::new();
     fields.insert("group_ca_key".into(), b64_value(&root_pkcs8));
     identity::save_with(&ident, dir, fields)?;
-    service::new_device_mode(dir)?;
     Ok((ident, why))
 }
 
@@ -819,7 +818,7 @@ impl Admin<'_> {
         let d = find_device(self.node, target)?;
         let s = self.signing().map_err(|_| {
             Error::msg(
-                "only an admin mutes a device or ends its mute: the group's root, an admin it made (cbb admin), or an admin phone; cbb mute without -on keeps the group's copies out of this device",
+                "only an admin mutes a device or ends its mute: the group's root, an admin it made (cbb admin), or an admin phone; cbb sync off turns this device's own sync off",
             )
         })?;
         if !s.root && self.node.records().lock().unwrap().frozen(&s.ca.key_hash()) {
@@ -866,6 +865,22 @@ impl Admin<'_> {
             "only an admin turns sync away from home off on another device: the group's root, an admin it made (cbb admin), or an admin phone",
         )
         .map(|_| ())
+    }
+
+    /// Turns sync on or off on the device target names with a mode command
+    /// (Go's `cbb sync -on DEVICE`); this device's own sync is the
+    /// service's, without -on.
+    pub fn sync_on(&self, target: &str, on: bool) -> Result<String> {
+        let d = find_device(self.node, target)?;
+        if d.id == self.me() {
+            return Err(Error::msg("-on names this device; cbb sync on or off without -on turns it here"));
+        }
+        self.order_command(
+            &d,
+            cbb_core::manage::Order::Sync(on),
+            "only an admin turns another device's sync on or off: the group's root, an admin it made (cbb admin), or an admin phone",
+        )?;
+        Ok(d.name)
     }
 
     /// Signs the device d a record with forward_only unless its newest has

@@ -279,6 +279,13 @@ private fun JoinScreen(model: AppModel) {
                     .clip(RoundedCornerShape(Tokens.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
                     .semantics { contentDescription = label },
             )
+            Text(
+                code.grouped,
+                style = MaterialTheme.typography.headlineLarge,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { contentDescription = code.code.toList().joinToString(" ") },
+            )
             val hint = when {
                 model.isTv -> R.string.join_hint_tv
                 model.joinAsAdmin -> R.string.join_admin_hint

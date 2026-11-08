@@ -125,12 +125,12 @@ func TestDeskArrange(t *testing.T) {
 	d.settings.Details = &off
 	d.status = &control.Status{Group: "g1"}
 	d.devices = []control.Device{{ID: "me", Self: true}, {ID: "a"}, {ID: "b"}, {ID: "c"}}
-	if st := d.snapshot(); st.Custom || len(st.Arranged) != 3 || st.Arranged[0].Device != "a" {
+	if st := d.snapshot(); st.Custom || len(st.Arranged) != 4 || st.Arranged[0].Device != "me" {
 		t.Fatalf("default: %+v", st.Arranged)
 	}
 	d.Arrange(ArrangeOp{Op: "new", Name: "Office", Devices: []string{"b", "c"}})
 	st := d.snapshot()
-	if !st.Custom || len(st.Arranged) != 2 || st.Arranged[1].Collection == nil || st.Arranged[1].Collection.Name != "Office" {
+	if !st.Custom || len(st.Arranged) != 3 || st.Arranged[2].Collection == nil || st.Arranged[2].Collection.Name != "Office" {
 		t.Fatalf("after new: %+v", st.Arranged)
 	}
 	if st.Settings.Arrangement != nil {
@@ -148,7 +148,7 @@ func TestDeskArrange(t *testing.T) {
 	if err := json.Unmarshal(data, &saved); err != nil {
 		t.Fatal(err)
 	}
-	if saved.Layout != "list" || saved.Arrangement == nil || saved.Arrangement.Group != "g1" || len(saved.Arrangement.Items) != 2 {
+	if saved.Layout != "list" || saved.Arrangement == nil || saved.Arrangement.Group != "g1" || len(saved.Arrangement.Items) != 3 {
 		t.Fatalf("saved: %s", data)
 	}
 	d.Arrange(ArrangeOp{Op: "rename", Collection: "c1", Name: strings.Repeat("x", 65)})
@@ -160,7 +160,7 @@ func TestDeskArrange(t *testing.T) {
 	if !d.pruneLocked() {
 		t.Error("nothing pruned")
 	}
-	if c := d.settings.Arrangement.Items[1].Collection; c == nil || len(c.Devices) != 1 || c.Devices[0] != "c" {
+	if c := d.settings.Arrangement.Items[2].Collection; c == nil || len(c.Devices) != 1 || c.Devices[0] != "c" {
 		t.Errorf("pruned: %+v", d.settings.Arrangement.Items)
 	}
 	// Another group starts afresh.

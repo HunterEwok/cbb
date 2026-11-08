@@ -61,6 +61,13 @@ cbb_join *cbb_join_new_admin(const uint8_t *request, size_t len, cbb_sign_fn sig
 uint8_t *cbb_join_accept(cbb_join *j, size_t *answer_len);
 uint8_t *cbb_join_feed(cbb_join *j, const uint8_t *data, size_t len, int64_t now_ms, size_t *answer_len);
 uint8_t *cbb_join_finish(cbb_join *j, int32_t saved, size_t *answer_len);
+/*
+ * Announces the joiner by mDNS while the app listens on port, so that a
+ * computer of the group finds it by the code typed there; the announcement
+ * ends with cbb_join_free. Returns 1 when it announced. Only in the build
+ * with the member (the Aurora app's).
+ */
+int32_t cbb_join_announce(cbb_join *j, uint16_t port);
 void cbb_join_free(cbb_join *j);
 
 /*

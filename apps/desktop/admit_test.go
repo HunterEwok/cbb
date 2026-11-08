@@ -42,7 +42,7 @@ func TestReadQR(t *testing.T) {
 	}
 }
 
-// AdmitByQR runs cbb pair -qr as the administrator with the text on its
+// TestAdmitByQR: Admit runs cbb pair -qr as the administrator with the text on its
 // standard input, never among its arguments.
 func TestAdmitByQR(t *testing.T) {
 	var args []string
@@ -54,17 +54,24 @@ func TestAdmitByQR(t *testing.T) {
 	}
 	defer func() { adminRun = old }()
 	d := &Desk{tr: map[string]string{}, socket: filepath.Join(t.TempDir(), "none.sock")}
-	d.AdmitByQR("  "+joinText+"\n", false)
+	d.Admit("  "+joinText+"\n", false)
 	if !slices.Equal(args, []string{"pair", "-qr"}) || input != joinText+"\n" {
 		t.Fatalf("ran %q with %q", args, input)
 	}
-	d.AdmitByQR(joinText, true)
+	d.Admit(joinText, true)
 	if !slices.Equal(args, []string{"pair", "-qr", "-admin"}) {
 		t.Fatalf("as an admin, ran %q", args)
 	}
-	args = nil
-	d.AdmitByQR("cbb://join?code=123456", false)
-	if args != nil || d.message == "" {
-		t.Errorf("admitted a joiner that does not listen: %q, %q", args, d.message)
+	// The six digits the new device shows, typed with a space.
+	d.Admit(" 246 810 ", false)
+	if !slices.Equal(args, []string{"pair", "-qr"}) || input != "246810\n" {
+		t.Fatalf("by the shown code, ran %q with %q", args, input)
+	}
+	for _, bad := range []string{"cbb://join?code=123456", "12345", "1234567", "12a456"} {
+		args, d.message = nil, ""
+		d.Admit(bad, false)
+		if args != nil || d.message == "" {
+			t.Errorf("admitted %q: %q, %q", bad, args, d.message)
+		}
 	}
 }

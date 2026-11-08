@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: abde0b7cf4b6 -->
+<!-- source: 6f28736f9b01 -->
 # Picha, faili na maandishi yenye muundo
 
 Kwa mtu yeyote anayenakili zaidi ya maandishi matupu. Picha, faili kutoka kwenye kidhibiti faili au maandishi yenye muundo wake, vilivyonakiliwa kwenye kifaa kimoja, vinaweza kubandikwa kwenye vingine kama vilivyo.
@@ -16,7 +16,7 @@ Nakala yenye maandishi na picha hutumwa kama maandishi. Kukata kwenye kidhibiti 
 
 ## Jinsi kinavyosafiri
 
-Nakala yenyewe hubaki kwenye kifaa ilipofanywa. Vingine hujua kwamba kuna nakala mpya, pamoja na ukubwa wake, na vile ambavyo hali yake ya usawazishaji inapokea nakala za kikundi huileta mara moja kutoka kwenye kifaa hicho, au kutoka kwa kingine kilicho nayo, kupitia miunganisho ile ile iliyosimbwa kama maandishi.
+Nakala yenyewe hubaki kwenye kifaa ilipofanywa. Vingine hujua kwamba kuna nakala mpya, pamoja na ukubwa wake, na vile vilivyowasha usawazishaji huileta mara moja kutoka kwenye kifaa hicho, au kutoka kwa kingine kilicho nayo, kupitia miunganisho ile ile iliyosimbwa kama maandishi.
 
 Ukiwa mbali na nyumbani, kitovu huleta kila nakala na kuipitisha kupitia handaki la kikundi, hadi kikomo chake chenyewe.
 

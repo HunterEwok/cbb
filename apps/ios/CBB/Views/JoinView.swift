@@ -25,9 +25,13 @@ struct JoinView: View {
                     .padding(Tokens.spacingMedium)
                     .background(Color.white, in: RoundedRectangle(cornerRadius: Tokens.radiusCard, style: .continuous))
                     .accessibilityLabel(Text("QR code to join the group"))
+                Text(verbatim: code.grouped)
+                    .font(.system(.largeTitle, design: .monospaced).weight(.bold))
+                    .textSelection(.enabled)
+                    .accessibilityLabel(Text(verbatim: code.code.map(String.init).joined(separator: " ")))
                 Text(model.joinAsAdmin
                     ? LocalizedStringKey("On the group's root phone, tap + and scan this code: only the root adds a phone as an admin. Keep this screen open.")
-                    : LocalizedStringKey("On your other phone, tap + and scan this code. Keep this screen open."))
+                    : LocalizedStringKey("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open."))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(palette.textDim)
             } else if model.message == nil {
