@@ -89,7 +89,7 @@ internal fun KeyboardSection(keyboard: BluetoothKeyboard, details: Boolean) {
                 Text(stringResource(R.string.keyboard_switch), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                 Switch(checked = set.on, onCheckedChange = null)
             }
-            Text(stringResource(R.string.keyboard_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+            Tip(R.string.keyboard_body)
             if (!set.on) return@Column
             val (line, detail, bad) = when (val s = state) {
                 BluetoothKeyboard.State.Off, BluetoothKeyboard.State.Starting -> Triple(R.string.keyboard_starting, null, false)
@@ -150,7 +150,7 @@ internal fun KeyboardSection(keyboard: BluetoothKeyboard, details: Boolean) {
                 Text(stringResource(R.string.keyboard_pastes), modifier = Modifier.weight(1f))
                 Switch(checked = set.pastes, onCheckedChange = null)
             }
-            Text(stringResource(R.string.keyboard_pastes_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+            Tip(R.string.keyboard_pastes_body)
             TextButton(
                 enabled = state is BluetoothKeyboard.State.Connected,
                 onClick = {

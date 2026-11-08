@@ -2,11 +2,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <resources>
     <string name="tagline">Один буфер обмена для этого телефона и ваших компьютеров.</string>
-    <string name="welcome_title">Телефон готов</string>
-    <string name="welcome_body">Он создал свой секретный ключ: ключ никогда не покидает телефон, и по нему ваши устройства узнают этот телефон. Теперь подключите устройство: нажмите «Подключить новое устройство» и отсканируйте QR-код, который оно покажет.</string>
-    <string name="connect_device">Подключить новое устройство</string>
-    <string name="connect_hint">На компьютере запустите cbb pair и отсканируйте код, который он покажет.</string>
-    <string name="join_other">У меня уже есть CBB на другом телефоне</string>
     <string name="settings">Настройки</string>
     <string name="close">Закрыть</string>
     <string name="back">Назад</string>
@@ -15,7 +10,6 @@
     <string name="remove">Удалить</string>
     <string name="language">Язык</string>
     <string name="language_system">Как в системе</string>
-    <string name="theme">Тема</string>
     <string name="theme_system">Как в системе</string>
     <string name="theme_material">Material You</string>
     <string name="theme_light">Светлая</string>
@@ -24,14 +18,7 @@
     <string name="join_qr_label">QR-код для входа в группу</string>
     <string name="join_tv">Войти в группу телефона</string>
     <string name="join_tv_hint">Телевизор входит в группу вашего телефона: он показывает QR-код, а телефон его сканирует.</string>
-    <string name="join_computer">Моя группа создана на компьютере</string>
-    <string name="join_computer_title">Войти в группу компьютера</string>
-    <string name="join_computer_hint">На компьютере, который создал группу, выполните cbb pair -admin и введите шестизначный код, который он покажет. Телефон должен быть в той же сети.</string>
-    <string name="join_computer_code">Код</string>
-    <string name="join_computer_go">Войти</string>
-    <string name="join_computer_searching">Ищу компьютер…</string>
     <string name="join_hint_tv">На телефоне откройте CBB, нажмите + и отсканируйте этот код. Не закрывайте этот экран.</string>
-    <string name="send_or_fetch">Отправить или получить</string>
     <string name="sent">Отправлено на компьютеры.</string>
     <string name="fetched">Получено с компьютеров.</string>
     <string name="nothing_new">Нечего отправить или получить.</string>
@@ -56,8 +43,7 @@
     <string name="remove_body">Он больше не будет синхронизироваться с вашими устройствами. Чтобы вернуть его, отсканируйте его QR-код снова.</string>
     <string name="remove_root_body">Этот телефон создал группу. Ваш телефон забирает группу себе с новым ключом, остальные устройства переходят за ним.</string>
     <string name="removed">Удалено. Остальные устройства больше его не принимают.</string>
-    <string name="not_admin_note">Добавлять и удалять устройства может только телефон-админ.</string>
-    <string name="lost_phone_note">Потеряли телефон? Сделайте второй телефон админом: на нём нажмите «У меня уже есть CBB на другом телефоне» и отсканируйте его код здесь через +.</string>
+    <string name="lost_phone_note">Сделайте второй телефон админом: на нём нажмите «Войти в группу», отсканируйте его код здесь через + и сделайте его админом.</string>
     <string name="add_device">Добавить устройство</string>
     <string name="scan_hint">Наведите камеру на QR-код cbb pair или на код, который показывает ваш другой телефон.</string>
     <string name="paste_hint">Вставьте текст QR-кода cbb pair.</string>
@@ -100,8 +86,6 @@
     <string name="error_no_window">Ни один компьютер не ждёт телефон. Выполните cbb pair -admin на компьютере, который создал группу, и попробуйте снова.</string>
     <string name="error_two_windows">Сразу два компьютера ждут устройство. Закройте cbb pair на одном из них и попробуйте снова.</string>
     <string name="error_needs_root">Этот компьютер не открыл окно для телефона. Выполните cbb pair -admin на компьютере, который создал группу.</string>
-    <string name="error_join_wrong_code">Код не совпал. Проверьте код на экране компьютера и введите его снова.</string>
-    <string name="error_join_computer">Не удалось войти в группу компьютера. Выполните на нём cbb pair -admin ещё раз.</string>
     <string name="error_no_screen_lock">Сначала включите блокировку экрана на телефоне: она нужна ключам группы.</string>
     <string name="error_not_authenticated">Отпечаток, лицо или блокировка экрана не подтверждены, поэтому ничего не изменилось.</string>
     <string name="error_no_biometric">Сначала добавьте на телефоне отпечаток или лицо: на Android 10 они нужны ключам группы.</string>
@@ -178,10 +162,7 @@
     <string name="hub_home_background">Этот телефон — хаб, и в фоне тоже.</string>
     <string name="away_title">Вне дома</string>
     <string name="away_body">Когда телефон не в домашней сети, он синхронизируется через туннель WireGuard вашего собственного хаба: компьютера группы, настроенного командой cbb global hub. Его порт доступен из интернета, но только через WireGuard с ключами группы. Хаб ответит этому телефону, когда тот в следующий раз подключится дома. Больше никуда ничего не уходит, а без туннеля нет и соединения. При выключении телефон забывает свой ключ туннеля.</string>
-    <string name="away_switch">Синхронизировать вне дома</string>
-    <string name="away_off">Выключено</string>
     <string name="away_waiting">Ждём хаб: один раз откройте приложение дома, рядом с компьютером группы.</string>
-    <string name="away_at_home">Дома: синхронизация напрямую.</string>
     <string name="away_connecting">Подключение к хабу через туннель…</string>
     <string name="away_connected">Подключено к хабу через туннель.</string>
     <string name="away_connected_to">Подключено к хабу %1$s через туннель.</string>
@@ -205,7 +186,6 @@
     <string name="rename_invalid">В имени от 1 до 64 символов.</string>
     <string name="reason_rename">Переименовать устройство</string>
     <string name="widget_description">Одно касание отправляет скопированное на телефоне на ваши компьютеры.</string>
-    <string name="color">Цвет</string>
     <string name="color_terminal">Терминал</string>
     <string name="color_midnight">Полночь</string>
     <string name="color_amber">Янтарь</string>
@@ -220,25 +200,12 @@
     <string name="layout_tiles">Плитки</string>
     <string name="layout_list">Список</string>
     <string name="layout_orbit">Орбита</string>
-    <string name="view_now">Вид: %1$s</string>
     <string name="online_count">%1$d из %2$d в сети</string>
     <string name="root">создатель группы</string>
     <string name="type">Тип</string>
-    <string name="operating_system">Операционная система</string>
     <string name="mac_address">MAC-адрес</string>
     <string name="hidden_by_system">скрыт системой</string>
     <string name="role">Роль</string>
-    <string name="in_the_group">В группе</string>
-    <string name="sync_mode">Режим синхронизации</string>
-    <string name="mode_own">Свой буфер</string>
-    <string name="mode_shared">Общий</string>
-    <string name="mode_receive">Только приём</string>
-    <string name="mode_send">Только отправка</string>
-    <string name="mode_own_note">Его копии остаются на нём, копии группы не приходят; отправить или забрать вручную по-прежнему можно.</string>
-    <string name="mode_shared_note">Его копии уходят в группу, копии группы приходят к нему.</string>
-    <string name="mode_receive_note">Копии группы приходят к нему, свои остаются на нём.</string>
-    <string name="mode_send_note">Его копии уходят в группу, копии группы не приходят.</string>
-    <string name="mode_set">Режим синхронизации изменён.</string>
     <string name="reason_set_mode">Изменить режим синхронизации компьютера</string>
     <string name="error_command_refused">Компьютер отказался.</string>
     <string name="error_no_answer">Компьютер не ответил. Возможно, он не в сети или на нём старая версия CBB.</string>
@@ -459,7 +426,6 @@
     <string name="handed_body">Компьютер, который держал группу, передал её этому телефону. Возьмите её, чтобы этот телефон стал корнем группы; компьютер останется в группе.</string>
     <string name="handed_take">Взять группу</string>
     <string name="handed_taken">Теперь этот телефон — корень группы. Остальные устройства узнают об этом, как только подключатся.</string>
-    <string name="restore">У меня есть лист восстановления группы</string>
     <string name="restore_title">Восстановить группу</string>
     <string name="restore_hint">Наведите камеру на QR-код листа восстановления. Телефон должен быть в сети компьютера группы. Этот телефон станет корнем группы, когда истечёт время ожидания группы, если старый телефон не отменит заявку.</string>
     <string name="restore_go">Восстановить</string>
@@ -548,8 +514,6 @@
     <string name="error_root_leaves">Этот телефон — корень группы, а в группе есть другие устройства. Сначала удалите их или дайте телефону-админу забрать группу.</string>
     <string name="reason_mute">Заглушить устройство</string>
     <string name="reason_unmute">Включить устройство</string>
-    <string name="pause_on">Этот телефон пока не принимает копии группы.</string>
-    <string name="pause_off">Этот телефон снова принимает копии группы.</string>
     <string name="mute_done">Устройство заглушено: его копии остаются на нём.</string>
     <string name="unmute_done">Устройство включено: его копии снова доходят до группы.</string>
     <string name="error_muted">Админ заглушил этот телефон, поэтому его копии остаются на нём.</string>
@@ -559,11 +523,6 @@
     <string name="pause_hour">На час</string>
     <string name="pause_eight">На 8 часов</string>
     <string name="pause_ever">Пока не включу</string>
-    <string name="pause_taking">Копии группы принимаются</string>
-    <string name="pause_not_taking">Копии группы не принимаются</string>
-    <string name="pause_not_taking_until">Копии не принимаются до %1$s</string>
-    <string name="pause_turn_off">не принимать копии группы</string>
-    <string name="pause_turn_on">снова принимать копии группы</string>
     <string name="pause_for_a_time">выбрать, на сколько</string>
     <string name="muted_mark">заглушено</string>
     <string name="muted_until">Заглушено до %1$s</string>
@@ -572,4 +531,35 @@
     <string name="unmute">Включить</string>
     <string name="mute_note">Тогда его копии не дойдут ни до одного устройства группы; копии остальных оно по-прежнему принимает.</string>
     <string name="mute_ever">Пока админ не включит</string>
+    <!-- Две кнопки (docs/apps.md): старт, переключатели и меню главного экрана, подсказки настроек -->
+    <string name="create_group">Создать группу</string>
+    <string name="join_group">Войти в группу</string>
+    <string name="restore_link">Восстановить по ключу восстановления</string>
+    <string name="sync_on">Синхронизация включена</string>
+    <string name="sync_off">Синхронизация выключена</string>
+    <string name="sync_off_until">Синхронизация выключена до %1$s</string>
+    <string name="sync_turn_off">выключить синхронизацию</string>
+    <string name="sync_turn_on">включить синхронизацию</string>
+    <string name="sync_turned_on">Синхронизация включена.</string>
+    <string name="sync_turned_off">Синхронизация выключена: ничего не уходит и не приходит.</string>
+    <string name="away_is_on">«Везде» включено</string>
+    <string name="away_is_off">«Везде» выключено</string>
+    <string name="away_waits">«Везде» ждёт, пока синхронизация выключена</string>
+    <string name="away_turn_on">включить «Везде»</string>
+    <string name="away_turn_off">выключить «Везде»</string>
+    <string name="away_ask_title">Включить «Везде»?</string>
+    <string name="turn_on">Включить</string>
+    <string name="scan_code">Сканировать код</string>
+    <string name="invite_send">Отправить приглашение</string>
+    <string name="invite_on_hub">Приглашение делается на хабе группы. На компьютере-хабе выполните cbb invite и отправьте получившийся файл по надёжному каналу; на новом устройстве выполните cbb pair -invite с этим файлом.</string>
+    <string name="more">Ещё</string>
+    <string name="view_next">Показать: %1$s</string>
+    <string name="lost_phone_title">Потеряли телефон?</string>
+    <string name="send_copy">Отправить скопированное</string>
+    <string name="close_tip">Закрыть подсказку</string>
+    <string name="appearance">Оформление</string>
+    <string name="advanced_settings">Дополнительные настройки</string>
+    <string name="sync">Синхронизация</string>
+    <string name="badge_hub">хаб</string>
+    <string name="device_id">ID устройства</string>
 </resources>

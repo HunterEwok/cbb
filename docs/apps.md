@@ -45,7 +45,9 @@ they look, so both apps are built to the same plan.
    first Home asks once for the clipboard, so that Settings, CBB lists "Paste from Other
    Apps", and opens Settings there to set it to Allow; the system's paste button (an icon
    only) shows on Home only when iOS refuses the app the clipboard or the user chose
-   "Later". On Android the tile, the widget, "Send" in the notification and Share stay. A
+   "Later". On Android it sends once each time the app comes to the front, as its window
+   gets the focus, and a small "Send what I copied" button shows only when that failed; the
+   tile, the widget, "Send" in the notification and Share stay. A
    tile shows the device's icon (laptop, computer,
    phone, tablet, TV, board, server, router, game console, watch, retro computer or other;
    SF Symbols on the iPhone), a live dot, its name, its system and its mark ("this phone",
@@ -87,7 +89,7 @@ they look, so both apps are built to the same plan.
    computer's image whole before it writes it, an image by its hash: the same image twice is
    nothing new. A received image goes to the clipboard by itself as a text does, on Android
    through the app's FileProvider and on the iPhone while the app runs, to this phone only.
-   Received files wait for the button, which saves them, with their folders, in Downloads,
+   Received files wait until the app opens, which saves them, with their folders, in Downloads,
    folder "CBB", on Android and in Files, On My iPhone, CBB,
    Received, on the iPhone; it saves a copy once. Android's Share sends a single image as an
    image and anything else as files, up to 100 MiB together. A copy over 100 MiB stays on
@@ -312,16 +314,18 @@ The Wear OS app (`apps/android/wear`, Wear OS 3, Compose for Wear OS) is the App
 app's twin, and works only through its phone as well: a Wear OS watch reaches its phone
 through the Wearable Data Layer of Google Play services, the only channel there is, and the
 watch's own network would make it a member, which it is not. It shows the same page in the
-phone's colour: how many devices are online, each device with its glyph and live dot, the
-switch for sync away from home and where it stands, the latest events.
+phone's colour: how many devices are online, the house (sync on the phone) and the globe
+(Everywhere) with where it stands, each device with its glyph and live dot, the latest
+events.
 
 - The phone (`WatchLink`) keeps the state in a data item, `/cbb/state` (`WatchState` in
-  `apps/android/shared`: devices, away, events, colour, whether errors show their details;
+  `apps/android/shared`: devices, away, sync, events, colour, whether errors show their details;
   never the clipboard), and replaces it whenever it changes; the watch reads it when it
   opens and follows each change.
-- The watch's switch sends the message `/cbb/away` (1 on, 0 off); Play services start the
-  phone app's listener (`WatchListener`), which turns the phone's own away mode on or off as
-  Settings does, and the new state comes back as the data item. Without a phone in reach the
+- The house sends the message `/cbb/sync` and the globe `/cbb/away` (1 on, 0 off); Play
+  services start the phone app's listener (`WatchListener`), which turns the phone's sync or
+  its Everywhere on or off as Home's switches do, and the new state comes back as the data
+  item. Without a phone in reach the
   watch says so and keeps the last state it got.
 - The two apps share the application id and the release key, as the Data Layer requires;
   `apps/android/shared` holds what they share (the colours of `tokens.json`, the device

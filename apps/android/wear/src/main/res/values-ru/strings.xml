@@ -3,7 +3,8 @@
 <resources>
     <string name="no_group">Откройте CBB на телефоне, чтобы создать группу или войти в неё.</string>
     <string name="online_count">%1$d из %2$d в сети</string>
-    <string name="away">Вне дома</string>
+    <string name="away">Везде</string>
+    <string name="sync">Синхронизация</string>
     <string name="away_off">Выключено</string>
     <string name="away_at_home">Дома: синхронизация напрямую.</string>
     <string name="away_connecting">Подключение к хабу…</string>

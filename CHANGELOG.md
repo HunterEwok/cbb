@@ -1318,6 +1318,14 @@ All notable changes to cbb are documented in this file. The format follows
   switch there. A device's card shows its badges, one line, the house, a row of icons and
   the rest under More. The phone's sync off replaces its pause of receiving and may last for
   a time; a phone that joins syncs at once. The Apple Watch has the house beside the globe.
+- The Android app does the same: the house and the globe beside how many devices are online,
+  no send button (what was copied goes out once each time the app comes to the front, with a
+  small button only when that failed), "+" for a code or an invitation, "⋯" for the view,
+  arranging and Settings, the orbit's centre this phone, the Start screen with Create a
+  group, Join a group and Restore with the recovery key, Settings with the look in a row, the
+  advanced ones behind a switch and tips that close once instead of long texts, and the
+  device's card with its badges, one line, the house, a row of icons and the rest under
+  More. Wear OS has the house beside the globe.
 - One switch, sync, replaces the four sync modes and the device's own "not listening" switch
   (design.md, "Sync on and off"): on by default, so a device that joins syncs at once; off,
   for a time or until turned on, the clipboard is the device's own, both ways. `cbb sync [on
