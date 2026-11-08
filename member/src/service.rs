@@ -1812,6 +1812,9 @@ impl Service {
     fn paste_on(&self, h: &Header, payload: &[u8]) -> Result<Message> {
         let mode = if h.method.is_empty() { "paste" } else { h.method.as_str() };
         let kind = if h.kind.is_empty() { "text" } else { h.kind.as_str() };
+        if kind == "media" {
+            return self.paste_copy_on(h);
+        }
         let text = remotepaste::clean(&String::from_utf8_lossy(payload));
         if text.is_empty() {
             return Err(Error::msg("nothing to paste: the text is empty or only control characters"));
@@ -1819,6 +1822,23 @@ impl Service {
         let wait = if mode == "type" { INJECT_WAIT + TYPE_WAIT * text.len() as u32 } else { INJECT_WAIT };
         let o = cbb_core::manage::Order::Paste { mode: mode.into(), kind: kind.into(), text, enter: h.enter };
         self.admin(|a| a.paste_on(&h.device, o, wait))?;
+        Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+    }
+
+    /// cbb paste -on with images or files, as Go's sendCopyPaste: a paste
+    /// command that names the group's current copy, which must be images or
+    /// files that this device reads.
+    fn paste_copy_on(&self, h: &Header) -> Result<Message> {
+        if !h.method.is_empty() && h.method != "paste" {
+            return Err(Error::msg("images and files are pasted, not typed"));
+        }
+        let node = self.node()?;
+        let Some(ev) = node.engine.current().filter(|ev| ev.media.is_some() && !ev.unread) else {
+            return Err(Error::msg("the group's current copy is no images or files that this device reads"));
+        };
+        let o =
+            cbb_core::manage::Order::Paste { mode: "paste".into(), kind: "media".into(), text: ev.id, enter: h.enter };
+        self.admin(|a| a.paste_on(&h.device, o, COPY_WAIT + COPY_PASTE_WAIT))?;
         Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
     }
 
