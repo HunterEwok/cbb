@@ -6,6 +6,14 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The group's root cancelled the claim; the phone stays an admin.</source>
+        <translation>群组的根设备取消了申请；手机仍是管理员。</translation>
+    </message>
+    <message>
+        <source>The claim to take the group over became void; the phone stays an admin.</source>
+        <translation>接管群组的申请已失效；手机仍是管理员。</translation>
+    </message>
+    <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
         <translation>请将手机连接到家庭 Wi-Fi 以加入群组。</translation>
     </message>
@@ -176,6 +184,22 @@
 <context>
     <name>MainPage</name>
     <message>
+        <source>Type the clipboard on %1</source>
+        <translation>在 %1 上输入剪贴板内容</translation>
+    </message>
+    <message>
+        <source>the keyboard's device</source>
+        <translation>键盘所连接的设备</translation>
+    </message>
+    <message>
+        <source>Back to the group's order</source>
+        <translation>恢复群组的顺序</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>新建集合…</translation>
+    </message>
+    <message>
         <source>Check the key again</source>
         <translation>重新检查密钥</translation>
     </message>
@@ -311,6 +335,30 @@
 <context>
     <name>DevicePage</name>
     <message>
+        <source>Take the group over</source>
+        <translation>接管群组</translation>
+    </message>
+    <message>
+        <source>Taking the group over from %1</source>
+        <translation>正在从 %1 接管群组</translation>
+    </message>
+    <message>
+        <source>Taking the group over</source>
+        <translation>接管群组</translation>
+    </message>
+    <message>
+        <source>Waiting, %1 h left</source>
+        <translation>等待中，还剩 %1 小时</translation>
+    </message>
+    <message>
+        <source>Waiting for the group to get the claim</source>
+        <translation>正在等待群组收到申请</translation>
+    </message>
+    <message>
+        <source>In dispute: the group's root answered the claim</source>
+        <translation>有争议：群组的根设备回应了申请</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>移除</translation>
     </message>
@@ -393,6 +441,30 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>蓝牙键盘</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>充当蓝牙键盘</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>关</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>已连接</translation>
+    </message>
+    <message>
+        <source>Not working</source>
+        <translation>无法使用</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>开</translation>
+    </message>
     <message>
         <source>Settings</source>
         <translation>设置</translation>
@@ -806,6 +878,10 @@
 <context>
     <name>Member</name>
     <message>
+        <source>A video</source>
+        <translation>一段视频</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>一张图片</translation>
     </message>
@@ -833,6 +909,10 @@
 <context>
     <name>Notifier</name>
     <message>
+        <source>%1 from the group is in the gallery</source>
+        <translation>来自群组的%1已存入图库</translation>
+    </message>
+    <message>
         <source>Saved %1 from the group in Downloads</source>
         <translation>已将群组的 %1 保存到“下载”</translation>
     </message>
@@ -843,6 +923,275 @@
     <message>
         <source>%1 files</source>
         <translation>%1 个文件</translation>
+    </message>
+    <message>
+        <source>Pasted from %1</source>
+        <translation>来自 %1 的粘贴</translation>
+    </message>
+</context>
+<context>
+    <name>ArrangePage</name>
+    <message>
+        <source>Arrange</source>
+        <translation>整理</translation>
+    </message>
+    <message>
+        <source>Move to start</source>
+        <translation>移到开头</translation>
+    </message>
+    <message>
+        <source>Move earlier</source>
+        <translation>前移</translation>
+    </message>
+    <message>
+        <source>Move later</source>
+        <translation>后移</translation>
+    </message>
+    <message>
+        <source>Move to end</source>
+        <translation>移到末尾</translation>
+    </message>
+    <message>
+        <source>Move to %1</source>
+        <translation>移到“%1”</translation>
+    </message>
+    <message>
+        <source>New collection…</source>
+        <translation>新建集合…</translation>
+    </message>
+    <message>
+        <source>Take out of collection</source>
+        <translation>移出集合</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>重命名集合…</translation>
+    </message>
+    <message>
+        <source>Ungroup</source>
+        <translation>解散集合</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionNameDialog</name>
+    <message>
+        <source>Make</source>
+        <translation>创建</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>重命名</translation>
+    </message>
+    <message>
+        <source>New collection</source>
+        <translation>新建集合</translation>
+    </message>
+    <message>
+        <source>Rename collection</source>
+        <translation>重命名集合</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>名称</translation>
+    </message>
+    <message>
+        <source>Office, Home, TVs…</source>
+        <translation>办公室、家、电视…</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionTile</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 台中 %1 台在线</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 台中 %1 台在线</translation>
+    </message>
+</context>
+<context>
+    <name>CollectionPage</name>
+    <message>
+        <source>Ungroup</source>
+        <translation>解散集合</translation>
+    </message>
+    <message>
+        <source>Rename collection…</source>
+        <translation>重命名集合…</translation>
+    </message>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 台中 %1 台在线</translation>
+    </message>
+    <message>
+        <source>No devices in this collection yet. Hold a device's tile on the main page to move it here.</source>
+        <translation>此集合中还没有设备。在主页面长按设备的磁贴即可将其移到这里。</translation>
+    </message>
+</context>
+<context>
+    <name>BleKeyboard</name>
+    <message>
+        <source>The phone's Bluetooth did not answer. CBB may not be allowed to use it.</source>
+        <translation>手机的蓝牙没有响应。CBB 可能无权使用它。</translation>
+    </message>
+    <message>
+        <source>This phone's Bluetooth cannot act as a keyboard.</source>
+        <translation>这部手机的蓝牙无法充当键盘。</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off. Turn it on in the phone's settings, then turn the keyboard on again.</source>
+        <translation>蓝牙已关闭。请在手机设置中打开它，然后重新打开键盘。</translation>
+    </message>
+    <message>
+        <source>The phone could not be a keyboard.</source>
+        <translation>手机未能充当键盘。</translation>
+    </message>
+    <message>
+        <source>The phone's Bluetooth did not take the keyboard.</source>
+        <translation>手机的蓝牙没有接受键盘。</translation>
+    </message>
+    <message>
+        <source>The phone could not advertise the keyboard.</source>
+        <translation>手机未能广播键盘。</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>没有已连接的设备。请在该设备的蓝牙设置中连接这部手机。</translation>
+    </message>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>剪贴板中没有文本。</translation>
+    </message>
+    <message>
+        <source>The text has more than %1 characters, more than a keyboard types.</source>
+        <translation>文本超过 %1 个字符，超出键盘可输入的长度。</translation>
+    </message>
+    <message>
+        <source>The device's layout has no key for: %1. Pick its layout above.</source>
+        <translation>该设备的键盘布局没有这些字符的按键：%1。请在上方选择它的布局。</translation>
+    </message>
+    <message>
+        <source>The device went away; the text was not typed whole.</source>
+        <translation>设备已断开；文本未完整输入。</translation>
+    </message>
+</context>
+<context>
+    <name>KeyboardPage</name>
+    <message>
+        <source>Bluetooth keyboard</source>
+        <translation>蓝牙键盘</translation>
+    </message>
+    <message>
+        <source>Act as a Bluetooth keyboard</source>
+        <translation>充当蓝牙键盘</translation>
+    </message>
+    <message>
+        <source>This phone types into a TV, a tablet, a console or a computer it is paired with, which needs nothing installed: the clipboard, at your tap.</source>
+        <translation>这部手机可以在与它配对的电视、平板、游戏机或电脑上打字，对方无需安装任何东西：轻点一下即可输入剪贴板。</translation>
+    </message>
+    <message>
+        <source>Getting ready…</source>
+        <translation>正在准备…</translation>
+    </message>
+    <message>
+        <source>Connected to %1.</source>
+        <translation>已连接到 %1。</translation>
+    </message>
+    <message>
+        <source>A device is connected.</source>
+        <translation>已有设备连接。</translation>
+    </message>
+    <message>
+        <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
+        <translation>没有已连接的设备。请在该设备的蓝牙设置中连接这部手机。</translation>
+    </message>
+    <message>
+        <source>Visible for %1 s</source>
+        <translation>可见，剩余 %1 秒</translation>
+    </message>
+    <message>
+        <source>Make this phone visible</source>
+        <translation>让这部手机可被发现</translation>
+    </message>
+    <message>
+        <source>A new device finds this phone as “CBB keyboard” in its Bluetooth settings while it is visible.</source>
+        <translation>在可见期间，新设备可以在其蓝牙设置中找到名为“CBB keyboard”的这部手机。</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>重试</translation>
+    </message>
+    <message>
+        <source>The device's keyboard layout</source>
+        <translation>设备的键盘布局</translation>
+    </message>
+    <message>
+        <source>English (US)</source>
+        <translation>英语（美国）</translation>
+    </message>
+    <message>
+        <source>Russian</source>
+        <translation>俄语</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>速度</translation>
+    </message>
+    <message>
+        <source>%1 characters a second</source>
+        <translation>每秒 %1 个字符</translation>
+    </message>
+    <message>
+        <source>Typing…</source>
+        <translation>正在输入…</translation>
+    </message>
+    <message>
+        <source>Type the clipboard</source>
+        <translation>输入剪贴板内容</translation>
+    </message>
+    <message>
+        <source>Remote paste</source>
+        <translation>远程粘贴</translation>
+    </message>
+    <message>
+        <source>Let the group's admins paste there</source>
+        <translation>允许群组的管理员在那里粘贴</translation>
+    </message>
+    <message>
+        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
+        <translation>群组的管理员随后可以通过这部手机，在它所连接的设备上输入文本，可从自己的应用或用 cbb paste。这部手机会显示是谁粘贴的，并保留最近粘贴的记录，不含其文本。</translation>
+    </message>
+    <message>
+        <source>Let a paste press Enter</source>
+        <translation>允许粘贴按下回车键</translation>
+    </message>
+    <message>
+        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
+        <translation>含换行的文本也需要它：键盘会把换行输入为回车键。</translation>
+    </message>
+    <message>
+        <source>Last pastes</source>
+        <translation>最近的粘贴</translation>
+    </message>
+    <message>
+        <source>(unverified)</source>
+        <translation>（未验证）</translation>
+    </message>
+    <message>
+        <source>%1 bytes</source>
+        <translation>%1 字节</translation>
+    </message>
+    <message>
+        <source>refused</source>
+        <translation>已拒绝</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>失败</translation>
     </message>
 </context>
 <context>

@@ -3,9 +3,12 @@
 
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import "devices.js" as Devices
 
 Page {
+    id: page
+    // The devices in the user's order and collections (App::arranged).
+    readonly property var view: app.arranged(app.member.devices, app.arrangement)
+
     // Aurora lets an app read the clipboard only in the foreground: what the
     // user copied goes to the group when the app comes to the front.
     Connections {
@@ -24,6 +27,12 @@ Page {
 
         PullDownMenu {
             MenuItem {
+                visible: app.keyboard.state === "connected"
+                text: qsTr("Type the clipboard on %1").arg(app.keyboard.host !== "" ? app.keyboard.host : qsTr("the keyboard's device"))
+                enabled: !app.keyboard.typing
+                onClicked: app.keyboard.typeClipboard()
+            }
+            MenuItem {
                 visible: app.keyLevel === "none"
                 text: qsTr("Check the key again")
                 enabled: !app.busy
@@ -32,6 +41,16 @@ Page {
             MenuItem {
                 text: qsTr("Settings")
                 onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
+            }
+            MenuItem {
+                visible: app.hasArrangement
+                text: qsTr("Back to the group's order")
+                onClicked: app.arrange({ op: "reset" })
+            }
+            MenuItem {
+                visible: app.member.devices.length > 0 && app.group !== ""
+                text: qsTr("New collection…")
+                onClicked: pageStack.push(Qt.resolvedUrl("CollectionNameDialog.qml"))
             }
             MenuItem {
                 visible: app.member.devices.length > 0
@@ -241,64 +260,15 @@ Page {
             }
 
             // The group's devices (docs/apps.md, "Screens", Home), as tiles
-            // or as a list; a tap opens the device's page.
+            // or as a list, in the user's order and collections; a tap opens
+            // the device's page, a long press arranges it.
             SectionHeader {
                 visible: app.member.devices.length > 0
                 text: qsTr("Devices")
             }
-            Flow {
-                id: tiles
-                visible: !app.deviceList
-                x: Theme.horizontalPageMargin - Theme.paddingSmall
-                width: parent.width - 2 * x
-                // Tiles at least as wide as on the other phones, two in a
-                // row on a phone held upright, so their words fit.
-                property int perRow: Math.max(2, Math.floor(width / (Theme.itemSizeExtraLarge * 2.2)))
-                Repeater {
-                    model: tiles.visible ? Devices.selfFirst(app.member.devices) : []
-                    DeviceTile {
-                        width: tiles.width / tiles.perRow
-                        device: modelData
-                    }
-                }
-            }
-            Repeater {
-                model: app.deviceList ? Devices.selfFirst(app.member.devices) : []
-                ListItem {
-                    contentHeight: Theme.itemSizeMedium
-                    onClicked: pageStack.push(Qt.resolvedUrl("DevicePage.qml"), { device: modelData })
-                    Rectangle {
-                        id: dot
-                        x: Theme.horizontalPageMargin
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: Theme.paddingMedium
-                        height: width
-                        radius: width / 2
-                        color: modelData.online || modelData.self ? Theme.highlightColor : "transparent"
-                        border.color: Theme.secondaryColor
-                        border.width: modelData.online || modelData.self ? 0 : 1
-                    }
-                    Column {
-                        anchors.left: dot.right
-                        anchors.leftMargin: Theme.paddingMedium
-                        anchors.right: parent.right
-                        anchors.rightMargin: Theme.horizontalPageMargin
-                        anchors.verticalCenter: parent.verticalCenter
-                        Label {
-                            width: parent.width
-                            text: Devices.name(modelData)
-                            color: highlighted ? Theme.highlightColor : Theme.primaryColor
-                            truncationMode: TruncationMode.Fade
-                        }
-                        Label {
-                            width: parent.width
-                            text: [Devices.kind(modelData), Devices.system(modelData), Devices.mark(modelData)].filter(function(s) { return s !== "" }).join(" · ")
-                            font.pixelSize: Theme.fontSizeExtraSmall
-                            color: Theme.secondaryColor
-                            truncationMode: TruncationMode.Fade
-                        }
-                    }
-                }
+            DeviceItems {
+                level: page.view
+                view: page.view
             }
 
             BusyIndicator {

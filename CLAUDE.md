@@ -93,7 +93,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   Ctrl+V or SendInput's Unicode keys, the secure desktop and integrity checks), `packaging/windows`
   (`install.ps1`, `uninstall.ps1`, `get.ps1`); CI's `windows installer` job runs them.
 - `apps/ios/CBBKit`: the phone's kit: `CoreMember` (the member in the Rust core, ffi's
-  `cbb_member_*`, which syncs; the app hands it addresses and answers its events), `Pairing*`,
+  `cbb_member_*`, which syncs; the app hands it addresses and answers its events), `CorePairing`
+  (making the group, admitting and joining through the core's admission), `Pairing*`,
   `Member` (the wire format, for pairing and restoring), `Records`, `Certificates`,
   `PhoneGroup`, `Discovery`/`BonjourBrowser` (finding the members and their addresses),
   `TLSTransport` (pairing), `KeychainIdentity`, `SecKeySigner`, `AwayFromHome` (sync away from
@@ -141,7 +142,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   UAC, `frontend/` plain HTML/JS with `tokens.js` from `tools/tokens` and `l10n/ru.json`);
   CI's `tray app` jobs.
 - `apps/android/kit`: the phone's kit in Kotlin, the Android twin of the Swift kit: `CoreMember` (the member in
-  the Rust core through JNA, which syncs), pairing, records, certificates, restoring, credentials; the Kotlin
+  the Rust core through JNA, which syncs), `CorePairing` (making the group, admitting and joining through the
+  core's admission), pairing, records, certificates, restoring, credentials; the Kotlin
   node, its sync engine's network part and its member listener and dialer are gone (D-86), as are the Swift
   kit's (`MemberNode`, `SyncEngine`, `MemberListener`, `MemberDialer`); `TLSTransport` stays for pairing;
   `apps/android/app`: the Compose app (`WatchLink` tells the Wear OS watch, `BluetoothKeyboard` types
@@ -160,10 +162,10 @@ Enclave, Face ID before each signing action), admits computers by QR code, syncs
 shows the devices and removes them, renews certificates (any admin renews any device, the
 `cert` message carrying its admin CA); admin CAs under the root work in Go and in the kit
 (records, chains, Welcome `issuer`); a second phone joins from its Start
-screen and the root makes it an admin (`PairingJoiner`, `TLSListener`, `PhoneGroup.joined`);
+screen and the root makes it an admin (`CorePairing`, the core's admission, on both phones);
 an admin phone removes a lost root phone by taking the group over with `root` records
-(`PhoneGroup.takeOver`, a claim that waits the root's delay, then `finishTakeOver`; both
-kits' `RecordSet` asks the Rust core);
+(the core's `take_over` through `CoreMember.claim`, a claim that waits the root's delay, then
+`CoreMember.finishTakeover`; both kits' `RecordSet` asks the Rust core);
 a computer of a phone group can be an admin: the root phone's "Make it an admin" certifies
 the admin key its hello offers (`PhoneGroup.makeAdmin`, the `admin` message; Go's
 `Identity.AdminKey`/`AdminCA`); the lite member for Linux (`member/`), with
@@ -193,6 +195,6 @@ Secure Enclave key creation with user presence, the Face ID prompt, the keychain
 for TLS, the admin CA in the TLS chain, making a computer an admin, sync both ways, the
 watch's list, remote paste to the Mac at home and away from home (through a Mac hub and
 the `cbb.tools` forwarder). Not yet: listening for a joining phone
-(`TLSListener`), the takeover (a new Secure Enclave root key signed right after the admin
+(`CorePairing.Listener`), the takeover (a new Secure Enclave root key signed right after the admin
 key) and a run of the background app refresh (the simulator has no BGTaskScheduler); test
 these on a device before relying on them.

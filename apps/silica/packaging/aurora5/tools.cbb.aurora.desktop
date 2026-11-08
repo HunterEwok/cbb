@@ -9,7 +9,7 @@ Name=CBB
 X-Share-Methods=text;files
 
 [X-Application]
-Permissions=Internet;Camera;UserDirs
+Permissions=Internet;Camera;UserDirs;Bluetooth
 OrganizationName=tools.cbb
 ApplicationName=aurora
 

@@ -223,6 +223,33 @@ pub struct Hub {
 /// (docs/protocol.md, section 11, "VLESS").
 static VLESS_FIRST: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
+/// The endpoint each hub's next link starts with, after a link that ended
+/// before the hub answered: the next one in its list, None for its way over
+/// VLESS, whose local address is new with each link. A dial gives up after
+/// about as long as a link waits before it tries the next endpoint, so a
+/// hub reached only by a later endpoint would otherwise never be reached.
+static TRY_NEXT: Mutex<Vec<(String, Option<SocketAddr>)>> = Mutex::new(Vec::new());
+
+/// Puts first the endpoint TRY_NEXT names for the hub, if it has one.
+fn start_with_next(hub: &str, endpoints: &mut [SocketAddr], vless_at: Option<SocketAddr>) {
+    if let Some((_, at)) = TRY_NEXT.lock().unwrap().iter().find(|(h, _)| h == hub)
+        && let Some(i) = endpoints.iter().position(|e| Some(*e) == at.or(vless_at))
+    {
+        endpoints.rotate_left(i);
+    }
+}
+
+/// Notes, as a link ends, where the hub's next link starts: after the
+/// endpoint in use if the hub never answered, else where it always does.
+fn note_next(hub: &str, endpoints: &[SocketAddr], current: usize, vless_at: Option<SocketAddr>, answered: bool) {
+    let mut next = TRY_NEXT.lock().unwrap();
+    next.retain(|(h, _)| h != hub);
+    if !answered && endpoints.len() > 1 {
+        let at = endpoints[(current + 1) % endpoints.len()];
+        next.push((hub.to_string(), (Some(at) != vless_at).then_some(at)));
+    }
+}
+
 impl Hub {
     /// Reports whether the offer gives a way to the hub: an address, or
     /// VLESS.
@@ -810,6 +837,7 @@ impl Link {
                 endpoints.push(at);
             }
         }
+        start_with_next(&hub.device, &mut endpoints, vless_at);
         let ln = TcpListener::bind("127.0.0.1:0").context("cannot open the tunnel's local port")?;
         ln.set_nonblocking(true).context("cannot open the tunnel's local port")?;
         let port = ln.local_addr().context("cannot open the tunnel's local port")?.port();
@@ -837,6 +865,7 @@ impl Link {
         let mut pump = Pump::new(tunn, limiter, endpoints, ln, own, peer, answered.clone(), log)?;
         pump.awg = awg;
         pump.vless = vless_at.map(|at| (hub.device.clone(), at));
+        pump.hub = hub.device.clone();
         pump.wanted = wanted.clone();
         let thread = {
             let stop = stop.clone();
@@ -954,6 +983,8 @@ struct Pump {
     awg: Option<crate::awg::Awg>,
     /// The hub and the local address of its way over VLESS, if it has one.
     vless: Option<(String, SocketAddr)>,
+    /// The hub's device ID.
+    hub: String,
     /// The endpoint the app asked for (Link::set_endpoint).
     wanted: Arc<Mutex<Option<SocketAddr>>>,
 }
@@ -1012,6 +1043,7 @@ impl Pump {
             said: false,
             awg: None,
             vless: None,
+            hub: String::new(),
             wanted: Arc::new(Mutex::new(None)),
         })
     }
@@ -1030,6 +1062,8 @@ impl Pump {
         for b in &self.bridges {
             let _ = b.local.shutdown(Shutdown::Both);
         }
+        let vless_at = self.vless.as_ref().map(|(_, v)| *v);
+        note_next(&self.hub, &self.endpoints, self.current, vless_at, self.answered.load(Ordering::SeqCst));
     }
 
     /// Does what can be done now; reports whether anything moved.
@@ -1334,6 +1368,30 @@ fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // A link that ends before the hub answers makes the next one start at
+    // the following endpoint; the way over VLESS is found again by its
+    // role, as its local address is new with each link; an answer forgets it.
+    #[test]
+    fn next_link_starts_after_an_unanswered_endpoint() {
+        let udp: SocketAddr = "192.0.2.1:51820".parse().unwrap();
+        let first_vless: SocketAddr = "127.0.0.1:40001".parse().unwrap();
+        let hub = "next-link-test-hub";
+        note_next(hub, &[udp, first_vless], 0, Some(first_vless), false);
+        let later_vless: SocketAddr = "127.0.0.1:40002".parse().unwrap();
+        let mut endpoints = vec![udp, later_vless];
+        start_with_next(hub, &mut endpoints, Some(later_vless));
+        assert_eq!(endpoints, vec![later_vless, udp]);
+        note_next(hub, &endpoints, 0, Some(later_vless), false);
+        let mut endpoints = vec![udp, first_vless];
+        start_with_next(hub, &mut endpoints, Some(first_vless));
+        assert_eq!(endpoints, vec![udp, first_vless]);
+        note_next(hub, &[udp, first_vless], 0, Some(first_vless), false);
+        note_next(hub, &[udp, first_vless], 1, Some(first_vless), true);
+        let mut endpoints = vec![udp, later_vless];
+        start_with_next(hub, &mut endpoints, Some(later_vless));
+        assert_eq!(endpoints, vec![udp, later_vless]);
+    }
 
     /// A Go hub's state (testdata/interop/tunnel-state.json, which
     /// internal/tunnel's TestStateVectors writes) reads and saves again

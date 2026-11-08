@@ -299,7 +299,8 @@ public final class CoreMember: @unchecked Sendable {
         }
     }
 
-    private let handle: OpaquePointer
+    /// The member's handle, which an admission (CorePairing.Admitting) runs on.
+    let handle: OpaquePointer
     private let context: Context
     private let lock = NSLock()
     private var stopped = false
@@ -650,6 +651,115 @@ public final class CoreMember: @unchecked Sendable {
     /// The devices connected now, by ID.
     public func connected() -> Set<String> { Set(((try? peers()) ?? []).map(\.device)) }
 
+    // MARK: Taking the group over
+
+    /// Where a claim to take the group over stands, as finish_takeover
+    /// answers.
+    public struct Takeover: Decodable, Sendable {
+        /// none, pending, cancelled, void, competing, disputed or effective.
+        public var state: String
+        /// How long the claim still waits, while pending.
+        public var leftMS: Int64
+        /// The phone's member certificate from the new root, once effective.
+        public var cert: Data?
+
+        enum CodingKeys: String, CodingKey { case state, leftMS = "left_ms", cert }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            state = try c.decode(String.self, forKey: .state)
+            leftMS = try c.decodeIfPresent(Int64.self, forKey: .leftMS) ?? 0
+            cert = try c.decodeIfPresent(Data.self, forKey: .cert)
+        }
+    }
+
+    /// Who claims the group (docs/protocol.md, section 10, "Handing the
+    /// group over").
+    public enum Claim: String, Sendable {
+        /// An admin phone, from the lost root's device.
+        case takeOver = "take_over"
+        /// The admin phone the root handed the group to.
+        case takeHandedOver = "take_handed_over"
+        /// The group's recovery key, under its admin CA.
+        case recover
+    }
+
+    /// The uncompressed point of a SubjectPublicKeyInfo, as the member's
+    /// manage requests name a key.
+    private static func point(_ der: Data) throws -> Data {
+        try P256.Signing.PublicKey(derRepresentation: der).x963Representation
+    }
+
+    /// A root CA for a new key of this phone, before a claim
+    /// (cbb_member_manage's root_ca): public is the new key, DER, which sign
+    /// signs a digest with. The app keeps the CA and the key until the
+    /// claim takes effect or ends.
+    public func rootCA(public: Data, sign: @escaping (Data) throws -> Data) throws -> Data {
+        struct A: Encodable { var action = "root_ca", `public`: Data }
+        struct R: Decodable { var root_ca: Data? }
+        guard let ca = try manage(A(public: try Self.point(`public`)), sign: sign, as: R.self).root_ca else {
+            throw Core.Mismatch(reason: "the member's root CA is missing")
+        }
+        return ca
+    }
+
+    /// Claims the group for rootCA, signed with the key public (DER) under
+    /// its CA ca (the admin key and admin CA, or the recovery key and its
+    /// CA); the member adds the claim to its records and sends it. lost is
+    /// the lost root's device for Claim.takeOver.
+    public func claim(_ kind: Claim, rootCA: Data, public: Data, ca: Data, sign: @escaping (Data) throws -> Data, lost: String? = nil) throws {
+        struct A: Encodable { var action: String, device: String?, root_ca: Data, `public`: Data, admin_ca: Data }
+        _ = try manage(A(action: kind.rawValue, device: lost, root_ca: rootCA, public: try Self.point(`public`), admin_ca: ca),
+                       sign: sign, as: Empty.self)
+    }
+
+    /// Finishes this phone's claim for rootCA once it took effect: the
+    /// member signs, with the new root key public (DER) through sign, the
+    /// phone's member certificate from the new root and the records a new
+    /// root starts with, adds and sends them. While the claim waits, or
+    /// after it ended, it signs nothing and only says where the claim
+    /// stands, so the app may ask again.
+    public func finishTakeover(rootCA: Data, public: Data, name: String, os: String = "ios", store: String, seal: Data?,
+                               sign: @escaping (Data) throws -> Data) throws -> Takeover {
+        struct A: Encodable { var action = "finish_takeover", root_ca: Data, `public`: Data, name: String, os: String, store: String, seal: Data? }
+        return try manage(A(root_ca: rootCA, public: try Self.point(`public`), name: name, os: os, store: store, seal: seal),
+                          sign: sign, as: Takeover.self)
+    }
+
+    /// The signer of one manage call, which the core calls during it only.
+    fileprivate final class Signing {
+        let sign: (Data) throws -> Data
+        init(_ sign: @escaping (Data) throws -> Data) { self.sign = sign }
+    }
+
+    /// Asks the member for an admin's change or a step of a takeover
+    /// (cbb_member_manage), signed through sign during this call; decodes
+    /// its answer's ok.
+    func manage<A: Encodable, R: Decodable>(_ request: A, sign: @escaping (Data) throws -> Data, as _: R.Type) throws -> R {
+        guard !lock.withLock({ stopped }) else { throw Stopped() }
+        let bytes = try JSONEncoder().encode(request)
+        let signing = Signing(sign)
+        var count = 0
+        // Held until the call is over: the core calls it during the call.
+        let answer: UnsafeMutablePointer<UInt8>? = withExtendedLifetime(signing) {
+            let raw = Unmanaged.passUnretained(signing).toOpaque()
+            return bytes.withUnsafeBytes { r in
+                cbb_member_manage(handle, r.bindMemory(to: UInt8.self).baseAddress, r.count, coreManageSign, raw, &count)
+            }
+        }
+        guard let answer else { throw Core.Mismatch(reason: "the member gave no answer to manage") }
+        defer { cbb_free(answer, count) }
+        let reply: Reply<R>
+        do {
+            reply = try JSONDecoder().decode(Reply<R>.self, from: Data(bytes: answer, count: count))
+        } catch {
+            throw Core.Mismatch(reason: "the member's answer to manage does not read: \(error)")
+        }
+        if let e = reply.error { throw Failure.of(e.refusal) }
+        guard let ok = reply.ok else { throw Core.Mismatch(reason: "the member's answer to manage has neither ok nor error") }
+        return ok
+    }
+
     // MARK: Events
 
     /// An event as the core sends it.
@@ -751,4 +861,16 @@ private func coreMemberSign(_ ctx: UnsafeMutableRawPointer?, _ digest: UnsafePoi
 private func coreMemberEvent(_ ctx: UnsafeMutableRawPointer?, _ event: UnsafePointer<UInt8>?, _ len: Int) {
     guard let event else { return }
     CoreMember.deliver(ctx, Data(bytes: event, count: len))
+}
+
+/// The signing callback of one manage call (cbb_sign_fn): its signer signs
+/// the 32-byte digest; the signature, DER, goes into sig's 72 bytes.
+private func coreManageSign(_ ctx: UnsafeMutableRawPointer?, _ digest: UnsafePointer<UInt8>?, _ sig: UnsafeMutablePointer<UInt8>?,
+                            _ sigLen: UnsafeMutablePointer<Int>?) -> Int32 {
+    guard let ctx, let digest, let sig, let sigLen else { return 1 }
+    let signing = Unmanaged<CoreMember.Signing>.fromOpaque(ctx).takeUnretainedValue()
+    guard let s = try? signing.sign(Data(bytes: digest, count: 32)), s.count <= 72 else { return 1 }
+    s.copyBytes(to: sig, count: s.count)
+    sigLen.pointee = s.count
+    return 0
 }

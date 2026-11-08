@@ -280,9 +280,13 @@ object Piv {
      * what would not verify.
      */
     class Signer(private val card: SmartCard, private val slot: Int, override val publicKeyDER: ByteArray, private val pin: String) : CertificateSigner {
-        override fun signature(data: ByteArray): ByteArray {
+        override fun signature(data: ByteArray): ByteArray = signed(data, sha256(data))
+
+        override fun signDigest(digest: ByteArray): ByteArray = signed(null, digest)
+
+        /** The card's signature of digest, checked against the certificate's key over data, or over the digest itself without data. */
+        private fun signed(data: ByteArray?, digest: ByteArray): ByteArray {
             verify(card, pin)
-            val digest = sha256(data)
             val (r, sw) = command(card, 0x87, ALG_P256, slot, tlv(0x7c, tlv(0x82, ByteArray(0)) + tlv(0x81, digest)))
             if (sw == 0x6982) fail(Kind.CARD, "the YubiKey wants its PIN first")
             if (sw != 0x9000) cardFail("signing", sw)
@@ -292,9 +296,9 @@ object Piv {
                 fail(Kind.CARD, "the signature does not parse")
             }
             val pub = p256PublicKey(publicKeyDER) ?: fail(Kind.CARD, "the recovery key is not a P-256 key")
-            val ok = java.security.Signature.getInstance("SHA256withECDSA").run {
+            val ok = java.security.Signature.getInstance(if (data != null) "SHA256withECDSA" else "NONEwithECDSA").run {
                 initVerify(pub)
-                update(data)
+                update(data ?: digest)
                 try {
                     verify(sig)
                 } catch (e: java.security.SignatureException) {
