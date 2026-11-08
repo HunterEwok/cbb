@@ -722,12 +722,6 @@ func (s *Credentials) Hubs() (Credential, *CredentialBody, bool) {
 	return s.typed(func() *Credential { return s.hubs })
 }
 
-// Members returns the members' credential kept for the period, and its
-// body.
-func (s *Credentials) Members() (Credential, *CredentialBody, bool) {
-	return s.typed(func() *Credential { return s.members })
-}
-
 func (s *Credentials) typed(f func() *Credential) (Credential, *CredentialBody, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -810,9 +804,6 @@ func LoadCredentials(dir string, groupCA, root *x509.Certificate, member func(Ke
 	s.Add(root, member, all)
 	return s, nil
 }
-
-// GroupCA returns the group CA of the set.
-func (s *Credentials) GroupCA() *x509.Certificate { return s.groupCA }
 
 // PublicKeyHash returns the hash of a public key, as KeyHashOf a
 // certificate of it: SHA-256 over its SubjectPublicKeyInfo.
