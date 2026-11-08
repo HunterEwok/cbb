@@ -253,10 +253,20 @@ pub struct LocalTime {
 /// The local clock's time now.
 #[cfg(unix)]
 pub fn local_time() -> LocalTime {
-    // SAFETY: time with a null pointer only returns the time; localtime_r
-    // writes into tm, which is a valid tm.
+    // SAFETY: time with a null pointer only returns the time.
+    local_time_at_secs(unsafe { libc::time(std::ptr::null_mut()) })
+}
+
+/// The local clock's time at ms, milliseconds since 1970 (UTC).
+#[cfg(unix)]
+pub fn local_time_at(ms: i64) -> LocalTime {
+    local_time_at_secs(ms.div_euclid(1000) as libc::time_t)
+}
+
+#[cfg(unix)]
+fn local_time_at_secs(now: libc::time_t) -> LocalTime {
+    // SAFETY: localtime_r writes into tm, which is a valid tm.
     unsafe {
-        let now = libc::time(std::ptr::null_mut());
         let mut tm: libc::tm = std::mem::zeroed();
         libc::localtime_r(&now, &mut tm);
         LocalTime {
@@ -267,6 +277,37 @@ pub fn local_time() -> LocalTime {
             minute: tm.tm_min as u32,
             second: tm.tm_sec as u32,
         }
+    }
+}
+
+/// The local clock's time at ms, milliseconds since 1970 (UTC).
+#[cfg(windows)]
+pub fn local_time_at(ms: i64) -> LocalTime {
+    use windows_sys::Win32::Foundation::{FILETIME, SYSTEMTIME};
+    use windows_sys::Win32::System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime};
+    // 100 ns ticks since 1601.
+    let ticks = (ms.max(0) as u64) * 10_000 + 116_444_736_000_000_000;
+    let ft = FILETIME { dwLowDateTime: ticks as u32, dwHighDateTime: (ticks >> 32) as u32 };
+    // SAFETY: both calls write into valid SYSTEMTIMEs; a null time zone is
+    // the current one.
+    let st = unsafe {
+        let mut utc: SYSTEMTIME = std::mem::zeroed();
+        let mut local: SYSTEMTIME = std::mem::zeroed();
+        if FileTimeToSystemTime(&ft, &mut utc) == 0
+            || SystemTimeToTzSpecificLocalTime(std::ptr::null(), &utc, &mut local) == 0
+        {
+            utc
+        } else {
+            local
+        }
+    };
+    LocalTime {
+        year: st.wYear as i32,
+        month: st.wMonth as u32,
+        day: st.wDay as u32,
+        hour: st.wHour as u32,
+        minute: st.wMinute as u32,
+        second: st.wSecond as u32,
     }
 }
 

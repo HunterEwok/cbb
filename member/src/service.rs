@@ -1843,7 +1843,7 @@ impl Service {
         if let Ok(c) = idle {
             let _ = c.set_read_timeout(None);
         }
-        if control::is_admin(&m.header.op) && !admin {
+        if control::needs_admin(&m.header) && !admin {
             let e = Error::msg(format!(
                 "{:?} changes the group, so the service takes it only on its admin socket, which only the administrator reaches",
                 m.header.op

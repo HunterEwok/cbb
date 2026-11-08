@@ -626,11 +626,15 @@ pub fn is_admin(op: &str) -> bool {
             // The uinput helper, as root, through the socket's group; the
             // service checks that it is root.
             | "keys"
-            // This device's own pause of receiving (design.md, "Muting a
-            // device"); the lite member mutes no other device.
-            | "mute"
-            | "unmute"
     )
+}
+
+/// Whether the service takes the request h only on its admin socket, as
+/// Go's NeedsAdmin: is_admin of its operation, except turning this device's
+/// own sync on or off, which changes nothing for the group (design.md,
+/// "Sync on or off").
+pub fn needs_admin(h: &Header) -> bool {
+    !(h.op == "sync" && h.device.is_empty()) && is_admin(&h.op)
 }
 
 /// The admin socket next to the control socket at `socket`.

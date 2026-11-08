@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The Rust `cbb` takes the group commands of the command line, with the Go cbb's words and
+  exit codes (2 for a wrong use): `new`, `remove`, `rename`, `takeover -delay`, `incoming`,
+  `keys`, `global hubs`, `freeze`, `unfreeze`, `admin`, `resolve`, `handover`, `mute`,
+  `unmute`, `config` and `network`; `TestRustCommandLine` runs them against Rust services.
+  `cbb mute` and `cbb unmute` go through the administrator's socket, as in the Go service, and
+  a command that does not reach a device names why.
 - The Go service's tests run on the Rust service (`CBB_TEST_RUST_SERVICE` names its
   binary): a Linux member with the default settings is then the Rust service, which finds
   the others by mDNS, beside Go services that answer by mDNS too. The Rust service now

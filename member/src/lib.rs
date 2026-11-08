@@ -21,6 +21,7 @@ mod away;
 #[cfg(feature = "tunnel")]
 mod awg;
 pub mod button;
+mod cli;
 pub mod content;
 mod control;
 mod copies;
@@ -178,7 +179,7 @@ port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the
 
 /// The commands of a full member (cmd/cbb) that the lite member does not
 /// have, so that it says so instead of "unknown command".
-const FULL_ONLY: &[&str] = &["remove", "admin", "takeover", "new", "invite", "forward", "relay"];
+const FULL_ONLY: &[&str] = &["invite", "forward", "relay"];
 
 /// Reports whether this is an OpenWrt router, whose /var is in RAM and
 /// which keeps /etc across upgrades.
@@ -187,7 +188,7 @@ pub(crate) fn openwrt() -> bool {
 }
 
 #[derive(Clone)]
-struct Global {
+pub(crate) struct Global {
     state: PathBuf,
     socket: PathBuf,
 }
@@ -242,6 +243,19 @@ pub fn main() {
                 #[cfg(unix)]
                 "paste-helper" => pastehelper::run(&g.socket, rest),
                 "update" => cmd_update(&g, rest),
+                "remove" => cli::remove(&g, rest),
+                "rename" => cli::rename(&g, rest),
+                "takeover" => cli::takeover(&g, rest),
+                "keys" => cli::keys(&g, rest),
+                "incoming" => cli::incoming(&g, rest),
+                "handover" => cli::handover(&g, rest),
+                "freeze" | "unfreeze" => cli::freeze(&g, rest, cmd == "freeze"),
+                "resolve" => cli::resolve(&g, rest),
+                "admin" => cli::admin(&g, rest),
+                "new" => cli::new(&g, rest),
+                "mute" | "unmute" => cli::mute(&g, rest, cmd == "unmute"),
+                "config" => cli::config(&g, rest),
+                "network" => cli::network(&g, rest),
                 "version" | "-version" | "--version" => {
                     println!(
                         "cbb {} ({}/{}), the lite member",
@@ -265,7 +279,7 @@ pub fn main() {
                 Ok(()) => 0,
                 Err(e) => {
                     eprintln!("cbb: {}", e.for_user());
-                    1
+                    if cli::is_usage(&e) { 2 } else { 1 }
                 }
             }
         }
@@ -274,7 +288,7 @@ pub fn main() {
 }
 
 /// The name of a flag, with one dash or two.
-fn flag(a: &str) -> Option<&str> {
+pub(crate) fn flag(a: &str) -> Option<&str> {
     a.strip_prefix("--").or_else(|| a.strip_prefix('-')).filter(|f| !f.is_empty())
 }
 
@@ -646,7 +660,7 @@ fn hint(systemd: bool, systemctl: &str) -> String {
 
 /// Sends one request to the service and returns its answer.
 pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
-    let conn = if control::is_admin(&m.header.op) {
+    let conn = if control::needs_admin(&m.header) {
         let path = control::admin_socket(&g.socket);
         match UnixStream::connect(&path) {
             Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
@@ -1216,7 +1230,8 @@ fn cmd_global(g: &Global, args: &[String]) -> Result<()> {
             h.consent = true;
         }
         [a] if a == "off" => h.name = "off".into(),
-        _ => return Err(Error::msg("usage: cbb global [on|off]")),
+        [a, rest @ ..] if a == "hubs" => return cli::hubs(g, rest),
+        _ => return Err(cli::usage("cbb global [on|off]")),
     }
     let m = request(g, &control::Message::new(h, Vec::new()))?;
     print_away(m.header.status.and_then(|s| s.away).as_ref());

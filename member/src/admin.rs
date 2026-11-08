@@ -1100,7 +1100,10 @@ impl Admin<'_> {
         let order = if on { cbb_core::manage::Order::Mute(for_ms) } else { cbb_core::manage::Order::Unmute };
         let r =
             cbb_core::manage::order(&self.node.records().lock().unwrap(), &signer, &d.id, &order, uptime::wall_ms())?;
-        let res = self.node.command(&r, Duration::from_secs(5)).map_err(|e| e.context(d.name.clone()))?;
+        let res = self.node.command(&r, Duration::from_secs(5)).map_err(|e| {
+            let m = format!("{}: {}", d.name, e.message());
+            e.context(m)
+        })?;
         if res.status != "done" {
             return Err(Error::msg(format!("{} {} it: {}", d.name, res.status, res.reason)));
         }
