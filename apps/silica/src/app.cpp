@@ -573,6 +573,7 @@ void App::leave()
     Errors::log(QStringLiteral("group: left %1").arg(m_member.groupTag()));
     m_member = Membership();
     m_events.forget();
+    m_paste.forgetLog();
     show(QString());
     emit groupChanged();
 

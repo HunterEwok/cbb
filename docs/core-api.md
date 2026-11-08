@@ -106,6 +106,7 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `muted` | none | `{"paused", "paused_ms", "muted", "muted_ms"}`: how long that pause and an admin's mute last, 0 for until lifted |
 | `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features, chain}]`, as their hellos and reach messages present them, `chain` the certificates the handshake checked, leaf first |
 | `answer` | `token` (a `command` event's), `status` (`done`, `refused` or `failed`), `reason` | `{}`: the result the command's sender gets |
+| `check_command` | `command` (a `command` event's record) | what `group_command` answers for it against the node's records, opened with the phone's key for sealed messages, and for a paste `clean`: its text as it may go in (newlines and tabs, no other control characters or terminal escapes); a command refused is an error. The app keeps the replay cache and its own switches |
 | `tunnel_key` | `key`, `psk` (32 bytes each, base64), or neither while sync away from home is off | `{}`: what the hellos offer the group's hubs; the phone connects to the full members again |
 | `evidence` | `evidence`: the attestations of the phone's keys | `{}`: every peer gets them after its hello (protocol.md, section 17) |
 | `disconnect` | `device` | `{}`: the connection to it ends with a goodbye; it is dialed again later |

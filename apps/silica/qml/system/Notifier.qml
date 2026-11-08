@@ -30,6 +30,17 @@ Item {
         }
     }
 
+    // An admin's paste went in.
+    Connections {
+        target: app.paste
+        onPasted: {
+            note.body = qsTr("Pasted from %1").arg(name)
+            note.previewBody = note.body
+            note.replacesId = 0
+            note.publish()
+        }
+    }
+
     Connections {
         target: app.events
         onPosted: {

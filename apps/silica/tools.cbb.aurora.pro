@@ -34,6 +34,7 @@ SOURCES += \
     src/main.cpp \
     src/admit.cpp \
     src/blekeyboard.cpp \
+    src/pastereceiver.cpp \
     src/app.cpp \
     src/core.cpp \
     src/errors.cpp \
@@ -45,6 +46,7 @@ SOURCES += \
 HEADERS += \
     src/admit.h \
     src/blekeyboard.h \
+    src/pastereceiver.h \
     src/app.h \
     src/core.h \
     src/errors.h \

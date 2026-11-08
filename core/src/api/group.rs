@@ -472,31 +472,31 @@ struct CommandArgs {
 /// section 15, "Sealed commands").
 fn command(a: CommandArgs) -> Result<Vec<u8>, Refusal> {
     let s = a.set.open()?;
-    let mut body = s
-        .verify_command(&a.command, &a.me, a.set.now_ms)
-        .map_err(|e| refuse(Code::Command, e.context("The command is refused.")))?;
-    let sealed_to_me = s.devices().iter().any(|d| d.id == a.me && !d.seal.is_empty());
+    checked_command(&s, &a.command, &a.me, a.set.now_ms, &a.secret)
+        .map(json)
+        .map_err(|e| refuse(Code::Command, e.context("The command is refused.")))
+}
+
+/// What `group_command` answers for the command c to the member me of the
+/// set s, at now_ms, with secret its key for sealed messages (empty when it
+/// has none): for a phone's member, which checks a command with the
+/// records it keeps itself.
+pub fn checked_command(s: &Records, c: &Record, me: &str, now_ms: i64, secret: &[u8]) -> Result<Value, Error> {
+    let mut body = s.verify_command(c, me, now_ms)?;
+    let sealed_to_me = s.devices().iter().any(|d| d.id == me && !d.seal.is_empty());
     if body.sealed() {
-        if a.secret.is_empty() {
-            return Err(refuse(
-                Code::Command,
-                Error::msg("the command is sealed, and this device has no key to open it")
-                    .context("The command is refused."),
-            ));
+        if secret.is_empty() {
+            return Err(Error::msg("the command is sealed, and this device has no key to open it"));
         }
-        body.open(&a.secret).map_err(|e| refuse(Code::Command, e.context("The command is refused.")))?;
+        body.open(secret)?;
     } else if sealed_to_me && body.kind == "paste" {
-        return Err(refuse(
-            Code::Command,
-            Error::msg("a paste for this device must be sealed to its key, and this one came in the open")
-                .context("The command is refused."),
-        ));
+        return Err(Error::msg("a paste for this device must be sealed to its key, and this one came in the open"));
     }
-    let (dev, root) = s.command_signer(&a.command);
-    let (sender, verified) = s.command_sender(&a.command, &body.by);
+    let (dev, root) = s.command_signer(c);
+    let (sender, verified) = s.command_sender(c, &body.by);
     let mut m = Map::new();
-    let mut fields: Value = serde_json::from_slice(&a.command.body)
-        .map_err(|e| refuse(Code::Request, Error::with("The command's body does not read.", e)))?;
+    let mut fields: Value =
+        serde_json::from_slice(&c.body).map_err(|e| Error::with("The command's body does not read.", e))?;
     if body.opened {
         if let Some(f) = fields.as_object_mut() {
             for (k, v) in [
@@ -523,7 +523,7 @@ fn command(a: CommandArgs) -> Result<Vec<u8>, Refusal> {
     }
     m.insert("command".into(), fields);
     if let Some(d) = dev {
-        m.insert("signer".into(), device_value(&d, &s));
+        m.insert("signer".into(), device_value(&d, s));
     }
     if root {
         m.insert("root".into(), Value::from(true));
@@ -532,7 +532,7 @@ fn command(a: CommandArgs) -> Result<Vec<u8>, Refusal> {
     if verified {
         m.insert("verified".into(), Value::from(true));
     }
-    Ok(json(Value::Object(m)))
+    Ok(Value::Object(m))
 }
 
 #[derive(Deserialize)]

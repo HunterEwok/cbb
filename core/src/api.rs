@@ -14,6 +14,7 @@
 //! always answers.
 
 mod group;
+pub use group::checked_command;
 mod signed;
 
 use alloc::collections::BTreeMap;

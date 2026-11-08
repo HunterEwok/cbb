@@ -5,12 +5,13 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 // The phone as a Bluetooth keyboard (docs/apps.md, "Bluetooth keyboard"),
-// as on Android: it types the clipboard, at a tap, into a TV, a tablet, a
-// console or a computer that paired with it, which needs nothing
-// installed. Aurora's own pairing dialog asks the user about a new device.
+// as on Android: it types the clipboard, at a tap, or an admin's remote
+// paste into a TV, a tablet, a console or a computer that paired with it,
+// which needs nothing installed. Aurora's own pairing dialog asks the user about a new device.
 Page {
     id: page
     readonly property var kb: app.keyboard
+    readonly property var paste: app.paste
 
     // Ticks the time left while the phone is visible.
     Timer {
@@ -121,6 +122,59 @@ Page {
                 color: Theme.errorColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: page.kb.typed
+            }
+
+            // Remote paste (docs/design.md, "Remote paste"): Aurora lets no
+            // app put keys into another one, so an admin's paste is typed on
+            // the device the keyboard is connected to.
+            SectionHeader { text: qsTr("Remote paste") }
+            TextSwitch {
+                text: qsTr("Let the group's admins paste there")
+                description: qsTr("An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.")
+                automaticCheck: false
+                checked: page.paste.on
+                onClicked: page.paste.on = !page.paste.on
+            }
+            TextSwitch {
+                visible: page.paste.on
+                text: qsTr("Let a paste press Enter")
+                description: qsTr("A text with a line break needs it too: the keyboard types a line break as Enter.")
+                automaticCheck: false
+                checked: page.paste.enter
+                onClicked: page.paste.enter = !page.paste.enter
+            }
+
+            SectionHeader {
+                visible: page.paste.log.length > 0
+                text: qsTr("Last pastes")
+            }
+            Repeater {
+                model: page.paste.log.slice(0, 10)
+                ListItem {
+                    contentHeight: Theme.itemSizeSmall
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2 * x
+                        anchors.verticalCenter: parent.verticalCenter
+                        truncationMode: TruncationMode.Fade
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: modelData.status === "done" ? Theme.primaryColor : Theme.secondaryColor
+                        text: Qt.formatTime(modelData.time, Qt.DefaultLocaleShortDate) + "  "
+                              + (modelData.name || modelData.by) + (modelData.unverified ? " " + qsTr("(unverified)") : "")
+                              + "  " + (modelData.status === "done" ? qsTr("%1 bytes").arg(modelData.bytes)
+                                        : modelData.status === "refused" ? qsTr("refused") : qsTr("failed"))
+                    }
+                    onClicked: if (modelData.reason) reason.text = modelData.reason
+                }
+            }
+            Label {
+                id: reason
+                visible: text !== ""
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeExtraSmall
+                color: Theme.secondaryColor
             }
         }
         VerticalScrollDecorator {}

@@ -339,6 +339,26 @@ impl Member {
         self.node.devices()
     }
 
+    /// A command the node passed to the app (its `others`), checked again
+    /// with the records and opened when sealed, as the core's
+    /// `group_command` answers it, with a paste's text as it may go in
+    /// (`clean`, as the computers clean it): the app takes its orders from
+    /// here.
+    pub fn check_command(&self, c: &Record) -> Result<serde_json::Value> {
+        let me = self.node.identity().id.to_string();
+        let mut v = {
+            let records = self.node.records();
+            let records = records.lock().unwrap();
+            let secret = crate::sealkey::secret().unwrap_or_default();
+            cbb_core::api::checked_command(&records, c, &me, uptime::wall_ms(), secret)?
+        };
+        let text = v.pointer("/command/text").and_then(serde_json::Value::as_str).map(crate::remotepaste::clean);
+        if let (Some(t), Some(o)) = (text, v.as_object_mut()) {
+            o.insert("clean".into(), t.into());
+        }
+        Ok(v)
+    }
+
     /// The group's records, to show and to sign new ones over.
     pub fn records(&self) -> Vec<Record> {
         self.node.records().lock().unwrap().all()

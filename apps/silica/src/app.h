@@ -10,6 +10,7 @@
 #include "join.h"
 #include "member.h"
 #include "membership.h"
+#include "pastereceiver.h"
 #include "platform/osinfo.h"
 
 #include <QJsonObject>
@@ -42,6 +43,7 @@ class App : public QObject
     Q_PROPERTY(Admit *admit READ admit CONSTANT)
     Q_PROPERTY(Events *events READ events CONSTANT)
     Q_PROPERTY(BleKeyboard *keyboard READ keyboard CONSTANT)
+    Q_PROPERTY(PasteReceiver *paste READ paste CONSTANT)
     // Settings: the error details under each error message (Errors::
     // showDetails), the language the next start uses ("" for the
     // system's), and whether the main page shows the devices as a list.
@@ -84,6 +86,7 @@ public:
     Admit *admit() { return &m_admit; }
     Events *events() { return &m_events; }
     BleKeyboard *keyboard() { return &m_keyboard; }
+    PasteReceiver *paste() { return &m_paste; }
 
     bool errorDetails() const;
     void setErrorDetails(bool on);
@@ -180,6 +183,7 @@ private:
     Admit m_admit;
     Events m_events;
     BleKeyboard m_keyboard;
+    PasteReceiver m_paste{&m_node, &m_keyboard};
     bool m_busy = false;
     QTimer m_renewTimer;
     QTimer m_claimTimer;

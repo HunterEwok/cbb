@@ -141,6 +141,8 @@ void Member::start(const Membership &membership, const QString &name, const QByt
     }
     m_error.clear();
     Errors::log(QStringLiteral("member: started in the group %1").arg(membership.groupTag()));
+    m_startedMs = QDateTime::currentMSecsSinceEpoch();
+    m_seen.clear();
     m_peerTimer.start();
     pollMuted();
     pollDevices();
@@ -421,6 +423,9 @@ void Member::event(const QByteArray &json)
                              QByteArray::fromBase64(e.value(QStringLiteral("issuer")).toString().toLatin1()), roots);
     } else if (type == QStringLiteral("mute")) {
         pollMuted();
+    } else if (type == QStringLiteral("command")) {
+        command(e.value(QStringLiteral("token")).toDouble(), e.value(QStringLiteral("from")).toString(),
+                e.value(QStringLiteral("command")).toObject());
     } else if (type == QStringLiteral("copy")) {
         // Images or files from another device come by themselves while the
         // phone takes the group's copies, as texts do through write; the
@@ -429,6 +434,71 @@ void Member::event(const QByteArray &json)
         if (copy.value(QStringLiteral("kind")).toString() == QStringLiteral("media") && !m_paused)
             take(copy);
     }
+}
+
+void Member::command(double token, const QString &from, const QJsonObject &record)
+{
+    if (!m_member)
+        return;
+    const auto refuse = [&](const QString &reason) {
+        Errors::log(QStringLiteral("member: refused a command from %1: %2").arg(from, reason));
+        answer(token, QStringLiteral("refused"), reason);
+    };
+    Failure failure;
+    const QJsonObject c =
+        call(m_member, QStringLiteral("check_command"), QJsonObject{{QStringLiteral("command"), record}}, &failure);
+    if (!failure.isNull()) {
+        refuse(failure.details.isEmpty() ? failure.message : failure.details);
+        return;
+    }
+    const QJsonObject body = c.value(QStringLiteral("command")).toObject();
+    const QString id = body.value(QStringLiteral("id")).toString();
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (qint64(body.value(QStringLiteral("time_ms")).toDouble()) < m_startedMs) {
+        refuse(QStringLiteral("this device started after the command was signed, so it may have carried it out "
+                              "already; send it again"));
+        return;
+    }
+    for (auto it = m_seen.begin(); it != m_seen.end();)
+        it = it.value() <= now ? m_seen.erase(it) : it + 1;
+    if (m_seen.contains(id)) {
+        refuse(QStringLiteral("this command was carried out already"));
+        return;
+    }
+    if (m_seen.size() >= maxCommands) {
+        refuse(QStringLiteral("too many commands; try again in a minute"));
+        return;
+    }
+    m_seen.insert(id, qint64(body.value(QStringLiteral("expires_ms")).toDouble()));
+    const QString kind = body.value(QStringLiteral("type")).toString();
+    if (kind == QStringLiteral("away-off")) {
+        Errors::log(QStringLiteral("member: %1 turned sync away from home off").arg(body.value(QStringLiteral("by")).toString()));
+        if (m_awayOn)
+            setAway(false);
+        answer(token, QStringLiteral("done"), QString());
+    } else if (kind == QStringLiteral("actions-off")) {
+        // A phone has no quick actions, so none of them stays on.
+        answer(token, QStringLiteral("done"), QString());
+    } else if (kind == QStringLiteral("paste") || kind == QStringLiteral("paste-off")) {
+        // The paste receiver answers, maybe once the keyboard has started.
+        QJsonObject checked = c;
+        checked.insert(QStringLiteral("token"), token);
+        emit commandArrived(checked);
+    } else {
+        refuse(QStringLiteral("this phone takes no %1 commands").arg(kind));
+    }
+}
+
+void Member::answer(double token, const QString &status, const QString &reason)
+{
+    if (!m_member)
+        return;
+    Failure failure;
+    call(m_member, QStringLiteral("answer"),
+         QJsonObject{{QStringLiteral("token"), token}, {QStringLiteral("status"), status}, {QStringLiteral("reason"), reason}},
+         &failure);
+    if (!failure.isNull())
+        Errors::log(QStringLiteral("member: answering a command: %1 (%2)").arg(failure.message, failure.details));
 }
 
 void Member::pause(int minutes)

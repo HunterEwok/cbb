@@ -688,6 +688,11 @@ impl Member {
                 let _ = tx.try_send(CommandResult { status: a.status, reason: a.reason, ..CommandResult::default() });
                 done()
             }
+            // A command event's record, checked and opened (docs/core-api.md).
+            "check_command" => {
+                let c: Record = args(arg(&a, "command").clone())?;
+                n.check_command(&c).map_err(|e| e.context("The command is refused."))
+            }
             "tunnel_key" => {
                 #[derive(Deserialize)]
                 struct K {

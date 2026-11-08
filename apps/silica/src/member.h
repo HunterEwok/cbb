@@ -13,6 +13,7 @@
 
 #include <QByteArray>
 #include <QDateTime>
+#include <QHash>
 #include <QImage>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -119,14 +120,25 @@ signals:
     void identityChanged(const QByteArray &cert, const QByteArray &issuer, const QList<QByteArray> &roots);
     // The images or files of a copy are in folder, for a notification.
     void saved(const QString &folder, int count);
+    // A paste or paste-off command an admin signed for this phone, checked
+    // and opened (the member's check_command answer, with the event's
+    // token): the receiver carries it out and answers.
+    void commandArrived(const QJsonObject &checked);
 
 public:
     // Brings the devices up to date now, as after an admin's change.
     void pollDevices();
+    // Answers the command of the token: done, refused or failed, and why
+    // (in English: the sender's log shows it).
+    void answer(double token, const QString &status, const QString &reason);
 
 private:
     Q_INVOKABLE void event(const QByteArray &json);
     void write(const QString &text, bool secret, qint64 ttlMs);
+    // A command for the phone itself (docs/protocol.md, section 15) that
+    // the node passed on: checked with the records, not carried out before
+    // and signed after the member started.
+    void command(double token, const QString &from, const QJsonObject &record);
     void pollPeers();
     void setLast(const QString &text, bool secret);
     // Takes the group's copy (as the core's copy JSON): a text into the
@@ -166,4 +178,8 @@ private:
     QString m_awayError;
     // The core's last error message, so that each is shown and logged once.
     QString m_awayFailure;
+    // The commands carried out, by ID, until they expire.
+    static const int maxCommands = 4096;
+    QHash<QString, qint64> m_seen;
+    qint64 m_startedMs = 0;
 };

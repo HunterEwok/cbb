@@ -501,25 +501,68 @@ void BleKeyboard::type(const QString &text)
         finish(tr("The text has more than %1 characters, more than a keyboard types.").arg(maxChars));
         return;
     }
+    QString untypeable;
     Failure failure;
-    const QJsonObject k = Core::call(QStringLiteral("keyboard"),
-                                     QJsonObject{{QStringLiteral("layout"), layout()}, {QStringLiteral("text"), text}},
-                                     &failure).toObject();
+    const QList<QByteArray> reports = reportsFor(text, &untypeable, &failure);
     if (!failure.isNull()) {
         finish(Errors::shown(failure));
         return;
     }
-    const QString untypeable = k.value(QStringLiteral("untypeable")).toString();
     if (!untypeable.isEmpty()) {
-        QStringList cs;
-        for (const QChar c : untypeable)
-            cs << QString(c);
-        finish(tr("The device's layout has no key for: %1. Pick its layout above.").arg(cs.join(QLatin1Char(' '))));
+        finish(tr("The device's layout has no key for: %1. Pick its layout above.").arg(untypeable));
         return;
     }
-    m_reports.clear();
+    begin(reports);
+}
+
+QString BleKeyboard::typeRemote(const QString &text, bool *refused)
+{
+    *refused = true;
+    if (!on())
+        return QStringLiteral("this phone types remote pastes on its Bluetooth keyboard, which is off; its user turns it "
+                              "on in the app's settings");
+    if (text.size() > maxChars)
+        return QStringLiteral("the text is longer than the %1 characters a keyboard types").arg(maxChars);
+    if (m_listening == 0) {
+        *refused = false;
+        return QStringLiteral("this phone's Bluetooth keyboard is not connected to a device");
+    }
+    if (m_typing.isActive())
+        return QStringLiteral("this phone's Bluetooth keyboard is typing another text; send it again in a moment");
+    QString untypeable;
+    Failure failure;
+    const QList<QByteArray> reports = reportsFor(text, &untypeable, &failure);
+    if (!failure.isNull()) {
+        *refused = false;
+        return failure.details.isEmpty() ? failure.message : failure.details;
+    }
+    if (!untypeable.isEmpty())
+        return QStringLiteral("the host's layout (%1) has no key for %2").arg(layout(), untypeable);
+    begin(reports);
+    return QString();
+}
+
+QList<QByteArray> BleKeyboard::reportsFor(const QString &text, QString *untypeable, Failure *failure) const
+{
+    const QJsonObject k = Core::call(QStringLiteral("keyboard"),
+                                     QJsonObject{{QStringLiteral("layout"), layout()}, {QStringLiteral("text"), text}},
+                                     failure).toObject();
+    QList<QByteArray> reports;
+    if (!failure->isNull())
+        return reports;
+    // At most eight of the characters, apart.
+    QStringList cs;
+    for (const QChar c : k.value(QStringLiteral("untypeable")).toString().left(8))
+        cs << QString(c);
+    *untypeable = cs.join(QLatin1Char(' '));
     for (const QJsonValue &r : k.value(QStringLiteral("reports")).toArray())
-        m_reports << QByteArray::fromBase64(r.toString().toLatin1());
+        reports << QByteArray::fromBase64(r.toString().toLatin1());
+    return reports;
+}
+
+void BleKeyboard::begin(const QList<QByteArray> &reports)
+{
+    m_reports = reports;
     m_next = 0;
     m_typed.clear();
     // A report down and one up for each character.
