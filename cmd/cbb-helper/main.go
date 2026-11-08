@@ -47,5 +47,6 @@ func newServer() *helper.Server {
 	s := helper.New(version.String())
 	s.HandleKeys()
 	s.HandlePeripherals(os.Stderr)
+	s.HandleAgent(os.Stderr)
 	return s
 }

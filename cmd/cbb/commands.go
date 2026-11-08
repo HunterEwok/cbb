@@ -12,7 +12,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -20,9 +19,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/HunterEwok/cbb/internal/actions"
+	"github.com/HunterEwok/cbb/internal/agent"
 	"github.com/HunterEwok/cbb/internal/benchtime"
-	"github.com/HunterEwok/cbb/internal/connector"
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/node"
@@ -666,31 +664,13 @@ func cmdAgent(args []string, stderr io.Writer) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if runtime.GOOS == "linux" || runtime.GOOS == "freebsd" {
-		logf := func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) }
-		return runDesktop(ctx, logf, stderr)
-	}
-	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
-		return fail(stderr, fmt.Errorf("the agent has no clipboard to link on %s", runtime.GOOS))
-	}
 	stderr, closeLog, err := agentLog(stderr)
 	if err != nil {
 		return fail(stderr, err)
 	}
 	defer closeLog()
-	if !firstAgent() {
-		return 0 // another agent links this session's clipboard already
-	}
 	logf := func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) }
-	if err := letServiceQuery(); err != nil {
-		logf("cbb: the service may not see who runs this agent, so it gets no remote pastes or quick actions: %v", err)
-	}
-	b := pasteboard.General()
-	if _, _, err := b.Read(); errors.Is(err, pasteboard.ErrUnsupported) {
-		return fail(stderr, err)
-	}
-	w := pasteboard.NewWatch(b)
-	if err := connector.Run(ctx, connector.Config{Socket: control.SocketPath(), Board: w, Target: agentTarget(w), Actor: actions.Session(), Commands: true, Files: receivedFiles(), Logf: logf}); err != nil {
+	if err := agent.Run(ctx, control.SocketPath(), logf); err != nil {
 		return fail(stderr, err)
 	}
 	return 0
@@ -744,17 +724,6 @@ func fail(stderr io.Writer, err error) int {
 		fmt.Fprintln(stderr, "  Detail:", de.Err)
 	}
 	return 1
-}
-
-// receivedFiles is the folder where the agent keeps the files the group
-// copies, a folder for each copy, in the user's cache: ~/.cache on Linux,
-// ~/Library/Caches on a Mac, %LocalAppData% on Windows. "" takes no files.
-func receivedFiles() string {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(dir, "cbb", "received")
 }
 
 // hostOS names this computer's operating system as device records do.

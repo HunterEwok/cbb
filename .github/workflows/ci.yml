@@ -2037,7 +2037,7 @@ jobs:
           rustup toolchain install stable --profile minimal --component rustfmt,clippy,llvm-tools-preview --target aarch64-unknown-linux-gnu,arm-unknown-linux-musleabihf,x86_64-pc-windows-gnu,aarch64-apple-darwin,x86_64-unknown-freebsd
           rustup default stable
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross swtpm
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross swtpm xvfb xclip
           echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
       - name: cargo fmt
         run: cargo fmt --all --check
@@ -2093,7 +2093,11 @@ jobs:
           sh wasm/build.sh
           go test -race -overlay target/cbb-core-overlay.json -tags cbbwasm ./internal/core -v
       - name: the lite member joins by the phone, syncs with Go members, takes their remote pastes and serves the Go command line and agent
-        run: CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run 'TestLite' -v
+        # TestLiteAgent links an X11 session's clipboard under Xvfb.
+        run: |
+          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
+          DISPLAY=:5 CBB_TEST_X11=1 CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run 'TestLite' -v
       - name: get.sh --lite installs the lite member, and uninstall.sh removes it
         run: |
           rel="$RUNNER_TEMP/release"

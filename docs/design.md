@@ -211,6 +211,14 @@ ends, the Go service described below is still the computers' member.
   watchers; one typed after its answer stops when remote paste goes off, which the helper
   reads in the same folder, or when `cbb`'s records no longer take its command, when `cbb`
   sends `peripheral-stop` (`TestLitePeripherals`).
+- **The agent.** `cbb agent`, which the user's session starts, links that session's clipboard
+  with the service: it starts its own `cbb-helper`, with the session's whole environment (its
+  display and D-Bus), and asks it `agent` with the service's socket. The helper runs the Go
+  agent (`internal/agent`: Wayland and X11, the Mac's and Windows' pasteboard, Windows' remote
+  paste target, the session's quick actions), a client of the control socket as the Go `cbb
+  agent` is, and answers when it ends; the end of its input ends it, so it ends with the
+  agent (`TestLiteAgent`). On Windows and a Mac the agent logs to its own file, as the Go
+  agent does.
 - **The clients' operations.** The Rust service already takes what the command line and the
   desktops' agents ask on the control socket: `status`, `devices`, `config` (the largest
   copy, `limits` in its state), `copy` and `paste`, the watchers' `watch`, `clipboard`,

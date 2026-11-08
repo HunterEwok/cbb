@@ -314,3 +314,14 @@ pub fn set_stderr(file: &std::fs::File) {
         SetStdHandle(STD_ERROR_HANDLE, file.as_raw_handle());
     }
 }
+
+/// Whether the process has a standard error to write to: not when Windows
+/// starts it at sign-in without a console.
+#[cfg(windows)]
+pub fn has_stderr() -> bool {
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::System::Console::{GetStdHandle, STD_ERROR_HANDLE};
+    // SAFETY: GetStdHandle has no preconditions.
+    let h = unsafe { GetStdHandle(STD_ERROR_HANDLE) };
+    !h.is_null() && h != INVALID_HANDLE_VALUE
+}

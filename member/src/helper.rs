@@ -82,6 +82,9 @@ pub struct Helper {
     path: PathBuf,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     state: Mutex<State>,
+    /// Whether it gets cbb's whole environment: the agent's helper, which
+    /// needs the session's display and buses.
+    whole_env: bool,
 }
 
 #[derive(Default)]
@@ -138,7 +141,14 @@ pub fn shared() -> Option<Arc<Helper>> {
 impl Helper {
     /// A helper at path, not yet started; log takes its stops and starts.
     pub fn new(path: &Path, log: Arc<dyn Fn(&str) + Send + Sync>) -> Helper {
-        Helper { path: path.to_path_buf(), log, state: Mutex::new(State::default()) }
+        Helper { path: path.to_path_buf(), log, state: Mutex::new(State::default()), whole_env: false }
+    }
+
+    /// The helper of cbb agent, which runs as the session's user and gets
+    /// the whole environment of the session: its display, D-Bus and the
+    /// like.
+    pub fn for_agent(path: &Path, log: Arc<dyn Fn(&str) + Send + Sync>) -> Helper {
+        Helper { path: path.to_path_buf(), log, state: Mutex::new(State::default()), whole_env: true }
     }
 
     /// Starts the helper if it does not run, and returns its hello.
@@ -210,7 +220,7 @@ impl Helper {
         let path = trusted(&self.path)?;
         let mut child = Command::new(&path)
             .env_clear()
-            .envs(std::env::vars_os().filter(|(k, _)| kept(k)))
+            .envs(std::env::vars_os().filter(|(k, _)| self.whole_env || kept(k)))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             // Its log goes where cbb's goes.

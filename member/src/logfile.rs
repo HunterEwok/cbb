@@ -29,7 +29,6 @@ static LOG: Mutex<Option<Log>> = Mutex::new(None);
 /// Opens the log at path for the rest of the process: the service's lines
 /// go there from now on, and so does what its children write to standard
 /// error.
-#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 pub fn set(path: &Path) -> Result<()> {
     if let Some(dir) = path.parent() {
         sys::mkdir_private(dir)?;

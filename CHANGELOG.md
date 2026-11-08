@@ -95,6 +95,10 @@ All notable changes to cbb are documented in this file. The format follows
   an error of its own when it fails so that its recovery actions start it again, and logs to
   `ProgramData\cbb\logs\service.log`; started by launchd on a Mac, to
   `/Library/Logs/cbb/service.log`; both move to `.1` past 1 MiB, as the Go service's logs.
+  The Rust `cbb agent` links the session's clipboard with the service through cbb-helper,
+  which runs the Go agent's code (`internal/agent`: Wayland and X11, the Mac's and Windows'
+  pasteboard, Windows' remote paste target, the session's quick actions) and ends with it
+  (`TestLiteAgent`).
 - A request to the Rust service while it is still starting waits for it rather than hearing
   that the device is in no group.
 - The Rust member no longer can deadlock when a renewed certificate and new records come at

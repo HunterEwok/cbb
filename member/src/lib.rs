@@ -12,6 +12,7 @@
 
 mod actions;
 mod admin;
+mod agent;
 #[cfg(feature = "tunnel")]
 mod away;
 #[cfg(not(feature = "tunnel"))]
@@ -99,6 +100,8 @@ Commands:
                        goes on.
   pair -full ...       Join as a computer with the service, a full member
                        that may become an admin, rather than a lite member.
+  agent                Link this session's clipboard with the service
+                       (started at sign-in), through cbb-helper.
   service [-name name] [-port port] [-peer host:port]... [-no-mdns]
           [-no-listen] [-tunnel-via host:port] [-full]
                        Run the service (started by systemd or procd): it
@@ -171,7 +174,7 @@ port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the
 
 /// The commands of a full member (cmd/cbb) that the lite member does not
 /// have, so that it says so instead of "unknown command".
-const FULL_ONLY: &[&str] = &["remove", "admin", "takeover", "new", "invite", "forward", "relay", "agent"];
+const FULL_ONLY: &[&str] = &["remove", "admin", "takeover", "new", "invite", "forward", "relay"];
 
 /// Reports whether this is an OpenWrt router, whose /var is in RAM and
 /// which keeps /etc across upgrades.
@@ -221,6 +224,8 @@ pub fn main() {
                 "pair" => join(&g, rest, false),
                 "next" => std::process::exit(next::run(&g, rest)),
                 "service" => cmd_service(&g, rest),
+                "agent" if rest.is_empty() => agent::run(&g.socket),
+                "agent" => Err(Error::msg("cbb agent takes no arguments")),
                 "copy" => cmd_copy(&g, rest),
                 "paste" => cmd_paste(&g, rest),
                 "status" => cmd_status(&g, rest),
