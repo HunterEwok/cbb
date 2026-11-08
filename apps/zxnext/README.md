@@ -39,9 +39,25 @@ tools. Test them on the machine before relying on them.
 .cbb uninstall        after a Y: stop the network, uninstall CBB.DRV, remove the Pi's cbb
                       and its group, and the files in /cbb; C:/DOT/CBB is yours to ERASE
                       (a /cbb/CBB that runs as ../CBB stays too, with the folder)
+.cbb show             the group's latest image on Layer 2 (below); a key ends it
+.cbb speed            how fast the Pi's line keeps the bytes whole (below)
 .cbb -d paste         the same, with the cause under each error and, at the end, the
                       bytes of the stack never used (debug mode)
 ```
+
+`show` asks the Pi for the latest image the group sent (a PNG or a JPEG). The Pi fits it to
+the screen in the mode that shows it closer: 320×256 in 256 colours, or 640×256 in 16 for
+images of few colours such as text and drawings, each colour one of the Next's 512, with
+dithering. `.cbb` takes ten 8K banks from NextZXOS, turns Layer 2 on in grey and shows each
+column as it arrives, the border flipping blue with each block of bytes that comes; at the
+end it checks the CRC-32, puts in the image's colours and shows the whole screen until a key,
+then gives Layer 2, its palette and the banks back as they were. At 115200 an image takes
+about 7 seconds; it works with the network on or off.
+
+`speed` (only with the network off) has the Pi send the same 80K at 115200, 230400, 460800,
+921600 and 2000000 and prints for each whether it arrived whole (its CRC-32) and how fast.
+Not yet run on a real Next; the line's speed stays where it is until a run shows a faster one
+keeps the bytes whole.
 
 SPACE stops a command that waits, such as `pair` while the phone has not scanned yet.
 
@@ -289,6 +305,7 @@ for the rest. z88dk's `dotn` loader puts `.cbb` in these parts:
 | PAGE_15 | 0xE000-0xFFFF | the logo, the usage, the install screen, SHA-256, the site's list | 1K |
 | PAGE_17 | 0xE000-0xFFFF | `.cbb net` and `pair` | 1K |
 | PAGE_19 | 0xE000-0xFFFF, in `CBB.OVL` | `.cbb paste`, `copy`, `text`, `leave`, `uninstall`, `paste-receive` | 1K |
+| PAGE_21 | 0xE000-0xFFFF, in `CBB.OVL` | `.cbb show` and `speed`, their receive loop and table CRC-32 in `far.asm` | 1K |
 
 `CBB` stays under 64K: a `CBB` of 64K reset a real Next. So the pages from 19 on are not in
 it but in `/cbb/CBB.OVL`, which `.cbb install` fetches: `ovl.sh` cuts them out of the file

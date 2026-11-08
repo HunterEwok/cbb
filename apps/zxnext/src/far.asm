@@ -41,6 +41,17 @@ PUBLIC _far_cbb_swap
 PUBLIC _far_autoexec
 PUBLIC _far_install_end
 PUBLIC _far_net_restart
+PUBLIC _far_show
+PUBLIC _rx_block
+PUBLIC _rx_dst
+PUBLIC _rx_left
+PUBLIC _rx_border
+PUBLIC _crc_block
+PUBLIC _crc_ptr
+PUBLIC _crc_len
+PUBLIC _crc_state
+PUBLIC _img_crc_tab
+PUBLIC _crc_hi_at
 
 EXTERN __z_page_table
 EXTERN _install_run
@@ -62,12 +73,14 @@ EXTERN _autoexec
 EXTERN _install_end
 EXTERN _net_restart
 EXTERN _ovl_load
+EXTERN _show_run
 
 FAR_DATA    equ 15
 FAR_INSTALL equ 13
 FAR_NET     equ 17
 FAR_OVL     equ 19
 FAR_CMD     equ FAR_OVL
+FAR_SHOW    equ 21
 OVL_FIRST   equ 19
 
 ; MMU7's page now, in a (reads NextReg 0x57).
@@ -159,6 +172,12 @@ _far_usage:
 _far_pair_check:
    ld a,FAR_OVL
    ld hl,_pair_check
+   jr far_call
+
+; int far_show(void): .cbb show and speed, in CBB.OVL's second page.
+_far_show:
+   ld a,FAR_SHOW
+   ld hl,_show_run
    jr far_call
 
 ; int far_net_halt(void) and int far_net_restart(void): the network
@@ -271,3 +290,149 @@ _rom_char:
    pop iy
    pop ix
    ret
+
+SECTION PAGE_21
+
+; uint8_t rx_block(void)
+;
+; Reads rx_left bytes from the selected UART to rx_dst as fast as they
+; come (about 90 T-states a byte, so 2 Mbit/s at 28 MHz), and flips the
+; border between rx_border and rx_border xor 7 after every 32: the
+; stripes follow the bytes that really came. LINK_OK (0) when all came,
+; LINK_TIMEOUT (1) when the line was quiet for some 20 seconds in all,
+; LINK_BREAK (2) on SPACE; rx_dst and rx_left say how far it got. The
+; UART's status and data ports differ only in their high byte, so INI
+; reads a byte into (hl) and leaves b at the status port again.
+RX_WAITS equ 160                ; rounds of 65536 polls, about 20 s
+
+_rx_block:
+   push ix
+   ld hl,(_rx_dst)
+   ld de,(_rx_left)
+   ld ix,0
+   ld a,RX_WAITS
+   ld (rx_rounds),a
+   ld bc,0x133b
+   ld a,d
+   or e
+   jr z,rx_ok
+rx_poll:
+   in a,(c)
+   rra
+   jr nc,rx_wait
+   inc b
+   ini
+   dec de
+   ld a,e
+   and 31
+   jr z,rx_flip
+rx_more:
+   ld a,d
+   or e
+   jr nz,rx_poll
+rx_ok:
+   ld a,0
+   jr rx_end
+rx_flip:
+   ld a,(_rx_border)
+   xor 7
+   ld (_rx_border),a
+   out (0xfe),a
+   jr rx_more
+rx_wait:
+   dec ix
+   ld a,ixh
+   or ixl
+   jr nz,rx_poll
+   ld a,0x7f                    ; SPACE: port 0x7ffe, bit 0
+   in a,(0xfe)
+   rra
+   ld a,2
+   jr nc,rx_end
+   ld a,(rx_rounds)
+   dec a
+   ld (rx_rounds),a
+   jr nz,rx_poll
+   inc a                        ; LINK_TIMEOUT
+rx_end:
+   ld (_rx_dst),hl
+   ld (_rx_left),de
+   ld l,a
+   ld h,0
+   pop ix
+   ret
+
+_rx_dst:
+   defw 0
+_rx_left:
+   defw 0
+_rx_border:
+   defb 1
+rx_rounds:
+   defb 0
+
+; void crc_block(void)
+;
+; CRC-32 (IEEE 802.3) of crc_len bytes from crc_ptr, continued in
+; crc_state, which holds the CRC inverted (start with 0xFFFFFFFF, invert
+; at the end): with four tables of 256 bytes, one for each
+; byte of the table's entries, about 110 T-states a byte, where
+; crc32_update() takes over a thousand. crc_table_make() fills them.
+_crc_block:
+   push ix
+   ld ix,(_crc_len)
+   ld a,ixh
+   or ixl
+   jr z,crc_end
+   ld hl,(_crc_state)
+   ld c,l
+   ld b,h
+   ld de,(_crc_state + 2)
+   ld hl,(_crc_ptr)
+crc_loop:
+   ld a,(hl)
+   xor c
+   push hl
+   ld l,a
+crc_hi:
+   ld h,0                       ; crc_table_make() writes the tables' page
+   ld a,b
+   xor (hl)
+   ld c,a
+   inc h
+   ld a,e
+   xor (hl)
+   ld b,a
+   inc h
+   ld a,d
+   xor (hl)
+   ld e,a
+   inc h
+   ld d,(hl)
+   pop hl
+   inc hl
+   dec ix
+   ld a,ixh
+   or ixl
+   jr nz,crc_loop
+   ld (_crc_ptr),hl
+   ld l,c
+   ld h,b
+   ld (_crc_state),hl
+   ld (_crc_state + 2),de
+crc_end:
+   pop ix
+   ret
+
+_crc_ptr:
+   defw 0
+_crc_len:
+   defw 0
+_crc_state:
+   defs 4
+
+; The tables, from the first 256-byte boundary in here on.
+_img_crc_tab:
+   defs 1024 + 255
+_crc_hi_at:
+   defw crc_hi + 1

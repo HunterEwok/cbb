@@ -457,6 +457,16 @@ pub struct Pi {
     pub received: Vec<u8>,
     /// The group's latest text, which cbb next paste gives.
     pub clip: Vec<u8>,
+    /// The latest image, which cbb next image gives: its mode letter and
+    /// its bytes (the pixels, then the palette).
+    pub image: Option<(char, Vec<u8>)>,
+    /// The fastest the line carries bytes whole: above it the Pi's tty
+    /// stays at its own speed, so the Next reads noise.
+    pub line_max: u32,
+    /// Speeds the line takes, and when.
+    later_bauds: Vec<(u64, u32)>,
+    /// The image's bytes, which go once the Next sends a byte.
+    image_wait: Option<Vec<u8>>,
     /// What cbb next copy took.
     pub copied: Vec<u8>,
     /// The cbb on the Pi: its SHA-256 in hex, or none.
@@ -483,6 +493,10 @@ impl Pi {
             raw_copy: false,
             received: Vec::new(),
             clip: b"Hello from the group".to_vec(),
+            image: None,
+            line_max: 2_000_000,
+            later_bauds: Vec::new(),
+            image_wait: None,
             copied: Vec::new(),
             cbb_sha: None,
             log: Vec::new(),
@@ -496,6 +510,13 @@ impl Pi {
     }
 
     fn apply_baud(&mut self, now: u64) {
+        while let Some(&(t, baud)) = self.later_bauds.first() {
+            if now < t {
+                break;
+            }
+            self.baud = baud;
+            self.later_bauds.remove(0);
+        }
         if let Some((t, baud)) = self.pending_baud {
             if now >= t {
                 self.baud = baud;
@@ -575,6 +596,42 @@ impl Pi {
                     f.extend_from_slice(b"\rCBBOK\r");
                     self.out.push(now + 50_000, &f);
                     return self.prompt(now + 50_000);
+                }
+                ["image"] => {
+                    let Some((mode, bytes)) = self.image.clone() else {
+                        self.say(now + 50_000, "CBBERR the clipboard holds no images or files\r");
+                        return self.prompt(now + 50_000);
+                    };
+                    let crc = crate::crc32(&bytes);
+                    // Some time to make it; the bytes once the Next asks.
+                    self.say(now + 1_000_000, &format!("CBBI {mode} {} {crc:08x}\r", bytes.len()));
+                    self.image_wait = Some(bytes);
+                    return;
+                }
+                ["speed", baud, n] => {
+                    // cbb next speed (member/src/next.rs): xorshift32 from 1.
+                    let baud: u32 = baud.parse().unwrap();
+                    let n: usize = n.parse().unwrap();
+                    let mut x: u32 = 1;
+                    let data: Vec<u8> = (0..n)
+                        .map(|_| {
+                            x ^= x << 13;
+                            x ^= x >> 17;
+                            x ^= x << 5;
+                            x as u8
+                        })
+                        .collect();
+                    let crc = crate::crc32(&data);
+                    let t = now + 50_000;
+                    self.say(t, &format!("CBBS {baud} {n} {crc:08x}\r"));
+                    // The line's speed for the data, then its own again.
+                    let at = if baud <= self.line_max { baud } else { 115_200 };
+                    self.later_bauds.push((t + 300_000, at));
+                    self.out.push(t + 500_000, &data);
+                    let end = t + 500_000 + (n as u64 * 10_000_000 / baud as u64) + 500_000;
+                    self.later_bauds.push((end, 115_200));
+                    self.out.push(end + 10_000, b"CBBOK\r");
+                    return self.prompt(end + 10_000);
                 }
                 ["copy", rest @ ..] => {
                     let n = rest
@@ -662,6 +719,11 @@ impl Peer for Pi {
         self.apply_baud(now);
         if !self.answers {
             return;
+        }
+        if let Some(mut bytes) = self.image_wait.take() {
+            bytes.extend_from_slice(b"\rCBBOK\r");
+            self.out.push(now + 1_000, &bytes);
+            return self.prompt(now + 1_000);
         }
         if self.raw > 0 && self.raw_copy {
             self.copied.push(b);

@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The ZX Spectrum Next shows the group's latest image: `.cbb show` asks the lite member on the
+  Pi (`cbb next image`), which fits the PNG or JPEG to Layer 2 in 320×256 with 256 colours or
+  640×256 with 16, whichever shows it closer, with dithering from the Next's 512 colours; the
+  Next shows it column by column as it arrives and gives the screen back on a key.
+  `.cbb speed` (`cbb next speed`) measures which speeds of the Pi's line keep 80K whole.
 - A new device shows a code, and a computer of the group types it: a device that listens to
   join announces itself by mDNS (TXT `j=1` and its fingerprint, docs/protocol.md sections 3
   and 6), and `cbb pair -qr` takes the six digits as well as the QR code's text, finds the

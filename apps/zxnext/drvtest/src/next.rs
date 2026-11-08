@@ -323,6 +323,14 @@ pub struct Next {
     pub printed: String,
     /// An address whose writes go to the log.
     pub watch: Option<u16>,
+    /// Layer 2's port (0x123B): bit 1 shows it.
+    pub layer2: u8,
+    /// Layer 2's clip window (NR 0x18, its index reset by NR 0x1C).
+    pub clip: [u8; 4],
+    clip_index: usize,
+    /// What Layer 2 showed when its clip window opened to the whole
+    /// screen: the 80K of its banks from NR 0x12 and the palette.
+    pub shown: Option<(Vec<u8>, Vec<u16>)>,
 }
 
 impl Next {
@@ -464,7 +472,21 @@ impl Next {
                     }
                 }
             }
-            0x07 | 0x08 | 0x43 | 0xA0 | 0x7F => {}
+            0x1C => {
+                if v & 1 != 0 {
+                    self.clip_index = 0;
+                }
+            }
+            0x18 => {
+                self.clip[self.clip_index] = v;
+                self.clip_index = (self.clip_index + 1) % 4;
+                if self.clip == [0, 159, 0, 255] && self.layer2 & 2 != 0 {
+                    let base = self.nr[0x12] as usize * 2 * PAGE;
+                    let pixels = self.ram[base..base + 10 * PAGE].to_vec();
+                    self.shown = Some((pixels, self.palette.clone()));
+                }
+            }
+            0x07 | 0x08 | 0x43 | 0xA0 | 0x7F | 0x12 | 0x14 | 0x15 | 0x16 | 0x17 | 0x6B | 0x70 | 0x71 => {}
             _ => self
                 .log
                 .push(format!("{:#06x}: NR {r:#04x} = {v:#04x}", self.pc)),
@@ -475,6 +497,7 @@ impl Next {
     fn nextreg_read(&mut self, r: u8) -> u8 {
         match r {
             0x50..=0x57 => self.mmu[(r - 0x50) as usize],
+            0x18 => self.clip[self.clip_index],
             0x41 => (self.palette[self.pal_index as usize] >> 1) as u8,
             0x44 => (self.palette[self.pal_index as usize] & 1) as u8,
             _ => self.nr[r as usize],
@@ -514,6 +537,7 @@ impl Machine for Next {
             }
             0x153B => self.select,
             0x163B => 0,
+            0x123B => self.layer2,
             0x243B => self.nr_sel,
             _ if a & 0xFF == 0xFE => self.keyboard((a >> 8) as u8),
             _ if a & 0xFF == 0x1F => 0, // Kempston
@@ -552,6 +576,7 @@ impl Machine for Next {
             }
             0x153B => self.select = v,
             0x163B => {}
+            0x123B => self.layer2 = v,
             0x7FFD | 0x1FFD | 0xDFFD => {
                 if a == 0x7FFD {
                     let bank = v & 7;
@@ -630,6 +655,10 @@ impl Run {
             keys: Vec::new(),
             border: 7,
             border_changes: 0,
+            layer2: 0,
+            clip: [0, 255, 0, 191],
+            clip_index: 0,
+            shown: None,
             pc: 0,
             breaches: Vec::new(),
             screen_writes: Vec::new(),

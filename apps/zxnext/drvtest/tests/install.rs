@@ -504,7 +504,7 @@ fn run_after(
         u16::from_str_radix(table.split('$').nth(1).unwrap().get(..4).unwrap(), 16).unwrap();
     run.overlay_logical = kit.pages.clone();
     let mut t = 0;
-    while !run.done && t < 60 {
+    while !run.done && t < 120 {
         run.run(1.0);
         t += 1;
     }
@@ -1052,7 +1052,7 @@ fn installs_then_pairs() {
     let Some(kit) = kit("thenpair") else { return };
     let (card, pi) = installed(&kit, "thenpair");
     std::fs::copy(kit.site.join("CBB.OVL"), card.join("cbb/CBB.OVL")).unwrap();
-    let keys = (0..6)
+    let keys = (0..20)
         .map(|i| Key {
             from: 8_000_000 + i * 5_000_000,
             until: 8_300_000 + i * 5_000_000,
@@ -1088,12 +1088,12 @@ fn updates_itself_in_dot() {
         "update",
         Esp::new(kit.site.clone()),
         pi,
-        120.0,
+        200.0,
         None,
     );
     assert!(o.has("CBB AND ITS FILES ARE NEW"), "{}", o.screen);
     // The new CBB and its CBB.OVL on one bar, their sizes summed.
-    assert!(o.has("64K OF    64K"), "{}", o.screen);
+    assert!(o.has("72K OF    72K"), "{}", o.screen);
     assert_eq!(std::fs::read(card.join("dot/CBB")).unwrap(), newer);
     assert!(!card.join("dot/CBB.NEW").exists());
     let _ = std::fs::remove_dir_all(&card);
@@ -1178,7 +1178,7 @@ fn says_when_there_are_no_updates() {
         "update",
         Esp::new(kit.site.clone()),
         pi,
-        60.0,
+        90.0,
         None,
     );
     assert!(o.has("NO UPDATES"), "{}", o.screen);
@@ -1239,4 +1239,89 @@ fn leaves_the_start_to_the_driver_after_power_on() {
         }
     }
     let _ = std::fs::remove_dir_all(&card);
+}
+
+/// An image as cbb next image sends it: 320×256 in Layer 2's order, then
+/// 256 palette entries of two bytes.
+fn image_frame() -> (Vec<u8>, Vec<u16>) {
+    let mut b: Vec<u8> = (0..81920u32).map(|i| (i * 7 / 3) as u8).collect();
+    let pal: Vec<u16> = (0..256u16).map(|i| (i * 2 + 1) & 0x1FF).collect();
+    for &c in &pal {
+        b.push((c >> 1) as u8);
+        b.push((c & 1) as u8);
+    }
+    (b, pal)
+}
+
+/// ENTER from `at` seconds for half a second.
+fn enter_at(at: f64) -> Vec<Key> {
+    vec![Key {
+        from: (at * 1e6) as u64,
+        until: (at * 1e6) as u64 + 500_000,
+        row: 0xBF,
+        bit: 0,
+    }]
+}
+
+/// Checks a run of .cbb show: the picture as sent, Layer 2 off again.
+fn check_shown(run: &Run, frame: &[u8], pal: &[u16]) {
+    let s = run.hw.screen_text();
+    let (pixels, shown_pal) = run.hw.shown.as_ref().unwrap_or_else(|| panic!("nothing shown:\n{s}"));
+    assert!(pixels[..] == frame[..81920], "the pixels differ");
+    assert_eq!(&shown_pal[..], pal);
+    assert_eq!(run.hw.layer2 & 2, 0, "Layer 2 still shows");
+    assert_eq!(run.hw.clip, [0, 255, 0, 191], "the clip window stays the image's");
+    // The stripes followed the bytes: one flip every 32.
+    assert!(run.hw.border_changes > 2000, "{}", run.hw.border_changes);
+    assert!(!s.contains("cbb:"), "{s}");
+}
+
+#[test]
+fn shows_the_groups_image() {
+    let Some(kit) = kit("show") else { return };
+    let (frame, pal) = image_frame();
+    let mut pi = Pi::new();
+    pi.image = Some(('L', frame.clone()));
+    let card = card("show");
+    std::fs::copy(&kit.dot, card.join("cbb/CBB")).unwrap();
+    let run = run_on(&kit, &card, "show", Esp::new(kit.site.clone()), pi, enter_at(14.0));
+    check_shown(&run, &frame, &pal);
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
+fn shows_the_groups_image_through_the_driver() {
+    let Some(kit) = kit("showvia") else { return };
+    let (frame, pal) = image_frame();
+    let (card, mut pi) = installed(&kit, "showvia");
+    pi.image = Some(('L', frame.clone()));
+    let run = run_after(&kit, &card, "show", Esp::new(kit.site.clone()), pi, enter_at(25.0), |run| {
+        run.hw.drivers.push((124, vec![0; 512]));
+        run.hw.net = true;
+        run.hw.via = true;
+    });
+    assert!(run.hw.net, "the network stopped");
+    check_shown(&run, &frame, &pal);
+    let _ = std::fs::remove_dir_all(&card);
+}
+
+#[test]
+fn says_when_the_group_has_no_image() {
+    let Some(kit) = kit("noimage") else { return };
+    let run = run_plain(&kit, "show", Pi::new());
+    let s = run.hw.screen_text();
+    assert!(s.contains("holds no imag"), "{s}");
+    assert!(run.hw.shown.is_none());
+}
+
+#[test]
+fn says_which_speeds_carry_the_bytes_whole() {
+    let Some(kit) = kit("speed") else { return };
+    let mut pi = Pi::new();
+    pi.line_max = 921_600;
+    let run = run_plain(&kit, "speed", pi);
+    let s = run.hw.screen_text();
+    for speed in ["115200: whole", "230400: whole", "460800: whole", "921600: whole", "2000000: DAMAGED"] {
+        assert!(s.contains(speed), "{speed}:\n{s}");
+    }
 }

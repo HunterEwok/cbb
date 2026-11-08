@@ -63,6 +63,8 @@ static const char usage_text[] = "CBB " VERSION "  .cbb COMMAND\n\n"
            "\tremote paste\n"
            "leave\tleave the group\n"
            "uninstall\tremove it all\n"
+           "show\tthe group's image\n"
+           "speed\ttest the Pi's line\n"
            "-d ...\terror details\n";
 #pragma constseg rodata_compiler
 
@@ -453,6 +455,21 @@ static uint8_t secret;
 #pragma bssseg PAGE_19
 #pragma dataseg PAGE_19
 
+// The commands' words, arrays of this page: zcc keeps string literals
+// with the main program's.
+static const char p_paste_fmt[] = "paste -max %u";
+static const char p_longer[] = "longer than -max";
+static const char p_damaged[] = "the text arrived damaged; try again";
+static const char p_crc[] = "CRC-32 mismatch";
+static const char p_no_create[] = "cannot create the file";
+static const char p_no_write[] = "cannot write the file";
+static const char p_saved[] = "%u bytes saved to %s\n";
+static const char p_copy_secret[] = "copy -secret %u %s";
+static const char p_copy[] = "copy %u %s";
+static const char p_sent_secret[] = "%u bytes sent to the group as a secret\n";
+static const char p_sent[] = "%u bytes sent to the group\n";
+static const char p_no_open[] = "cannot open the file";
+
 // Eight lowercase hex digits, as the lite member writes a CRC-32.
 static void hex8(char *out, uint32_t v)
 {
@@ -478,12 +495,12 @@ static int paste(const char *file)
     uint32_t len, crc;
     uint16_t got;
     uint8_t c, err, fh;
-    sprintf(line, "paste -max %u", MAX_TEXT);
+    sprintf(line, p_paste_fmt, MAX_TEXT);
     if (command(line)) return 1;
     if (expect(LINE_TEXT, &len, &crc, ANSWER_SECONDS) != LINE_TEXT) return 1;
     if (len > MAX_TEXT) {
         link_send(3);
-        return fail(too_long, "longer than -max");
+        return fail(too_long, p_longer);
     }
     for (got = 0; got < len; got++) {
         err = link_recv(&c, ANSWER_SECONDS);
@@ -492,20 +509,20 @@ static int paste(const char *file)
     }
     if (expect(LINE_OK, &len, &crc, ANSWER_SECONDS) != LINE_OK) return 1;
     link_prompt();
-    if (crc32_update(0, text, got) != crc) return fail("the text arrived damaged; try again", "CRC-32 mismatch");
+    if (crc32_update(0, text, got) != crc) return fail(p_damaged, p_crc);
     if (!file) {
         show(text, got);
         return 0;
     }
     errno = 0;
     fh = esx_f_open(file, ESX_MODE_W | ESX_MODE_OPEN_CREAT_TRUNC);
-    if (errno) return fail("cannot create the file", file);
+    if (errno) return fail(p_no_create, file);
     if (esx_f_write(fh, text, got) != got) {
         esx_f_close(fh);
-        return fail("cannot write the file", file);
+        return fail(p_no_write, file);
     }
     esx_f_close(fh);
-    printf("%u bytes saved to %s\n", got, file);
+    printf(p_saved, got, file);
     return 0;
 }
 
@@ -515,13 +532,13 @@ static int copy(uint16_t len)
     uint16_t i;
     char crc_hex[9];
     hex8(crc_hex, crc32_update(0, text, len));
-    sprintf(line, secret ? "copy -secret %u %s" : "copy %u %s", len, crc_hex);
+    sprintf(line, secret ? p_copy_secret : p_copy, len, crc_hex);
     if (command(line)) return 1;
     if (expect(LINE_GO, &n, &crc, ANSWER_SECONDS) != LINE_GO) return 1;
     for (i = 0; i < len; i++) link_send(text[i]);
     if (expect(LINE_OK, &n, &crc, ANSWER_SECONDS) != LINE_OK) return 1;
     link_prompt();
-    printf(secret ? "%u bytes sent to the group as a secret\n" : "%u bytes sent to the group\n", len);
+    printf(secret ? p_sent_secret : p_sent, len);
     return 0;
 }
 
@@ -531,7 +548,7 @@ static int copy_file(const char *file)
     uint16_t len;
     errno = 0;
     fh = esx_f_open(file, ESX_MODE_R | ESX_MODE_OPEN_EXIST);
-    if (errno) return fail("cannot open the file", file);
+    if (errno) return fail(p_no_open, file);
     len = esx_f_read(fh, text, MAX_TEXT);
     esx_f_close(fh);
     return copy(len);
@@ -2726,6 +2743,505 @@ static int install(void)
     return err;
 }
 
+// .cbb show and speed, in CBB.OVL's second page (far.asm, far_show()).
+// show: the lite member's `cbb next image` (member/README.md) sends the
+// group's latest image as Layer 2 wants it, a column of 256 pixels after
+// another, then its palette. The bytes go straight into ten 8K banks that
+// are Layer 2's for the moment, while it shows the middle of the screen
+// in grey and the border stripes after every 32 bytes that came, as a
+// screen loads from tape; the colours come last, over the whole screen.
+// A key puts everything back: the registers, Layer 2's second palette,
+// the banks. speed: the line's speeds tried with `cbb next speed`, each
+// checked by its CRC-32.
+static char **far_show_argv;
+extern int far_show(void);
+extern uint8_t rx_block(void);
+extern uint8_t *rx_dst;
+extern uint16_t rx_left;
+extern uint8_t rx_border;
+extern void crc_block(void);
+extern const uint8_t *crc_ptr;
+extern uint16_t crc_len;
+extern uint32_t crc_state;
+extern uint8_t img_crc_tab[1024 + 255];
+extern uint8_t *crc_hi_at;
+
+#pragma codeseg PAGE_21
+#pragma constseg PAGE_21
+#pragma bssseg PAGE_21
+#pragma dataseg PAGE_21
+
+#define IMG_PIXELS 81920UL
+#define IMG_BANKS 10
+#define IMG_TRIES 32
+#define NR_SEL 0x243B
+#define NR_DATA 0x253B
+#define PORT_L2 0x123B
+#define BORDCR (*(uint8_t *)23624)
+#define WINDOW 0x6000 // MMU3: BASIC's program, which nothing runs meanwhile
+
+static const char s_image[] = "image";
+static const char s_failed[] = "cbb failed";
+static const char s_net_runs[] = "the network runs: .cbb net off first";
+static const char s_cbbi[] = "CBBI ";
+static const char s_cbbs[] = "CBBS ";
+static const char s_memory[] = "no 80K of free memory for the image";
+static const char s_header[] = "the Pi sent no image";
+static const char s_damaged[] = "the image arrived damaged; try again";
+static const char s_crc[] = "CRC-32 mismatch";
+static const char s_speed_fmt[] = "speed %lu %lu";
+static const char s_speed_line[] = "%7lu: %s, %u.%u KB/s\n";
+static const char s_ok[] = "whole";
+static const char s_bad[] = "DAMAGED";
+static const char s_lost[] = "bytes lost";
+static const uint32_t speeds[] = {115200UL, 230400UL, 460800UL, 921600UL, 2000000UL};
+
+// The ten banks, the first one even, as Layer 2 takes 16K banks.
+static uint8_t img_base;
+static uint8_t img_taken[IMG_TRIES];
+// What Layer 2 showed before: NR 0x12, 0x14, 0x15, 0x16, 0x17, 0x43,
+// 0x6B, 0x70, 0x71, the clip window, port 0x123B, and its second palette.
+static const uint8_t saved_regs[] = {0x12, 0x14, 0x15, 0x16, 0x17, 0x43, 0x6B, 0x70, 0x71};
+static uint8_t saved[sizeof saved_regs];
+static uint8_t saved_clip[4];
+static uint8_t saved_port;
+static uint8_t saved_pal[512];
+static uint8_t img_pal[512];
+static uint8_t img_border;
+// The commands go through the driver while the network runs, as in
+// cmd_run() (CBB.OVL's first page, which this one cannot call).
+static uint8_t img_via;
+
+static void nr(uint8_t r, uint8_t v)
+{
+    z80_outp(NR_SEL, r);
+    z80_outp(NR_DATA, v);
+}
+
+static uint8_t nr_get(uint8_t r)
+{
+    z80_outp(NR_SEL, r);
+    return z80_inp(NR_DATA);
+}
+
+static void img_via_send(uint8_t c)
+{
+    driver(DRV_CBB_OUT, c == 3 ? VIA_STOP << 8 : VIA_BYTE << 8 | c);
+}
+
+static uint8_t img_via_recv(uint8_t *c, uint16_t seconds)
+{
+    uint16_t start = FRAMES_LO;
+    for (;;) {
+        driver(DRV_CBB_IN, 0);
+        if (drv.de & 0x100) {
+            *c = (uint8_t)drv.de;
+            return LINK_OK;
+        }
+        if (in_key_pressed(IN_KEY_SCANCODE_SPACE)) {
+            link_stopped = 1;
+            return LINK_BREAK;
+        }
+        if ((uint16_t)(FRAMES_LO - start) / 50 >= seconds) return LINK_TIMEOUT;
+    }
+}
+
+// The line through the driver while the network runs; 1 when it failed.
+static uint8_t img_open(void)
+{
+    img_via = 0;
+    if (!net_on()) return 0;
+    img_via = !driver(DRV_CBB_OUT, VIA_OPEN << 8);
+    if (img_via) {
+        driver(DRV_CBB_OUT, VIA_STOP << 8);
+        link_via_send = img_via_send;
+        link_via_recv = img_via_recv;
+        return 0;
+    }
+    img_via = 2;
+    return far_net_halt();
+}
+
+static int img_close(int err)
+{
+    if (img_via == 1) {
+        link_via_send = 0;
+        link_via_recv = 0;
+        driver(DRV_CBB_OUT, VIA_CLOSE << 8);
+    } else if (img_via == 2) {
+        err |= far_net_restart();
+    }
+    return err;
+}
+
+// A line from the Pi, the border flipping red and cyan with each byte.
+static uint8_t img_line(uint16_t seconds)
+{
+    uint8_t n = 0, c, err;
+    for (;;) {
+        err = link_recv(&c, seconds);
+        if (err) return err;
+        img_border ^= 7;
+        z80_outp(0xFE, img_border);
+        if (c == '\r') break;
+        if (c == '\n' || c == 0) continue;
+        if (n + 1 < sizeof line) line[n++] = c;
+    }
+    line[n] = 0;
+    return LINK_OK;
+}
+
+// Lines until the status line: 0 on CBBOK, 1 when it failed (and said).
+static uint8_t img_status(void)
+{
+    uint32_t a, b;
+    uint8_t err, kind;
+    for (;;) {
+        err = img_line(ANSWER_SECONDS);
+        if (err) return link_fail(err);
+        kind = frame_line(line, &a, &b);
+        if (kind == LINE_OK) return 0;
+        if (kind == LINE_ERR) return fail(line[6] ? line + 7 : s_failed, 0);
+    }
+}
+
+static void banks_free(void)
+{
+    uint8_t i;
+    if (img_base == NO_BANK) return;
+    for (i = 0; i < IMG_BANKS; i++) esx_ide_bank_free(ESX_BANKTYPE_RAM, img_base + i);
+    img_base = NO_BANK;
+}
+
+// Ten banks in a row from NextZXOS, the first even: banks come from the
+// top down, so each one is usually one under the last; the ones of no
+// use go back. 0 when img_base holds them.
+static uint8_t banks_take(void)
+{
+    uint8_t n = 0, run = 0, b, i;
+    img_base = NO_BANK;
+    while (n < IMG_TRIES) {
+        b = esx_ide_bank_alloc(ESX_BANKTYPE_RAM);
+        if (b == NO_BANK) break;
+        img_taken[n] = b;
+        run = n && img_taken[n - 1] == b + 1 ? run + 1 : 1;
+        n++;
+        if (run >= IMG_BANKS && !(b & 1)) {
+            img_base = b;
+            break;
+        }
+    }
+    for (i = 0; i < n; i++) {
+        b = img_taken[i];
+        if (img_base == NO_BANK || b < img_base || b >= img_base + IMG_BANKS) esx_ide_bank_free(ESX_BANKTYPE_RAM, b);
+    }
+    return img_base == NO_BANK;
+}
+
+// The bank of the image's byte offset in WINDOW.
+static void bank_in(uint8_t i)
+{
+    nr(0x53, img_base + i);
+}
+
+static void bank_out(void)
+{
+    nr(0x53, 11); // BASIC's: the upper half of bank 5
+}
+
+// Layer 2's clip window, through its index (NR 0x1C bit 0 resets it).
+static void clip_set(uint8_t x1, uint8_t x2, uint8_t y1, uint8_t y2)
+{
+    nr(0x1C, 1);
+    nr(0x18, x1);
+    nr(0x18, x2);
+    nr(0x18, y1);
+    nr(0x18, y2);
+}
+
+static void state_save(void)
+{
+    uint16_t i;
+    for (i = 0; i < sizeof saved_regs; i++) saved[i] = nr_get(saved_regs[i]);
+    // Each read and written back moves the index on.
+    nr(0x1C, 1);
+    for (i = 0; i < 4; i++) {
+        saved_clip[i] = nr_get(0x18);
+        nr(0x18, saved_clip[i]);
+    }
+    saved_port = z80_inp(PORT_L2);
+    nr(0x43, 0x50); // Layer 2's second palette, to read
+    for (i = 0; i < 256; i++) {
+        nr(0x40, i);
+        saved_pal[2 * i] = nr_get(0x41);
+        saved_pal[2 * i + 1] = nr_get(0x44);
+    }
+}
+
+// Writes Layer 2's second palette, two bytes an entry as NR 0x44 takes them.
+static void pal_write(const uint8_t *p)
+{
+    uint16_t i;
+    nr(0x43, 0x54); // the second palette, written and shown
+    nr(0x40, 0);
+    for (i = 0; i < 512; i++) nr(0x44, p[i]);
+}
+
+static void state_restore(void)
+{
+    uint8_t i;
+    z80_outp(PORT_L2, saved_port);
+    pal_write(saved_pal);
+    clip_set(saved_clip[0], saved_clip[1], saved_clip[2], saved_clip[3]);
+    for (i = 0; i < sizeof saved_regs; i++) nr(saved_regs[i], saved[i]);
+    zx_border(BORDCR >> 3 & 7);
+}
+
+// Layer 2 on for an image of the mode, its banks clear, shown in grey
+// through the middle of the screen: the border around it stays the ULA's.
+static void layer2_on(uint8_t hi)
+{
+    uint16_t i;
+    uint8_t g;
+    for (i = 0; i < IMG_BANKS; i++) {
+        bank_in(i);
+        memset((void *)WINDOW, 0, 8192);
+    }
+    bank_out();
+    for (i = 0; i < 256; i++) {
+        g = hi ? (i & 15) >> 1 : i >> 5;
+        img_pal[2 * i] = g << 5 | g << 2 | g >> 1;
+        img_pal[2 * i + 1] = g & 1;
+    }
+    pal_write(img_pal);
+    nr(0x12, img_base >> 1);
+    nr(0x70, hi ? 0x20 : 0x10);
+    nr(0x16, 0);
+    nr(0x71, 0);
+    nr(0x17, 0);
+    nr(0x14, 0xE3);
+    nr(0x6B, saved[6] & 0x7F);            // no tilemap
+    nr(0x15, (saved[2] & 0xE2) | 0x04); // Layer 2 over the ULA, no sprites
+    clip_set(16, 143, 32, 223);
+    z80_outp(PORT_L2, 0x02);
+}
+
+// The image's pixels into the banks as they come; LINK_OK or the error.
+static uint8_t img_pixels(void)
+{
+    uint8_t i, err, c;
+    uint16_t k;
+    for (i = 0; i < IMG_BANKS; i++) {
+        if (!img_via) {
+            // Straight from the UART into the bank.
+            bank_in(i);
+            rx_dst = (uint8_t *)WINDOW;
+            rx_left = 8192;
+            rx_border = img_border;
+            err = rx_block();
+            img_border = rx_border;
+            bank_out();
+            if (err) return err;
+            continue;
+        }
+        // Through the driver, with BASIC's own MMU3 for its calls.
+        for (k = 0; k < 8192; k++) {
+            err = link_recv(&c, ANSWER_SECONDS);
+            if (err) return err;
+            text[k] = c;
+            if (!(k & 31)) {
+                img_border ^= 7;
+                z80_outp(0xFE, img_border);
+            }
+        }
+        intrinsic_di();
+        bank_in(i);
+        memcpy((void *)WINDOW, text, 8192);
+        bank_out();
+        intrinsic_ei();
+    }
+    return LINK_OK;
+}
+
+// crc_block()'s tables: byte k of each entry in the k-th 256, from a
+// 256-byte boundary, whose page crc_block() takes in its code.
+static void crc_table_make(void)
+{
+    uint32_t c;
+    uint16_t n;
+    uint8_t k, *t = (uint8_t *)(((uint16_t)img_crc_tab + 255) & 0xFF00);
+    *crc_hi_at = (uint16_t)t >> 8;
+    for (n = 0; n < 256; n++) {
+        c = n;
+        for (k = 0; k < 8; k++) c = c & 1 ? (c >> 1) ^ 0xEDB88320UL : c >> 1;
+        for (k = 0; k < 4; k++) {
+            t[k * 256 + n] = (uint8_t)c;
+            c >>= 8;
+        }
+    }
+}
+
+static void crc_add_block(const uint8_t *p, uint16_t n)
+{
+    crc_ptr = p;
+    crc_len = n;
+    crc_block();
+}
+
+static uint32_t img_crc(uint16_t pal_bytes)
+{
+    uint8_t i;
+    crc_state = 0xFFFFFFFFUL;
+    for (i = 0; i < IMG_BANKS; i++) {
+        bank_in(i);
+        crc_add_block((const uint8_t *)WINDOW, 8192);
+    }
+    bank_out();
+    crc_add_block(img_pal, pal_bytes);
+    return ~crc_state;
+}
+
+static int img_show(void)
+{
+    uint32_t len, crc;
+    uint16_t k, pal_bytes;
+    uint8_t err, hi, c;
+    char *e;
+    img_border = INK_RED;
+    if (command(s_image)) return 1;
+    for (;;) {
+        err = img_line(60);
+        if (err) return link_fail(err);
+        if (frame_line(line, &len, &crc) == LINE_ERR) {
+            fail(line[6] ? line + 7 : s_failed, 0);
+            link_prompt();
+            return 1;
+        }
+        if (memcmp(line, s_cbbi, 5) == 0) break;
+    }
+    hi = line[5] == 'H';
+    pal_bytes = hi ? 32 : 512;
+    len = strtoul(line + 7, &e, 10);
+    crc = strtoul(e, 0, 16);
+    if ((line[5] != 'L' && !hi) || len != IMG_PIXELS + pal_bytes) {
+        link_send(3);
+        return fail(s_header, line);
+    }
+    if (banks_take()) {
+        link_send(3);
+        return fail(s_memory, 0);
+    }
+    state_save();
+    layer2_on(hi);
+    // Ready: the Pi sends the bytes now, as fast as the line goes.
+    link_send('G');
+    img_border = INK_BLUE;
+    err = img_pixels();
+    for (k = 0; !err && k < pal_bytes; k++) {
+        err = link_recv(&c, ANSWER_SECONDS);
+        img_pal[k] = c;
+    }
+    if (err || img_status()) {
+        state_restore();
+        banks_free();
+        return err ? link_fail(err) : 1;
+    }
+    link_prompt();
+    if (img_crc(pal_bytes) != crc) {
+        state_restore();
+        banks_free();
+        return fail(s_damaged, s_crc);
+    }
+    // The colours, and the whole screen.
+    if (hi)
+        for (k = 32; k < 512; k++) img_pal[k] = 0;
+    pal_write(img_pal);
+    clip_set(0, 159, 0, 255);
+    in_wait_nokey();
+    in_wait_key();
+    in_wait_nokey();
+    state_restore();
+    banks_free();
+    return 0;
+}
+
+// Each speed: the Pi sends 80K at it, into the banks, which hold them for
+// the CRC-32; then the line's own speed again. Only straight to the Pi.
+static int img_speed(void)
+{
+    uint32_t len, crc;
+    uint16_t start, frames, kbs;
+    uint8_t i, err, s, lost;
+    char *e;
+    if (img_via) return fail(s_net_runs, 0);
+    if (banks_take()) return fail(s_memory, 0);
+    for (s = 0; s < sizeof speeds / sizeof speeds[0]; s++) {
+        img_border = INK_RED;
+        sprintf(line, s_speed_fmt, speeds[s], IMG_PIXELS);
+        if (command(line)) break;
+        for (;;) {
+            err = img_line(ANSWER_SECONDS);
+            if (err || memcmp(line, s_cbbs, 5) == 0 || frame_line(line, &len, &crc) == LINE_ERR) break;
+        }
+        if (err || line[3] != 'S') {
+            if (!err) fail(line[6] ? line + 7 : s_failed, 0);
+            link_prompt();
+            break;
+        }
+        e = strchr(line + 5, ' ');
+        len = strtoul(e, &e, 10);
+        crc = strtoul(e, 0, 16);
+        link_speed(speeds[s]);
+        rx_border = INK_BLUE;
+        start = FRAMES_LO;
+        lost = 0;
+        for (i = 0; i < IMG_BANKS && !lost; i++) {
+            bank_in(i);
+            rx_dst = (uint8_t *)WINDOW;
+            rx_left = 8192;
+            err = rx_block();
+            lost = err != LINK_OK;
+            bank_out();
+        }
+        frames = FRAMES_LO - start;
+        link_open(); // the line's own speed again
+        if (err == LINK_BREAK) break;
+        if (lost) {
+            // What the Pi still sends ends at its status line.
+            img_status();
+            link_prompt();
+            printf(s_speed_line, speeds[s], s_lost, 0, 0);
+            continue;
+        }
+        err = img_status();
+        link_prompt();
+        if (err) break;
+        // The time from the first byte waited for, so a little under the line's.
+        kbs = frames ? (uint16_t)(IMG_PIXELS * 500 / frames / 1024) : 0;
+        printf(s_speed_line, speeds[s], img_crc(0) == crc ? s_ok : s_bad, kbs / 10, kbs % 10);
+    }
+    zx_border(BORDCR >> 3 & 7);
+    banks_free();
+    return 0;
+}
+
+// Not static: far_show() (far.asm) calls it.
+int show_run(void)
+{
+    int err;
+    img_base = NO_BANK;
+    crc_table_make();
+    if (img_open()) return 1;
+    err = strcmp(far_show_argv[0], "speed") == 0 ? img_speed() : img_show();
+    zx_border(BORDCR >> 3 & 7);
+    return img_close(err);
+}
+
+#pragma codeseg code_compiler
+#pragma constseg rodata_compiler
+#pragma bssseg bss_compiler
+#pragma dataseg data_compiler
+
 static int run(int argc, char **argv)
 {
     int i = 1;
@@ -2749,6 +3265,10 @@ static int run(int argc, char **argv)
     if ((strcmp(argv[i], "paste") == 0 && argc - i <= 2) || (strcmp(argv[i], "copy") == 0 && argc - i == 2) ||
         (strcmp(argv[i], "text") == 0 && argc - i >= 2)) {
         return far_cmd();
+    }
+    if ((strcmp(argv[i], "show") == 0 || strcmp(argv[i], "speed") == 0) && argc - i == 1) {
+        far_show_argv = argv + i;
+        return far_show();
     }
     // NextPi has no network but the ESP's.
     if (strcmp(argv[i], "pair") == 0 && argc - i <= 2) {

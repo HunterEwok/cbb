@@ -339,7 +339,7 @@ impl<W: Write> Link<W> {
                     self.command = true;
                 }
                 None => {
-                    self.answer_cbb(b"CBBERR the network runs only cbb next paste and copy\r");
+                    self.answer_cbb(b"CBBERR the network runs only cbb next paste, image and copy\r");
                     self.answer_cbb(PROMPT);
                 }
             }
@@ -572,7 +572,7 @@ impl<W: Write> Link<W> {
 }
 
 /// The arguments for this program of a command line `.cbb` types: `cbb
-/// [-debug] next paste|copy ...`, and nothing else.
+/// [-debug] next paste|image|copy ...`, and nothing else.
 fn command_args(line: &str) -> Option<Vec<String>> {
     let words: Vec<&str> = line.split_whitespace().collect();
     let (&first, mut rest) = words.split_first()?;
@@ -585,7 +585,7 @@ fn command_args(line: &str) -> Option<Vec<String>> {
         rest = &rest[1..];
     }
     match rest {
-        ["next", "paste" | "copy", ..] => {
+        ["next", "paste" | "copy" | "image", ..] => {
             args.extend(rest.iter().map(|w| w.to_string()));
             Some(args)
         }

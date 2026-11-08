@@ -45,7 +45,7 @@ build/CBB: mapcheck.sh budget.sh ovl.sh $(SRC) src/far.asm src/stack.asm src/log
 	@# up to the last page used, not z88dk's 223.
 	rm -f build/cbb_PAGE_*.bin
 	cd build && $(ZCC) +zxn -vn -O2 -clib=new -subtype=dotn -startup=30 -I../src -I. $$(cat formats) \
-		-pragma-define:REGISTER_SP=0xE000 -pragma-define:DOTN_LAST_PAGE=19 \
+		-pragma-define:REGISTER_SP=0xE000 -pragma-define:DOTN_LAST_PAGE=21 \
 		$(addprefix ../,$(SRC)) ../src/far.asm ../src/stack.asm -o cbb -create-app -m
 	@# The pages from 19 on go to CBB.OVL, which CBB loads (ovl.sh).
 	@sh ovl.sh build || { mv build/CBB build/CBB.bad; exit 1; }
