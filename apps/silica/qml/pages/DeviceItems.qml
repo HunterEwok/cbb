@@ -32,6 +32,7 @@ Column {
     property int dragFrom: -1   // the index in level of the dragged item
     property int dragPos: -1    // where it shows now, in shown
     property int dragInto: -1   // the collection it goes into, in shown
+    property int dragHit: -1    // the item it last passed over, in level
     property bool dragMoved: false
     property real grabX: 0
     property real grabY: 0
@@ -70,6 +71,7 @@ Column {
         dragFrom = at
         dragPos = pos
         dragInto = -1
+        dragHit = -1
         dragMoved = false
         grabX = mouse.x
         grabY = mouse.y
@@ -89,10 +91,17 @@ Column {
             return
         var f = tile.mapToItem(tiles, mouse.x, mouse.y)
         var over = tileAt(f.x, f.y)
-        if (over < 0 || over === dragPos) {
+        if (over < 0) {
+            dragHit = -1
             dragInto = -1
             return
         }
+        // The tile it passed over keeps its outline as it makes way.
+        if (over === dragPos) {
+            dragInto = -1
+            return
+        }
+        dragHit = shown.get(over).idx
         var t = tileRepeater.itemAt(over)
         var target = items.level[shown.get(over).idx]
         if (target.kind === "collection" && items.level[dragFrom].kind === "device") {
@@ -135,6 +144,7 @@ Column {
         dragFrom = -1
         dragPos = -1
         dragInto = -1
+        dragHit = -1
         dragMoved = false
         if (!moved || from < 0)
             return
@@ -183,6 +193,16 @@ Column {
                     sourceComponent: entry && entry.kind === "collection" ? collectionTile : deviceTile
                     // The dragged tile's place stays empty under it.
                     opacity: items.dragFrom === at ? 0 : 1
+                    // The tile the dragged one passes over.
+                    Rectangle {
+                        visible: items.dragMoved && items.dragHit === at && items.dragInto < 0
+                        anchors.fill: parent
+                        anchors.margins: Theme.paddingSmall
+                        radius: Theme.paddingSmall
+                        color: "transparent"
+                        border.width: 2
+                        border.color: Theme.highlightColor
+                    }
                     // A collection that takes the dragged device.
                     Rectangle {
                         visible: items.dragInto === index
