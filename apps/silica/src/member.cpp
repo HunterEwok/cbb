@@ -294,7 +294,7 @@ void Member::sendFiles(const QStringList &paths)
         QJsonObject part{{QStringLiteral("path"), fi.fileName()}, {QStringLiteral("file"), fi.absoluteFilePath()}};
         // A lone image goes as clipboard data, so that it lands in the
         // other devices' clipboards; files keep their names.
-        if (paths.size() == 1 && (type == QStringLiteral("image/png") || type == QStringLiteral("image/jpeg")))
+        if (paths.size() == 1 && (type == QStringLiteral("image/png") || type == QStringLiteral("image/jpeg") || type == QStringLiteral("image/gif")))
             part = QJsonObject{{QStringLiteral("type"), type}, {QStringLiteral("file"), fi.absoluteFilePath()}};
         parts.append(part);
     }
@@ -359,7 +359,7 @@ void Member::take(const QJsonObject &copy)
             const QString type = p.value(QStringLiteral("type")).toString();
             single = p.value(QStringLiteral("file")).toString();
             singleType = type;
-            if (type == QStringLiteral("image/png") || type == QStringLiteral("image/jpeg"))
+            if (type == QStringLiteral("image/png") || type == QStringLiteral("image/jpeg") || type == QStringLiteral("image/gif"))
                 image = single;
         }
         // One image or video goes to Pictures/CBB or Videos/CBB, where the

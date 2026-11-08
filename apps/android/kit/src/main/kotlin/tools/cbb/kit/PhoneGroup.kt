@@ -515,6 +515,16 @@ class PhoneGroup internal constructor(
     }
 
     /**
+     * A paste command of the group's copy of images or files copyID, which
+     * this phone made just before (docs/protocol.md, section 15): the
+     * member to fetches it and pastes it with the paste keys.
+     */
+    fun pasteCopyCommand(to: String, copyID: String, enter: Boolean, caSigner: CertificateSigner, now: Instant): Member.Record {
+        if (!isAdmin) throw Failure("this phone is no admin")
+        return Commands.paste(to, copyID, "paste", enter, "media", tag, device, now, caSigner, adminCA, seal = sealKey(to))
+    }
+
+    /**
      * An action command that runs the quick action name on the member to,
      * signed with this phone's root or admin key; the member defines what
      * it does.

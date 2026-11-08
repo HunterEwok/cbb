@@ -29,10 +29,12 @@ func mediaType(t string) (string, error) {
 		return clip.TypePNG, nil
 	case "jpeg", "jpg", clip.TypeJPEG:
 		return clip.TypeJPEG, nil
+	case "gif", clip.TypeGIF:
+		return clip.TypeGIF, nil
 	case "html", clip.TypeHTML:
 		return clip.TypeHTML, nil
 	}
-	return "", fmt.Errorf("-type is png, jpeg or html, not %q", t)
+	return "", fmt.Errorf("-type is png, jpeg, gif or html, not %q", t)
 }
 
 // copyMedia sends the files at paths, or with typ the one file as an

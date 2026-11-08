@@ -35,6 +35,20 @@ All notable changes to cbb are documented in this file. The format follows
   device that waits and admits it (`TestJoinByShownCode`). The lite member, the iPhone, the
   Android phone and the Aurora phone announce themselves the same way while they wait, and
   the phones show the six digits under their QR code (`cbb_join_announce` for Aurora).
+- Remote paste carries images and files (docs/design.md, "Remote paste"): `cbb paste -on
+  DEVICE FILE...` (`-image` for one PNG, JPEG or GIF as an image, `-copy` for the group's current
+  copy) copies them to the group and signs a `paste` command of kind `media` that names the
+  copy. The receiver fetches it, its desktop connector writes it into the clipboard (an image,
+  or files as a file manager copies them) and presses the paste keys, on X11, Wayland, GNOME
+  and KDE (the portal or the uinput helper) and Windows, so a chat such as Telegram gets the
+  picture; tmux and text consoles refuse it. The Go and the Rust member take it, and only a
+  copy sealed to the sender too (docs/protocol.md, section 15). The Mac app pastes it with
+  Cmd+V, the Android app takes an image through its accessibility service, and both phones'
+  "Paste on…" send a picture or files.
+- GIF images, animated ones too, are carried as `image/gif`: the clipboards of Linux,
+  Windows (the registered `GIF` format), the Mac (`com.compuserve.gif`) and the phones read
+  and write them as they are, and a receiver offers the first frame as PNG next to it for
+  the programs that take no GIF.
 - `cbb-helper`, the Go helper of the Rust program `cbb` (docs/design.md, "The service and its
   helper"): `cbb` starts it as its child, talks to it only over the pipes it inherits, logs
   its hello and starts it again when it stops. It does nothing else yet; the steps that make

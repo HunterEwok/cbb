@@ -30,6 +30,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -183,6 +184,46 @@ class CopyWatcher : AccessibilityService() {
         } catch (e: TimeoutException) {
             InjectFailure("the accessibility service did not answer", refused = false)
         }
+    }
+
+    /**
+     * Puts a received image into the focused text field, on the main thread:
+     * on the clipboard through the app's FileProvider, then ACTION_PASTE. The
+     * clipboard keeps it, as the group's copy it is. Null when it went in.
+     */
+    fun injectImage(file: File, alt: String, enter: Boolean): InjectFailure? {
+        val done = CompletableFuture<InjectFailure?>()
+        main.post {
+            done.complete(
+                try {
+                    injectImageNow(file, alt, enter)
+                } catch (e: RuntimeException) {
+                    Log.e(TAG, "a paste of an image failed", e)
+                    InjectFailure("the paste failed: $e", refused = false)
+                },
+            )
+        }
+        return try {
+            done.get(5, TimeUnit.SECONDS)
+        } catch (e: TimeoutException) {
+            InjectFailure("the accessibility service did not answer", refused = false)
+        }
+    }
+
+    private fun injectImageNow(file: File, alt: String, enter: Boolean): InjectFailure? {
+        if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) return InjectFailure("the phone is locked")
+        if (enter && Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return InjectFailure("this phone presses Enter from Android 11 on; send the image without Enter")
+        val node = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable }
+            ?: return InjectFailure("no text field has the focus on this phone")
+        pastingUntil = SystemClock.elapsedRealtime() + 2_000
+        Clipboard.writeImage(this, file, alt)
+        if (!node.performAction(AccessibilityNodeInfo.ACTION_PASTE)) return InjectFailure("the text field took no paste", refused = false)
+        if (enter && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            !node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+        ) {
+            return InjectFailure("the image is in, but the text field took no Enter", refused = false)
+        }
+        return null
     }
 
     private fun injectNow(text: String, method: String, enter: Boolean, secret: Boolean): InjectFailure? {

@@ -16,7 +16,7 @@ public enum Media {
     public static let maxName = 255
     /// The largest plain-text alternative of a media event, in bytes of UTF-8.
     public static let maxAltText = 256 << 10
-    public static let types: Set<String> = ["image/png", "image/jpeg", "text/html"]
+    public static let types: Set<String> = ["image/png", "image/jpeg", "image/gif", "text/html"]
 
     /// What a media event's content is.
     public struct Manifest: Codable, Equatable, Sendable {

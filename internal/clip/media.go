@@ -47,6 +47,7 @@ const (
 const (
 	TypePNG  = "image/png"
 	TypeJPEG = "image/jpeg"
+	TypeGIF  = "image/gif" // an animated image: a receiver offers its first frame as PNG too
 	TypeHTML = "text/html"
 )
 
@@ -98,7 +99,7 @@ func ParseManifest(b []byte) (*Manifest, error) {
 // Part is one item of a manifest: a piece of clipboard data of a Type, or a
 // file or folder of a copy of files at its Path.
 type Part struct {
-	Type   string `json:"type,omitempty"`   // clipboard data: TypePNG, TypeJPEG or TypeHTML
+	Type   string `json:"type,omitempty"`   // clipboard data: TypePNG, TypeJPEG, TypeGIF or TypeHTML
 	Path   string `json:"path,omitempty"`   // a file or folder: names joined by "/"
 	Dir    bool   `json:"dir,omitempty"`    // with Path: a folder, without size or hash
 	Size   int64  `json:"size,omitempty"`   // bytes
@@ -135,7 +136,7 @@ func (m *Manifest) Validate() error {
 			// Paths compare as a receiver writes them: two that SavePath
 			// makes one would land in one place.
 			key = SavePath(p.Path)
-		case p.Type != TypePNG && p.Type != TypeJPEG && p.Type != TypeHTML:
+		case p.Type != TypePNG && p.Type != TypeJPEG && p.Type != TypeGIF && p.Type != TypeHTML:
 			return fmt.Errorf("clip: unknown media type %q", p.Type)
 		}
 		if seen[key] {

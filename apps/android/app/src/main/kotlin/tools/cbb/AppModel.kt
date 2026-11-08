@@ -4,6 +4,7 @@
 package tools.cbb
 
 import android.content.Context
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -801,6 +802,27 @@ class AppModel(private val app: Context) {
         var done = false
         message = try {
             group.paste(id, text, method, enter, secret)
+            done = true
+            Note(R.string.pasted)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LiveGroup.CommandRefused) {
+            Log.e(TAG, app.getString(R.string.error_paste_refused), e)
+            Note(R.string.error_paste_refused, e.reason, error = true)
+        } catch (e: LiveGroup.NotConnected) {
+            describe(e, R.string.error_no_answer)
+        } catch (e: Exception) {
+            describe(e)
+        }
+        return done
+    }
+
+    /** Pastes an image or files the user picked where a computer's focus is; true when it did, else the reason shows. */
+    suspend fun pasteShared(id: String, uris: List<Uri>, enter: Boolean): Boolean {
+        var done = false
+        message = try {
+            val shared = withContext(Dispatchers.IO) { Files.read(app, uris) }
+            group.pasteShared(id, shared, enter)
             done = true
             Note(R.string.pasted)
         } catch (e: CancellationException) {

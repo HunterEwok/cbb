@@ -686,14 +686,22 @@ func (s *Service) receivePart(r *control.Reader, size int64) ([sha256.Size]byte,
 // clipboard, or of the group's copy in a mode that keeps its clipboard to
 // itself, once they have arrived; the plain-text alternative, then each
 // part and its bytes.
-func (s *Service) pasteMedia(ctx context.Context, c net.Conn) error {
+func (s *Service) pasteMedia(ctx context.Context, c net.Conn, copyID string) error {
 	e := s.engine()
 	if e == nil || s.content == nil {
 		return s.errNoGroup()
 	}
 	var man *clip.Manifest
 	var text string
-	if e.Mode().Receives() {
+	if copyID != "" {
+		// A remote paste's copy (pastemedia.go), which the service fetched
+		// before it handed the paste to the watcher.
+		ev, ok := e.Current()
+		if !ok || ev.ID != copyID || ev.Media == nil || ev.Unread {
+			return errors.New("the copy to paste is no longer the group's current copy")
+		}
+		man, text = ev.Media, ev.Text
+	} else if e.Mode().Receives() {
 		var ok bool
 		if man, text, _, ok = e.LocalMedia(); !ok {
 			return errors.New("the clipboard holds no images or files")
@@ -710,7 +718,7 @@ func (s *Service) pasteMedia(ctx context.Context, c net.Conn) error {
 		}
 		s.setMedia(mc, group.DeviceID(ev.Origin), s.groupContext())
 	}
-	if err := s.waitMedia(ctx, c, man); err != nil {
+	if err := s.waitMedia(ctx, gone(c), man); err != nil {
 		return err
 	}
 	if err := reply(c, control.Header{Kind: control.KindMedia}, []byte(text)); err != nil {
@@ -755,9 +763,8 @@ func sendPart(c net.Conn, r io.Reader, buf []byte) error {
 }
 
 // waitMedia waits until the cache holds every part of man, while it is
-// being fetched and the client waits.
-func (s *Service) waitMedia(ctx context.Context, c net.Conn, man *clip.Manifest) error {
-	left := gone(c)
+// being fetched and until left is closed.
+func (s *Service) waitMedia(ctx context.Context, left <-chan struct{}, man *clip.Manifest) error {
 	for !s.content.complete(man) {
 		s.mediaMu.Lock()
 		run, failed := s.fetch, s.fetchFailed

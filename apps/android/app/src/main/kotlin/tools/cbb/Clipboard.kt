@@ -130,7 +130,7 @@ object Clipboard {
     fun writeImage(context: Context, file: File, alt: String) {
         val cm = context.getSystemService(ClipboardManager::class.java)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
-        val type = if (file.extension == "png") "image/png" else "image/jpeg"
+        val type = Images.type(file.extension)
         val clip = if (alt.isEmpty()) {
             ClipData(ClipDescription("cbb", arrayOf(type)), ClipData.Item(uri))
         } else {
