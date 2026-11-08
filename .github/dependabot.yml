@@ -11,6 +11,8 @@
 # dependency-name), or the firmware's `cargo build --locked` fails. esp-hal and its crates are
 # pinned to a git commit on purpose and are left alone. gradle covers the Android app and its kit.
 # npm covers only the checks of the website in CI (site/package.json).
+# swift covers the iPhone kit's packages. Versions written out by hand in the workflows (qemu,
+# zig, the ESP32 toolchain, the cargo tools CI installs) are checked weekly by tools/pins.
 # The cooldown waits a week after a release before proposing it, so a compromised release
 # has time to be noticed and pulled.
 version: 2
@@ -106,4 +108,17 @@ updates:
       default-days: 7
     groups:
       website-checks:
+        patterns: ["*"]
+
+  # The iPhone kit's Swift packages (apps/ios/CBBKit/Package.resolved).
+  - package-ecosystem: "swift"
+    directory: "/apps/ios/CBBKit"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      timezone: "UTC"
+    cooldown:
+      default-days: 7
+    groups:
+      swift:
         patterns: ["*"]
