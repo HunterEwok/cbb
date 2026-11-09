@@ -61,7 +61,9 @@ pub(crate) fn set_tcp_timeouts(sock: &mut tcp::Socket) {
     sock.set_keep_alive(Some(TCP_KEEP_ALIVE));
 }
 /// How long the link waits for the hub's answer at one endpoint before it
-/// tries the next.
+/// tries the next: counted from when it started there, last heard the hub or
+/// began a rekey, so a rekey, which WireGuard starts once a session is two
+/// minutes old, does not leave an endpoint that works.
 const ENDPOINT_WAIT: Duration = Duration::from_secs(10);
 const MAX_ENDPOINTS: usize = 8;
 pub(crate) const TCP_BUFFER: usize = 64 << 10;
@@ -984,7 +986,11 @@ struct Pump {
     limiter: Arc<RateLimiter>,
     endpoints: Vec<SocketAddr>,
     current: usize,
+    /// When the link started at the current endpoint, last heard the hub or
+    /// began a rekey.
     since: Instant,
+    /// Whether the session was active when the link last looked.
+    active: bool,
     udp: UdpSocket,
     ln: TcpListener,
     iface: Interface,
@@ -1043,6 +1049,7 @@ impl Pump {
             endpoints,
             current: 0,
             since: Instant::now(),
+            active: false,
             udp,
             ln,
             iface,
@@ -1133,6 +1140,7 @@ impl Pump {
 
     /// Notes that the hub answered, and through which way.
     fn answer(&mut self) {
+        self.since = Instant::now();
         if self.answered.swap(true, Ordering::SeqCst) {
             return;
         }
@@ -1147,7 +1155,16 @@ impl Pump {
 
     /// Tries the next endpoint while the hub does not answer at this one.
     fn next_endpoint(&mut self) {
-        if self.tunn.has_active_session() || self.endpoints.len() < 2 || self.since.elapsed() < ENDPOINT_WAIT {
+        if self.tunn.has_active_session() {
+            self.active = true;
+            return;
+        }
+        if std::mem::take(&mut self.active) {
+            // The session is old enough for a rekey: its handshake gets
+            // the whole wait at the endpoint that has worked.
+            self.since = Instant::now();
+        }
+        if self.endpoints.len() < 2 || self.since.elapsed() < ENDPOINT_WAIT {
             return;
         }
         self.use_endpoint((self.current + 1) % self.endpoints.len());
