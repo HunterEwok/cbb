@@ -150,7 +150,7 @@ fn learns_the_vless_settings() {
     let _r = Registration::start(cfg, report.clone(), Arc::new(|_| {}));
     assert!(wait_for(Duration::from_secs(20), || report.lock().unwrap().seen.is_some()));
     let v = report.lock().unwrap().vless.clone().unwrap();
-    assert_eq!(v["endpoint"], format!("127.0.0.1:8443"));
+    assert_eq!(v["endpoint"], "127.0.0.1:8443");
     assert_eq!(v["id"], id);
     assert_eq!(v["transport"], "xhttp");
     assert_eq!(learned.lock().unwrap().as_ref(), Some(&v));
