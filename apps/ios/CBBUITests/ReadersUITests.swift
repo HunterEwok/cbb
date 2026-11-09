@@ -55,7 +55,10 @@ final class ReadersUITests: XCTestCase {
             try app.performAccessibilityAudit(for: types) { issue in
                 guard let e = issue.element else { return false }
                 // The system's status bar is not the app's to fix.
-                return e.elementType == .statusBar || app.statusBars.firstMatch.exists && app.statusBars.firstMatch.frame.contains(e.frame)
+                if e.elementType == .statusBar || app.statusBars.firstMatch.exists && app.statusBars.firstMatch.frame.contains(e.frame) { return true }
+                // Each issue on a line of its own, with the element it is on.
+                XCTFail("\(screen): \(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' at \(e.frame)")
+                return true
             }
         } catch {
             XCTFail("\(screen): \(error)")

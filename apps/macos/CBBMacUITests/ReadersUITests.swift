@@ -55,7 +55,7 @@ final class ReadersUITests: XCTestCase {
                     guard let e = issue.element else { return false }
                     // The Touch Bar is the system's, not the app's to fix.
                     if e.elementType == .touchBar { return true }
-                    XCTFail("the window in \(language): \(issue.compactDescription) on \(e.debugDescription)")
+                    XCTFail("the window in \(language): \(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' '\(String(describing: e.value ?? ""))' at \(e.frame)")
                     return true
                 }
             } catch {

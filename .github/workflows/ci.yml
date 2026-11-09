@@ -1600,7 +1600,9 @@ jobs:
               for second in $(seq 300); do kill -0 "$boot" 2>/dev/null || break; sleep 1; done
               kill "$boot" 2>/dev/null || true
               wait "$boot" || true
+              rm -rf "$RUNNER_TEMP/ios-$1.xcresult"
               xcodebuild test-without-building -project CBB.xcodeproj -scheme CBB -destination "id=$1" \
+                -resultBundlePath "$RUNNER_TEMP/ios-$1.xcresult" \
                 "${sign[@]}" "${only[@]}" >"$log" 2>&1 &
               pid=$!
               killed=
@@ -1650,6 +1652,26 @@ jobs:
             "${sign[@]}" | tail -n 50
           test_on "$iphone"
           test_on "$ipad"
+      # The screens' pictures in every language (ReadersUITests), to look at
+      # what the accessibility audit found; the English ones also go into
+      # the log as small JPEGs when the tests fail.
+      - name: the screens' pictures
+        if: always()
+        run: |
+          for r in "$RUNNER_TEMP"/ios-*.xcresult; do
+            [ -d "$r" ] || continue
+            xcrun xcresulttool export attachments --path "$r" --output-path "$RUNNER_TEMP/ios-screens/$(basename "$r" .xcresult)" || true
+          done
+      - name: the English screens in the log
+        if: failure()
+        run: python3 .github/pictures.py "$RUNNER_TEMP/ios-screens" -en
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: ios-screens
+          path: ${{ runner.temp }}/ios-screens
+          retention-days: 7
+          if-no-files-found: ignore
   macapp:
     name: Mac app
     needs: changes
@@ -1677,6 +1699,9 @@ jobs:
       - name: the windows' pictures
         if: always()
         run: xcrun xcresulttool export attachments --path "$RUNNER_TEMP/mac.xcresult" --output-path "$RUNNER_TEMP/mac-windows" || true
+      - name: the English window in the log
+        if: failure()
+        run: python3 .github/pictures.py "$RUNNER_TEMP/mac-windows" -en
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
