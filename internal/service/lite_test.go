@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -96,7 +97,13 @@ func startLiteEnv(t *testing.T, bin, dir string, env []string, args ...string) *
 	if env != nil {
 		cmd.Env = append(os.Environ(), env...)
 	}
-	cmd.Stdout, cmd.Stderr = testWriter{t, "lite: ", s}, testWriter{t, "lite: ", s}
+	// Each line names the service, by its -name when it has one, so that
+	// a failing test's log tells the members apart.
+	prefix := "lite: "
+	if i := slices.Index(args, "-name"); i >= 0 && i+1 < len(args) {
+		prefix = args[i+1] + ": "
+	}
+	cmd.Stdout, cmd.Stderr = testWriter{t, prefix, s}, testWriter{t, prefix, s}
 	// A child of cbb's that outlives it, such as a cbb-helper, keeps the
 	// log's pipes open: the wait ends anyway, so that the test fails where
 	// it went wrong rather than hanging the package.
