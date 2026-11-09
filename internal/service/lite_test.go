@@ -97,6 +97,10 @@ func startLiteEnv(t *testing.T, bin, dir string, env []string, args ...string) *
 		cmd.Env = append(os.Environ(), env...)
 	}
 	cmd.Stdout, cmd.Stderr = testWriter{t, "lite: ", s}, testWriter{t, "lite: ", s}
+	// A child of cbb's that outlives it, such as a cbb-helper, keeps the
+	// log's pipes open: the wait ends anyway, so that the test fails where
+	// it went wrong rather than hanging the package.
+	cmd.WaitDelay = 10 * time.Second
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
