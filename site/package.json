@@ -1,6 +1,6 @@
 {
   "private": true,
-  "description": "Checks of the built website in CI: HTML validity and Lighthouse (see README.md); rough.js draws the chalk pictures (chalk.js), and og.js the pictures for links (with Playwright).",
+  "description": "Checks of the built website in CI: HTML validity and Lighthouse (see README.md); rough.js draws the line drawings (chalk.js), and og.js the pictures for links (with Playwright).",
   "license": "AGPL-3.0-only",
   "devDependencies": {
     "html-validate": "11.17.0",

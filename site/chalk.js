@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Draws the site's pictures as a hand would with chalk on a board, and
-// writes them to templates/chalk.html: every line wobbles a little and is
-// gone over twice, as rough.js does. The seeds are fixed, so the drawings
-// come out the same each time; run `npm run chalk` after changing them.
+// Draws the site's pictures as the lines of a technical drawing and writes
+// them to templates/chalk.html: rough.js with no roughness, so every line is
+// straight and drawn once. The seeds are fixed, so the drawings come out the
+// same each time; run `npm run chalk` after changing them.
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -11,14 +11,14 @@ const rough = require("roughjs");
 
 const g = rough.generator();
 let seed = 7;
-const opts = (o = {}) => Object.assign({ roughness: 0.75, bowing: 0.7, strokeWidth: 1, seed: seed++, preserveVertices: true }, o);
+const opts = (o = {}) => Object.assign({ roughness: 0, bowing: 0, disableMultiStroke: true, strokeWidth: 1, seed: seed++, preserveVertices: true }, o);
 const round = (d) => d.replace(/-?\d+\.\d+/g, (n) => String(Math.round(parseFloat(n) * 10) / 10));
 const paths = (d) => g.toPaths(d).map((p) => round(p.d)).join(" ");
 const shapes = {
   rect: (x, y, w, h, r) => g.path(`M${x + r} ${y}H${x + w - r}Q${x + w} ${y} ${x + w} ${y + r}V${y + h - r}Q${x + w} ${y + h} ${x + w - r} ${y + h}H${x + r}Q${x} ${y + h} ${x} ${y + h - r}V${y + r}Q${x} ${y} ${x + r} ${y}Z`, opts()),
-  line: (x1, y1, x2, y2) => g.line(x1, y1, x2, y2, opts({ roughness: 0.7 })),
+  line: (x1, y1, x2, y2) => g.line(x1, y1, x2, y2, opts()),
   path: (d) => g.path(d, opts()),
-  circle: (cx, cy, d) => g.circle(cx, cy, d, opts({ roughness: 0.6 })),
+  circle: (cx, cy, d) => g.circle(cx, cy, d, opts()),
 };
 const draw = (list) => list.map(([kind, ...args]) => paths(shapes[kind](...args))).join(" ");
 
@@ -169,7 +169,7 @@ const part = ([cls, d]) => (cls.startsWith("g ") ? `<g class="${cls.slice(2)}">$
 const still = (d) => line("y link", d.links) + line("w", d.white) + line("y", d.yellow);
 const lines = (d) => (d.parts ? `<g>${still(d)}</g><g>${d.parts.map(part).join("")}</g>` : `<g>${still(d)}</g>`);
 const out = `<!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- Written by chalk.js: the lines of the chalk drawings, without their
+<!-- Written by chalk.js: the lines of the drawings, without their
      labels, which the pages add in their own language. -->
 {{define "chalk-hero"}}${lines(hero)}{{end}}
 {{define "chalk-computer"}}${lines(computer)}{{end}}

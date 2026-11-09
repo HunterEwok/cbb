@@ -7,7 +7,7 @@ documentation at `/docs/` (the index and the users' guides in every language, th
 [`tools/site`](../tools/site/main.go) into plain HTML and CSS. It loads nothing from other
 sites. Its scripts are all served by the same server: its own `static/theme.js`, a few lines
 that put the reader's light or dark theme on the page before it is drawn, and
-`static/site.js`, deferred, which runs the theme button, the copy buttons and the chalk and,
+`static/site.js`, deferred, which runs the theme button, the copy buttons and the drawings' motion and,
 on the download page, puts the reader's system first; and the visit counter, GoatCounter (the other `<script>` elements are schema.org data
 for search engines). Without scripts every page works: the theme follows the system and
 every way to download is shown. It also has error pages (`404`, `50x`) in every language, which nginx shows.
@@ -28,16 +28,22 @@ every way to download is shown. It also has error pages (`404`, `50x`) in every 
 - Write for the reader: the benefit first, short sentences, buttons that say what happens
   ("Download for Android", not "More"), and a next step at the end of every page. State only
   what is true today: no invented reviews or numbers, and what is planned says so.
-- The design is art deco on wool felt, in a dark theme and a light one; its colours are
-  tokens at the top of `static/style.css`, the light theme's in a block of its own. The
-  theme follows the system until the reader picks one with the button in the header. Motion is CSS only, 0.2 to 0.6 s (a board's chalk is written in about a second), and off under
-  `prefers-reduced-motion`. Buttons are at least 44 px high.
-- The pictures and the tables are chalk on boards in walnut frames. The chalk lines are drawn
-  once by rough.js: change `chalk.js` and run `npm run chalk`, which writes
-  `templates/chalk.html`; the labels stay in the pages, in each language. `textures.py`
-  (NumPy and Pillow) makes the wood and the felt of both themes in `static/`.
+- The design is the blueprint, the same as the apps': a white sheet with blue lines in the
+  light theme, a blueprint in the dark one, both on a fine grid; IBM Plex Sans for the text and
+  IBM Plex Mono for labels and codes (`static/fonts`). Its colours are tokens at the top of
+  `static/style.css`, the light theme's in a block of its own, taken from the apps' design
+  tokens. A solid line means on or working, a dashed one off or waiting, and corner marks show
+  the active element; radii are 3 px. Each section is a numbered sheet and each picture a
+  numbered figure, with the words "Sheet" and "Fig." translated. The theme follows the system
+  until the reader picks one with the button in the header. Motion is CSS only, 0.2 to 0.6 s
+  (a drawing's lines are drawn in about a second), and off under `prefers-reduced-motion`.
+  Buttons are at least 44 px high.
+- The pictures are line drawings with numbered callouts, explained in a list under them. The
+  lines are drawn once by rough.js with no roughness: change `chalk.js` and run
+  `npm run chalk`, which writes `templates/chalk.html`; the labels stay in the pages, in each
+  language.
 - `static/og/<language>.jpg` (1200×630) is the picture links to the site show in chats and
-  social networks: the home page's title beside its board. After changing either, run
+  social networks: the home page's title beside its figure 1. After changing either, run
   `npm run og` (Playwright's Chromium, and Noto fonts for Chinese, Arabic, Hebrew and Hindi;
   see `og.js`).
 - Name every phone and computer the same way: "a phone or a computer", "iPhone, Android,
