@@ -732,6 +732,23 @@ func TestFFIJoinerMadeAdmin(t *testing.T) {
 	if err != nil || !ca.IsCA || !strings.HasPrefix(ca.Subject.CommonName, "cbb admin ") {
 		t.Fatalf("the admin CA: %v, %+v", err, ca)
 	}
+	// The member checks the CA for the app and stops offering the key; a
+	// second CA finds no key offered.
+	take := func() map[string]any {
+		req, _ := json.Marshal(map[string]any{"op": "take_admin_ca", "args": map[string]any{"key": der}})
+		fmt.Fprintf(in, "CALL %s\n", req)
+		var ans struct{ Error map[string]any }
+		if err := json.Unmarshal([]byte(next("ANSWER ")), &ans); err != nil {
+			t.Fatal(err)
+		}
+		return ans.Error
+	}
+	if e := take(); e != nil {
+		t.Fatalf("the member refused the root's admin CA: %v", e)
+	}
+	if e := take(); e == nil {
+		t.Fatal("the member took an admin CA with no admin key offered")
+	}
 	if d := listed(); !d.Admin || d.Role != group.RolePhone || d.Store != "hardware" {
 		t.Fatalf("the phone made an admin is listed as %+v", d)
 	}

@@ -532,6 +532,11 @@ impl Node {
         *self.presence.admin_key.write().unwrap() = spki;
     }
 
+    /// The admin key the hellos offer now, if any.
+    pub fn offered_admin_key(&self) -> Option<Vec<u8>> {
+        self.presence.admin_key.read().unwrap().clone()
+    }
+
     /// Says whether a pairing window is open here, for mDNS.
     pub fn set_window_open(&self, open: bool) {
         self.window_open.store(open, Ordering::SeqCst);

@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use cbb_core::admit::{self, Admitted, Admitter, GroupView};
-use cbb_core::certs::DeviceId;
+use cbb_core::certs::{Cert, DeviceId};
 use cbb_core::clip::{Engine, Event, Kind, Via};
 use cbb_core::identity::Identity;
 use cbb_core::manage::{self, Change, Order, Signer};
@@ -510,6 +510,36 @@ impl Member {
     /// the phone's while it is no admin, None once it is one.
     pub fn offer_admin_key(&self, spki: Option<Vec<u8>>) {
         self.node.offer_admin_key(spki.filter(|k| !k.is_empty()));
+    }
+
+    /// Checks the admin CA that came in the root's admin message, as
+    /// docs/protocol.md section 10 ("Admins") says a member MUST: it is for
+    /// the admin key the hellos offer, names this phone and stands under the
+    /// group's current root, and the records do not refuse it. Then the
+    /// hellos offer the key no more; the app keeps the CA and signs with it.
+    pub fn take_admin_ca(&self, ca: &[u8]) -> Result<()> {
+        let offered = self.node.offered_admin_key().ok_or_else(|| Error::msg("this phone offers no admin key"))?;
+        let cert = Cert::parse(ca)?;
+        let ident = self.node.identity();
+        let point = cbb_core::certs::p256_spki(&offered)
+            .map(|k| k.to_sec1_point(false).as_bytes().to_vec())
+            .ok_or_else(|| Error::msg("the offered admin key is no P-256 key"))?;
+        let mut roots = self.node.records().lock().unwrap().roots();
+        if roots.is_empty() {
+            roots.push(ident.root().clone());
+        }
+        let root = roots.last().unwrap_or(ident.root());
+        if cert.public_key() != point.as_slice()
+            || cert.common_name.as_deref() != Some(format!("cbb admin {}", ident.id).as_str())
+        {
+            return Err(Error::msg("the admin CA is not for this phone's admin key"));
+        }
+        cbb_core::certs::check_admin_ca(&cert, root).map_err(|e| e.context("the admin CA"))?;
+        if let Some(why) = self.node.records().lock().unwrap().refused_admin_ca(&cert) {
+            return Err(Error::msg(format!("the group's records refuse the admin CA: {why:?}")));
+        }
+        self.node.offer_admin_key(None);
+        Ok(())
     }
 
     /// Sends a member the admin CA for the admin key its hello offered.

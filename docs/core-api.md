@@ -111,6 +111,7 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `answer` | `token` (a `command` event's), `status` (`done`, `refused` or `failed`), `reason` | `{}`: the result the command's sender gets |
 | `check_command` | `command` (a `command` event's record) | what `group_command` answers for it against the node's records, opened with the phone's key for sealed messages, and for a paste `clean`: its text as it may go in (newlines and tabs, no other control characters or terminal escapes); a command refused is an error. The app keeps the replay cache and its own switches |
 | `offer_admin_key` | `key` (the phone's admin key, a SubjectPublicKeyInfo in base64, or none) | `{}`: what the hellos offer the root from the next connection on: the phone's admin key while it is no admin, none once it is one |
+| `take_admin_ca` | `key` (the admin CA of the root's `admin` message, DER in base64) | `{}` once the member checked it: for the offered admin key, naming this phone, under the group's current root, not refused by the records; the hellos then offer the key no more. An error names what failed |
 | `tunnel_key` | `key`, `psk` (32 bytes each, base64), or neither while sync away from home is off | `{}`: what the hellos offer the group's hubs; the phone connects to the members again |
 | `evidence` | `evidence`: the attestations of the phone's keys | `{}`: every peer gets them after its hello (protocol.md, section 17) |
 | `disconnect` | `device` | `{}`: the connection to it ends with a goodbye; it is dialed again later |

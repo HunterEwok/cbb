@@ -800,6 +800,13 @@ impl Member {
                 n.offer_admin_key(a.key);
                 done()
             }
+            // The admin CA of the root's admin message, checked against the
+            // offered key, this phone and the current root.
+            "take_admin_ca" => {
+                let a: OfferArgs = args(a)?;
+                n.take_admin_ca(&a.key.ok_or_else(|| Error::msg("take_admin_ca needs the admin CA"))?)?;
+                done()
+            }
             "send_tunnel" => {
                 let a: ToArgs = args(a)?;
                 let offer = a.offer.ok_or_else(|| Error::msg("send_tunnel needs the offer"))?;
