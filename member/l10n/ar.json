@@ -21,5 +21,9 @@
  "Sync away from home: on; the hub is {}, at {}; not connected through the tunnel.": "المزامنة خارج المنزل: تعمل؛ المحور هو {}، في {}؛ غير متصلة عبر النفق.",
  "\nThis device's key fingerprint:  {}": "\nبصمة مفتاح هذا الجهاز:  {}",
  "Whoever invited you sees it on the hub and admits this device if it matches.": "من دعاك يراها على المحور ويقبل هذا الجهاز إن تطابقت.",
- "Waiting for them; press Ctrl+C to give up.": "في انتظاره؛ اضغط Ctrl+C للتراجع."
+ "Waiting for them; press Ctrl+C to give up.": "في انتظاره؛ اضغط Ctrl+C للتراجع.",
+ "Handing this device's tunnel key to the hub...": "جارٍ تسليم مفتاح نفق هذا الجهاز إلى المحور...",
+ "The hub took it: this device syncs from afar now.": "قبله المحور: يتزامن هذا الجهاز الآن عن بُعد.",
+ "The hub has not answered yet; the service keeps trying for a day.": "لم يستجب المحور بعد؛ تواصل الخدمة المحاولة لمدة يوم.",
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "شغّل الخدمة (cbb service) خلال يوم: فهي تسلّم مفتاح هذا الجهاز إلى المحور."
 }

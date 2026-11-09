@@ -21,5 +21,9 @@
  "Sync away from home: on; the hub is {}, at {}; not connected through the tunnel.": "Usawazishaji ukiwa mbali na nyumbani: umewashwa; kitovu ni {}, kwenye {}; hakijaunganishwa kupitia handaki.",
  "\nThis device's key fingerprint:  {}": "\nAlama ya ufunguo wa kifaa hiki:  {}",
  "Whoever invited you sees it on the hub and admits this device if it matches.": "Aliyekualika anaiona kwenye kitovu na anakubali kifaa hiki ikiwa inalingana.",
- "Waiting for them; press Ctrl+C to give up.": "Inamsubiri; bonyeza Ctrl+C kuacha."
+ "Waiting for them; press Ctrl+C to give up.": "Inamsubiri; bonyeza Ctrl+C kuacha.",
+ "Handing this device's tunnel key to the hub...": "Inakabidhi ufunguo wa handaki wa kifaa hiki kwa kitovu...",
+ "The hub took it: this device syncs from afar now.": "Kitovu kimeupokea: kifaa hiki sasa kinasawazisha kikiwa mbali.",
+ "The hub has not answered yet; the service keeps trying for a day.": "Kitovu bado hakijajibu; huduma itaendelea kujaribu kwa siku moja.",
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "Anzisha huduma (cbb service) ndani ya siku moja: inakabidhi ufunguo wa kifaa hiki kwa kitovu."
 }

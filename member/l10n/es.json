@@ -21,5 +21,9 @@
  "Sync away from home: on; the hub is {}, at {}; not connected through the tunnel.": "Sincronización fuera de casa: activada; el hub es {}, en {}; sin conexión por el túnel.",
  "\nThis device's key fingerprint:  {}": "\nHuella de la clave de este dispositivo:  {}",
  "Whoever invited you sees it on the hub and admits this device if it matches.": "Quien te invitó la ve en el hub y admite este dispositivo si coincide.",
- "Waiting for them; press Ctrl+C to give up.": "Esperando; pulsa Ctrl+C para cancelar."
+ "Waiting for them; press Ctrl+C to give up.": "Esperando; pulsa Ctrl+C para cancelar.",
+ "Handing this device's tunnel key to the hub...": "Entregando la clave del túnel de este dispositivo al hub...",
+ "The hub took it: this device syncs from afar now.": "El hub la aceptó: este dispositivo se sincroniza ahora desde lejos.",
+ "The hub has not answered yet; the service keeps trying for a day.": "El hub aún no respondió; el servicio lo sigue intentando durante un día.",
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "Inicia el servicio (cbb service) en menos de un día: entrega la clave de este dispositivo al hub."
 }

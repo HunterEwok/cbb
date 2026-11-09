@@ -21,5 +21,9 @@
  "Sync away from home: on; the hub is {}, at {}; not connected through the tunnel.": "离家同步：已开启；中心节点是 {}，地址 {}；尚未通过隧道连接。",
  "\nThis device's key fingerprint:  {}": "\n此设备的密钥指纹：  {}",
  "Whoever invited you sees it on the hub and admits this device if it matches.": "邀请你的人会在中心节点上看到它，如果一致就会接纳此设备。",
- "Waiting for them; press Ctrl+C to give up.": "正在等待对方；按 Ctrl+C 放弃。"
+ "Waiting for them; press Ctrl+C to give up.": "正在等待对方；按 Ctrl+C 放弃。",
+ "Handing this device's tunnel key to the hub...": "正在把此设备的隧道密钥交给中心节点...",
+ "The hub took it: this device syncs from afar now.": "中心节点已接受：此设备现在可以远程同步。",
+ "The hub has not answered yet; the service keeps trying for a day.": "中心节点尚未响应；服务会在一天内持续尝试。",
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "请在一天内启动服务（cbb service）：它会把此设备的密钥交给中心节点。"
 }

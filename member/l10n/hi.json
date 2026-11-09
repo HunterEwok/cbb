@@ -21,5 +21,9 @@
  "Sync away from home: on; the hub is {}, at {}; not connected through the tunnel.": "घर से बाहर सिंक: चालू; हब {} है, पता {}; सुरंग से जुड़ा नहीं है।",
  "\nThis device's key fingerprint:  {}": "\nइस डिवाइस की कुंजी का फ़िंगरप्रिंट:  {}",
  "Whoever invited you sees it on the hub and admits this device if it matches.": "जिसने आपको आमंत्रित किया वह इसे हब पर देखता है और मेल खाने पर इस डिवाइस को स्वीकार करता है।",
- "Waiting for them; press Ctrl+C to give up.": "उनका इंतज़ार है; छोड़ने के लिए Ctrl+C दबाएँ।"
+ "Waiting for them; press Ctrl+C to give up.": "उनका इंतज़ार है; छोड़ने के लिए Ctrl+C दबाएँ।",
+ "Handing this device's tunnel key to the hub...": "इस डिवाइस की टनल कुंजी हब को सौंपी जा रही है...",
+ "The hub took it: this device syncs from afar now.": "हब ने इसे ले लिया: यह डिवाइस अब दूर से सिंक करता है।",
+ "The hub has not answered yet; the service keeps trying for a day.": "हब ने अभी तक जवाब नहीं दिया; सेवा एक दिन तक कोशिश करती रहेगी।",
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "एक दिन के भीतर सेवा (cbb service) शुरू करें: यह इस डिवाइस की कुंजी हब को सौंपती है।"
 }

@@ -7,6 +7,20 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Remote invitations on every device: any admin makes one, on the group's hub or through a
+  hub it is connected to, which lets the guest in and passes the pairing to the admin's
+  window (`guest` messages, docs/protocol.md, section 12, "Through the hub"). The invitation
+  is a QR code first, with its text or file as the fallback: the iPhone, Android and Aurora
+  apps show it from Send an invitation, and the Mac and tray apps through `cbb invite -app`,
+  which they run as the administrator (`TestInviteApp`). A phone far from the group joins
+  with Join with an invitation on its Start screen: it scans the QR code, or takes the text
+  or the file, and the invitation waits to be joined or declined; joined, the phone shows the
+  fingerprint the admin compares (`TestFFIJoinInvite`, `TestFFIInviteThroughHub`). An
+  invitation carries the hub's way over VLESS with XHTTP (`x`), for a network that lets no
+  UDP through. The hub keeps the guest for a day after it admitted the device, and the device
+  keeps the invitation and offers its own tunnel key again until the hub answers, after a
+  restart too, so a device that starts late or loses its network after the join still gets
+  through.
 - The bench's time-scaled build of the Rust `cbb` (`cargo build -p cbb-lite --features
   benchtime`, never released), as the Go one's: certificates, renewals, credential periods and
   the hub key's handover run 100000 times faster, and `CBB_TEST_CLOCK` moves the wall clock.

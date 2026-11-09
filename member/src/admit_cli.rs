@@ -171,8 +171,7 @@ fn admin_hint(g: &Global) {
 /// admin that is not the hub it goes through a hub, the first connected
 /// one or -hub's.
 pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
-    const USE: &str =
-        "cbb invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]   (valid for up to 24h)";
+    const USE: &str = "cbb invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]   (valid for up to 24h)";
     let (mut valid, mut out, mut hub) = (INVITE_LIFETIME_MS, INVITE_FILE.to_string(), String::new());
     let (mut app, mut answers) = (None, None);
     let mut it = args.iter();
@@ -293,11 +292,12 @@ fn next_answer(f: &mut std::fs::File, used: &mut usize) -> Result<bool> {
         let mut all = String::new();
         std::io::Seek::rewind(f).context("cannot read the answers")?;
         Read::by_ref(f).take(64 * 1024).read_to_string(&mut all).context("cannot read the answers")?;
-        if let Some(line) = all.lines().nth(*used) {
-            if all.ends_with('\n') || all.lines().count() > *used + 1 {
-                *used += 1;
-                return Ok(line.trim().eq_ignore_ascii_case("yes"));
-            }
+        // A line counts once it is whole: a later one, or the newline, ends it.
+        if let Some(line) = all.lines().nth(*used)
+            && (all.ends_with('\n') || all.lines().count() > *used + 1)
+        {
+            *used += 1;
+            return Ok(line.trim().eq_ignore_ascii_case("yes"));
         }
         if std::time::Instant::now() > until {
             *used = all.lines().count();
