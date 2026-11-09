@@ -33,13 +33,21 @@ pub fn new_key() -> Arc<FileKey> {
 pub struct Dev {
     pub id: DeviceId,
     pub key: Arc<FileKey>,
+    pub pkcs8: Vec<u8>,
     pub cert: Vec<u8>,
+}
+
+/// A new key and its PKCS #8.
+fn new_key_der() -> (Arc<FileKey>, Vec<u8>) {
+    let der = identity::new_key().unwrap();
+    (Arc::new(FileKey::new(&der).unwrap()), der)
 }
 
 /// A group made in memory: its root, the devices with member
 /// certificates, the first one the root's own, and their records.
 pub struct Group {
     pub root_key: Arc<FileKey>,
+    pub root_pkcs8: Vec<u8>,
     pub root: Cert,
     pub records: Records,
     pub devs: Vec<Dev>,
@@ -48,8 +56,8 @@ pub struct Group {
 impl Group {
     /// A group of n devices.
     pub fn new(n: usize) -> Group {
-        let root_key = new_key();
-        let key = new_key();
+        let (root_key, root_pkcs8) = new_key_der();
+        let (key, pkcs8) = new_key_der();
         let now = now_ms();
         let point = key.public();
         let own = OwnDevice {
@@ -62,12 +70,14 @@ impl Group {
             seal: Vec::new(),
         };
         let g = new_group(&*root_key, &own, now).unwrap();
-        let mut group = Group {
+        let group = Group {
             root_key,
+            root_pkcs8,
             root: g.root,
             records: g.records,
-            devs: vec![Dev { id: g.device, key, cert: g.cert.der }],
+            devs: vec![Dev { id: g.device, key, pkcs8, cert: g.cert.der }],
         };
+        let mut group = group;
         for _ in 1..n {
             group.add();
         }
@@ -76,7 +86,21 @@ impl Group {
 
     /// Adds a device with its certificate and record.
     pub fn add(&mut self) -> usize {
-        let key = new_key();
+        self.add_with(|_| {})
+    }
+
+    /// Adds a device that only passes copies on, which may be a hub.
+    pub fn add_forwarder(&mut self) -> usize {
+        self.add_with(|b| {
+            b.forward_only = true;
+            b.caps = vec![authority::CAP_HUB.into()];
+        })
+    }
+
+    /// Adds a device whose record f changes first, such as a device that
+    /// only passes copies on and may be a hub.
+    pub fn add_with(&mut self, f: impl FnOnce(&mut Body)) -> usize {
+        let (key, pkcs8) = new_key_der();
         let id = DeviceId::random();
         let now = now_ms();
         let rk = self.root_key.clone();
@@ -96,8 +120,10 @@ impl Group {
             store: "file".into(),
             ..Default::default()
         };
+        let mut b = b;
+        f(&mut b);
         self.sign(b);
-        self.devs.push(Dev { id, key, cert });
+        self.devs.push(Dev { id, key, pkcs8, cert });
         self.devs.len() - 1
     }
 
@@ -118,7 +144,7 @@ impl Group {
             kind: authority::TYPE_REVOKE.into(),
             signer: Hash(self.root.key_hash()),
             time_ms: now_ms(),
-            device: self.devs[i].id.to_string(),
+            keys: vec![Hash(Cert::parse(&self.devs[i].cert).unwrap().key_hash())],
             ..Default::default()
         };
         self.sign(b)
@@ -215,8 +241,8 @@ impl Group {
     pub fn identity(&self, i: usize) -> crate::identity::Identity {
         crate::identity::Identity {
             id: self.devs[i].id.clone(),
-            key: Vec::new(),
-            external: Some(self.devs[i].key.clone()),
+            key: self.devs[i].pkcs8.clone(),
+            external: None,
             cert: Cert::parse(&self.devs[i].cert).unwrap(),
             issuer: None,
             group_ca: self.root.clone(),
@@ -230,6 +256,18 @@ impl Group {
         let (_, errs) = rs.add_all(&self.records.all());
         assert!(errs.is_empty(), "{errs:?}");
         let ident = self.identity(i);
+        // The root's device keeps the root's key, as admin::new_group
+        // leaves it, so that it signs records and commands.
+        let mut fields = serde_json::Map::new();
+        if i == 0 {
+            use base64::Engine;
+            fields.insert(
+                "group_ca_key".into(),
+                base64::engine::general_purpose::STANDARD.encode(&self.root_pkcs8).into(),
+            );
+        }
+        crate::identity::save_with(&ident, &dir.0, fields).unwrap();
+        crate::records::Stored::save(&rs, &dir.0).unwrap();
         let engine = Arc::new(crate::clip::Engine::new(
             ident.id.as_str(),
             crate::service::clock(&dir.0),

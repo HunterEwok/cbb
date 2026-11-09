@@ -513,3 +513,7 @@ fn problem(msg: &str, project: bool) -> String {
         "the connection to the relay failed".to_string()
     }
 }
+
+#[cfg(test)]
+#[path = "../nettest/away_meet.rs"]
+mod net_tests;

@@ -10,7 +10,7 @@ use std::net::{Ipv4Addr, UdpSocket};
 use super::*;
 use crate::control::Header;
 use crate::nettest::{Group, NodeAt, wait_for};
-use cbb_core::certs;
+use cbb_core::certs::{self, Cert, DeviceId};
 
 /// A free UDP port on the loopback address, for a hub to listen on.
 fn free_udp_port() -> u16 {
@@ -38,7 +38,24 @@ pub(crate) fn away_of(g: &Group, n: &NodeAt, i: usize) -> Arc<Away> {
             }
         }));
     }
+    {
+        let a = away.clone();
+        let w = Arc::downgrade(&n.node);
+        n.node.on_message(Box::new(move |from, m| {
+            if let (Some(v), "hubs", Some(node)) = (m.hubs.as_ref(), m.kind.as_str(), w.upgrade()) {
+                a.hubs_shared(&node, from, &node.chain_of(from), v);
+            }
+        }));
+    }
     away
+}
+
+/// Dials b's member port from a until the returned handle's connection
+/// ends.
+fn meet_at_home(a: &NodeAt, b: &NodeAt, b_id: &DeviceId) -> std::thread::JoinHandle<Result<()>> {
+    let port = crate::discovery::listen(b.node.clone(), 0, b.log()).unwrap();
+    let (n, id) = (a.node.clone(), b_id.clone());
+    std::thread::spawn(move || n.dial(SocketAddr::from((Ipv4Addr::LOCALHOST, port)), Some(id)))
 }
 
 fn hub_header(port: u16) -> Header {
@@ -114,4 +131,270 @@ fn a_member_reaches_its_hub_through_the_tunnel() {
     b.node.close();
     a.node.close();
     let _ = runner.join();
+}
+
+fn relay_server(g: &Group) -> (crate::relayd::server::Relay, String) {
+    use base64::Engine;
+    let keys = crate::relayd::keys::Keys::new().unwrap();
+    let pin =
+        base64::engine::general_purpose::STANDARD.encode(cbb_core::certs::Cert::parse(&keys.cert).unwrap().key_hash());
+    let s = crate::relayd::server::Relay::start(crate::relayd::server::Config {
+        listen: SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        keys,
+        groups: vec![certs::tag(&g.root)],
+        open: false,
+        limits: Default::default(),
+        log: Arc::new(|_| {}),
+        verbose: false,
+    })
+    .unwrap();
+    (s, pin)
+}
+
+fn relay_header(addr: &str, key: &str, consent: bool) -> Header {
+    Header { op: "relay".into(), relay: addr.into(), relay_key: key.into(), consent, ..Header::default() }
+}
+
+/// Two devices meet their group at a relay: each registers, sees the
+/// other online, and one connects to the other through the relay; both
+/// say so in their status. Turning sync away from home off ends it.
+#[test]
+fn two_devices_meet_at_a_relay() {
+    let g = Group::new(2);
+    let (s, pin) = relay_server(&g);
+    let (a, b) = (g.node(0), g.node(1));
+    let (away_a, away_b) = (away_of(&g, &a, 0), away_of(&g, &b, 1));
+    let addr = s.addr().to_string();
+    // What the request must give.
+    assert!(away_a.meet_at(&a.node, &relay_header("nowhere", &pin, true)).is_err());
+    assert!(away_a.meet_at(&a.node, &relay_header(&addr, "bad", true)).is_err());
+    let e = away_a.meet_at(&a.node, &relay_header(&addr, &pin, false)).unwrap_err();
+    assert!(e.to_string().contains("a relay learns"), "{e}");
+    for (away, n) in [(&away_a, &a), (&away_b, &b)] {
+        let keys = away.meet_at(&n.node, &relay_header(&addr, &pin, true)).unwrap();
+        n.node.set_tunnel_key(Some(keys));
+    }
+    let st = away_a.status(&a.node).unwrap();
+    assert!(st.relay.is_some_and(|r| !r.connected && r.error.contains("not running")));
+    let runners: Vec<_> = [(away_a.clone(), a.node.clone()), (away_b.clone(), b.node.clone())]
+        .into_iter()
+        .map(|(aw, n)| std::thread::spawn(move || aw.run(n)))
+        .collect();
+    assert!(
+        wait_for(Duration::from_secs(40), || a.node.connected(&g.devs[1].id) && b.node.connected(&g.devs[0].id)),
+        "{:?}\n{:?}",
+        a.logs.lock().unwrap(),
+        b.logs.lock().unwrap()
+    );
+    let st = away_a.status(&a.node).unwrap();
+    let r = st.relay.unwrap();
+    assert!(r.connected && r.online == vec![g.id(1)], "{r:?}");
+    assert!(wait_for(Duration::from_secs(5), || away_a.status(&a.node).unwrap().through
+        || away_b.status(&b.node).unwrap().through));
+    assert!(a.logged("connected to the relay at"));
+    away_a.turn_off().unwrap();
+    assert!(away_a.status(&a.node).is_none());
+    a.node.close();
+    b.node.close();
+    for r in runners {
+        let _ = r.join();
+    }
+}
+
+/// The relay refuses a group it does not serve; the status says why in
+/// short and the whole error in the detail.
+#[test]
+fn a_relay_of_another_group() {
+    let g = Group::new(1);
+    let other = Group::new(1);
+    let (s, pin) = relay_server(&other);
+    let a = g.node(0);
+    let away = away_of(&g, &a, 0);
+    away.meet_at(&a.node, &relay_header(&s.addr().to_string(), &pin, true)).unwrap();
+    let runner = {
+        let (aw, n) = (away.clone(), a.node.clone());
+        std::thread::spawn(move || aw.run(n))
+    };
+    assert!(
+        wait_for(Duration::from_secs(30), || away
+            .status(&a.node)
+            .and_then(|s| s.relay)
+            .is_some_and(|r| !r.error.is_empty() && !r.detail.is_empty())),
+        "{:?}",
+        away.status(&a.node)
+    );
+    a.node.close();
+    let _ = runner.join();
+}
+
+/// Two hubs: the root and a device that only passes copies on. Meeting
+/// at home, the root shares its offer and clients with the other hub,
+/// which keeps them and, being below the root, gives way while the root
+/// serves. A member's tunnel is dropped once the records remove it, and
+/// when the root stops being a hub the other forgets its offer.
+#[test]
+fn several_hubs_share_and_prune() {
+    let mut g = Group::new(1);
+    let fi = g.add_forwarder();
+    let mi = g.add();
+    let (a, f, m) = (g.node(0), g.node(fi), g.node(mi));
+    let (away_a, away_f, away_m) = (away_of(&g, &a, 0), away_of(&g, &f, fi), away_of(&g, &m, mi));
+    let keys = away_a.make_hub(&hub_header(free_udp_port())).unwrap();
+    a.node.set_tunnel_key(Some(keys));
+    away_a.serve_if_first(&a.node);
+    let keys = away_f.make_hub(&hub_header(free_udp_port())).unwrap();
+    f.node.set_tunnel_key(Some(keys));
+    // The forwarder serves too: no hub above it is known yet.
+    away_f.serve_if_first(&f.node);
+    assert!(away_f.serving.lock().unwrap().is_some());
+    m.node.set_tunnel_key(Some(away_m.turn_on().unwrap()));
+    // The member meets the root: its tunnel key is admitted.
+    let mh = meet_at_home(&m, &a, &g.devs[0].id);
+    assert!(wait_for(Duration::from_secs(20), || away_a.st.lock().unwrap().as_ref().unwrap().members.len() == 1));
+    // The forwarder meets the root: it learns the root's offer and clients
+    // and gives way, the root being above it.
+    let fh = meet_at_home(&f, &a, &g.devs[0].id);
+    assert!(
+        wait_for(Duration::from_secs(20), || away_f.st.lock().unwrap().as_ref().is_some_and(|s| s
+            .hubs
+            .iter()
+            .any(|h| h.device == g.id(0))
+            && s.members.iter().any(|c| c.device == g.id(mi)))),
+        "{:?}",
+        f.logs.lock().unwrap()
+    );
+    assert!(
+        wait_for(Duration::from_secs(20), || away_f.standby.lock().unwrap().is_some()),
+        "{:?}",
+        f.logs.lock().unwrap()
+    );
+    assert!(f.logged("a hub above this one"), "{:?}", f.logs.lock().unwrap());
+    let st = away_f.status(&f.node).unwrap();
+    assert!(st.error.is_empty(), "{st:?}");
+
+    // The records remove the member: the root drops its tunnel.
+    let r = g.revoke(mi);
+    a.node.records().lock().unwrap().add(&r).unwrap();
+    away_a.prune(&a.node);
+    assert!(a.logged("was removed from the group"), "{:?}", a.logs.lock().unwrap());
+    assert!(away_a.st.lock().unwrap().as_ref().unwrap().members.iter().all(|c| c.device != g.id(mi)));
+
+    // The root stops being a hub: the forwarder, still connected, forgets
+    // its offer.
+    away_a.stop_hub(&a.node, true).unwrap();
+    assert!(wait_for(Duration::from_secs(10), || f.logged("its offer is forgotten")), "{:?}", f.logs.lock().unwrap());
+    for n in [&a, &f, &m] {
+        n.node.close();
+    }
+    let _ = (mh.join(), fh.join());
+}
+
+/// What a device that is no hub of the group shares is ignored, as is a
+/// share that does not decode.
+#[test]
+fn shares_ignored() {
+    let g = Group::new(2);
+    let b = g.node(1);
+    let away_b = away_of(&g, &b, 1);
+    away_b.turn_on().unwrap();
+    let chain: Vec<Cert> = g.chain(0).iter().map(|d| Cert::parse(d).unwrap()).collect();
+    let other: Vec<Cert> = g.chain(1).iter().map(|d| Cert::parse(d).unwrap()).collect();
+    away_b.hubs_shared(&b.node, &g.devs[1].id, &other, &serde_json::json!({}));
+    assert!(b.logged("only the group's root"));
+    away_b.hubs_shared(&b.node, &g.devs[0].id, &chain, &serde_json::json!({"clients": 3}));
+    assert!(b.logged("does not decode"));
+    // A stopped share of a hub it never kept changes nothing.
+    away_b.hubs_shared(&b.node, &g.devs[0].id, &chain, &serde_json::json!({"stopped": true}));
+    assert!(!b.logged("forgotten"));
+}
+
+/// Wires the node's hub commands as the service carries them out
+/// (service.rs hub_command): checked against the records, then a stop
+/// order stops the hub after the result went back, and any other makes
+/// this device the hub.
+fn take_hub_commands(n: &NodeAt, away: &Arc<Away>) {
+    let (a, w) = (away.clone(), Arc::downgrade(&n.node));
+    n.node.on_command(Arc::new(move |_peer, c| {
+        let node = w.upgrade().unwrap();
+        let me = node.identity().id.to_string();
+        let body = node.records().lock().unwrap().verify_command(c, &me, crate::uptime::wall_ms());
+        let mut res = crate::wire::CommandResult { status: "done".into(), ..Default::default() };
+        let body = match body {
+            Ok(b) => b,
+            Err(e) => {
+                (res.status, res.reason) = ("refused".into(), e.message().to_string());
+                return res;
+            }
+        };
+        res.id = body.id.clone();
+        let order = body.hub.clone().unwrap_or_default();
+        if super::is_stop(&order) {
+            let (a, node) = (a.clone(), node.clone());
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(300));
+                a.stop_hub(&node, true).unwrap();
+            });
+            return res;
+        }
+        match a.take_hub(&node, &body.by, &order) {
+            Ok(o) => res.tunnel = serde_json::to_value(&o).ok(),
+            Err(e) => (res.status, res.reason) = ("refused".into(), e.message().to_string()),
+        }
+        res
+    }));
+}
+
+/// The root makes another computer a hub that only passes copies on, with
+/// a hub command, and keeps its offer; then stops it; then moves the hub
+/// there, becoming that hub's client. What a hub command may not name is
+/// refused before it goes.
+#[test]
+fn the_root_makes_stops_and_moves_hubs() {
+    let mut g = Group::new(1);
+    let bi = g.add_with(|b| b.caps = vec![cbb_core::authority::CAP_HUB.into()]);
+    let ci = g.add();
+    let (a, b) = (g.node(0), g.node(bi));
+    let (away_a, away_b) = (away_of(&g, &a, 0), away_of(&g, &b, bi));
+    take_hub_commands(&b, &away_b);
+    let admin = crate::admin::Admin { node: &a.node, dir: &a.dir.0 };
+    let addrs = |p: u16| vec![format!("127.0.0.1:{p}")];
+    // Refused before any command: this device, a device that cannot be a
+    // hub, no address.
+    assert!(away_a.make_hub_on(&admin, &g.id(0), &addrs(1), ("", ""), true).is_err());
+    let e = away_a.make_hub_on(&admin, &g.id(ci), &addrs(1), ("", ""), true).unwrap_err();
+    assert!(e.to_string().contains("cannot be a hub"), "{e}");
+    assert!(away_a.make_hub_on(&admin, &g.id(bi), &addrs(1), ("", ""), false).is_err(), "no admin");
+    assert!(away_a.make_hub_on(&admin, &g.id(bi), &[], ("", ""), true).is_err());
+    assert!(away_a.move_hub(&admin, &g.id(bi), &addrs(1), ("", "")).is_err(), "not the hub");
+    assert!(away_a.stop_hub_on(&admin, &g.id(bi), false).is_err(), "no hub known");
+
+    let keys = away_a.make_hub(&hub_header(free_udp_port())).unwrap();
+    a.node.set_tunnel_key(Some(keys));
+    away_a.serve_if_first(&a.node);
+    b.node.set_tunnel_key(Some(away_b.turn_on().unwrap()));
+    let home = meet_at_home(&b, &a, &g.devs[0].id);
+    assert!(wait_for(Duration::from_secs(20), || away_a.st.lock().unwrap().as_ref().unwrap().members.len() == 1));
+
+    // B becomes a hub that passes copies on.
+    away_a.make_hub_on(&admin, &g.id(bi), &addrs(free_udp_port()), ("", ""), true).unwrap();
+    assert!(away_b.is_hub());
+    assert!(b.logged("in place of"), "{:?}", b.logs.lock().unwrap());
+    let order = a.node.hub_order();
+    let known = away_a.known_hubs(&order);
+    assert!(known.contains(&g.id(bi)) && known.contains(&g.id(0)), "{known:?} {order:?}");
+
+    // And stops: A forgets its offer.
+    away_a.stop_hub_on(&admin, &g.id(bi), false).unwrap();
+    assert!(wait_for(Duration::from_secs(10), || !away_b.is_hub()));
+    assert!(!away_a.known_hubs(&a.node.hub_order()).contains(&g.id(bi)));
+
+    // The hub moves to B: A becomes its client.
+    away_a.move_hub(&admin, &g.id(bi), &addrs(free_udp_port()), ("", "")).unwrap();
+    assert!(away_b.is_hub());
+    assert!(!away_a.is_hub());
+    assert!(away_a.st.lock().unwrap().as_ref().unwrap().hubs.iter().any(|h| h.device == g.id(bi)));
+    for n in [&a, &b] {
+        n.node.close();
+    }
+    let _ = home.join();
 }
