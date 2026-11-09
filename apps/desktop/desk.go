@@ -93,6 +93,9 @@ type Settings struct {
 	Details *bool `json:"details,omitempty"`
 	// Lang is the language the user picked, "" for the system's.
 	Lang string `json:"lang,omitempty"`
+	// Advanced shows the advanced settings: why the computer does not
+	// sync, making a device the hub and the hub's tunnel.
+	Advanced bool `json:"advanced,omitempty"`
 	// Arrangement is the user's order of the tiles and their collections
 	// (arrange.go); nil until the user changes something. The window never
 	// sends it: Arrange changes it.

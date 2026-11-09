@@ -446,12 +446,12 @@
 <context>
     <name>SettingsPage</name>
     <message>
-        <source>Advanced settings</source>
-        <translation>Дополнительные настройки</translation>
+        <source>Lab</source>
+        <translation>Лаборатория</translation>
     </message>
     <message>
-        <source>Bluetooth keyboard</source>
-        <translation>Bluetooth-клавиатура</translation>
+        <source>Advanced settings</source>
+        <translation>Дополнительные настройки</translation>
     </message>
     <message>
         <source>Act as a Bluetooth keyboard</source>

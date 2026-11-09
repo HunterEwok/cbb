@@ -202,6 +202,9 @@ function hubLine(d, me) {
     const stop = me?.admin || d.self ? `<button data-action="unhub" class="danger" ${busy}>${esc(t("Stop being the hub"))}</button>` : "";
     return `<div class="card actions"><div class="line"><span>${esc(t("This is the group's hub"))}</span></div>${stop}</div>`;
   }
+  // Making a device the hub is in the advanced settings: the hub is
+  // chosen by itself.
+  if (!state.settings.advanced) return "";
   const why = noHub(d, me);
   if (why) return `<div class="card actions"><button disabled>${esc(t("Make it a hub"))}</button><p class="dim small">${esc(why)}</p></div>`;
   if (d.may_hub && !d.forward_only) return `<div class="card actions"><button data-action="hub" ${busy}>${esc(t("Make it a hub that reads the copies"))}</button></div>`;
@@ -211,7 +214,7 @@ function hubLine(d, me) {
 // The hub's own settings, on this computer's page while it is a hub.
 function hubCard(d) {
   const a = state.status?.away;
-  if (!d.self || !a?.hub) return "";
+  if (!d.self || !a?.hub || !state.settings.advanced) return "";
   const cur = hubTunnel(a);
   const fwd = a.forwarder ? a.forwarder.endpoint : t("none");
   return `<div class="card"><div class="dim small">${esc(t("How the hub's tunnel hides"))}</div><div class="segmented">` +
@@ -929,8 +932,8 @@ function renderSettings() {
   $("language").innerHTML = `<option value="">${esc(t("System language"))}</option>` +
     (state.languages ?? ["en"]).map((l) => `<option value="${l}" ${l === s.lang ? "selected" : ""}>${esc(languageName(l))}</option>`).join("");
   $("at-login").checked = state.at_login;
-  $("advanced").checked = advanced;
-  $("advanced-box").hidden = !advanced;
+  $("advanced").checked = !!s.advanced;
+  $("advanced-box").hidden = !s.advanced;
   $("advanced-recovery").hidden = !state.status?.group;
   $("details").checked = s.details ?? state.show_details;
   // Seven taps on the version show the switch, as on the phones; it stays
@@ -938,7 +941,7 @@ function renderSettings() {
   $("details-row").hidden = versionTaps < 7 && !s.details;
   $("version").textContent = state.version;
 }
-let advanced = false, versionTaps = 0;
+let versionTaps = 0;
 
 function openSettings() {
   renderSettings();
@@ -1248,10 +1251,7 @@ $("at-login").addEventListener("change", async (e) => {
   await refresh();
   renderSettings();
 });
-$("advanced").addEventListener("change", (e) => {
-  advanced = e.target.checked;
-  renderSettings();
-});
+$("advanced").addEventListener("change", (e) => saveSettings({ advanced: e.target.checked }));
 $("admit-code").addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();

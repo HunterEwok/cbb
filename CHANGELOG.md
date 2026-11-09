@@ -1500,6 +1500,11 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The apps' settings are simpler: making a device the hub and the hub's tunnel show only with
+  the advanced settings on (the hub is chosen by itself), and the Bluetooth keyboard sits in a
+  "Lab" section of the advanced settings on Android and Aurora, beside the other things that
+  work but are no promise of 1.0. Aurora gets the advanced settings switch, and the tray app
+  keeps it on between launches.
 - One list of operations for the phones' member and the computers' control socket
   (docs/core-api.md, "The member's operations"): the same names and bodies on both. Every control
   message is the core's envelope, a request `{"op", "args"}` and an answer `{"ok"}` or

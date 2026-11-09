@@ -569,6 +569,7 @@
     <string name="saved_to_gallery">Imehifadhiwa kwenye matunzio, katika albamu CBB.</string>
     <string name="paste_pick">Bandika picha au faili…</string>
     <string name="paste_pick_note">Picha au faili huenda kwenye kikundi kama nakala, na kompyuta huzibandika mahali lengo lake lilipo, kama Ctrl+V ingefanya: kwenye gumzo, hati au folda. Enter, ikiwa imewashwa, huzituma kwenye gumzo.</string>
+    <string name="lab">Maabara</string>
     <!-- Why it does not sync (docs/apps.md). -->
     <string name="why_screen">Kwa nini haisawazishi</string>
     <string name="why_ok">Kila kitu kinasawazishwa.</string>

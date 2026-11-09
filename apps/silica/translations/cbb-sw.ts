@@ -446,12 +446,12 @@
 <context>
     <name>SettingsPage</name>
     <message>
-        <source>Advanced settings</source>
-        <translation>Mipangilio ya kina</translation>
+        <source>Lab</source>
+        <translation>Maabara</translation>
     </message>
     <message>
-        <source>Bluetooth keyboard</source>
-        <translation>Kibodi ya Bluetooth</translation>
+        <source>Advanced settings</source>
+        <translation>Mipangilio ya kina</translation>
     </message>
     <message>
         <source>Act as a Bluetooth keyboard</source>

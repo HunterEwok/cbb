@@ -569,6 +569,7 @@
     <string name="saved_to_gallery">गैलरी में, CBB एल्बम में सहेजा गया।</string>
     <string name="paste_pick">तस्वीर या फ़ाइलें पेस्ट करें…</string>
     <string name="paste_pick_note">तस्वीर या फ़ाइलें ग्रुप में एक कॉपी के रूप में जाती हैं, और कंप्यूटर उन्हें वहाँ पेस्ट करता है जहाँ उसका फ़ोकस है, जैसे Ctrl+V करता: किसी चैट, दस्तावेज़ या फ़ोल्डर में। Enter, अगर चालू है, तो उन्हें चैट में भेज देता है।</string>
+    <string name="lab">प्रयोगशाला</string>
     <!-- Why it does not sync (docs/apps.md). -->
     <string name="why_screen">सिंक क्यों नहीं हो रहा</string>
     <string name="why_ok">सब कुछ सिंक हो रहा है।</string>

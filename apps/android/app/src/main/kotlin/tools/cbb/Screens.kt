@@ -71,9 +71,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -476,10 +478,18 @@ internal fun SettingsScreen(model: AppModel, back: () -> Unit) {
             model.blindRelay?.let { BlindRelaySection(model, it) }
             if (!model.isTv) ShareAsk(model)
             RemotePasteSection(model.group.pastes, model.isTv)
-            // A TV has nothing near it to type into.
-            if (!model.isTv) KeyboardSection(model.group.keyboard, model.settings.showsErrorDetails)
             model.incomingMS?.let { IncomingSection(model, it) }
             model.keyLevel?.let { KeyLevelSection(model, it) }
+            // The lab: what works but is no promise of 1.0 (docs/apps.md,
+            // "The lab"). A TV has nothing near it to type into.
+            if (!model.isTv) {
+                Text(
+                    stringResource(R.string.lab),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.semantics { heading() }.testTag("lab"),
+                )
+                KeyboardSection(model.group.keyboard, model.settings.showsErrorDetails)
+            }
         }
         if (home) LeaveSection(model)
         UpdateSection(model)

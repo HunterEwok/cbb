@@ -20,6 +20,9 @@ struct DeviceDetail: View {
     @State private var renaming = false
     @State private var newName = ""
     @State private var tunnelTo: MacModel.HubTunnel?
+    /// The hub and its tunnel are chosen by themselves; making a device the
+    /// hub and the tunnel's settings show only in the advanced settings.
+    @AppStorage("AdvancedSettings") private var advanced = false
     @State private var changingForwarder = false
     @State private var forwarderAddress = ""
     @State private var forwarderKey = ""
@@ -36,7 +39,7 @@ struct DeviceDetail: View {
                     iconRow(d)
                     DisclosureGroup(isExpanded: $more) { summary(d) } label: { Text("More") }
                     actions(d)
-                    hubSettings(d)
+                    if advanced { hubSettings(d) }
                 }
                 .padding(Tokens.spacingLarge)
             }
@@ -300,8 +303,10 @@ struct DeviceDetail: View {
                 .font(.footnote).foregroundStyle(palette.textDim)
             if d.isSelf {
                 VStack(alignment: .leading, spacing: 0) {
-                    hubLine(d)
-                    line
+                    if showsHubLine(d) {
+                        hubLine(d)
+                        line
+                    }
                     leaveAction
                 }
                 .glassTile(cornerRadius: Tokens.radiusCard)
@@ -325,8 +330,10 @@ struct DeviceDetail: View {
                     line
                     action("star", "Make it an admin") { promoting = true }
                 }
-                line
-                hubLine(d)
+                if showsHubLine(d) {
+                    line
+                    hubLine(d)
+                }
                 if !d.isSelf {
                     line
                     action("xmark.circle", "Remove", danger: true) { removing = true }
@@ -365,8 +372,14 @@ struct DeviceDetail: View {
         }
     }
 
-    /// Whether it is a hub, and what this Mac may do about it: always
-    /// there, so that a device that can never be a hub says why.
+    /// Whether the hub's line shows: always for a hub, otherwise only with
+    /// the advanced settings on.
+    private func showsHubLine(_ d: Control.Device) -> Bool {
+        advanced || (d.isSelf ? model.status?.away?.hub == true : d.hub)
+    }
+
+    /// Whether it is a hub, and, with the advanced settings on, what this
+    /// Mac may do about it, or why a device can never be a hub.
     @ViewBuilder private func hubLine(_ d: Control.Device) -> some View {
         if d.isSelf ? model.status?.away?.hub == true : d.hub {
             Label { Text("This is the group's hub") } icon: { Image(systemName: "antenna.radiowaves.left.and.right") }

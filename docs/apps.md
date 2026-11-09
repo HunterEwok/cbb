@@ -260,6 +260,15 @@ shows its code and the member's own words.
 | `devices_offline`, `devices_sync_off`, `devices_muted` | info | which other devices are offline, have sync off or are muted |
 | `update` | info | a newer CBB is available |
 
+## The lab
+
+Some things work but are no promise of 1.0: the ZX Spectrum Next, the Arduino Nano ESP32, a
+computer as a TV's remote and a phone or a Linux computer as a Bluetooth keyboard. In the apps
+they sit in a "Lab" section at the end of the advanced settings (the Bluetooth keyboard on
+Android and Aurora; the others have no screen in the apps). The settings show only what most
+people need: the hub is chosen by itself, so making a device the hub, the hub's tunnel and its
+forwarder show only with the advanced settings on, on every app.
+
 ## Big screens
 
 - **iPad** (the same app, universal): an iPad is a phone for the group. It joins as an

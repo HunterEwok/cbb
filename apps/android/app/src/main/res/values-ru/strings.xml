@@ -571,6 +571,7 @@
     <string name="sync">Синхронизация</string>
     <string name="badge_hub">хаб</string>
     <string name="device_id">ID устройства</string>
+    <string name="lab">Лаборатория</string>
     <!-- Why it does not sync (docs/apps.md). -->
     <string name="why_screen">Почему не синхронизируется</string>
     <string name="why_ok">Всё синхронизируется.</string>

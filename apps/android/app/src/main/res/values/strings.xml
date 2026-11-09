@@ -575,6 +575,7 @@
     <string name="sync">Sync</string>
     <string name="badge_hub">hub</string>
     <string name="device_id">Device ID</string>
+    <string name="lab">Lab</string>
     <!-- Why it does not sync (docs/apps.md). -->
     <string name="why_screen">Why it does not sync</string>
     <string name="why_ok">Everything syncs.</string>

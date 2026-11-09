@@ -569,6 +569,7 @@
     <string name="saved_to_gallery">Guardado en la galería, en el álbum CBB.</string>
     <string name="paste_pick">Pegar una imagen o archivos…</string>
     <string name="paste_pick_note">Una imagen o archivos van al grupo como una copia, y el ordenador los pega donde tiene el foco, como lo haría Ctrl+V: en un chat, un documento o una carpeta. Intro, si está activado, los envía en un chat.</string>
+    <string name="lab">Laboratorio</string>
     <!-- Why it does not sync (docs/apps.md). -->
     <string name="why_screen">Por qué no se sincroniza</string>
     <string name="why_ok">Todo se sincroniza.</string>

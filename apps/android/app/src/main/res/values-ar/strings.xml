@@ -569,6 +569,7 @@
     <string name="saved_to_gallery">حُفظ في المعرض، في الألبوم CBB.</string>
     <string name="paste_pick">لصق صورة أو ملفات…</string>
     <string name="paste_pick_note">تذهب الصورة أو الملفات إلى المجموعة كنسخة، ويلصقها الكمبيوتر حيث يكون التركيز، كما يفعل Ctrl+V: في محادثة أو مستند أو مجلد. مفتاح Enter، إن كان مفعّلًا، يرسلها في المحادثة.</string>
+    <string name="lab">المختبر</string>
     <!-- Why it does not sync (docs/apps.md). -->
     <string name="why_screen">لماذا لا تتم المزامنة</string>
     <string name="why_ok">كل شيء تتم مزامنته.</string>
