@@ -35,7 +35,9 @@ fn config(g: &Group, endpoint: SocketAddr, pins: Vec<certs::KeyHash>) -> (Config
     (cfg, sent)
 }
 
-fn logger() -> (Logs, Arc<dyn Fn(&str) + Send + Sync>) {
+type Log = Arc<dyn Fn(&str) + Send + Sync>;
+
+fn logger() -> (Logs, Log) {
     let logs: Logs = Arc::new(Mutex::new(Vec::new()));
     let l = logs.clone();
     (logs, Arc::new(move |s: &str| l.lock().unwrap().push(s.to_string())))
@@ -237,7 +239,7 @@ fn registers_with_a_credential() {
         crate::identity::sign_external(&*server, tbs)
     })
     .unwrap();
-    let first = g.period(&[server.clone()], 1);
+    let first = g.period(std::slice::from_ref(&server), 1);
     let now: Arc<Mutex<Vec<cbb_core::credential::Credential>>> = Arc::new(Mutex::new(vec![first[1].clone()]));
     let f = Forwarder::start(fake::welcome(), None);
     let (mut cfg, _) = config(&g, f.addr, vec![f.pin]);

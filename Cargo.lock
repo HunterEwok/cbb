@@ -256,6 +256,7 @@ dependencies = [
  "mdns-sd",
  "p256",
  "png",
+ "proptest",
  "qrcode",
  "rustls",
  "serde",

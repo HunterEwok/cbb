@@ -207,7 +207,7 @@ fn certificates_it_refuses() {
     let g = Group::new(1);
     let (s, pins) = start(true, Vec::new());
     let root: Arc<dyn ExternalKey> = g.root_key.clone();
-    assert!(connect(&s, &pins, &[g.root.der.clone()], &root).is_err());
+    assert!(connect(&s, &pins, std::slice::from_ref(&g.root.der), &root).is_err());
     let mut long = g.chain(0);
     for _ in 0..9 {
         long.push(g.root.der.clone());
@@ -260,8 +260,8 @@ fn credentials_it_refuses() {
     let g = Group::new(1);
     let server = new_key();
     let other = new_key();
-    let creds = g.period(&[server.clone()], 1);
-    let not_listed = g.period(&[other.clone()], 1);
+    let creds = g.period(std::slice::from_ref(&server), 1);
+    let not_listed = g.period(std::slice::from_ref(&other), 1);
     let cert = |k: &Arc<FileKey>| {
         certs::server_cert_by(&k.public(), &mut |tbs| crate::identity::sign_external(&**k, tbs)).unwrap()
     };

@@ -16,7 +16,9 @@ const ID: &str = "6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d";
 
 type Logs = Arc<Mutex<Vec<String>>>;
 
-fn logger() -> (Logs, Arc<dyn Fn(&str) + Send + Sync>) {
+type Log = Arc<dyn Fn(&str) + Send + Sync>;
+
+fn logger() -> (Logs, Log) {
     let logs: Logs = Arc::new(Mutex::new(Vec::new()));
     let l = logs.clone();
     (logs, Arc::new(move |s: &str| l.lock().unwrap().push(s.to_string())))
