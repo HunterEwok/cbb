@@ -6,8 +6,8 @@ import XCTest
 /// every reader (docs/testbench-catalogue.md, A9, U14; docs/testing.md, "The
 /// apps' languages, accessibility and screenshots"), with no service
 /// answering (CBB_SOCKET), as MacUITests runs it: the notice translated and
-/// Xcode's accessibility audit (contrast, clipped text, element descriptions) passing
-/// in every language. Each window's picture is attached to the test's result.
+/// Xcode's accessibility audit (contrast and element descriptions; macOS
+/// audits no clipped text) passing in every language. Each window's picture is attached to the test's result.
 final class ReadersUITests: XCTestCase {
     static let languages = ["ar", "en", "es", "he", "hi", "ru", "sw", "zh-Hans"]
 
@@ -47,7 +47,7 @@ final class ReadersUITests: XCTestCase {
             a.lifetime = .keepAlways
             add(a)
             do {
-                try app.performAccessibilityAudit(for: [.contrast, .textClipped, .sufficientElementDescription])
+                try app.performAccessibilityAudit(for: [.contrast, .sufficientElementDescription])
             } catch {
                 XCTFail("the window in \(language): \(error)")
             }
