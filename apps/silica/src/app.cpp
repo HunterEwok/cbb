@@ -194,6 +194,11 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
         m_member = m;
         emit groupChanged();
         startMember();
+        // Joined from afar: sync away from home goes on, and the member
+        // offers its tunnel key to the hub through the invitation's guest
+        // tunnel until the hub answers.
+        if (m_join.byInvite())
+            m_node.joinedByInvite(m_join.invite());
     });
 }
 
@@ -293,6 +298,47 @@ void App::startAdmit(const QString &qr, bool makeAdmin)
         m_admit.admit(qr, m_node.handle(), key.publicKey, m_member.adminCa, makeAdmin && m_member.root);
     });
     thread->start();
+}
+
+void App::startInvite(int seconds)
+{
+    if (!m_member.isAdmin()) {
+        m_invite.fail({QCoreApplication::translate("Errors", "Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer."),
+                       QStringLiteral("invite: not an admin")});
+        return;
+    }
+    if (m_busy)
+        return;
+    m_busy = true;
+    emit keyChanged();
+    m_invite.setPreparing();
+    auto *thread = new KeyThread(KeyStore::Which::Admin);
+    connect(thread, &QThread::finished, this, [this, thread, seconds]() {
+        const KeyStore::Key key = thread->key;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (key.state != KeyStore::State::Ready) {
+            m_invite.fail(key.failure);
+            return;
+        }
+        m_invite.open(m_node.handle(), key.publicKey, m_member.adminCa, seconds);
+    });
+    thread->start();
+}
+
+void App::startJoinByInvite(const QString &text)
+{
+    if (m_publicKey.isEmpty()) {
+        show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("join: no key")}));
+        return;
+    }
+    if (!m_member.isNull()) {
+        show(Errors::shown({QCoreApplication::translate("Errors", "This phone is in a group already. Leave it first to join another."),
+                            QStringLiteral("join: in a group")}));
+        return;
+    }
+    m_join.startInvite(phoneName(), phoneOs(), m_publicKey, text);
 }
 
 void App::resolve(const QStringList &records)

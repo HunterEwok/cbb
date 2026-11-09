@@ -589,7 +589,7 @@ final class LiveGroup: GroupController {
                 ended: @escaping @MainActor (Result<String, Error>) -> Void) async throws -> AppModel.Invitation {
         guard let g = state, g.isAdmin else { throw Failure.notAdmin }
         // A phone that is not the hub makes it through a hub of the group.
-        guard let hub else { return try await inviteThroughHub(lifetime: lifetime, ask: ask, ended: ended) }
+        guard let hub, hub.isOn else { return try await inviteThroughHub(lifetime: lifetime, ask: ask, ended: ended) }
         guard let identity = memberIdentity else { throw HubOnPhone.Failure.notRunning }
         let guestBox = GuestBox()
         let window = try InvitationWindow(identity: identity, expires: Date().addingTimeInterval(TimeInterval(lifetime)), admit: { [weak self] t, joinerCert, sid in

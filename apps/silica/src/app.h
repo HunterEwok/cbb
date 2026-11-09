@@ -7,6 +7,7 @@
 #include "admit.h"
 #include "blekeyboard.h"
 #include "events.h"
+#include "invite.h"
 #include "join.h"
 #include "member.h"
 #include "membership.h"
@@ -41,6 +42,7 @@ class App : public QObject
     Q_PROPERTY(Join *join READ join CONSTANT)
     Q_PROPERTY(Member *member READ member CONSTANT)
     Q_PROPERTY(Admit *admit READ admit CONSTANT)
+    Q_PROPERTY(Invite *invite READ invite CONSTANT)
     Q_PROPERTY(Events *events READ events CONSTANT)
     Q_PROPERTY(BleKeyboard *keyboard READ keyboard CONSTANT)
     Q_PROPERTY(PasteReceiver *paste READ paste CONSTANT)
@@ -84,6 +86,7 @@ public:
     Join *join() { return &m_join; }
     Member *member() { return &m_node; }
     Admit *admit() { return &m_admit; }
+    Invite *invite() { return &m_invite; }
     Events *events() { return &m_events; }
     BleKeyboard *keyboard() { return &m_keyboard; }
     PasteReceiver *paste() { return &m_paste; }
@@ -112,6 +115,11 @@ public:
     // with the admin key, found off the GUI thread.
     // makeAdmin: the root makes a phone that asks an admin.
     Q_INVOKABLE void startAdmit(const QString &qr, bool makeAdmin = false);
+    // Makes a remote invitation for a device far away, valid for seconds,
+    // as an admin (docs/protocol.md, section 12).
+    Q_INVOKABLE void startInvite(int seconds = 3600);
+    // Joins by a remote invitation's text, which the user accepted.
+    Q_INVOKABLE void startJoinByInvite(const QString &text);
     // Makes a group of the phone's own, its root key the admin key in the
     // TEE (docs/protocol.md, section 3), and starts the member as its root.
     Q_INVOKABLE void makeGroup();
@@ -185,6 +193,7 @@ private:
     Join m_join;
     Member m_node;
     Admit m_admit;
+    Invite m_invite;
     Events m_events;
     BleKeyboard m_keyboard;
     PasteReceiver m_paste{&m_node, &m_keyboard};
