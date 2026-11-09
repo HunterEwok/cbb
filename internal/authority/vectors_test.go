@@ -135,7 +135,7 @@ var scenarios = []struct {
 	{"recovery cert from another root", TestRecoveryCertFromAnotherRoot},
 	{"handover", TestHandover},
 	{"handover replaced", TestHandoverReplaced},
-		{"old root after handover", TestOldRootAfterHandover},
+	{"old root after handover", TestOldRootAfterHandover},
 }
 
 // TestV2Vectors writes (with -update) and checks
