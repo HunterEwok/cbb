@@ -66,6 +66,8 @@ struct StartView: View {
             Text("CBB")
                 .font(.system(.largeTitle, design: .monospaced).weight(.bold))
                 .foregroundStyle(palette.accent)
+                // WCAG's large text, for ReadersUITests' contrast (3:1).
+                .accessibilityIdentifier("largeText")
             Text(verbatim: "Copy Beyond Borders")
                 .font(.system(.headline, design: .monospaced))
                 .foregroundStyle(palette.accent)
@@ -83,6 +85,7 @@ struct StartView: View {
             Button { restoring = true } label: {
                 Text("Restore with the recovery key")
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())
             }

@@ -56,7 +56,10 @@ final class ReadersUITests: XCTestCase {
     private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String) {
         do {
             try app.performAccessibilityAudit(for: types) { issue in
-                guard let e = issue.element else { return false }
+                guard let e = issue.element else {
+                    XCTFail("\(screen): \(issue.compactDescription) on no element: \(issue.detailedDescription)")
+                    return true
+                }
                 // The system's status bar is not the app's to fix.
                 if e.elementType == .statusBar || app.statusBars.firstMatch.exists && app.statusBars.firstMatch.frame.contains(e.frame) { return true }
                 if issue.auditType == .dynamicType && app.navigationBars.firstMatch.exists && app.navigationBars.firstMatch.frame.contains(e.frame) { return true }
@@ -73,18 +76,23 @@ final class ReadersUITests: XCTestCase {
     /// The audit's contrast check fails text that its own picture shows
     /// at 6.9:1 (the dim text on the light background), so each text and
     /// button on the screen is measured on the screen's picture instead:
-    /// its darkest and lightest pixels at least 4.5:1 (WCAG AA).
+    /// its darkest and lightest pixels at least 4.5:1 (WCAG AA), or 3:1 for
+    /// large text, which the app marks with the identifier largeText.
     private func contrast(_ app: XCUIApplication, _ screen: String) {
         let shot = XCUIScreen.main.screenshot()
         let bounds = app.frame
         let status = app.statusBars.firstMatch.exists ? app.statusBars.firstMatch.frame : .null
         let elements = app.staticTexts.allElementsBoundByIndex + app.buttons.allElementsBoundByIndex
-        for e in elements where !e.label.isEmpty && e.frame.width > 1 && e.frame.height > 1 && bounds.contains(e.frame) && !status.intersects(e.frame) {
+        // Only what the user sees: a sheet hides the screen under it from
+        // touch, not from the element tree.
+        for e in elements where !e.label.isEmpty && e.frame.width > 1 && e.frame.height > 1 && bounds.contains(e.frame) && !status.intersects(e.frame) && e.isHittable {
             guard let ratio = Self.contrast(e.frame, in: shot, screen: bounds) else {
                 XCTFail("\(screen): no picture of '\(e.label)' at \(e.frame)")
                 continue
             }
-            XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(screen): '\(e.label)' at \(e.frame) has a contrast of \(ratio)")
+            // WCAG's large text (the app marks it so) needs 3:1.
+            let least = e.identifier == "largeText" ? 3.0 : 4.5
+            XCTAssertGreaterThanOrEqual(ratio, least, "\(screen): '\(e.label)' at \(e.frame) has a contrast of \(ratio)")
         }
     }
 
