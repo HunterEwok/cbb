@@ -2012,6 +2012,12 @@ All notable changes to cbb are documented in this file. The format follows
 - A member removed from the group while it was still answering the hello of the connection that
   removed it hears that it was removed: when its own writing failed first, as the other end hung
   up, it dropped the records it had already read, and every later connection was refused.
+- Members on a computer with several network interfaces (Docker's bridges, a VPN) connect to each
+  other again: one could be found by mDNS only at a link-local address heard on another interface,
+  and its dial then hung on that interface until the connection timed out, while the addresses
+  mDNS brought next waited for the backoff. A member's own link-local addresses are dialed through
+  the interface that has them, a TCP connect waits at most 5 seconds, new addresses are dialed at
+  once, and the log tells why a member cannot be reached and when mDNS publishing changes.
 - A member that booted less than a minute ago no longer writes an old copy from the group to
   its clipboard as if it had just been made: the age of a copy counted at most the time since
   the boot.
