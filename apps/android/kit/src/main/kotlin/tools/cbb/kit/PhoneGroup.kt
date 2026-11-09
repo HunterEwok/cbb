@@ -591,16 +591,15 @@ class PhoneGroup internal constructor(
     }
 
     /**
-     * Makes a phone or a computer an admin (section 10, "Making a device an
-     * admin"): the root issues an admin CA for the admin key the device's
-     * hello offered (a SubjectPublicKeyInfo) and signs its device record
-     * again, naming that CA. It returns the admin CA, for the admin message,
-     * and the record to send. Only the root makes admins. A phone joined as
-     * a member and keeps its store; for a computer, keyStore is where its
-     * hello says its keys live; one that keeps them in a file becomes an
-     * admin only with allowFileKey, else it throws FileKey, and a rootless
-     * install never (Rootless). A key the group already names for another
-     * device or a root is refused.
+     * Makes a phone or a computer an admin (section 10, "Admins"): the root
+     * issues an admin CA for the admin key the device's hello offered (a
+     * SubjectPublicKeyInfo) and signs its device record again, naming that CA.
+     * It returns the admin CA, for the admin message, and the record to send.
+     * Only the root makes admins. A phone joined as a member and keeps its
+     * store; for a computer, keyStore is where its hello says its keys live;
+     * one that keeps them in a file becomes an admin only with allowFileKey,
+     * else it throws FileKey, and a rootless install never (Rootless). A key
+     * the group already names for another device or a root is refused.
      */
     fun makeAdmin(
         device: String,
@@ -640,7 +639,7 @@ class PhoneGroup internal constructor(
 
     /**
      * Takes the admin CA the root sent in the admin message when it made
-     * this member phone an admin (section 10, "Making a device an admin"):
+     * this member phone an admin (section 10, "Admins"):
      * it must name this phone, certify adminKey (the SubjectPublicKeyInfo
      * its hellos offered) and come from the group's current root. The phone
      * is an admin from then on.

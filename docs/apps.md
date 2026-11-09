@@ -1064,6 +1064,6 @@ the app on real devices.
   the Mac's menu bar and the tray in three states, which the tool copies into the Mac app's asset catalog as template
   images and turns into the tray's symbolic SVGs and white and black PNGs for Linux and white and black ICOs for Windows in `apps/desktop/trayicon`); `go run ./tools/tokens` turns `tokens.json` into
   `apps/ios/CBB/Theme/Tokens.swift` and the Android apps' `Tokens.kt` and fails when a palette misses the
-  WCAG AA contrast, and CI checks that the generated files are up to date; `apps/l10n/` — the shared glossary of terms, so
-  both apps use the same words.
+  WCAG AA contrast, and CI checks that the generated files are up to date; [the glossary](reference/glossary.md) holds the shared terms, so
+  every app uses the same words.
 - The protocol both apps speak is [protocol.md](protocol.md).
