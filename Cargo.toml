@@ -3,10 +3,10 @@
 
 # The Rust workspace: the core (core/), the member's program cbb (member/), the
 # core's C functions (ffi/), the firmware's network code (embassy/), the ring
-# stand-in (ring-shim/) and the core as WebAssembly (wasm/). The ESP32 firmware
+# stand-in (ring-shim/). The ESP32 firmware
 # (esp32/) and the fuzz targets (core/fuzz/) are workspaces of their own.
 [workspace]
-members = ["core", "embassy", "ffi", "member", "ring-shim", "wasm"]
+members = ["core", "embassy", "ffi", "member", "ring-shim"]
 exclude = ["esp32", "core/fuzz"]
 # A cargo build or run without -p or --workspace means the program cbb.
 default-members = ["member"]

@@ -72,10 +72,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # a release builds from scratch
-      - name: the Rust core as WebAssembly, which the Go programs run for the group's rules (internal/core)
-        run: |
-          CBB_SOURCE="$GITHUB_SHA" sh wasm/build.sh
-          sh member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
       - name: zig, which links cbb for FreeBSD and Windows, and the nightly Rust of the routers' builds
         if: matrix.goos == 'freebsd' || matrix.goos == 'windows' || matrix.gomips
         run: |
@@ -103,9 +99,6 @@ jobs:
       - name: cbb-helper and cbb-forward, the Go programs beside cbb
         run: |
           ldflags="-s -w -X github.com/HunterEwok/cbb/internal/version.Version=$GITHUB_REF_NAME"
-          # Every release build runs the Rust core under wazero, never Go's
-          # own rules, which only the tests use.
-          overlay=$GITHUB_WORKSPACE/target/cbb-core-overlay.json
           exe=; if [ "$GOOS" = windows ]; then exe=.exe; fi
           if [ "$GOOS" = windows ]; then
             # The tray app, a module of its own; on Windows it needs no cgo.
@@ -119,8 +112,7 @@ jobs:
           mips | mipsle) ;;
           *)
             for p in cbb-helper cbb-forward; do
-              go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/$p$exe" "./cmd/$p"
-              go version -m "$RUNNER_TEMP/$p$exe" | grep -q -- '-tags=cbbwasm'
+              go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/$p$exe" "./cmd/$p"
               # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.
               grep -aqF -- "$GITHUB_REF_NAME" "$RUNNER_TEMP/$p$exe"
             done
@@ -194,7 +186,7 @@ jobs:
         run: |
           bin=$RUNNER_TEMP/cbb
           if [ "$GOOS" = windows ]; then bin=$bin.exe; fi
-          RUST_NOTICES=$RUNNER_TEMP/rust-notices CORE_NOTICES=$RUNNER_TEMP/core-notices \
+          RUST_NOTICES=$RUNNER_TEMP/rust-notices \
             sh packaging/archive.sh "$bin" "$GOOS" "${{ matrix.name }}" "$RUNNER_TEMP/dist"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

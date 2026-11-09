@@ -22,9 +22,6 @@
 # forward and cbb relay run. Each Go program packed adds its modules' notices.
 # The binary is the Rust cbb. With RUST_NOTICES naming a file, the notices
 # of the Rust cbb's crates (member/packaging/notices.sh TARGET) come first.
-# With CORE_NOTICES naming a file, the notices of the Rust core's crates
-# (member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm)
-# follow those of the Go modules, for Go programs built with the core.
 set -eu
 
 if [ $# -ne 4 ]; then
@@ -77,10 +74,6 @@ notices() {
 		printf 'internal/third_party/%s (copied; see its README.md)\n' "$(basename "$copied")"
 		license_files "$copied"
 	done
-	if [ -n "${CORE_NOTICES:-}" ]; then
-		printf '\n================================================================\n'
-		cat "$CORE_NOTICES"
-	fi
 }
 
 license_files() {

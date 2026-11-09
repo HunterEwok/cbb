@@ -330,3 +330,8 @@ internal/third_party/cpace/field_test.go TestFieldInvert D-88: Go no longer runs
 internal/third_party/cpace/field_test.go TestFieldChi D-88: Go no longer runs CPace since internal/pair left; the Rust core's translation is the one members run; core/src/third_party/cpace/field_tests.rs field_invert_chi_elligator2 tests the same
 internal/third_party/cpace/field_test.go TestFieldBytes D-88: Go no longer runs CPace since internal/pair left; the Rust core's translation is the one members run; core/src/third_party/cpace/field_tests.rs field_bytes tests the same
 internal/third_party/cpace/field_test.go TestElligator2 D-88: Go no longer runs CPace since internal/pair left; the Rust core's translation is the one members run; core/src/third_party/cpace/field_tests.rs field_invert_chi_elligator2 tests the same
+internal/clip/sealedcore_test.go TestCoreAndGoSealAlike D-93: it sealed through the core linked into Go, which Go programs no longer carry; core/src/copy/tests.rs and internal/clip check both against testdata/interop/copies-go.json
+internal/core/core_test.go TestVectors D-93: internal/core is gone; internal/group's checkV2Cases and the core's tests read the same vectors
+internal/core/core_test.go TestDo D-93: internal/core, the Go binding of the core, is gone
+internal/core/core_test.go TestConcurrent D-93: internal/core, the Go binding of the core, is gone
+internal/core/evaluate_test.go TestEvaluate D-93: internal/core is gone; internal/authority evaluates the same vectors itself

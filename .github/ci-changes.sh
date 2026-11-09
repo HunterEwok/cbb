@@ -45,7 +45,7 @@ for f in $files; do
 	core/* | ffi/* | Cargo.toml | Cargo.lock) lite=true; ios=true; android=true; silica=true ;;
 	# The computers' cbb, which the kits' interop tests run as the computer.
 	member/* | ring-shim/*) lite=true; ios=true; android=true ;;
-	embassy/* | esp32/* | wasm/* | .cargo/* | deny.toml | rustfmt.toml) lite=true ;;
+	embassy/* | esp32/* | .cargo/* | deny.toml | rustfmt.toml) lite=true ;;
 	apps/ios/*) ios=true; macos=true ;;
 	apps/macos/*) macos=true ;;
 	apps/desktop/*) desktop=true ;;

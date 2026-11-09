@@ -252,15 +252,10 @@ through another callback. `TestRustPhoneTunnel`, `TestRustPhoneHub`, `TestRustPh
 `TestRustPhoneRelayCredentials` run them
 against Go's hub, clients, forwarder and relay through the example `tunnel-on-linux`.
 
-Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
-`libcbb_ffi`, or through the same core built as WebAssembly (`wasm/`, `cbb_call` and its
-memory functions), run by wazero under the tag `cbbwasm`. Every release build of `cbb`, on
-every system and architecture, takes `cbbwasm`, so it stays one static binary without cgo
-(the release workflow checks the tag with `go version -m`), and `cbb version` names the
-rules it runs; a build without either tag, as `go build` and `go test` are, evaluates with
-Go's own `internal/authority`, which only the tests use as a reference.
-`wasm/build.sh` builds the module and writes the `go build -overlay` file that lays it
-over `internal/core/cbb_core.wasm`, so no build output lands in the source tree.
+The Go programs (`cbb-helper`, `cbb-forward` and the tests) do not link the core: they run
+Go's own `internal/authority`, `internal/clip` and `internal/group`, which the interop
+vectors and the differential run (`.github/differential.sh`) keep byte for byte the same as
+the core's.
 
 ## Operations
 

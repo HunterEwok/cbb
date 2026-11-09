@@ -2007,6 +2007,12 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Removed
 
+- The Rust core as WebAssembly in the Go programs (`internal/core`, `wasm/`, wazero and the
+  build tags `cbbwasm` and `cbbcore`): `cbb-helper` and `cbb-forward` run Go's own rules,
+  which the interop vectors and the differential run keep the same as the core's. The Mac's
+  `cbb` and `cbb-helper` are signed with no entitlement at all, since nothing compiles code
+  at run time any more.
+
 - The Go command line `cmd/cbb` and the Go service in it: `cbb` is the Rust program on every
   member, with `cbb-helper` beside it on computers. Its tests run on the Rust `cbb`
   (`member/tests/cli_commands.rs`, the service tests in `internal/service`).

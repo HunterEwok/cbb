@@ -24,7 +24,6 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/atomicfile"
 	"github.com/HunterEwok/cbb/internal/authority"
-	"github.com/HunterEwok/cbb/internal/core"
 	"github.com/HunterEwok/cbb/internal/strict"
 )
 
@@ -374,14 +373,13 @@ type parsed struct {
 	r  Record
 }
 
-// State returns what the records say (docs/protocol.md, section 10, "The state"),
-// from the Rust core when the build links it.
+// State returns what the records say (docs/protocol.md, section 10, "The state").
 func (s *Records) State() *authority.State {
 	now := s.now()
 	if s.st != nil && (len(s.st.Claims) == 0 || now.Sub(s.at) < time.Second) {
 		return s.st
 	}
-	st, err := core.Evaluate(authority.Input{
+	st, err := authority.Evaluate(authority.Input{
 		GroupCA:   s.groupCA,
 		Group:     s.tag,
 		Records:   s.All(),
