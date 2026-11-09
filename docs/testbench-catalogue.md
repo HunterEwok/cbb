@@ -174,7 +174,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 |---|---|---|---|
 | D1 | mDNS: every full member and the lite member publish and browse; avahi, systemd-resolved, mDNSResponder and the Windows DNS client keep working beside it; another group's records are ignored | real, fleet | |
 | D2 | Who dials: of two full members the lower ID dials; the other dials after 30 s when that is blocked; one connection per pair stays [P4] | fleet, real | |
-| D3 | Full members dial lite members; phones dial everyone; a phone that is the hub listens while its app is open | fleet, ui | |
+| D3 | Members that dial dial those that publish `r=listen` at once, whatever their device IDs; phones dial everyone; a phone that is the hub listens while its app is open | fleet, ui | |
 | D6 | Known networks: a member is quiet on a network it does not know; it learns one by making or joining a group, a pairing window or a member connection; `cbb status` names quiet networks; `sudo cbb network` after a new router | fleet | |
 | D7 | Only private, unique-local and link-local addresses are published and accepted; a public source address on the member port is refused by the program and by the unit's limits | fleet | |
 | D8 | Only IPv6 between two members; link-local addresses tried last [P19] | fleet, real | |
@@ -186,7 +186,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | D14 | A queue of 256 messages: a peer a whole queue behind is disconnected and catches up from its next hello | fleet | |
 | D15 | Junk on the member port: random bytes, a wrong ALPN, a TLS client without a certificate, a hello or an event that does not decode, a frame over 7 MiB: each closed or dropped, the service unharmed [S14] | fleet | |
 | D16 | Address change: a member's DHCP address changes; an away device moves between networks without a new invitation [F11] | fleet, real | |
-| D17 | mDNS answers and records: the TXT fields (`g=`, `r=lite`, `r=phone`), announcements at start, goodbyes at stop, answers to a query, browsing that ignores its own records | fleet | |
+| D17 | mDNS answers and records: the TXT fields (`g=`, `r=listen`, `r=phone`), announcements at start, goodbyes at stop, answers to a query, browsing that ignores its own records | fleet | |
 
 ## 5. Sync of text (Y)
 

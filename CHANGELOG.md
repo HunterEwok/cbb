@@ -1483,6 +1483,9 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The bench's fleet checks whom the members dial by D-89: one that publishes `r=listen` at
+  once, though its device ID is the lowest, and one with the lowest that dials only after the
+  fallback, in place of the old check that no one dials a member with `r=lite` (D3).
 - docs/decisions.md lists the decisions in force apart from the replaced ones, which stay
   below as history, and `tools/repocheck` checks the register: each number once, a known
   status, a replaced row among the replaced decisions, naming a decision that exists. D-90
@@ -1517,7 +1520,8 @@ All notable changes to cbb are documented in this file. The format follows
   takes `-caps` (all three by default, `admin,dials` for the ZX Next's Pi), and an ESP32 has
   none. The apps show "Member" and decide what a device can do from its capabilities. Groups
   set up during development whose records name `full` or `lite` are set up again: no release
-  carried those records.
+  carried those records. The ZX Next's `.cbb net on` looks for a computer past the members
+  with `r=listen`, as it did past `r=lite`.
 - The Android and iPhone apps put one received image or video, and an image the button
   fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
   Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).
