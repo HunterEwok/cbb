@@ -118,8 +118,8 @@
         <translation>הטלפון הזה לא שומר מפתחות לאפליקציות.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>המכשיר השני לא קיבל את הטלפון הזה כמנהל. רק השורש של הקבוצה ממנה מנהלים: שם, קבלו אותו כמנהל (cbb pair -qr -admin), או הצטרפו בלי להיות מנהל.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>המכשיר השני לא קיבל את הטלפון הזה כמנהל. רק המכשיר שיצר את הקבוצה ממנה מנהלים: סרקו את הקוד בו, או הצטרפו בלי להיות מנהל.</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -201,8 +201,8 @@
         <translation>יוצר את מפתח המנהל…</translation>
     </message>
     <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>במחשב השורש של הקבוצה, קבלו את הטלפון הזה כמנהל עם הקוד הזה: באפליקציית CBB הוסיפו מכשיר ובחרו לקבל אותו כמנהל, או הריצו cbb pair -qr -admin. השאירו את המסך הזה פתוח.</translation>
+        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
+        <translation>במכשיר שיצר את הקבוצה, הקישו + וסרקו את הקוד הזה. השאירו את המסך הזה פתוח.</translation>
     </message>
 </context>
 <context>

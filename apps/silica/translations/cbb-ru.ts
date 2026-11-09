@@ -118,8 +118,8 @@
         <translation>Этот телефон не хранит ключи приложений.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>Другое устройство не приняло этот телефон как админа. Админов назначает только корень группы: там примите его как админа (cbb pair -qr -admin) или войдите в группу не как админ.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>Другое устройство не приняло этот телефон как админа. Админов назначает только устройство, которое создало группу: отсканируйте код на нём или войдите в группу не как админ.</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -201,8 +201,8 @@
         <translation>Создаётся ключ админа…</translation>
     </message>
     <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>На корневом компьютере группы примите этот телефон как админа по этому коду: в приложении CBB добавьте устройство и выберите «принять как админа» или выполните cbb pair -qr -admin. Не закрывайте этот экран.</translation>
+        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
+        <translation>На устройстве, которое создало группу, нажмите + и отсканируйте этот код. Не закрывайте этот экран.</translation>
     </message>
 </context>
 <context>

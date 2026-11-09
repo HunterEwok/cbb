@@ -118,8 +118,8 @@
         <translation>Este teléfono no guarda claves para las apps.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>El otro dispositivo no admitió este teléfono como administrador. Solo la raíz del grupo nombra administradores: allí, admítelo como administrador (cbb pair -qr -admin), o únete sin ser administrador.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>El otro dispositivo no admitió este teléfono como administrador. Solo el dispositivo que creó el grupo nombra administradores: escanea el código allí, o únete sin ser administrador.</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -201,8 +201,8 @@
         <translation>Creando la clave de administrador…</translation>
     </message>
     <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>En el ordenador raíz del grupo, admite este teléfono como administrador con este código: en la app CBB, añade un dispositivo y elige admitirlo como administrador, o ejecuta cbb pair -qr -admin. Mantén esta pantalla abierta.</translation>
+        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
+        <translation>En el dispositivo que creó el grupo, toca + y escanea este código. Mantén esta pantalla abierta.</translation>
     </message>
 </context>
 <context>

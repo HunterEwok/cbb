@@ -118,8 +118,8 @@
         <translation>لا يحفظ هذا الهاتف مفاتيح للتطبيقات.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>لم يقبل الجهاز الآخر هذا الهاتف كمشرف. جذر المجموعة وحده يعيّن المشرفين: هناك اقبله كمشرف (cbb pair -qr -admin)، أو انضم دون أن تكون مشرفًا.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>لم يقبل الجهاز الآخر هذا الهاتف كمشرف. الجهاز الذي أنشأ المجموعة وحده يعيّن المشرفين: امسح الرمز عليه، أو انضم دون أن تكون مشرفًا.</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -201,8 +201,8 @@
         <translation>جارٍ إنشاء مفتاح المشرف…</translation>
     </message>
     <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>على حاسوب جذر المجموعة، اقبل هذا الهاتف كمشرف بهذا الرمز: في تطبيق CBB أضف جهازًا واختر قبوله كمشرف، أو شغّل cbb pair -qr -admin. أبقِ هذه الشاشة مفتوحة.</translation>
+        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
+        <translation>على الجهاز الذي أنشأ المجموعة، اضغط + وامسح هذا الرمز. أبقِ هذه الشاشة مفتوحة.</translation>
     </message>
 </context>
 <context>

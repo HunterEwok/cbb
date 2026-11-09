@@ -34,7 +34,7 @@ Page {
                     : app.join.state === "joining" ? qsTr("Joining…")
                     : app.join.state === "failed" ? ""
                     : app.busy ? qsTr("Making the admin key…")
-                    : page.admin ? qsTr("On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.")
+                    : page.admin ? qsTr("On the device that made the group, tap + and scan this code. Keep this screen open.")
                     : qsTr("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.")
             }
 

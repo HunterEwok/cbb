@@ -118,8 +118,8 @@
         <translation>此手机不为应用保存密钥。</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>另一台设备没有以管理员身份接纳此手机。只有群组的根设备可以设立管理员：请在根设备上以管理员身份接纳它（cbb pair -qr -admin），或者以非管理员身份加入。</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>另一台设备没有以管理员身份接纳此手机。只有创建群组的设备可以设立管理员：请在那台设备上扫描代码，或者以非管理员身份加入。</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -201,8 +201,8 @@
         <translation>正在生成管理员密钥…</translation>
     </message>
     <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>在群组的根电脑上用此代码以管理员身份接纳此手机：在 CBB 应用中添加设备并选择以管理员身份接纳，或运行 cbb pair -qr -admin。请保持此屏幕打开。</translation>
+        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
+        <translation>在创建群组的设备上点按 +，然后扫描此代码。请保持此屏幕打开。</translation>
     </message>
 </context>
 <context>

@@ -118,8 +118,8 @@
         <translation>Simu hii haihifadhi funguo za programu.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>Kifaa kingine hakikukubali simu hii kama msimamizi. Ni mzizi wa kikundi pekee unaoteua wasimamizi: huko, ikubali kama msimamizi (cbb pair -qr -admin), au jiunge bila kuwa msimamizi.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>Kifaa kingine hakikukubali simu hii kama msimamizi. Ni kifaa kilichounda kikundi pekee kinachoteua wasimamizi: changanua msimbo huko, au jiunge bila kuwa msimamizi.</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -201,8 +201,8 @@
         <translation>Inatengeneza ufunguo wa msimamizi…</translation>
     </message>
     <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>Kwenye kompyuta ya mzizi wa kikundi, ikubali simu hii kama msimamizi kwa msimbo huu: katika programu ya CBB ongeza kifaa na uchague kukikubali kama msimamizi, au endesha cbb pair -qr -admin. Acha skrini hii wazi.</translation>
+        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
+        <translation>Kwenye kifaa kilichounda kikundi, gusa + kisha uchanganue msimbo huu. Acha skrini hii wazi.</translation>
     </message>
 </context>
 <context>
