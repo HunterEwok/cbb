@@ -613,8 +613,8 @@ fn go_entries() {
     }
 }
 
-/// The ZX Spectrum Next's files (docs/protocol.md, section 16, "The ZX
-/// Spectrum Next's files"), as Go's TestZXNextVectors writes them: which
+/// The ZX Spectrum Next's files (docs/protocol.md, section 16, "Where the
+/// files are"), as Go's TestZXNextVectors writes them: which
 /// lists the Pi's cbb takes.
 #[test]
 fn go_zxnext() {

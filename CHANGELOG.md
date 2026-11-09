@@ -1486,6 +1486,15 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- docs/decisions.md lists the decisions in force apart from the replaced ones, which stay
+  below as history, and `tools/repocheck` checks the register: each number once, a known
+  status, a replaced row among the replaced decisions, naming a decision that exists. D-90
+  records that a role gives no rights, so any admin with `admit` admits a phone without an
+  admin key; D-26 is marked replaced by D-80, D-11 partly replaced by D-80 and D-40 partly
+  replaced by D-87.
+- From 0.6 on, a device works in one group with devices of the release before it, and an
+  update never breaks a group (D-92; docs/design.md, "Versions in one group"). SUPPORT.md says
+  what keeps a group working if the maintainer is gone.
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program
@@ -2008,6 +2017,15 @@ All notable changes to cbb are documented in this file. The format follows
   sockets it kept listening, a connection found the port closed and ended at once.
 - A connection through the tunnel to a hub or a relay ends on the far side at once when the
   local side closes or breaks; the far side held it until its timeout, some 30 seconds.
+- A member removed from the group while it was still answering the hello of the connection that
+  removed it hears that it was removed: when its own writing failed first, as the other end hung
+  up, it dropped the records it had already read, and every later connection was refused.
+- Members on a computer with several network interfaces (Docker's bridges, a VPN) connect to each
+  other again: one could be found by mDNS only at a link-local address heard on another interface,
+  and its dial then hung on that interface until the connection timed out, while the addresses
+  mDNS brought next waited for the backoff. A member's own link-local addresses are dialed through
+  the interface that has them, a TCP connect waits at most 5 seconds, new addresses are dialed at
+  once, and the log tells why a member cannot be reached and when mDNS publishing changes.
 - A member that booted less than a minute ago no longer writes an old copy from the group to
   its clipboard as if it had just been made: the age of a copy counted at most the time since
   the boot.
