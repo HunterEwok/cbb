@@ -343,7 +343,7 @@ Raspberry Pi 4 runs the fleet and time suites every week with `tools/bench/weekl
 cron, on the newest main, each against the previous week's `metrics.json`. `-repeat N` runs
 the fleet, time or phone suite N times, each run's cases named `runK/...`, and lists in
 `flaky.txt` the cases that both passed and failed; every failure still fails the run, and each
-flaky case goes into [testing](testing.md#flaky-tests)' list until its cause is fixed.
+flaky case goes into [testing](testing.md#unstable-tests)' list until its cause is fixed.
 
 **Reports**: a JUnit XML file for GitHub's test summary, an HTML report with the matrix
 (green and red cells), every failure's logs from all devices (`journalctl`, `log show`,

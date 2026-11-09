@@ -180,17 +180,19 @@ these before the bench has run them.
 A failing test is a finding, never noise: find the cause before running it again. A test is
 never skipped, disabled or retried until green to make CI pass.
 
-### Flaky tests
+## Unstable tests
 
-A test that fails now and then on the same code is a finding too, and the hardest one to see:
-each failure looks like bad luck. It is listed here when it is seen, with how often it fails,
-until its cause is found and fixed; then it leaves the list, and the fix names it. To measure
-the rate, run it many times: `go test -run NAME -count 20 ./PACKAGE`, or `go run ./tools/bench
--repeat 5 -scenario NAME fleet`, which lists in `flaky.txt` the cases that both passed and
-failed ([test bench](testbench.md#11-automation)).
+A test that fails only now and then is a red test too, with a cause to find: a race in the
+code, a wait too short for a slow runner, or an order the test assumes. The nightly
+workflow's `unstable` job runs the members' tests ten times over, with the Go service and
+with the Rust `cbb`, and its summary lists every test that failed and how often. A test
+found there goes into this table with what is known of its cause, and leaves it with the
+fix that removes the cause. The bench finds them too: `go run ./tools/bench -repeat 5
+-scenario NAME fleet` lists in `flaky.txt` the cases that both passed and failed
+([test bench](testbench.md#11-automation)).
 
-| Test | Where | Fails | Seen | State |
-|---|---|---|---|---|
-| `TestSeveralHubs` | `internal/service`, against the Rust service | about 1 in 6 in CI, 0 in 4 in Docker | 2026-11-08 | cause not found; passes 6 of 6 against the Go service |
-| `TestLiteHubs` | `internal/service`, against the Rust service | about 2 in 5 in CI, 1 in 4 in Docker | 2026-11-08 | after the first hub stops, the client's tunnel connection to the second hub ends right after it comes up, and the copy made then is lost; passes 6 of 6 against the Go service |
-| `TestWindow` | `apps/desktop`, Windows | rarely: Chrome gives no DevTools port in 30 s | 2026-11-06 | its failure shows Chrome's stderr; read it when it fails again |
+| Test | Where | Seen | What is known |
+|---|---|---|---|
+| `TestSeveralHubs` | `internal/service` | about one run in six, 2026-11 | not yet found |
+| `TestLiteHubs` | `internal/service`, against the Rust service | about two runs in five in CI, 2026-11 | after the first hub stops, the client's tunnel connection to the second hub ends right after it comes up, and the copy made then is lost |
+| `TestWindow` | `apps/desktop`, Windows | rarely, 2026-11 | Chrome gave no DevTools port within 30 seconds; the test now prints Chrome's error output, to be read when it fails again |
