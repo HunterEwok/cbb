@@ -383,7 +383,12 @@ struct Conn {
     sinks: Mutex<HashMap<[u8; 32], SyncSender<Piece>>>,
     /// The reach message last sent to it, a phone (send_reach).
     reach_sent: Mutex<Option<Vec<DeviceId>>>,
+    /// Tells this connection from the peer's earlier and later ones.
+    serial: u64,
 }
+
+/// The serial of the next connection.
+static CONN_SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 impl Node {
     pub fn new(
@@ -872,6 +877,12 @@ impl Node {
 
     /// Queues a message for the member id; reports whether it is
     /// connected as a member.
+    /// The serial of the member connection to id, which a connection after
+    /// it does not share; None when it is not connected.
+    pub fn connection(&self, id: &DeviceId) -> Option<u64> {
+        self.conns.lock().unwrap().get(id).filter(|c| !c.records_only).map(|c| c.serial)
+    }
+
     pub fn send_to(&self, id: &DeviceId, m: Message) -> bool {
         let c = self.conns.lock().unwrap().get(id).cloned();
         match c {
@@ -1724,6 +1735,7 @@ impl Node {
             gets: Mutex::new(VecDeque::new()),
             sinks: Mutex::new(HashMap::new()),
             reach_sent: Mutex::new(None),
+            serial: CONN_SERIAL.fetch_add(1, Ordering::SeqCst),
         });
         {
             let mut conns = self.conns.lock().unwrap();

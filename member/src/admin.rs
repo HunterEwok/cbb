@@ -380,10 +380,10 @@ pub fn finish_takeover(dir: &Path, node: &Node, name: &str) -> Result<bool> {
     Ok(false)
 }
 
-/// The root each admin got its admin CA from, by device: from cbb admin
-/// (make_admin) or renew_admin_cas, so neither gives a second one. One
-/// service runs in a process.
-static ADMIN_CAS_SENT: Mutex<std::collections::BTreeMap<String, [u8; 32]>> =
+/// The root each admin got its admin CA from, and on which connection, by
+/// device: from cbb admin (make_admin) or renew_admin_cas, so neither gives
+/// a second one on that connection. One service runs in a process.
+static ADMIN_CAS_SENT: Mutex<std::collections::BTreeMap<String, crate::takeover::AdminCaSent>> =
     Mutex::new(std::collections::BTreeMap::new());
 
 /// On the group's root, gives each connected admin computer whose admin
@@ -875,7 +875,8 @@ impl Admin<'_> {
         // key: renew_admin_cas, which may run as soon as the record below is
         // in the set, must not give it a second one, as in Go. Noted before
         // signing, and undone if it never gets this one.
-        let before = ADMIN_CAS_SENT.lock().unwrap().insert(d.id.clone(), s.ca.key_hash());
+        let conn = self.node.connection(&peer.id);
+        let before = ADMIN_CAS_SENT.lock().unwrap().insert(d.id.clone(), (s.ca.key_hash(), conn));
         let undo = || {
             let mut sent = ADMIN_CAS_SENT.lock().unwrap();
             match before {

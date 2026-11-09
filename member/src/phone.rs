@@ -123,7 +123,7 @@ pub struct Member {
     tunnels: Arc<RwLock<Option<OnTunnel>>>,
     away: Arc<Away>,
     /// The admins given a new admin CA, by device, with the root it is from.
-    admin_cas: Mutex<std::collections::BTreeMap<String, [u8; 32]>>,
+    admin_cas: Mutex<std::collections::BTreeMap<String, crate::takeover::AdminCaSent>>,
 }
 
 /// What a member port a phone opens is for.
