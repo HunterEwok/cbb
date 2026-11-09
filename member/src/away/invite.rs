@@ -508,6 +508,12 @@ impl GuestTunnel {
     pub fn answered(&self) -> bool {
         self.0.answered()
     }
+
+    /// The tunnel's link, for a phone's app that keeps it as its other
+    /// tunnels.
+    pub fn into_link(self) -> crate::tunnel::Link {
+        self.0
+    }
 }
 
 /// The guest tunnel of an invitation to its hub.

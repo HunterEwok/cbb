@@ -105,6 +105,9 @@ protocol GroupController: AnyObject {
     func join(asAdmin: Bool, show: @escaping @MainActor (JoinCode) -> Void) async throws
     /// Joins a computer's group with the code cbb pair shows on its root.
     func joinComputer(code: String) async throws
+    /// Joins a group from afar by a remote invitation the user accepted;
+    /// shown gets the fingerprint the inviting admin compares.
+    func joinByInvite(_ text: String, shown: @escaping @MainActor (String) -> Void) async throws
     /// Restores the group on this new phone with the recovery key from the
     /// sheet's QR code; returns once the claim is sent.
     func restore(sheet: Core.RecoveredKey) async throws
@@ -180,6 +183,7 @@ extension GroupController {
     func watchBody(_ ask: WatchState.Ask) throws -> Data { throw PhoneGroup.Failure.notAWatch }
     func deliverFromWatch(_ signed: WatchState.Signed) async throws { throw PhoneGroup.Failure.notAWatch }
     func joinComputer(code: String) async throws { throw PendingGroup.Failure.notReady }
+    func joinByInvite(_ text: String, shown: @escaping @MainActor (String) -> Void) async throws { throw PendingGroup.Failure.notReady }
     func restore(sheet: Core.RecoveredKey) async throws { throw PendingGroup.Failure.notReady }
     func restoreWithCard(pin: String) async throws { throw PendingGroup.Failure.notReady }
     func rename(_ id: String, to name: String) async throws {}
@@ -357,6 +361,18 @@ final class AppModel: ObservableObject {
     @Published private(set) var retries = 0
     /// The QR code this phone shows while it waits to join a group.
     @Published private(set) var joinCode: JoinCode?
+    /// A remote invitation the user scanned, opened or pasted, which waits
+    /// to be accepted or declined (docs/apps.md, Start).
+    struct PendingInvite: Equatable, Identifiable {
+        let text: String
+        let invitation: Core.Invitation
+        var id: String { text }
+    }
+    @Published var pendingInvite: PendingInvite?
+    /// The invitation the join screen joins by, once accepted.
+    @Published private(set) var joiningInvite: PendingInvite?
+    /// The fingerprint this phone shows while it joins by an invitation.
+    @Published private(set) var inviteFingerprint: String?
     @Published private(set) var isAdmin = true
     /// Whether this phone holds the group's root, which ends conflicts.
     @Published private(set) var isRoot = false
@@ -468,6 +484,8 @@ final class AppModel: ObservableObject {
     /// A remote invitation as Settings shows it: when it expires, the file
     /// to share, and the device waiting for the user's answer.
     struct Invite {
+        /// The invitation's text, for its QR code.
+        var text: String
         var expires: Date
         var file: URL
         var request: PairingMember.Request?
@@ -562,7 +580,71 @@ final class AppModel: ObservableObject {
     func startJoining(admin: Bool = false) {
         message = nil
         joinAsAdmin = admin
+        joiningInvite = nil
         phase = .joining
+    }
+
+    /// Reads a remote invitation the user scanned, opened or pasted, for
+    /// the screen that accepts or declines it; false with a message when it
+    /// is none, has expired, or the phone is in a group already.
+    func readInvitation(_ text: String) -> Bool {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard phase == .start else {
+            message = String(localized: "This phone is in a group already. Leave it first to join another.", bundle: .app)
+            return false
+        }
+        do {
+            switch try Core.readInvite(text) {
+            case let .refused(_, why):
+                let summary = String(localized: "This is not a CBB invitation.", bundle: .app)
+                message = Self.showsErrorDetails ? summary + "\n\n" + why : summary
+                return false
+            case let .invitation(inv):
+                guard Date(timeIntervalSince1970: TimeInterval(inv.expires)) > Date() else {
+                    message = String(localized: "The invitation has expired. Ask for a new one.", bundle: .app)
+                    return false
+                }
+                message = nil
+                pendingInvite = PendingInvite(text: text, invitation: inv)
+                return true
+            }
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
+    }
+
+    /// The user declined the invitation: nothing is sent.
+    func declineInvitation() { pendingInvite = nil }
+
+    /// The user accepted the invitation: the join screen joins by it.
+    func acceptInvitation() {
+        guard let p = pendingInvite else { return }
+        pendingInvite = nil
+        message = nil
+        joinAsAdmin = false
+        joiningInvite = p
+        phase = .joining
+    }
+
+    /// Joins by the accepted invitation: shows the fingerprint for the
+    /// inviting admin to compare, then goes Home once admitted. The join
+    /// screen runs it as its task, so leaving the screen cancels it.
+    func joinByInvite() async {
+        guard let p = joiningInvite else { return }
+        do {
+            try await group.joinByInvite(p.text) { [weak self] fp in self?.inviteFingerprint = fp }
+            computers = group.computers
+            devices = group.devices
+            isAdmin = group.isAdmin
+            joiningInvite = nil
+            phase = .home
+            message = String(localized: "This phone is in the group. It syncs through the group's hub away from home.", bundle: .app)
+        } catch is CancellationError {
+        } catch {
+            message = Self.describe(error)
+        }
+        inviteFingerprint = nil
     }
 
     /// Joins another phone's group: shows this phone's QR code until an
@@ -644,6 +726,8 @@ final class AppModel: ObservableObject {
     /// Leaves the join screen without joining.
     func cancelJoin() {
         joinCode = nil
+        joiningInvite = nil
+        inviteFingerprint = nil
         message = nil
         phase = .start
     }
@@ -953,7 +1037,7 @@ final class AppModel: ObservableObject {
                 await self?.ask(req) ?? false
             }, ended: { [weak self] r in self?.inviteEnded(r) })
             let file = try Self.inviteFile(inv.text)
-            (invitation, invite, inviteNote) = (inv, Invite(expires: inv.expires, file: file), nil)
+            (invitation, invite, inviteNote) = (inv, Invite(text: inv.text, expires: inv.expires, file: file), nil)
         } catch HubOnPhone.Failure.notRunning {
             inviteNote = Self.describe(HubOnPhone.Failure.notRunning, summary: String(
                 localized: "An invitation needs the hub registered with its forwarder. Check the forwarder above.", bundle: .app))
@@ -1482,6 +1566,8 @@ final class AppModel: ObservableObject {
                 return String(localized: "No computer of the group was found on this network. Turn one on and keep this phone on its network, then try again.", bundle: .app)
             case .noGroup:
                 return String(localized: "This phone is in no group, so there is nothing to leave.", bundle: .app)
+            case .hubUnreachable:
+                return String(localized: "The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.", bundle: .app)
             case let .rootLeaves(others):
                 let names = others.formatted(.list(type: .and))
                 return String(localized: "This phone holds the group's root, and the group has other devices: \(names). Remove them first, or let an admin phone take the group over.", bundle: .app)

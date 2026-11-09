@@ -16,6 +16,11 @@
 //! - `start` with `key`, `device`, `hub` (the hub's device ID) and `offer`
 //!   (the hub's tunnel offer as the member protocol carries it):
 //!   `{"id", "port"}`;
+//! - `guest_start` with `invite` (a remote invitation's text): `{"id",
+//!   "port"}`, the invitation's guest tunnel, whose port leads to the hub's
+//!   member port once the hub admitted the device that joined by it: the
+//!   app's node dials it to offer its own tunnel key, until the hub's offer
+//!   comes (docs/protocol.md, section 12); `status` and `stop` take its id;
 //! - `status` with `id`: `{"answered", "log"}`, whether the hub answered
 //!   and the log lines since the last status;
 //! - `set_endpoint` with `id` and `endpoint` ("ip:port"): the tunnel tries
@@ -124,6 +129,9 @@ enum Request {
         device: String,
         hub: String,
         offer: Box<TunnelOffer>,
+    },
+    GuestStart {
+        invite: String,
     },
     Status {
         id: u64,
@@ -547,6 +555,7 @@ fn handle(request: &[u8]) -> Result<Value> {
         Request::NewKey => Ok(json!({ "key": b64(&tunnel::new_key()?) })),
         Request::PublicKey { key } => Ok(json!({ "public": b64(&State::with_key(&key)?.public_key()) })),
         Request::Start { key, device, hub, offer } => start(&key, &device, &hub, &offer),
+        Request::GuestStart { invite } => guest_start(&invite),
         Request::Status { id } => with(id, |r| {
             let log: Vec<String> = r.log.lock().map(|mut l| l.drain(..).collect()).unwrap_or_default();
             Ok(json!({ "answered": r.link.answered(), "log": log }))
@@ -646,6 +655,19 @@ fn start(key: &[u8], device: &str, hub: &str, offer: &TunnelOffer) -> Result<Val
     let h = tunnel::hub_from_offer(&from, offer)?;
     let log = Arc::new(Mutex::new(VecDeque::new()));
     let link = Link::start(&st, &h, &me, logger(log.clone()))?;
+    let port = link.local().port();
+    let id = NEXT.fetch_add(1, Ordering::SeqCst);
+    tunnels(|t| {
+        t.insert(id, Running { link, log });
+        Ok(())
+    })?;
+    Ok(json!({ "id": id, "port": port }))
+}
+
+fn guest_start(text: &str) -> Result<Value> {
+    let inv = cbb_core::invite::parse(text).map_err(|r| Error::msg(r.message()))?;
+    let log = Arc::new(Mutex::new(VecDeque::new()));
+    let link = cbb_lite::phone::GuestTunnel::start(&inv, logger(log.clone()))?.into_link();
     let port = link.local().port();
     let id = NEXT.fetch_add(1, Ordering::SeqCst);
     tunnels(|t| {

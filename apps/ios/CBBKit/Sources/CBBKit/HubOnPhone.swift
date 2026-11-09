@@ -104,7 +104,9 @@ public protocol HubTunnel: AnyObject, Sendable {
     /// The forwarder's report as JSON.
     func status() -> String
     /// Opens a remote invitation's guest tunnel.
-    func invite(group: String, endpoints: String, lifetime: Int, guestPort: UInt16) throws -> HubGuest
+    /// vless is the way over VLESS the hub's offers carry, as JSON, or
+    /// empty.
+    func invite(group: String, endpoints: String, lifetime: Int, guestPort: UInt16, vless: String) throws -> HubGuest
     func close()
 }
 
@@ -420,12 +422,24 @@ public final class HubOnPhone: @unchecked Sendable {
 
     /// Opens a remote invitation's guest tunnel to the window on guestPort
     /// (docs/protocol.md, section 12), with the forwarder as the hub's
-    /// address away from home; throws while the hub does not run.
+    /// address away from home, and the hub's way over VLESS when its
+    /// offers carry one, for a device whose network lets no UDP through;
+    /// throws while the hub does not run.
     public func invite(group: String, lifetime: Int, guestPort: UInt16) throws -> HubGuest {
-        let (t, fw) = lock.withLock { (tunnel, state?.forwarder) }
+        let (t, fw, h) = lock.withLock { (tunnel, state?.forwarder, hub) }
         guard let t, let fw else { throw Failure.notRunning }
         let endpoints = String(decoding: try JSONEncoder().encode([fw.endpoint]), as: UTF8.self)
-        return try t.invite(group: group, endpoints: endpoints, lifetime: lifetime, guestPort: guestPort)
+        return try t.invite(group: group, endpoints: endpoints, lifetime: lifetime, guestPort: guestPort,
+                            vless: Self.invitationVLESS(h?.vless))
+    }
+
+    /// The way over VLESS as an invitation carries it (docs/protocol.md,
+    /// section 12): XHTTP only, with its five fields; empty without one.
+    static func invitationVLESS(_ v: Member.VLESS?) -> String {
+        guard let v, v.transport == "xhttp" else { return "" }
+        let o = ["transport": "xhttp", "endpoint": v.endpoint, "server_name": v.serverName, "path": v.path, "id": v.id]
+        guard let d = try? JSONSerialization.data(withJSONObject: o, options: [.sortedKeys]) else { return "" }
+        return String(decoding: d, as: UTF8.self)
     }
 
     /// Hands the forwarder new authority records at the next registration,
