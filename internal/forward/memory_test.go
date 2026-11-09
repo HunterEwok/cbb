@@ -8,6 +8,8 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net/netip"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -114,17 +116,24 @@ func TestMemoryKeepIsLinear(t *testing.T) {
 		if got := len(m.records("g")); got != n {
 			t.Fatalf("kept %d records of %d", got, n)
 		}
-		// Each run repeats the call for at least 10 ms and takes the time
+		// Each run repeats the call for at least 50 ms and takes the time
 		// of one, so a coarse clock (Windows) does not read it as zero.
+		// The garbage collector runs before each run and not during it:
+		// on a small virtual machine (CI's FreeBSD under qemu) a cycle in
+		// every run of the larger group's few calls read as a square.
+		defer debug.SetGCPercent(debug.SetGCPercent(100))
 		best := time.Duration(1 << 62)
 		for range 15 {
+			runtime.GC()
+			debug.SetGCPercent(-1)
 			calls := 0
 			start := time.Now()
-			for calls == 0 || time.Since(start) < 10*time.Millisecond {
+			for calls == 0 || time.Since(start) < 50*time.Millisecond {
 				m.keep("g", noSource, rs)
 				calls++
 			}
 			best = min(best, time.Since(start)/time.Duration(calls))
+			debug.SetGCPercent(100)
 		}
 		return best
 	}
