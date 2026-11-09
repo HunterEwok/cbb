@@ -4,6 +4,7 @@
 package tools.cbb
 
 import android.content.Context
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
@@ -60,6 +61,25 @@ class AccessibilityTest {
     fun namedAndLargeEnough() = screens { screen ->
         assertNone("$screen, controls without a name", Readers.unnamed(compose))
         assertNone("$screen, controls too small", Readers.small(compose))
+    }
+
+    /**
+     * U15: a text given no colour takes the palette's text colour, in every
+     * colour and both appearances, never Compose's default black, which the
+     * dark backgrounds would hide. The palettes' contrast is tools/tokens'.
+     */
+    @Test
+    fun textColour() {
+        val wrong = mutableListOf<String>()
+        compose.setContent {
+            for (name in ColorChoice.offered) for (appearance in listOf(Appearance.DARK, Appearance.LIGHT)) {
+                AppTheme(name, appearance) {
+                    if (LocalContentColor.current != LocalPalette.current.text) wrong += "$name ${appearance.key}: ${LocalContentColor.current}"
+                }
+            }
+        }
+        compose.waitForIdle()
+        assertNone("texts without a colour", wrong)
     }
 
     /** U16: at twice the font size nothing is cut off. */

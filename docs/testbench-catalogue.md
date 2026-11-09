@@ -382,7 +382,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | U12 | Error details in the apps: off in release builds, on in debug builds; seven taps on the version, the launch argument `ShowErrorDetails` and the tray and Mac apps' switch show the cause under each message | ui | |
 | U13 | The lite member's `-state`, `-socket`, `-debug`, `CBB_STATE`, `CBB_SOCKET`; `CBB_SOCKET` for a second instance of a full member | real, fleet | |
 | U14 | Every control of the apps has a name a screen reader reads (VoiceOver, TalkBack, Narrator, Orca), in each of the eight languages, and is at least 48 dp to touch on Android | ui | |
-| U15 | Text keeps WCAG AA contrast: every palette of the design tokens, the tray window's every view in each colour and appearance, Xcode's audit on the iPhone and the Mac | ui | |
+| U15 | Text keeps WCAG AA contrast: every palette of the design tokens, the tray window's every view in each colour and appearance, Xcode's audit on the iPhone and the Mac, the Android app's text colour in every palette | ui | |
 | U16 | Large text: the tray window at twice the size, Android at font scale 2, the iPhone at the largest accessibility size; nothing cut off | ui | |
 | U17 | The keyboard reaches every control of the tray window, and the focus shows | ui | |
 | U18 | Screenshot regressions: the tray window and the Android screens in English (dark, light), Arabic and Chinese against the pictures in the repository; the iPhone's and the Mac's pictures in every language kept with the test results | ui | |

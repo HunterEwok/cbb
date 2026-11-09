@@ -1960,6 +1960,10 @@ All notable changes to cbb are documented in this file. The format follows
   the right, as it does the rest of the window.
 - The Ruby colour in the dark appearance is a shade lighter (#FF6681), so that its badges
   keep WCAG AA contrast on the tray window's tiles.
+- The Android app's Settings in the dark appearance show the title, "Update automatically" and
+  "Version" in the palette's text colour; they were near black on the dark background. At the
+  largest font size the colour names take as many lines as they need, and the round buttons'
+  symbols stay inside their circles.
 - The lite member fetches a copy's images or files once when two requests want them at the
   same time (`cbb paste -o` while the copy is fetched in the background); the second waited on
   chunks the first had taken and could fail.
