@@ -3,9 +3,13 @@
 
 # Static musl binaries, all Rust, linked with Rust's own lld, so no cross
 # toolchain is needed: the Raspberry Pi Zero and Pi 1 (ARMv6, 32-bit), and the
-# release's ARM64 and x86-64 builds.
+# release's ARMv7, ARM64 and x86-64 builds.
 # cargo build --release --target arm-unknown-linux-musleabihf
 [target.arm-unknown-linux-musleabihf]
+linker = "rust-lld"
+rustflags = ["-C", "linker-flavor=ld.lld"]
+
+[target.armv7-unknown-linux-musleabihf]
 linker = "rust-lld"
 rustflags = ["-C", "linker-flavor=ld.lld"]
 

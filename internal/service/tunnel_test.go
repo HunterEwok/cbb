@@ -11,23 +11,19 @@ import (
 	"fmt"
 	mrand "math/rand/v2"
 	"net"
-	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/group/grouptest"
 	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/tunnel"
-	"github.com/HunterEwok/cbb/internal/uptime"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
 
@@ -67,12 +63,12 @@ func TestTunnelKeys(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
-	for _, s := range []*testService{pi, deck, mac} {
+	laptop := startService(t, &h, "laptop")
+	for _, s := range []*testService{pi, deck, laptop} {
 		turnTunnelOn(t, s)
 	}
 	pairWith(t, pi, deck)
-	pairWith(t, pi, mac)
+	pairWith(t, pi, laptop)
 
 	// Make the pi the hub, as cbb will when the user turns it on.
 	pi.stop()
@@ -88,7 +84,7 @@ func TestTunnelKeys(t *testing.T) {
 	piID := pi.status(t).Device
 	hubKey := st.Key.Public()
 
-	for _, s := range []*testService{deck, mac} {
+	for _, s := range []*testService{deck, laptop} {
 		// The members dial the restarted hub again with their backoff,
 		// which a loaded machine stretches past 10 s.
 		waitUpTo(t, 30*time.Second, s.name+" keeps the hub's offer", func() bool {
@@ -120,8 +116,8 @@ func TestTunnelKeys(t *testing.T) {
 	}
 
 	// A member that is no admin making itself a hub too gets nowhere: the
-	// Mac keeps the offer of the pi, the group's root.
-	macID := mac.status(t).Device
+	// laptop keeps the offer of the pi, the group's root.
+	laptopID := laptop.status(t).Device
 	deck.stop()
 	dst := tunnelState(t, deck)
 	dst.IsHub, dst.Hubs = true, nil
@@ -129,25 +125,25 @@ func TestTunnelKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	deck = restartService(t, &h, deck)
-	waitUpTo(t, 30*time.Second, "the deck takes the Mac's key", func() bool {
+	waitUpTo(t, 30*time.Second, "the deck takes the laptop's key", func() bool {
 		for _, m := range tunnelState(t, deck).Members {
-			if m.Device == macID {
+			if m.Device == laptopID {
 				return true
 			}
 		}
 		return false
 	})
-	if st := tunnelState(t, mac); st.Hub(piID) == nil || len(st.Hubs) != 1 {
-		t.Errorf("the Mac took the offer of a member that is no admin")
+	if st := tunnelState(t, laptop); st.Hub(piID) == nil || len(st.Hubs) != 1 {
+		t.Errorf("the laptop took the offer of a member that is no admin")
 	}
 
-	// Removing the Mac drops it from the hub.
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "mac"}, ""); err != nil {
+	// Removing the laptop drops it from the hub.
+	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "laptop"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the hub drops the Mac", func() bool {
+	waitFor(t, "the hub drops the laptop", func() bool {
 		for _, m := range tunnelState(t, pi).Members {
-			if m.Device == macID {
+			if m.Device == laptopID {
 				return false
 			}
 		}
@@ -289,11 +285,9 @@ func TestHubKeyRotation(t *testing.T) {
 	every, ahead := renewEvery, hubKeyAhead
 	renewEvery, hubKeyAhead = 200*time.Millisecond, 24*time.Hour
 	t.Cleanup(func() { renewEvery, hubKeyAhead = every, ahead })
-	var skew atomic.Int64
+	clock := newTestClock(t, 0)
 	var h hub
-	pi := startWith(t, &h, "pi", group.OSLinux, func(c *Config) {
-		c.now = func() time.Time { return time.Now().Add(time.Duration(skew.Load())) }
-	})
+	pi := startEnv(t, &h, "pi", clock.env())
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	for _, s := range []*testService{pi, deck} {
@@ -339,7 +333,7 @@ func TestHubKeyRotation(t *testing.T) {
 	deckID := deck.status(t).Device
 	deck.stop()
 	h.hide(deckID)
-	skew.Store(int64(25 * time.Hour))
+	clock.set(t, 25*time.Hour)
 	waitFor(t, "the hub serves with the new key", func() bool {
 		st := load(pi)
 		return st.Next.IsZero() && st.ServingKey().Public() == next
@@ -444,26 +438,21 @@ func TestAwayThroughForwarder(t *testing.T) {
 	t.Run("obfuscated", func(t *testing.T) { testAwayThroughForwarder(t, true, false) })
 	// VLESS comes with AmneziaWG, which goes first over UDP.
 	t.Run("vless", func(t *testing.T) { testAwayThroughForwarder(t, false, true) })
-	// Where no UDP passes, the deck falls back to VLESS.
+	// Where no UDP passes, the deck, whose hub hides its tunnel with
+	// AmneziaWG and tries UDP first, falls back to VLESS.
 	t.Run("vless without UDP", func(t *testing.T) {
 		dead, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 		if err != nil {
 			t.Fatal(err)
 		}
-		// Put back after the services stop, which their cleanups do.
-		t.Cleanup(func() { dead.Close(); udpBlocked = nil })
-		udpBlocked = func(eps []netip.AddrPort) []netip.AddrPort {
-			out := make([]netip.AddrPort, len(eps))
-			for i := range out {
-				out[i] = dead.LocalAddr().(*net.UDPAddr).AddrPort()
-			}
-			return out
-		}
-		testAwayThroughForwarder(t, false, true)
+		t.Cleanup(func() { dead.Close() })
+		testAwayThroughForwarder(t, true, true, "CBB_TEST_DEAD_UDP="+dead.LocalAddr().String())
 	})
 }
 
-func testAwayThroughForwarder(t *testing.T, obfuscate, overVLESS bool) {
+// testAwayThroughForwarder runs the deck, with deckEnv, away from home
+// through the hub's forwarder.
+func testAwayThroughForwarder(t *testing.T, obfuscate, overVLESS bool, deckEnv ...string) {
 	t.Setenv("CBB_DEBUG", "1")
 	cert, err := forward.NewCert()
 	if err != nil {
@@ -499,7 +488,7 @@ func testAwayThroughForwarder(t *testing.T, obfuscate, overVLESS bool) {
 
 	var h hub
 	pi := startService(t, &h, "pi")
-	deck := startService(t, &h, "deck")
+	deck := startEnv(t, &h, "deck", deckEnv...)
 	pairWith(t, pi, deck)
 	for _, s := range []*testService{pi, deck} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
@@ -710,61 +699,6 @@ func TestJoinByAddress(t *testing.T) {
 	})
 }
 
-// TestNearOnlyForAWhile checks that an announcement alone keeps a member
-// "on this network" only for nearGrace: anyone can announce a hub's name
-// and the group's tag on a foreign network.
-func TestNearOnlyForAWhile(t *testing.T) {
-	id := group.DeviceID(strings.Repeat("a", 32))
-	s := &Service{nearby: map[group.DeviceID]time.Duration{id: uptime.Now()}}
-	if !s.nearLocked(id) {
-		t.Error("a member just found does not count as near")
-	}
-	s.nearby[id] = uptime.Now() - nearGrace - time.Second
-	if s.nearLocked(id) {
-		t.Error("a member found long ago without a connection still counts as near")
-	}
-	if s.nearLocked(group.DeviceID(strings.Repeat("b", 32))) {
-		t.Error("a member never found counts as near")
-	}
-}
-
-// TestHubWait checks that a member tries a hub that is a phone, there
-// only while its app is open, more often than one that is a computer.
-func TestHubWait(t *testing.T) {
-	now := time.Now()
-	ca, err := group.NewRootCA(now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := &Service{records: group.NewRecords(ca.Cert)}
-	phone, pc := group.NewDeviceID(), group.NewDeviceID()
-	for _, d := range []struct {
-		id   group.DeviceID
-		role string
-	}{{phone, group.RolePhone}, {pc, group.RoleMember}} {
-		key, _ := group.NewKey()
-		leaf, err := ca.IssueMember(d.id, &key.PublicKey, now)
-		if err != nil {
-			t.Fatal(err)
-		}
-		k := group.KeyHashOf(leaf)
-		r := grouptest.Sign(t, group.RecordBody{Type: group.RecordDevice, Group: group.Tag(ca.Cert), TimeMS: now.UnixMilli(),
-			Device: string(d.id), Name: d.role, Role: d.role, Key: &k}, ca.Key)
-		if ok, err := s.records.Add(r); !ok || err != nil {
-			t.Fatalf("adding the record of the %s: %v", d.role, err)
-		}
-	}
-	if w := s.hubWait(phone); w != phoneHubWait {
-		t.Errorf("a phone hub: %v", w)
-	}
-	if w := s.hubWait(pc); w != maxBackoff {
-		t.Errorf("a computer hub: %v", w)
-	}
-	if w := (&Service{}).hubWait(phone); w != maxBackoff {
-		t.Errorf("no records: %v", w)
-	}
-}
-
 // TestMoveHub moves the hub from the pi to the Mac, an admin, while the
 // deck is far away and reaches the pi through the tunnel: the Mac takes the
 // pi's clients, the deck gets the Mac's offer through the tunnel with its
@@ -881,9 +815,6 @@ func TestSeveralHubs(t *testing.T) {
 	t.Setenv("CBB_DEBUG", "1")
 	// The deck stays on the Mac, below the pi, for upCheck, then dials the
 	// pi for up to handshakeTimeout: long enough to sync on a slow runner.
-	upCheck, standbyGrace = 20*time.Second, 2*time.Second
-	t.Cleanup(func() { upCheck, standbyGrace = 5*time.Minute, time.Minute })
-	// The Rust service takes them from its environment.
 	t.Setenv("CBB_UP_CHECK", "20")
 	t.Setenv("CBB_STANDBY_GRACE", "2")
 	var h hub
@@ -960,41 +891,6 @@ func TestSeveralHubs(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "the pi is back" })
-}
-
-// TestHubsToTry checks the hubs a member tries, in the group's order: all
-// it keeps offers of, or on a hub those above it; never a device outside
-// the order, itself or one without an address.
-func TestHubsToTry(t *testing.T) {
-	ep := []netip.AddrPort{netip.MustParseAddrPort("192.0.2.1:8764")}
-	link := func(dev string) tunnel.HubLink { return tunnel.HubLink{Device: dev, Endpoints: ep} }
-	order := []group.DeviceID{"phone", "mac", "pi"}
-	st := &tunnel.State{Hubs: []tunnel.HubLink{link("pi"), link("stranger"), link("phone"), {Device: "mac"}}}
-	devs := func(hs []tunnel.HubLink) (out []string) {
-		for _, h := range hs {
-			out = append(out, h.Device)
-		}
-		return out
-	}
-	if got := devs(hubsToTry(order, "deck", st)); !slices.Equal(got, []string{"phone", "pi"}) {
-		t.Errorf("a client tries %v", got)
-	}
-	st.IsHub = true
-	if got := devs(hubsToTry(order, "pi", st)); !slices.Equal(got, []string{"phone"}) {
-		t.Errorf("the lowest hub tries %v", got)
-	}
-	if got := devs(hubsToTry(order, "phone", st)); len(got) != 0 {
-		t.Errorf("the first hub tries %v", got)
-	}
-
-	// A hub with a key for the next period is tried once, with both keys
-	// (tryHub).
-	st.IsHub = false
-	st.Hubs[2].PublicKey, st.Hubs[2].Next = tunnel.Key{1}, tunnel.Key{2}
-	got := hubsToTry(order, "deck", st)
-	if !slices.Equal(devs(got), []string{"phone", "pi"}) || got[0].PublicKey != (tunnel.Key{1}) || got[0].Next != (tunnel.Key{2}) {
-		t.Errorf("a client tries %+v", got)
-	}
 }
 
 // TestMakeHub has the pi, the group's root and not a hub, make the Mac, an

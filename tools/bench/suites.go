@@ -537,7 +537,7 @@ func All(ctx context.Context, r *Report, inv *Inventory, devices []*Device, time
 		}
 		if s == "time" {
 			if cbbTime == "" {
-				r.Skip("time", "give -cbb-time FILE, the same cbb built with -tags benchtime, to run the time suite")
+				r.Skip("time", "give -cbb-time FILE, the same cbb built with the feature benchtime, to run the time suite")
 			} else {
 				TimeSuite(ctx, r, cbbTime, timeout)
 			}

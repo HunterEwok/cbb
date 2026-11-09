@@ -26,8 +26,8 @@ func listens(ctx context.Context, from *Device, addr string) bool {
 // for the phone that scans its QR code: nothing listens before, the code is
 // good only against the certificate the QR code names, a wrong code does
 // not spend it, the right one admits the computer, and the listener goes
-// with the join or when cbb pair is stopped. The forge plays the phone
-// with the root's identity.
+// with the join or when cbb pair is stopped. The forge has the root's
+// service admit it, as the phone that scanned the code would.
 func joinerListens(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/G17-joiner-listens/"
 	g := fleetGroup(ctx, r, f, "fleet/G17-listen", 1)
@@ -84,7 +84,7 @@ func joinerListens(ctx context.Context, r *Report, f *Fleet, timeout time.Durati
 		}
 	}
 	scan := func(how, qr string) (string, error) {
-		out, err := RunFor(ctx, hub, fmt.Sprintf("cbbbench-forge -signer /var/lib/cbb %s", shellQuote("qr:"+how+":"+qr)), "", 2*time.Minute)
+		out, err := RunFor(ctx, hub, fmt.Sprintf("cbbbench-forge %s", shellQuote("qr:"+how+":"+qr)), "", 2*time.Minute)
 		fmt.Fprintf(r.out, "%s\n", strings.TrimSpace(out))
 		return out, err
 	}

@@ -8,10 +8,10 @@
 #   0 3 * * 0  sh $HOME/cbb-weekly/cbb/tools/bench/weekly.sh $HOME/cbb-weekly >>$HOME/cbb-weekly/weekly.log 2>&1
 #
 # DIR holds a checkout of the repository in DIR/cbb, which the run brings
-# to origin/main and builds: the bench, the cbb under test (static), the
-# time-scaled cbb (-tags benchtime) and the lite member (cargo, when
-# installed). Each run's reports go to DIR/reports/DATE/fleet and
-# DIR/reports/DATE/time, each compared with the newest earlier run's
+# to origin/main and builds (Go and cargo): the bench, the Rust cbb under
+# test (also the fleet's lite member) with cbb-helper, cbb-forward and
+# cbb-relay beside it, and its time-scaled build (--features benchtime).
+# Each run's reports go to DIR/reports/DATE/fleet and DIR/reports/DATE/time, each compared with the newest earlier run's
 # metrics.json (-baseline). It keeps the last 12 runs, writes DIR/last.txt
 # with the commit and each suite's result, and exits 1 when a suite
 # failed. CBB_WEEKLY_SCENARIO limits the fleet to some scenarios.
@@ -35,14 +35,19 @@ commit=$(git rev-parse --short HEAD)
 echo "weekly.sh: $date, main at $commit"
 
 go build -o "$bin/bench" ./tools/bench
-CGO_ENABLED=0 go build -trimpath -o "$bin/cbb" ./cmd/cbb
-CGO_ENABLED=0 go build -trimpath -tags benchtime -o "$bin/cbb-time" ./cmd/cbb
-lite=
-if command -v cargo >/dev/null 2>&1; then
-	cargo build -q --locked --release -p cbb-lite
-	cp target/release/cbb "$bin/cbb-lite"
-	lite="-cbb-lite $bin/cbb-lite"
-fi
+# The Rust cbb with what it runs beside it (tools/bench/fleet.go), and its
+# time-scaled build in a directory of its own with the same helpers.
+cargo build -q --locked --release -p cbb-lite
+cargo build -q --locked --release -p cbb-lite --features benchtime --target-dir target/benchtime
+mkdir -p "$bin/time"
+cp target/release/cbb "$bin/cbb"
+cp target/benchtime/release/cbb "$bin/time/cbb"
+[ ! -f target/release/cbb-relay ] || cp target/release/cbb-relay "$bin/cbb-relay"
+for p in cbb-helper cbb-forward; do
+	CGO_ENABLED=0 go build -trimpath -o "$bin/$p" "./cmd/$p"
+	cp "$bin/$p" "$bin/time/$p"
+done
+lite="-cbb-lite $bin/cbb"
 
 # baseline SUITE: the newest earlier run's metrics.json of SUITE, if any.
 baseline() {
@@ -70,7 +75,7 @@ else
 	status=1
 fi
 # shellcheck disable=SC2046 # the option splits into words on purpose
-if sudo "$bin/bench" -cbb "$bin/cbb" -cbb-time "$bin/cbb-time" $(baseline time) -report "$out/time" time; then
+if sudo "$bin/bench" -cbb "$bin/cbb" -cbb-time "$bin/time/cbb" $(baseline time) -report "$out/time" time; then
 	result time passed
 else
 	result time failed

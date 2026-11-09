@@ -91,29 +91,11 @@ func runFetch(state string, to group.DeviceID, addr, arg string) error {
 	if err != nil {
 		return err
 	}
-	raw, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	f, err := dialHello(id, to, addr, "linux")
 	if err != nil {
 		return err
 	}
-	tc := tls.Client(raw, id.ClientTLS(to, group.TLSOptions{}))
-	defer tc.Close()
-	if err := tc.Handshake(); err != nil {
-		return err
-	}
-	f := fetchConn{tc}
-	if err := f.write(map[string]any{"t": "hello", "role": "full", "hello": map[string]any{
-		"os": "linux", "wall_ms": time.Now().UnixMilli(), "name": "forge", "mode": "shared"}}); err != nil {
-		return err
-	}
-	for {
-		t, _, err := f.read(10 * time.Second)
-		if err != nil {
-			return fmt.Errorf("waiting for the hello: %w", err)
-		}
-		if t == "hello" {
-			break
-		}
-	}
+	defer f.c.Close()
 	get := func(length int64) error {
 		return f.write(map[string]any{"t": "get", "get": map[string]any{"sha256": sum, "offset": 0, "length": length}})
 	}
@@ -179,7 +161,7 @@ func runFetch(state string, to group.DeviceID, addr, arg string) error {
 		b, _ := json.Marshal(map[string]any{"t": "get", "get": map[string]any{"sha256": sum, "offset": 0, "length": fetchWindow}})
 		burst = append(append(burst, binary.BigEndian.AppendUint32(nil, uint32(len(b)))...), b...)
 	}
-	if _, err := tc.Write(burst); err != nil {
+	if _, err := f.c.Write(burst); err != nil {
 		fmt.Printf("flood: closed while sending: %v\n", err)
 		return nil
 	}

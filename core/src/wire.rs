@@ -8,6 +8,7 @@ use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -60,7 +61,7 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release: Option<Value>,
     /// In a reach message, the members a computer is connected to (section
-    /// 4, "Reach"), kept as it came: the lite member shows no devices.
+    /// 4, "Reach"), kept as it came.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reach: Option<Value>,
     /// In a hubs message, what a hub shares with the group's other hubs
@@ -149,6 +150,16 @@ pub fn with_release(mut m: Message, order: (u64, u64)) -> Message {
     {
         h.insert("release_seq".into(), order.1.into());
         h.insert("release_keys_seq".into(), order.0.into());
+    }
+    m
+}
+
+/// m, a hello, carrying the group's first root, DER (section 4, "Hello":
+/// only on a connection that carries records only with a device no device
+/// record names).
+pub fn with_group_ca(mut m: Message, der: &[u8]) -> Message {
+    if let Some(Value::Object(h)) = m.hello.as_mut() {
+        h.insert("group_ca".into(), to_value(&base64::engine::general_purpose::STANDARD.encode(der)));
     }
     m
 }
@@ -269,6 +280,13 @@ pub struct HelloBody {
     /// one that serves the content of media events.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub features: Vec<String>,
+    /// From a member on a connection that carries records only with a
+    /// device no device record names: the group's first root, DER, so that
+    /// a phone restoring the group with the recovery key builds the group's
+    /// path from the records (section 4, "Hello"; section 10, "The recovery
+    /// key").
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    pub group_ca: Option<Vec<u8>>,
     /// What a member says it can do: `admin`, `dials`, `hub` (section 4,
     /// "Capabilities"); a receiver keeps those it knows (clean_caps).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -448,6 +466,7 @@ pub fn hello(
         release_seq: 0,
         release_keys_seq: 0,
         features: Vec::new(),
+        group_ca: None,
         caps: Vec::new(),
     };
     Message { kind: "hello".into(), role: role.into(), hello: Some(to_value(&body)), ..Default::default() }
@@ -521,6 +540,13 @@ pub fn credentials(list: &Value) -> Message {
 /// (section 17, "Evidence").
 pub fn evidence(e: &Value) -> Message {
     Message { kind: "evidence".into(), evidence: Some(e.clone()), ..Default::default() }
+}
+
+/// A reach message: the members a computer is connected to now, other
+/// than the phone it goes to (section 4, "Reach").
+pub fn reach(ids: &[&str]) -> Message {
+    let list = ids.iter().map(|id| Value::String((*id).into())).collect();
+    Message { kind: "reach".into(), reach: Some(Value::Array(list)), ..Default::default() }
 }
 
 /// A message with only its type, such as a ping or a goodbye.
@@ -606,6 +632,34 @@ mod tests {
         let cut = clean_reason(&format!("{}é", "a".repeat(MAX_REASON - 1)));
         assert_eq!(cut, "a".repeat(MAX_REASON - 1));
         assert!(clean_reason(&"é".repeat(MAX_REASON)).len() <= MAX_REASON);
+    }
+
+    /// A records-only hello carries the group's first root in base64, which
+    /// a hello decodes back; every other hello leaves it out.
+    #[test]
+    fn group_ca_in_a_hello() {
+        let h = super::Hello { wall: 1, current: None };
+        let m = super::hello(
+            &h,
+            "d".into(),
+            "member",
+            "pi",
+            "linux",
+            &DeviceInfo::default(),
+            None,
+            "own",
+            None,
+            &[],
+            "file",
+            None,
+            (0, 0),
+            None,
+        );
+        assert!(!serde_json::to_string(&m.hello).unwrap().contains("group_ca"));
+        let m = super::with_group_ca(m, &[1, 2, 3]);
+        assert_eq!(m.hello.as_ref().unwrap()["group_ca"], "AQID");
+        let (_, body) = super::decode_hello(m.hello.as_ref()).unwrap();
+        assert_eq!(body.group_ca.as_deref(), Some(&[1u8, 2, 3][..]));
     }
 
     /// A hello's archive is kept only when it is named as

@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::certs::{Cert, DeviceId, Usage};
 use cbb_core::copy::{self, Content, Sealed};
@@ -126,7 +126,7 @@ pub struct Peer {
     pub chain: Vec<Vec<u8>>,
 }
 
-/// The most device IDs a reach message is read for.
+/// The most device IDs a reach message is read for or sent with.
 const MAX_REACH: usize = 256;
 /// The most commands remembered as passed on, as Go's.
 const MAX_PASSED: usize = 4096;
@@ -224,6 +224,8 @@ pub struct Node {
     paused: AtomicBool,
     /// Wakes the dial loops early: the member resumed or found an address.
     kick: (Mutex<u64>, Condvar),
+    /// Counts the times new records came, for records_nap.
+    changed: (Mutex<u64>, Condvar),
     /// Counts redial: the records may let in devices refused until now.
     redials: AtomicUsize,
     /// The commands this member sent, by ID, waiting for their results.
@@ -253,6 +255,9 @@ pub struct Node {
     on_pairing: RwLock<Option<OnPairing>>,
     /// A pairing window is open here, which mDNS announces (TXT p=1).
     window_open: AtomicBool,
+    /// The members with a lower device ID that did not dial this one, so
+    /// that it dialed them after FALLBACK (discovery's later dialer).
+    unreached: Mutex<std::collections::BTreeSet<DeviceId>>,
 }
 
 /// The ID of a command as its body names it, for the result of one that
@@ -376,7 +381,15 @@ struct Conn {
     gets: Mutex<VecDeque<wire::Get>>,
     /// The fetches waiting for the peer's chunks, by blob.
     sinks: Mutex<HashMap<[u8; 32], SyncSender<Piece>>>,
+    /// The reach message last sent to it, a phone (send_reach).
+    reach_sent: Mutex<Option<Vec<DeviceId>>>,
+    /// Tells this connection from the peer's earlier and later ones.
+    serial: u64,
 }
+
+/// The serial of the last connection; a lock, since 32-bit MIPS has no
+/// 64-bit atomics.
+static CONN_SERIAL: Mutex<u64> = Mutex::new(0);
 
 impl Node {
     pub fn new(
@@ -423,6 +436,7 @@ impl Node {
             keep_identity: None,
             paused: AtomicBool::new(false),
             kick: (Mutex::new(0), Condvar::new()),
+            changed: (Mutex::new(0), Condvar::new()),
             redials: AtomicUsize::new(0),
             waiting: Mutex::new(HashMap::new()),
             passed: Mutex::new(HashMap::new()),
@@ -435,6 +449,7 @@ impl Node {
             on_relay: RwLock::new(None),
             on_pairing: RwLock::new(None),
             window_open: AtomicBool::new(false),
+            unreached: Mutex::new(Default::default()),
         }
     }
 
@@ -501,8 +516,11 @@ impl Node {
     pub fn set_tunnel_key(&self, key: TunnelKeys) {
         *self.tunnel_key.write().unwrap() = key;
         self.reconnects.fetch_add(1, Ordering::SeqCst);
+        // Every member and phone connects again, as Go's Reconnect after
+        // SetTunnelKey: a hub is a computer or a phone, and its offer
+        // answers the hello that carries the key.
         for c in self.conns.lock().unwrap().values() {
-            if c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "member") {
+            if c.peer.lock().unwrap().is_some() {
                 c.close(true);
             }
         }
@@ -610,7 +628,12 @@ impl Node {
     /// group's tag, so past that only a connection to it counts.
     #[cfg_attr(not(feature = "tunnel"), allow(dead_code))] // used by sync away from home
     pub fn at_home(&self, id: &DeviceId) -> bool {
-        self.home.lock().unwrap().get(id).is_some_and(|at| uptime::now().saturating_sub(*at) < NEAR_GRACE)
+        near(self.home.lock().unwrap().get(id).copied(), uptime::now())
+    }
+
+    /// The state directory.
+    pub fn state_dir(&self) -> &std::path::Path {
+        &self.state_dir
     }
 
     pub fn identity(&self) -> Arc<Identity> {
@@ -634,7 +657,7 @@ impl Node {
         let der = |k: &str| -> Option<Vec<u8>> { cbb_core::certs::b64::deserialize(f.get(k)?.clone()).ok() };
         let Some(prev) = der("prev_cert").and_then(|d| Cert::parse(&d).ok()) else { return ident };
         const RENEW_BEFORE: i64 = 240 * 24 * 3600;
-        if uptime::wall_ms() / 1000 >= prev.not_after.saturating_sub(RENEW_BEFORE)
+        if uptime::wall_ms() / 1000 >= prev.not_after.saturating_sub(cbb_core::benchtime::d(RENEW_BEFORE))
             || prev.public_key() != ident.cert.public_key()
         {
             return ident;
@@ -643,6 +666,24 @@ impl Node {
         shown.issuer = der("prev_issuer").and_then(|d| Cert::parse(&d).ok());
         shown.cert = prev;
         Arc::new(shown)
+    }
+
+    /// Marks whether the member did not dial this one, so that this one
+    /// dials it, as Go's trackSeen and waitUnconnected.
+    pub fn set_unreached(&self, id: &DeviceId, unreached: bool) {
+        let mut u = self.unreached.lock().unwrap();
+        if unreached {
+            u.insert(id.clone());
+        } else {
+            u.remove(id);
+        }
+    }
+
+    /// The members connected only because this one dialed them back after
+    /// they did not dial it, sorted.
+    pub fn unreached(&self) -> Vec<String> {
+        let u = self.unreached.lock().unwrap().clone();
+        u.into_iter().filter(|id| self.connected(id)).map(|id| id.to_string()).collect()
     }
 
     /// Reports whether a connection to the device is up.
@@ -685,6 +726,39 @@ impl Node {
     pub fn peer_chains(&self) -> Vec<(DeviceId, Vec<Cert>)> {
         let conns = self.conns.lock().unwrap();
         conns.values().filter(|c| !c.records_only).map(|c| (c.id.clone(), c.chain.clone())).collect()
+    }
+
+    /// Renews the member certificates that are due, as an admin with the
+    /// signer s, as Go's renew and the phone kits' renewal: each connected
+    /// member's, sent to it, and this member's own, kept. It returns how
+    /// many it renewed.
+    pub fn renew_due(&self, s: &cbb_core::manage::Signer) -> Result<usize> {
+        let now = uptime::wall_ms() / 1000;
+        let ident = self.identity();
+        let mut roots = self.records.lock().unwrap().roots();
+        if roots.is_empty() {
+            roots.push(ident.root().clone());
+        }
+        let issuer = (!roots.iter().any(|r| r == s.ca)).then(|| s.ca.der.clone());
+        let mut n = 0;
+        for (to, chain) in self.peer_chains() {
+            match cbb_core::manage::renewal(&chain, &roots, s, now) {
+                Ok(Some(cert)) => {
+                    if self.send_to(&to, wire::cert(&cert, issuer.as_deref())) {
+                        self.logf(&format!("cbb: renewed the certificate of {to}"));
+                        n += 1;
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => self.logf(&format!("cbb: renewing the certificate of {to}: {}", e.for_log())),
+            }
+        }
+        let own: Vec<_> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
+        if let Some(cert) = cbb_core::manage::renewal(&own, &roots, s, now)? {
+            self.renewed(&cert, issuer.as_deref())?;
+            n += 1;
+        }
+        Ok(n)
     }
 
     /// Whether this device's newest record makes it a hub that only passes
@@ -774,6 +848,18 @@ impl Node {
         *g != start
     }
 
+    /// Waits up to d, or until new records come; reports whether they
+    /// did. What follows from the records (the server credentials, a
+    /// takeover) is brought up to date at once, as Go does in
+    /// settleRecords.
+    pub fn records_nap(&self, d: Duration) -> bool {
+        let (m, cv) = &self.changed;
+        let g = m.lock().unwrap();
+        let start = *g;
+        let (g, _) = cv.wait_timeout_while(g, d, |n| *n == start && !self.is_closed()).unwrap();
+        *g != start
+    }
+
     /// Waits up to timeout for a member to connect and say its hello;
     /// reports whether one did.
     pub fn wait_connected(&self, timeout: Duration) -> bool {
@@ -792,6 +878,12 @@ impl Node {
 
     /// Queues a message for the member id; reports whether it is
     /// connected as a member.
+    /// The serial of the member connection to id, which a connection after
+    /// it does not share; None when it is not connected.
+    pub fn connection(&self, id: &DeviceId) -> Option<u64> {
+        self.conns.lock().unwrap().get(id).filter(|c| !c.records_only).map(|c| c.serial)
+    }
+
     pub fn send_to(&self, id: &DeviceId, m: Message) -> bool {
         let c = self.conns.lock().unwrap().get(id).cloned();
         match c {
@@ -916,6 +1008,11 @@ impl Node {
         let sum: [u8; 32] = releases::unhex(sha)
             .and_then(|b| b.try_into().ok())
             .ok_or_else(|| Error::msg(format!("{sha:?} is not a SHA-256")))?;
+        let lock = self.fetch_lock(&sum);
+        let _one = lock.lock().unwrap_or_else(|e| e.into_inner());
+        if self.releases.held(sha, now).is_some() {
+            return Ok(());
+        }
         let size = u64::try_from(a.size).map_err(|_| Error::msg("the archive has no size"))?;
         let part = self.releases.files_dir()?.join(format!(".part-{sha}"));
         let peers: Vec<Arc<Conn>> = self
@@ -964,7 +1061,9 @@ impl Node {
             wire::get(wire::Get { sha256: sum.to_vec(), offset: offset as i64, length: length as i64 })
         };
         let mut asked = have;
-        let mut idle = Duration::ZERO;
+        // Measured, not counted in waits: a wait may end early, as under
+        // an emulator.
+        let mut last = Instant::now();
         let res = loop {
             while asked < size && asked - have < FETCH_AHEAD {
                 let len = (size - asked).min(wire::MAX_GET as u64);
@@ -984,13 +1083,12 @@ impl Node {
                         break Err(Error::msg(format!("keep a fetch: {e}")));
                     }
                     have += n as u64;
-                    idle = Duration::ZERO;
+                    last = Instant::now();
                 }
                 Ok(Piece::Chunk(_)) => {}
                 Ok(Piece::Missing) => break Err(Error::msg("it does not hold the blob")),
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    idle += Duration::from_secs(1);
-                    if idle >= FETCH_IDLE {
+                    if last.elapsed() >= FETCH_IDLE {
                         break Err(Error::msg("no chunk came for 15 s"));
                     }
                 }
@@ -1345,6 +1443,44 @@ impl Node {
         }
     }
 
+    /// Tells each connected phone, when this member is a computer, the
+    /// other members it is connected to now, whenever that changes for the
+    /// phone (docs/protocol.md, section 4, "Reach"), as Go's sendReach:
+    /// away from home a phone connects only to a hub, which passes its
+    /// commands on to the members behind it, so that the phone shows them
+    /// as online.
+    fn send_reach(&self) {
+        if self.presence.role != "member" {
+            return;
+        }
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+        let mut all = Vec::new();
+        let mut phones = Vec::new();
+        for c in &conns {
+            let Some(role) = c.peer.lock().unwrap().as_ref().map(|p| p.role.clone()) else { continue };
+            if c.closed.load(Ordering::SeqCst) || c.records_only {
+                continue;
+            }
+            if role == "phone" {
+                phones.push(c);
+            }
+            all.push(c.id.clone());
+        }
+        all.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        for c in phones {
+            let reach: Vec<DeviceId> = all.iter().filter(|id| **id != c.id).take(MAX_REACH).cloned().collect();
+            {
+                let mut sent = c.reach_sent.lock().unwrap();
+                if sent.as_ref() == Some(&reach) {
+                    continue;
+                }
+                *sent = Some(reach.clone());
+            }
+            let ids: Vec<&str> = reach.iter().map(|id| id.as_str()).collect();
+            self.enqueue(c, Out::Message(wire::reach(&ids)));
+        }
+    }
+
     /// Closes every connection with a goodbye and refuses new ones.
     /// Reports whether the group's records revoke this device: it was
     /// removed, and joins again only after cbb leave.
@@ -1357,6 +1493,7 @@ impl Node {
     pub fn close(&self) {
         self.closed.store(true, Ordering::SeqCst);
         self.kick();
+        self.changed.1.notify_all();
         for c in self.conns.lock().unwrap().values() {
             c.close(true);
         }
@@ -1599,6 +1736,12 @@ impl Node {
             lower_dialed,
             gets: Mutex::new(VecDeque::new()),
             sinks: Mutex::new(HashMap::new()),
+            reach_sent: Mutex::new(None),
+            serial: {
+                let mut n = CONN_SERIAL.lock().unwrap();
+                *n += 1;
+                *n
+            },
         });
         {
             let mut conns = self.conns.lock().unwrap();
@@ -1669,6 +1812,7 @@ impl Node {
                 conns.remove(&id);
             }
         }
+        self.send_reach();
         if !c.records_only {
             self.engine.disconnected(id.as_str());
         }
@@ -1710,13 +1854,6 @@ impl Node {
                 let mut peer = peer_of(&c.id, &m.role, &body, c.records_only);
                 peer.chain = c.chain.iter().map(|x| x.der.clone()).collect();
                 *c.peer.lock().unwrap() = Some(peer.clone());
-                if !c.records_only
-                    && let Some(f) = self.on_hello.read().unwrap().as_ref()
-                {
-                    for out in f(&c.id, &peer, &c.chain) {
-                        self.enqueue(c, Out::Message(out));
-                    }
-                }
                 if !c.records_only {
                     let out = self
                         .engine
@@ -1732,6 +1869,16 @@ impl Node {
                     }
                 }
                 drop(st);
+                // After the records, as Go's: the credentials and the offers
+                // that follow are checked against them, and a device that
+                // just joined finds its own device record there.
+                if !c.records_only
+                    && let Some(f) = self.on_hello.read().unwrap().as_ref()
+                {
+                    for out in f(&c.id, &peer, &c.chain) {
+                        self.enqueue(c, Out::Message(out));
+                    }
+                }
                 if !c.records_only {
                     for e in self.evidence.read().unwrap().iter() {
                         self.enqueue(c, Out::Message(wire::evidence(e)));
@@ -1740,6 +1887,7 @@ impl Node {
                 if let Some(f) = self.on_peer.read().unwrap().as_ref() {
                     f(&peer);
                 }
+                self.send_reach();
                 if !c.records_only && !peer.device.archive.is_empty() {
                     let mut a = self.archives.lock().unwrap();
                     if a.len() < MAX_ARCHIVES || a.contains_key(&c.id) {
@@ -1969,6 +2117,13 @@ impl Node {
         self.take_cert(self.identity().with_cert_from(der, issuer)?)
     }
 
+    /// Takes a member certificate issued again for this device that need
+    /// not end later than the current one, as the one from its new admin
+    /// CA (admin::become_admin).
+    pub fn reissued(&self, der: &[u8], issuer: Option<&[u8]>) -> Result<()> {
+        self.take_cert(self.identity().with_cert_any_end(der, issuer)?)
+    }
+
     /// Takes the member certificate that this device, whose claim made it
     /// the group's root, issued itself from the new root.
     pub fn took_over(&self, der: &[u8]) -> Result<()> {
@@ -2099,6 +2254,11 @@ impl Node {
             fresh
         };
         self.apply_copy_rules();
+        {
+            let (m, cv) = &self.changed;
+            *m.lock().unwrap() += 1;
+            cv.notify_all();
+        }
         // A thaw lets in devices refused until now, and a claim, a resolve,
         // a settings, a checkpoint or a recovery record may, as Go's
         // updateRecords.
@@ -2250,7 +2410,16 @@ fn writer(
                 );
                 let m = wire::with_caps(m, &who.caps);
                 let m = wire::with_features(m, if content.is_some() && !c.records_only { &["media"] } else { &[] });
-                Some(wire::with_release(m, if c.records_only { (0, 0) } else { releases.order(uptime::wall_ms()) }))
+                let m = wire::with_release(m, if c.records_only { (0, 0) } else { releases.order(uptime::wall_ms()) });
+                // A member hands the group's first root to a device no
+                // record names, as a phone restoring the group with the
+                // recovery key, which builds the group's path from it.
+                let rs = records.lock().unwrap();
+                Some(if c.records_only && rs.refused_peer(&c.chain) == Some(Refusal::NotListed) {
+                    wire::with_group_ca(m, &rs.group_ca().der)
+                } else {
+                    m
+                })
             }
             Out::Event(ev, queued) => {
                 let mut s = ev.sealed?;
@@ -2417,7 +2586,7 @@ fn replaces(addr: &SocketAddr, up: &SocketAddr) -> bool {
 }
 
 /// A peer as its hello presents it, with what is not valid left out.
-fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool) -> Peer {
+pub(crate) fn peer_of(id: &DeviceId, role: &str, body: &wire::HelloBody, records_only: bool) -> Peer {
     let valid = |s: &str, ok: &[&str]| if ok.contains(&s) { s.to_string() } else { String::new() };
     Peer {
         id: id.clone(),
@@ -2498,6 +2667,13 @@ fn remember_found(home: &mut HashMap<DeviceId, Duration>, id: &DeviceId, here: b
     } else if home.len() < MAX_HOME || home.contains_key(id) {
         home.entry(id.clone()).or_insert_with(now);
     }
+}
+
+/// Reports whether a device found by discovery at `found` (uptime) still
+/// counts as on the home network at `now`.
+#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+fn near(found: Option<Duration>, now: Duration) -> bool {
+    found.is_some_and(|at| now.saturating_sub(at) < NEAR_GRACE)
 }
 
 /// How long a copy from another device stays live, as the records set it;
@@ -2598,6 +2774,20 @@ mod tests {
         let rec = |body: &[u8]| crate::records::Record { body: body.to_vec(), sig: Vec::new(), chain: Vec::new() };
         assert_eq!(super::command_id(&rec(br#"{"type":"mode","to":"aa","id":"c1","expires_ms":5}"#)), "c1");
         assert_eq!(super::command_id(&rec(b"not json")), "");
+    }
+
+    /// An announcement alone keeps a device "on this network" only for
+    /// NEAR_GRACE: anyone can announce a hub's name and the group's tag on a
+    /// foreign network.
+    #[test]
+    fn near_only_for_a_while() {
+        let now = Duration::from_secs(1000);
+        assert!(super::near(Some(now), now), "a device just found does not count as near");
+        assert!(
+            !super::near(Some(now - super::NEAR_GRACE - Duration::from_secs(1)), now),
+            "a device found long ago without a connection still counts as near"
+        );
+        assert!(!super::near(None, now), "a device never found counts as near");
     }
 
     #[test]

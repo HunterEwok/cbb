@@ -119,55 +119,6 @@ const (
 	OSNone     = "none" // firmware without an operating system
 )
 
-// ValidOS reports whether os names a known operating system.
-func ValidOS(os string) bool {
-	switch os {
-	case OSLinux, OSWindows, OSMacOS, OSiOS, OSAndroid, OSAurora, OSSailfish, OSWatchOS, OSWearOS, OSNone:
-		return true
-	}
-	return false
-}
-
-// PhoneOS reports whether os is a phone's that runs the app: iOS, Android,
-// Aurora OS or Sailfish OS.
-func PhoneOS(os string) bool {
-	switch os {
-	case OSiOS, OSAndroid, OSAurora, OSSailfish:
-		return true
-	}
-	return false
-}
-
-// OSName names an operating system for the user: "Linux", "Windows",
-// "macOS", "iOS", "Android", "Aurora OS", "Sailfish OS", "watchOS", "Wear OS",
-// "device" for firmware,
-// "?" when unknown.
-func OSName(os string) string {
-	switch os {
-	case OSLinux:
-		return "Linux"
-	case OSWindows:
-		return "Windows"
-	case OSMacOS:
-		return "macOS"
-	case OSiOS:
-		return "iOS"
-	case OSAndroid:
-		return "Android"
-	case OSAurora:
-		return "Aurora OS"
-	case OSSailfish:
-		return "Sailfish OS"
-	case OSWatchOS:
-		return "watchOS"
-	case OSWearOS:
-		return "Wear OS"
-	case OSNone:
-		return "device"
-	}
-	return "?"
-}
-
 // A KeyHash names a key in records: SHA-256 over a SubjectPublicKeyInfo, or
 // also a record ID.
 type KeyHash = authority.Hash
@@ -214,9 +165,6 @@ type held struct {
 	id  KeyHash
 	sig string
 }
-
-// GroupCA returns the group's first root, which names the group.
-func (s *Records) GroupCA() *x509.Certificate { return s.groupCA }
 
 // NewRecords returns an empty set for the group of groupCA, the group's
 // first root, which names the group for good.
@@ -710,25 +658,6 @@ func (s *Records) refusedChain(chain []*x509.Certificate) error {
 	return nil
 }
 
-// RefusedAdminCA returns why an admin CA is not taken, nil when it is
-// (docs/protocol.md, section 10, "Certificates"): it is under a root on the path,
-// its key is not revoked, and a device record that counts names it as an
-// admin key; one whose record has not reached this member yet is refused
-// with ErrNotListed.
-func (s *Records) RefusedAdminCA(ca *x509.Certificate) error {
-	k := KeyHashOf(ca)
-	if s.Revoked(k) {
-		return errors.New("group: the admin CA's key was removed from the group")
-	}
-	if !signedByAny(ca, s.path()) {
-		return errors.New("group: the admin CA is not from a root of the group")
-	}
-	if _, ok := s.adminDevice(k); !ok {
-		return ErrNotListed
-	}
-	return nil
-}
-
 // ErrNotListed is what Refused returns for a chain that no device record
 // that counts names; errors.Is(ErrNotListed, ErrRecordsOnly) holds, so the
 // connection carries records only.
@@ -793,33 +722,6 @@ func (s *Records) RootMember() (DeviceID, KeyHash) {
 		return "", KeyHash{}
 	}
 	return DeviceID(st.RootDevice), *best.b.Key
-}
-
-// DeviceOfRoot returns the device of the newest holds_root device record
-// that the root key root signed: the device that held that root; "" when
-// there is none.
-func (s *Records) DeviceOfRoot(root KeyHash) DeviceID {
-	var best *parsed
-	for _, p := range s.bodies() {
-		if p.b.Type == RecordDevice && p.b.HoldsRoot && p.b.Signer == root && (best == nil || p.b.Seq > best.b.Seq) {
-			best = &p
-		}
-	}
-	if best == nil {
-		return ""
-	}
-	return DeviceID(best.b.Device)
-}
-
-// AdminUnder reports whether a device record that the root key root signed
-// names the admin key admin.
-func (s *Records) AdminUnder(root, admin KeyHash) bool {
-	for _, p := range s.bodies() {
-		if p.b.Type == RecordDevice && p.b.Signer == root && p.b.Admin != nil && *p.b.Admin == admin {
-			return true
-		}
-	}
-	return false
 }
 
 // MayHost reports whether the device dev may be the group's hub for sync
@@ -990,25 +892,6 @@ func (s *Records) Next(signer KeyHash) (int64, *KeyHash) {
 	return seq + 1, &prev
 }
 
-// Voided returns the records of signer that are on a branch a root's
-// resolve voided, by seq: what its device may sign again once the root
-// voided both of its histories.
-func (s *Records) Voided(signer KeyHash) []Record {
-	own, dead := s.branches(signer)
-	var ps []parsed
-	for _, p := range own {
-		if dead(p) {
-			ps = append(ps, p)
-		}
-	}
-	sort.Slice(ps, func(i, j int) bool { return ps[i].b.Seq < ps[j].b.Seq })
-	out := make([]Record, len(ps))
-	for i, p := range ps {
-		out[i] = p.r
-	}
-	return out
-}
-
 // branches returns the records of signer, by ID, and whether one is on a
 // voided branch: its prev chain, as far as the set holds it, passes
 // through a record that a root's resolve names and that has a sibling.
@@ -1119,21 +1002,6 @@ func (s *Records) ClaimTimes() []ClaimTime {
 	return out
 }
 
-// TakeClaimTimes takes, for each claim the set holds, the time in ts when
-// it is earlier than the set's own and not in the future: a new member
-// takes the times of the member that admitted it from the Welcome, so a
-// claim that took effect there takes effect on the new member too
-// (docs/protocol.md, section 10, "Handing the group over").
-func (s *Records) TakeClaimTimes(ts []ClaimTime) {
-	now := s.now().UnixMilli()
-	for _, t := range ts {
-		if ms, ok := s.firstSeen[t.Record]; ok && t.MS < ms && t.MS <= now {
-			s.firstSeen[t.Record] = t.MS
-			s.st = nil
-		}
-	}
-}
-
 // Digest returns SHA-256 over each record's ID and signature, sorted as
 // All sorts them, in base64: the value a hello carries; "" for an empty
 // set.
@@ -1211,23 +1079,3 @@ func (s *Records) AuthorityRecords() []Record { return s.All() }
 // that the Welcome's roots are the group's: all of them, since it evaluates
 // the set as every member does.
 func (s *Records) PathRecords() []Record { return s.All() }
-
-// SignerName names the device of a signer's key for the user: the device
-// whose newest root record names it as its admin key, the root's own
-// device for a root key on the path, or the key hash when neither does.
-func (s *Records) SignerName(k KeyHash) string {
-	st := s.State()
-	for _, d := range st.Devices {
-		if d.Admin != nil && *d.Admin == k {
-			return d.Name
-		}
-	}
-	if slices.Contains(st.Roots, k) {
-		for _, d := range st.Devices {
-			if d.Device == st.RootDevice {
-				return d.Name
-			}
-		}
-	}
-	return k.String()
-}

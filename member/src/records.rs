@@ -49,15 +49,18 @@ pub const OLD_GROUP_DIR: &str = "before-0.6";
 /// starts in no group: 0.6 reads only records of version 2, with no
 /// migration (docs/records-v2.md), so such a group can no longer work and
 /// is set up again. Its records file is a JSON array; version 2's is an
-/// object. The records go last, so that a start cut short moves the rest at
-/// the next one; the device's settings stay.
+/// object. A group made before 0.4, whose group CA certifies no admin CAs,
+/// leaves too, with or without records (Go's ErrOldGroup). The records go
+/// last, so that a start cut short moves the rest at the next one; the
+/// device's settings stay.
 pub fn leave_version1_group(dir: &Path) -> Result<bool> {
-    let data = match std::fs::read(dir.join(FILE_NAME)) {
-        Ok(d) => d,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(e) => return Err(Error::with(format!("cannot read {}", dir.join(FILE_NAME).display()), e)),
+    let read = |name: &str| match std::fs::read(dir.join(name)) {
+        Ok(d) => Ok(Some(d)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(Error::with(format!("cannot read {}", dir.join(name).display()), e)),
     };
-    if data.iter().find(|b| !b.is_ascii_whitespace()) != Some(&b'[') {
+    let version1 = read(FILE_NAME)?.is_some_and(|d| d.iter().find(|b| !b.is_ascii_whitespace()) == Some(&b'['));
+    if !version1 && !read(crate::identity::FILE_NAME)?.is_some_and(|d| made_before_0_4(&d)) {
         return Ok(false);
     }
     let to = dir.join(OLD_GROUP_DIR);
@@ -80,6 +83,16 @@ pub fn leave_version1_group(dir: &Path) -> Result<bool> {
         }
     }
     Ok(true)
+}
+
+/// Whether an identity file is of a group made before 0.4: its group CA
+/// has a path length of 0, so it certifies no admin CAs.
+fn made_before_0_4(identity: &[u8]) -> bool {
+    use base64::Engine as _;
+    let Ok(v) = serde_json::from_slice::<serde_json::Value>(identity) else { return false };
+    let Some(ca) = v["group_ca"].as_str() else { return false };
+    let Ok(der) = base64::engine::general_purpose::STANDARD.decode(ca) else { return false };
+    Cert::parse(&der).is_ok_and(|c| c.is_ca && c.path_len == Some(0))
 }
 
 /// An empty set for the group of group_ca on the wall clock.
@@ -114,5 +127,14 @@ mod tests {
         assert!(dir.join("sync.json").exists());
         assert!(!leave_version1_group(&dir).unwrap());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Only an identity whose group CA has a path length of 0 is of a group
+    /// made before 0.4; TestUpgrade starts the service on one.
+    #[test]
+    fn a_group_before_0_4() {
+        assert!(!made_before_0_4(b"{}"));
+        assert!(!made_before_0_4(b"not json"));
+        assert!(!made_before_0_4(br#"{"group_ca":"bm90IGEgY2VydA=="}"#));
     }
 }

@@ -106,7 +106,7 @@ pub fn root_ca(point: &[u8], now: i64, sign: Sign) -> Result<Vec<u8>> {
         ext(&OID_SUBJECT_KEY_ID, false, &tagged(0x04, &key_id(point))),
     ];
     let n = name(&cn);
-    let start = now.checked_sub(BACKDATE).ok_or_else(|| Error::msg("the date is out of range"))?;
+    let start = now.checked_sub(crate::benchtime::d(BACKDATE)).ok_or_else(|| Error::msg("the date is out of range"))?;
     let der = build(&n, &n, point, start, add_years(now, CA_YEARS)?, &extensions, sign)?;
     check_root(&Cert::parse(&der)?).map_err(|_| Error::msg("the signing key does not match the root's key"))?;
     Ok(der)
@@ -190,6 +190,12 @@ fn time(t: i64) -> Result<Vec<u8>> {
 /// t plus years, as Go's AddDate does it: the same day and time of day,
 /// with February 29 becoming March 1 in a year that has none.
 fn add_years(t: i64, years: u16) -> Result<i64> {
+    if crate::benchtime::scale() > 1 {
+        // The time-scaled build: years of 365 days, scaled, as Go's
+        // benchtime.Years.
+        let span = crate::benchtime::d(i64::from(years).saturating_mul(365 * 86_400));
+        return t.checked_add(span).ok_or_else(|| Error::msg("the date is out of range"));
+    }
     let d = date(t)?;
     let y = d.year().checked_add(years).ok_or_else(|| Error::msg("the date is out of range"))?;
     let at = |month, day| DateTime::new(y, month, day, d.hour(), d.minutes(), d.seconds());
