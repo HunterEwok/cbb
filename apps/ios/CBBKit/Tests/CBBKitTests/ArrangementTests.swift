@@ -50,7 +50,8 @@ final class ArrangementTests: XCTestCase {
                 guard let op = parsed.value else { continue }
                 var want = raw.filter { !($0.value is NSNull) }
                 if case .new = op, want["devices"] == nil { want["devices"] = [String]() }
-                XCTAssertEqual(NSDictionary(dictionary: op.json), NSDictionary(dictionary: want), "\(c["name"] ?? "")")
+                let got = try XCTUnwrap(JSONSerialization.jsonObject(with: op.data) as? [String: Any])
+                XCTAssertEqual(NSDictionary(dictionary: got), NSDictionary(dictionary: want), "\(c["name"] ?? "")")
                 n += 1
             }
         }

@@ -209,6 +209,11 @@ final class LiveGroup: GroupController {
 
     var groupTag: String? { state?.tag }
 
+    /// The member's tiles (docs/apps.md, "What the member shows").
+    func view(_ op: Arrangement.Op?) throws -> Arrangement.View<CoreMember.TileDevice>? {
+        try node?.view(op)
+    }
+
     /// Whether this phone may add and remove devices: it made the group, or
     /// the phone that did made it an admin. A phone without a group makes
     /// one when it adds a computer.

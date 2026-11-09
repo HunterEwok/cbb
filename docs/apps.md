@@ -806,7 +806,7 @@ The rules:
 The apps reach every change in an Arrange mode, with a menu path, VoiceOver and TalkBack
 actions and the keyboard for each drag.
 
-**On the iPhone and the iPad** (`Views/Arrange.swift`, the model in `AppModel`):
+**On the iPhone and the iPad** (`Views/Arrange.swift`, drawing the member's `view` in `AppModel`, which sends `arrange`):
 
 - Arrange mode starts from **Arrange devices** in the "…" menu or **Arrange** in a tile's
   menu (a long press), and ends with **Done**. In it a tap does not open a tile, tiles have

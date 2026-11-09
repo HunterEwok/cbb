@@ -14,9 +14,12 @@ private let log = Logger(subsystem: "tools.cbb", category: "app")
 @MainActor
 protocol GroupController: AnyObject {
     var hasGroup: Bool { get }
-    /// The group's tag, which the arrangement of the tiles is kept for;
-    /// nil without a group.
+    /// The group's tag; nil without a group.
     var groupTag: String? { get }
+    /// The device tiles as the member keeps them, with the user's change op
+    /// applied first (docs/apps.md, "What the member shows"); nil while no
+    /// member runs. A change that does not fit throws and changes nothing.
+    func view(_ op: Arrangement.Op?) throws -> Arrangement.View<CoreMember.TileDevice>?
     /// Whether this phone may add and remove devices.
     var isAdmin: Bool { get }
     var computers: [AppModel.Computer] { get }
@@ -158,6 +161,7 @@ protocol GroupController: AnyObject {
 extension GroupController {
     /// A stand-in tag for the tests' and previews' groups.
     var groupTag: String? { hasGroup ? "group" : nil }
+    func view(_ op: Arrangement.Op?) throws -> Arrangement.View<CoreMember.TileDevice>? { nil }
     func unfreeze(_ id: String) async throws {}
     var removed: Bool { false }
     func leave() async throws { throw LiveGroup.Failure.noGroup }
@@ -341,14 +345,15 @@ final class AppModel: ObservableObject {
     @Published private(set) var computers: [Computer] = []
     @Published private(set) var devices: [Computer] = [] {
         didSet {
-            loadArrangement()
+            loadTiles()
             SyncSwitch.publish(group.hasGroup ? syncOff == nil : nil)
         }
     }
-    /// The user's order of the tiles and their collections (docs/apps.md,
-    /// "Collections and the order of the tiles"), kept on this phone only;
-    /// nil without a group.
-    @Published private(set) var arrangement: Arrangement?
+    /// The devices and collections, this phone among them, in the user's
+    /// order as the member keeps it (docs/apps.md, "What the member
+    /// shows"), and whether the user changed it.
+    @Published private(set) var arranged: [Arranged] = []
+    @Published private(set) var customOrder = false
     /// One line about the last action, in plain words.
     @Published var message: String?
     /// The bug report to ask about in release mode ("Oops, something
@@ -505,7 +510,7 @@ final class AppModel: ObservableObject {
         computers = group.computers
         devices = group.devices
         isAdmin = group.isAdmin
-        loadArrangement()
+        loadTiles()
         if let live = group as? LiveGroup {
             live.onPanic = { [weak self] details, log in self?.broke(kind: "panic", code: 5, name: "panic", details: details, log: log) }
             let bugs = self.bugs
@@ -1431,26 +1436,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    static let arrangementKey = "deviceArrangement"
-
-    /// This phone's own ID: first in the arrangement until the user moves it.
-    private var selfID: String? { devices.first(where: \.isSelf)?.id }
-
-    /// The devices and collections, this phone among them, in the user's
-    /// order: the group's order, this phone first, until the user changes it.
-    var arranged: [Arranged] {
-        guard let a = arrangement else {
-            return (devices.filter(\.isSelf) + devices.filter { !$0.isSelf }).map { .device($0) }
-        }
-        let byID = Dictionary(devices.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        return a.view(devices: devices.map(\.id), self: selfID).compactMap { item in
-            switch item {
-            case .device(let id): byID[id].map { .device($0) }
-            case .collection(let c): .collection(c, c.devices.compactMap { byID[$0] })
-            }
-        }
-    }
-
     /// The collection with the ID, as Home shows it.
     func collection(_ id: String) -> (Arrangement.Collection, [Computer])? {
         for case let .collection(c, ds) in arranged where c.id == id { return (c, ds) }
@@ -1471,38 +1456,42 @@ final class AppModel: ObservableObject {
         return nil
     }
 
-    /// Reads the group's arrangement once its tag is known, and drops the
-    /// devices that left once the list is whole: the group loaded, this
-    /// phone in it. Until the user changes something nothing is stored.
-    private func loadArrangement() {
-        guard let tag = group.groupTag else {
-            if arrangement != nil { arrangement = nil }
+    /// Draws the member's tiles for the devices the group lists: the
+    /// group's order, this phone first, while no member answers.
+    private func loadTiles() {
+        guard group.hasGroup, let v = try? group.view(nil) else {
+            arranged = (devices.filter(\.isSelf) + devices.filter { !$0.isSelf }).map { .device($0) }
+            customOrder = false
             return
         }
-        var a = Arrangement.decode(defaults.data(forKey: Self.arrangementKey), group: tag)
-        if let current = arrangement, current.group == tag { a = current }
-        if selfID != nil, defaults.data(forKey: Self.arrangementKey) != nil {
-            let before = a
-            a.prune(devices: devices.map(\.id))
-            if a != before { defaults.set(a.encoded(), forKey: Self.arrangementKey) }
-        }
-        if a != arrangement { arrangement = a }
+        show(v)
     }
 
-    /// Makes a change to the arrangement and keeps it; one that does not
-    /// fit leaves it as it was and says so.
+    /// Shows the member's view: its tiles, each device as the group lists it.
+    private func show(_ v: Arrangement.View<CoreMember.TileDevice>) {
+        let byID = Dictionary(devices.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        arranged = v.tiles.compactMap { t in
+            switch t {
+            case .device(let d): byID[d.id].map { .device($0) }
+            case let .collection(id, name, ds):
+                .collection(Arrangement.Collection(id: id, name: name, devices: ds.map(\.id)), ds.compactMap { byID[$0.id] })
+            }
+        }
+        customOrder = v.custom
+    }
+
+    /// Makes a change to the tiles, which the member keeps; one that does
+    /// not fit leaves them as they were and says so.
     @discardableResult
     func arrange(_ op: Arrangement.Op) -> Bool {
-        guard var a = arrangement else { return false }
         do {
-            try a.apply(op, devices: devices.map(\.id), self: selfID)
+            guard let v = try group.view(op) else { return false }
+            show(v)
+            return true
         } catch {
-            message = Self.describe(error)
+            message = Self.describe(error, summary: String(localized: "The tiles stay as they were: that change does not fit.", bundle: .app))
             return false
         }
-        defaults.set(a.encoded(), forKey: Self.arrangementKey)
-        arrangement = a
-        return true
     }
 
     /// Makes a collection of the devices and returns its ID; nil when it
@@ -1514,8 +1503,8 @@ final class AppModel: ObservableObject {
     }
 
     private var collectionIDs: [String] {
-        (arrangement?.items ?? []).compactMap { item -> String? in
-            guard case let .collection(c) = item else { return nil }
+        arranged.compactMap { item -> String? in
+            guard case let .collection(c, _) = item else { return nil }
             return c.id
         }
     }
@@ -1641,9 +1630,6 @@ final class AppModel: ObservableObject {
         }
         if error is LiveGroup.ClipboardUnreadable {
             return String(localized: "Could not read the clipboard, so it was left as it is. Allow pasting for CBB, or copy the text again.", bundle: .app)
-        }
-        if error is Arrangement.Refused {
-            return String(localized: "The tiles stay as they were: that change does not fit.", bundle: .app)
         }
         if let f = error as? PhoneGroup.Failure, f == .cannotRemoveRoot {
             return String(localized: "The phone that made the group cannot be removed yet.", bundle: .app)

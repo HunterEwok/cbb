@@ -23,20 +23,24 @@ public enum Arrangement {
     }
 
     /// A device or a collection, as a change names it.
-    public enum Ref: Equatable, Hashable, Sendable {
+    public enum Ref: Equatable, Hashable, Sendable, Encodable {
         case device(String)
         case collection(String)
 
-        var json: [String: String] {
+        private enum Keys: String, CodingKey { case device, collection }
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: Keys.self)
             switch self {
-            case .device(let d): ["device": d]
-            case .collection(let c): ["collection": c]
+            case .device(let d): try c.encode(d, forKey: .device)
+            case .collection(let id): try c.encode(id, forKey: .collection)
             }
         }
     }
 
-    /// A change the user makes, which the member applies and keeps.
-    public enum Op: Equatable, Sendable {
+    /// A change the user makes, which the member applies and keeps; it
+    /// encodes as `arrange` takes it (cbb_core::arrange::Op).
+    public enum Op: Equatable, Sendable, Encodable {
         case move(Ref, before: Ref?)
         case into(device: String, collection: String)
         case out(device: String)
@@ -45,24 +49,44 @@ public enum Arrangement {
         case ungroup(collection: String)
         case reset
 
-        /// The change as `arrange` takes it (cbb_core::arrange::Op).
-        public var json: [String: Any] {
+        private enum Keys: String, CodingKey { case op, item, before, device, collection, name, devices }
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: Keys.self)
             switch self {
             case let .move(item, before):
-                var o: [String: Any] = ["op": "move", "item": item.json]
-                if let before { o["before"] = before.json }
-                return o
-            case let .into(device, collection): return ["op": "into", "device": device, "collection": collection]
-            case let .out(device): return ["op": "out", "device": device]
-            case let .new(name, devices): return ["op": "new", "name": name, "devices": devices]
-            case let .rename(collection, name): return ["op": "rename", "collection": collection, "name": name]
-            case let .ungroup(collection): return ["op": "ungroup", "collection": collection]
-            case .reset: return ["op": "reset"]
+                try c.encode("move", forKey: .op)
+                try c.encode(item, forKey: .item)
+                try c.encodeIfPresent(before, forKey: .before)
+            case let .into(device, collection):
+                try c.encode("into", forKey: .op)
+                try c.encode(device, forKey: .device)
+                try c.encode(collection, forKey: .collection)
+            case let .out(device):
+                try c.encode("out", forKey: .op)
+                try c.encode(device, forKey: .device)
+            case let .new(name, devices):
+                try c.encode("new", forKey: .op)
+                try c.encode(name, forKey: .name)
+                try c.encode(devices, forKey: .devices)
+            case let .rename(collection, name):
+                try c.encode("rename", forKey: .op)
+                try c.encode(collection, forKey: .collection)
+                try c.encode(name, forKey: .name)
+            case let .ungroup(collection):
+                try c.encode("ungroup", forKey: .op)
+                try c.encode(collection, forKey: .collection)
+            case .reset:
+                try c.encode("reset", forKey: .op)
             }
         }
 
         /// The change as JSON.
-        public var data: Data { (try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])) ?? Data() }
+        public var data: Data {
+            let e = JSONEncoder()
+            e.outputFormatting = [.sortedKeys]
+            return (try? e.encode(self)) ?? Data()
+        }
     }
 
     /// A tile of the member's view: a device, or a collection of devices,
