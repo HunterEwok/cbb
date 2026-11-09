@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- A release carries its build provenance as `provenance.intoto.jsonl`, the same signed
+  attestation GitHub keeps, for checking a release without GitHub's API; `release-sign`
+  leaves it out of `release.json`, as it describes the files and no attestation covers it.
+- CI checks the Android build's `gradle-wrapper.jar` against the checksums of Gradle's own
+  releases (`gradle/actions/wrapper-validation`).
 - The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
   the Go relay's flags, key file, wire format and an open relay's budget with the same limits
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it
@@ -2009,6 +2014,13 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A release's `winget-manifest.zip` has its line in `SHA256SUMS`, which `release-sign verify`
+  and `mirror` ask of every file in `release.json`; it was written after the sums.
+- The copy of amneziawg-go requires only what its packages import, at the versions the root
+  module selects: the module's own `go.mod` named older versions that never reach the build,
+  and scanners that read every `go.mod` (OpenSSF Scorecard) took them for ours. The firmware's
+  OSV-Scanner exceptions sit beside `esp32/Cargo.lock`, where Scorecard's run reads them, and
+  the stale one for block-buffer, which no longer matches, is gone.
 - A member removed from the group while it was still answering the hello of the connection that
   removed it hears that it was removed: when its own writing failed first, as the other end hung
   up, it dropped the records it had already read, and every later connection was refused.
