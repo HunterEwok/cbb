@@ -1949,6 +1949,15 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The tunnel to the hub of a lite member or a phone stays on the way over VLESS when
+  WireGuard renews its keys. Once a session was two minutes old the link took the hub for
+  silent and moved on to the next endpoint at once, a blocked UDP port when only VLESS gets
+  through, and the tunnel went quiet for 15 to 20 seconds every two minutes; a copy sent then
+  was lost. The wait at an endpoint now counts from the rekey or from when the hub was last
+  heard.
+- A joining device's connection through the tunnel no longer drops after 30 quiet seconds,
+  as while an invitation waits for the admin's answer: the tunnel's TCP sends a keep-alive
+  every 10 seconds.
 - The lite member fetches a copy's images or files once when two requests want them at the
   same time (`cbb paste -o` while the copy is fetched in the background); the second waited on
   chunks the first had taken and could fail.

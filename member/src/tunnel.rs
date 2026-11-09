@@ -878,6 +878,8 @@ impl Link {
             IndexTable::from_os_rng(),
             limiter.clone(),
         );
+        #[cfg(test)]
+        let tunn = tests::with_test_timers(tunn);
         let stop = Arc::new(AtomicBool::new(false));
         let answered = Arc::new(AtomicBool::new(false));
         let wanted = Arc::new(Mutex::new(None));
@@ -1402,6 +1404,83 @@ fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    std::thread_local! {
+        /// The session age at which the links this thread starts rekey.
+        static REKEY_AFTER: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+    }
+
+    /// Gives a link's WireGuard the rekey time a test set for its thread.
+    pub(super) fn with_test_timers(mut tunn: Tunn) -> Tunn {
+        if let Some(d) = REKEY_AFTER.get() {
+            tunn.dangerously_set_timer_params(gotatun::noise::TimerParams {
+                rekey_after_time: d..=d,
+                ..Default::default()
+            });
+        }
+        tunn
+    }
+
+    /// A session old enough for a rekey keeps the link at the endpoint
+    /// where the hub answers: the rekey's handshake gets the whole wait
+    /// there, as the way over VLESS must not be left for a blocked UDP
+    /// every time WireGuard renews its keys.
+    #[test]
+    fn rekey_keeps_the_endpoint_that_works() {
+        let st = State::new("g").unwrap();
+        let me = DeviceId::parse("0123456789abcdef0123456789abcdef").unwrap();
+        let mut raw = [0u8; 32];
+        raw.copy_from_slice(&random_key().unwrap());
+        let hub_secret = StaticSecret::from(raw);
+        let hub_public = PublicKey::from(&hub_secret);
+        let good = UdpSocket::bind("127.0.0.1:0").unwrap();
+        good.set_read_timeout(Some(Duration::from_millis(100))).unwrap();
+        let blocked = UdpSocket::bind("127.0.0.1:0").unwrap();
+        blocked.set_nonblocking(true).unwrap();
+        let hub = Hub {
+            device: "fedcba98765432100123456789abcd0e".into(),
+            key: hub_public.as_bytes().to_vec(),
+            psk: st.psk.clone(),
+            endpoints: vec![good.local_addr().unwrap(), blocked.local_addr().unwrap()],
+            next: vec![],
+            obfuscation: None,
+            vless: None,
+        };
+        // A rekey once the session is a little older than the wait at an
+        // endpoint, which a link counted from its start counts as gone.
+        REKEY_AFTER.set(Some(ENDPOINT_WAIT + Duration::from_secs(1)));
+        let link = Link::start(&st, &hub, &me, Arc::new(|_: &str| {})).unwrap();
+        REKEY_AFTER.set(None);
+
+        let mut psk = [0u8; 32];
+        psk.copy_from_slice(&st.psk);
+        let limiter = Arc::new(RateLimiter::new(&hub_public, HANDSHAKE_RATE_LIMIT));
+        let mut tunn = Tunn::new(
+            hub_secret,
+            PublicKey::from(&st.secret()),
+            Some(psk),
+            None,
+            IndexTable::from_os_rng(),
+            limiter.clone(),
+        );
+        let until = Instant::now() + ENDPOINT_WAIT + Duration::from_secs(6);
+        let mut buf = [0u8; 2048];
+        while Instant::now() < until {
+            assert!(
+                blocked.recv_from(&mut buf).is_err(),
+                "the link left the endpoint that works when its session became old enough for a rekey"
+            );
+            let Ok((n, from)) = good.recv_from(&mut buf) else { continue };
+            let Ok(wg) = limiter.verify_packet(from, Packet::from_bytes(BytesMut::from(&buf[..n]))) else {
+                continue;
+            };
+            if let TunnResult::WriteToNetwork(p) = tunn.handle_incoming_packet(wg) {
+                let _ = good.send_to(Packet::from(p).as_ref(), from);
+            }
+        }
+        assert!(link.answered(), "the hub never answered");
+        drop(link);
+    }
 
     // A link that ends before the hub answers makes the next one start at
     // the following endpoint; the way over VLESS is found again by its
