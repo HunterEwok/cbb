@@ -11,7 +11,16 @@ Page {
     id: page
     property bool admin: false
 
-    Component.onCompleted: app.startJoin(admin)
+    // Started once the page is in place: as an admin it may ask for the PIN
+    // first, and the page stack takes no dialog while this page is still
+    // being pushed.
+    property bool started: false
+    onStatusChanged: {
+        if (status === PageStatus.Active && !started) {
+            started = true
+            app.startJoin(admin)
+        }
+    }
     Component.onDestruction: if (app.join.state !== "joined") app.join.stop()
 
     SilicaFlickable {
