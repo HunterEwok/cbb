@@ -531,7 +531,8 @@ fn a_dialing_attempt_joins_by_an_invitation() {
         let (cfg, exporter) =
             tls::member_or_pair_server(&admitter.identity, Arc::new(|_: &[Cert]| None), &clock()).unwrap();
         let session = Session::server(Arc::new(cfg)).unwrap();
-        let mut adm = Admission::accept_secret(admitter.clone(), GroupView::of(&rs), &secret, session, exporter).unwrap();
+        let mut adm =
+            Admission::accept_secret(admitter.clone(), GroupView::of(&rs), &secret, session, exporter).unwrap();
         let mut joining = Attempt::dialing_secret(phone, &secret, &clock()).unwrap();
         let (mut asked, mut admitted, mut joined, mut joiner_err, mut member_err) = (None, None, None, None, None);
         let mut to_member = joining.feed(&[], now_ms()).send;

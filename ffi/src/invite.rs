@@ -184,7 +184,11 @@ impl Invite {
         };
         let lifetime = Duration::from_secs(a.expires);
         let inv = Arc::new(node.invite(admitter, lifetime, hub.as_ref(), confirm)?);
-        let ans = NewAnswer { invite: inv.text.clone(), expires: inv.lifetime.as_secs(), modules: crate::join::modules(&inv.text)? };
+        let ans = NewAnswer {
+            invite: inv.text.clone(),
+            expires: inv.lifetime.as_secs(),
+            modules: crate::join::modules(&inv.text)?,
+        };
         let waiter = {
             let (inv, shared, closed) = (inv.clone(), shared.clone(), closed.clone());
             std::thread::spawn(move || {

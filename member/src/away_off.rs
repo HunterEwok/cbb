@@ -160,10 +160,7 @@ pub fn keep_guest(_dir: &std::path::Path, _text: &str) -> Result<()> {
 pub struct GuestTunnel;
 
 impl GuestTunnel {
-    pub fn start(
-        _inv: &cbb_core::invite::Invitation,
-        _log: Arc<dyn Fn(&str) + Send + Sync>,
-    ) -> Result<GuestTunnel> {
+    pub fn start(_inv: &cbb_core::invite::Invitation, _log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<GuestTunnel> {
         Err(off())
     }
 

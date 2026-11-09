@@ -46,9 +46,9 @@ use std::process::ExitCode;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
-    cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_join_accept,
-    cbb_join_answered, cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin,
-    cbb_invite_answer, cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_member_call, cbb_member_manage,
+    cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_invite_answer,
+    cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_join_accept, cbb_join_answered, cbb_join_feed,
+    cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call, cbb_member_manage,
     cbb_member_start,
 };
 use p256::ecdsa::SigningKey;

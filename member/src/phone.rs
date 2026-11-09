@@ -27,14 +27,14 @@ use cbb_core::wire::{self, CommandResult, DeviceInfo};
 
 use crate::away::Away;
 pub use crate::away::GuestTunnel;
-pub use crate::inviter::Invite;
-pub use crate::window::{CONFIRM_WAIT, Confirm, Joined};
 use crate::button::{self, Own};
 use crate::content::Source;
 use crate::discovery::{Dialers, Listener};
 use crate::error::{Error, Result};
+pub use crate::inviter::Invite;
 use crate::node::{KeepIdentity, Node, OnCommand, OnMessage, OnPeer, OnTunnel, Peer, Presence, WriteReq};
 use crate::records::{Record, Records, Stored as _};
+pub use crate::window::{CONFIRM_WAIT, Confirm, Joined};
 use crate::{discovery, mute, service, uptime};
 use cbb_core::media::Part;
 
