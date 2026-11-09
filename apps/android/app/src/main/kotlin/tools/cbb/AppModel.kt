@@ -5,6 +5,7 @@ package tools.cbb
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -14,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import tools.cbb.kit.GroupAlert
 import tools.cbb.kit.Arrangement
+import tools.cbb.kit.BugReports
 import tools.cbb.kit.Core
 import tools.cbb.kit.Content
 import tools.cbb.kit.CopyKeys
@@ -64,6 +66,16 @@ class AppModel(private val app: Context) {
         g.keyboard.apply()
     }
 
+    /**
+     * Bug reports (docs/core-api.md, "Bug reports"): in debug mode a break
+     * shows whole in the message and the log, and nothing is asked; in
+     * release mode [bug] holds the report to ask about ("Oops, something
+     * broke"), which the user allows or cancels.
+     */
+    val bugs = BugReports({ settings.bugState }, { settings.bugState = it }, ::postBug)
+    var bug by mutableStateOf<BugReports.Offer?>(null)
+        private set
+
     var phase by mutableStateOf(if (group.hasGroup) Phase.HOME else Phase.START)
         private set
     private var listed by mutableStateOf(group.devices)
@@ -86,6 +98,9 @@ class AppModel(private val app: Context) {
 
     init {
         loadArrangement()
+        group.onPanic = { details, log -> broke("panic", 5, "panic", details, log) }
+        // Reports that waited for the network go now.
+        Thread({ runCatching { bugs.resend() }.onFailure { Log.w(TAG, "sending the waiting bug reports", it) } }, "bugs").start()
         // A command from an admin changes this phone's mode on the node's thread.
         group.onModeChanged = {
             Handler(Looper.getMainLooper()).post { devices = group.devices }
@@ -1254,6 +1269,73 @@ class AppModel(private val app: Context) {
             is Authenticator.Cancelled -> R.string.error_not_authenticated
             is TLSTransport.Failure, is java.io.IOException -> R.string.error_unreachable
             else -> R.string.error_generic
+        }
+    }
+
+    /**
+     * Something broke: in debug mode the message shows it whole; in
+     * release mode the core's report is offered (asked, sent by itself
+     * when the user allowed always, or not made again).
+     */
+    private fun broke(kind: String, code: Int, name: String, details: String, log: List<String>) {
+        Log.e(TAG, "$kind: $details")
+        Thread({
+            val offer = runCatching {
+                bugs.offer(
+                    BugReports.Input(
+                        kind = kind, code = code, name = name,
+                        message = "Something in CBB broke, and it started again.",
+                        details = details, app = "android",
+                        version = ApkUpdate.versionName(app).orEmpty(),
+                        os = "android", osVersion = Build.VERSION.RELEASE.orEmpty(),
+                        model = Build.MODEL.orEmpty(), arch = Build.SUPPORTED_ABIS.firstOrNull().orEmpty(),
+                        log = log, names = group.devices.map { it.name },
+                    ),
+                )
+            }.onFailure { Log.w(TAG, "building a bug report", it) }.getOrNull()
+            Handler(Looper.getMainLooper()).post {
+                if (settings.showsErrorDetails) {
+                    message = Note(R.string.bug_broke_restarted, details, error = true)
+                    return@post
+                }
+                when (offer?.action) {
+                    "ask" -> bug = offer
+                    "send" -> Thread({ bugs.send(offer) }, "bugs").start()
+                    else -> message = Note(R.string.bug_broke_restarted, error = true)
+                }
+            }
+        }, "bugs").start()
+    }
+
+    /** The user allowed the report on screen, and maybe always; it goes in the background. */
+    fun allowBug(always: Boolean) {
+        val o = bug ?: return
+        bug = null
+        Thread({
+            bugs.allow(always)
+            bugs.send(o)
+        }, "bugs").start()
+    }
+
+    /** The user cancelled the report: nothing goes. */
+    fun cancelBug() {
+        bug = null
+    }
+
+    /** Posts a report's body; the server's answer, or an exception when it did not go. */
+    private fun postBug(url: String, body: ByteArray): String {
+        val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        c.connectTimeout = 20_000
+        c.readTimeout = 20_000
+        c.requestMethod = "POST"
+        c.doOutput = true
+        c.setRequestProperty("Content-Type", "application/json")
+        try {
+            c.outputStream.use { it.write(body) }
+            if (c.responseCode != 200) error("$url: ${c.responseCode}")
+            return c.inputStream.use { it.readBytes().take(4096).toByteArray().decodeToString() }
+        } finally {
+            c.disconnect()
         }
     }
 }

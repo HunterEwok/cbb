@@ -569,4 +569,12 @@
     <string name="saved_to_gallery">נשמר בגלריה, באלבום CBB.</string>
     <string name="paste_pick">הדבקת תמונה או קבצים…</string>
     <string name="paste_pick_note">התמונה או הקבצים נשלחים לקבוצה כהעתקה, והמחשב מדביק אותם במקום שבו נמצא המיקוד, כמו Ctrl+V: בצ׳אט, במסמך או בתיקייה. Enter, אם הוא מופעל, שולח אותם בצ׳אט.</string>
+    <string name="bug_title">אופס, משהו נשבר</string>
+    <string name="bug_text">סליחה! מאשרים לנו לשלוח דוח קצר כדי שנוכל לתקן את זה? יש בו רק מה שנשבר, הגרסאות של CBB ושל המערכת, דגם המכשיר והרישומים של CBB עצמו. אין בו את הטקסטים, הקבצים, המפתחות, שמות המכשירים והכתובות שלך. הדוח אנונימי.</string>
+    <string name="bug_allow">לאשר</string>
+    <string name="bug_cancel">ביטול</string>
+    <string name="bug_always">לאשר תמיד</string>
+    <string name="bug_details">פרטים טכניים</string>
+    <string name="bug_fixed_in">גרסה %1$s מתקנת את זה: יש לעדכן את CBB.</string>
+    <string name="bug_broke_restarted">משהו ב-CBB נשבר. הוא הופעל מחדש.</string>
 </resources>

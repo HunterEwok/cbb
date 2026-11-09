@@ -106,6 +106,7 @@ fun Root(model: AppModel) {
     AppTheme(model.color, model.appearance) {
         AppBackground {
             LocalNetworkPermission(model)
+            BugDialog(model)
             Box(Modifier.safeDrawingPadding()) {
                 when (model.phase) {
                     AppModel.Phase.START -> StartScreen(model)

@@ -569,4 +569,12 @@
     <string name="saved_to_gallery">गैलरी में, CBB एल्बम में सहेजा गया।</string>
     <string name="paste_pick">तस्वीर या फ़ाइलें पेस्ट करें…</string>
     <string name="paste_pick_note">तस्वीर या फ़ाइलें ग्रुप में एक कॉपी के रूप में जाती हैं, और कंप्यूटर उन्हें वहाँ पेस्ट करता है जहाँ उसका फ़ोकस है, जैसे Ctrl+V करता: किसी चैट, दस्तावेज़ या फ़ोल्डर में। Enter, अगर चालू है, तो उन्हें चैट में भेज देता है।</string>
+    <string name="bug_title">उफ़, कुछ टूट गया</string>
+    <string name="bug_text">माफ़ कीजिए! क्या आप हमें एक छोटी रिपोर्ट भेजने की अनुमति देंगे ताकि हम इसे ठीक कर सकें? इसमें केवल यह होता है कि क्या टूटा, CBB और सिस्टम के संस्करण, डिवाइस का मॉडल और CBB के अपने रिकॉर्ड। इसमें आपके टेक्स्ट, फ़ाइलें, कुंजियाँ, डिवाइस के नाम और पते नहीं हैं। रिपोर्ट गुमनाम है।</string>
+    <string name="bug_allow">अनुमति दें</string>
+    <string name="bug_cancel">रद्द करें</string>
+    <string name="bug_always">हमेशा अनुमति दें</string>
+    <string name="bug_details">तकनीकी विवरण</string>
+    <string name="bug_fixed_in">संस्करण %1$s में यह ठीक है: CBB अपडेट करें।</string>
+    <string name="bug_broke_restarted">CBB में कुछ टूट गया। यह फिर से शुरू हो गया।</string>
 </resources>

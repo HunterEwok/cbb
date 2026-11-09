@@ -569,4 +569,12 @@
     <string name="saved_to_gallery">已保存到图库的 CBB 相册中。</string>
     <string name="paste_pick">粘贴图片或文件…</string>
     <string name="paste_pick_note">图片或文件作为一份拷贝发送到群组，电脑会像按 Ctrl+V 一样把它们粘贴到焦点所在处：聊天、文档或文件夹中。如果开启了回车，会在聊天中发送它们。</string>
+    <string name="bug_title">哎呀，出问题了</string>
+    <string name="bug_text">抱歉！允许我们发送一份简短的报告，以便修复这个问题吗？报告只包含出错的内容、CBB 和系统的版本、设备型号以及 CBB 自己的记录。其中没有你的文本、文件、密钥、设备名称和地址。报告是匿名的。</string>
+    <string name="bug_allow">允许</string>
+    <string name="bug_cancel">取消</string>
+    <string name="bug_always">始终允许</string>
+    <string name="bug_details">技术详情</string>
+    <string name="bug_fixed_in">版本 %1$s 已修复此问题：请更新 CBB。</string>
+    <string name="bug_broke_restarted">CBB 出了点问题，已重新启动。</string>
 </resources>

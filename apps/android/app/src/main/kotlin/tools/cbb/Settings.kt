@@ -121,6 +121,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("keepsPhoneHub", false)
         set(v) = prefs.edit().putBoolean("keepsPhoneHub", v).apply()
 
+    /** The bug reports' state as the core keeps it (docs/core-api.md, "Bug reports"). */
+    var bugState: String?
+        get() = prefs.getString("bugState", null)
+        set(v) = prefs.edit().putString("bugState", v).apply()
+
     /** Whether seven taps on the version showed the error details switch in Settings. */
     var errorDetailsSwitch: Boolean
         get() = prefs.getBoolean("errorDetailsSwitch", false)

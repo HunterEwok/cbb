@@ -569,4 +569,12 @@
     <string name="saved_to_gallery">Guardado en la galería, en el álbum CBB.</string>
     <string name="paste_pick">Pegar una imagen o archivos…</string>
     <string name="paste_pick_note">Una imagen o archivos van al grupo como una copia, y el ordenador los pega donde tiene el foco, como lo haría Ctrl+V: en un chat, un documento o una carpeta. Intro, si está activado, los envía en un chat.</string>
+    <string name="bug_title">Vaya, algo se rompió</string>
+    <string name="bug_text">¡Lo sentimos! ¿Nos permites enviar un informe breve para arreglarlo? Solo contiene lo que se rompió, las versiones de CBB y del sistema, el modelo del dispositivo y los registros propios de CBB. Tus textos, archivos, claves, nombres de dispositivos y direcciones no están en él. El informe es anónimo.</string>
+    <string name="bug_allow">Permitir</string>
+    <string name="bug_cancel">Cancelar</string>
+    <string name="bug_always">Permitir siempre</string>
+    <string name="bug_details">Detalles técnicos</string>
+    <string name="bug_fixed_in">La versión %1$s lo corrige: actualiza CBB.</string>
+    <string name="bug_broke_restarted">Algo se rompió en CBB. Se ha vuelto a iniciar.</string>
 </resources>

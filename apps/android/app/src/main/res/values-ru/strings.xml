@@ -571,4 +571,12 @@
     <string name="sync">Синхронизация</string>
     <string name="badge_hub">хаб</string>
     <string name="device_id">ID устройства</string>
+    <string name="bug_title">Ой, что-то сломалось</string>
+    <string name="bug_text">Простите! Разрешите отправить нам короткий отчёт, чтобы мы это исправили? В нём только что сломалось, версия CBB и системы, модель устройства и служебные записи CBB. Ваших текстов, файлов, ключей, имён устройств и адресов там нет. Отчёт анонимный.</string>
+    <string name="bug_allow">Разрешить</string>
+    <string name="bug_cancel">Отменить</string>
+    <string name="bug_always">Разрешать всегда</string>
+    <string name="bug_details">Технические подробности</string>
+    <string name="bug_fixed_in">Это исправлено в версии %1$s: обновите CBB.</string>
+    <string name="bug_broke_restarted">В CBB что-то сломалось. Он запустился заново.</string>
 </resources>

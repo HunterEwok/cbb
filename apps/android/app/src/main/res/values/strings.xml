@@ -575,4 +575,12 @@
     <string name="sync">Sync</string>
     <string name="badge_hub">hub</string>
     <string name="device_id">Device ID</string>
+    <string name="bug_title">Oops, something broke</string>
+    <string name="bug_text">Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device\'s model and CBB\'s own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</string>
+    <string name="bug_allow">Allow</string>
+    <string name="bug_cancel">Cancel</string>
+    <string name="bug_always">Always allow</string>
+    <string name="bug_details">Technical details</string>
+    <string name="bug_fixed_in">Version %1$s fixes this: update CBB.</string>
+    <string name="bug_broke_restarted">Something in CBB broke. It started again.</string>
 </resources>

@@ -569,4 +569,12 @@
     <string name="saved_to_gallery">Imehifadhiwa kwenye matunzio, katika albamu CBB.</string>
     <string name="paste_pick">Bandika picha au faili…</string>
     <string name="paste_pick_note">Picha au faili huenda kwenye kikundi kama nakala, na kompyuta huzibandika mahali lengo lake lilipo, kama Ctrl+V ingefanya: kwenye gumzo, hati au folda. Enter, ikiwa imewashwa, huzituma kwenye gumzo.</string>
+    <string name="bug_title">Lo, kuna kitu kimeharibika</string>
+    <string name="bug_text">Samahani! Unaturuhusu kutuma ripoti fupi ili tuirekebishe? Ina tu kilichoharibika, matoleo ya CBB na ya mfumo, muundo wa kifaa na kumbukumbu za CBB yenyewe. Maandishi yako, faili, funguo, majina ya vifaa na anwani hazimo. Ripoti haina jina.</string>
+    <string name="bug_allow">Ruhusu</string>
+    <string name="bug_cancel">Ghairi</string>
+    <string name="bug_always">Ruhusu kila mara</string>
+    <string name="bug_details">Maelezo ya kiufundi</string>
+    <string name="bug_fixed_in">Toleo %1$s linarekebisha hili: sasisha CBB.</string>
+    <string name="bug_broke_restarted">Kuna kitu kimeharibika katika CBB. Kimeanza upya.</string>
 </resources>

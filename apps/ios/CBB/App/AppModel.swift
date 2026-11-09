@@ -351,6 +351,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var arrangement: Arrangement?
     /// One line about the last action, in plain words.
     @Published var message: String?
+    /// The bug report to ask about in release mode ("Oops, something
+    /// broke"); in debug mode a break shows whole in `message` instead.
+    @Published private(set) var bug: BugReports.Offer?
     @Published private(set) var busy = false
     /// How many times a device being added that has not answered yet was
     /// dialed again; 0 before that.
@@ -503,6 +506,102 @@ final class AppModel: ObservableObject {
         devices = group.devices
         isAdmin = group.isAdmin
         loadArrangement()
+        if let live = group as? LiveGroup {
+            live.onPanic = { [weak self] details, log in self?.broke(kind: "panic", code: 5, name: "panic", details: details, log: log) }
+            let bugs = self.bugs
+            Task.detached { bugs.resend() }
+        }
+    }
+
+    // MARK: Bug reports
+
+    /// The bug reports' state in the app's defaults, posted with URLSession.
+    nonisolated let bugs = BugReports(
+        load: { UserDefaults.standard.data(forKey: "BugState") },
+        save: { UserDefaults.standard.set($0, forKey: "BugState") },
+        post: AppModel.postBug
+    )
+
+    /// Something broke: in debug mode `message` shows it whole; in release
+    /// mode the core's report is offered (asked, sent by itself when the
+    /// user allowed always, or not made again).
+    func broke(kind: String, code: Int, name: String, details: String, log: [String]) {
+        log.error("\(kind, privacy: .public): \(details, privacy: .public)")
+        let summary = String(localized: "Something in CBB broke. It started again.", bundle: .app)
+        var i = BugReports.Input(kind: kind, code: code, name: name, message: "Something in CBB broke, and it started again.",
+                                 details: details, app: "ios", version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+        i.build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        i.os = "ios"
+        i.os_version = ProcessInfo.processInfo.operatingSystemVersionString
+        i.model = Self.machine
+        #if arch(arm64)
+        i.arch = "arm64"
+        #else
+        i.arch = "x86_64"
+        #endif
+        i.log = log
+        i.names = devices.map(\.name)
+        let bugs = self.bugs
+        Task.detached {
+            let offer = try? bugs.offer(i)
+            await MainActor.run {
+                if Self.showsErrorDetails {
+                    self.message = summary + "\n\n" + details
+                    return
+                }
+                switch offer?.action {
+                case "ask": self.bug = offer
+                case "send": if let offer { Task.detached { bugs.send(offer) } }
+                default: self.message = summary
+                }
+            }
+        }
+    }
+
+    /// The user allowed the report on screen, and maybe always; it goes in
+    /// the background.
+    func allowBug(always: Bool) {
+        guard let o = bug else { return }
+        bug = nil
+        let bugs = self.bugs
+        Task.detached {
+            try? bugs.allow(always: always)
+            bugs.send(o)
+        }
+    }
+
+    /// The user cancelled the report: nothing goes.
+    func cancelBug() { bug = nil }
+
+    /// The device's model identifier, as iPhone17,1.
+    nonisolated static var machine: String {
+        var u = utsname()
+        uname(&u)
+        return withUnsafeBytes(of: &u.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+    }
+
+    /// Posts a report's body and waits for the server's answer; throws when
+    /// it did not go.
+    nonisolated static func postBug(_ url: String, _ body: Data) throws -> Data {
+        guard let u = URL(string: url) else { throw URLError(.badURL) }
+        var r = URLRequest(url: u, timeoutInterval: 20)
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = body
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var result: Result<Data, Error> = .failure(URLError(.timedOut))
+        URLSession.shared.dataTask(with: r) { data, response, error in
+            if let error {
+                result = .failure(error)
+            } else if (response as? HTTPURLResponse)?.statusCode != 200 {
+                result = .failure(URLError(.badServerResponse))
+            } else {
+                result = .success(data ?? Data())
+            }
+            done.signal()
+        }.resume()
+        done.wait()
+        return try result.get()
     }
 
     /// Reads what the camera saw, or what the user typed: the text of the QR
