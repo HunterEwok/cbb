@@ -93,6 +93,14 @@ pub fn find_joiners(wait: Duration) -> crate::error::Result<Vec<(Vec<SocketAddr>
     Ok(waiting.into_values().collect())
 }
 
+/// The addresses of the members of the group tag that browsing finds, one
+/// list for each member, for a new phone that restores the group with its
+/// recovery key: browsed for up to wait, then a moment more for the others.
+pub fn find_group(tag: &str, wait: Duration) -> crate::error::Result<Vec<Vec<SocketAddr>>> {
+    let found = browse_txt(wait, |info| (info.get_property_val_str("g") == Some(tag)).then_some(()))?;
+    Ok(found.into_values().map(|(a, ())| a).collect())
+}
+
 /// Browses for up to wait for the members whose TXT pick takes, then a
 /// moment more for the others; by instance name, their addresses and what
 /// pick made of them.

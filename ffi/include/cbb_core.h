@@ -118,9 +118,23 @@ void cbb_member_stop(cbb_member *m);
  * "root_ca", public its key, "name", "os", "store", "seal" answers
  * {"state","left_ms"} while the claim waits, signing nothing, and
  * {"state":"effective","cert"} once it made the phone the root.
+ * recover_with_sheet with "sheet" (the recovery sheet's QR code) and
+ * "root_ca" claims the group for a phone that restored it (cbb_restore): the
+ * sheet's key signs the claim, sign is not called.
  */
 uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                            size_t *answer_len);
+
+/*
+ * Restores a group on a new phone with its recovery key (src/restore.rs):
+ * request is {"sheet","public","name","os","addrs","wait_ms"}, sheet the recovery
+ * sheet's QR code and public the phone's member key point, which sign signs
+ * with during this call only. It blocks while it browses for the group by
+ * the sheet's tag (or asks addrs, "host:port") and takes the records from a member on a connection that
+ * carries records only, checked; the answer {"device","cert","issuer",
+ * "group_ca","roots","records","addr"} is what the app starts its member with.
+ */
+uint8_t *cbb_restore(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
 
 /*
  * The texts of the QR codes in a grey camera frame (src/qr.rs), only with the

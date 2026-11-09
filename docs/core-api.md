@@ -188,6 +188,17 @@ of its key. The member's
 "handed_to"}`. `TestFFIPhoneRoot` renames and removes a computer through it and sets the root's
 records, and `TestFFIPhoneTakeover` takes a computer's group over.
 
+A new phone restores a group with its recovery key (docs/protocol.md, section 10, "The recovery
+key") through `cbb_restore` (`ffi/src/restore.rs`, `cbb_lite::restore`): with the sheet's QR
+code and the phone's member key point, signed through the callback during the call, it lets the
+recovery key issue the phone a member certificate under its admin CA, browses for the group by the
+sheet's tag (or asks `addrs`), takes the records from a member on a connection that carries
+records only and checks them before anything is signed, and answers `{"device", "cert", "issuer",
+"group_ca", "roots", "records", "addr"}`, what the app starts its member with. The member's
+manage then claims the group with `recover_with_sheet` (`sheet`, `root_ca`): the sheet's key signs
+the claim in the core and is not kept, and `finish_takeover` goes on as for any claim.
+`TestFFIPhoneRestore` restores a computer's group whose root was lost.
+
 Built with the feature `tunnel` (the iPhone and Android libraries), the library is also the
 phones' tunnel (`ffi/src/tunnel.rs`, whose comment lists the requests): `cbb_tunnel` takes
 a JSON request by its `op` for the tunnel to the hub (a loopback port that leads to the hub's
