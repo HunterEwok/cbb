@@ -109,17 +109,6 @@ func (h HeldKey) Load() (crypto.Signer, error) {
 	return storedKey{tpm: h.TPM, se: h.SE}.load()
 }
 
-// HardwareKeys tells whether NewDeviceKey would put a new key in the TPM
-// or the Secure Enclave: the machine has one this program may use, and
-// CBB_TPM is not off.
-func HardwareKeys() bool {
-	if os.Getenv(TPMEnv) == "off" {
-		return false
-	}
-	_, err := theTPM()
-	return err == nil || sekey.Available()
-}
-
 // WhyNotHardware tells why a key is not in the TPM: TPM support turned
 // off, the TPM that did not open, or the error of the last key it did not
 // make; "" when nothing failed (a machine without a TPM, or a Mac's Secure

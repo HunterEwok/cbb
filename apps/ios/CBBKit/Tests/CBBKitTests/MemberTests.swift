@@ -4,8 +4,8 @@
 import Foundation
 import XCTest
 
-/// Checks the member protocol against the vectors that the Go tests write
-/// (go test ./internal/node -update), and the engine and node by themselves.
+/// Checks the member protocol against the vectors in testdata/interop, which
+/// Go's member wrote and the Rust core reads, and the engine and node by themselves.
 final class MemberTests: XCTestCase {
     func vectors(_ name: String) throws -> Data {
         try Data(contentsOf: repoRoot().appendingPathComponent("testdata/interop/\(name)"))

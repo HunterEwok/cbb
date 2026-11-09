@@ -277,6 +277,16 @@ extern "C" fn on_signal(_: libc::c_int) {
     STOP.store(true, Ordering::SeqCst);
 }
 
+/// Sleeps for d, or less once the service is stopping, so that SIGTERM
+/// stops it at once: launchctl bootout returns before the process has
+/// exited, and uninstall.sh checks right after.
+fn wait_unless_stopping(d: Duration) {
+    let until = std::time::Instant::now() + d;
+    while !STOP.load(Ordering::SeqCst) && std::time::Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 /// Has the service stop, as SIGTERM does; Windows' service manager asks
 /// with it.
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -366,6 +376,10 @@ pub fn run(cfg: Config) -> Result<()> {
     if !only.is_empty() {
         log(&format!("cbb: the member port and mDNS work only on {} (CBB_INTERFACES)", only.join(", ")));
     }
+    // Out of a group the member port is the one cbb pair waits on for the
+    // phone (its firewall rule opens it, OpenWrt's init script passes it),
+    // so the status says it until the service listens there itself.
+    *svc.port.lock().unwrap() = cfg.port;
     let admin_socket = control::admin_socket(&cfg.socket);
     for (ln, admin) in [(listen(&cfg.socket, false)?, false), (listen(&admin_socket, true)?, true)] {
         let svc = svc.clone();
@@ -392,7 +406,7 @@ pub fn run(cfg: Config) -> Result<()> {
                     *broken = Some(e.for_log());
                 }
                 drop(broken);
-                std::thread::sleep(Duration::from_secs(2));
+                wait_unless_stopping(Duration::from_secs(2));
             }
             Ok(None) => {
                 *svc.broken.lock().unwrap() = None;
@@ -400,7 +414,7 @@ pub fn run(cfg: Config) -> Result<()> {
                     log("cbb: this device is in no group yet; run cbb pair");
                     said = true;
                 }
-                std::thread::sleep(Duration::from_secs(2));
+                wait_unless_stopping(Duration::from_secs(2));
             }
         }
     };
@@ -420,7 +434,7 @@ pub fn run(cfg: Config) -> Result<()> {
     let tag = ident.tag();
     let away =
         Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()).via(cfg.tunnel_via));
-    let presence = presence_of(&ident, &records, &cfg.name, &cfg.caps);
+    let presence = presence_of(&cfg.state_dir, &ident, &records, &cfg.name, &cfg.caps);
     // The blobs of the copies are a cache that a service starts empty, as
     // Go's: the group's current copy is fetched again when it is pasted.
     crate::content::empty(&cfg.state_dir, &|s| log(s));
@@ -675,22 +689,21 @@ fn claim_states(node: &Node) -> String {
 /// How this member presents itself in its hellos: as a member with the
 /// caps its own device record names, or those it was started with while
 /// no record names it. Its keys are in the hardware when cbb-helper holds
-/// the device key.
-fn presence_of(ident: &Identity, records: &Records, name: &str, caps: &[String]) -> crate::node::Presence {
+/// the device key, unless it holds the group's root key too.
+fn presence_of(
+    dir: &std::path::Path,
+    ident: &Identity,
+    records: &Records,
+    name: &str,
+    caps: &[String],
+) -> crate::node::Presence {
     let own = records.devices().into_iter().find(|d| d.id == ident.id.as_str());
     crate::node::Presence {
         role: "member".into(),
         caps: own.map(|d| d.caps).unwrap_or_else(|| caps.to_vec()),
         name: name.to_string(),
         os: crate::admin::os_name().into(),
-        key_store: if ident.external.is_some() {
-            "hardware"
-        } else if crate::rootless::is() {
-            "rootless"
-        } else {
-            "file"
-        }
-        .into(),
+        key_store: crate::admin::own_store(dir, ident).into(),
         device: crate::device::own().clone(),
         admin_key: Default::default(),
     }
@@ -2318,6 +2331,7 @@ impl Service {
                             keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
                             tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
                             left_old_group: self.left_old,
+                            port: self.port.lock().unwrap().map_or(0, i64::from),
                             ..Default::default()
                         };
                         return Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()));
@@ -2854,7 +2868,9 @@ impl Service {
             role: "member".into(),
             os: crate::admin::os_name().into(),
             version: VERSION.into(),
-            key_level: if ident.external.is_some() { "hardware" } else { "files" }.into(),
+            // A group made on a computer starts at the level files
+            // (admin::new_group), whatever its member key.
+            key_level: "files".into(),
             key_problem: why,
             ..Default::default()
         };
@@ -3283,7 +3299,7 @@ fn devices(node: &Node, hubs: &[String]) -> Vec<Device> {
             role: node.role().into(),
             caps: node.caps().to_vec(),
             os: node.os().into(),
-            store: crate::admin::own_store(&ident).into(),
+            store: crate::admin::own_store(node.state_dir(), &ident).into(),
             ..Default::default()
         }));
     }

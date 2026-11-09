@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -96,7 +97,17 @@ func startLiteEnv(t *testing.T, bin, dir string, env []string, args ...string) *
 	if env != nil {
 		cmd.Env = append(os.Environ(), env...)
 	}
-	cmd.Stdout, cmd.Stderr = testWriter{t, "lite: ", s}, testWriter{t, "lite: ", s}
+	// Each line names the service, by its -name when it has one, so that
+	// a failing test's log tells the members apart.
+	prefix := "lite: "
+	if i := slices.Index(args, "-name"); i >= 0 && i+1 < len(args) {
+		prefix = args[i+1] + ": "
+	}
+	cmd.Stdout, cmd.Stderr = testWriter{t, prefix, s}, testWriter{t, prefix, s}
+	// A child of cbb's that outlives it, such as a cbb-helper, keeps the
+	// log's pipes open: the wait ends anyway, so that the test fails where
+	// it went wrong rather than hanging the package.
+	cmd.WaitDelay = 10 * time.Second
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -628,6 +639,98 @@ func TestFFIPhoneAway(t *testing.T) {
 		t.Errorf("tunnel.json after turning it off: %v", err)
 	}
 	waitFor(t, "the phone syncs at home only", func() bool { return peers() == 0 })
+}
+
+// TestFFIPhoneReach: a computer tells the phone connected to it the other
+// members it is connected to (docs/protocol.md, section 4, "Reach"), so
+// that a phone away from home shows the members behind its hub as online;
+// and turning sync away from home on there makes the phone connect again,
+// so that the hello it gets carries the new tunnel key, which a phone that
+// is the group's hub answers with its offer.
+func TestFFIPhoneReach(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	var h hub
+	pi := startService(t, &h, "pi")
+	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+		t.Fatal(err)
+	}
+	m2 := startService(t, &h, "m2")
+	c, code := openWindow(t, pi)
+	if _, err := m2.do(t, control.Header{Op: control.OpJoin, Code: code, Address: pi.addr()}, ""); err != nil {
+		t.Fatalf("join on m2: %v", err)
+	}
+	c.Close()
+	piID, m2ID := pi.status(t).Device, m2.status(t).Device
+	waitFor(t, "m2 is connected to pi", func() bool {
+		for _, p := range pi.status(t).Peers {
+			if p.ID == m2ID {
+				return true
+			}
+		}
+		return false
+	})
+	next, in := phoneOnLinux(t, bin, "-name", "phone", "-dir", t.TempDir())
+	jc, ok := phone.ParseJoinQR(next("QR: "))
+	if !ok {
+		t.Fatal("not a join QR code")
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
+		t.Fatalf("admitting the phone: %v", err)
+	}
+	next("Joined ")
+	call := func(op string, args any) map[string]any {
+		t.Helper()
+		req, err := json.Marshal(map[string]any{"op": op, "args": args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(in, "CALL %s\n", req)
+		var ans struct {
+			OK    map[string]any `json:"ok"`
+			Error map[string]any `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(next("ANSWER ")), &ans); err != nil {
+			t.Fatalf("%s: %v", op, err)
+		}
+		if ans.Error != nil {
+			t.Fatalf("%s: %v", op, ans.Error)
+		}
+		return ans.OK
+	}
+	// The phone's view of pi, the only member it is told of.
+	piPeer := func() map[string]any {
+		for _, p := range call("peers", nil)["peers"].([]any) {
+			if m, _ := p.(map[string]any); m["device"] == string(piID) {
+				return m
+			}
+		}
+		return nil
+	}
+	call("found", map[string]any{"key": "pi", "addrs": []string{pi.addr()}})
+	waitFor(t, "pi tells the phone it reaches m2", func() bool {
+		p := piPeer()
+		return p != nil && fmt.Sprint(p["reach"]) == fmt.Sprint([]any{string(m2ID)})
+	})
+	if p := piPeer(); p["tunnel_key"] != nil {
+		t.Fatalf("pi offers a tunnel key before sync away from home is on: %v", p["tunnel_key"])
+	}
+
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitUpTo(t, 30*time.Second, "the phone connected again and got pi's tunnel key", func() bool {
+		p := piPeer()
+		return p != nil && p["tunnel_key"] != nil
+	})
+
+	m2.stop()
+	waitFor(t, "pi tells the phone it reaches no one now", func() bool {
+		p := piPeer()
+		return p != nil && fmt.Sprint(p["reach"]) == fmt.Sprint([]any{})
+	})
 }
 
 // phoneOnLinux starts ffi's example phone-on-linux, the Aurora app on

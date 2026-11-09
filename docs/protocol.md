@@ -164,7 +164,7 @@ these words depends on it.
 | Member ALPN | `cbb/3` | `group.MemberProtocol` |
 | Pairing ALPN | `cbb-pair/2` | `pair.Protocol` |
 | Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `cbb-forward/2` (section 13) | `internal/forward` |
-| Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `internal/relay` |
+| Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `member/src/relayd` (`cbb-relay`) |
 | Pairing code | six ASCII digits; users may type spaces and dashes, which are removed | `pair.NormalizeCode` |
 | Join QR text | `cbb://join?code=` followed by the six-digit code (section 7) | `phone.JoinQR`, `phone.ParseJoinQR` |
 
@@ -179,7 +179,8 @@ once; more are closed at accept. An implementation SHOULD bound them likewise.
 
 All keys are ECDSA P-256; all signatures are ECDSA with SHA-256 (Go's default for P-256).
 Serial numbers are random. Go also adds subject and authority key identifiers; peers do not
-rely on them. Source: `internal/group/cert.go`, `internal/group/tls.go`, `internal/pair/join.go`.
+rely on them. Source: `internal/group/cert.go`, `internal/group/tls.go`, `core/src/certs.rs`,
+`core/src/issue.rs`.
 
 | Certificate | Subject CN | SAN | Validity | Extensions |
 |-------------|-----------|-----|----------|------------|
@@ -331,9 +332,8 @@ rescanned every 10 s.
 
 ## 4. Member protocol
 
-Source: `internal/node`, `internal/clip`, `internal/group/tls.go`,
-`internal/service/members.go`; the lite member's and the phones' `member/src/node.rs` and
-`member/src/phone.rs`.
+Source: `core/src/wire.rs`, `core/src/clip.rs`, `core/src/tls`; the service's and the
+phones' `member/src/node.rs` and `member/src/phone.rs`.
 
 ### Who dials whom
 
@@ -455,7 +455,7 @@ Rules for the receiver:
   the connection. A hello whose `hello` object does not decode closes the connection. A
   `current` that does not decode (for example an unknown `kind` or `via` from a newer
   version) MUST count as no current event. A `current` that decodes but fails validation,
-  or that is a secret with its text, closes the connection (`internal/node/node.go`).
+  or that is a secret with its text, closes the connection (`core/src/clip.rs`, `reconcile`).
 - An `event` that does not decode or fails validation MUST be dropped; the connection stays.
 - Unknown `t` values and `ping` MUST be ignored, so a newer peer can add messages.
 - Timeouts: each frame must start arriving within 15 s of the previous one; once its length
@@ -736,7 +736,7 @@ up to 64 KiB, and a copy of the same image twice is two different blobs.
 A member that wants the bytes of a copy asks a connected member whose hello says `media`
 for its sealed blob, by `blob.sha256`, and gets them in binary frames. Members fetch, keep and
 serve only sealed blobs, so a member that serves one, a hub that only passes copies on among
-them, never needs to read it. The Go code is `internal/node/content.go`.
+them, never needs to read it. The code is `member/src/content.rs`.
 
 - `{"t":"get","get":{"sha256":"...","offset":0,"length":1048576}}` asks for `length` bytes
   of the blob from `offset`. `length` is 1 to 1 MiB; a receiver drops a get that is not
@@ -797,7 +797,7 @@ a member that does not know the message ignores it.
 The parts marked "wire" are needed for convergence, and an implementation MUST follow them;
 the rest is the Go engine's local policy, which another member SHOULD follow so that users
 see the same behaviour. Source:
-`internal/clip/clip.go`, `internal/hlc/hlc.go`, `internal/node/node.go`.
+`core/src/clip.rs`, `core/src/hlc.rs`, `member/src/node.rs`.
 
 ### Hybrid logical clock (wire)
 
@@ -913,7 +913,7 @@ when the records set none. A write increments the write sequence number (section
 
 ## 6. Pairing a computer
 
-Source: `internal/pair`, `internal/third_party/cpace`, `internal/service/socket.go`.
+Source: `core/src/pair.rs`, `core/src/admit`, `core/src/third_party/cpace`, `member/src/pair.rs`.
 
 ### Window
 
@@ -955,7 +955,7 @@ A window for a remote invitation (design.md, "Joining from another network") dif
 ### Channel binding and CPace
 
 Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
-`internal/third_party/cpace`, with explicit key confirmation.
+`core/src/third_party/cpace`, with explicit key confirmation.
 
 | Input | Value |
 |-------|-------|
@@ -2145,9 +2145,9 @@ beyond) and check the same bytes.
 ## 11. Tunnel keys
 
 The keys of the group's WireGuard tunnel for sync away from home ([design.md](design.md),
-"Sync away from home"). Implemented in Go (`internal/tunnel`, `internal/node`,
-`internal/service/tunnel.go`); the tunnel carries the member protocol between Go members
-("Through the tunnel" below). The phone kits speak the hello's `tunnel_key` and the
+"Sync away from home"). Implemented in the Rust `cbb` (`member/src/tunnel.rs`,
+`member/src/away.rs`, `member/src/node.rs`); the tunnel carries the member protocol between
+members ("Through the tunnel" below). The phone kits speak the hello's `tunnel_key` and the
 `tunnel` message (through the phones' member in the Rust core: `tunnel_key`, the `tunnel`
 event, `send_tunnel`) and run the tunnel itself in
 the Rust core (`ffi/src/tunnel.rs`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
@@ -2882,8 +2882,9 @@ or to a log. With `CBB_DEBUG=1` it logs counts each minute.
 ## 14. The blind relay
 
 The meeting point, on the user's own server or the project's open relay, for a group that has
-no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Go (`internal/relay`,
-`cbb relay`, and on the devices `internal/service/relay.go`), and on the phones through
+no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Rust (`member/src/relayd`,
+`cbb-relay`, which `cbb relay` starts, and on the devices `member/src/relay.rs`), with Go's `internal/relay`
+kept as the reference its tests check it against, and on the phones through
 the Rust tunnel (`cbb_tunnel_relay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
 tunnel and joins two devices' connections inside the tunnels, and member TLS (section 4)
 runs end to end between the two devices.

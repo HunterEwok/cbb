@@ -179,6 +179,13 @@ const MAX_FOUND: usize = 64;
 /// How often the networks where this device publishes itself are checked
 /// again: an interface may have come up or moved to another network.
 const RECHECK: Duration = Duration::from_secs(5);
+/// The least time between two changes of this device's registration. A
+/// change of its TXT record is probed for about a second before mdns-sd
+/// announces it; a second change in that time, as a pairing window that
+/// closes and opens again for the next device, had mdns-sd hear its own
+/// announcement as another device's, rename this one ("ID (2)", "ID (3)",
+/// ...) and answer for none of the names until the renames stopped.
+const REPUBLISH_GAP: Duration = Duration::from_millis(1500);
 
 /// The addresses of a found member; None once it is gone.
 type Addrs = Arc<Mutex<Option<Vec<SocketAddr>>>>;
@@ -579,6 +586,7 @@ fn browse(
     let mut at = where_();
     publish(window, &at)?;
     let mut checked = Instant::now();
+    let mut published = Instant::now();
     let events = daemon.browse(SERVICE)?;
     let mut found: HashMap<DeviceId, Addrs> = HashMap::new();
     loop {
@@ -592,14 +600,16 @@ fn browse(
                 *a.lock().unwrap() = None;
             }
         }
-        if node.window_open() != window
+        if (node.window_open() != window
             || checked.elapsed() >= RECHECK
-            || away != at.as_ref().is_some_and(Vec::is_empty)
+            || away != at.as_ref().is_some_and(Vec::is_empty))
+            && published.elapsed() >= REPUBLISH_GAP
         {
             checked = Instant::now();
             let now = where_();
             if node.window_open() != window || now != at {
                 (window, at) = (node.window_open(), now);
+                published = Instant::now();
                 if let Err(e) = publish(window, &at) {
                     log(&format!("cbb: announcing this device failed: {e}"));
                 }

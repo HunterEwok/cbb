@@ -69,6 +69,8 @@ mod piv;
 pub mod records;
 #[cfg(feature = "tunnel")]
 pub mod relay;
+#[cfg(feature = "tunnel")]
+pub mod relayd;
 pub mod releases;
 mod remotepaste;
 mod rootless;
@@ -81,6 +83,7 @@ mod third_party {
 }
 mod servers;
 mod service;
+mod settings;
 mod signed;
 mod sync;
 mod sys;
@@ -221,9 +224,10 @@ Rarely needed:
                           (as for pair; its device record decides); -user: started as root, open the mDNS sockets, then run as
                           this user (FreeBSD's rc script).
   agent                   Link this desktop's clipboard to the service (started at sign-in).
-  paste-helper tmux|console
+  paste-helper tmux|console|uinput
                           Take remote pastes into tmux (started by cbb.conf)
-                          or the Linux text console (the cbb-console unit).
+                          or the Linux text console (the cbb-console unit), or press
+                          their keys for the desktop (uinput, the cbb-uinput unit).
   next paste|copy|pair    The same for the ZX Spectrum Next's .cbb dot command, in frames
                           its Z80 reads (member/README.md).
 
@@ -412,16 +416,16 @@ fn parse_caps(list: &str) -> Result<Vec<String>> {
     Ok(out)
 }
 
-/// The member port: 8764, or CBB_PORT.
+/// The member port: 8764, or CBB_PORT from the environment or cbb.env.
 fn member_port() -> u16 {
-    std::env::var("CBB_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8764)
+    settings::get("CBB_PORT").and_then(|p| p.trim().parse().ok()).unwrap_or(8764)
 }
 
 /// Joins a group. For the Next (for_next), the QR code and the outcome come
 /// in its frames, and so do the log lines, as `CBB#` lines it skips.
 /// cbb pair's usage in no group.
 const PAIR_USE: &str =
-    "cbb pair [-code [ADDRESS:PORT] | -invite FILE | -app FILE] [-full] [-name NAME] [-port PORT] [-addr ADDRESS]";
+    "cbb pair [-code [ADDRESS:PORT] | -invite FILE | -app FILE] [-caps LIST] [-name NAME] [-port PORT] [-addr ADDRESS]";
 
 fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut name = host_name();
@@ -484,7 +488,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         let code = pair::normalize_code(line.trim())?;
         let h = control::Header { op: "join".into(), code, ..Default::default() };
         request(g, &control::Message::new(h, Vec::new()))?;
-        println!("Joined the group.");
+        println!("{}", tr!("Joined the group."));
         return Ok(());
     }
     let invite = match invite {
@@ -650,9 +654,13 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
     if inv.expired(uptime::wall_ms() / 1000) {
         return Err(Error::msg("the invitation has expired; ask for a new one"));
     }
-    println!("A device that joins with an invitation syncs away from home through the");
-    println!("group's hub, so sync away from home is turned on here.\n");
-    print!("Type yes to join and turn sync away from home on: ");
+    println!(
+        "{}",
+        tr!(
+            "A device that joins with an invitation syncs away from home through the\ngroup's hub, so sync away from home is turned on here.\n"
+        )
+    );
+    print!("{}", tr!("Type yes to join and turn sync away from home on: "));
     std::io::stdout().flush().ok();
     let mut line = String::new();
     std::io::stdin().read_line(&mut line).context("cannot read the answer")?;
@@ -683,7 +691,7 @@ pub(crate) fn joiner(state: &std::path::Path, name: &str) -> Result<(pair::Joine
     // otherwise.
     match keys::new_device_key() {
         (Some(key), _) => joiner = joiner.holding_key(key)?,
-        (None, why) if !why.is_empty() => eprintln!("cbb: the device key stays in a file: {why}"),
+        (None, why) if !why.is_empty() => eprintln!("{}", tr!("cbb: the device key stays in a file: {}", why)),
         (None, _) => {}
     }
     // The key for sealed messages the service will offer in its hello goes
@@ -692,7 +700,7 @@ pub(crate) fn joiner(state: &std::path::Path, name: &str) -> Result<(pair::Joine
         .and_then(|s| cbb_core::seal::public_key(&s).map_err(|e| e.context("the key for sealed messages")))
     {
         Ok(public) => joiner.seal = public,
-        Err(e) => eprintln!("cbb: the key for sealed commands: {e}; commands will come unsealed"),
+        Err(e) => eprintln!("{}", tr!("cbb: the key for sealed commands: {}; commands will come unsealed", e)),
     }
     let state = state.to_path_buf();
     let save = move |id: &identity::Identity, rs: &[records::Record], ts: &[records::ClaimTime]| {
@@ -999,7 +1007,10 @@ fn cmd_paste(g: &Global, args: &[String]) -> Result<()> {
         }
         let (text, dropped) = terminal_text(&String::from_utf8_lossy(&out), lines);
         if dropped > 0 {
-            eprintln!("cbb: pasted only the first line; {dropped} more left out (add -lines to paste them)");
+            eprintln!(
+                "{}",
+                tr!("cbb: pasted only the first line; {} more left out (add -lines to paste them)", dropped)
+            );
         }
         out = text.into_bytes();
     }
@@ -1219,11 +1230,11 @@ fn cmd_paste_receive(g: &Global, args: &[String]) -> Result<()> {
     let (all, device) = (h.all, h.device.clone());
     let m = request(g, &control::Message::new(h, Vec::new()))?;
     if all {
-        println!("Remote paste is off on every device of the group.");
+        println!("{}", tr!("Remote paste is off on every device of the group."));
         return Ok(());
     }
     if !device.is_empty() {
-        println!("Remote paste is off on {device}.");
+        println!("{}", tr!("Remote paste is off on {}.", device));
         return Ok(());
     }
     let p = m.header.status.and_then(|s| s.paste).ok_or_else(|| Error::msg("this device is in no group"))?;
@@ -1286,20 +1297,20 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
         [v, a, d] if v == "off" && flag(a) == Some("on") => {
             let h = control::Header { op: "actions-off".into(), device: d.clone(), ..Default::default() };
             request(g, &control::Message::new(h, Vec::new()))?;
-            println!("The quick actions are off on {d}.");
+            println!("{}", tr!("The quick actions are off on {}.", d));
             return Ok(());
         }
         [v, a] if v == "off" && flag(a) == Some("all") => {
             let h = control::Header { op: "actions-off".into(), all: true, ..Default::default() };
             request(g, &control::Message::new(h, Vec::new()))?;
-            println!("The quick actions are off on every device of the group.");
+            println!("{}", tr!("The quick actions are off on every device of the group."));
             return Ok(());
         }
         [a, d, name] if flag(a) == Some("on") && flag(name).is_none() => {
             let h =
                 control::Header { op: "action-on".into(), device: d.clone(), name: name.clone(), ..Default::default() };
             request(g, &control::Message::new(h, Vec::new()))?;
-            println!("{d} ran {name}.");
+            println!("{}", tr!("{} ran {}.", d, name));
             return Ok(());
         }
         [v] if v == "off" => {
@@ -1311,16 +1322,16 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             if let Err(e) = grant(&m)
                 && is_root()
             {
-                eprintln!("cbb: the actions are off, but the rights stay: {}", e.for_user());
+                eprintln!("{}", tr!("cbb: the actions are off, but the rights stay: {}", e.for_user()));
             }
-            println!("The quick actions are off here.");
+            println!("{}", tr!("The quick actions are off here."));
             return Ok(());
         }
         [v, name] if v == "remove" => {
             let h = control::Header { op: "action-remove".into(), name: name.clone(), ..Default::default() };
             let m = request(g, &control::Message::new(h, Vec::new()))?;
             grant(&m)?;
-            println!("{name} is removed.");
+            println!("{}", tr!("{} is removed.", name));
             return Ok(());
         }
         [v, name, ..] if v == "enable" || v == "disable" || v == "add" => (v.as_str(), name.clone()),
@@ -1353,12 +1364,12 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
         )));
     }
     if a.on && !yes {
-        print!("{}Type yes to turn it on: ", action_warning(&a));
+        print!("{}{}", action_warning(&a), tr!("Type yes to turn it on: "));
         std::io::stdout().flush().ok();
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).context("cannot read the answer")?;
         if !line.trim().eq_ignore_ascii_case("yes") {
-            println!("Nothing changed.");
+            println!("{}", tr!("Nothing changed."));
             return Err(Error::msg("the action stays as it was"));
         }
     }
@@ -1572,9 +1583,9 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         println!(
             "{}",
             if on {
-                "Automatic updates are on: once a day this device checks for a signed release and installs it."
+                tr!("Automatic updates are on: once a day this device checks for a signed release and installs it.")
             } else {
-                "Automatic updates are off; cbb update installs a release by hand."
+                tr!("Automatic updates are off; cbb update installs a release by hand.")
             }
         );
         return Ok(());
@@ -1585,9 +1596,9 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         }
         match m.as_str() {
             "" if st.mirror.is_empty() => {
-                println!("Updates come from GitHub, or {} when GitHub does not answer.", update::MIRROR)
+                println!("{}", tr!("Updates come from GitHub, or {} when GitHub does not answer.", update::MIRROR))
             }
-            "" => println!("Updates come from {}.", st.mirror),
+            "" => println!("{}", tr!("Updates come from {}.", st.mirror)),
             "default" => {
                 st.mirror.clear();
                 update::save_state(&dir, &st)?;

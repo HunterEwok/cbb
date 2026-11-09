@@ -72,6 +72,9 @@ pub struct Away {
     /// The hub this member dials through the tunnel now, and how many
     /// links it started, so a timer ends only its own.
     using: Mutex<Option<(String, u64)>>,
+    /// The hub and the key of the link up through the tunnel, while a
+    /// member connection goes through it.
+    link_up: Mutex<Option<(String, Vec<u8>)>>,
     /// Where the tunnel sends its packets instead of the hubs' addresses.
     via: Option<SocketAddr>,
     /// The hub, while this device serves as one.
@@ -139,6 +142,7 @@ impl Away {
             error: Mutex::new(error),
             through: AtomicBool::new(false),
             using: Mutex::new(None),
+            link_up: Mutex::new(None),
             via: None,
             serving: Mutex::new(None),
             meeting: Mutex::new(None),
@@ -255,6 +259,13 @@ impl Away {
         if next.hub(hub_id.as_str()) == Some(&hub) && !forgot {
             return None;
         }
+        // The link up is already through the hub's key in the new offer,
+        // which reaches it the same way: it stays up, and the next try takes
+        // the new offer, as Go's addHubOffer. Starting it again would try the
+        // hubs above it first, which may be off, before this one again.
+        let keeps_link = !forgot
+            && next.hub(hub_id.as_str()).is_some_and(|p| same_way(p, &hub))
+            && self.link_up.lock().unwrap().as_ref().is_some_and(|(d, k)| *d == hub_id.as_str() && *k == hub.key);
         next.hubs.retain(|h| h.device != hub_id.as_str());
         next.hubs.push(hub);
         if let Err(e) = next.save(&self.dir) {
@@ -267,7 +278,7 @@ impl Away {
             (self.log)(&format!("cbb: {hub_id} is one of the group's hubs for sync away from home"));
         }
         *cur = next;
-        Some(hub_id)
+        if keeps_link { None } else { Some(hub_id) }
     }
 
     /// Ends the link through the tunnel when the hub `hub`, whose offer
@@ -487,7 +498,9 @@ impl Away {
                 }
                 let start = uptime::now();
                 self.through.store(true, Ordering::SeqCst);
+                *self.link_up.lock().unwrap() = Some((hub.device.clone(), hub.key.clone()));
                 let res = node.dial(link.local(), Some(id.clone()));
+                self.link_up.lock().unwrap().take();
                 self.through.store(false, Ordering::SeqCst);
                 *self.using.lock().unwrap() = None;
                 match res {
@@ -524,6 +537,12 @@ impl Away {
 /// comes and goes, and MAX_WAIT for any other.
 fn hub_wait(devices: &[crate::records::Device], hub: &str) -> Duration {
     if devices.iter().any(|d| d.id == hub && d.role == "phone") { PHONE_HUB_WAIT } else { MAX_WAIT }
+}
+
+/// Whether two offers of a hub reach it the same way, apart from its keys,
+/// as Go's sameWay.
+fn same_way(a: &tunnel::Hub, b: &tunnel::Hub) -> bool {
+    a.psk == b.psk && a.endpoints == b.endpoints && a.obfuscation == b.obfuscation && a.vless == b.vless
 }
 
 #[cfg(test)]
@@ -591,6 +610,40 @@ mod tests {
         let st = State::load(&dir).unwrap().unwrap();
         assert_eq!(st.hubs_to_try(&[pi.to_string(), mac.to_string()]).len(), 1);
         assert_eq!(st.psk.len(), 32);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A new offer of the hub the link up goes through, with the link's key
+    /// and the same way to it, is kept without starting the link again; any
+    /// other change starts it again.
+    #[test]
+    fn keeps_the_link_up_through_the_offered_key() {
+        let dir = std::env::temp_dir().join(format!("cbb-away-link-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let id = |c: char| DeviceId::parse(&c.to_string().repeat(32)).unwrap();
+        let (me, pi) = (id('d'), id('a'));
+        let away = Away::new(dir.clone(), "g".into(), me.clone(), Arc::new(|_: &str| {}));
+        away.turn_on().unwrap();
+        let offer = |key: u8, next: u8, port: u16| {
+            serde_json::to_value(TunnelOffer {
+                hub_key: vec![key; 32],
+                psk: vec![9; 32],
+                endpoints: vec![format!("192.0.2.1:{port}")],
+                next_key: if next == 0 { Vec::new() } else { vec![next; 32] },
+                ..Default::default()
+            })
+            .unwrap()
+        };
+        let admins = |_: &str| true;
+        assert_eq!(away.offered(&pi, &offer(1, 0, 8764), &admins), Some(pi.clone()));
+        *away.link_up.lock().unwrap() = Some((pi.to_string(), vec![1; 32]));
+        assert_eq!(away.offered(&pi, &offer(1, 2, 8764), &admins), None, "only the next key is new");
+        let kept = || away.st.lock().unwrap().as_ref().unwrap().hub(pi.as_str()).cloned().unwrap();
+        assert_eq!(kept().next, vec![2; 32], "the new offer is kept");
+        assert_eq!(away.offered(&pi, &offer(1, 2, 8765), &admins), Some(pi.clone()), "another address");
+        assert_eq!(away.offered(&pi, &offer(3, 0, 8765), &admins), Some(pi.clone()), "another key");
+        *away.link_up.lock().unwrap() = None;
+        assert_eq!(away.offered(&pi, &offer(3, 4, 8765), &admins), Some(pi.clone()), "no link up");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

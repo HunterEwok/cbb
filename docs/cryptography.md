@@ -11,8 +11,8 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 ## Rules
 
 - Only standard, published constructions; nothing of our own. The one construction from an
-  Internet-Draft, CPace, is the CFRG's balanced PAKE and is copied as is
-  (`internal/third_party/cpace`, `core/src/third_party/cpace`).
+  Internet-Draft, CPace, is the CFRG's balanced PAKE and is translated line by line
+  from the Go original (`core/src/third_party/cpace`).
 - One curve for signatures: NIST P-256 with ECDSA and SHA-256, everywhere, since the
   phones' secure hardware (the Secure Enclave, Android's Keystore and StrongBox) and TPM 2.0
   all offer it.

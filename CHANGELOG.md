@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
+  the Go relay's flags, key file, wire format and an open relay's budget with the same limits
+  and caps, and runs as its own systemd service as before. The Go relay's tests that check it
+  from outside run against it (`CBB_TEST_RUST_RELAY`), and those that look inside it are
+  ported beside it.
 - The bench's time-scaled build of the Rust `cbb` (`cargo build -p cbb-lite --features
   benchtime`, never released), as the Go one's: certificates, renewals, credential periods and
   the hub key's handover run 100000 times faster, and `CBB_TEST_CLOCK` moves the wall clock.
@@ -105,7 +110,10 @@ All notable changes to cbb are documented in this file. The format follows
   members dial each other at once, both keep the connection the lower device ID dialed; a
   hub that moves to another device offers itself to no member meanwhile; a member whose
   mDNS name got a conflict suffix is still found; `cbb global hub` serves at once on a hub
-  with no hub above it.
+  with no hub above it; a client keeps its link to a hub whose new offer only adds the
+  hub's next key; an admin CA goes again on a member's next connection; a device spaces the
+  changes of its mDNS registration, so a pairing window closed and opened again for the
+  next device does not rename it.
 - The Docker e2e (tools/e2e/e2e.sh) runs the Rust service too, with cbb-helper beside it
   and the Go cbb's commands against its socket, in CI's e2e job: the Rust service
   answers status in no group, and joins with a code (`join`: the member whose pairing
@@ -1996,6 +2004,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A member that booted less than a minute ago no longer writes an old copy from the group to
+  its clipboard as if it had just been made: the age of a copy counted at most the time since
+  the boot.
 - `cbb pair` out of a group waits for the phone on the running service's port, the one its
   firewall rule opens (on OpenWrt the port in `/etc/config/cbb`), not on the default one.
 - `cbb action`, run by a user, no longer fails on the polkit rule when the actions that are
