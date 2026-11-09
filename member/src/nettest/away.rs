@@ -398,3 +398,136 @@ fn the_root_makes_stops_and_moves_hubs() {
     }
     let _ = home.join();
 }
+
+/// A hub with a forwarder and VLESS registers there while it serves:
+/// its status shows the forwarder registered and where it saw the hub,
+/// it keeps the VLESS settings the forwarder gave and its update way names
+/// them; a forwarder that refuses shows why in short.
+#[test]
+fn a_hub_registers_with_its_forwarder() {
+    use base64::Engine;
+    let g = Group::new(1);
+    let f =
+        crate::nettest::forwarder::Forwarder::start(crate::nettest::forwarder::welcome(), Some("203.0.113.9:51820"));
+    let a = g.node(0);
+    let away = away_of(&g, &a, 0);
+    let pin = base64::engine::general_purpose::STANDARD.encode(f.pin);
+    let h = Header {
+        forwarder: f.addr.to_string(),
+        forwarder_key: pin.clone(),
+        vless: true,
+        port: i64::from(free_udp_port()),
+        ..hub_header(0)
+    };
+    let h = Header { addrs: Vec::new(), ..h };
+    let keys = away.make_hub(&h).unwrap();
+    a.node.set_tunnel_key(Some(keys));
+    away.serve_if_first(&a.node);
+    assert!(
+        wait_for(Duration::from_secs(20), || away
+            .status(&a.node)
+            .and_then(|s| s.forwarder)
+            .is_some_and(|fw| fw.registered && fw.seen == "203.0.113.9:51820")),
+        "{:?} {:?}",
+        away.status(&a.node),
+        a.logs.lock().unwrap()
+    );
+    let claim = &f.claims()[0];
+    assert!(claim["vless"].is_string() && claim["obfuscation"].is_object(), "VLESS comes with AmneziaWG");
+    away.vless_learned(&a.node);
+    assert!(a.logged("come over VLESS to the forwarder"), "{:?}", a.logs.lock().unwrap());
+    let way = away.update_way(&a.node).unwrap();
+    assert_eq!(way["id"], claim["vless"]);
+    // Set again keeping its settings: the same VLESS user ID.
+    let again = Header { keep: true, forwarder: String::new(), forwarder_key: String::new(), port: 0, ..h.clone() };
+    away.make_hub(&again).unwrap();
+    let st = away.st.lock().unwrap().clone().unwrap();
+    assert_eq!(st.forwarder.as_ref().unwrap().vless_id, claim["vless"].as_str().unwrap());
+    drop(st);
+    away.stop_serving();
+
+    // A forwarder that refuses.
+    let no = crate::nettest::forwarder::Forwarder::start(
+        Arc::new(|_: &serde_json::Value| serde_json::json!({"error": "full"})),
+        None,
+    );
+    let h = Header {
+        forwarder: no.addr.to_string(),
+        forwarder_key: base64::engine::general_purpose::STANDARD.encode(no.pin),
+        vless: false,
+        ..h
+    };
+    away.make_hub(&h).unwrap();
+    away.serve_if_first(&a.node);
+    assert!(
+        wait_for(Duration::from_secs(20), || away
+            .status(&a.node)
+            .and_then(|s| s.forwarder)
+            .is_some_and(|fw| fw.error.contains("refused the registration: full"))),
+        "{:?}",
+        away.status(&a.node)
+    );
+    a.node.close();
+}
+
+/// What a hub request must give, and turning on and off.
+#[test]
+fn hub_requests_refused() {
+    let g = Group::new(1);
+    let a = g.node(0);
+    let away = away_of(&g, &a, 0);
+    let refused = |h: Header, want: &str| {
+        let e = away.make_hub(&h).unwrap_err().to_string();
+        assert!(e.contains(want), "{want}: {e}");
+    };
+    refused(Header { port: 70000, ..hub_header(1) }, "a bad port");
+    refused(Header { consent: false, ..hub_header(1) }, "turn it on first");
+    refused(Header { keep: true, ..hub_header(1) }, "not a hub yet");
+    refused(Header { addrs: Vec::new(), ..hub_header(1) }, "an address away from home or a forwarder");
+    refused(Header { vless: true, ..hub_header(1) }, "VLESS goes to a forwarder");
+    refused(Header { addrs: vec!["nowhere".into()], ..hub_header(1) }, "");
+    refused(Header { forwarder: "nowhere".into(), forwarder_key: "x".into(), ..hub_header(1) }, "");
+    assert!(away.stop_hub(&a.node, false).is_err(), "no hub");
+    // A hub alone refuses to stop without anyway.
+    away.make_hub(&hub_header(free_udp_port())).unwrap();
+    let e = away.stop_hub(&a.node, false).unwrap_err().to_string();
+    assert!(e.contains("no other hub"), "{e}");
+    // Obfuscated, and set again keeping its address and port.
+    let o = away.make_hub(&Header { obfuscate: true, ..hub_header(free_udp_port()) }).unwrap();
+    let again =
+        away.make_hub(&Header { keep: true, addrs: Vec::new(), port: 0, obfuscate: true, ..hub_header(0) }).unwrap();
+    assert_eq!(o, again, "the same keys");
+    let st = away.st.lock().unwrap().clone().unwrap();
+    assert!(st.obfuscation.is_some() && !st.endpoints.is_empty() && st.listen_port != 0);
+    drop(st);
+    away.turn_off().unwrap();
+    assert!(!away.is_hub() && away.key().is_none());
+    assert!(a.logged("sync away from home is off"));
+}
+
+/// The tunnel state the service starts with: none, one of another group,
+/// which is dropped, one of no group, which takes this one, and one that
+/// does not read, which keeps it off and says why.
+#[test]
+fn the_state_it_starts_with() {
+    let g = Group::new(1);
+    let a = g.node(0);
+    let tag = certs::tag(&g.root);
+    let me = g.devs[0].id.clone();
+    let off = Away::new(a.dir.0.clone(), tag.clone(), me.clone(), a.log());
+    assert!(off.key().is_none() && off.status(&a.node).is_none());
+    let mut st = State::new("0123456789abcdef").unwrap();
+    st.save(&a.dir.0).unwrap();
+    let other = Away::new(a.dir.0.clone(), tag.clone(), me.clone(), a.log());
+    assert!(other.key().is_none());
+    assert!(a.logged("in another group now"));
+    st.group = String::new();
+    st.save(&a.dir.0).unwrap();
+    let none = Away::new(a.dir.0.clone(), tag.clone(), me.clone(), a.log());
+    assert!(none.key().is_some());
+    assert_eq!(State::load(&a.dir.0).unwrap().unwrap().group, tag);
+    std::fs::write(a.dir.0.join("tunnel.json"), b"{not json").unwrap();
+    let bad = Away::new(a.dir.0.clone(), tag, me, a.log());
+    let s = bad.status(&a.node).unwrap();
+    assert!(!s.error.is_empty(), "{s:?}");
+}
