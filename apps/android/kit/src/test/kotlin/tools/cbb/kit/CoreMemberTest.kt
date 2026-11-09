@@ -62,6 +62,29 @@ class CoreMemberTest {
         assertFailsWith<IllegalStateException> { m.current() }
     }
 
+    /** The member keeps the tiles' order: a change shows in its view, and one that does not fit throws and changes nothing. */
+    @Test
+    fun keepsTheTilesOrder() {
+        val root = SoftwareSigner()
+        val keyA = SoftwareSigner()
+        val g = PhoneGroup.create(root, keyA.publicKeyDER, now, seal = Core.sealPublic(seal))
+        val keyB = SoftwareSigner()
+        val idB = SyncEngine.newID()
+        g.record(idB, "Phone two", "phone", Records.keyHash(keyB.publicKeyDER), root, now, os = "android", store = Records.HARDWARE, seal = Core.sealPublic(seal))
+        val m = start(g.device, keyA, g.memberCert, g.groupCA)
+        m.addRecords(g.records.records)
+        val v = m.view()
+        assertTrue(!v.custom)
+        assertEquals(listOf(Arrangement.Item.Device(g.device), Arrangement.Item.Device(idB)), v.tiles)
+        val after = m.view(Arrangement.Op.New("Desk", listOf(idB)))
+        assertTrue(after.custom)
+        val desk = after.tiles.last() as Arrangement.Item.Collection
+        assertEquals(listOf(idB), desk.devices)
+        assertFailsWith<Core.Refusal> { m.view(Arrangement.Op.Rename(desk.id, "x".repeat(65))) }
+        m.view(Arrangement.Op.Move(Arrangement.Ref.Collection(desk.id), Arrangement.Ref.Device(g.device)))
+        assertEquals(desk.id, (m.view().tiles.first() as Arrangement.Item.Collection).id)
+    }
+
     @Test
     fun refusesAnIdentityThatDoesNotCheck() {
         val root = SoftwareSigner()

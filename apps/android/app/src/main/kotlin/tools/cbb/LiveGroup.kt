@@ -360,8 +360,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     val hasGroup: Boolean get() = synchronized(lock) { state != null }
 
-    /** The group's tag, which the arrangement of the tiles is kept for; null without a group. */
+    /** The group's tag; null without a group. */
     val groupTag: String? get() = synchronized(lock) { state?.tag }
+
+    /**
+     * The device tiles as the member keeps them, with the user's change op
+     * applied first (docs/apps.md, "What the member shows"); null while no
+     * member runs. A change that does not fit throws and changes nothing.
+     */
+    fun view(op: tools.cbb.kit.Arrangement.Op? = null): tools.cbb.kit.Arrangement.View? = synchronized(lock) { node }?.view(op)
 
     /**
      * Whether this phone may add and remove devices: it made the group, or

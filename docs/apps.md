@@ -827,7 +827,7 @@ actions and the keyboard for each drag.
 - **Back to the group's order** in the "…" menu is *reset*.
 - The orbit on a big screen keeps the group's order for now.
 
-**On Android** (`Arrange.kt`, the model in `AppModel`, kept as `device_arrangement`):
+**On Android** (`Arrange.kt`, drawing the member's `view` in `AppModel`, which sends `arrange`):
 
 - Arrange mode starts from **Arrange devices** in the ⇅ menu beside the view button or
   **Arrange** in a tile's menu (a long press), and ends with **Done**. In it a tap does
