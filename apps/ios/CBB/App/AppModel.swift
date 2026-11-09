@@ -530,7 +530,7 @@ final class AppModel: ObservableObject {
     /// Something broke: in debug mode `message` shows it whole; in release
     /// mode the core's report is offered (asked, sent by itself when the
     /// user allowed always, or not made again).
-    func broke(kind: String, code: Int, name: String, details: String, log: [String]) {
+    func broke(kind: String, code: Int, name: String, details: String, log lines: [String]) {
         log.error("\(kind, privacy: .public): \(details, privacy: .public)")
         let summary = String(localized: "Something in CBB broke. It started again.", bundle: .app)
         var i = BugReports.Input(kind: kind, code: code, name: name, message: "Something in CBB broke, and it started again.",
@@ -544,7 +544,7 @@ final class AppModel: ObservableObject {
         #else
         i.arch = "x86_64"
         #endif
-        i.log = log
+        i.log = lines
         i.names = devices.map(\.name)
         let bugs = self.bugs
         Task.detached {
