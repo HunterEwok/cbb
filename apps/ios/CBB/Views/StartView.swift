@@ -52,8 +52,6 @@ struct StartView: View {
                 .buttonStyle(AccentButtonStyle())
             Button { model.startJoining() } label: { Text("Join a group") }
                 .buttonStyle(GlassButtonStyle())
-            Button { model.startJoining(admin: true) } label: { Text("Join as an admin") }
-                .buttonStyle(GlassButtonStyle())
             Button { restoring = true } label: { Text("Restore with the recovery key") }
                 .font(.footnote)
                 .foregroundStyle(palette.textDim)

@@ -339,6 +339,8 @@ fn the_root_makes_a_member_phone_an_admin() {
 
     let key = soft();
     let spki = certs::p256_spki_of(&key.public());
+    let e = make_admin(&g.rs, &root, &g.root_phone, &spki, "", false, now_ms()).err().unwrap();
+    assert!(e.message().contains("more than an admin"));
     // The phone's hello says nothing of a file: its record's store counts.
     let made = make_admin(&g.rs, &root, &phone, &spki, "file", false, now_ms()).unwrap();
     let ca = Cert::parse(&made.admin_ca).unwrap();

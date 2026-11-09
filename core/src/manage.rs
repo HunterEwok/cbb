@@ -395,6 +395,9 @@ pub fn make_admin(
         return Err(Error::msg("only the group's root makes admins"));
     }
     let d = find(rs, device)?;
+    if d.id == s.me || d.id == rs.state().root_device {
+        return Err(Error::msg("the group's root is more than an admin"));
+    }
     let phone = d.role == authority::ROLE_PHONE;
     if !phone && !d.can(authority::CAP_ADMIN) {
         return Err(Error::msg("only a phone or a member with the cap admin is made an admin"));
