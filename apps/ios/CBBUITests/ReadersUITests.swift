@@ -15,6 +15,9 @@ final class ReadersUITests: XCTestCase {
     /// The project's languages, as the app's .lproj folders name them.
     static let languages = ["ar", "en", "es", "he", "hi", "ru", "sw", "zh-Hans"]
     static let rightToLeft: Set<String> = ["ar", "he"]
+    /// The languages testLargestText checks at the largest text size:
+    /// English, Swahili, among the longest, and Hindi, the tallest script.
+    static let largestText = ["en", "sw", "hi"]
 
     override func setUp() {
         continueAfterFailure = true
@@ -53,9 +56,15 @@ final class ReadersUITests: XCTestCase {
     /// element of the system's own may fail it: the status bar, and the
     /// navigation bar's buttons, whose text iOS keeps from the largest
     /// sizes. Contrast is measured on the screen's picture (`contrast`).
-    private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String) {
+    ///
+    /// At the default size the audit's clipped text check only predicts
+    /// clipping at larger sizes, and it predicts it for Hindi text that
+    /// the largest size shows whole; `checkedLarger` skips that prediction
+    /// in a language testLargestText checks at the largest size itself.
+    private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String, checkedLarger: Bool = false) {
         do {
             try app.performAccessibilityAudit(for: types) { issue in
+                if checkedLarger && issue.auditType == .textClipped { return true }
                 guard let e = issue.element else {
                     XCTFail("\(screen): \(issue.compactDescription) on no element: \(issue.detailedDescription)")
                     return true
@@ -160,22 +169,22 @@ final class ReadersUITests: XCTestCase {
                 XCTAssertEqual(languageFirst, Self.rightToLeft.contains(language) ? !en : en, "\(language): the top row does not run \(Self.rightToLeft.contains(language) ? "right to left" : "left to right")")
             }
             picture("start-\(language)")
-            audit(app, checks, "the Start screen in \(language)")
+            audit(app, checks, "the Start screen in \(language)", checkedLarger: Self.largestText.contains(language))
 
             settings.tap()
             XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10), "\(language): Settings did not open")
             XCTAssertTrue(app.buttons[tr("Ocean", language)].exists, "\(language): the colours are not translated")
             picture("settings-\(language)")
-            audit(app, checks, "Settings in \(language)")
+            audit(app, checks, "Settings in \(language)", checkedLarger: Self.largestText.contains(language))
             app.terminate()
         }
     }
 
-    /// U16: at the largest accessibility text size, in English and in
-    /// Swahili, among the longest of the eight, no text is clipped and the
-    /// screens follow Dynamic Type.
+    /// U16: at the largest accessibility text size, in English, in
+    /// Swahili, among the longest of the eight, and in Hindi, the tallest
+    /// script, no text is clipped and the screens follow Dynamic Type.
     func testLargestText() {
-        for language in ["en", "sw"] {
+        for language in Self.largestText {
             let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
             XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
             picture("start-\(language)-largest-text")

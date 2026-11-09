@@ -108,9 +108,9 @@ A9 and U14 to U18).
   every control named and at least 48 dp to touch, nothing cut off at font scale 2.
 - The iPhone and the Mac (`ReadersUITests`): each language launched with `-AppleLanguages`,
   the texts checked against the app's catalog, the iPhone's top row swapping sides from right
-  to left, and Xcode's accessibility audit (clipped text, descriptions, touch targets,
-  Dynamic Type at the largest size) passing; each screen's picture is attached to
-  the run's `.xcresult`, uploaded by CI (`ios-screens`, `mac-windows`), and the English ones
+  to left, and Xcode's accessibility audit (clipped text, descriptions, touch targets; on the
+  iPhone also Dynamic Type and clipped text at the largest size in English, Swahili and
+  Hindi) passing; each screen's picture is attached to the run's `.xcresult`, uploaded by CI (`ios-screens`, `mac-windows`), and the English ones
   are printed into a failed job's log (`.github/pictures.py`), with, on the iPhone, a picture
   of each element the audit fails. The audit's contrast check
   fails text its own picture shows at 6.9:1 and more, so each text's (and on the iPhone each

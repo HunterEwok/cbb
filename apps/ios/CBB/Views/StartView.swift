@@ -90,7 +90,7 @@ struct StartView: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(Rectangle())
             }
-            .font(.subheadline)
+            .font(.footnote)
             .foregroundStyle(palette.textDim)
         }
     }
