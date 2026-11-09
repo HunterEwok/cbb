@@ -7,6 +7,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
@@ -1046,11 +1048,38 @@ func TestFFIPhoneRoot(t *testing.T) {
 			QR      string   `json:"qr"`
 			Text    string   `json:"text"`
 			Modules []string `json:"modules"`
+			Admin   []byte   `json:"admin"`
 		} `json:"ok"`
 	}
 	if got := manage(`{"action":"make_recovery"}`); json.Unmarshal([]byte(got), &sheet) != nil ||
-		!strings.HasPrefix(sheet.OK.QR, "cbb://recover?g="+made[1]+"&") || len(sheet.OK.Text) != 69 || len(sheet.OK.Modules) == 0 {
+		!strings.HasPrefix(sheet.OK.QR, "cbb://recover?g="+made[1]+"&") || len(sheet.OK.Text) != 69 || len(sheet.OK.Modules) == 0 ||
+		len(sheet.OK.Admin) != 32 {
 		t.Fatalf("making the recovery key: %s", got)
+	}
+	// A YubiKey's key, which never leaves the card: the root issues its admin CA.
+	card, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spki, err := x509.MarshalPKIXPublicKey(&card.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var onCard struct {
+		OK struct {
+			AdminCA []byte `json:"admin_ca"`
+		} `json:"ok"`
+	}
+	got := manage(`{"action":"recovery_for","key":"` + base64.StdEncoding.EncodeToString(spki) + `"}`)
+	if json.Unmarshal([]byte(got), &onCard) != nil {
+		t.Fatalf("the card's recovery key: %s", got)
+	}
+	cardCA, err := x509.ParseCertificate(onCard.OK.AdminCA)
+	if err != nil || !cardCA.IsCA || !card.PublicKey.Equal(cardCA.PublicKey) || cardCA.CheckSignatureFrom(id.GroupCA.Cert) != nil {
+		t.Fatalf("the card's admin CA: %s, %v", got, err)
+	}
+	if got := manage(`{"action":"recovery_for","key":"AAAA"}`); !strings.Contains(got, "no P-256 key") {
+		t.Fatalf("a recovery key that is no key: %s", got)
 	}
 	fmt.Fprintln(in, `CALL {"op":"records"}`)
 	var recs struct {

@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
-use cbb_core::authority::Record;
+use cbb_core::authority::{Body, Record};
 use cbb_core::certs::{self, Cert, DeviceId};
 use cbb_core::clip::{Event as Copy, Kind};
 use cbb_core::error::{Error, Result};
@@ -215,6 +215,10 @@ struct ManageArgs {
     /// With key_level: proven, hardware or files.
     #[serde(default)]
     level: String,
+    /// With recovery_for: the recovery key a YubiKey made, as a
+    /// SubjectPublicKeyInfo (DER).
+    #[serde(with = "certs::b64::opt", default)]
+    key: Option<Vec<u8>>,
 }
 
 fn hardware() -> String {
@@ -934,7 +938,25 @@ impl Member {
                     })?;
                     let m = made.into_inner().ok_or_else(|| Error::msg("the recovery key was not made"))?;
                     let modules = crate::join::modules(&m.qr)?;
-                    return Ok(json!({ "qr": m.qr, "text": m.text, "modules": modules }));
+                    let admin = Body::parse(&m.record.body)?.admin.map(|h| h.0.to_vec()).unwrap_or_default();
+                    return Ok(json!({ "qr": m.qr, "text": m.text, "modules": modules, "admin": b64(&admin) }));
+                }
+                // The recovery key a YubiKey made, which never leaves it:
+                // its admin CA goes into the card's slot.
+                "recovery_for" => {
+                    let spki = a.key.as_deref().ok_or_else(|| Error::msg("the action needs key"))?;
+                    let point = certs::p256_spki(spki)
+                        .ok_or_else(|| Error::msg("the recovery key is no P-256 key"))?
+                        .to_sec1_point(false)
+                        .as_bytes()
+                        .to_vec();
+                    let ca = std::cell::RefCell::new(Vec::new());
+                    rooted(&|rs, now| {
+                        let (der, r) = root::recovery_for(rs, &s, &point, now)?;
+                        *ca.borrow_mut() = der;
+                        Ok(r)
+                    })?;
+                    return Ok(json!({ "admin_ca": b64(&ca.into_inner()) }));
                 }
                 _ => {}
             }

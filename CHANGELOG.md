@@ -12,6 +12,9 @@ All notable changes to cbb are documented in this file. The format follows
   or removes the group's recovery key, whose sheet it shows once. The core builds and signs
   these records (`cbb_core::root`, `cbb_member_manage`'s `takeover_delay`, `key_level`,
   `hand_over`, `make_recovery` and `remove_recovery`, and the member's `root_view`).
+- The Android app's root asks the core for these records too: the key level, the recovery key
+  as a sheet and on a YubiKey (`recovery_for`) and its removal go through the kit's
+  `CoreMember`, and the Kotlin kit no longer builds them itself.
 - The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
   the Go relay's flags, key file, wire format and an open relay's budget with the same limits
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it

@@ -179,8 +179,11 @@ do not pass; it answers `{"below"}`, the admins and hubs whose keys the level do
 which stay until removed), each a `settings` record that keeps what it does not change;
 `hand_over` (`device`, an admin: a `handover` record, so that its claim takes effect at once);
 `make_recovery`, a new recovery key whose admin CA and `recovery` record the root signs, answering
-the sheet once as `{"qr", "text", "modules"}` (the QR code's modules, a string of `1` and `0` a
-row) and keeping nothing of the key; and `remove_recovery`, a revocation of its key. The member's
+the sheet once as `{"qr", "text", "modules", "admin"}` (the QR code's modules, a string of `1`
+and `0` a row; `admin`, the key's hash) and keeping nothing of the key; `recovery_for` (`key`, a
+P-256 SubjectPublicKeyInfo a YubiKey made), the same for a key that never leaves the card,
+answering its admin CA as `{"admin_ca"}` for the card's slot; and `remove_recovery`, a revocation
+of its key. The member's
 `root_view` op answers what the records set: `{"delay_ms", "key_level", "recovery",
 "handed_to"}`. `TestFFIPhoneRoot` renames and removes a computer through it and sets the root's
 records, and `TestFFIPhoneTakeover` takes a computer's group over.
