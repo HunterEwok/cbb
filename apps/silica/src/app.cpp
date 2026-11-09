@@ -192,8 +192,32 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
     connect(&m_claimTimer, &QTimer::timeout, this, &App::finishTakeover);
     // A member that broke stops and starts again; the user sees what
     // broke, the details only in debug mode (Errors::showDetails).
+    // Reports that waited for the network go now.
+    QTimer::singleShot(0, this, [this]() { m_bugs.resend(); });
     connect(&m_node, &Member::panicked, this, [this](const QString &details) {
         show(Errors::shown({QCoreApplication::translate("Errors", "Something in CBB broke. It starts again."), details}));
+        // In release mode the app asks to send a report (Bugs); in debug
+        // mode the error shows whole and nothing is asked.
+        if (!Errors::showDetails()) {
+            QJsonArray names, log;
+            for (const QVariant &d : m_node.devices())
+                names.append(d.toMap().value(QStringLiteral("name")).toString());
+            for (const QString &l : m_node.recentLog())
+                log.append(l);
+            m_bugs.offer(QJsonObject{{QStringLiteral("kind"), QStringLiteral("panic")},
+                                     {QStringLiteral("code"), 5},
+                                     {QStringLiteral("name"), QStringLiteral("panic")},
+                                     {QStringLiteral("message"), QStringLiteral("Something in CBB broke, and it started again.")},
+                                     {QStringLiteral("details"), details},
+                                     {QStringLiteral("app"), QStringLiteral("aurora")},
+                                     {QStringLiteral("version"), version()},
+                                     {QStringLiteral("os"), phoneOs()},
+                                     {QStringLiteral("os_version"), m_os.version},
+                                     {QStringLiteral("model"), QSysInfo::prettyProductName()},
+                                     {QStringLiteral("arch"), QSysInfo::currentCpuArchitecture()},
+                                     {QStringLiteral("log"), log},
+                                     {QStringLiteral("names"), names}});
+        }
         QTimer::singleShot(0, this, [this]() {
             m_node.stop();
             startMember();

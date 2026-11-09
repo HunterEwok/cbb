@@ -36,6 +36,7 @@ SOURCES += \
     src/blekeyboard.cpp \
     src/pastereceiver.cpp \
     src/app.cpp \
+    src/bugs.cpp \
     src/core.cpp \
     src/errors.cpp \
     src/events.cpp \
@@ -48,6 +49,7 @@ HEADERS += \
     src/blekeyboard.h \
     src/pastereceiver.h \
     src/app.h \
+    src/bugs.h \
     src/core.h \
     src/errors.h \
     src/events.h \

@@ -1205,4 +1205,35 @@
         <translation>Когда телефон не в домашней сети, он синхронизируется через туннель WireGuard вашего собственного хаба: компьютера группы, настроенного командой cbb global hub. Его порт доступен из интернета, но только через WireGuard с ключами группы. Хаб ответит этому телефону, когда тот в следующий раз подключится дома. Больше никуда ничего не уходит, а без туннеля нет и соединения. При выключении телефон забывает свой ключ туннеля.</translation>
     </message>
 </context>
+<context>
+    <name>BugDialog</name>
+    <message>
+        <source>Oops, something broke</source>
+        <translation>Ой, что-то сломалось</translation>
+    </message>
+    <message>
+        <source>Allow</source>
+        <translation>Разрешить</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отменить</translation>
+    </message>
+    <message>
+        <source>Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</source>
+        <translation>Простите! Разрешите отправить нам короткий отчёт, чтобы мы это исправили? В нём только что сломалось, версия CBB и системы, модель устройства и служебные записи CBB. Ваших текстов, файлов, ключей, имён устройств и адресов там нет. Отчёт анонимный.</translation>
+    </message>
+    <message>
+        <source>Version %1 fixes this: update CBB.</source>
+        <translation>Это исправлено в версии %1: обновите CBB.</translation>
+    </message>
+    <message>
+        <source>Always allow</source>
+        <translation>Разрешать всегда</translation>
+    </message>
+    <message>
+        <source>Technical details</source>
+        <translation>Технические подробности</translation>
+    </message>
+</context>
 </TS>

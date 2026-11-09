@@ -1205,4 +1205,35 @@
         <translation>כשהטלפון אינו ברשת הביתית, הוא מסתנכרן דרך מנהרת ה-WireGuard של הרכזת שלך, מחשב בקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם מפתחות הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. כיבוי גורם לטלפון לשכוח את מפתח המנהרה שלו.</translation>
     </message>
 </context>
+<context>
+    <name>BugDialog</name>
+    <message>
+        <source>Oops, something broke</source>
+        <translation>אופס, משהו נשבר</translation>
+    </message>
+    <message>
+        <source>Allow</source>
+        <translation>לאשר</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>ביטול</translation>
+    </message>
+    <message>
+        <source>Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</source>
+        <translation>סליחה! מאשרים לנו לשלוח דוח קצר כדי שנוכל לתקן את זה? יש בו רק מה שנשבר, הגרסאות של CBB ושל המערכת, דגם המכשיר והרישומים של CBB עצמו. אין בו את הטקסטים, הקבצים, המפתחות, שמות המכשירים והכתובות שלך. הדוח אנונימי.</translation>
+    </message>
+    <message>
+        <source>Version %1 fixes this: update CBB.</source>
+        <translation>גרסה %1 מתקנת את זה: יש לעדכן את CBB.</translation>
+    </message>
+    <message>
+        <source>Always allow</source>
+        <translation>לאשר תמיד</translation>
+    </message>
+    <message>
+        <source>Technical details</source>
+        <translation>פרטים טכניים</translation>
+    </message>
+</context>
 </TS>

@@ -1205,4 +1205,35 @@
         <translation>Simu isipokuwa kwenye mtandao wa nyumbani, husawazisha kupitia handaki la WireGuard la kitovu chako mwenyewe, kompyuta ya kikundi iliyowekwa kwa cbb global hub; mlango wake unafikika kutoka intaneti, lakini kupitia WireGuard yenye funguo za kikundi pekee. Kitovu hujibu simu hii itakapounganika nyumbani wakati ujao. Hakuna kinachoenda kwingine, na bila handaki hakuna muunganisho. Kuzima husahaulisha simu hii ufunguo wake wa handaki.</translation>
     </message>
 </context>
+<context>
+    <name>BugDialog</name>
+    <message>
+        <source>Oops, something broke</source>
+        <translation>Lo, kuna kitu kimeharibika</translation>
+    </message>
+    <message>
+        <source>Allow</source>
+        <translation>Ruhusu</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Ghairi</translation>
+    </message>
+    <message>
+        <source>Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</source>
+        <translation>Samahani! Unaturuhusu kutuma ripoti fupi ili tuirekebishe? Ina tu kilichoharibika, matoleo ya CBB na ya mfumo, muundo wa kifaa na kumbukumbu za CBB yenyewe. Maandishi yako, faili, funguo, majina ya vifaa na anwani hazimo. Ripoti haina jina.</translation>
+    </message>
+    <message>
+        <source>Version %1 fixes this: update CBB.</source>
+        <translation>Toleo %1 linarekebisha hili: sasisha CBB.</translation>
+    </message>
+    <message>
+        <source>Always allow</source>
+        <translation>Ruhusu kila mara</translation>
+    </message>
+    <message>
+        <source>Technical details</source>
+        <translation>Maelezo ya kiufundi</translation>
+    </message>
+</context>
 </TS>

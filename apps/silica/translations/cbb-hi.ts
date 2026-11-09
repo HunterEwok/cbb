@@ -1205,4 +1205,35 @@
         <translation>जब फ़ोन घर के नेटवर्क पर नहीं होता, तो वह आपके अपने हब की WireGuard सुरंग से सिंक करता है, जो समूह का एक कंप्यूटर है जिसे cbb global hub से सेट किया गया है; उसका पोर्ट इंटरनेट से पहुँचा जा सकता है, पर केवल समूह की कुंजियों वाले WireGuard से। हब इस फ़ोन को अगली बार जवाब देता है जब यह घर पर जुड़ता है। कुछ भी कहीं और नहीं जाता, और सुरंग के बिना कोई कनेक्शन नहीं होता। इसे बंद करने पर यह फ़ोन अपनी सुरंग कुंजी भूल जाता है।</translation>
     </message>
 </context>
+<context>
+    <name>BugDialog</name>
+    <message>
+        <source>Oops, something broke</source>
+        <translation>उफ़, कुछ टूट गया</translation>
+    </message>
+    <message>
+        <source>Allow</source>
+        <translation>अनुमति दें</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>रद्द करें</translation>
+    </message>
+    <message>
+        <source>Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</source>
+        <translation>माफ़ कीजिए! क्या आप हमें एक छोटी रिपोर्ट भेजने की अनुमति देंगे ताकि हम इसे ठीक कर सकें? इसमें केवल यह होता है कि क्या टूटा, CBB और सिस्टम के संस्करण, डिवाइस का मॉडल और CBB के अपने रिकॉर्ड। इसमें आपके टेक्स्ट, फ़ाइलें, कुंजियाँ, डिवाइस के नाम और पते नहीं हैं। रिपोर्ट गुमनाम है।</translation>
+    </message>
+    <message>
+        <source>Version %1 fixes this: update CBB.</source>
+        <translation>संस्करण %1 में यह ठीक है: CBB अपडेट करें।</translation>
+    </message>
+    <message>
+        <source>Always allow</source>
+        <translation>हमेशा अनुमति दें</translation>
+    </message>
+    <message>
+        <source>Technical details</source>
+        <translation>तकनीकी विवरण</translation>
+    </message>
+</context>
 </TS>

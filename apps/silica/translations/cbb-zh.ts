@@ -1205,4 +1205,35 @@
         <translation>手机不在家庭网络中时，它通过你自己的中枢的 WireGuard 隧道同步；中枢是群组中用 cbb global hub 设置的一台电脑，它的端口可从互联网访问，但只能通过带有群组密钥的 WireGuard。中枢会在这部手机下次在家连接时回应它。数据不会去往别处，没有隧道就没有连接。关闭它会让这部手机忘记它的隧道密钥。</translation>
     </message>
 </context>
+<context>
+    <name>BugDialog</name>
+    <message>
+        <source>Oops, something broke</source>
+        <translation>哎呀，出问题了</translation>
+    </message>
+    <message>
+        <source>Allow</source>
+        <translation>允许</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <source>Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</source>
+        <translation>抱歉！允许我们发送一份简短的报告，以便修复这个问题吗？报告只包含出错的内容、CBB 和系统的版本、设备型号以及 CBB 自己的记录。其中没有你的文本、文件、密钥、设备名称和地址。报告是匿名的。</translation>
+    </message>
+    <message>
+        <source>Version %1 fixes this: update CBB.</source>
+        <translation>版本 %1 已修复此问题：请更新 CBB。</translation>
+    </message>
+    <message>
+        <source>Always allow</source>
+        <translation>始终允许</translation>
+    </message>
+    <message>
+        <source>Technical details</source>
+        <translation>技术详情</translation>
+    </message>
+</context>
 </TS>

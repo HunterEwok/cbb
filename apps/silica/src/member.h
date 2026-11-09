@@ -70,6 +70,8 @@ public:
     // The names of the members connected now.
     QStringList peers() const { return m_peers; }
     QVariantList devices() const { return m_devices; }
+    // The member's recent log lines, oldest first, for a bug report.
+    QStringList recentLog() const { return m_recentLog; }
     QVariantList alerts() const { return m_alerts; }
     // What the clipboard got or sent last, shortened, for the main page.
     QString last() const { return m_last; }
@@ -158,6 +160,7 @@ private:
     QTimer m_peerTimer;
     QStringList m_peers;
     QVariantList m_devices;
+    QStringList m_recentLog;
     QVariantList m_alerts;
     QString m_last;
     QString m_error;
