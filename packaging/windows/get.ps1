@@ -30,6 +30,9 @@
 # install.ps1 from the archive.
 
 & {
+	# T takes its text and the values for its %s by position, as printf does.
+	[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPositionalParameters', '', Justification = 'T is a printf')]
+	param()
 	Set-StrictMode -Version 3
 	$ErrorActionPreference = 'Stop'
 	$ProgressPreference = 'SilentlyContinue'
