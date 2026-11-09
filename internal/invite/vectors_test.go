@@ -219,7 +219,9 @@ func makeVectors() vectorFile {
 	refuse("range with spaces", obfWith(`"h1":"100-200"`, `"h1":"100 - 200"`), BadObfuscation)
 	refuse("range above 32 bits", obfWith(`"h4":"3221225488-4294967295"`, `"h4":"3221225488-4294967296"`), BadObfuscation)
 	refuse("header key zero", obfWith(`BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU=`, base64.StdEncoding.EncodeToString(make([]byte, 32))), BadObfuscation)
-	xWith := func(from, to string) string { return build(map[string]string{"x": strings.Replace(xhttp, from, to, 1)}) }
+	xWith := func(from, to string) string {
+		return build(map[string]string{"x": strings.Replace(xhttp, from, to, 1)})
+	}
 	refuse("VLESS null", build(map[string]string{"x": `null`}), Damaged)
 	refuse("VLESS empty", build(map[string]string{"x": `{}`}), BadVLESS)
 	refuse("VLESS unknown field", build(map[string]string{"x": strings.Replace(xhttp, `{`, `{"public_key":"AQ==",`, 1)}), Damaged)
