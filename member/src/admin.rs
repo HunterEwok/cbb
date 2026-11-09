@@ -1477,10 +1477,15 @@ impl Admin<'_> {
     /// makes a phone that offers an admin key an admin.
     pub fn admitter(&self, admins: bool) -> Result<admit::Admitter> {
         let s = self.signing().map_err(|_| Error::msg(NOT_ADMITTER))?;
+        // The app shows the refusal; the log keeps it too, for whoever
+        // reads why a phone did not join here.
         if admins && !s.root {
-            return Err(Error::msg("only the group's root lets a phone join as an admin"));
+            let why = "only the group's root lets a phone join as an admin";
+            self.node.logf(&format!("cbb: refused to let a phone join as an admin: {why}"));
+            return Err(Error::msg(why));
         }
         if !s.root && self.node.records().lock().unwrap().frozen(&s.ca.key_hash()) {
+            self.node.logf(&format!("cbb: refused to admit a device: {FROZEN}"));
             return Err(Error::msg(FROZEN));
         }
         Ok(admit::Admitter {

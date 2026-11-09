@@ -509,14 +509,77 @@ impl Node {
     /// them.
     pub fn set_tunnel_key(&self, key: TunnelKeys) {
         *self.tunnel_key.write().unwrap() = key;
-        self.reconnects.fetch_add(1, Ordering::SeqCst);
-        // Every member and phone connects again, as Go's Reconnect after
-        // SetTunnelKey: a hub is a computer or a phone, and its offer
-        // answers the hello that carries the key.
-        for c in self.conns.lock().unwrap().values() {
-            if c.peer.lock().unwrap().is_some() {
-                c.close(true);
+        // The peers take the key from a presence message, without
+        // connecting again: a hub answers it with its offer as it answers
+        // a hello, and this member sends its own offers if it is a hub now.
+        self.announce(true);
+    }
+
+    /// Tells every connected peer what this member's hello would say now
+    /// about its sync, its mute and its tunnel key, in a `presence`
+    /// message (docs/protocol.md, section 4, "Presence"), so that a change
+    /// shows without connecting again. With offers it also runs what a
+    /// hello runs here for each peer once more (on_hello), as a device
+    /// that just became a hub does to send its offer to the members
+    /// already connected.
+    pub fn announce(&self, offers: bool) {
+        let m = self.presence_message();
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().filter(|c| !c.records_only).cloned().collect();
+        for c in conns {
+            self.enqueue(&c, Out::Message(m.clone()));
+            let peer = c.peer.lock().unwrap().clone();
+            if offers
+                && let Some(peer) = peer
+                && let Some(f) = self.on_hello.read().unwrap().as_ref()
+            {
+                for out in f(&c.id, &peer, &c.chain) {
+                    self.enqueue(&c, Out::Message(out));
+                }
             }
+        }
+    }
+
+    /// The presence message for this member now.
+    fn presence_message(&self) -> Message {
+        let key = self.tunnel_key.read().unwrap().clone();
+        let mute = self.engine.mute_left();
+        let body = wire::HelloBody {
+            mode: self.engine.mode().name().to_string(),
+            muted: mute.is_some(),
+            muted_for_ms: mute.unwrap_or(0),
+            tunnel_psk: key.as_ref().map(|(_, p)| p.clone()),
+            tunnel_key: key.map(|(k, _)| k),
+            ..Default::default()
+        };
+        Message { kind: "presence".into(), hello: serde_json::to_value(&body).ok(), ..Default::default() }
+    }
+
+    /// Takes a peer's presence message: its sync, mute and tunnel key
+    /// replace what its hello said, and a new tunnel key runs what a hello
+    /// runs (on_hello), so that a hub admits it as its hello would have.
+    fn take_presence(&self, c: &Arc<Conn>, v: Option<&serde_json::Value>) {
+        let Some(body) =
+            v.filter(|v| v.is_object()).and_then(|v| serde_json::from_value::<wire::HelloBody>(v.clone()).ok())
+        else {
+            self.logf(&format!("cbb: dropped a presence message from {} that does not decode", c.id));
+            return;
+        };
+        let fresh = peer_of(&c.id, "", &body, false);
+        let (peer, rekeyed) = {
+            let mut cur = c.peer.lock().unwrap();
+            let Some(p) = cur.as_mut() else { return };
+            let rekeyed = p.tunnel_key != fresh.tunnel_key;
+            (p.mode, p.muted, p.muted_for_ms, p.tunnel_key) =
+                (fresh.mode, fresh.muted, fresh.muted_for_ms, fresh.tunnel_key);
+            (p.clone(), rekeyed)
+        };
+        if rekeyed && let Some(f) = self.on_hello.read().unwrap().as_ref() {
+            for out in f(&c.id, &peer, &c.chain) {
+                self.enqueue(c, Out::Message(out));
+            }
+        }
+        if let Some(f) = self.on_peer.read().unwrap().as_ref() {
+            f(&peer);
         }
     }
 
@@ -1921,6 +1984,7 @@ impl Node {
                     }
                 }
                 "records" if !m.records.is_empty() => self.add_records(&m.records, &c.id),
+                "presence" => self.take_presence(c, m.hello.as_ref()),
                 "entries" if m.entries.is_some() => self.add_entries(m.entries.as_ref().unwrap(), &c.id),
                 "release" if m.release.is_some() && self.presence.role != "phone" => {
                     self.add_release(m.release.as_ref().unwrap(), &c.id)

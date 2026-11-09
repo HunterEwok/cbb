@@ -2055,6 +2055,11 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Muting or unmuting a device, and turning sync away from home on or off or making a device a
+  hub, no longer drops its connections, so the device no longer vanishes from the others for
+  a moment: it tells its peers in a new `presence` message (docs/protocol.md, section 4,
+  "Presence"). A device that refuses to let a phone join as an admin, or to admit while its
+  admin key is frozen, now says so in its log as well as to the app.
 - A member that booted less than a minute ago no longer writes an old copy from the group to
   its clipboard as if it had just been made: the age of a copy counted at most the time since
   the boot.

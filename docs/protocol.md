@@ -441,8 +441,8 @@ Message object:
 
 1. After the TLS handshake each side MUST send its hello first, without waiting for the other's.
 2. Then events follow, in any number, interleaved with pings, records messages, `admin`,
-   `tunnel`, `hubs`, `credentials` (section 18), `command`, `result` and `reach`
-   messages, `evidence` (section 17), `release` (section 16), `get`, `missing` and `chunk`
+   `tunnel`, `hubs`, `credentials` (section 18), `command`, `result`, `reach` and
+   `presence` messages, `evidence` (section 17), `release` (section 16), `get`, `missing` and `chunk`
    frames ("Content", below), and at most one `cert`.
 3. A side that has written nothing for 5 s MUST send `ping`. Every frame written resets that
    timer.
@@ -791,6 +791,24 @@ trusted: a member may leave a device out or name one it does not reach, as it co
 the commands it should pass on. A receiver ignores an ID that is not valid or that no
 device record of the group names. The lite member and the phones send none for now, and
 a member that does not know the message ignores it.
+
+### Presence
+
+```
+{"t":"presence","hello":{"mode":"shared","muted":true,"muted_for_ms":3600000,"tunnel_key":"<base64>","tunnel_psk":"<base64>"}}
+```
+
+A member tells each peer connected to it, past the hello, what its hello would say now about
+its sync, its mute and its tunnel key, when one of them changes: `hello` holds the hello's
+`mode`, `muted`, `muted_for_ms`, `tunnel_key` and `tunnel_psk` with their meanings there
+(above, and section 11), the absent ones absent, and nothing else counts. The receiver
+replaces those fields of the sender's hello with them, so the change shows without the
+connection ending and the device dropping out of view for a moment. A new or removed tunnel
+key counts as a hello with it would: a hub answers with its offer, or forgets the client
+(section 11). A member that has just become a hub also answers each peer connected to it as
+it would answer that peer's hello. A presence that does not decode is dropped; the
+connection stays. A member that does not know the message ignores it, and shows the change
+at the next connection. Every member sends it: computers, the lite member and the phones.
 
 ## 5. Sync semantics
 
@@ -2062,7 +2080,9 @@ XHTTP (`member/src/vless.rs`); it refuses an offer whose `vless` is REALITY and 
   one but a Linux computer with a TPM) MUST ask for the user's consent before it turns sync
   away from home on (`consent` in the request).
 - Each member's hello carries `tunnel_key`, its public key, and `tunnel_psk`, a preshared
-  key of 32 random bytes it made with the key pair: 32 bytes each. A member where sync
+  key of 32 random bytes it made with the key pair: 32 bytes each. When the user turns sync
+  away from home on or off, or makes the device a hub, the member tells its peers in a
+  `presence` message (section 4, "Presence") instead of connecting again. A member where sync
   away from home is off, or whose tunnel state cannot be read, sends neither, and syncs at
   home only.
 - A hub is a member chosen on that member (`cbb global hub`; `is_hub`,
@@ -3140,8 +3160,9 @@ it) or `failed`, and keeps the last 100 actions in a log (sender, time, action, 
 the device's own user turns them on again.
 
 An `away-off` command turns sync away from home off on the receiver as its user's own
-`off` does (section 11, the control operation `away`): its tunnel keys go, and the members
-connect again once the result is sent. It answers `done` also when sync away from home was
+`off` does (section 11, the control operation `away`): its tunnel keys go, and once the
+result is sent it tells the members connected in a `presence` message (section 4,
+"Presence"). It answers `done` also when sync away from home was
 off already.
 
 A `mute` command mutes the receiver until `for_ms` from when it takes the command, or until
@@ -3149,8 +3170,8 @@ an admin lifts it; the commands of several admins simply follow each other, the 
 taken counts. It makes no events, not even
 from a deliberate copy (which it refuses), and takes the group's copies as before; its sync
 mode stays as its user set it. It saves the mute, so that it lasts across restarts, answers
-`done`, and once the result has gone back connects to the members again, so that their hellos
-show it (section 4, `muted`). An `unmute` command ends it the same way; the device's own
+`done`, and tells the members connected in a `presence` message, so that they show it
+(section 4, "Presence") without the connection ending. An `unmute` command ends it the same way; the device's own
 user ends it only where the device is itself an admin or the root (section 8, `unmute`), and
 a mute that ends by its time ends without a message. Every member takes both: computers,
 lite members and the phones. A device that does not take the command (an older one, or one
