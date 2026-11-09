@@ -100,11 +100,11 @@ struct MainView: View {
                     Menu {
                         Button { arrange.on.toggle() } label: { arrange.on ? Text("Done arranging") : Text("Arrange devices") }
                             .disabled(searching)
-                        if model.arrangement?.items.isEmpty == false {
+                        if model.customOrder {
                             Button { model.arrange(.reset) } label: { Text("Back to the group's order") }
                         }
                     } label: { Label("Arrange devices", systemImage: "square.grid.3x3.square") }
-                    .disabled(model.arrangement == nil)
+                    .disabled(!model.inGroup)
                 }
                 ToolbarItem {
                     Button { adding = true } label: { Label("Add a device", systemImage: "plus") }

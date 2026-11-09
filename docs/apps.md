@@ -855,8 +855,8 @@ actions and the keyboard for each drag.
   devices, Arrange mode for them and its menu. The search and filters come with more than
   12 devices. The orbit keeps the group's order.
 
-**In the Mac app** (`Views/Arrange.swift`, the model in `MacModel`, which builds the Swift
-kit's `Arrangement.swift` in; kept as `deviceArrangement` in its defaults): as on the
+**In the Mac app** (`Views/Arrange.swift`, drawing the service's `view` in `MacModel`, which
+sends `arrange`): as on the
 iPhone, with **Arrange devices** and **Back to the group's order** in the toolbar, each
 tile's menu on a right click, and Option with the arrow keys, Home or End moving the
 focused tile in Arrange mode.

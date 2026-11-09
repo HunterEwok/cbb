@@ -44,8 +44,14 @@ enum Control {
         var value: String?
         var part: Part?
 
+        /// view and arrange (docs/apps.md, "What the member shows"): the
+        /// tiles to draw, and the user's change.
+        var view: View?
+        var arrange: Change?
+
         enum CodingKeys: String, CodingKey {
             case op, kind, len, error, detail, done, name, status, devices, inject, seq, method, enter, refused, device, on
+            case view, arrange
             case images, files, html, value, part
             case pasteOnly = "paste_only"
             case forMS = "for_ms"
@@ -63,6 +69,43 @@ enum Control {
         var path: String?
         var dir: Bool?
         var size: Int64?
+    }
+
+    /// The member's tiles in the user's order (docs/apps.md, "What the
+    /// member shows"): each a device or a collection of devices.
+    struct View: Codable, Equatable {
+        struct Collection: Codable, Equatable {
+            var id: String
+            var name: String
+            var devices: [Device]?
+        }
+
+        struct Tile: Codable, Equatable {
+            var device: Device?
+            var collection: Collection?
+        }
+
+        var tiles: [Tile]?
+        var online: Int?
+        var others: Int?
+        var custom: Bool?
+    }
+
+    /// The user's change of the tiles, as arrange takes it
+    /// (cbb_core::arrange::Op).
+    struct Change: Codable, Equatable {
+        struct Ref: Codable, Equatable {
+            var device: String?
+            var collection: String?
+        }
+
+        var op: String
+        var item: Ref?
+        var before: Ref?
+        var device: String?
+        var collection: String?
+        var name: String?
+        var devices: [String]?
     }
 
     /// This device and its group, as cbb status shows them.

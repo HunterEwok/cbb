@@ -184,37 +184,24 @@ final class CBBMacTests: XCTestCase {
         XCTAssertTrue(Injector.strokes(for: "").isEmpty)
     }
 
-    /// The window's arrangement: the group's order, this Mac first, until
-    /// the user changes it, kept for the group's tag, pruned once the list is whole, and a
-    /// change that does not fit says so.
+    /// The window draws the member's view: its tiles in order, the
+    /// devices in them, and whether the user changed the order; a change
+    /// goes out as arrange takes it.
     @MainActor
-    func testArrangement() throws {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "cbb-mac-arrange-test"))
-        defaults.removePersistentDomain(forName: "cbb-mac-arrange-test")
-        let model = MacModel(defaults: defaults)
-        // CBB's Control, not Carbon's.
-        func device(_ id: String, me: Bool = false) -> CBB.Control.Device {
-            var d = Control.Device(id: id, name: id, role: "member")
-            d.isSelf = me
-            return d
-        }
-        let status = Control.Status(device: "me", group: "g1", role: "member", version: "dev")
-        model.show(status: status, devices: [device("me", me: true), device("a"), device("b"), device("c")])
-        XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a", "d:b", "d:c"])
-        XCTAssertNil(defaults.data(forKey: MacModel.arrangementKey))
-        XCTAssertTrue(model.arrange(.new(name: "Office", devices: ["b", "c"])))
+    func testView() throws {
+        let line = #"{"ok":{"view":{"tiles":[{"device":{"id":"me","self":true}},{"device":{"id":"a","online":true}},{"collection":{"id":"c1","name":"Office","devices":[{"id":"b"},{"id":"c"}]}}],"online":1,"others":3,"custom":true}}}"#
+        let (header, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
+        let model = MacModel(defaults: try XCTUnwrap(UserDefaults(suiteName: "cbb-mac-view-test")))
+        model.show(status: Control.Status(device: "me", group: "g1", role: "member", version: "dev"), view: try XCTUnwrap(header.view))
         XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a", "c:c1"])
+        XCTAssertEqual(model.devices.map(\.id), ["me", "a", "b", "c"])
         XCTAssertEqual(model.collection(holding: "c")?.name, "Office")
-        XCTAssertFalse(model.arrange(.rename(collection: "c1", name: String(repeating: "x", count: 65))))
-        XCTAssertNotNil(model.message)
-        // b leaves the group: the stored arrangement drops it.
-        model.show(status: status, devices: [device("me", me: true), device("a"), device("c")])
-        XCTAssertEqual(model.collection("c1")?.0.devices, ["c"])
-        let stored = Arrangement.decode(defaults.data(forKey: MacModel.arrangementKey), group: "g1")
-        XCTAssertEqual(stored.items.count, 3)
-        // Another group starts afresh.
-        model.show(status: Control.Status(device: "me", group: "g2", role: "member", version: "dev"), devices: [device("me", me: true), device("a")])
-        XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a"])
-        defaults.removePersistentDomain(forName: "cbb-mac-arrange-test")
+        XCTAssertTrue(model.customOrder)
+        XCTAssertEqual(model.others.count, 3)
+
+        var h = Control.Header(op: "arrange")
+        h.arrange = try JSONDecoder().decode(Control.Change.self, from: Arrangement.Op.move(.device("a"), before: .collection("c1")).data)
+        let text = String(decoding: try Control.encode(h), as: UTF8.self)
+        XCTAssertEqual(text, #"{"args":{"arrange":{"before":{"collection":"c1"},"item":{"device":"a"},"op":"move"}},"len":0,"op":"arrange"}"# + "\n")
     }
 }
