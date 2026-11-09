@@ -102,14 +102,45 @@ func TestSlug(t *testing.T) {
 	}
 }
 
+// libRs is a stand-in for member/src/lib.rs: the match that runs the
+// commands, and the functions two of them call.
+const libRs = `fn main() {
+            let res = match cmd {
+                "pair" if in_group(&g) => admit_cli::pair(&g, rest),
+                "copy" => cmd_copy(&g, rest),
+                "freeze" | "unfreeze" => cli::freeze(&g, rest, cmd == "freeze"),
+                "version" | "-version" => {
+                    Ok(())
+                }
+                "cbb" if !rest.is_empty() => {
+                    std::process::exit(2)
+                }
+            };
+}
+
+fn cmd_copy(g: &Global, args: &[String]) -> Result<()> {
+    for a in args {
+        match flag(a) {
+            Some("secret") | Some("x") => {}
+            Some("from") if true => {}
+            _ => {}
+        }
+    }
+    match args.first().map(String::as_str) {
+        Some("words") => {}
+        _ => {}
+    }
+    if word.as_deref() != Some("off") {}
+}
+`
+
 func TestCheckCommands(t *testing.T) {
 	files := map[string][]byte{
-		"cmd/cbb/main.go":       []byte("switch cmd {\n\tcase \"copy\":\n\tcase \"away\":\n}\n"),
-		"member/src/lib.rs":     []byte("match c {\n    \"watch\" => cmd_watch(&g, rest),\n    \"run\" => cmd_run(&g, rest),\n}\n"),
-		"docs/reference/cli.md": []byte("`cbb copy` sends. `cbb watch` is not lite.\n\n## The lite member\n\n`cbb run` runs.\n\n## Other\n"),
+		"member/src/lib.rs":     []byte(libRs),
+		"docs/reference/cli.md": []byte("`cbb copy` sends. `cbb freeze` freezes.\n\n## The lite member\n\n`cbb version` prints.\n"),
 	}
 	got := checkCommands(files)
-	want := []string{"cbb away", "cbb watch"}
+	want := []string{"cbb pair", "cbb unfreeze"}
 	if len(got) != len(want) {
 		t.Fatalf("checkCommands() = %q, want %d problems", got, len(want))
 	}
@@ -169,12 +200,12 @@ func TestCheckPlanned(t *testing.T) {
 
 func TestCheckFlags(t *testing.T) {
 	files := map[string][]byte{
-		"cmd/cbb/a.go":          []byte("func a() {\n\tfs := flag.NewFlagSet(\"global hub\", flag.ContinueOnError)\n\tport := fs.Int(\"port\", 0, \"\")\n\tfs.StringVar(&fw, \"firewall\", \"ask\", \"\")\n}\n\nfunc b() {\n\tfs := flag.NewFlagSet(\"global move\", flag.ContinueOnError)\n\tfwd := fs.String(\"forwarder\", \"\", \"\")\n}\n\nfunc c() {\n\tfs := flag.NewFlagSet(\"forward\", flag.ContinueOnError)\n\tk := fs.String(\"key\", \"\", \"\")\n\ts := fs.Bool(\"show-key\", false, \"\")\n}\n"),
-		"cmd/cbb/a_test.go":     []byte("fs := flag.NewFlagSet(\"test\", 0)\n"),
-		"docs/reference/cli.md": []byte("| `cbb global hub [-port N]` | with `-firewall` |\n| `cbb forward [-key FILE]` | |\n\nAlso -show-key, but not about the command.\n"),
+		"member/src/lib.rs":       []byte(libRs),
+		"member/src/admit_cli.rs": []byte("pub fn pair(g: &Global, args: &[String]) -> Result<()> {\n    match flag(&args[0]) {\n        Some(\"admin\") => {}\n        _ => {}\n    }\n}\n"),
+		"docs/reference/cli.md":   []byte("| `cbb copy [-secret]` | from a file with `-from` |\n| `cbb pair` | |\n\nAlso -admin, but not about the command.\n"),
 	}
 	got := checkFlags(files)
-	want := []string{"the command cbb global move ", "the flag -show-key of cbb forward "}
+	want := []string{"the flag -admin of cbb pair ", "the flag -x of cbb copy "}
 	if len(got) != len(want) {
 		t.Fatalf("checkFlags() = %q, want %d problems", got, len(want))
 	}
@@ -189,7 +220,7 @@ func TestCheckPorts(t *testing.T) {
 	files := map[string][]byte{
 		"internal/mdns/mdns.go":       []byte("const Port = 5353\n"),
 		"internal/service/service.go": []byte("const (\n\tMemberPort = 8764\n\tbacklog = 32\n)\n"),
-		"cmd/cbb/forward.go":          []byte(`v := fs.String("vless-listen", ":443", "")`),
+		"cmd/cbb-forward/main.go":     []byte(`v := fs.String("vless-listen", ":443", "")`),
 		"member/src/tunnel.rs":        []byte("const MEMBER_PORT: u16 = 8765;\n"),
 		"internal/third_party/x/x.go": []byte("const Port = 9999\n"),
 		"internal/service/x_test.go":  []byte("const testPort = 1234\n"),

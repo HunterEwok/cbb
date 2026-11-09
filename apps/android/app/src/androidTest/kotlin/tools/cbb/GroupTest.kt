@@ -119,7 +119,7 @@ class GroupTest {
         typeAndAdd(code)
         until(90, "the phone admits ${Bench.PC}; the app says ${model.message}") { model.phase == AppModel.Phase.HOME }
         val out = pairing.finish(60)
-        assertTrue("cbb pair on ${Bench.PC} did not join:\n$out", out.contains("Joined the group."))
+        assertTrue("cbb pair on ${Bench.PC} did not join:\n$out", out.contains("Joined the group"))
         until(30, "${Bench.PC} in the phone's devices: ${model.group.devices.map { it.name }}") {
             model.group.devices.any { it.name == Bench.PC }
         }
@@ -283,7 +283,7 @@ class GroupTest {
         } catch (e: AssertionError) {
             throw AssertionError("${e.message}\n${appState()}\n$dev's log:\n${Bench.logs(dev)}")
         }
-        assertTrue("cbb pair on $dev did not join:\n$out", out.contains("Joined the group."))
+        assertTrue("cbb pair on $dev did not join:\n$out", out.contains("Joined the group"))
         until(30, "$dev in the phone's devices") { model.group.devices.any { it.name == dev } }
     }
 
@@ -487,7 +487,7 @@ class GroupTest {
             }
             InstrumentationRegistry.getInstrumentation().runOnMainSync { model.answer(true) }
             val out = join.finish(120)
-            assertTrue("cbb pair -invite on $guest did not join:\n$out", out.contains("Joined the group."))
+            assertTrue("cbb pair -invite on $guest did not join:\n$out", out.contains("Joined the group"))
             until(30, "the invitation says it admitted $guest: ${model.inviteNote}") { model.inviteNote?.text == R.string.invite_admitted }
             until(60, "$guest in the phone's devices") { model.group.devices.any { it.name == guest } }
 
@@ -533,7 +533,7 @@ class GroupTest {
         val code = window.line("Pairing code:").replace(" ", "")
         val at = window.line("If it cannot find this one: cbb pair -code")
         val joined = Bench.run(guest, "cbb pair -code $at", stdin = "$code\n", seconds = 90)
-        assertTrue("cbb pair -code on $guest did not join:\n$joined", joined.contains("Joined the group."))
+        assertTrue("cbb pair -code on $guest did not join:\n$joined", joined.contains("Joined the group"))
         val admitted = window.finish(60)
         assertTrue("cbb pair on $hub did not admit $guest:\n$admitted", admitted.contains("joined the group."))
         until(60, "$guest, admitted by $hub, in the phone's devices: ${model.group.devices.map { it.name }}") {

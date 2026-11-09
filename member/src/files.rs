@@ -5,7 +5,7 @@
 
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
 
@@ -40,6 +40,28 @@ pub fn write_atomic(path: &Path, data: &[u8], mode: u32) -> Result<()> {
     Ok(())
 }
 
+/// The path with its links followed, as a program that is not Rust takes
+/// it: on Windows without the prefix \\?\ that fs::canonicalize puts
+/// before it, which PowerShell's -File and Join-Path refuse. The path
+/// itself when it cannot be followed.
+pub fn real_path(path: &Path) -> PathBuf {
+    let Ok(real) = fs::canonicalize(path) else { return path.to_path_buf() };
+    plain(real)
+}
+
+/// A Windows path without the prefix \\?\ (\\?\UNC\ as \\), where
+/// the rest is a path without it; others as they are.
+fn plain(p: PathBuf) -> PathBuf {
+    let Some(s) = p.to_str() else { return p };
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    match s.strip_prefix(r"\\?\") {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') && rest.len() < 260 => PathBuf::from(rest),
+        _ => p,
+    }
+}
+
 /// Sixteen random hex digits for a new file's or folder's name. Without the
 /// system's randomness it falls back to the process and the time, which still
 /// tells apart the names one process makes.
@@ -55,6 +77,16 @@ pub fn random_name() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plain_paths() {
+        assert_eq!(
+            plain(PathBuf::from(r"\\?\C:\Program Files\cbb\cbb.exe")),
+            PathBuf::from(r"C:\Program Files\cbb\cbb.exe")
+        );
+        assert_eq!(plain(PathBuf::from(r"\\?\UNC\host\share\cbb.exe")), PathBuf::from(r"\\host\share\cbb.exe"));
+        assert_eq!(plain(PathBuf::from("/usr/local/bin/cbb")), PathBuf::from("/usr/local/bin/cbb"));
+    }
 
     #[test]
     fn writes_through_a_new_file() {

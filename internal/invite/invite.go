@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/cbb/internal/pair"
 	"github.com/HunterEwok/cbb/internal/strict"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 )
@@ -109,6 +108,10 @@ type Error struct {
 func (e *Error) Error() string { return "invite: " + e.msg }
 
 func refuse(r Reason, msg string) error { return &Error{Reason: r, msg: msg} }
+
+// MinSecret is the length in bytes of the shortest secret an invitation
+// may carry in place of a pairing code: 128 bits.
+const MinSecret = 16
 
 // MaxSecret is the longest pairing secret an invitation carries.
 const MaxSecret = 64
@@ -212,7 +215,7 @@ func Parse(text string) (*Invitation, error) {
 		}
 		in.Endpoints = append(in.Endpoints, ep)
 	}
-	if in.Secret, err = strict.DecodeBase64(w.Secret); err != nil || len(in.Secret) < pair.MinSecret || len(in.Secret) > MaxSecret {
+	if in.Secret, err = strict.DecodeBase64(w.Secret); err != nil || len(in.Secret) < MinSecret || len(in.Secret) > MaxSecret {
 		return nil, refuse(BadSecret, "the invitation's secret is too short or too long")
 	}
 	if w.Expires <= 0 {

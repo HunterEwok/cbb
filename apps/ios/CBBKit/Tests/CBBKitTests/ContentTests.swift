@@ -6,8 +6,8 @@ import Crypto
 import Foundation
 import XCTest
 
-/// Checks the content of images and files against Go's vectors (go test
-/// ./internal/node -update) and between two nodes.
+/// Checks the content of images and files against the vectors in
+/// testdata/interop and between two nodes.
 final class ContentTests: XCTestCase {
     struct Vectors: Decodable {
         struct Chunk: Decodable {

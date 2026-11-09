@@ -48,7 +48,7 @@ var goParts = []struct {
 }{
 	{"go", goProduct},
 	{"go-core", func(rel string) bool {
-		return goProduct(rel) && slices.Contains([]string{"internal/group", "internal/pair", "internal/node", "internal/clip", "internal/hlc"}, path.Dir(rel))
+		return goProduct(rel) && slices.Contains([]string{"internal/group", "internal/clip", "internal/hlc"}, path.Dir(rel))
 	}},
 }
 
