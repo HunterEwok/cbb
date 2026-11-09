@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/node"
 )
 
 // The renewals (K3): forge -target-state DIR ... cert:KIND[:SIGNER] sends
@@ -26,7 +25,7 @@ import (
 // targetState is the state directory of the target, for its key.
 var targetState string
 
-func sendCert(n *node.Node, to group.DeviceID, kind string, signer *group.Identity) error {
+func sendCert(n *memberConn, kind string, signer *group.Identity) error {
 	if targetState == "" {
 		return errors.New("cert takes -target-state")
 	}
@@ -74,8 +73,8 @@ func sendCert(n *node.Node, to group.DeviceID, kind string, signer *group.Identi
 			return err
 		}
 	}
-	if !n.SendCert(to, cert, signer.AdminCA) {
-		return errors.New("the target is not connected")
+	if err := n.cert(cert, signer.AdminCA); err != nil {
+		return fmt.Errorf("the target is not connected: %v", err)
 	}
 	fmt.Printf("cert %s: sent\n", kind)
 	// It leaves before the next one, and before the connection closes.

@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/godbus/dbus/v5"
-
 	"github.com/HunterEwok/cbb/internal/blekeyboard"
 	"github.com/HunterEwok/cbb/internal/blekeyboard/bluetest"
 	"github.com/HunterEwok/cbb/internal/control"
@@ -28,9 +26,7 @@ func TestKeyboard(t *testing.T) {
 	f := bluetest.Start(t)
 	var h hub
 	pi := startService(t, &h, "pi")
-	deck := startWith(t, &h, "deck", group.OSLinux, func(c *Config) {
-		c.KeyboardBus = func() (*dbus.Conn, error) { return dbus.Connect(f.Addr) }
-	})
+	deck := startEnv(t, &h, "deck", "DBUS_SYSTEM_BUS_ADDRESS="+f.Addr)
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -115,9 +111,7 @@ func TestKeyboard(t *testing.T) {
 func TestKeyboardNoGroup(t *testing.T) {
 	f := bluetest.Start(t)
 	var h hub
-	deck := startWith(t, &h, "deck", group.OSLinux, func(c *Config) {
-		c.KeyboardBus = func() (*dbus.Conn, error) { return dbus.Connect(f.Addr) }
-	})
+	deck := startEnv(t, &h, "deck", "DBUS_SYSTEM_BUS_ADDRESS="+f.Addr)
 	m, err := deck.do(t, control.Header{Op: control.OpKeyboard, Name: "on", Keyboard: &control.Keyboard{Layout: "us"}}, "")
 	if err != nil {
 		t.Fatal(err)

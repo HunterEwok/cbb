@@ -43,18 +43,22 @@ var (
 	mdHeading = regexp.MustCompile(`^#{1,6}\s+(.+?)\s*#*\s*$`)
 	// oldName matches the project's old names in every spelling, written
 	// in pieces so that this file does not hold them either.
-	oldName   = regexp.MustCompile(`(?i)clip(?:` + `board)?[ _.-]?` + `bridge`)
-	goCommand = regexp.MustCompile(`(?m)^\s*case "([a-z]+)"`)
-	rsCommand = regexp.MustCompile(`(?m)^\s*"([a-z]+)" => cmd_`)
+	oldName = regexp.MustCompile(`(?i)clip(?:` + `board)?[ _.-]?` + `bridge`)
+	// rsArm is an arm of cbb's commands in member/src/lib.rs: the names it
+	// takes and, when it calls one, the function that runs the command.
+	rsArm  = regexp.MustCompile(`(?m)^\s*((?:"[a-z][a-z-]*"(?: \| )?)+)(?: if [^=]+)? => (?:std::process::exit\()?([\w:]+\()?`)
+	rsName = regexp.MustCompile(`"([a-z][a-z-]*)"`)
+	// rsFlag is an arm of a match on a flag (flag(arg)) in a command's
+	// function, rsMatch the start of the match it is in.
+	rsFlag  = regexp.MustCompile(`\bSome\("[a-z][\w-]*"\)(?: \| Some\("[a-z][\w-]*"\))*\s*(?:if [^=]*)?=>`)
+	rsSome  = regexp.MustCompile(`Some\("([a-z][\w-]*)"\)`)
+	rsMatch = regexp.MustCompile(`\bmatch ([^{]*)\{`)
 	// envQuoted is a variable's name as a string in Go, Rust, Swift and
 	// Kotlin; envShell is one that a shell script, a systemd unit or
 	// PowerShell reads.
 	envQuoted = regexp.MustCompile(`"(CBB_[A-Z0-9_]+)"`)
 	envShell  = regexp.MustCompile(`(?:\$\{?|\$env:|Environment=)(CBB_[A-Z0-9_]+)`)
 	mdPageRef = regexp.MustCompile(`\]\(([^)#\s]+\.md)(?:#[^)]*)?\)`)
-	// flagSet starts a command's flags in cmd/cbb; goFlag is one flag of it.
-	flagSet = regexp.MustCompile(`flag\.NewFlagSet\("([a-z][a-z -]*)"`)
-	goFlag  = regexp.MustCompile(`\b\w+\.(?:String|Bool|Int|Int64|Uint|Duration|Float64|Func|BoolFunc)\("([A-Za-z][\w-]*)"|\b\w+\.(?:StringVar|BoolVar|IntVar|Int64Var|UintVar|DurationVar|Var|TextVar)\([^,()]+, "([A-Za-z][\w-]*)"`)
 	// goPort and rsPort are a port constant, listenPort a default listen
 	// address of a flag.
 	goPort     = regexp.MustCompile(`(?m)^\s*(?:const\s+)?\w*Port\s*=\s*(\d{2,5})\s*$`)
@@ -197,35 +201,40 @@ func slug(heading string) string {
 }
 
 // liteSection is the heading of the lite member's commands in docs/reference/cli.md.
-const liteSection = "## The lite member"
+// rsCommands are cbb's commands, from the match that runs them in
+// member/src/lib.rs (between "let res = match cmd {" and its end), each with
+// the function it calls ("" for one that runs in place).
+func rsCommands(files map[string][]byte) [][2]string {
+	src := string(files["member/src/lib.rs"])
+	_, block, ok := strings.Cut(src, "let res = match cmd {")
+	if !ok {
+		return nil
+	}
+	block, _, _ = strings.Cut(block, "\n            };")
+	var out [][2]string
+	for _, m := range rsArm.FindAllStringSubmatch(block, -1) {
+		fn := strings.TrimSuffix(m[2], "(")
+		for _, n := range rsName.FindAllStringSubmatch(m[1], -1) {
+			// cbb cbb: the program's name typed twice, which cbb explains.
+			if n[1] != "cbb" {
+				out = append(out, [2]string{n[1], fn})
+			}
+		}
+	}
+	return out
+}
 
-// checkCommands reports the commands of cbb that docs/reference/cli.md does not name:
-// the full member's anywhere, the lite member's in its section.
+// checkCommands reports the commands of cbb that docs/reference/cli.md does
+// not name.
 func checkCommands(files map[string][]byte) []string {
-	ref, ok := files["docs/reference/cli.md"]
+	ref, ok := files[cliRef]
 	if !ok {
 		return nil
 	}
 	var problems []string
-	lite := ""
-	if _, after, ok := strings.Cut(string(ref), "\n"+liteSection+"\n"); ok {
-		lite, _, _ = strings.Cut(after, "\n## ")
-	}
-	for _, c := range []struct {
-		source, doc string
-		re          *regexp.Regexp
-	}{
-		{"cmd/cbb/main.go", string(ref), goCommand},
-		{"member/src/lib.rs", lite, rsCommand},
-	} {
-		src, ok := files[c.source]
-		if !ok {
-			continue
-		}
-		for _, m := range c.re.FindAllStringSubmatch(string(src), -1) {
-			if !strings.Contains(c.doc, "`cbb "+m[1]) {
-				problems = append(problems, fmt.Sprintf("docs/reference/cli.md:1: the command cbb %s (%s) is not described", m[1], c.source))
-			}
+	for _, c := range rsCommands(files) {
+		if !strings.Contains(string(ref), "`cbb "+c[0]) {
+			problems = append(problems, fmt.Sprintf("%s:1: the command cbb %s (member/src/lib.rs) is not described", cliRef, c[0]))
 		}
 	}
 	return problems
@@ -363,9 +372,29 @@ func checkPlanned(files map[string][]byte) []string {
 // cliRef is the reference page of the commands.
 const cliRef = "docs/reference/cli.md"
 
-// checkFlags reports the subcommands of the full member with flags of their
-// own that docs/reference/cli.md does not name, and the flags it does not
-// name in a line about their command.
+// rsFunction returns the body of the function a command calls, such as
+// cmd_copy in member/src/lib.rs or cli::remove in member/src/cli.rs, and the
+// file it is in.
+func rsFunction(files map[string][]byte, fn string) (string, string) {
+	file, name := "member/src/lib.rs", fn
+	if mod, n, ok := strings.Cut(fn, "::"); ok {
+		file, name = "member/src/"+mod+".rs", n
+	}
+	src := string(files[file])
+	k := strings.Index(src, "fn "+name+"(")
+	if k < 0 {
+		return "", file
+	}
+	body := src[k:]
+	if e := strings.Index(body, "\n}\n"); e >= 0 {
+		body = body[:e]
+	}
+	return body, file
+}
+
+// checkFlags reports the flags of cbb's commands, as the functions that run
+// them take them, that docs/reference/cli.md does not name in a line about
+// their command.
 func checkFlags(files map[string][]byte) []string {
 	ref, ok := files[cliRef]
 	if !ok {
@@ -373,38 +402,38 @@ func checkFlags(files map[string][]byte) []string {
 	}
 	lines := strings.Split(string(ref), "\n")
 	var problems []string
-	for _, name := range sortedKeys(files) {
-		if !strings.HasPrefix(name, "cmd/cbb/") || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+	for _, c := range rsCommands(files) {
+		if c[1] == "" {
 			continue
 		}
-		src := string(files[name])
-		sets := flagSet.FindAllStringSubmatchIndex(src, -1)
-		for i, m := range sets {
-			cmd := src[m[2]:m[3]]
-			// A command's flags end at the next command's or at the next function.
-			end := len(src)
-			if i+1 < len(sets) {
-				end = sets[i+1][0]
+		body, file := rsFunction(files, c[1])
+		var about []string
+		for _, l := range lines {
+			if strings.Contains(l, "`cbb "+c[0]) {
+				about = append(about, l)
 			}
-			body := src[m[1]:end]
-			if k := strings.Index(body, "\nfunc "); k >= 0 {
-				body = body[:k]
-			}
-			if !strings.Contains(string(ref), "`cbb "+cmd) {
-				problems = append(problems, fmt.Sprintf("%s:1: the command cbb %s (%s) is not described", cliRef, cmd, name))
-				continue
-			}
-			first, _, _ := strings.Cut(cmd, " ")
-			var about []string
-			for _, l := range lines {
-				if strings.Contains(l, "`cbb "+first) {
-					about = append(about, l)
+		}
+		seen := map[string]bool{}
+		matches := rsMatch.FindAllStringSubmatchIndex(body, -1)
+		for _, f := range rsFlag.FindAllStringIndex(body, -1) {
+			// Only the arms of a match on flag(...): another matches
+			// subcommands or words.
+			var on string
+			for _, m := range matches {
+				if m[0] < f[0] {
+					on = body[m[2]:m[3]]
 				}
 			}
-			for _, f := range goFlag.FindAllStringSubmatch(body, -1) {
-				flag := f[1] + f[2]
-				if !anyContains(about, "-"+flag) {
-					problems = append(problems, fmt.Sprintf("%s:1: the flag -%s of cbb %s (%s) is not described", cliRef, flag, cmd, name))
+			if !strings.Contains(on, "flag(") {
+				continue
+			}
+			for _, n := range rsSome.FindAllStringSubmatch(body[f[0]:f[1]], -1) {
+				if seen[n[1]] {
+					continue
+				}
+				seen[n[1]] = true
+				if !anyContains(about, "-"+n[1]) {
+					problems = append(problems, fmt.Sprintf("%s:1: the flag -%s of cbb %s (%s) is not described", cliRef, n[1], c[0], file))
 				}
 			}
 		}

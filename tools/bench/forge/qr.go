@@ -4,30 +4,29 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/pair"
+	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/phone"
 )
 
 // The joiner that listens (G17, docs/protocol.md section 6, "The joiner
-// listens"): forge -signer DIR qr:HOW:URL plays the phone that scanned the
-// QR code URL of cbb pair, as the admin in DIR, and prints
+// listens"): forge qr:HOW:URL has the service on this device, the group's
+// root or an admin, admit the joiner whose QR code URL cbb pair showed, as
+// the phone that scanned it would, and prints
 //
-//	qr HOW: joined DEVICE
+//	qr HOW: joined NAME
 //	qr HOW: refused: REASON
 //
 // HOW is right (the code and fingerprint of the QR code), code (a wrong
-// code) or fp (another fingerprint, as for another computer).
+// code) or fp (another fingerprint, as for another computer). -socket
+// names the service's control socket, if not the default.
 
 func qrCase(arg string) bool { return strings.HasPrefix(arg, "qr:") }
 
-func runQR(signerDir, arg string) error {
+func runQR(socket, arg string) error {
 	how, raw, ok := strings.Cut(strings.TrimPrefix(arg, "qr:"), ":")
 	jc, ok2 := phone.ParseJoinQR(raw)
 	if !ok || !ok2 || len(jc.Addrs) == 0 {
@@ -42,32 +41,21 @@ func runQR(signerDir, arg string) error {
 	default:
 		return fmt.Errorf("qr: HOW is right, code or fp, not %q", how)
 	}
-	admin, err := group.Load(signerDir)
+	if socket == "" {
+		socket = control.SocketPath()
+	}
+	c, err := control.Dial(control.AdminSocketFor(socket))
 	if err != nil {
 		return err
 	}
-	w, err := pair.Open(admin, jc.Code, pair.Options{})
-	if err != nil {
-		return err
-	}
-	defer w.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	conn, err := net.DialTimeout("tcp", jc.Addrs[0], 5*time.Second)
+	defer c.Close()
+	c.SetDeadline(time.Now().Add(time.Minute))
+	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}})
 	if err != nil {
 		fmt.Printf("qr %s: refused: %v\n", how, err)
 		return nil
 	}
-	if err := w.Dial(ctx, conn, jc.Fingerprint); err != nil {
-		fmt.Printf("qr %s: refused: %v\n", how, err)
-		return nil
-	}
-	res, err := w.Result()
-	if err != nil {
-		fmt.Printf("qr %s: refused: %v\n", how, err)
-		return nil
-	}
-	fmt.Printf("qr %s: joined %s\n", how, res.Device)
+	fmt.Printf("qr %s: joined %s\n", how, m.Name)
 	return nil
 }
 

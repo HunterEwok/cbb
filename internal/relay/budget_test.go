@@ -100,19 +100,27 @@ func TestRegistrationsBoundByProvider(t *testing.T) {
 // room in all.
 func TestRecordBytesChargedToTheSource(t *testing.T) {
 	one := recordSize(deviceRecords(t, newGroup(t), 2)[1]) // with prev, as all but a group's first
-	r, link := startWith(t, Config{Open: true, Limits: Limits{PerAddress: 100, PerNetwork: 100, GroupRecordBytes: 11 * one, RecordBytes: 1000 * one}})
+	r, link := startAny(t, Config{Open: true, Limits: Limits{PerAddress: 100, PerNetwork: 100, GroupRecordBytes: 11 * one, RecordBytes: 1000 * one}})
+	gr := goRelay(r)
 	for i := range 4 {
 		g := newGroup(t)
 		if err := registerWith(t, link, g, deviceRecords(t, g, 10)); err != nil {
 			t.Fatalf("group %d of one network, within its share: %v", i, err)
 		}
 	}
-	before := r.state()
+	var before string
+	if gr != nil {
+		before = gr.state()
+	}
 	g := newGroup(t)
 	if err := registerWith(t, link, g, deviceRecords(t, g, 10)); err == nil || !strings.Contains(err.Error(), "from this network") {
 		t.Errorf("records past the network's share: %v", err)
 	}
-	if after := r.settled(t); after != before {
+	if gr == nil {
+		if g, n := r.Stats(); g != 4 || n != 4 {
+			t.Errorf("after a refused registration the relay holds %d groups and %d devices, want 4 and 4", g, n)
+		}
+	} else if after := gr.settled(t); after != before {
 		t.Errorf("a refused registration changed the relay\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }

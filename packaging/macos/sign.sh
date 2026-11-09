@@ -7,6 +7,7 @@
 #
 #   sh packaging/macos/sign.sh IDENTITY path/to/cbb
 #   sh packaging/macos/sign.sh IDENTITY path/to/cbb-helper
+#   sh packaging/macos/sign.sh IDENTITY path/to/cbb-forward (or cbb-relay)
 #   sh packaging/macos/sign.sh IDENTITY path/to/CBB.app
 #
 # IDENTITY is a Developer ID Application identity in a keychain (its SHA-1
@@ -16,7 +17,8 @@
 # signature carries a secure timestamp, which notarization requires; an ad hoc
 # one cannot. The binary keeps its identifier tools.cbb.cli, so that every
 # release is the same program to macOS; cbb-helper, the Go helper cbb starts
-# as its child, keeps tools.cbb.helper. An app, built by xcodebuild without
+# as its child, keeps tools.cbb.helper, and the servers cbb-forward and
+# cbb-relay keep tools.cbb.forward and tools.cbb.relay. An app, built by xcodebuild without
 # signing, is signed from the inside out: its nested code first, then the
 # bundle, which keeps the identifier of its Info.plist.
 #
@@ -60,6 +62,8 @@ esac
 identifier=tools.cbb.cli
 case $bin in
 */cbb-helper | cbb-helper | */cbb-helper-* | cbb-helper-*) identifier=tools.cbb.helper ;;
+*/cbb-forward | cbb-forward) identifier=tools.cbb.forward ;;
+*/cbb-relay | cbb-relay) identifier=tools.cbb.relay ;;
 esac
 sign "$bin" --identifier "$identifier" --entitlements "$entitlements"
 codesign --verify --strict --verbose=2 "$bin"
@@ -76,6 +80,16 @@ if [ "$(lipo -archs "$bin")" != "$(uname -m)" ] && ! arch -x86_64 /usr/bin/true 
 	echo "sign.sh: $(lipo -archs "$bin") does not run here (no Rosetta); not run" >&2
 	exit 0
 fi
+case $identifier in
+tools.cbb.forward | tools.cbb.relay)
+	# A server takes only flags and has no version; that it refuses an
+	# argument shows it loads under the hardened runtime.
+	out=$("$bin" version 2>&1) || true
+	echo "$out"
+	echo "$out" | grep -q 'takes only flags'
+	exit 0
+	;;
+esac
 out=$("$bin" version)
 echo "$out"
 if [ "$identifier" = tools.cbb.helper ]; then

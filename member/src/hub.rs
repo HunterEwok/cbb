@@ -108,6 +108,20 @@ impl Hub {
         log: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Result<Hub> {
         let own = crate::tunnel::addr(device).ok_or_else(|| Error::msg(format!("{device} is not a device ID")))?;
+        Hub::start_at(key, own, obfuscation, peers, listen, target, log)
+    }
+
+    /// Starts the hub as start does, at the tunnel address own in place of
+    /// a device's: the blind relay's.
+    pub fn start_at(
+        key: &[u8; 32],
+        own: Ipv6Addr,
+        obfuscation: Option<&serde_json::Value>,
+        peers: Vec<Peer>,
+        listen: SocketAddr,
+        target: Target,
+        log: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Result<Hub> {
         check_peers(&peers, own)?;
         let obf = obfuscation.map(crate::awg::Obfuscation::from_offer).transpose()?;
         let udp = UdpSocket::bind(listen).context("cannot open the hub's UDP port")?;
@@ -187,6 +201,12 @@ impl Hub {
     /// Replaces the hub's clients; a client left out is cut off at once.
     pub fn set_peers(&self, peers: Vec<Peer>, device: &str) -> Result<()> {
         let own = crate::tunnel::addr(device).ok_or_else(|| Error::msg(format!("{device} is not a device ID")))?;
+        self.set_peers_at(peers, own)
+    }
+
+    /// Replaces the hub's clients as set_peers does, for a hub at the
+    /// tunnel address own.
+    pub fn set_peers_at(&self, peers: Vec<Peer>, own: Ipv6Addr) -> Result<()> {
         check_peers(&peers, own)?;
         *self.peers.lock().map_err(|_| Error::msg("the hub's clients are broken"))? = Some(peers);
         Ok(())
