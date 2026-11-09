@@ -588,6 +588,21 @@ pub fn pair_server(cert: &[u8], key: &[u8], clock: &Clock) -> Result<(rustls::Se
     Ok((cfg, exporter))
 }
 
+/// A blind relay's server configuration for the registrations
+/// (docs/protocol.md, section 14): TLS 1.3, ALPN protocol, its certificate
+/// with its PKCS #8 key, any client certificate required, which the relay
+/// checks itself, and no session tickets.
+pub fn registration_server(cert: &[u8], key: &[u8], protocol: &[u8], clock: &Clock) -> Result<rustls::ServerConfig> {
+    let (chain, key) = pair_identity(cert, key);
+    let mut cfg = server_builder(clock)?
+        .with_client_cert_verifier(Arc::new(AnyPeer))
+        .with_single_cert(chain, key)
+        .map_err(|e| Error::with("cannot use the relay's certificate", TlsError(e)))?;
+    cfg.alpn_protocols = vec![protocol.to_vec()];
+    cfg.send_tls13_tickets = 0;
+    Ok(cfg)
+}
+
 /// The joiner's server configuration of pair_server for a device key the
 /// core does not hold: key signs the handshake.
 pub fn pair_server_external(

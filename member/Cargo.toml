@@ -18,6 +18,12 @@ path = "src/lib.rs"
 name = "cbb"
 path = "src/main.rs"
 
+# The blind relay, a service of its own (src/relayd).
+[[bin]]
+name = "cbb-relay"
+path = "src/relay_main.rs"
+required-features = ["tunnel"]
+
 # cbbw.exe, the same program without a console window, which Windows starts
 # at sign-in for the agent (packaging/windows/install.ps1).
 [[bin]]

@@ -92,12 +92,15 @@ jobs:
           rustup toolchain install stable --profile minimal
           dir=$(CBB_VERSION="${GITHUB_REF_NAME#v}" sh member/packaging/build.sh "$GOOS/$GOARCH${GOARM:+/$GOARM}")
           if [ "$GOOS" = windows ]; then
-            cp "$dir/cbb.exe" "$dir/cbbw.exe" "$RUNNER_TEMP/"
+            cp "$dir/cbb.exe" "$dir/cbbw.exe" "$dir/cbb-relay.exe" "$RUNNER_TEMP/"
+          elif [ -z "$GOMIPS" ]; then
+            # cbb-relay, the relay in Rust, a service of its own beside cbb.
+            cp "$dir/cbb" "$dir/cbb-relay" "$RUNNER_TEMP/"
           else
             cp "$dir/cbb" "$RUNNER_TEMP/"
           fi
           sh member/packaging/notices.sh "$(basename "$(dirname "$dir")")" >"$RUNNER_TEMP/rust-notices"
-      - name: cbb-helper, cbb-forward and cbb-relay, the Go programs beside cbb
+      - name: cbb-helper and cbb-forward, the Go programs beside cbb
         run: |
           ldflags="-s -w -X github.com/HunterEwok/cbb/internal/version.Version=$GITHUB_REF_NAME"
           # Every release build runs the Rust core under wazero, never Go's
@@ -115,7 +118,7 @@ jobs:
           case $GOARCH in
           mips | mipsle) ;;
           *)
-            for p in cbb-helper cbb-forward cbb-relay; do
+            for p in cbb-helper cbb-forward; do
               go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/$p$exe" "./cmd/$p"
               go version -m "$RUNNER_TEMP/$p$exe" | grep -q -- '-tags=cbbwasm'
               # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.

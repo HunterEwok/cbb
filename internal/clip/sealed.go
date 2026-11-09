@@ -653,24 +653,3 @@ func sealInGo(id, origin string, t hlc.Timestamp, cert, issuer []byte, readers [
 	}
 	return s, s.ToSign(), nil
 }
-
-// EventOf is the engine's event of a sealed copy that this member, me,
-// received and checked: opened with its secret when the copy is sealed to
-// it, Unread otherwise. A copy that is sealed to me but does not open is
-// Unread too, since the others may read theirs; err then says why, for
-// the log.
-func EventOf(s *Sealed, me string, secret []byte) (ev Event, err error) {
-	ev = Event{ID: s.ID, Origin: s.Origin, Time: s.Time, Age: s.Age, Sealed: s, Unread: true}
-	if s.IsMark() {
-		return ev, nil
-	}
-	c, key, err := s.Open(me, secret)
-	switch {
-	case errors.Is(err, ErrNotReader):
-		return ev, nil
-	case err != nil:
-		return ev, err
-	}
-	ev.Kind, ev.Via, ev.Text, ev.Media, ev.Key, ev.Unread = c.Kind, c.Via, c.Text, c.Media, key, false
-	return ev, nil
-}

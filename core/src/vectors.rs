@@ -36,6 +36,41 @@ fn records(v: &Value) -> Vec<Record> {
     serde_json::from_value(v.clone()).unwrap()
 }
 
+/// The frames the phone app's CBBKit writes as a member
+/// (swift-member.json, from its tests), decoded as a member does: the
+/// phone's hello, whose current copy is a secret's mark, sealed copies, and
+/// pings or a goodbye.
+#[test]
+fn swift_member_frames() {
+    let frames: Vec<String> = serde_json::from_value(vectors("swift-member.json")).unwrap();
+    assert!(frames.len() >= 3, "{} frames, want a hello, an event and a ping at least", frames.len());
+    for (i, f) in frames.iter().enumerate() {
+        let raw = STANDARD.decode(f).unwrap();
+        let (len, body) = raw.split_at(4);
+        assert_eq!(u32::from_be_bytes(len.try_into().unwrap()) as usize, body.len(), "frame {i}'s length");
+        let m: Message = serde_json::from_slice(body).unwrap();
+        match m.kind.as_str() {
+            "hello" => {
+                assert_eq!((i, m.role.as_str()), (0, "phone"), "frame {i}: a hello other than the phone's first");
+                let (h, body) = wire::decode_hello(m.hello.as_ref()).unwrap();
+                assert_eq!(body.name, "iPhone");
+                // The phone's current copy is a secret, which a hello
+                // carries only as its mark.
+                let s = h.current.and_then(|c| c.sealed).expect("the hello carries the current copy");
+                s.validate().unwrap();
+                assert!(s.is_mark(), "the hello carries a secret's payload");
+            }
+            "event" => {
+                let s: crate::copy::Sealed = serde_json::from_value(m.event.clone().unwrap()).unwrap();
+                s.validate().unwrap();
+                assert!(!s.is_mark(), "frame {i}: an event that is a mark");
+            }
+            "ping" | "bye" => {}
+            t => panic!("frame {i}: unexpected type {t:?}"),
+        }
+    }
+}
+
 /// The member protocol's frames, timestamps, events and their order
 /// (member.json).
 #[test]

@@ -10,8 +10,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * The member protocol of docs/protocol.md, sections 4 and 5, as the Go side
- * speaks it (internal/node, internal/clip, internal/hlc): frames of a
+ * The member protocol of docs/protocol.md, sections 4 and 5, as the Rust core
+ * speaks it (core/src/wire.rs, core/src/clip.rs, core/src/hlc.rs): frames of a
  * 4-byte big-endian length and a JSON message, a hello first, then events,
  * pings, records and goodbyes.
  */

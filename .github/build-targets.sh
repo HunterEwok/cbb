@@ -4,8 +4,8 @@
 #
 # CI's build for each target, as a release builds it: build-targets.sh
 # NOTICES DIR TARGET... builds cbb, the Rust program
-# (member/packaging/build.sh), and beside it the Go programs cbb-helper,
-# cbb-forward and cbb-relay (with the Rust core as WebAssembly, which
+# (member/packaging/build.sh) with cbb-relay, the relay in Rust, and beside
+# them the Go programs cbb-helper and cbb-forward (with the Rust core as WebAssembly, which
 # wasm/build.sh made, and its notices in NOTICES) for each TARGET,
 # GOOS/GOARCH with /N for GOARM and /vet to run go vet first, into
 # DIR/GOOS-ARCH, makes the release archive in DIR/dist with
@@ -43,10 +43,13 @@ EOF
 	exe=''
 	[ "$os" != windows ] || exe=.exe
 	cp "$rust/cbb$exe" "$out/"
-	# The Go programs beside cbb; not for the routers (MIPS), where cbb runs
-	# alone (the lite member).
-	goprograms=''
-	[ -n "$GOMIPS" ] || goprograms='cbb-helper cbb-forward cbb-relay'
+	# cbb-relay and the Go programs beside cbb; not for the routers (MIPS),
+	# where cbb runs alone (the lite member).
+	goprograms='' servers=''
+	if [ -z "$GOMIPS" ]; then
+		goprograms='cbb-helper cbb-forward' servers=cbb-relay
+		cp "$rust/cbb-relay$exe" "$out/"
+	fi
 	for p in $goprograms; do
 		go build -overlay "$overlay" -tags cbbwasm -trimpath -o "$out/$p$exe" "./cmd/$p"
 	done
@@ -67,7 +70,7 @@ EOF
 	else
 		RUST_NOTICES=$out/rust-notices CORE_NOTICES=$notices sh packaging/archive.sh "$out/cbb" "$os" "$name" "$dir/dist"
 		tar -tzf "$dir/dist/cbb-$os-$name.tar.gz" >"$out/list"
-		for p in cbb $goprograms; do
+		for p in cbb $servers $goprograms; do
 			grep -qx "cbb/$p" "$out/list" || { echo "build-targets.sh: no $p in the $os/$name archive" >&2; exit 1; }
 		done
 		tar -xzOf "$dir/dist/cbb-$os-$name.tar.gz" cbb/THIRD_PARTY_NOTICES >"$out/notices"

@@ -15,7 +15,7 @@ fun unhex(s: String): ByteArray {
 fun ByteArray.hex(): String = joinToString("") { "%02x".format(it) }
 
 // Test vectors from draft-irtf-cfrg-cpace-21, Appendix B.1, as in
-// internal/third_party/cpace/cpace_test.go.
+// internal/cpace/ of rsc.io/cmd/mote v0.1.3, file cpace_test.go.
 class CPaceTest {
     private val prs = "Password".toByteArray()
     private val ci = "\u000bA_initiator\u000bB_responder".toByteArray()

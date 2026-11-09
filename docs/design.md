@@ -304,8 +304,7 @@ ends, the Go service described below is still the computers' member.
 - **The server credentials.** `credentials.rs` keeps the group's credentials as Go's
   `credentials.go`: the core's `credential::Store` (Go's `group.Credentials`, the same rules
   of what counts) in `credentials.json`, the keys for the servers in `server-keys.json` (in
-  the TPM or the Secure Enclave through cbb-helper where it can put them there, as Go's
-  `ServerKeys`). Every peer gets them in a `credentials` message after its hello; new ones a
+  the TPM or the Secure Enclave through cbb-helper where it can put them there). Every peer gets them in a `credentials` message after its hello; new ones a
   peer sends are kept and passed on. When the records or the credentials change, and twice a
   day, the service brings them up to date as Go's `refreshCredential`: the root starts a
   period when the one kept is due or a member that sent its server key left; every member
@@ -656,8 +655,8 @@ permission to paste.
 - Third-party code: `golang.org/x/net`, `golang.org/x/sys`, `golang.org/x/crypto` and
   `golang.org/x/time` (BSD-3-Clause), `jezek/xgb` (BSD-3-Clause), `rsc.io/qr`
   (BSD-3-Clause), `amnezia-vpn/amneziawg-go` (MIT, a fork of wireguard-go) with gVisor's netstack (Apache-2.0)
-  and `google/btree` (Apache-2.0) for the tunnel, and the CPace implementation copied from
-  `rsc.io/cmd/mote` v0.1.3 (BSD-3-Clause) into `internal/third_party/cpace`. The lite
+  and `google/btree` (Apache-2.0) for the tunnel, and the CPace implementation translated to Rust from
+  `rsc.io/cmd/mote` v0.1.3 (BSD-3-Clause) in `core/src/third_party/cpace`. The lite
   member uses RustCrypto and rustls (MIT or Apache-2.0). The tray app reads QR codes from
   pictures with `makiuchi-d/gozxing` (Apache-2.0).
 

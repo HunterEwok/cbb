@@ -186,7 +186,7 @@ fn confirm(question: &str) -> Result<()> {
     if answer()?.trim().eq_ignore_ascii_case("yes") {
         return Ok(());
     }
-    println!("Nothing changed.");
+    println!("{}", tr!("Nothing changed."));
     std::process::exit(1)
 }
 
