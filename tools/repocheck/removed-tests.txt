@@ -335,3 +335,40 @@ internal/core/core_test.go TestVectors D-93: internal/core is gone; internal/gro
 internal/core/core_test.go TestDo D-93: internal/core, the Go binding of the core, is gone
 internal/core/core_test.go TestConcurrent D-93: internal/core, the Go binding of the core, is gone
 internal/core/evaluate_test.go TestEvaluate D-93: internal/core is gone; internal/authority evaluates the same vectors itself
+internal/consolepaste/console_test.go TestConsole D-88: cbb paste-helper console is the Rust cbb's; member/src/pastehelper.rs console_gets_carriage_returns tests it
+internal/tmuxpaste/tmux_test.go TestTmux D-88: cbb paste-helper tmux is the Rust cbb's; member/src/pastehelper.rs types_into_tmux_literally and picks_the_pane_used_last test it
+internal/sysinfo/sysinfo_linux_test.go TestFormOf D-88: the Rust cbb describes its device itself (member/src/device.rs, os_release_names); no Go program asked internal/sysinfo
+internal/sysinfo/sysinfo_linux_test.go TestOSRelease D-88: the Rust cbb describes its device itself (member/src/device.rs, os_release_names); no Go program asked internal/sysinfo
+internal/sysinfo/sysinfo_test.go TestPickMAC D-88: the Rust cbb describes its device itself (member/src/device.rs); no Go program asked internal/sysinfo
+internal/sysinfo/sysinfo_test.go TestDevice D-88: the Rust cbb describes its device itself (member/src/device.rs); no Go program asked internal/sysinfo
+internal/uptime/uptime_test.go TestNowAdvances D-88: no Go program reads internal/uptime; member/src/uptime.rs now_advances and now_counts_like_the_monotonic_clock_awake test the clock cbb runs
+internal/uptime/uptime_test.go TestNowCountsLikeGoAwake D-88: no Go program reads internal/uptime; member/src/uptime.rs now_advances and now_counts_like_the_monotonic_clock_awake test the clock cbb runs
+internal/steamos/steamos_test.go TestIs D-88: cbb update and the firewall find the SteamOS layout in member/src/update_os.rs and hubport.rs; no Go program asked internal/steamos
+internal/update/platform_test.go TestHealthy D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestHealthyGivesUp D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestInstall D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestPrograms D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestArchiveName D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestMethodCommands D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestTimerHelpers D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestUpdate D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestFromGroup D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestRollback D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestRefused D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestNoRoots D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestMinFrom D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestPinned D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestHTTPSources D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestState D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestDetectMethod D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestInstallFailure D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestReleaseFromGroup D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestMirrorThrough D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestFetchFor D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/project_test.go TestProjectAddresses D-88: moved to internal/release/project_test.go, which compares the copies with member/src/update.rs
+internal/piv/piv_test.go TestSigns D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it
+internal/piv/piv_test.go TestWrongPIN D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it
+internal/piv/piv_test.go TestOtherKeyInSlot D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it
+internal/piv/piv_test.go TestFind D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it
+internal/piv/piv_test.go TestChaining D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it
+internal/piv/piv_test.go TestReadTLV D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it

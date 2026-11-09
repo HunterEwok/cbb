@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! cbb update for the lite member on Linux and OpenWrt, as the full
-//! member's internal/update does it (docs/guide/install.md, "Updating"):
+//! cbb update (docs/guide/install.md, "Updating"):
 //! it checks keys.json, stable.json and release.json against the release
 //! roots, downloads the lite member's archive for this device, checks it and
 //! the program in it, runs the archive's own installer, and puts the

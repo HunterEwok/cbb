@@ -382,7 +382,7 @@ jobs:
         run: >-
           go test -timeout 20m -exec "$(command -v qemu-mips-static || command -v qemu-mips)" ./internal/clip ./internal/control ./internal/group
           ./internal/hlc ./internal/mdns ./internal/netguard ./internal/openwrt
-          ./internal/sysinfo ./internal/tunnel ./internal/uptime
+          ./internal/tunnel
           ./internal/vless </dev/null
 
   freebsd:

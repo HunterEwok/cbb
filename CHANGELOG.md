@@ -2013,6 +2013,12 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb` and `cbb-helper` are signed with no entitlement at all, since nothing compiles code
   at run time any more.
 
+- The Go packages that only the Go service used: `internal/update`, `internal/piv`,
+  `internal/tmuxpaste`, `internal/consolepaste`, `internal/sysinfo`, `internal/uptime` and
+  `internal/steamos`, whose work the Rust `cbb` does and tests, and the functions no Go
+  program calls any more. `TestProjectAddresses` now compares the copies of the update
+  servers' addresses with `member/src/update.rs`.
+
 - The Go command line `cmd/cbb` and the Go service in it: `cbb` is the Rust program on every
   member, with `cbb-helper` beside it on computers. Its tests run on the Rust `cbb`
   (`member/tests/cli_commands.rs`, the service tests in `internal/service`).
