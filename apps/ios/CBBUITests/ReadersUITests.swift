@@ -6,8 +6,9 @@ import XCTest
 /// (docs/testbench-catalogue.md, A9, U14, U16; docs/testing.md, "The apps'
 /// languages, accessibility and screenshots"): the Start screen and Settings
 /// translated, Arabic and Hebrew laid out from right to left, and Xcode's
-/// accessibility audit (contrast, clipped text, element descriptions, touch
-/// targets, Dynamic Type) passing in every language and at the largest text
+/// accessibility audit (clipped text, element descriptions, touch targets,
+/// Dynamic Type) and each text's contrast, measured on the screen's picture,
+/// passing in every language and at the largest text
 /// size. Each screen's picture is attached to the test's result, so a run's
 /// .xcresult shows every language for a person to look over.
 final class ReadersUITests: XCTestCase {
@@ -49,13 +50,16 @@ final class ReadersUITests: XCTestCase {
     }
 
     /// Runs Xcode's accessibility audit on the screen as it is. Only an
-    /// element of the system's own (the status bar) may fail it.
+    /// element of the system's own may fail it: the status bar, and the
+    /// navigation bar's buttons, whose text iOS keeps from the largest
+    /// sizes. Contrast is measured on the screen's picture (`contrast`).
     private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String) {
         do {
             try app.performAccessibilityAudit(for: types) { issue in
                 guard let e = issue.element else { return false }
                 // The system's status bar is not the app's to fix.
                 if e.elementType == .statusBar || app.statusBars.firstMatch.exists && app.statusBars.firstMatch.frame.contains(e.frame) { return true }
+                if issue.auditType == .dynamicType && app.navigationBars.firstMatch.exists && app.navigationBars.firstMatch.frame.contains(e.frame) { return true }
                 // Each issue on a line of its own, with the element it is on.
                 XCTFail("\(screen): \(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' at \(e.frame)")
                 return true
@@ -63,10 +67,64 @@ final class ReadersUITests: XCTestCase {
         } catch {
             XCTFail("\(screen): \(error)")
         }
+        contrast(app, screen)
+    }
+
+    /// The audit's contrast check fails text that its own picture shows
+    /// at 6.9:1 (the dim text on the light background), so each text and
+    /// button on the screen is measured on the screen's picture instead:
+    /// its darkest and lightest pixels at least 4.5:1 (WCAG AA).
+    private func contrast(_ app: XCUIApplication, _ screen: String) {
+        let shot = XCUIScreen.main.screenshot()
+        let bounds = app.frame
+        let status = app.statusBars.firstMatch.exists ? app.statusBars.firstMatch.frame : .null
+        let elements = app.staticTexts.allElementsBoundByIndex + app.buttons.allElementsBoundByIndex
+        for e in elements where !e.label.isEmpty && e.frame.width > 1 && e.frame.height > 1 && bounds.contains(e.frame) && !status.intersects(e.frame) {
+            guard let ratio = Self.contrast(e.frame, in: shot, screen: bounds) else {
+                XCTFail("\(screen): no picture of '\(e.label)' at \(e.frame)")
+                continue
+            }
+            XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(screen): '\(e.label)' at \(e.frame) has a contrast of \(ratio)")
+        }
+    }
+
+    /// The contrast between the darkest and the lightest pixel of a frame
+    /// of the screen's picture, as WCAG computes it from their relative
+    /// luminance.
+    static func contrast(_ frame: CGRect, in shot: XCUIScreenshot, screen: CGRect) -> Double? {
+        guard let image = shot.image.cgImage, screen.width > 0 else { return nil }
+        let scale = CGFloat(image.width) / screen.width
+        let pixels = CGRect(x: frame.minX * scale, y: frame.minY * scale, width: frame.width * scale, height: frame.height * scale)
+            .integral.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        guard !pixels.isEmpty, let crop = image.cropping(to: pixels), let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        let w = crop.width, h = crop.height
+        var data = [UInt8](repeating: 0, count: w * h * 4)
+        let drawn: Bool = data.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(data: buffer.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                          space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return false }
+            context.draw(crop, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard drawn else { return nil }
+        var darkest = 1.0, lightest = 0.0
+        for i in stride(from: 0, to: data.count, by: 4) {
+            let l = luminance(data[i], data[i + 1], data[i + 2])
+            darkest = min(darkest, l)
+            lightest = max(lightest, l)
+        }
+        return (lightest + 0.05) / (darkest + 0.05)
+    }
+
+    static func luminance(_ r: UInt8, _ g: UInt8, _ b: UInt8) -> Double {
+        func linear(_ c: UInt8) -> Double {
+            let v = Double(c) / 255
+            return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
 
     /// The audit's checks that hold in every language and text size.
-    private let checks: XCUIAccessibilityAuditType = [.contrast, .textClipped, .sufficientElementDescription, .hitRegion, .elementDetection]
+    private let checks: XCUIAccessibilityAuditType = [.textClipped, .sufficientElementDescription, .hitRegion, .elementDetection]
 
     /// A9, U14: in each language the Start screen and Settings are
     /// translated and pass the audit, and the Start screen's top row runs

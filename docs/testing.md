@@ -108,13 +108,13 @@ A9 and U14 to U18).
   every control named and at least 48 dp to touch, nothing cut off at font scale 2.
 - The iPhone and the Mac (`ReadersUITests`): each language launched with `-AppleLanguages`,
   the texts checked against the app's catalog, the iPhone's top row swapping sides from right
-  to left, and Xcode's accessibility audit (contrast, clipped text, descriptions, touch
-  targets, Dynamic Type at the largest size) passing; each screen's picture is attached to
+  to left, and Xcode's accessibility audit (clipped text, descriptions, touch targets,
+  Dynamic Type at the largest size) passing; each screen's picture is attached to
   the run's `.xcresult`, uploaded by CI (`ios-screens`, `mac-windows`), and the English ones
-  are printed into a failed job's log (`.github/pictures.py`). On the Mac, where the audit's
-  contrast check fails text its own picture shows dark on a light sheet, each text's
-  contrast is measured on the window's picture instead: its darkest and lightest pixels at
-  least 4.5:1.
+  are printed into a failed job's log (`.github/pictures.py`). The audit's contrast check
+  fails text its own picture shows at 6.9:1 and more, so each text's (and on the iPhone each
+  button's) contrast is measured on the screen's picture instead: its darkest and lightest
+  pixels at least 4.5:1. The iPhone's Start screen scrolls rather than squeeze its texts.
 
 Screenshots are compared where a picture is the same on every machine that draws it: the
 tray window on Linux in the Noto fonts (`fonts-noto-core`, `fonts-noto-mono`,

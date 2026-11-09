@@ -15,6 +15,31 @@ struct StartView: View {
     @AppStorage(LanguageChoice.key) private var language = LanguageChoice.system
 
     var body: some View {
+        // A scroll view as tall as the screen: at the largest text sizes and
+        // in the longer languages the screen scrolls instead of squeezing
+        // or cutting off its texts.
+        GeometryReader { screen in
+            ScrollView {
+                content
+                    .padding(Tokens.spacingLarge)
+                    .frame(minHeight: screen.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .task { model.prepare() }
+        .sheet(isPresented: $adding) { AddDeviceView() }
+        .sheet(isPresented: $restoring) { AddDeviceView(restore: true) }
+        .sheet(isPresented: $settings) {
+            NavigationStack {
+                SettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) { Button("Done") { settings = false } }
+                    }
+            }
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: Tokens.spacingLarge) {
             HStack {
                 Menu {
@@ -54,21 +79,15 @@ struct StartView: View {
                 .buttonStyle(GlassButtonStyle())
             Button { model.startJoining(admin: true) } label: { Text("Join as an admin") }
                 .buttonStyle(GlassButtonStyle())
-            Button { restoring = true } label: { Text("Restore with the recovery key") }
-                .font(.footnote)
-                .foregroundStyle(palette.textDim)
-        }
-        .padding(Tokens.spacingLarge)
-        .task { model.prepare() }
-        .sheet(isPresented: $adding) { AddDeviceView() }
-        .sheet(isPresented: $restoring) { AddDeviceView(restore: true) }
-        .sheet(isPresented: $settings) {
-            NavigationStack {
-                SettingsView()
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) { Button("Done") { settings = false } }
-                    }
+            // Small, yet as large to touch as any button (44 points).
+            Button { restoring = true } label: {
+                Text("Restore with the recovery key")
+                    .multilineTextAlignment(.center)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
+            .font(.footnote)
+            .foregroundStyle(palette.textDim)
         }
     }
 }

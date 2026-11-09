@@ -1967,6 +1967,9 @@ All notable changes to cbb are documented in this file. The format follows
 - The Android app's back button points right in Arabic and Hebrew, where it stands on the right.
 - The Mac app's notices (the service not answering, a removed Mac) show their title and text in
   the theme's text colour, for contrast on every theme, and VoiceOver reads a notice by its title.
+- The iPhone app's Start screen scrolls at the largest text sizes and in the longer languages
+  instead of cutting off its name, tagline and buttons, and "Restore with the recovery key" is
+  44 points tall to touch.
 - The lite member fetches a copy's images or files once when two requests want them at the
   same time (`cbb paste -o` while the copy is fetched in the background); the second waited on
   chunks the first had taken and could fail.
