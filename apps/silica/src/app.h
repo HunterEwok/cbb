@@ -41,6 +41,13 @@ class App : public QObject
     Q_PROPERTY(QString claimState READ claimState NOTIFY claimChanged)
     // How long a pending claim still waits, in milliseconds.
     Q_PROPERTY(double claimLeftMs READ claimLeftMs NOTIFY claimChanged)
+    // Restoring the group from its recovery sheet on a new phone: "" before,
+    // "restoring" while the phone looks for a member and checks its records,
+    // "claiming" while it claims the group, "claimed" once the claim went out
+    // (claimState then says where it stands), "failed" (error says why).
+    Q_PROPERTY(QString restoreState READ restoreState NOTIFY restoreChanged)
+    // Why the last code the camera read is not a recovery sheet's.
+    Q_PROPERTY(QString restoreHint READ restoreHint NOTIFY restoreChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
     Q_PROPERTY(Member *member READ member CONSTANT)
     Q_PROPERTY(Admit *admit READ admit CONSTANT)
@@ -90,6 +97,8 @@ public:
     // Whether the group's root made this phone an admin when it joined.
     bool admin() const { return m_member.isAdmin(); }
     bool root() const { return m_member.root; }
+    QString restoreState() const { return m_restoreState; }
+    QString restoreHint() const { return m_restoreHint; }
     QString claimState() const { return m_member.claim.isEmpty() ? QString() : m_claimState; }
     double claimLeftMs() const { return double(m_claimLeftMs); }
     Join *join() { return &m_join; }
@@ -151,6 +160,19 @@ public:
     // phone or else after the group's delay; the claim is then checked
     // every minute until it makes this phone the root, off the GUI thread.
     Q_INVOKABLE void takeOver(const QString &device);
+    // The text of the recovery sheet's QR code in a camera frame, or empty;
+    // another code sets restoreHint.
+    Q_INVOKABLE QString scanSheet(const QVariant &frame);
+    // Restores the group of the recovery sheet's QR code on this new phone
+    // (cbb_restore): finds a member of the group on the network, checks its
+    // records and starts the member with a certificate the sheet's key
+    // issued; then claims the group with the sheet's key for a new root CA
+    // of the admin key, kept first, as takeOver does. The claim waits the
+    // group's delay unless the root cancels it, and finishTakeover makes the
+    // phone the root. A phone that restored the group but whose claim failed
+    // only claims again. Off the GUI thread.
+    Q_INVOKABLE void restore(const QString &sheet);
+    Q_INVOKABLE void resetRestore();
     // The root's decision on an alert: voids the records it names.
     Q_INVOKABLE void resolve(const QStringList &records);
     // The root's own records, built and signed in the core (cbb_core::root)
@@ -182,6 +204,7 @@ signals:
     void claimChanged();
     void arrangementChanged();
     void recoveryChanged();
+    void restoreChanged();
 
 private:
     void show(const QString &error);
@@ -204,6 +227,9 @@ private:
     // The core's arrange call on ids with op (null for none): {view, stored},
     // the stored arrangement kept in the settings; null on a refusal, shown.
     QJsonObject callArrange(const QStringList &ids, bool prune, const QJsonValue &op);
+    // Claims the group with the recovery sheet's key, for restore.
+    void claimWithSheet(const QString &sheet);
+    void setRestoreState(const QString &state);
     // Keeps next as the membership, or shows why it could not.
     bool keep(const Membership &next);
 
@@ -231,4 +257,6 @@ private:
     QString m_recoveryText;
     QStringList m_recoveryModules;
     QStringList m_belowLevel;
+    QString m_restoreState;
+    QString m_restoreHint;
 };

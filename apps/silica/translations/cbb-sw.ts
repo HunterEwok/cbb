@@ -145,6 +145,38 @@
         <source>The phone could not delete its key.</source>
         <translation>Simu haikuweza kufuta ufunguo wake.</translation>
     </message>
+    <message>
+        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
+        <translation>Changanua msimbo wa QR wa karatasi ya urejeshaji: kwenye simu mpya ufunguo ulioandikwa hautoshi.</translation>
+    </message>
+    <message>
+        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
+        <translation>Huu si ufunguo wa urejeshaji wa kikundi sasa: mzizi uliuondoa au uliunda mpya.</translation>
+    </message>
+    <message>
+        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
+        <translation>Hakuna kifaa cha kikundi kilichopatikana kwenye mtandao huu. Washa simu au kompyuta ya kikundi kisha ujaribu tena.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB recovery sheet.</source>
+        <translation>Hii si karatasi ya urejeshaji ya CBB.</translation>
+    </message>
+    <message>
+        <source>The phone could not restore the group.</source>
+        <translation>Simu haikuweza kurejesha kikundi.</translation>
+    </message>
+    <message>
+        <source>This is not the QR code of a CBB recovery sheet.</source>
+        <translation>Huu si msimbo wa QR wa karatasi ya urejeshaji ya CBB.</translation>
+    </message>
+    <message>
+        <source>The group's root cancelled the claim to restore the group.</source>
+        <translation>Mzizi wa kikundi umeghairi ombi la kurejesha kikundi.</translation>
+    </message>
+    <message>
+        <source>The claim to restore the group became void.</source>
+        <translation>Ombi la kurejesha kikundi limebatilika.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -330,6 +362,10 @@
     <message>
         <source>Off until I turn it on</source>
         <translation>Zima hadi niiwashe</translation>
+    </message>
+    <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>Rejesha kwa karatasi ya urejeshaji</translation>
     </message>
 </context>
 <context>
@@ -1314,6 +1350,49 @@
     <message>
         <source>I wrote it down</source>
         <translation>Nimeuandika</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>Rejesha kikundi</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>Simu hii sasa ni mzizi wa kikundi.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>Inatafuta simu au kompyuta ya kikundi kwenye mtandao huu…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>Inaomba kikundi…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>Kikundi kimerejeshwa kwenye simu hii. Inakuwa mzizi wa kikundi muda wa kusubiri ukiisha, baada ya saa %1, isipokuwa mzizi ukighairi ombi.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>Kikundi kimerejeshwa kwenye simu hii. Inakuwa mzizi wa kikundi muda wa kusubiri wa kikundi ukiisha, isipokuwa mzizi ukighairi ombi.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>Elekeza kamera kwenye msimbo wa QR wa karatasi ya urejeshaji ya kikundi. Weka simu au kompyuta ya kikundi ikiwa imewashwa na kwenye mtandao huu.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Kamera haianzi: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>Au bandika maandishi ya msimbo, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Jaribu tena</translation>
     </message>
 </context>
 </TS>

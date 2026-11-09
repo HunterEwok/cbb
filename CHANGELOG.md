@@ -16,6 +16,12 @@ All notable changes to cbb are documented in this file. The format follows
   as a sheet and on a YubiKey (`recovery_for`) and its removal go through the kit's
   `CoreMember`, and the Kotlin kit no longer builds them itself. The iPhone app does the same through
   the Swift kit's `CoreMember`.
+- A new Aurora phone restores the group from its recovery sheet: Start's "Restore with a recovery
+  sheet" reads the sheet's QR code, finds a phone or a computer of the group on the network,
+  checks the records it sends, and claims the group with the sheet's key for a new root key in
+  the TEE; the phone becomes the root once the group's delay passes, unless the root cancels.
+  The core does the restoring for any app whose keys it does not hold (`cbb_restore`,
+  `cbb_member_manage`'s `recover_with_sheet`, `cbb_lite::restore`).
 - The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
   the Go relay's flags, key file, wire format and an open relay's budget with the same limits
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it

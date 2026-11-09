@@ -145,6 +145,38 @@
         <source>The phone could not delete its key.</source>
         <translation>手机无法删除它的密钥。</translation>
     </message>
+    <message>
+        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
+        <translation>扫描恢复单上的二维码：在新手机上，仅输入密钥是不够的。</translation>
+    </message>
+    <message>
+        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
+        <translation>这已不是群组当前的恢复密钥：根设备已将其移除或生成了新密钥。</translation>
+    </message>
+    <message>
+        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
+        <translation>在此网络上没有找到群组的设备。请打开群组中的一部手机或一台电脑，然后重试。</translation>
+    </message>
+    <message>
+        <source>This is not a CBB recovery sheet.</source>
+        <translation>这不是 CBB 恢复单。</translation>
+    </message>
+    <message>
+        <source>The phone could not restore the group.</source>
+        <translation>手机无法恢复群组。</translation>
+    </message>
+    <message>
+        <source>This is not the QR code of a CBB recovery sheet.</source>
+        <translation>这不是 CBB 恢复单的二维码。</translation>
+    </message>
+    <message>
+        <source>The group's root cancelled the claim to restore the group.</source>
+        <translation>群组的根设备取消了恢复群组的申请。</translation>
+    </message>
+    <message>
+        <source>The claim to restore the group became void.</source>
+        <translation>恢复群组的申请已失效。</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -330,6 +362,10 @@
     <message>
         <source>Off until I turn it on</source>
         <translation>关闭，直到我打开</translation>
+    </message>
+    <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>用恢复单恢复</translation>
     </message>
 </context>
 <context>
@@ -1314,6 +1350,49 @@
     <message>
         <source>I wrote it down</source>
         <translation>我已抄下</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>恢复群组</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>这部手机现在是群组的根设备。</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>正在此网络上查找群组的手机或电脑…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>正在申请群组…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>群组已在这部手机上恢复。等待时间结束后（%1 小时后），它将成为群组的根设备，除非根设备取消申请。</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>群组已在这部手机上恢复。群组的等待时间结束后，它将成为群组的根设备，除非根设备取消申请。</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>将相机对准群组恢复单上的二维码。让群组中的一部手机或一台电脑保持开机并连接到此网络。</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>相机无法启动：%1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>或粘贴二维码的文本 cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>重试</translation>
     </message>
 </context>
 </TS>

@@ -145,6 +145,38 @@
         <source>The phone could not delete its key.</source>
         <translation>Телефону не удалось удалить свой ключ.</translation>
     </message>
+    <message>
+        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
+        <translation>Отсканируйте QR-код листа восстановления: на новом телефоне введённого ключа недостаточно.</translation>
+    </message>
+    <message>
+        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
+        <translation>Это больше не ключ восстановления группы: корень удалил его или сделал новый.</translation>
+    </message>
+    <message>
+        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
+        <translation>В этой сети не нашлось ни одного устройства группы. Включите телефон или компьютер группы и попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB recovery sheet.</source>
+        <translation>Это не лист восстановления CBB.</translation>
+    </message>
+    <message>
+        <source>The phone could not restore the group.</source>
+        <translation>Телефону не удалось восстановить группу.</translation>
+    </message>
+    <message>
+        <source>This is not the QR code of a CBB recovery sheet.</source>
+        <translation>Это не QR-код листа восстановления CBB.</translation>
+    </message>
+    <message>
+        <source>The group's root cancelled the claim to restore the group.</source>
+        <translation>Корень группы отменил заявку на восстановление группы.</translation>
+    </message>
+    <message>
+        <source>The claim to restore the group became void.</source>
+        <translation>Заявка на восстановление группы стала недействительной.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -330,6 +362,10 @@
     <message>
         <source>Off until I turn it on</source>
         <translation>Выключить, пока не включу</translation>
+    </message>
+    <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>Восстановить по листу восстановления</translation>
     </message>
 </context>
 <context>
@@ -1314,6 +1350,49 @@
     <message>
         <source>I wrote it down</source>
         <translation>Я записал ключ</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>Восстановить группу</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>Теперь этот телефон — корень группы.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>Ищем телефон или компьютер группы в этой сети…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>Отправляем заявку на группу…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>Группа восстановлена на этом телефоне. Он станет корнем группы, когда истечёт время ожидания, через %1 ч, если корень не отменит заявку.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>Группа восстановлена на этом телефоне. Он станет корнем группы, когда истечёт время ожидания группы, если корень не отменит заявку.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>Наведите камеру на QR-код листа восстановления группы. Телефон или компьютер группы должен быть включён и в этой сети.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Камера не запускается: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>Или вставьте текст кода, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Попробовать снова</translation>
     </message>
 </context>
 </TS>
