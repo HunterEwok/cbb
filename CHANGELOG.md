@@ -16,7 +16,9 @@ All notable changes to cbb are documented in this file. The format follows
   to the robot's key and keeps the app's state: one report for each break and version, at
   most five waiting for seven days, "Always allow" offered after the second time, and the
   version that fixes a break (`bug_report`, `bug_allow`, `bug_sent`, `bug_pending`). Nothing
-  is sent until the robot's key is in the build.
+  is sent until the robot's key is in the build. `cbb-bug` takes the reports at
+  bug.cbb.tools behind nginx (`packaging/linux/nginx-bug.conf`, `cbb-bug.service`), with a
+  body limit of twice the largest report, checked by a test, and daily caps per break.
 - The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
   the Go relay's flags, key file, wire format and an open relay's budget with the same limits
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it

@@ -26,6 +26,8 @@ mod awaynet;
 #[cfg(feature = "tunnel")]
 mod awg;
 mod benchtime;
+#[cfg(feature = "tunnel")]
+pub mod bugd;
 pub mod button;
 mod cli;
 pub mod content;

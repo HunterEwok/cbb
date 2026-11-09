@@ -366,6 +366,13 @@ sends one report for each fingerprint and version, and `fixed_in` lets the dialo
 update fixes it. A report that could not be sent waits, at most five for seven days
 (`bug_pending`). The app keeps the `state` the calls give back in its own settings.
 
+On cbb.tools, nginx (`packaging/linux/nginx-bug.conf`, a server block of its own that logs no
+client address) passes each POST to `cbb-bug` (`member/src/bugd.rs`, `cbb-bug.service`) on a
+loopback port. It checks that the body is a sealed report, keeps it in a folder of the day and
+the break, and answers `fixed_in` from the robot's `fixed.json`. At most 20 reports of one break
+and version and 5000 in all are kept each day; the rest are answered as taken and dropped, so
+that no app sends them again. The robot opens the reports elsewhere with its secret.
+
 ## Member chains
 
 `check_member` is the check of a peer's certificates in member TLS, for a TLS stack's verify

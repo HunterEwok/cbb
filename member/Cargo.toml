@@ -18,6 +18,12 @@ path = "src/lib.rs"
 name = "cbb"
 path = "src/main.rs"
 
+# The receiver of bug reports at bug.cbb.tools (src/bugd.rs).
+[[bin]]
+name = "cbb-bug"
+path = "src/bug_main.rs"
+required-features = ["tunnel"]
+
 # The blind relay, a service of its own (src/relayd).
 [[bin]]
 name = "cbb-relay"

@@ -290,7 +290,7 @@ pub fn fingerprint(kind: &str, name: &str, at: &str, details: &str) -> String {
 }
 
 /// The day of ms, `YYYY-MM-DD` in UTC.
-fn day(ms: i64) -> String {
+pub fn day(ms: i64) -> String {
     if ms <= 0 {
         return String::new();
     }
