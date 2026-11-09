@@ -86,7 +86,8 @@ struct StartView: View {
                 Text("Restore with the recovery key")
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(minWidth: 44, minHeight: 44)
+                    .padding(.vertical, Tokens.spacingSmall)
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(Rectangle())
             }
             .font(.footnote)

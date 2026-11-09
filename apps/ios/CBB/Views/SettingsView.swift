@@ -470,7 +470,8 @@ struct ColorSwatches: View {
                             }
                             .padding(3)
                             .overlay(Circle().stroke(chosen ? swatch.accent : .clear, lineWidth: 2))
-                        Text(AccentChoice.title(pair.name)).font(.caption2).lineLimit(1).minimumScaleFactor(0.8)
+                        Text(AccentChoice.title(pair.name)).font(.caption2)
+                            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(chosen ? palette.text : palette.textDim)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
