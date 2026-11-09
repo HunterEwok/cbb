@@ -30,7 +30,7 @@ func TestContainerHoldsNoKeys(t *testing.T) {
 	if id, err := group.Load(nas.dir); err != nil || id.AdminKey != nil {
 		t.Fatalf("the container made an admin key: %v", err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpAdmin, Name: "nas"}, ""); err == nil || !strings.Contains(err.Error(), "offers no admin key") {
+	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Name: "nas"}, ""); err == nil || !strings.Contains(err.Error(), "offers no admin key") {
 		t.Fatalf("making the container an admin: %v", err)
 	}
 	if _, err := nas.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
@@ -74,7 +74,7 @@ func TestRootlessHoldsNoKeys(t *testing.T) {
 		}
 		return false
 	})
-	if _, err := pi.do(t, control.Header{Op: control.OpAdmin, Name: "box", Consent: true}, ""); err == nil || !strings.Contains(err.Error(), "without root") {
+	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Name: "box", Consent: true}, ""); err == nil || !strings.Contains(err.Error(), "without root") {
 		t.Fatalf("making the rootless install an admin: %v", err)
 	}
 	if _, err := box.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {

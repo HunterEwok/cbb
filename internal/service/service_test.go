@@ -340,7 +340,7 @@ func makeAdmin(t *testing.T, root, s *testService) {
 	var err error
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		m, err = root.do(t, control.Header{Op: control.OpAdmin, Name: s.name, Consent: true}, "")
+		m, err = root.do(t, control.Header{Op: control.OpMakeAdmin, Name: s.name, Consent: true}, "")
 		if err == nil || !strings.Contains(err.Error(), "is not connected") || time.Now().After(deadline) {
 			break
 		}
@@ -820,7 +820,7 @@ func TestControlSocketMode(t *testing.T) {
 func TestAdminOpsOnlyOnTheAdminSocket(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
-	for _, op := range []string{control.OpNew, control.OpPair, control.OpRevoke, control.OpAway, control.OpAdmin, "unknown"} {
+	for _, op := range []string{control.OpNew, control.OpPair, control.OpRemove, control.OpAway, control.OpMakeAdmin, "unknown"} {
 		c, err := control.Dial(pi.socket)
 		if err != nil {
 			t.Fatal(err)
@@ -956,20 +956,20 @@ func TestDevicesAndRevoke(t *testing.T) {
 		}
 	}
 
-	if _, err := laptop.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
+	if _, err := laptop.do(t, control.Header{Op: control.OpRemove, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
 		t.Errorf("revoke on the laptop: %v", err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "cannot remove itself") {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Name: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "cannot remove itself") {
 		t.Errorf("revoking itself: %v", err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "toaster"}, ""); err == nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Name: "toaster"}, ""); err == nil {
 		t.Error("revoked a device that is not there")
 	}
-	if _, err := deck.do(t, control.Header{Op: control.OpAdmin, Name: "laptop"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
+	if _, err := deck.do(t, control.Header{Op: control.OpMakeAdmin, Name: "laptop"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
 		t.Errorf("admin on a member that is not the root: %v", err)
 	}
 	makeAdmin(t, pi, deck)
-	if _, err := pi.do(t, control.Header{Op: control.OpAdmin, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "already an admin") {
+	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "already an admin") {
 		t.Errorf("making an admin twice: %v", err)
 	}
 	waitFor(t, "the laptop sees the admin", func() bool {
@@ -980,11 +980,11 @@ func TestDevicesAndRevoke(t *testing.T) {
 		}
 		return false
 	})
-	if _, err := deck.do(t, control.Header{Op: control.OpRevoke, Name: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "holds the group's root") {
+	if _, err := deck.do(t, control.Header{Op: control.OpRemove, Name: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "holds the group's root") {
 		t.Errorf("revoking the root: %v", err)
 	}
 	// The admin removes a member.
-	m, err := deck.do(t, control.Header{Op: control.OpRevoke, Name: "LAPTOP"}, "")
+	m, err := deck.do(t, control.Header{Op: control.OpRemove, Name: "LAPTOP"}, "")
 	if err != nil || m.Name != "laptop" {
 		t.Fatalf("revoke the laptop: %+v, %v", m, err)
 	}
@@ -995,7 +995,7 @@ func TestDevicesAndRevoke(t *testing.T) {
 	}
 	waitFor(t, "the laptop is alone", func() bool { return len(laptop.status(t).Peers) == 0 })
 	// The root removes the admin.
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Name: "deck"}, ""); err != nil {
 		t.Fatalf("revoke the admin: %v", err)
 	}
 	waitFor(t, "the pi is alone", func() bool { return listed(pi.devices(t)) == "pi" && len(pi.status(t).Peers) == 0 })
@@ -1020,10 +1020,10 @@ func TestOnlyTheRootRemovesAnAdmin(t *testing.T) {
 	makeAdmin(t, pi, a)
 	makeAdmin(t, pi, b)
 	b.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpRevoke, Name: "b"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
+	if _, err := a.do(t, control.Header{Op: control.OpRemove, Name: "b"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
 		t.Errorf("an admin removed another admin: %v", err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "b"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Name: "b"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "a drops b", func() bool { return listed(a.devices(t)) == "a pi" })
@@ -1044,18 +1044,18 @@ func TestTakeover(t *testing.T) {
 	makeAdmin(t, pi, a)
 	pairWith(t, a, c)
 	old, _ := group.Load(pi.dir)
-	if _, err := b.do(t, control.Header{Op: control.OpTakeover, Name: "pi"}, ""); err == nil {
+	if _, err := b.do(t, control.Header{Op: control.OpTakeOver, Name: "pi"}, ""); err == nil {
 		t.Error("a member that is no admin took the group over")
 	}
-	if _, err := a.do(t, control.Header{Op: control.OpTakeover, Name: "b"}, ""); err == nil {
+	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Name: "b"}, ""); err == nil {
 		t.Error("an admin took the group over from a device that is not its root")
 	}
 	noClaimWait(t, pi, a, b, c)
 	pi.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpRevoke, Name: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "cbb takeover") {
+	if _, err := a.do(t, control.Header{Op: control.OpRemove, Name: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "cbb takeover") {
 		t.Errorf("revoking the root: %v", err)
 	}
-	if m, err := a.do(t, control.Header{Op: control.OpTakeover, Name: "pi"}, ""); err != nil || m.Name != "pi" {
+	if m, err := a.do(t, control.Header{Op: control.OpTakeOver, Name: "pi"}, ""); err != nil || m.Name != "pi" {
 		t.Fatalf("takeover: %+v, %v", m, err)
 	}
 	// The claim takes effect as soon as a evaluates it, and a then makes
@@ -1150,7 +1150,7 @@ func TestSecondTakeover(t *testing.T) {
 	makeAdmin(t, pi, b)
 	noClaimWait(t, pi, a, b, c)
 	pi.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpTakeover, Name: "pi"}, ""); err != nil {
+	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Name: "pi"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	ra, _ := group.Load(a.dir)
@@ -1179,7 +1179,7 @@ func TestSecondTakeover(t *testing.T) {
 	}
 	waitFor(t, "b has c's new name", func() bool { return named(b) })
 	a.stop()
-	if _, err := b.do(t, control.Header{Op: control.OpTakeover, Name: "a"}, ""); err != nil {
+	if _, err := b.do(t, control.Header{Op: control.OpTakeOver, Name: "a"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	id, _ := group.Load(b.dir)
@@ -1263,7 +1263,7 @@ func TestUnfrozenAfterTakeover(t *testing.T) {
 	})
 	noClaimWait(t, pi, a) // b, frozen, is refused
 	pi.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpTakeover, Name: "pi"}, ""); err != nil {
+	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Name: "pi"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := a.do(t, control.Header{Op: control.OpThaw, Name: "b"}, ""); err != nil {
@@ -1276,7 +1276,7 @@ func TestUnfrozenAfterTakeover(t *testing.T) {
 	})
 	noClaimWait(t, a, b)
 	a.stop()
-	if _, err := b.do(t, control.Header{Op: control.OpTakeover, Name: "a"}, ""); err != nil {
+	if _, err := b.do(t, control.Header{Op: control.OpTakeOver, Name: "a"}, ""); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1296,7 +1296,7 @@ func TestAwayDuringTakeover(t *testing.T) {
 	noClaimWait(t, pi, a, c)
 	c.stop()
 	pi.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpTakeover, Name: "pi"}, ""); err != nil {
+	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Name: "pi"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	c = restartService(t, &h, c)
@@ -1324,7 +1324,7 @@ func TestTakeoverUndone(t *testing.T) {
 	noClaimWait(t, pi, a, b)
 	old, _ := group.Load(pi.dir)
 	pi.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpTakeover, Name: "pi"}, ""); err != nil {
+	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Name: "pi"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "b follows the new root", func() bool {
@@ -1343,7 +1343,7 @@ func TestTakeoverUndone(t *testing.T) {
 			}
 		}
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "a"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Name: "a"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "b is back under the old root", func() bool {
@@ -1395,7 +1395,7 @@ func TestFreezeAnAdmin(t *testing.T) {
 	}
 	waitFor(t, "the root and b hear of the freeze", func() bool { return frozen(pi) && frozen(b) })
 	waitFor(t, "b is refused", func() bool { return len(pi.status(t).Peers) == 1 })
-	if _, err := b.do(t, control.Header{Op: control.OpRevoke, Name: "a"}, ""); err == nil {
+	if _, err := b.do(t, control.Header{Op: control.OpRemove, Name: "a"}, ""); err == nil {
 		t.Error("a frozen admin signed a record")
 	}
 	if _, err := a.do(t, control.Header{Op: control.OpThaw, Name: "b"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {

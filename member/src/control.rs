@@ -694,9 +694,9 @@ pub fn is_admin(op: &str) -> bool {
         op,
         "copy"
             | "paste"
-            | "copy-media"
-            | "copied-media"
-            | "paste-media"
+            | "copy_media"
+            | "copied_media"
+            | "paste_media"
             | "part"
             | "data"
             | "config"
@@ -716,10 +716,10 @@ pub fn is_admin(op: &str) -> bool {
             // The signed release cbb update fetched, for the group, and the
             // one held.
             | "release"
-            | "release-get"
-            | "release-held"
+            | "release_get"
+            | "release_held"
             | "entries"
-            | "entries-get"
+            | "entries_get"
             // The uinput helper, as root, through the socket's group; the
             // service checks that it is root.
             | "keys"

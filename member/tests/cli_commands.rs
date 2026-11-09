@@ -83,6 +83,35 @@ impl Default for Case {
 type Answers = Vec<(Value, Vec<u8>)>;
 type Handler = Arc<dyn Fn(&Sent) -> Answers + Send + Sync>;
 
+/// A request's envelope, {"op", "args", "len", "seq"}, as one flat object,
+/// so that the checks read its fields by name.
+fn flatten(v: Value) -> Value {
+    let mut flat = v["args"].as_object().cloned().unwrap_or_default();
+    for k in ["op", "len", "seq"] {
+        if let Some(x) = v.get(k) {
+            flat.insert(k.into(), x.clone());
+        }
+    }
+    Value::Object(flat)
+}
+
+/// A flat answer put in its envelope: error, detail, done, len and seq
+/// beside, the rest in ok unless it failed.
+fn answer_envelope(a: Value) -> Value {
+    let mut fields = a.as_object().cloned().unwrap_or_default();
+    fields.remove("op");
+    let mut out = serde_json::Map::new();
+    for k in ["error", "detail", "details", "done", "len", "seq"] {
+        if let Some(x) = fields.remove(k) {
+            out.insert(k.into(), x);
+        }
+    }
+    if !out.contains_key("error") {
+        out.insert("ok".into(), Value::Object(fields));
+    }
+    Value::Object(out)
+}
+
 /// Serves one socket: every request on every connection gets handle's
 /// answers.
 fn serve(l: UnixListener, handle: Handler, got: Arc<Mutex<Vec<Sent>>>) {
@@ -98,7 +127,7 @@ fn serve(l: UnixListener, handle: Handler, got: Arc<Mutex<Vec<Sent>>>) {
                     if r.read_until(b'\n', &mut line).unwrap_or(0) == 0 {
                         return;
                     }
-                    let Ok(h) = serde_json::from_slice::<Value>(&line) else { return };
+                    let Ok(h) = serde_json::from_slice::<Value>(&line).map(flatten) else { return };
                     let mut body = vec![0u8; h["len"].as_u64().unwrap_or(0) as usize];
                     if r.read_exact(&mut body).is_err() {
                         return;
@@ -106,11 +135,10 @@ fn serve(l: UnixListener, handle: Handler, got: Arc<Mutex<Vec<Sent>>>) {
                     let sent = Sent { h, payload: body };
                     got.lock().unwrap().push(sent.clone());
                     for (mut a, payload) in handle(&sent) {
-                        a["op"] = json!("reply");
                         if !payload.is_empty() {
                             a["len"] = json!(payload.len());
                         }
-                        let mut out = serde_json::to_vec(&a).unwrap();
+                        let mut out = serde_json::to_vec(&answer_envelope(a)).unwrap();
                         out.push(b'\n');
                         out.extend_from_slice(&payload);
                         if w.write_all(&out).is_err() {
@@ -283,7 +311,7 @@ fn device_commands() {
                 name: "remove",
                 args: &["remove", "laptop"],
                 answer: json!({"name": "laptop"}),
-                sent: Some(("revoke", Some(|s| s.s("name") == "laptop"))),
+                sent: Some(("remove", Some(|s| s.s("name") == "laptop"))),
                 stdout: "Removed laptop from the group",
                 ..Case::default()
             },
@@ -291,7 +319,7 @@ fn device_commands() {
                 name: "remove refused",
                 args: &["remove", "laptop"],
                 answer: err("no device laptop in the group"),
-                sent: Some(("revoke", None)),
+                sent: Some(("remove", None)),
                 code: 1,
                 stderr: "no device laptop in the group",
                 ..Case::default()
@@ -314,7 +342,7 @@ fn device_commands() {
             Case {
                 name: "takeover delay",
                 args: &["takeover", "-delay", "24h"],
-                sent: Some(("takeover-delay", Some(|s| s.s("value") == "24h"))),
+                sent: Some(("takeover_delay", Some(|s| s.s("value") == "24h"))),
                 stdout: "now waits 24h",
                 ..Case::default()
             },
@@ -329,7 +357,7 @@ fn device_commands() {
                 name: "key level",
                 args: &["keys", "hardware"],
                 answer: json!({"below": ["desk"]}),
-                sent: Some(("key-level", Some(|s| s.s("value") == "hardware"))),
+                sent: Some(("key_level", Some(|s| s.s("value") == "hardware"))),
                 stdout: "Below it: desk.",
                 ..Case::default()
             },
@@ -419,7 +447,7 @@ fn device_commands() {
                 name: "admin",
                 args: &["admin", "desk"],
                 answer: json!({"name": "desk"}),
-                sent: Some(("admin", Some(|s| s.s("name") == "desk" && !s.b("consent")))),
+                sent: Some(("make_admin", Some(|s| s.s("name") == "desk" && !s.b("consent")))),
                 stdout: "desk is an admin now",
                 ..Case::default()
             },
@@ -427,7 +455,7 @@ fn device_commands() {
                 name: "admin with a file key",
                 args: &["admin", "-allow-file-key", "desk"],
                 answer: json!({"name": "desk"}),
-                sent: Some(("admin", Some(|s| s.b("consent")))),
+                sent: Some(("make_admin", Some(|s| s.b("consent")))),
                 stdout: "guard it",
                 ..Case::default()
             },
@@ -435,7 +463,7 @@ fn device_commands() {
                 name: "admin refused",
                 args: &["admin", "desk"],
                 answer: refused,
-                sent: Some(("admin", None)),
+                sent: Some(("make_admin", None)),
                 code: 1,
                 stderr: "only the group's root",
                 ..Case::default()
@@ -452,7 +480,7 @@ fn device_commands() {
                 name: "takeover",
                 args: &["takeover", "old"],
                 answer: json!({"name": "old"}),
-                sent: Some(("takeover", Some(|s| s.s("name") == "old"))),
+                sent: Some(("take_over", Some(|s| s.s("name") == "old"))),
                 stdout: "Claimed the group from old",
                 ..Case::default()
             },
@@ -625,7 +653,7 @@ fn action_commands() {
             Case {
                 name: "run on another device",
                 args: &["action", "-on", "desk", "lock"],
-                sent: Some(("action-on", Some(|s| s.s("device") == "desk" && s.s("name") == "lock"))),
+                sent: Some(("action_on", Some(|s| s.s("device") == "desk" && s.s("name") == "lock"))),
                 stdout: "desk ran lock.",
                 ..Case::default()
             },
@@ -633,7 +661,7 @@ fn action_commands() {
                 name: "run refused",
                 args: &["action", "-on", "desk", "lock"],
                 answer: err("lock is off on desk"),
-                sent: Some(("action-on", None)),
+                sent: Some(("action_on", None)),
                 code: 1,
                 stderr: "lock is off on desk",
                 ..Case::default()
@@ -694,7 +722,7 @@ fn action_commands() {
                 name: "add",
                 args: &["action", "add", "backup", "-by", "phone", "-yes", "--", "/usr/bin/backup", "--now"],
                 sent: Some((
-                    "action-set",
+                    "action_set",
                     Some(|s| {
                         let a = &s.h["actions"];
                         a.as_array().map(|a| a.len()) == Some(1)
@@ -711,7 +739,7 @@ fn action_commands() {
                 name: "add with yes typed",
                 args: &["action", "add", "backup", "--", "/usr/bin/backup"],
                 stdin: "YES\n",
-                sent: Some(("action-set", None)),
+                sent: Some(("action_set", None)),
                 stdout: "backup: on, for every admin",
                 ..Case::default()
             },
@@ -719,7 +747,7 @@ fn action_commands() {
                 name: "add refused",
                 args: &["action", "add", "backup", "-yes", "--", "/usr/bin/backup"],
                 answer: err("too many actions"),
-                sent: Some(("action-set", None)),
+                sent: Some(("action_set", None)),
                 code: 1,
                 stderr: "too many actions",
                 ..Case::default()
@@ -740,7 +768,7 @@ fn action_commands() {
             Case {
                 name: "remove",
                 args: &["action", "remove", "backup"],
-                sent: Some(("action-remove", Some(|s| s.s("name") == "backup"))),
+                sent: Some(("action_remove", Some(|s| s.s("name") == "backup"))),
                 stdout: "backup is removed.",
                 ..Case::default()
             },
@@ -754,14 +782,14 @@ fn action_commands() {
             Case {
                 name: "off elsewhere",
                 args: &["action", "off", "-on", "desk"],
-                sent: Some(("actions-off", Some(|s| s.s("device") == "desk" && !s.b("all")))),
+                sent: Some(("actions_off", Some(|s| s.s("device") == "desk" && !s.b("all")))),
                 stdout: "off on desk.",
                 ..Case::default()
             },
             Case {
                 name: "off everywhere",
                 args: &["action", "off", "-all"],
-                sent: Some(("actions-off", Some(|s| s.b("all")))),
+                sent: Some(("actions_off", Some(|s| s.b("all")))),
                 stdout: "off on every device of the group.",
                 ..Case::default()
             },
@@ -776,7 +804,7 @@ fn action_commands() {
                 name: "off refused",
                 args: &["action", "off", "-all"],
                 answer: err("only admins"),
-                sent: Some(("actions-off", None)),
+                sent: Some(("actions_off", None)),
                 code: 1,
                 stderr: "only admins",
                 ..Case::default()
@@ -1153,28 +1181,28 @@ fn paste_receive_flags() {
     let answer =
         || json!({"status": {"device": "d1", "role": "full", "version": "0.6.0", "port": 0, "paste": {"on": true}}});
     run_cases(
-        "paste-receive",
+        "paste_receive",
         vec![
             // The usage's order, on before its flags, and the flags first.
             Case {
                 name: "on, then flags",
                 args: &["paste-receive", "on", "-console", "-enter"],
                 answer: answer(),
-                sent: Some(("paste-receive", Some(|s| s.s("name") == "on" && s.b("console") && s.b("enter")))),
+                sent: Some(("paste_receive", Some(|s| s.s("name") == "on" && s.b("console") && s.b("enter")))),
                 ..Case::default()
             },
             Case {
                 name: "flags, then on",
                 args: &["paste-receive", "-console", "-enter", "on"],
                 answer: answer(),
-                sent: Some(("paste-receive", Some(|s| s.s("name") == "on" && s.b("console") && s.b("enter")))),
+                sent: Some(("paste_receive", Some(|s| s.s("name") == "on" && s.b("console") && s.b("enter")))),
                 ..Case::default()
             },
             Case {
                 name: "off elsewhere",
                 args: &["paste-receive", "off", "-on", "deck"],
                 answer: answer(),
-                sent: Some(("paste-receive", Some(|s| s.s("name") == "off" && s.s("device") == "deck"))),
+                sent: Some(("paste_receive", Some(|s| s.s("name") == "off" && s.s("device") == "deck"))),
                 ..Case::default()
             },
             Case { name: "on and off", args: &["paste-receive", "on", "off"], code: 2, ..Case::default() },
@@ -1501,14 +1529,14 @@ fn keyboard_commands() {
 #[test]
 fn paste_on_another_device() {
     run_cases(
-        "paste-on",
+        "paste_on",
         vec![
             Case {
                 name: "paste",
                 args: &["paste", "-on", "desk"],
                 stdin: "hello",
                 sent: Some((
-                    "paste-on",
+                    "paste_on",
                     Some(|s| {
                         s.s("device") == "desk"
                             && s.s("method") == "paste"
@@ -1524,7 +1552,7 @@ fn paste_on_another_device() {
                 name: "typed secret with Enter",
                 args: &["paste", "-on", "desk", "-type", "-enter", "-secret"],
                 stdin: "pw",
-                sent: Some(("paste-on", Some(|s| s.s("method") == "type" && s.s("kind") == "secret" && s.b("enter")))),
+                sent: Some(("paste_on", Some(|s| s.s("method") == "type" && s.s("kind") == "secret" && s.b("enter")))),
                 ..Case::default()
             },
             Case {
@@ -1548,7 +1576,7 @@ fn paste_on_another_device() {
                 args: &["paste", "-on", "desk"],
                 stdin: "x",
                 answer: err("remote paste is off on desk"),
-                sent: Some(("paste-on", None)),
+                sent: Some(("paste_on", None)),
                 code: 1,
                 stderr: "off on desk",
                 ..Case::default()
@@ -2309,7 +2337,7 @@ fn copy_service(refused: &'static str) -> Handler {
 
 /// What cbb copy sent: the text alternative and each part with its bytes.
 fn copied(r: &Run) -> (String, Vec<(Value, Vec<u8>)>) {
-    let text = r.sent.iter().find(|s| s.op() == "copy-media").map(text).unwrap_or_default();
+    let text = r.sent.iter().find(|s| s.op() == "copy_media").map(text).unwrap_or_default();
     let mut parts: Vec<(Value, Vec<u8>)> = Vec::new();
     for s in &r.sent {
         match s.op() {
@@ -2380,7 +2408,7 @@ fn paste_files() {
     let o = out.to_str().unwrap().to_string();
     let serve = |parts: Vec<(Value, &'static [u8])>| {
         handler(move |s| {
-            if s.op() != "paste-media" {
+            if s.op() != "paste_media" {
                 return vec![];
             }
             let mut a = vec![(json!({}), Vec::new())];

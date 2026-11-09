@@ -138,7 +138,7 @@ func TestTunnelKeys(t *testing.T) {
 	}
 
 	// Removing the laptop drops it from the hub.
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "laptop"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Name: "laptop"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the hub drops the laptop", func() bool {

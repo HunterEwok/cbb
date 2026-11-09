@@ -61,7 +61,7 @@ func TestLeave(t *testing.T) {
 	if _, err := deck.do(t, control.Header{Op: control.OpSync, Name: "off"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Name: "deck"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the deck sees it was removed", func() bool { return deck.status(t).Removed })
@@ -90,7 +90,7 @@ func TestLeave(t *testing.T) {
 	waitFor(t, "the deck is back", func() bool { return listed(pi.devices(t)) == "deck pi" && !deck.status(t).Removed })
 
 	// Alone, the root leaves, and the group is gone.
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Name: "deck"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the pi is alone", func() bool { return listed(pi.devices(t)) == "pi" })
@@ -137,7 +137,7 @@ func TestLiteLeave(t *testing.T) {
 	dir := joinLite(t, bin, pi)
 	lite := startLite(t, bin, dir, "-no-mdns", "-peer", pi.addr())
 	waitFor(t, "the lite member connects", func() bool { return len(pi.status(t).Peers) == 1 })
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "lite"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Name: "lite"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the lite member sees it was removed", func() bool {

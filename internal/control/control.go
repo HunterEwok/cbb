@@ -38,7 +38,7 @@ const (
 	OpPair        = "pair"           // client → service: open a pairing window; answers follow
 	OpJoin        = "join"           // client → service: join a group with a code
 	OpDevices     = "devices"        // client → service: list the group's devices
-	OpRevoke      = "revoke"         // client → service: remove the device Name names (a name or a device ID)
+	OpRemove      = "remove"         // client → service: remove the device Name names (a name or a device ID)
 	OpRename      = "rename"         // client → service: give the device Name names the name NewName
 	OpFreeze      = "freeze"         // client → service: freeze the admin computer Name names
 	OpThaw        = "thaw"           // client → service: on the root, unfreeze the admin computer Name names
@@ -46,13 +46,13 @@ const (
 	OpAway        = "away"           // client → service: Name "on", "off", "hub", "hub-off", "move" (to Device) or "relay": sync away from home
 	OpSync        = "sync"           // client → service: Name "on" or "off" (for ForMS, 0 for until turned on): sync this device's clipboard with the group, or with Device as an admin (no ForMS)
 	OpNetwork     = "network"        // client → service: take the networks this device is on now as known
-	OpAdmin       = "admin"          // client → service: on the root, make the device Name names an admin
-	OpTakeover    = "takeover"       // client → service: on an admin, take the group over from the lost root Name names
-	OpDelay       = "takeover-delay" // client → service: on the root, set how long a claim waits to Value, a duration
-	OpKeyLevel    = "key-level"      // client → service: on the root, set the group's key level to Value (proven, hardware or files); answer: Below
+	OpMakeAdmin   = "make_admin"     // client → service: on the root, make the device Name names an admin
+	OpTakeOver    = "take_over"      // client → service: on an admin, take the group over from the lost root Name names
+	OpDelay       = "takeover_delay" // client → service: on the root, set how long a claim waits to Value, a duration
+	OpKeyLevel    = "key_level"      // client → service: on the root, set the group's key level to Value (proven, hardware or files); answer: Below
 	OpIncoming    = "incoming"       // client → service: on the root or an admin, set how long a copy from another device stays live to Value, a duration
-	OpRecovery    = "recovery"       // client → service: claim the group with its recovery key, the payload the sheet's text or QR code, or with Name RecoveryCard the YubiKey's PIN
-	OpHandover    = "handover"       // client → service: on the root, hand the group to the admin Name names, whose claim then takes effect at once
+	OpRecover     = "recover"        // client → service: claim the group with its recovery key, the payload the sheet's text or QR code, or with Name RecoveryCard the YubiKey's PIN
+	OpHandOver    = "hand_over"      // client → service: on the root, hand the group to the admin Name names, whose claim then takes effect at once
 	OpHubs        = "hubs"           // client → service: on the root or an admin with hub, sign the table of main hubs Hubs (names or device IDs)
 	OpLeave       = "leave"          // client → service: leave the group: delete its keys and files, keep the settings, restart in no group
 	OpInvite      = "invite"         // client → service: make a remote invitation on the hub; answers and a question follow
@@ -61,31 +61,31 @@ const (
 	OpCopied      = "copied"         // watcher → service: the clipboard changed
 	OpClipboard   = "clipboard"      // watcher → service: what the clipboard holds, without a change
 	OpWrite       = "write"          // service → watcher: put this text into the clipboard; with Kind media, the images paste-media gives
-	OpPasteOn     = "paste-on"       // client → service: as an admin, have the member Device put the payload where its focus is
-	OpReceive     = "paste-receive"  // client → service: Name "on" or "off": remote paste on this device, or off on Device or All
+	OpPasteOn     = "paste_on"       // client → service: as an admin, have the member Device put the payload where its focus is
+	OpReceive     = "paste_receive"  // client → service: Name "on" or "off": remote paste on this device, or off on Device or All
 	OpInject      = "inject"         // service → watcher: put the payload where the focus is, a remote paste
 	OpInjected    = "injected"       // watcher → service: how the inject with Seq ended: Error empty, or why not
-	OpActionSet   = "action-set"     // client → service: set this device's quick action Actions[0]: on or off, and for whom
-	OpActionOn    = "action-on"      // client → service: as an admin, have the member Device run its action Name
-	OpActionOff   = "actions-off"    // client → service: as an admin, turn every quick action off on Device or All
-	OpActionDel   = "action-remove"  // client → service: remove this device's own action Name
+	OpActionSet   = "action_set"     // client → service: set this device's quick action Actions[0]: on or off, and for whom
+	OpActionOn    = "action_on"      // client → service: as an admin, have the member Device run its action Name
+	OpActionOff   = "actions_off"    // client → service: as an admin, turn every quick action off on Device or All
+	OpActionDel   = "action_remove"  // client → service: remove this device's own action Name
 	OpAct         = "act"            // service → watcher: run the quick action Name in the watcher's session
 	OpActed       = "acted"          // watcher → service: how the act with Seq ended: Error empty, or why not
 	OpReply       = "reply"          // service → client: the answer to a request
-	OpCopyMedia   = "copy-media"     // client → service: copy images or files, the payload their plain-text alternative; part and data messages follow
+	OpCopyMedia   = "copy_media"     // client → service: copy images or files, the payload their plain-text alternative; part and data messages follow
 	OpPart        = "part"           // client → service in copy-media, or a reply in paste-media: the next part (Part), its bytes in data messages; Done ends the parts
 	OpData        = "data"           // client → service in copy-media, or a reply in paste-media: the next bytes of the part
-	OpPasteMedia  = "paste-media"    // client → service: ask for the images or files of the member's own clipboard; parts follow
-	OpCopiedMedia = "copied-media"   // watcher → service: the clipboard changed to an image, as copy-media carries it
+	OpPasteMedia  = "paste_media"    // client → service: ask for the images or files of the member's own clipboard; parts follow
+	OpCopiedMedia = "copied_media"   // watcher → service: the clipboard changed to an image, as copy-media carries it
 	OpConfig      = "config"         // client → service: show the settings, or set the setting Name to Value
 	OpRelease     = "release"        // client → service: the payload a Release in JSON, a signed release cbb update fetched, for the group
-	OpReleaseFile = "release-file"   // client → service: an archive of the held release that cbb update installed, Value its SHA-256 and Part its size, its bytes in data messages
-	OpReleaseGet  = "release-get"    // client → service: the archive of the held release whose SHA-256 is Value, from this device or its peers; a reply with Part, its bytes, then Done
-	OpReleaseHeld = "release-held"   // client → service: the signed release this device holds, a Release in JSON, for cbb update when no update server answers
+	OpReleaseFile = "release_file"   // client → service: an archive of the held release that cbb update installed, Value its SHA-256 and Part its size, its bytes in data messages
+	OpReleaseGet  = "release_get"    // client → service: the archive of the held release whose SHA-256 is Value, from this device or its peers; a reply with Part, its bytes, then Done
+	OpReleaseHeld = "release_held"   // client → service: the signed release this device holds, a Release in JSON, for cbb update when no update server answers
 	OpEntries     = "entries"        // client → service: the signed entry points, keys.json and entries.json in JSON ({keys, entries}), from cbb update or a string, for the group
-	OpEntriesGet  = "entries-get"    // client → service: the signed entry points this device holds, in the same JSON
-	OpUpdateWay   = "update-way"     // client → service: the VLESS settings, a tunnel.VLESS in JSON, by which cbb update reaches the mirror on the hub's forwarder; empty without VLESS
-	OpReleaseWant = "release-want"   // client → service: on a hub, the names of the held release's archives the group's members update from and it does not hold, in JSON, for cbb update to download
+	OpEntriesGet  = "entries_get"    // client → service: the signed entry points this device holds, in the same JSON
+	OpUpdateWay   = "update_way"     // client → service: the VLESS settings, a tunnel.VLESS in JSON, by which cbb update reaches the mirror on the hub's forwarder; empty without VLESS
+	OpReleaseWant = "release_want"   // client → service: on a hub, the names of the held release's archives the group's members update from and it does not hold, in JSON, for cbb update to download
 	OpKeyboard    = "keyboard"       // client → service: Name "on" (Keyboard the settings), "off", "pair", "type" (the payload) or "" (status): this computer as a Bluetooth keyboard
 	OpKeys        = "keys"           // uinput helper (root) → service: may it press Name ("paste" or "enter") for the user Value, under the grant Keys of an inject
 	OpMute        = "mute"           // client → service: as an admin, mute Device for ForMS, 0 for until unmute: its copies then stay its own
@@ -93,7 +93,7 @@ const (
 	OpRemote      = "remote"         // client → service: Name "add" (Address, Value the kind, NewName, Consent), "code" (Code), "cancel", "remove", "pastes" (Value on or off), "type" (the payload), for the TV Device, or "" (status): this device as a TV's remote
 )
 
-// RecoveryCard is OpRecovery's Name when the recovery key is on a YubiKey.
+// RecoveryCard is OpRecover's Name when the recovery key is on a YubiKey.
 const RecoveryCard = "yubikey"
 
 // Kinds and the ways a text came, as Header.Kind and Header.Via carry them.

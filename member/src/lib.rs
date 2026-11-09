@@ -1201,7 +1201,7 @@ fn cmd_paste_receive(g: &Global, args: &[String]) -> Result<()> {
     while let Some(a) = it.next() {
         match (a.as_str(), flag(a)) {
             ("on" | "off", _) if h.name.is_empty() => {
-                h.op = "paste-receive".into();
+                h.op = "paste_receive".into();
                 h.name = a.clone();
             }
             (_, Some("enter")) => (h.enter, on_flags) = (true, true),
@@ -1294,20 +1294,20 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             return Ok(());
         }
         [v, a, d] if v == "off" && flag(a) == Some("on") => {
-            let h = control::Header { op: "actions-off".into(), device: d.clone(), ..Default::default() };
+            let h = control::Header { op: "actions_off".into(), device: d.clone(), ..Default::default() };
             request(g, &control::Message::new(h, Vec::new()))?;
             println!("{}", tr!("The quick actions are off on {}.", d));
             return Ok(());
         }
         [v, a] if v == "off" && flag(a) == Some("all") => {
-            let h = control::Header { op: "actions-off".into(), all: true, ..Default::default() };
+            let h = control::Header { op: "actions_off".into(), all: true, ..Default::default() };
             request(g, &control::Message::new(h, Vec::new()))?;
             println!("{}", tr!("The quick actions are off on every device of the group."));
             return Ok(());
         }
         [a, d, name] if flag(a) == Some("on") && flag(name).is_none() => {
             let h =
-                control::Header { op: "action-on".into(), device: d.clone(), name: name.clone(), ..Default::default() };
+                control::Header { op: "action_on".into(), device: d.clone(), name: name.clone(), ..Default::default() };
             request(g, &control::Message::new(h, Vec::new()))?;
             println!("{}", tr!("{} ran {}.", d, name));
             return Ok(());
@@ -1315,7 +1315,7 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
         [v] if v == "off" => {
             let m = request(
                 g,
-                &control::Message::new(control::Header { op: "actions-off".into(), ..Default::default() }, Vec::new()),
+                &control::Message::new(control::Header { op: "actions_off".into(), ..Default::default() }, Vec::new()),
             )?;
             // The rights go too, when this runs as root here.
             if let Err(e) = grant(&m)
@@ -1327,7 +1327,7 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             return Ok(());
         }
         [v, name] if v == "remove" => {
-            let h = control::Header { op: "action-remove".into(), name: name.clone(), ..Default::default() };
+            let h = control::Header { op: "action_remove".into(), name: name.clone(), ..Default::default() };
             let m = request(g, &control::Message::new(h, Vec::new()))?;
             grant(&m)?;
             println!("{}", tr!("{} is removed.", name));
@@ -1372,13 +1372,13 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             return Err(Error::msg("the action stays as it was"));
         }
     }
-    let h = control::Header { op: "action-set".into(), actions: vec![a.clone()], ..Default::default() };
+    let h = control::Header { op: "action_set".into(), actions: vec![a.clone()], ..Default::default() };
     let m = request(g, &control::Message::new(h, Vec::new()))?;
     if let Err(e) = grant(&m) {
         if a.on {
             // Without the right the action would only fail; leave it off.
             let off = control::Action { on: false, ..a.clone() };
-            let h = control::Header { op: "action-set".into(), actions: vec![off], ..Default::default() };
+            let h = control::Header { op: "action_set".into(), actions: vec![off], ..Default::default() };
             let _ = request(g, &control::Message::new(h, Vec::new()));
         }
         return Err(e.context(format!("giving the service the right to {}", a.name)));
@@ -1775,15 +1775,15 @@ impl update::Group for ServiceLink<'_> {
     }
 
     fn held(&self) -> Result<serde_json::Value> {
-        let m = self.ask("release-held", Vec::new())?;
+        let m = self.ask("release_held", Vec::new())?;
         serde_json::from_slice(&m.payload).context("the service's release does not decode")
     }
 
     fn get(&self, sha: &str, size: i64, path: &std::path::Path) -> Result<()> {
         use std::io::Write;
         // The service tries its peers for a while before it answers.
-        let (mut c, mut r) = self.open("release-get", Duration::from_secs(15 * 60))?;
-        let h = control::Header { op: "release-get".into(), value: sha.into(), ..Default::default() };
+        let (mut c, mut r) = self.open("release_get", Duration::from_secs(15 * 60))?;
+        let h = control::Header { op: "release_get".into(), value: sha.into(), ..Default::default() };
         control::write(&mut c, &control::Message::new(h, Vec::new()))?;
         let first = Self::answer(&mut r)?;
         if first.header.part.as_ref().map(|p| p.size) != Some(size) {
@@ -1812,10 +1812,10 @@ impl update::Group for ServiceLink<'_> {
         use std::io::Read;
         let res = (|| -> Result<()> {
             let mut f = std::fs::File::open(path).context("cannot read the archive")?;
-            let (mut c, mut r) = self.open("release-file", Duration::from_secs(120))?;
+            let (mut c, mut r) = self.open("release_file", Duration::from_secs(120))?;
             let part = control::Part { size, ..Default::default() };
             let h = control::Header {
-                op: "release-file".into(),
+                op: "release_file".into(),
                 value: sha.into(),
                 part: Some(part),
                 ..Default::default()
@@ -1838,7 +1838,7 @@ impl update::Group for ServiceLink<'_> {
     }
 
     fn want(&self) -> Vec<String> {
-        self.ask("release-want", Vec::new())
+        self.ask("release_want", Vec::new())
             .ok()
             .and_then(|m| serde_json::from_slice::<Option<Vec<String>>>(&m.payload).ok().flatten())
             .unwrap_or_default()

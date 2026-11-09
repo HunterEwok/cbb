@@ -609,7 +609,7 @@ fn entries(g: &Global, args: &[String]) -> Result<()> {
 
 /// The signed entry points the service holds.
 fn held_entries(g: &Global) -> Result<serde_json::Value> {
-    let m = request(g, &Message::new(Header { op: "entries-get".into(), ..Default::default() }, Vec::new()))?;
+    let m = request(g, &Message::new(Header { op: "entries_get".into(), ..Default::default() }, Vec::new()))?;
     serde_json::from_slice(&m.payload).map_err(|_| Error::msg("the service sent entry points that do not decode"))
 }
 

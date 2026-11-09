@@ -1039,7 +1039,7 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
 /// again for a minute.
 fn set_paste(g: &crate::Global, on: bool, enter: bool, log: &mpsc::Sender<Msg>) {
     let h = crate::control::Header {
-        op: "paste-receive".into(),
+        op: "paste_receive".into(),
         name: if on { "on" } else { "off" }.into(),
         enter,
         ..Default::default()

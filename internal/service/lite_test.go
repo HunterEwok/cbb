@@ -917,7 +917,7 @@ func TestFFIPhoneTakeover(t *testing.T) {
 	if st := ok2(manage(`{"action":"finish_takeover","root_ca":"` + root + `"}`))["state"]; st != "none" {
 		t.Fatalf("a claim before claiming: %v", st)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpHandover, Name: "admin phone"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpHandOver, Name: "admin phone"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the phone holds the handover", func() bool {

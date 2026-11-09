@@ -45,7 +45,7 @@ fn one_device<'a>(args: &'a [String], use_: &str) -> Result<&'a str> {
 /// cbb remove.
 pub(crate) fn remove(g: &Global, args: &[String]) -> Result<()> {
     let name = one_device(args, "cbb remove <name or device ID>; cbb status lists them")?;
-    let m = ask(g, Header { name: name.into(), ..header("revoke") })?;
+    let m = ask(g, Header { name: name.into(), ..header("remove") })?;
     println!(
         "{}",
         tr!("Removed {} from the group. The other members refuse it as soon as they hear of it.", m.header.name)
@@ -79,7 +79,7 @@ pub(crate) fn takeover(g: &Global, args: &[String]) -> Result<()> {
         if help_flag(d) {
             return Err(usage("cbb takeover -delay <duration>, from 0s to 168h, as 72h"));
         }
-        ask(g, Header { value: d.clone(), ..header("takeover-delay") })?;
+        ask(g, Header { value: d.clone(), ..header("takeover_delay") })?;
         println!(
             "{}",
             tr!("A claim to take the group over now waits {} on each member, from when it first holds the claim.", d)
@@ -87,7 +87,7 @@ pub(crate) fn takeover(g: &Global, args: &[String]) -> Result<()> {
         return Ok(());
     }
     let name = one_device(args, "cbb takeover <name or device ID of the lost root>; cbb status shows it")?;
-    let m = ask(g, Header { name: name.into(), ..header("takeover") })?;
+    let m = ask(g, Header { name: name.into(), ..header("take_over") })?;
     println!(
         "{}",
         tr!(
@@ -168,7 +168,7 @@ pub(crate) fn keys(g: &Global, args: &[String]) -> Result<()> {
             println!("{}", key_level_line(&s.key_level));
         }
         [a] if !help_flag(a) => {
-            let m = ask(g, Header { value: a.clone(), ..header("key-level") })?;
+            let m = ask(g, Header { value: a.clone(), ..header("key_level") })?;
             println!("{}", key_level_line(a));
             if !m.header.below.is_empty() {
                 println!(
@@ -246,7 +246,7 @@ pub(crate) fn admin(g: &Global, args: &[String]) -> Result<()> {
         }
     }
     let [name] = names.as_slice() else { return Err(usage(USE)) };
-    let m = ask(g, Header { name: name.clone(), consent: allow, ..header("admin") })?;
+    let m = ask(g, Header { name: name.clone(), consent: allow, ..header("make_admin") })?;
     println!("{}", tr!("{} is an admin now: it can admit and remove devices.", m.header.name));
     if allow {
         println!(
@@ -284,7 +284,7 @@ pub(crate) fn handover(g: &Global, args: &[String]) -> Result<()> {
         args,
         "cbb handover <name or device ID of an admin>; on the group's root, it lets that admin take the group over at once",
     )?;
-    let m = ask(g, Header { name: name.into(), ..header("handover") })?;
+    let m = ask(g, Header { name: name.into(), ..header("hand_over") })?;
     println!(
         "{}",
         tr!(
@@ -430,7 +430,7 @@ fn read_secret_line(limit: usize) -> Result<String> {
 /// cmdRecovery. The key comes from standard input, never the command line.
 pub(crate) fn recovery(g: &Global, args: &[String]) -> Result<()> {
     use std::io::IsTerminal;
-    let mut h = Header { kind: "secret".into(), ..header("recovery") };
+    let mut h = Header { kind: "secret".into(), ..header("recover") };
     match args {
         [] => {}
         [a] if flag(a) == Some("yubikey") => h.name = "yubikey".into(),

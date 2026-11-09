@@ -2015,7 +2015,7 @@ impl Service {
             self.watch(m, r, out);
             return;
         }
-        if m.header.op == "copy-media" || m.header.op == "copied-media" {
+        if m.header.op == "copy_media" || m.header.op == "copied_media" {
             let answer = match self.copy_media(&m, &mut r) {
                 Ok(()) => control::reply(Header::default(), Vec::new()),
                 Err(e) => {
@@ -2067,7 +2067,7 @@ impl Service {
             }
             return;
         }
-        if m.header.op == "release-file" {
+        if m.header.op == "release_file" {
             let answer = match self.receive_release_file(&m, &mut r) {
                 Ok(()) => control::reply(Header::default(), Vec::new()),
                 Err(e) => {
@@ -2082,14 +2082,14 @@ impl Service {
             let _ = control::write(&mut out, &answer);
             return;
         }
-        if m.header.op == "release-get" {
+        if m.header.op == "release_get" {
             if let Err(e) = self.send_release_file(&m.header.value, &mut out) {
                 (self.log)(&format!("cbb: release-get: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));
             }
             return;
         }
-        if m.header.op == "paste-media" {
+        if m.header.op == "paste_media" {
             if let Err(e) = self.paste_media(&mut out, &m.header.value) {
                 let _ = control::write(&mut out, &control::failure(&e));
             }
@@ -2114,7 +2114,7 @@ impl Service {
         let limit = self.limits.lock().unwrap().home;
         let mut got = copies::receive(r, &m.payload, limit, &self.tmp_dir()?)?;
         let parts = std::mem::take(&mut got.parts);
-        let ev = if m.header.op == "copied-media" {
+        let ev = if m.header.op == "copied_media" {
             node.copied_media(&got.text, parts, Via::Copy)?
         } else {
             Some(node.send_media(&got.text, parts, Via::Copy)?)
@@ -2427,7 +2427,7 @@ impl Service {
                 self.node()?.put_entries(&set)?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
             }
-            "entries-get" => {
+            "entries_get" => {
                 let set = self
                     .node()?
                     .entries()
@@ -2446,11 +2446,11 @@ impl Service {
                 self.node()?.put_release(&set)?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
             }
-            "release-want" => {
+            "release_want" => {
                 let data = serde_json::to_vec(&self.wanted_release_files()?).context("cannot encode the files")?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, data))
             }
-            "release-held" => {
+            "release_held" => {
                 let set = self
                     .node()?
                     .releases()
@@ -2459,7 +2459,7 @@ impl Service {
                 let data = serde_json::to_vec(&set).context("cannot encode the release")?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, data))
             }
-            "update-way" => {
+            "update_way" => {
                 let node = self.node()?;
                 let data = match self.away()?.update_way(&node) {
                     Some(v) => serde_json::to_vec(&v).context("cannot encode the way")?,
@@ -2467,7 +2467,7 @@ impl Service {
                 };
                 Ok(control::reply(Header { done: true, ..Default::default() }, data))
             }
-            "paste-receive" => self.set_receive(h),
+            "paste_receive" => self.set_receive(h),
             "keyboard" | "remote" => {
                 let p = self.peripherals.serve(&h.op, h, &m.payload)?;
                 // With the paste targets, which a TV that pastes joins, as
@@ -2476,8 +2476,8 @@ impl Service {
                     Status { keyboard: p.keyboard, tvs: p.tvs, paste: self.paste_status(), ..Default::default() };
                 Ok(control::reply(Header { status: Some(status), done: true, ..Default::default() }, Vec::new()))
             }
-            "action-set" => self.set_action(h),
-            "actions-off" => {
+            "action_set" => self.set_action(h),
+            "actions_off" => {
                 let node = self.node()?;
                 let off_here = || {
                     self.all_actions_off(&node)?;
@@ -2491,12 +2491,12 @@ impl Service {
                 }
                 Ok(self.action_reply(&actions::load(&self.state_dir)?))
             }
-            "action-on" => {
+            "action_on" => {
                 self.admin(|a| a.action_on(&h.device, &h.name))?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
             }
-            "action-remove" => self.remove_action(h),
-            "paste-on" => self.paste_on(h, &m.payload),
+            "action_remove" => self.remove_action(h),
+            "paste_on" => self.paste_on(h, &m.payload),
             "mute" | "unmute" => {
                 self.mute_op(h)?;
                 Ok(control::reply(Header::default(), Vec::new()))
@@ -2521,7 +2521,7 @@ impl Service {
                 self.request(&status)
             }
             "new" => self.new_group(),
-            "revoke" => {
+            "remove" => {
                 let name = self.admin(|a| a.revoke(&h.name))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
@@ -2537,15 +2537,15 @@ impl Service {
                 let who = self.admin(|a| a.resolve())?;
                 Ok(control::reply(Header { name: who.join(", "), done: true, ..Default::default() }, Vec::new()))
             }
-            "admin" => {
+            "make_admin" => {
                 let name = self.admin(|a| a.make_admin(&h.name, h.consent))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "key-level" => {
+            "key_level" => {
                 let below = self.admin(|a| a.set_key_level(&h.value))?;
                 Ok(control::reply(Header { below, done: true, ..Default::default() }, Vec::new()))
             }
-            "takeover-delay" => {
+            "takeover_delay" => {
                 self.admin(|a| a.set_takeover_delay(&h.value))?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
@@ -2553,11 +2553,11 @@ impl Service {
                 self.admin(|a| a.set_incoming(&h.value))?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
-            "takeover" => {
+            "take_over" => {
                 let name = self.admin(|a| a.take_over(&h.name))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "recovery" => {
+            "recover" => {
                 let text = String::from_utf8_lossy(&m.payload).to_string();
                 if h.name == "yubikey" {
                     self.admin(|a| a.recover_with_card(&text))?;
@@ -2566,7 +2566,7 @@ impl Service {
                 }
                 Ok(control::reply(Header::default(), Vec::new()))
             }
-            "handover" => {
+            "hand_over" => {
                 let name = self.admin(|a| a.hand_over(&h.name))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }

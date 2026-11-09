@@ -438,7 +438,7 @@ pub(crate) fn latest_image(g: &Global) -> Result<(String, Vec<u8>)> {
     let mut w = conn.try_clone().context("cannot reach the service")?;
     control::write(
         &mut w,
-        &control::Message::new(control::Header { op: "paste-media".into(), ..Default::default() }, Vec::new()),
+        &control::Message::new(control::Header { op: "paste_media".into(), ..Default::default() }, Vec::new()),
     )?;
     let mut r = control::Reader::new(conn);
     let mut next = || -> Result<control::Message> {
