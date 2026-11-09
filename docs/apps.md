@@ -771,7 +771,7 @@ for Face ID (D-94, docs/protocol.md section 3):
 - **When it asks.** Before the admin key signs: making a group or joining as an admin, which
   sets the PIN (typed twice, at least four digits), adding a device, an action on a device's
   page, the root's decision on an alert, the takeover and its finish. The app hands the PIN
-  to the TEE and wipes it at once; the token then stays logged in for two minutes after its
+  to the TEE and wipes it at once; the token then stays logged in for five minutes (as the iPhone app trusts one Face ID) after its
   last use and is logged out when the app leaves the screen; renewals of the members'
   certificates go only while it is logged in. The dialog asks not to reuse the phone's unlock
   code. Settings change it ("Change the

@@ -59,7 +59,7 @@ bool memberTokenKnown()
 // The tries Aurora's TA gives a user PIN before it locks (measured).
 const int pinTries = 7;
 // How long the admin token stays logged in after its last use.
-const qint64 pinHoldMs = 2 * 60 * 1000;
+const qint64 pinHoldMs = 5 * 60 * 1000;
 
 QString hex(CK_RV rv) { return QStringLiteral("0x%1").arg(rv, 0, 16); }
 

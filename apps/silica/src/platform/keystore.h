@@ -82,8 +82,8 @@ enum class PinResult { Right, Wrong, Locked, Failed };
 
 // Checks pin against the token, setting it first when none is set, and on
 // Right keeps the token logged in, the PIN itself not kept: the admin key
-// then signs without asking until it has not been used for two minutes, or
-// dropAdminPin logs it out. A wrong PIN spends one of
+// then signs without asking until it has not been used for five minutes
+// (as long as the iPhone app trusts one Face ID), or dropAdminPin logs it out. A wrong PIN spends one of
 // the seven tries; after says how many are left. Blocks.
 PinResult enterAdminPin(const QByteArray &pin, PinStatus *after, Failure *failure);
 
