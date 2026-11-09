@@ -1104,6 +1104,7 @@ impl Node {
     /// receiver; or one for a command it passed on, which goes back to
     /// where the command came from, once.
     fn take_result(&self, mut res: wire::CommandResult, from: &DeviceId) {
+        res.reason = wire::clean_reason(&res.reason);
         if let Some(w) = self.waiting.lock().unwrap().get(&res.id) {
             if res.by == w.to.as_str() || (res.by.is_empty() && from == &w.to) {
                 let _ = w.tx.try_send(res);
@@ -1854,17 +1855,9 @@ impl Node {
                 "result" if m.result.is_some() => self.take_result(m.result.unwrap(), &c.id),
                 "get" if self.content.is_some() => {
                     let Some(g) = m.get.filter(wire::Get::valid) else { continue };
-                    let mut gets = c.gets.lock().unwrap();
-                    if g.length == 0 {
-                        gets.retain(|q| q.sha256 != g.sha256);
-                        continue;
+                    if queue_get(&mut c.gets.lock().unwrap(), g).map_err(|e| Error::msg(format!("{} {e}", c.id)))? {
+                        let _ = c.tx.try_send(Out::Wake);
                     }
-                    if gets.len() >= MAX_GETS {
-                        return Err(Error::msg(format!("{} asked for more than {MAX_GETS} ranges at once", c.id)));
-                    }
-                    gets.push_back(g);
-                    drop(gets);
-                    let _ = c.tx.try_send(Out::Wake);
                 }
                 "missing" => {
                     let sum: Option<[u8; 32]> = m.get.and_then(|g| g.sha256.try_into().ok());
@@ -2376,6 +2369,22 @@ fn next_piece(c: &Conn, store: &Store, releases: &Releases) -> Option<Vec<u8>> {
     }
 }
 
+/// Takes a peer's get into its queue and reports whether there is a new
+/// range to serve. A cancel (length 0) drops the queued ranges of its blob
+/// and is kept nowhere, so cancels of other blobs hold nothing; more than
+/// MAX_GETS ranges at once end the connection.
+fn queue_get(gets: &mut VecDeque<wire::Get>, g: wire::Get) -> Result<bool> {
+    if g.length == 0 {
+        gets.retain(|q| q.sha256 != g.sha256);
+        return Ok(false);
+    }
+    if gets.len() >= MAX_GETS {
+        return Err(Error::msg(format!("asked for more than {MAX_GETS} ranges at once")));
+    }
+    gets.push_back(g);
+    Ok(true)
+}
+
 /// Reads one frame: a message, or a chunk frame, whose length word has its
 /// top bit set ("Content" in docs/protocol.md, section 4).
 fn read_any(r: &mut impl Read) -> Result<Frame> {
@@ -2502,8 +2511,54 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
-    use super::{MAX_HOME, remember_found};
+    use super::{MAX_GETS, MAX_HOME, queue_get, read_any, remember_found};
     use crate::certs::DeviceId;
+    use crate::wire;
+
+    /// A peer's cancels of blobs it is not served are kept nowhere, a
+    /// cancel drops only its own blob's ranges, and the ranges a peer asks
+    /// for at once are bounded.
+    #[test]
+    fn gets_are_bounded() {
+        let get = |b: u8, offset: i64, length: i64| wire::Get { sha256: vec![b; 32], offset, length };
+        let mut gets = std::collections::VecDeque::new();
+        assert!(queue_get(&mut gets, get(1, 0, 10)).unwrap());
+        assert!(queue_get(&mut gets, get(2, 0, 10)).unwrap());
+        for b in 3..=255 {
+            assert!(!queue_get(&mut gets, get(b, 0, 0)).unwrap());
+        }
+        assert_eq!(gets.len(), 2);
+        assert!(!queue_get(&mut gets, get(1, 0, 0)).unwrap());
+        assert_eq!(gets.iter().map(|g| g.sha256[0]).collect::<Vec<_>>(), [2]);
+        for i in 1..MAX_GETS {
+            assert!(queue_get(&mut gets, get(2, i as i64 * 10, 10)).unwrap());
+        }
+        assert!(queue_get(&mut gets, get(2, 0, 10)).is_err());
+        assert_eq!(gets.len(), MAX_GETS);
+    }
+
+    /// A frame's length is checked before its body is read: a message frame
+    /// past MAX_FRAME and a chunk frame past MAX_CHUNK_FRAME end the
+    /// connection, as does one cut short.
+    #[test]
+    fn frames_are_bounded() {
+        let read = |head: u32, body: &[u8]| {
+            let mut b = head.to_be_bytes().to_vec();
+            b.extend_from_slice(body);
+            read_any(&mut std::io::Cursor::new(b))
+        };
+        let ping = br#"{"t":"ping"}"#;
+        assert!(matches!(read(ping.len() as u32, ping), Ok(super::Frame::Message(_))));
+        assert!(read(ping.len() as u32 + 1, ping).is_err());
+        // A message padded past MAX_FRAME would decode: only its length refuses it.
+        let mut big = ping.to_vec();
+        big.resize(wire::MAX_FRAME, b' ');
+        assert!(matches!(read(big.len() as u32, &big), Ok(super::Frame::Message(_))));
+        big.push(b' ');
+        assert!(read(big.len() as u32, &big).is_err());
+        assert!(read(0x8000_0000 | (wire::MAX_CHUNK_FRAME as u32 + 1), &[]).is_err());
+        assert!(read(u32::MAX, &[]).is_err());
+    }
     #[test]
     fn found_is_bounded() {
         let mut home = HashMap::new();

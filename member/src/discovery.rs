@@ -174,6 +174,22 @@ const RECHECK: Duration = Duration::from_secs(5);
 /// The addresses of a found member; None once it is gone.
 type Addrs = Arc<Mutex<Option<Vec<SocketAddr>>>>;
 
+/// Keeps the addresses of a found member: a member found again takes the
+/// new ones, and a new one is kept while fewer than MAX_FOUND are, and
+/// returned to be dialed. A member past MAX_FOUND is not dialed.
+fn remember<K: std::hash::Hash + Eq>(found: &mut HashMap<K, Addrs>, key: K, addrs: Vec<SocketAddr>) -> Option<Addrs> {
+    if let Some(a) = found.get(&key) {
+        *a.lock().unwrap() = Some(addrs);
+        return None;
+    }
+    if found.len() >= MAX_FOUND {
+        return None;
+    }
+    let a: Addrs = Arc::new(Mutex::new(Some(addrs)));
+    found.insert(key, a.clone());
+    Some(a)
+}
+
 /// Dials the member at addrs again and again: at once after this member
 /// ended the connection to connect again (a new hello), a second after a
 /// connection that came up ended, and after a round of failures 1 s,
@@ -395,16 +411,11 @@ impl Dialers {
         let mut addrs: Vec<SocketAddr> = addrs.into_iter().filter(|a| home_address(a.ip())).collect();
         addrs.sort_by_key(|a| (a.ip().is_ipv6(), a.ip().is_loopback()));
         addrs.dedup();
-        let mut found = self.found.lock().unwrap();
-        if let Some(a) = found.get(key) {
-            *a.lock().unwrap() = Some(addrs);
-        } else if found.len() < MAX_FOUND {
-            let a: Addrs = Arc::new(Mutex::new(Some(addrs)));
-            found.insert(key.to_string(), a.clone());
+        let a = remember(&mut self.found.lock().unwrap(), key.to_string(), addrs);
+        if let Some(a) = a {
             let node = node.clone();
             std::thread::spawn(move || dial_loop(node, a, peer));
         }
-        drop(found);
         node.kick();
     }
 
@@ -631,22 +642,17 @@ fn browse(
                 if addrs.is_empty() {
                     continue;
                 }
-                match found.get(&id) {
-                    Some(cur) => {
-                        node.found(&id, true);
-                        *cur.lock().unwrap() = Some(addrs)
-                    }
-                    // Anyone on the network can announce the group's tag, so
-                    // the members dialed are bounded, as in Go.
-                    None if found.len() >= MAX_FOUND => continue,
-                    None => {
-                        node.found(&id, true);
-                        log(&format!("cbb: found {id} at {}", addrs[0]));
-                        let cur: Addrs = Arc::new(Mutex::new(Some(addrs)));
-                        found.insert(id.clone(), cur.clone());
-                        let node = node.clone();
-                        std::thread::spawn(move || dial_loop_as(node, cur, Some(id), later));
-                    }
+                // Anyone on the network can announce the group's tag, so
+                // the members dialed are bounded, as in Go.
+                if !found.contains_key(&id) && found.len() >= MAX_FOUND {
+                    continue;
+                }
+                node.found(&id, true);
+                let first = addrs[0];
+                if let Some(cur) = remember(&mut found, id.clone(), addrs) {
+                    log(&format!("cbb: found {id} at {first}"));
+                    let node = node.clone();
+                    std::thread::spawn(move || dial_loop_as(node, cur, Some(id), later));
                 }
             }
             mdns_sd::ServiceEvent::ServiceRemoved(_, fullname) => {
@@ -713,6 +719,24 @@ mod tests {
         let want = DeviceId::parse(id).ok();
         assert_eq!(instance_id(&format!("{id} (9).{SERVICE}")), want);
         assert_eq!(instance_id(&format!("{id}.{SERVICE}")), want);
+    }
+
+    /// The members found and dialed are bounded: past MAX_FOUND a new one is
+    /// not dialed, while one found again takes its new addresses.
+    #[test]
+    fn dials_at_most_max_found() {
+        use super::{MAX_FOUND, remember};
+        let addr = |i: usize| vec![std::net::SocketAddr::from(([192, 168, 0, (i % 250) as u8], 7000))];
+        let mut found = std::collections::HashMap::new();
+        for i in 0..MAX_FOUND {
+            assert!(remember(&mut found, i, addr(i)).is_some(), "member {i}");
+        }
+        assert!(remember(&mut found, MAX_FOUND, addr(1)).is_none());
+        assert_eq!(found.len(), MAX_FOUND);
+        assert!(remember(&mut found, 3, addr(9)).is_none());
+        assert_eq!(*found[&3].lock().unwrap(), Some(addr(9)));
+        found.remove(&0);
+        assert!(remember(&mut found, MAX_FOUND, addr(1)).is_some());
     }
 
     /// A connection this member ended to send a new hello (a mode, a tunnel
