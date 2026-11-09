@@ -100,11 +100,12 @@ rise but not fall. When the table says "raise the floor", raise it in the same p
 | `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `lite` job |
-| `rust-lite` | lines of `member/src/` (much of it is tested by Go's tests of the lite member, which are not counted) | as `rust-core` |
+| `rust-lite` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
+| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service` and the desktop connector, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb` job |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
 
-The aims are 80% for `go` and 85% to 90% for the protocol's core in each implementation.
+The aims are 80% for `go`, 85% to 90% for the protocol's core in each implementation, and 90% for `rust-service`.
 A number is a hint, not the goal: a test that runs a line without checking what it did
 raises it and proves nothing.
 
@@ -113,6 +114,19 @@ To see Go's numbers locally:
 ```sh
 go test -coverpkg=./cmd/...,./internal/... -coverprofile=cover.out ./cmd/... ./internal/...
 go run ./tools/coverage -go cover.out -floor tools/coverage/floor.json
+```
+
+And the Rust service's, on Linux (the tests of `internal/service` need mDNS, so a computer on a
+network or a container with one of its own):
+
+```sh
+eval "$(cargo llvm-cov show-env --sh)"
+cargo llvm-cov clean --workspace
+cargo test --release -p cbb-lite && cargo build --release -p cbb-lite
+CGO_ENABLED=0 go build -o target/release/cbb-helper ./cmd/cbb-helper
+CBB_TEST_RUST_SERVICE=$PWD/target/release/cbb CBB_LITE=$PWD/target/release/cbb go test ./internal/service
+cargo llvm-cov report --release --json --summary-only --output-path service.json
+go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/floor.json
 ```
 
 ## Mutation testing
