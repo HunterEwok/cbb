@@ -322,7 +322,8 @@ final class MacModel: ObservableObject {
     /// turned on again: the clipboard is then this Mac's own. Any user of
     /// the Mac may, over the plain socket.
     func turnSync(_ on: Bool, forMS: Int64 = 0) async {
-        var h = Control.Header(op: "sync", name: on ? "on" : "off")
+        var h = Control.Header(op: "sync")
+        h.on = on
         if !on, forMS > 0 { h.forMS = forMS }
         await act {
             _ = try await self.client.request(h)

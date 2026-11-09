@@ -630,7 +630,7 @@ void Member::readAway(const QJsonValue &away)
         bool online = false;
         for (const QVariant &d : m_devices) {
             const QVariantMap m = d.toMap();
-            if (m.value(QStringLiteral("device")).toString() == hub) {
+            if (m.value(QStringLiteral("id")).toString() == hub) {
                 hubName = m.value(QStringLiteral("name")).toString();
                 online = m.value(QStringLiteral("online")).toBool();
             }

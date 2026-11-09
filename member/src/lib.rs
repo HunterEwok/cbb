@@ -29,7 +29,7 @@ mod benchtime;
 pub mod button;
 mod cli;
 pub mod content;
-mod control;
+pub mod control;
 mod copies;
 pub mod credentials;
 mod device;
@@ -84,7 +84,7 @@ mod third_party {
 mod servers;
 mod service;
 mod signed;
-mod sync;
+pub mod sync;
 mod sys;
 pub mod takeover;
 pub mod tls;
@@ -1130,7 +1130,7 @@ fn cmd_sync(g: &Global, args: &[String]) -> Result<()> {
     }
     let h = match &word {
         Some(w) => {
-            control::Header { op: "sync".into(), name: w.clone(), device: on.clone(), for_ms, ..Default::default() }
+            control::Header { op: "sync".into(), on: Some(w == "on"), device: on.clone(), for_ms, ..Default::default() }
         }
         None => control::Header { op: "status".into(), ..Default::default() },
     };

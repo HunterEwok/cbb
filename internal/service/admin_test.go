@@ -118,7 +118,7 @@ func TestComputerAdmin(t *testing.T) {
 	a := startIn(t, &h, &testService{name: "pi", dir: piDir, os: group.OSLinux})
 	b := startIn(t, &h, &testService{name: "deck", dir: deckDir, os: group.OSLinux})
 	waitFor(t, "pi and deck connected", func() bool { return len(a.status(t).Peers) == 1 })
-	if _, err := a.do(t, control.Header{Op: control.OpRemove, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
+	if _, err := a.do(t, control.Header{Op: control.OpRemove, Device: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
 		t.Errorf("revoke before the pi is an admin: %v", err)
 	}
 	pending, err := group.Load(piDir)
@@ -151,7 +151,7 @@ func TestComputerAdmin(t *testing.T) {
 		})
 	}
 
-	if _, err := a.do(t, control.Header{Op: control.OpRemove, Name: "iphone"}, ""); err == nil || !strings.Contains(err.Error(), "group's root") {
+	if _, err := a.do(t, control.Header{Op: control.OpRemove, Device: "iphone"}, ""); err == nil || !strings.Contains(err.Error(), "group's root") {
 		t.Errorf("revoking the root phone: %v", err)
 	}
 	// The pi admits a computer from its admin CA, which every member
@@ -166,7 +166,7 @@ func TestComputerAdmin(t *testing.T) {
 		waitFor(t, s.name+" lists the laptop", func() bool { return listed(s.devices(t)) == "deck iphone laptop pi" })
 		waitFor(t, s.name+" connected", func() bool { return len(s.status(t).Peers) >= 2 })
 	}
-	if _, err := a.do(t, control.Header{Op: control.OpRemove, Name: "laptop"}, ""); err != nil {
+	if _, err := a.do(t, control.Header{Op: control.OpRemove, Device: "laptop"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the deck drops the laptop", func() bool { return listed(b.devices(t)) == "deck iphone pi" })
@@ -181,7 +181,7 @@ func TestAdminOfFileKeys(t *testing.T) {
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	waitFor(t, "deck is connected to the root", func() bool { return len(pi.status(t).Peers) == 1 })
-	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "-allow-file-key") {
+	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "-allow-file-key") {
 		t.Fatalf("admin without consent: %v", err)
 	}
 	makeAdmin(t, pi, deck)
@@ -235,22 +235,22 @@ func TestRename(t *testing.T) {
 	pairWith(t, pi, laptop)
 	waitFor(t, "the laptop lists every device", func() bool { return listed(laptop.devices(t)) == "deck laptop pi" })
 	makeAdmin(t, pi, deck)
-	if _, err := laptop.do(t, control.Header{Op: control.OpRename, Name: "deck", NewName: "steam deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
+	if _, err := laptop.do(t, control.Header{Op: control.OpRename, Device: "deck", Name: "steam deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
 		t.Errorf("rename on the laptop: %v", err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpRename, Name: "deck", NewName: " "}, ""); err == nil || !strings.Contains(err.Error(), "1 to 64") {
+	if _, err := pi.do(t, control.Header{Op: control.OpRename, Device: "deck", Name: " "}, ""); err == nil || !strings.Contains(err.Error(), "1 to 64") {
 		t.Errorf("an empty name: %v", err)
 	}
-	m, err := pi.do(t, control.Header{Op: control.OpRename, Name: "deck", NewName: "steam deck"}, "")
+	m, err := pi.do(t, control.Header{Op: control.OpRename, Device: "deck", Name: "steam deck"}, "")
 	if err != nil || m.Name != "deck" {
 		t.Fatalf("rename: %+v %v", m, err)
 	}
 	// Only the root renames itself or an admin (docs/protocol.md, section 10, "Who
 	// signs what").
-	if _, err := deck.do(t, control.Header{Op: control.OpRename, Name: "pi", NewName: "pi4"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
+	if _, err := deck.do(t, control.Header{Op: control.OpRename, Device: "pi", Name: "pi4"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
 		t.Errorf("the admin renamed the root: %v", err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpRename, Name: "pi", NewName: "pi4"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRename, Device: "pi", Name: "pi4"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, s := range []*testService{pi, deck, laptop} {

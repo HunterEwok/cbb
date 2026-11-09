@@ -734,7 +734,7 @@ QVariantList App::arranged(const QVariantList &devices, int)
     QStringList ids;
     QHash<QString, QVariant> byId;
     for (const QVariant &d : devices) {
-        const QString id = d.toMap().value(QStringLiteral("device")).toString();
+        const QString id = d.toMap().value(QStringLiteral("id")).toString();
         ids << id;
         byId.insert(id, d);
     }

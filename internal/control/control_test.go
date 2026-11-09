@@ -156,10 +156,10 @@ func TestNames(t *testing.T) {
 // TestNeedsAdmin: this device's own sync is on either socket; another
 // device's sync and a mute only on the admin socket.
 func TestNeedsAdmin(t *testing.T) {
-	if NeedsAdmin(Header{Op: OpSync, Name: "off"}) {
+	if NeedsAdmin(Header{Op: OpSync, On: Bool(false)}) {
 		t.Error("turning this device's sync off needs the admin socket")
 	}
-	if !NeedsAdmin(Header{Op: OpSync, Name: "off", Device: "beta"}) || !NeedsAdmin(Header{Op: OpMute, Device: "beta"}) || !NeedsAdmin(Header{Op: OpUnmute, Device: "beta"}) {
+	if !NeedsAdmin(Header{Op: OpSync, On: Bool(false), Device: "beta"}) || !NeedsAdmin(Header{Op: OpMute, Device: "beta"}) || !NeedsAdmin(Header{Op: OpUnmute, Device: "beta"}) {
 		t.Error("another device's sync or mute does not need the admin socket")
 	}
 }

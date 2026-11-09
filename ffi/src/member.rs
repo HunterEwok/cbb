@@ -89,8 +89,9 @@ struct Request {
 #[derive(Deserialize)]
 struct CopyArgs {
     text: String,
+    /// text (the default) or secret, as the control socket's copy.
     #[serde(default)]
-    secret: bool,
+    kind: String,
     /// The text came from the phone's clipboard (the default), not from
     /// another app's share.
     #[serde(default = "yes")]
@@ -384,27 +385,6 @@ fn listen_kind(v: &Value) -> Result<Option<Listen>> {
     }
 }
 
-#[derive(Serialize)]
-struct DeviceAnswer {
-    device: String,
-    name: String,
-    role: String,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    caps: Vec<String>,
-    os: String,
-    admin: bool,
-    root: bool,
-    frozen: bool,
-    online: bool,
-    #[serde(rename = "self")]
-    this: bool,
-    listed: bool,
-    sync: String,
-    version: String,
-    os_version: String,
-    mac: String,
-}
-
 /// The app's callback and its context, called from the member's threads.
 #[derive(Clone, Copy)]
 struct Events {
@@ -574,7 +554,12 @@ impl Member {
             // The clipboard and the button (docs/design.md, "The one button").
             "copy" => {
                 let a: CopyArgs = args(a)?;
-                n.copy(&a.text, a.secret, a.board)?;
+                let secret = match a.kind.as_str() {
+                    "" | "text" => false,
+                    "secret" => true,
+                    other => return Err(Error::msg(format!("a copy is a text or a secret, not {other:?}"))),
+                };
+                n.copy(&a.text, secret, a.board)?;
                 done()
             }
             "copy_media" => {
@@ -662,7 +647,7 @@ impl Member {
                 let ms = arg(&a, "timeout_ms").as_u64().unwrap_or(5_000).min(60_000);
                 Ok(json!({ "connected": n.wait_connected(Duration::from_millis(ms)) }))
             }
-            "mute" => {
+            "set_mute" => {
                 n.set_mute(arg(&a, "until_ms").as_i64());
                 done()
             }
@@ -738,11 +723,13 @@ impl Member {
             "away_status" => Ok(json!({ "away": n.away_status() })),
             // Every device of the group as the app shows it.
             "devices" => {
-                let ds: Vec<DeviceAnswer> = n
+                // The same devices, in the same form, as the control
+                // socket's devices answers on a computer.
+                let ds: Vec<cbb_lite::control::Device> = n
                     .device_views()
                     .into_iter()
-                    .map(|d| DeviceAnswer {
-                        device: d.id,
+                    .map(|d| cbb_lite::control::Device {
+                        id: d.id,
                         name: d.name,
                         role: d.role,
                         caps: d.caps,
@@ -753,10 +740,15 @@ impl Member {
                         online: d.online,
                         this: d.this,
                         listed: d.listed,
-                        sync: d.sync,
+                        mode: match d.sync.as_str() {
+                            "on" => "shared".into(),
+                            "off" => "own".into(),
+                            _ => String::new(),
+                        },
                         version: d.version,
                         os_version: d.os_version,
                         mac: d.mac,
+                        ..Default::default()
                     })
                     .collect();
                 Ok(json!({ "devices": ds }))
@@ -822,13 +814,7 @@ impl Member {
     /// `{"sync_off", "sync_off_ms", "muted", "muted_ms"}`, the times what
     /// is left, 0 for until it is lifted.
     fn state(&self) -> serde_json::Value {
-        let (off, muted) = self.node.muted();
-        serde_json::json!({
-            "sync_off": off.is_some(),
-            "sync_off_ms": off.unwrap_or(0),
-            "muted": muted.is_some(),
-            "muted_ms": muted.unwrap_or(0),
-        })
+        serde_json::to_value(self.node.muted()).unwrap_or_default()
     }
 
     /// Stops the member once; calls answer that it stopped from then on.

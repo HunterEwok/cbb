@@ -386,7 +386,7 @@ func (d *Desk) SetSync(id string, on bool, forMS int64) {
 		return
 	}
 	d.act(func() (string, error) {
-		if _, _, err := d.requestHeader(control.Header{Op: control.OpSync, Name: name, ForMS: forMS}, nil); err != nil {
+		if _, _, err := d.requestHeader(control.Header{Op: control.OpSync, On: &on, ForMS: forMS}, nil); err != nil {
 			return "", err
 		}
 		if on {

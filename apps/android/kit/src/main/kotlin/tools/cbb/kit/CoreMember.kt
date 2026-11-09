@@ -245,7 +245,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
 
     /** Sends a text; board says it came from the phone's clipboard, which the button then compares with it. */
     fun copy(text: String, secret: Boolean = false, board: Boolean = true) {
-        call("copy", Wire.obj("text" to Wire.str(text), "secret" to JsonPrimitive(secret), "board" to JsonPrimitive(board)))
+        call("copy", Wire.obj("text" to Wire.str(text), "kind" to Wire.str(if (secret) "secret" else "text"), "board" to JsonPrimitive(board)))
     }
 
     /** Sends images or files with their plain-text alternative; board says they came from the phone's clipboard. */
@@ -332,7 +332,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
 
     /** Sets until when an admin muted this phone, in Unix milliseconds, 0 for until an admin unmutes it; null unmutes. */
     fun setMute(untilMS: Long?) {
-        call("mute", Wire.obj("until_ms" to (untilMS?.let { JsonPrimitive(it) } ?: JsonNull)))
+        call("set_mute", Wire.obj("until_ms" to (untilMS?.let { JsonPrimitive(it) } ?: JsonNull)))
     }
 
     // What the app shows.

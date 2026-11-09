@@ -1483,6 +1483,17 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- One list of operations for the phones' member and the computers' control socket
+  (docs/core-api.md, "The member's operations"): the same names and bodies on both. Every control
+  message is the core's envelope, a request `{"op", "args"}` and an answer `{"ok"}` or
+  `{"error", "detail"}`. The operations are named in snake case (`copy_media`, `paste_on`,
+  `action_set`, `key_level`, ...); `revoke`, `admin`, `takeover`, `recovery` and `handover` are
+  `remove`, `make_admin`, `take_over`, `recover` and `hand_over`. An admin's operation names its
+  device in `device` (`rename` takes the new name in `name`, `make_admin` the warning's consent in
+  `allow_file_key`), `sync` takes `on` and answers `{sync_off, sync_off_ms, muted, muted_ms}` as
+  the new `muted` does, `copy` on a phone takes `kind` instead of `secret`, the phone's
+  `devices` answers the socket's devices (`id`, `mode`), and its own mute is `set_mute`. The
+  commands of `cbb` keep their names.
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program

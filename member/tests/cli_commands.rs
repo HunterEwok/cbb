@@ -311,7 +311,7 @@ fn device_commands() {
                 name: "remove",
                 args: &["remove", "laptop"],
                 answer: json!({"name": "laptop"}),
-                sent: Some(("remove", Some(|s| s.s("name") == "laptop"))),
+                sent: Some(("remove", Some(|s| s.s("device") == "laptop"))),
                 stdout: "Removed laptop from the group",
                 ..Case::default()
             },
@@ -328,7 +328,7 @@ fn device_commands() {
                 name: "rename",
                 args: &["rename", "laptop", " work "],
                 answer: json!({"name": "laptop"}),
-                sent: Some(("rename", Some(|s| s.s("name") == "laptop" && s.s("new_name") == " work "))),
+                sent: Some(("rename", Some(|s| s.s("device") == "laptop" && s.s("name") == " work "))),
                 stdout: "Renamed laptop to work.",
                 ..Case::default()
             },
@@ -416,7 +416,7 @@ fn device_commands() {
                 name: "freeze",
                 args: &["freeze", "desk"],
                 answer: json!({"name": "desk"}),
-                sent: Some(("freeze", Some(|s| s.s("name") == "desk"))),
+                sent: Some(("freeze", Some(|s| s.s("device") == "desk"))),
                 stdout: "Froze desk",
                 ..Case::default()
             },
@@ -447,7 +447,7 @@ fn device_commands() {
                 name: "admin",
                 args: &["admin", "desk"],
                 answer: json!({"name": "desk"}),
-                sent: Some(("make_admin", Some(|s| s.s("name") == "desk" && !s.b("consent")))),
+                sent: Some(("make_admin", Some(|s| s.s("device") == "desk" && !s.b("allow_file_key")))),
                 stdout: "desk is an admin now",
                 ..Case::default()
             },
@@ -455,7 +455,7 @@ fn device_commands() {
                 name: "admin with a file key",
                 args: &["admin", "-allow-file-key", "desk"],
                 answer: json!({"name": "desk"}),
-                sent: Some(("make_admin", Some(|s| s.b("consent")))),
+                sent: Some(("make_admin", Some(|s| s.b("allow_file_key")))),
                 stdout: "guard it",
                 ..Case::default()
             },
@@ -480,7 +480,7 @@ fn device_commands() {
                 name: "takeover",
                 args: &["takeover", "old"],
                 answer: json!({"name": "old"}),
-                sent: Some(("take_over", Some(|s| s.s("name") == "old"))),
+                sent: Some(("take_over", Some(|s| s.s("device") == "old"))),
                 stdout: "Claimed the group from old",
                 ..Case::default()
             },
@@ -522,7 +522,7 @@ fn sync_and_network() {
                 name: "sync off",
                 args: &["sync", "off"],
                 answer: in_group(json!({"mode": "own"})),
-                sent: Some(("sync", Some(|s| s.s("name") == "off" && s.s("device").is_empty() && s.i("for_ms") == 0))),
+                sent: Some(("sync", Some(|s| s.h["on"] == false && s.s("device").is_empty() && s.i("for_ms") == 0))),
                 stdout: "Sync is off until cbb sync on",
                 ..Case::default()
             },
@@ -530,7 +530,7 @@ fn sync_and_network() {
                 name: "sync off for an hour",
                 args: &["sync", "-for", "1h", "off"],
                 answer: in_group(json!({"mode": "own", "sync_until_ms": 1})),
-                sent: Some(("sync", Some(|s| s.s("name") == "off" && s.i("for_ms") == 3_600_000))),
+                sent: Some(("sync", Some(|s| s.h["on"] == false && s.i("for_ms") == 3_600_000))),
                 stdout: "Sync is off until",
                 ..Case::default()
             },
@@ -538,7 +538,7 @@ fn sync_and_network() {
                 name: "sync off, then the time",
                 args: &["sync", "off", "-for", "15m"],
                 answer: in_group(json!({"mode": "own", "sync_until_ms": 1})),
-                sent: Some(("sync", Some(|s| s.s("name") == "off" && s.i("for_ms") == 900_000))),
+                sent: Some(("sync", Some(|s| s.h["on"] == false && s.i("for_ms") == 900_000))),
                 stdout: "Sync is off until",
                 ..Case::default()
             },
@@ -553,14 +553,14 @@ fn sync_and_network() {
                 name: "sync on",
                 args: &["sync", "on"],
                 answer: in_group(json!({"mode": "shared"})),
-                sent: Some(("sync", Some(|s| s.s("name") == "on"))),
+                sent: Some(("sync", Some(|s| s.h["on"] == true))),
                 stdout: "Sync is on",
                 ..Case::default()
             },
             Case {
                 name: "sync elsewhere",
                 args: &["sync", "-on", "tv", "off"],
-                sent: Some(("sync", Some(|s| s.s("name") == "off" && s.s("device") == "tv"))),
+                sent: Some(("sync", Some(|s| s.h["on"] == false && s.s("device") == "tv"))),
                 stdout: "Sync is off on tv now.",
                 ..Case::default()
             },

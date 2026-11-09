@@ -227,7 +227,7 @@ ends, the Go service described below is still the computers' member.
 - **The clients' operations.** The Rust service already takes what the command line and the
   desktops' agents ask on the control socket: `status`, `devices`, `config` (the largest
   copy, `limits` in its state), `copy` and `paste`, the watchers' `watch`, `clipboard`,
-  `copied` and `write`, and images and files: `copy-media`, `copied-media` and `paste-media`
+  `copied` and `write`, and images and files: `copy_media`, `copied_media` and `paste_media`
   with their `part` and `data` messages. It keeps and serves the blobs of media copies
   (`features: ["media"]`), fetches a copy whole before it writes it to a watcher that takes
   it, and gives the other watchers its text. The Go `cbb` and agent work against it unchanged
@@ -238,8 +238,8 @@ ends, the Go service described below is still the computers' member.
   carries the capabilities its own device record names (or, before it has one, its `-caps`
   flag, all three by default and `admin` and `dials` for the ZX Next's Pi); with `dials` it
   dials the members with a higher device ID, without it it publishes `r=listen` and waits.
-  On the root or an admin it takes `revoke`, `rename`, `freeze`, `thaw`, `resolve`, `admin`,
-  `key-level`, `takeover-delay`, `incoming`, `handover`, `mute` and `unmute` of another
+  On the root or an admin it takes `remove`, `rename`, `freeze`, `thaw`, `resolve`, `make_admin`,
+  `key_level`, `takeover_delay`, `incoming`, `hand_over`, `mute` and `unmute` of another
   device (a command from the core's `manage::order`), and `pair` with a QR code's addresses (`cbb pair -qr`, the core's admission),
   each a record signed with the root's key or the admin key under its admin CA, by Go's rules
   and with Go's messages; the admin's fields of `identity.json` stay as Go writes them when
@@ -253,13 +253,13 @@ ends, the Go service described below is still the computers' member.
   (`Admission::accept`, `TestLiteRootWindow`). With the capability `admin`, it is a computer's service
   before its own device record arrives: its hellos offer an admin key (in the hardware where
   cbb-helper can put it, else `admin_key`), and an `admin` message's admin CA makes it an
-  admin with a member certificate from that CA. On such an admin `takeover` keeps the new
+  admin with a member certificate from that CA. On such an admin `take_over` keeps the new
   root's key as `claim` and `claim_key` and signs the claim; a loop looks at the claims every
   two seconds, as Go's `claimLoop` does, and once the records lead to that root it becomes
   the root (`root_key`) and signs a new root's first records; as root the same loop gives
   each connected admin whose admin CA is from an earlier root a new one for the same key, as
   Go's `renewAdminCAs` (`TestLiteTakeover`). Any
-  member claims the group the same way with the recovery key (`recovery`): the sheet's key,
+  member claims the group the same way with the recovery key (`recover`): the sheet's key,
   or with `yubikey` the card's, which `cbb` signs with after the PIN (`member/src/piv.rs`), signs the
   claim under the recovery key's admin CA from the records or the sheet (`TestLiteRecovery`).
 - **The hub.** On an admin whose key level allows it, `hub` makes the Rust service the

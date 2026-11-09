@@ -147,13 +147,13 @@ func TestRecovery(t *testing.T) {
 	// The new root signs the old root's settings again, the key level too.
 	waitFor(t, "b keeps the group's key level", func() bool { return b.status(t).KeyLevel == level })
 	makeAdmin(t, b, a)
-	if _, err := b.do(t, control.Header{Op: control.OpHandOver, Name: "pi"}, ""); err == nil {
+	if _, err := b.do(t, control.Header{Op: control.OpHandOver, Device: "pi"}, ""); err == nil {
 		t.Error("handed the group to a device that is no admin")
 	}
-	if _, err := a.do(t, control.Header{Op: control.OpHandOver, Name: "b"}, ""); err == nil {
+	if _, err := a.do(t, control.Header{Op: control.OpHandOver, Device: "b"}, ""); err == nil {
 		t.Error("an admin that is no root handed the group over")
 	}
-	if m, err := b.do(t, control.Header{Op: control.OpHandOver, Name: "a"}, ""); err != nil || m.Name != "a" {
+	if m, err := b.do(t, control.Header{Op: control.OpHandOver, Device: "a"}, ""); err != nil || m.Name != "a" {
 		t.Fatalf("handover: %+v, %v", m, err)
 	}
 	waitFor(t, "a holds the handover", func() bool {
@@ -173,7 +173,7 @@ func TestRecovery(t *testing.T) {
 		return false
 	})
 	b.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Name: "b"}, ""); err != nil {
+	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Device: "b"}, ""); err != nil {
 		t.Fatalf("takeover after the handover: %v", err)
 	}
 	waitFor(t, "a is the root at once", func() bool {

@@ -287,13 +287,8 @@ impl Member {
 
     /// How long sync stays off and how long an admin's mute lasts, in
     /// milliseconds: 0 for until it is lifted, None for neither.
-    pub fn muted(&self) -> (Option<i64>, Option<i64>) {
-        let off = match self.node.engine.sync() {
-            (true, _) => None,
-            (false, 0) => Some(0),
-            (false, u) => Some(u.saturating_sub(uptime::wall_ms()).max(1)),
-        };
-        (off, self.node.engine.mute_left())
+    pub fn muted(&self) -> crate::sync::Standing {
+        crate::sync::standing(&self.node.engine)
     }
 
     /// Sends a text the user handed to the app; board says it came from

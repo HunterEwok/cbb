@@ -33,6 +33,8 @@ enum Control {
         /// own pause of receiving, and for how long, nil for until ended.
         var device: String?
         var forMS: Int64?
+        /// sync: on or off.
+        var on: Bool?
         /// A watch request: the app pastes images, files and formatted
         /// text too. paste-media: the copy of a remote paste, and its
         /// answers' parts.
@@ -43,7 +45,7 @@ enum Control {
         var part: Part?
 
         enum CodingKeys: String, CodingKey {
-            case op, kind, len, error, detail, done, name, status, devices, inject, seq, method, enter, refused, device
+            case op, kind, len, error, detail, done, name, status, devices, inject, seq, method, enter, refused, device, on
             case images, files, html, value, part
             case pasteOnly = "paste_only"
             case forMS = "for_ms"

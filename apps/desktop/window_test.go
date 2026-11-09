@@ -828,7 +828,7 @@ func (s *fakeService) serve(c net.Conn) {
 		s.mu.Lock()
 		s.sync = m.Header
 		s.status.Mode, s.status.SyncUntilMS = "shared", 0
-		if m.Name == "off" {
+		if m.On != nil && !*m.On {
 			s.status.Mode = "own"
 			if m.ForMS > 0 {
 				s.status.SyncUntilMS = time.Now().UnixMilli() + m.ForMS

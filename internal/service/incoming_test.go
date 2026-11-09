@@ -61,7 +61,7 @@ func TestRemovedDevicesCopyIsDropped(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "beta has gamma's copy", func() bool { return b.paste(t) == "from gamma" })
-	if _, err := a.do(t, control.Header{Op: control.OpRemove, Name: "gamma"}, ""); err != nil {
+	if _, err := a.do(t, control.Header{Op: control.OpRemove, Device: "gamma"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "beta drops gamma's copy", func() bool { return b.logged("no longer counts and is dropped") })

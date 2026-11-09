@@ -38,21 +38,22 @@ const (
 	OpPair        = "pair"           // client → service: open a pairing window; answers follow
 	OpJoin        = "join"           // client → service: join a group with a code
 	OpDevices     = "devices"        // client → service: list the group's devices
-	OpRemove      = "remove"         // client → service: remove the device Name names (a name or a device ID)
-	OpRename      = "rename"         // client → service: give the device Name names the name NewName
-	OpFreeze      = "freeze"         // client → service: freeze the admin computer Name names
-	OpThaw        = "thaw"           // client → service: on the root, unfreeze the admin computer Name names
+	OpRemove      = "remove"         // client → service: remove the device Device names (a name or a device ID)
+	OpRename      = "rename"         // client → service: give the device Device names the name Name
+	OpFreeze      = "freeze"         // client → service: freeze the admin computer Device names
+	OpThaw        = "thaw"           // client → service: on the root, unfreeze the admin computer Device names
 	OpResolve     = "resolve"        // client → service: on the root, void both histories of every key that signed two; Name answers whose
 	OpAway        = "away"           // client → service: Name "on", "off", "hub", "hub-off", "move" (to Device) or "relay": sync away from home
-	OpSync        = "sync"           // client → service: Name "on" or "off" (for ForMS, 0 for until turned on): sync this device's clipboard with the group, or with Device as an admin (no ForMS)
+	OpSync        = "sync"           // client → service: On true or false (for ForMS, 0 for until turned on): sync this device's clipboard with the group, or with Device as an admin (no ForMS); answer: SyncOff, SyncOffMS, Muted, MutedMS
+	OpMuted       = "muted"          // client → service: where sync and an admin's mute stand, as sync answers
 	OpNetwork     = "network"        // client → service: take the networks this device is on now as known
-	OpMakeAdmin   = "make_admin"     // client → service: on the root, make the device Name names an admin
-	OpTakeOver    = "take_over"      // client → service: on an admin, take the group over from the lost root Name names
+	OpMakeAdmin   = "make_admin"     // client → service: on the root, make the device Device names an admin (AllowFileKey: even with its keys in a file)
+	OpTakeOver    = "take_over"      // client → service: on an admin, take the group over from the lost root Device names
 	OpDelay       = "takeover_delay" // client → service: on the root, set how long a claim waits to Value, a duration
 	OpKeyLevel    = "key_level"      // client → service: on the root, set the group's key level to Value (proven, hardware or files); answer: Below
 	OpIncoming    = "incoming"       // client → service: on the root or an admin, set how long a copy from another device stays live to Value, a duration
 	OpRecover     = "recover"        // client → service: claim the group with its recovery key, the payload the sheet's text or QR code, or with Name RecoveryCard the YubiKey's PIN
-	OpHandOver    = "hand_over"      // client → service: on the root, hand the group to the admin Name names, whose claim then takes effect at once
+	OpHandOver    = "hand_over"      // client → service: on the root, hand the group to the admin Device names, whose claim then takes effect at once
 	OpHubs        = "hubs"           // client → service: on the root or an admin with hub, sign the table of main hubs Hubs (names or device IDs)
 	OpLeave       = "leave"          // client → service: leave the group: delete its keys and files, keep the settings, restart in no group
 	OpInvite      = "invite"         // client → service: make a remote invitation on the hub; answers and a question follow
@@ -92,6 +93,9 @@ const (
 	OpUnmute      = "unmute"         // client → service: as an admin, end the mute of Device
 	OpRemote      = "remote"         // client → service: Name "add" (Address, Value the kind, NewName, Consent), "code" (Code), "cancel", "remove", "pastes" (Value on or off), "type" (the payload), for the TV Device, or "" (status): this device as a TV's remote
 )
+
+// Bool returns a pointer to b, for Header.On.
+func Bool(b bool) *bool { return &b }
 
 // RecoveryCard is OpRecover's Name when the recovery key is on a YubiKey.
 const RecoveryCard = "yubikey"
@@ -170,8 +174,8 @@ type Header struct {
 	Listen       bool     `json:"listen,omitempty"`      // join: wait for a member to dial this device
 	Admins       bool     `json:"admins,omitempty"`      // pair: the window may make a phone an admin (on the root)
 	Name         string   `json:"name,omitempty"`        // a device name
-	NewName      string   `json:"new_name,omitempty"`    // rename: the device's new name
-	Device       string   `json:"device,omitempty"`      // mode: the device, by name or ID, whose mode an admin sets, this device if empty; away move: the new hub
+	NewName      string   `json:"new_name,omitempty"`    // remote add: the TV's name
+	Device       string   `json:"device,omitempty"`      // remove, rename, freeze, thaw, make_admin, take_over, hand_over, sync: the device, by name or ID, whose mode an admin sets, this device if empty; away move: the new hub
 	Expires      int      `json:"expires,omitempty"`     // seconds a pairing window stays open; for a listening join, seconds to wait
 	Port         int      `json:"port,omitempty"`        // away hub: the UDP port; 0 for the default
 	Forwarder    string   `json:"forwarder,omitempty"`   // away hub: the forwarder's address, with its key in ForwarderKey
@@ -196,10 +200,21 @@ type Header struct {
 	Part  *Part  `json:"part,omitempty"`
 	Value string `json:"value,omitempty"`
 	// ForMS, in mute, is how long, 0 for until unmute.
-	ForMS  int64 `json:"for_ms,omitempty"`
-	Images bool  `json:"images,omitempty"`
-	Files  bool  `json:"files,omitempty"`
-	HTML   bool  `json:"html,omitempty"`
+	ForMS int64 `json:"for_ms,omitempty"`
+	// On is sync's on or off; AllowFileKey lets make_admin take an admin
+	// key in a file after the warning.
+	On           *bool `json:"on,omitempty"`
+	AllowFileKey bool  `json:"allow_file_key,omitempty"`
+	// SyncOff, SyncOffMS, Muted and MutedMS answer sync and muted: where
+	// sync and an admin's mute stand, how long each lasts, 0 for until
+	// it is lifted.
+	SyncOff   bool  `json:"sync_off,omitempty"`
+	SyncOffMS int64 `json:"sync_off_ms,omitempty"`
+	Muted     bool  `json:"muted,omitempty"`
+	MutedMS   int64 `json:"muted_ms,omitempty"`
+	Images    bool  `json:"images,omitempty"`
+	Files     bool  `json:"files,omitempty"`
+	HTML      bool  `json:"html,omitempty"`
 }
 
 // Part is a part of a copy of images or files, as copy-media and

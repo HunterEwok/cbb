@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -263,25 +264,30 @@ func TestFFIJoiner(t *testing.T) {
 		}
 	}
 	// The app's devices list: the group's root online, and this phone,
-	// both from the records.
-	type appDevice struct {
-		Device, Name, Role, OS            string
-		Admin, Root, Frozen, Online, Self bool
-		Listed                            bool
-	}
-	var devs []appDevice
+	// both from the records, in the control socket's form, field for
+	// field (docs/core-api.md, "Operations").
+	var devs []control.Device
 	waitFor(t, "the app lists the group's devices", func() bool {
 		fmt.Fprintln(in, "DEVICES")
 		devs = nil
-		if err := json.Unmarshal([]byte(next("DEVICES ")), &devs); err != nil {
+		dec := json.NewDecoder(strings.NewReader(next("DEVICES ")))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&devs); err != nil {
 			t.Fatal(err)
 		}
 		return len(devs) == 2 && devs[0].Listed && devs[1].Listed
 	})
 	piID := pi.status(t).Device
+	var onPi []string
+	for _, d := range pi.devices(t) {
+		onPi = append(onPi, d.ID)
+	}
 	for _, d := range devs {
+		if !slices.Contains(onPi, d.ID) {
+			t.Errorf("the phone lists %s, which the root's devices do not: %v", d.ID, onPi)
+		}
 		switch {
-		case d.Device == piID:
+		case d.ID == piID:
 			if !d.Root || !d.Online || d.Self || d.OS == "" {
 				t.Fatalf("the app lists the root as %+v", d)
 			}
@@ -444,7 +450,7 @@ func TestFFIMember(t *testing.T) {
 	// carries out, goes to the app, whose answer goes back.
 	answered := make(chan error, 1)
 	go func() {
-		_, err := pi.do(t, control.Header{Op: control.OpSync, Device: me, Name: "off"}, "")
+		_, err := pi.do(t, control.Header{Op: control.OpSync, Device: me, On: control.Bool(false)}, "")
 		answered <- err
 	}()
 	token, cmd, _ := strings.Cut(next("COMMAND "), " ")
@@ -917,7 +923,7 @@ func TestFFIPhoneTakeover(t *testing.T) {
 	if st := ok2(manage(`{"action":"finish_takeover","root_ca":"` + root + `"}`))["state"]; st != "none" {
 		t.Fatalf("a claim before claiming: %v", st)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpHandOver, Name: "admin phone"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpHandOver, Device: "admin phone"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the phone holds the handover", func() bool {
@@ -1257,7 +1263,7 @@ func TestLiteMember(t *testing.T) {
 		}
 		return false
 	})
-	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: st.Device, Name: "off"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: st.Device, On: control.Bool(false)}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if m := lite.status(t).Mode; m != "own" {
@@ -1269,10 +1275,10 @@ func TestLiteMember(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(dir, syncFile)); err != nil || !strings.Contains(string(b), `"off":true`) {
 		t.Errorf("the lite member's %s: %q, %v", syncFile, b, err)
 	}
-	if _, err := laptop.do(t, control.Header{Op: control.OpSync, Device: st.Device, Name: "on"}, ""); err == nil {
+	if _, err := laptop.do(t, control.Header{Op: control.OpSync, Device: st.Device, On: control.Bool(true)}, ""); err == nil {
 		t.Error("a device that is no admin turned the lite member's sync on")
 	}
-	if _, err := lite.do(t, control.Header{Op: control.OpSync, Name: "on"}, ""); err != nil || lite.status(t).Mode != "shared" {
+	if _, err := lite.do(t, control.Header{Op: control.OpSync, On: control.Bool(true)}, ""); err != nil || lite.status(t).Mode != "shared" {
 		t.Errorf("cbb sync on on the lite member: %v", err)
 	}
 

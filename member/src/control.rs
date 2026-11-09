@@ -96,6 +96,16 @@ pub struct Header {
     /// In copy-media and paste-media, the next part of the copy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub part: Option<Part>,
+    /// In make_admin: the device's admin key may be in a file, which the
+    /// user agreed to after the warning.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allow_file_key: bool,
+    /// In sync: on or off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on: Option<bool>,
+    /// The answer to sync and muted: where sync and the mute stand.
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub standing: Option<crate::sync::Standing>,
     /// In rename, the device's new name.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub new_name: String,
@@ -703,6 +713,7 @@ pub fn is_admin(op: &str) -> bool {
             | "status"
             | "version"
             | "devices"
+            | "muted"
             | "watch"
             | "copied"
             | "clipboard"

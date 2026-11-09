@@ -89,7 +89,7 @@ func TestMute(t *testing.T) {
 
 	// gamma turns sync off for an hour: the group's copies stay out of
 	// its clipboard and its own stay home.
-	if _, err := c.do(t, control.Header{Op: control.OpSync, Name: "off", ForMS: time.Hour.Milliseconds()}, ""); err != nil {
+	if _, err := c.do(t, control.Header{Op: control.OpSync, On: control.Bool(false), ForMS: time.Hour.Milliseconds()}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if st := c.status(t); st.Mode != "own" || st.SyncUntilMS == 0 || st.Muted {
@@ -99,7 +99,7 @@ func TestMute(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "alpha has beta's text", func() bool { return a.paste(t) == "beta again" })
-	if _, err := c.do(t, control.Header{Op: control.OpSync, Name: "on"}, ""); err != nil {
+	if _, err := c.do(t, control.Header{Op: control.OpSync, On: control.Bool(true)}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "beta heard"); err != nil {

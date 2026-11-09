@@ -1168,12 +1168,12 @@ socket's and makes again at each start unless the system, the administrators or 
 it), with mode 0600: only root and the
 service's user (on Windows the system, administrators and the service's account) can
 connect. `CBB_ADMIN_SOCKET` overrides its path for clients. The control socket takes only
-`copy`, `paste`, `copy-media`, `copied-media`, `paste-media`, `config`, `status`, `devices`, `release`, `release-get`, `release-held`, `entries`, `entries-get`, `keys` (from root only) and `watch` (with
+`copy`, `paste`, `copy_media`, `copied_media`, `paste_media`, `config`, `status`, `devices`, `muted`, `sync` without `device`, `release`, `release_get`, `release_held`, `entries`, `entries_get`, `keys` (from root only) and `watch` (with
 the watcher's `copied`, `clipboard`, `injected` and `acted`) and refuses every other operation with an error; the admin socket takes them
 all, and MUST be the only way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
 rename, freeze or make admin a device, take over, or change sync away from home. `cbb` dials the socket each operation needs. The lite member does the same
-with its own two sockets, but its control socket takes fewer: no `copy-media`, `copied-media`,
-`paste-media`, `config`, `release`, `release-get`, `entries`, `entries-get` or `keys`, and of the watcher's reports no
+with its own two sockets, but its control socket takes fewer: no `copy_media`, `copied_media`,
+`paste_media`, `config`, `release`, `release_get`, `entries`, `entries_get` or `keys`, and of the watcher's reports no
 `acted`.
 
 ### Framing
@@ -1183,107 +1183,14 @@ Each message is a JSON header on one line ending in `\n`, at most 64 KiB, follow
 The header is the envelope of the core's requests (docs/core-api.md, "Requests and answers"): a
 request or a watcher's message is `{"op", "args", "len", "seq"}`, an answer `{"ok", "len",
 "seq", "done"}` or, failed, `{"error", "detail", "seq", "done"}`; `len` and `seq` are omitted
-when 0. The fields below go in `args` or `ok` (all omitted when empty):
-
-| Field | Type | Meaning |
-|-------|------|---------|
-| `op` | string | the operation |
-| `kind` | string | `text` (default), `secret`, or `media` for the images or files of a copy |
-| `via` | string | `copy` (default), `phone` or `universal-clipboard` |
-| `seq` | integer | order of writes |
-| `ttl_ms` | integer | how long a written secret may stay in the clipboard |
-| `len` | integer | payload length |
-| `error` | string | a failed request, human text |
-| `done` | bool | the last answer to a request |
-| `code` | string | pairing code |
-| `fingerprint` | string | the fingerprint of this device's key: for the join QR code, or for the admin to compare (`invite`) |
-| `address` | string | `host:port` |
-| `name` | string | a device name |
-| `expires` | integer | seconds a window stays open; for a listening `join`, seconds to wait (at most 300) |
-| `listen` | bool | `join`: listen for a member instead of dialing one |
-| `addrs` | array of strings | the first answer of a listening `join`: where it listens |
-| `port` | integer | `away hub`: the UDP port; 0 for 8764 |
-| `consent` | bool | `away on`, and `away hub` where sync away from home is off (it turns it on first): the user agreed to the warning about keys in files; `join` with an invitation and `admin` of a device with keys in files: the user agreed to the warning; `remote add`: a Roku over plain HTTP; `answer`: yes |
-| `force` | bool | `away hub-off`: stop the hub even when the group has no other one |
-| `device` | string | `mode`, `paste-on`, `paste-receive`: another device, by name or device ID; `remote`: the TV, by its name |
-| `new_name` | string | `rename`: the device's new name; `remote add`: the TV's name here |
-| `method` | string | `paste-on`, `inject`: `paste` (the clipboard and the paste keys, the default) or `type` |
-| `enter` | bool | `paste-on`, `inject`: press Enter after the text; `paste-receive on`: allow that |
-| `console` | bool | `paste-receive on`: allow text consoles and root's tmux |
-| `no_lock_check` | bool | `paste-receive on`: let a target paste where nothing tells whether the session is locked, which it refuses otherwise; `inject`: that this device allows it |
-| `all` | bool | `paste-receive off`, `actions-off`: on every device of the group |
-| `actions` | array | `action-set`: one quick action, `{name, on?, by?, any_key?, command?}`: on or off, the admins it lets run it (by key), any admin, and for an action of the user's own its program and arguments; in `status`, this device's actions, the presets first |
-| `inject` | string | `watch`: the remote paste target the watcher offers, `desktop`, `tmux` or `console` |
-| `paste_only` | bool | `watch`: the watcher holds no clipboard and only pastes, like the Mac app |
-| `images` | bool | `watch`: the watcher writes images, so the service sends it copies with images as a `write` of kind `media` |
-| `files` | bool | `watch`: the same for copies of files and folders |
-| `html` | bool | `watch`: the same for formatted text, a copy with a `text/html` part whose plain-text alternative is its text; such a watcher reports formatted text with `copied-media` and the text as the alternative, and the others get the text |
-| `act` | bool | `watch`: the watcher runs the quick actions in its session: the presets on a Mac and on Windows, the user's own actions everywhere |
-| `command` | array | `act`, and `action-set`'s action: the program and arguments of the user's own action |
-| `hubs` | array | `hubs`: the group's main hubs by name or device ID, in the order they serve |
-| `below` | array | `key-level`'s answer: the admins and hubs whose keys the new level would not let in |
-| `refused` | bool | `injected`, `acted`: the target refused, rather than failed |
-| `keys` | string | `inject` to a `desktop` watcher: the grant that its desktop connector hands the uinput helper; `keys`: that grant |
-| `keyboard` | object | `keyboard on`: the Bluetooth keyboard's settings, `{layout?, rate?, pastes?}`; in `status`, also `{on?, connected?, visible_until_ms?, problem?}` |
-| `status` | object | for `status` |
-| `devices` | array | reserved |
-| `part` | object | `copy-media`'s `part` messages and `paste-media`'s answers: `{type?, path?, dir?, size?}`, a part of images or files without its hash; `release-file` and `release-get`: the archive's `size` |
-| `value` | string | `config`: the setting's new value; `paste-media`: a remote paste's copy; `remote add`: the TV's kind, `androidtv` (the default), `appletv` or `roku`; `remote pastes`: `on` or `off` |
-| `detail` | string | with `error`: the underlying error, which the client shows with error details on (`CBB_DEBUG=1`) |
-| `admins` | bool | `pair`, on the group's root: the window may make a phone with the app an admin (`cbb pair -admin`) |
-| `forwarder`, `forwarder_key` | strings | `away hub`: the forwarder's address and its key, 44 characters of base64 |
-| `relay`, `relay_key` | strings | `away relay`: the relay's address and its key; needs `consent` |
-| `obfuscate` | bool | `away hub`: speak AmneziaWG instead of plain WireGuard (section 11) |
-| `vless` | bool | `away hub`: the clients reach the forwarder over VLESS where UDP does not pass, with AmneziaWG on (section 11) |
-| `keep` | bool | `away hub`: keep the hub's addresses, port and forwarder where the message gives none, changing only `obfuscate` and `vless` (the apps' setting) |
-| `forward_only` | bool | `away hub` with `device`: make that computer, which is no admin, a hub that only passes copies on, first signing it a device record with `forward_only` (section 11, "Two kinds of hub") |
-| `invite` | string | the text of a remote invitation: made by `invite`, used by `join` (section 12) |
-| `joining` | object | `invite`: a device to confirm before it is admitted, `{id, name, os, fingerprint}` |
+when 0. The operations, what goes in `args` and what comes back in `ok`, are in
+[core-api.md](core-api.md), "The member's operations": one list for this socket and the phones'
+`cbb_member_call`, with the same names and bodies. On the socket a text or other bytes travel as
+the payload after the header, `len` bytes, and `done` marks the last answer to a request.
 
 A connection carries one request: the service reads the first message and dispatches on
 `op`; an unknown `op` fails. An answer has no `op`. A failure is
 `{"error":"...","done":true}`.
-
-### Operations
-
-| `op` | Request | Answers |
-|------|---------|---------|
-| `copy` | payload = text; `kind`, `via` | `{done}`. A deliberate action: always an event, also written to the member's own clipboard |
-| `paste` | none | `{kind, done}` + payload = the member's own clipboard text; error `the clipboard is empty` when unknown or an expired secret, and one that names `cbb paste -o` for images or files without a text |
-| `copy-media` | payload = the plain-text alternative, or none; then for each part `{"op":"part", part}`, followed for a file or clipboard data by `{"op":"data"}` messages whose payloads, at most 1 MiB each, are exactly its `size` bytes; last `{"op":"part", done}` | `{done}`: the parts are in the cache and the copy went to the group as a `media` event (section 4, "Media"), also written to the member's own clipboard. An error when the copy is over this device's limit, its manifest is not valid or the bytes do not come as said. `cbb copy FILE...` reads the files as the user and sends them |
-| `copied-media` | as `copy-media` | as `copy-media`, but a watcher's report that its clipboard changed: the copy goes to the group as an event when the engine decides so (section 5) and is not written back to the member's own clipboard |
-| `paste-media` | `{value?}` | with `value`, the event ID of a remote paste's copy (section 15), while it is the group's current copy and its parts are here: the same answers for that copy. Without it, once every part of the member's own images or files (with sync off the group's) is in the cache, fetched first if it is not: `{kind: "media"}` + payload = the plain-text alternative; then for each part `{part}` and its bytes in answers of at most 1 MiB; last `{done}`. An error when the clipboard holds none, or they did not arrive. `cbb paste -o DIR` writes them |
-| `config` | `{name?, value?}`: `max-copy` or `max-copy-away` and a size such as `200MiB` | `{status, done}`, with the setting saved first when `name` is given; `status.media` = `{max_copy, max_copy_away, fetching?, fetched?, from?, failed?}`, in bytes, also in `status` |
-| `status` | none | `{status, done}`; `status` = `{device, group, role, os, peers: [{id, role, os, skew_ms}], unreached?, port, cert_ends_ms, incoming_ms, away?, version}`; `cert_ends_ms` is when this device's member certificate ends, in Unix milliseconds, `unreached` lists the members at home that could not connect to this one and synced only because it dialed them back, `port` is the member port; `incoming_ms` is the group's live window (section 5, "Writing the member's own clipboard"); `away`, present while sync away from home is on: `{hub, port, endpoints, clients, hub_device, through, keys_in_file, error, detail, forwarder?, relay?}` (section 11); `forwarder`, on a hub with one: `{endpoint, registered, seen, error, detail}` (section 13); `relay`, on a device with one: `{endpoint, connected, online, error, detail}`, where `online` lists the other devices of the group on the relay and `through` tells whether a member connection runs through it (section 14) |
-| `leave` | none | `{done}`: the device leaves its group (D-83): the service deletes the keys and the group's files, turns remote paste and the quick actions off, and restarts in no group. Refused on the group's root while the group has other devices; taken while the group file is damaged |
-| `new` | none | `{status, done}`: the device creates a group and is its root (section 10). Only on a device in no group |
-| `pair` | none, or `{code, addrs?, fingerprint?, admins?}` | without `code`: first `{code, expires: 300, address}` (the member port at the first private IPv4 address), then `{name: <joined device name>, done}` or an error. With `code`, a device that listens to join (section 6, "The joiner listens") is admitted: at `addrs` with `fingerprint`, as its QR code gives them, or, without them, each device that announces that it waits (section 3, TXT `j`) found within 10 s, until one joins; then `{name, done}` or an error. `admins`, on the root, lets the window make a phone an admin. Only on the group's root or an admin; elsewhere the error names them. Hanging up closes the window |
-| `join` | `{code, address?}`, `{code, listen, expires}` or `{invite, consent}` | `{done}` or an error. Without `address` it browses for `p=1`. With `listen` it first answers `{addrs, fingerprint}` for the QR code, then `{done}` or an error when a member admitted it, or after `expires` seconds. With `invite`, the text of a remote invitation (section 12), it needs `consent` (sync away from home is turned on, and the device keeps its keys in files), first answers `{fingerprint}` (of this device's key, for the admin to compare), then `{done}` or an error. Hanging up cancels |
-| `invite` | `{expires?}`: seconds, 3600 if absent, at most 86 400 | Only on the group's hub, when it can admit devices. First `{invite, expires}`: the invitation's text. Then, for each device that used it and proved it knows the secret, `{joining: {id, name, os, fingerprint}}`, which the client answers with `{"op": "answer", consent}` (`true` admits it); last `{name, done}` or an error. Hanging up cancels the invitation |
-| `sync` | `{name, device?, for_ms?}`: `name` `on` or `off`; `device`, a name or device ID, for another device (on an admin); `for_ms`, only with `off` and no `device`, from 1 to 2 592 000 000 (30 days), absent for until turned on | without `device`: `{status, done}`, saved in `sync.json` and in effect, `status.mode` `shared` or `own` and, while off for a time, `status.sync_until_ms` when it turns on again, in Unix milliseconds (design.md, "Sync on and off"); with it: `{done}` once that device answered `done` to the `mode` command (section 15), or an error with its reason. Without `device` on either socket, so that the apps switch it without the administrator; with it only on the admin socket |
-| `mute` | `{device, for_ms?}`: `device` a name or device ID; `for_ms` from 1 to 2 592 000 000 (30 days), absent for until `unmute` | `{status, done}` or an error. On an admin that is not frozen, mutes that device: sends it a `mute` command (section 15), or mutes this device at once when it names this one (design.md, "Muting a device"). The mute lasts across restarts, in `mute.json`. Only on the admin socket |
-| `unmute` | `{device}` | `{status, done}` or an error: on an admin that is not frozen, sends that device an `unmute` command, or ends this device's own mute at once. So a muted device that is no admin waits for an admin, and a muted admin or root ends its own mute. Only on the admin socket |
-| `paste-on` | `{device, method?, enter?, kind?}` + payload = the text | `{done}` once that device answered `done` to the `paste` command this admin signed (section 15), or an error with its reason. The text is cleaned first (design.md, "Remote paste"). `kind` `media`, without a payload, pastes the group's current copy, which must be images or files that this device reads (`cbb paste -on DEVICE FILE...` copies the files first). Only on the admin socket |
-| `paste-receive` | `{name, enter?, console?, device?, all?}`: `name` `on` or `off` | `{status, done}`: `on` saves the switches of remote paste here, only for this device; `off` turns it off here, or with `device` or `all` on another or every device through `paste-off` commands. Only on the admin socket |
-| `keyboard` | `{name?, keyboard?}` + payload for `type`: `name` `on`, `off`, `pair`, `type` or none | `{status, done}`: `on` saves the Bluetooth keyboard's settings and registers it with BlueZ (Linux only), `off` takes it off, `pair` makes it discoverable for two minutes, `type` types the payload on the connected device and answers once it is typed, none only answers the status. Only on the admin socket |
-| `remote` | `{name?, address?, value?, new_name?, consent?, code?, device?}` + payload for `type`: `name` `add`, `code`, `cancel`, `remove`, `pastes`, `type` or none | `{status, done}`: `add` pairs with the TV at `address` (an Android TV or a Google TV shows a code; a Roku, `value` `roku`, needs `consent`, as its control is plain HTTP), `code` finishes that pairing within two minutes, `cancel` ends it, `remove` forgets the TV `device`, `pastes` sends the group's remote pastes to it or not, `type` types the payload into the field open on the TV, none only answers the status; `status.tvs` = `[{name?, kind, host, pastes?, pairing?}]`. An address outside the home network fails. Only on the admin socket |
-| `rename` | `{name, new_name}`: `name` the device, by name or device ID | `{name, done}` with the old name: an admin signs a `device` record like the device's newest one with the new name (section 10). Only on the admin socket |
-| `network` | none | `{status, done}`: the networks this device is on now become known ones, where it publishes itself and takes connections (`cbb network`). Only on the admin socket |
-| `answer` | `{consent?}` | none: during a request that asks the user, such as a listening `join` waiting for a phone or an `invite` asking whether to admit a device, the client's answer; `consent` is yes |
-| `action-set` | `{actions: [action]}`, exactly one | `{status, done}`: this device's user turns the quick action on or off and says who may run it (section 15); an action of the user's own carries its `command`. Only on the admin socket |
-| `action-remove` | `{name}` | `{status, done}`: the user's own action `name` is removed; a preset cannot be, only turned off. Only on the admin socket |
-| `action-on` | `{name, device}` | `{done}` once the member `device` answered the `action` command this admin signed (section 15), or an error with its reason. Only on an admin's admin socket |
-| `actions-off` | `{device}` or `{all}` | `{status, done}`: every quick action is turned off on that device, or on every device of the group, through signed commands; this device's own at once. Only on an admin's admin socket |
-| `release` | payload = the release in JSON, `{keys, channel, release}`, the three files of section 16 that `cbb update` fetched | `{done}`: the service checks the release as a `release` message (section 16, "In the group"), keeps it when it is newer than the one it holds, and passes it on to its peers |
-| `release-file` | `{value, part}`: the archive's SHA-256 and its `size`, then its bytes in `data` messages | `{done}`: `cbb update` hands the service an archive of the release it holds (section 16), which keeps it only whole and matching its hash, to pass on to its peers. Only on the admin socket |
-| `keys` | `{name, value, keys}`: `paste` or `enter`, a user ID, and the grant of an `inject` | `{done}` when the service handed that inject to a `desktop` watcher of that user and it is not answered yet, and `name` is its paste keys the first time or, after them, its Enter the first time when the command set `enter`; otherwise an error. Only from root (the uinput helper), on the control socket |
-| `release-held` | none | payload = the release this device holds in JSON, `{keys, channel, release}`, or an error when it holds none: `cbb update` takes it when no update server answers, and checks it as it checks what it downloads (section 16) |
-| `entries` | payload = the signed entry points in JSON, `{keys, entries}` (section 16, "Entry points"), from `cbb update` or `cbb global entries import` | `{done}`: the service checks them, keeps them when they are newer than those it holds, and passes them on to its peers; an error when they do not check out |
-| `entries-get` | none | payload = the signed entry points this device holds, in the same JSON, or an error when it holds none or they have expired: `cbb global entries` shows them and `export` gives them as a string |
-| `release-want` | none | payload = the names of the held release's archives that the members' hellos name and this device does not hold whole, a JSON array, at most 16; `null` on a device that is no hub: its `cbb update` downloads them for the group (section 16). Only on the admin socket |
-| `update-way` | none | payload = the VLESS settings (section 11) of the hub this device reaches away from home, with the group's VLESS user ID, or none without VLESS: `cbb update` reaches the mirror through them (section 16). Only on the admin socket |
-| `release-get` | `{value}`: an archive's SHA-256 | `{part}`, its bytes in `data` answers, then `{done}`: the archive of the held release, from this device or fetched from its peers |
-| `watch` | `{kind, via, inject?, paste_only?, act?, images?, files?}` + payload = what the clipboard holds now (may be empty) | an answer `{"ok":{}}` without `done`; then the watcher protocol below |
 
 ### Watcher protocol
 
@@ -1309,11 +1216,11 @@ A desktop connector or the Mac's pasteboard agent keeps a `watch` connection ope
 - A copy of images or files: a watcher whose watch request set `images` (for a copy with an
   image) or `files` (for a copy of files and folders) gets, once every part is in the cache,
   a `write` with `kind` `media` whose payload is the plain-text alternative. It fetches the
-  parts with `paste-media` on a connection of its own and writes the image (with the text
+  parts with `paste_media` on a connection of its own and writes the image (with the text
   next to it) into the clipboard, or saves the files in a new folder of its own and puts
   their paths there, or writes the text alone when the fetch fails. Other watchers get the
   plain-text alternative as a `text` write when there is one, and nothing otherwise. A
-  watcher reports a copied image or copied files with `copied-media` on a connection of its
+  watcher reports a copied image or copied files with `copied_media` on a connection of its
   own (one `png` or `jpeg` part with the text as the payload, or the files and folders as
   `cbb copy` sends them, without a text), never as `copied`; a clipboard that holds a text
   and an image is reported as text, and one that holds files as the files. A newer copy
@@ -1338,7 +1245,7 @@ A desktop connector or the Mac's pasteboard agent keeps a `watch` connection ope
   with `refused` when it would not (a locked session, an administrator's window, a missing
   permission) rather than could not. An `inject` of `kind` `media` goes only to a `desktop`
   watcher whose watch request set `images`, `files` (or `html`) for what the copy holds; its
-  payload is the copy's event ID, which the watcher fetches with `paste-media` and `value`
+  payload is the copy's event ID, which the watcher fetches with `paste_media` and `value`
   on a connection of its own, writes into its clipboard as it writes a copy, and pastes with
   the paste keys alone; the service waits 8 s for it, after the copy arrived. The service waits 5 s for it, and 5 ms more for each
   byte it types. A watcher whose target is `tmux` or `console`, or whose watch request
@@ -1369,8 +1276,6 @@ A desktop connector or the Mac's pasteboard agent keeps a `watch` connection ope
 - A watcher MUST check right before it injects keys that its session is active and not
   locked, and refuse otherwise; a watcher MUST NOT run an action's `command` through a
   shell.
-
-The `devices` and `revoke` operations are in section 10.
 
 ## 9. The phone as the root
 
@@ -2128,22 +2033,6 @@ beyond) and check the same bytes.
   record yet, with the name and `os` from the peer's hello (or the role and the first 8
   characters of its ID). When a computer's hello states an `os` that its record does not, it
   signs a new record for it with that `os` and the rest of the record unchanged.
-
-### Control operations
-
-| `op` | Request | Answers |
-|------|---------|---------|
-| `devices` | none | `{devices: [{id, name, role, caps, os, form, os_version, version, mac, admin, root, frozen, old_keys, online, last_seen_ms, self, listed, muted, muted_until_ms, ignored, ignored_until_ms}], done}`: the listed devices, then this device and the connected peers that have no record yet (`listed` false). `last_seen_ms` is when this member last saw the device connected; `form`, `os_version`, `version` and `mac` are what its hello says (section 4, "Device"), for this device and the connected ones only, and so are `muted` and `muted_until_ms` (Unix milliseconds, 0 for until it is lifted) |
-| `away` | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate?, vless?, keep?, consent?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?, forward_only?}`, `{name: "hub-off", device?, force?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status, done}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (section 11, "Several hubs"); with `forward_only` `true` the member may be any computer that is not an admin, and an admin with `hub` first signs it a device record with `forward_only` (section 11, "Two kinds of hub"); reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins (`default` for the project's relay, section 14), in place of a hub or its offer (section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; `obfuscate` and `vless` with `hub` are the settings of section 11, and `keep` on a hub keeps its addresses, port and forwarder where the message gives none; `consent` with `hub` turns sync away from home on first where it is off; `hub-off` makes this device, a hub, stop being one, or with `device`, on an admin, sends that hub a `hub` command with a stop order, and refuses while the group has no other hub unless `force` (section 11, "Stopping a hub"). Members connect again afterwards, so their hellos carry the change (section 11) |
-| `revoke` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`takeover`) |
-| `admin` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on the root computer: makes the connected member with `admin` an admin ("Admins") |
-| `takeover` | `{name}`: the lost root, a device ID or a name (case-insensitive) | `{name, done}` or an error. Only on an admin computer of a group whose root is a computer: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it ("Handing the group over") |
-| `takeover-delay` | `{value}`: a duration from `0s` to `168h` | `{done}` or an error. Only on the group's root: signs a `settings` record with `takeover_delay_ms`, how long a claim waits on each member, and the `key_level` its newest one had |
-| `key-level` | `{value}`: `proven`, `hardware` or `files` | `{below, done}` or an error. Only on the group's root, and never a level its own key does not pass: signs a `settings` record with `key_level` and the `takeover_delay_ms` its newest one had; `below` names the admins and hubs whose keys the new level would not let in, which stay until removed. `cbb new` signs `files` itself when the root's keys are in a file, as a computer's CA keys are (section 17) |
-| `incoming` | `{value}`: a duration from `5s` to `1h` | `{done}` or an error. On the group's root or any admin: signs a `copies` record with `incoming_ms`, how long a copy from another device stays live on each member ("The copies setting") |
-| `hubs` | `{hubs}`: 1 to 16 names or device IDs of computers and phones, in the order they serve | `{done}` or an error. On the group's root or an admin with `hub`: signs a `hubs` record, the group's main hubs |
-| `freeze` | `{name}`: a device ID, or a name (case-insensitive) | `{name, done}` or an error. Only on an admin that is not frozen: freezes another admin without `remove-admins`, never the root or an admin phone ("Removals and freezes keep what the author saw") |
-| `thaw` | `{name}` | `{name, done}` or an error. Only on the root computer (a computer's admin has no `thaw`): ends every freeze of that admin ("Removals and freezes keep what the author saw") |
 
 ## 11. Tunnel keys
 
@@ -3398,7 +3287,7 @@ hub that uses VLESS (section 11), it reaches the default mirror only inside VLES
 the hub's forwarder (section 13), since a network that blocks WireGuard blocks the mirror
 as well; a mirror set by hand (`cbb update -mirror`) is reached directly. When neither
 answers, it asks its service for the release the group passed to it (control operation
-`release-held`, below), and the archive comes from the members as below; the files are
+`release_held`, below), and the archive comes from the members as below; the files are
 checked the same way, wherever they came from.
 
 ### The check
@@ -3458,9 +3347,9 @@ it checks what it downloads.
 - The archives pass through the group as images and files do ("Content", section 4): a
   member serves, by its SHA-256, a file of the release it holds once it holds it whole, and
   `get` asks for it like a part. `cbb update` hands the archive it installed to the service
-  (control operation `release-file`), which keeps it (`release-files/` in its state
+  (control operation `release_file`), which keeps it (`release-files/` in its state
   directory, named by the SHA-256) only when the held `release.json` lists it with that size
-  and hash. Before downloading, `cbb update` asks its service (`release-get`), which fetches
+  and hash. Before downloading, `cbb update` asks its service (`release_get`), which fetches
   the archive from its peers that send `media`, and downloads it from the server only when
   no peer has it; it checks the archive against `release.json` either way. A member deletes
   the archives of a release once it holds a newer one, and serves them through the group's
@@ -3468,10 +3357,10 @@ it checks what it downloads.
 - A hub fetches the archives its group's members install, so that a device on a network that
   blocks the update servers, as one that syncs over AmneziaWG may be on, gets them through
   the group and its tunnel. Its `cbb update` (the daily timer, or by hand) asks its service
-  (control operation `release-want`) for the archives of the held release that the
+  (control operation `release_want`) for the archives of the held release that the
   members' hellos name in `device` `archive` (section 4) and it does not hold whole, at most
   16, downloads each from the server it checked the release from, checks it against
-  `release.json` and hands it over as with `release-file`.
+  `release.json` and hands it over as with `release_file`.
 - A member that does not know `release` ignores it, as it ignores every message of a type it does not know.
 
 ### Entry points
@@ -3589,7 +3478,7 @@ far.
   keys are not in the TPM or the Secure Enclave yet (roadmap, D-44). A computer that holds
   the current root's CA key in a file therefore says `file` for its keys, in its hello and
   `cbb status`, whatever its member key, and `cbb new` signs the level `files` for its
-  group; `key-level` refuses `hardware` and `proven` there. Making a group or an admin with
+  group; `key_level` refuses `hardware` and `proven` there. Making a group or an admin with
   keys in a file asks first too.
 - **The attestation challenge.** An Android key is made with the attestation challenge
   `SHA-256("cbb attest v1" || field(group tag) || field(member key) || salt)`, where

@@ -945,6 +945,12 @@ impl Service {
         Ok(())
     }
 
+    /// The answer to sync and muted, as the phone's member gives it.
+    fn standing(&self) -> Result<Message> {
+        let standing = crate::sync::standing(&self.node()?.engine);
+        Ok(control::reply(Header { standing: Some(standing), done: true, ..Default::default() }, Vec::new()))
+    }
+
     /// Turns sync on, or off for ms milliseconds (0 for until it is
     /// turned on), and saves it.
     fn set_sync(&self, on: bool, ms: i64) -> Result<()> {
@@ -2502,7 +2508,7 @@ impl Service {
                 Ok(control::reply(Header::default(), Vec::new()))
             }
             "sync" => {
-                let on = crate::sync::parse(&h.name)?;
+                let on = h.on.ok_or_else(|| Error::msg("sync needs on, true or false"))?;
                 if !h.device.is_empty() {
                     if h.for_ms != 0 {
                         return Err(Error::msg("-on turns another device's sync on or off with no time"));
@@ -2515,22 +2521,20 @@ impl Service {
                     return Err(Error::msg("a time goes only with cbb sync off"));
                 }
                 self.set_sync(on, h.for_ms)?;
-                // The answer carries the status, as Go's.
-                let status =
-                    Message { header: Header { op: "status".into(), ..Default::default() }, payload: Vec::new() };
-                self.request(&status)
+                self.standing()
             }
+            "muted" => self.standing(),
             "new" => self.new_group(),
             "remove" => {
-                let name = self.admin(|a| a.revoke(&h.name))?;
+                let name = self.admin(|a| a.revoke(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "rename" => {
-                let name = self.admin(|a| a.rename(&h.name, &h.new_name))?;
+                let name = self.admin(|a| a.rename(&h.device, &h.name))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "freeze" | "thaw" => {
-                let name = self.admin(|a| a.freeze(&h.name, h.op == "freeze"))?;
+                let name = self.admin(|a| a.freeze(&h.device, h.op == "freeze"))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "resolve" => {
@@ -2538,7 +2542,7 @@ impl Service {
                 Ok(control::reply(Header { name: who.join(", "), done: true, ..Default::default() }, Vec::new()))
             }
             "make_admin" => {
-                let name = self.admin(|a| a.make_admin(&h.name, h.consent))?;
+                let name = self.admin(|a| a.make_admin(&h.device, h.allow_file_key))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "key_level" => {
@@ -2554,7 +2558,7 @@ impl Service {
                 Ok(control::reply(Header::default(), Vec::new()))
             }
             "take_over" => {
-                let name = self.admin(|a| a.take_over(&h.name))?;
+                let name = self.admin(|a| a.take_over(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "recover" => {
@@ -2567,7 +2571,7 @@ impl Service {
                 Ok(control::reply(Header::default(), Vec::new()))
             }
             "hand_over" => {
-                let name = self.admin(|a| a.hand_over(&h.name))?;
+                let name = self.admin(|a| a.hand_over(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "pair" => {

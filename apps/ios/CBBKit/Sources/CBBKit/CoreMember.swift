@@ -410,8 +410,8 @@ public final class CoreMember: @unchecked Sendable {
     /// Sends a text the user handed to the app; board says it came from the
     /// phone's clipboard, which the button then compares with it.
     public func copy(_ text: String, secret: Bool = false, board: Bool = true) throws {
-        struct A: Encodable { var text: String, secret: Bool, board: Bool }
-        try run("copy", A(text: text, secret: secret, board: board))
+        struct A: Encodable { var text: String, kind: String, board: Bool }
+        try run("copy", A(text: text, kind: secret ? "secret" : "text", board: board))
     }
 
     /// Sends images or files: clipboard data (board true when it came from
@@ -545,7 +545,7 @@ public final class CoreMember: @unchecked Sendable {
             }
             enum CodingKeys: CodingKey { case until_ms }
         }
-        try run("mute", A(until_ms: untilMS))
+        try run("set_mute", A(until_ms: untilMS))
     }
 
     /// The members connected now; all adds those that carry records only.

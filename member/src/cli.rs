@@ -45,7 +45,7 @@ fn one_device<'a>(args: &'a [String], use_: &str) -> Result<&'a str> {
 /// cbb remove.
 pub(crate) fn remove(g: &Global, args: &[String]) -> Result<()> {
     let name = one_device(args, "cbb remove <name or device ID>; cbb status lists them")?;
-    let m = ask(g, Header { name: name.into(), ..header("remove") })?;
+    let m = ask(g, Header { device: name.into(), ..header("remove") })?;
     println!(
         "{}",
         tr!("Removed {} from the group. The other members refuse it as soon as they hear of it.", m.header.name)
@@ -58,7 +58,7 @@ pub(crate) fn rename(g: &Global, args: &[String]) -> Result<()> {
     let [name, new_name] = args else {
         return Err(usage("cbb rename <name or device ID> <new name>; cbb status lists them"));
     };
-    let m = ask(g, Header { name: name.clone(), new_name: new_name.clone(), ..header("rename") })?;
+    let m = ask(g, Header { device: name.clone(), name: new_name.clone(), ..header("rename") })?;
     println!(
         "{}",
         tr!(
@@ -87,7 +87,7 @@ pub(crate) fn takeover(g: &Global, args: &[String]) -> Result<()> {
         return Ok(());
     }
     let name = one_device(args, "cbb takeover <name or device ID of the lost root>; cbb status shows it")?;
-    let m = ask(g, Header { name: name.into(), ..header("take_over") })?;
+    let m = ask(g, Header { device: name.into(), ..header("take_over") })?;
     println!(
         "{}",
         tr!(
@@ -218,7 +218,7 @@ pub(crate) fn hubs(g: &Global, args: &[String]) -> Result<()> {
 pub(crate) fn freeze(g: &Global, args: &[String], on: bool) -> Result<()> {
     let (op, cmd) = if on { ("freeze", "freeze") } else { ("thaw", "unfreeze") };
     let name = one_device(args, &format!("cbb {cmd} <name or device ID>; cbb status lists them"))?;
-    let m = ask(g, Header { name: name.into(), ..header(op) })?;
+    let m = ask(g, Header { device: name.into(), ..header(op) })?;
     if on {
         println!(
             "{}",
@@ -246,7 +246,7 @@ pub(crate) fn admin(g: &Global, args: &[String]) -> Result<()> {
         }
     }
     let [name] = names.as_slice() else { return Err(usage(USE)) };
-    let m = ask(g, Header { name: name.clone(), consent: allow, ..header("make_admin") })?;
+    let m = ask(g, Header { device: name.clone(), allow_file_key: allow, ..header("make_admin") })?;
     println!("{}", tr!("{} is an admin now: it can admit and remove devices.", m.header.name));
     if allow {
         println!(
@@ -284,7 +284,7 @@ pub(crate) fn handover(g: &Global, args: &[String]) -> Result<()> {
         args,
         "cbb handover <name or device ID of an admin>; on the group's root, it lets that admin take the group over at once",
     )?;
-    let m = ask(g, Header { name: name.into(), ..header("hand_over") })?;
+    let m = ask(g, Header { device: name.into(), ..header("hand_over") })?;
     println!(
         "{}",
         tr!(

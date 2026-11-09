@@ -61,7 +61,7 @@ QMap<QString, Events::Seen> Events::seen(const QVariantList &devices)
         const QVariantMap d = v.toMap();
         if (d.value(QStringLiteral("self")).toBool())
             continue;
-        const QString id = d.value(QStringLiteral("device")).toString();
+        const QString id = d.value(QStringLiteral("id")).toString();
         if (id.isEmpty() || m.contains(id))
             continue;
         m.insert(id, Seen(d.value(QStringLiteral("name")).toString(), d.value(QStringLiteral("admin")).toBool(),
