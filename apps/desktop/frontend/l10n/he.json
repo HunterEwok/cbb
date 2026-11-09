@@ -42,6 +42,7 @@
   "Graphite": "גרפיט",
   "If the phone cannot connect, the firewall must let it reach TCP port %d here.": "אם הטלפון לא מצליח להתחבר, חומת האש חייבת לאפשר לו להגיע לפורט TCP %d כאן.",
   "It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.": "אז הוא יוכל להוסיף ולהסיר מכשירים עם cbb pair ו-cbb remove. המפתח שלו הוא קובץ במחשב, לכן עשו זאת רק למחשב שאתם שומרים עליו.",
+  "It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.": "אז הוא יוכל להוסיף ולהסיר מכשירים. המפתחות שלו בחומרה של הטלפון, שלעולם לא מוציאה אותם.",
   "It is a hub now that only passes the copies on, and reads none of them.": "עכשיו זו רכזת שרק מעבירה את ההעתקות הלאה, ולא קוראת אף אחת מהן.",
   "It is a hub now.": "עכשיו זו רכזת.",
   "It is an admin now.": "עכשיו הוא מנהל.",

@@ -14,9 +14,6 @@
     <string name="theme_material">Material You</string>
     <string name="theme_light">Светлая</string>
     <string name="join_title">Войти в группу</string>
-    <string name="join_admin">Войти как админ</string>
-    <string name="join_admin_title">Войти как админ</string>
-    <string name="join_admin_hint">На корневом телефоне группы нажмите + и отсканируйте этот код: добавить телефон админом может только корень. Не закрывайте этот экран.</string>
     <string name="join_hint">На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте этот экран.</string>
     <string name="join_qr_label">QR-код для входа в группу</string>
     <string name="join_tv">Войти в группу телефона</string>
@@ -36,6 +33,7 @@
     <string name="make_admin_title">Сделать %1$s админом?</string>
     <string name="make_admin_body">Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb remove. Его ключи лежат в файле на компьютере: кто скопирует этот файл, сможет действовать как админ, пока другой админ его не удалит. Делайте так только для компьютера, который надёжно защищён.</string>
     <string name="make_admin_hardware_body">Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb remove. Его ключи хранятся в его железе и никогда его не покидают.</string>
+    <string name="make_admin_phone_body">Тогда он сможет добавлять и удалять устройства, а если этот телефон потеряется, забрать группу себе.</string>
     <string name="made_admin">Теперь это админ: он добавляет и удаляет устройства командами cbb pair и cbb remove.</string>
     <string name="frozen">заморожен</string>
     <string name="unfreeze">Разморозить</string>
@@ -59,7 +57,7 @@
     <string name="reason_join">Войти в группу как администратор</string>
     <string name="reason_add">Добавить компьютер в вашу группу</string>
     <string name="reason_remove">Удалить устройство из вашей группы</string>
-    <string name="reason_make_admin">Сделать компьютер админом</string>
+    <string name="reason_make_admin">Сделать устройство админом</string>
     <string name="reason_unfreeze">Разморозить компьютер-админа</string>
     <string name="reason_take_over">Забрать группу у потерянного телефона</string>
     <string name="reason_take_handed">Взять группу, которую компьютер передал этому телефону</string>

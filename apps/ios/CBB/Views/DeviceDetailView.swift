@@ -70,7 +70,9 @@ struct DeviceDetailView: View {
                 Task { await model.makeAdmin(id) }
             } label: { Text("Make it an admin") }
         } message: {
-            if device?.keysInFile != false, model.keyLevel != Records.levelFiles {
+            if device?.role == "phone" {
+                Text("It can then add and remove devices, and take the group over if this phone is lost.")
+            } else if device?.keysInFile != false, model.keyLevel != Records.levelFiles {
                 Text("It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.")
                     + Text(verbatim: " ")
                     + Text("The group then lets keys in files be admins and hubs (Settings, Admin keys).")

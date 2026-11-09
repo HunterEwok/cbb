@@ -55,9 +55,9 @@ on every platform of the class, on the roadmap).
 |---|---|---|---|---|
 | Make a group, root key in hardware behind biometrics | yes | yes | yes, the root key in the TEE behind the app's own PIN, which the TEE checks (D-94): Aurora 5.1.5 gives a regular app neither its authentication service nor the fingerprint (a probe on the R570E and Open Mobile Platform's answer, 2026-11-09); making a group not yet tried on the phone | StrongBox or TEE; Secure Enclave |
 | Add a computer or a lite device by QR code | yes | yes | yes, as an admin; not yet tried on the phone | the Aurora app reads the code with the core's reader |
-| Join another phone's group | yes | yes | yes | |
+| Join another phone's group, as a member with one button | yes | yes | yes; the second button "Join as an admin" goes after the admin PIN (D-94) | the root makes it an admin later (D-95) |
 | Make an admin, remove, take over from a lost root, renew certificates | yes | yes | remove, renew and take over from a lost root (its admin key in the TEE becomes the new root), as the root or an admin; not yet tried on the phone | the core signs (`cbb_core::takeover` for the takeover), the app's admin key in the TEE |
-| Make a computer an admin | yes | yes | yes, as the root, for a computer connected; not yet tried on the phone | |
+| Make a phone or a computer an admin | yes | yes | yes, as the root, for a device connected; not yet tried on the phone | a phone offers its admin key in its hellos once it is in the group; on Aurora after D-94 |
 | Sync away from home | yes, in the background | while the app runs | yes, while the app runs, through the lite member's tunnel in the core (`TestFFIPhoneAway`); not yet tried on the phone | **OS**: iOS stops a background app's network |
 | Receive copies without a tap | yes (foreground service) | **OS** | yes | iOS lets an app read and write the clipboard only in the foreground; Aurora lets it write in the background |
 | Send without a tap | yes (accessibility service) | **OS** | **OS** | iOS: Back Tap or the Action button runs the app's shortcut, one gesture; Aurora reads the clipboard only in the foreground, so the app sends when it comes to the front |

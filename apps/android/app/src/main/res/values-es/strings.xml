@@ -33,6 +33,7 @@
     <string name="make_admin_title">¿Hacer administrador a %1$s?</string>
     <string name="make_admin_body">Entonces podrá añadir y quitar dispositivos con cbb pair y cbb remove. Sus claves están en un archivo del ordenador: quien copie ese archivo puede actuar como administrador hasta que otro administrador lo quite. Hazlo solo con un ordenador que mantengas seguro.</string>
     <string name="make_admin_hardware_body">Entonces podrá añadir y quitar dispositivos con cbb pair y cbb remove. Sus claves están en su hardware, que nunca las deja salir.</string>
+    <string name="make_admin_phone_body">Así podrá añadir y quitar dispositivos, y quedarse con el grupo si se pierde este teléfono.</string>
     <string name="made_admin">Ahora es administrador: añade y quita dispositivos con cbb pair y cbb remove.</string>
     <string name="frozen">congelado</string>
     <string name="unfreeze">Descongelar</string>
@@ -56,7 +57,7 @@
     <string name="reason_join">Unirse al grupo como administrador</string>
     <string name="reason_add">Añadir un ordenador a tu grupo</string>
     <string name="reason_remove">Quitar un dispositivo de tu grupo</string>
-    <string name="reason_make_admin">Hacer administrador a un ordenador</string>
+    <string name="reason_make_admin">Hacer administrador a un dispositivo</string>
     <string name="reason_unfreeze">Descongelar un ordenador de administrador</string>
     <string name="reason_take_over">Tomar el grupo del teléfono perdido</string>
     <string name="reason_take_handed">Tomar el grupo que el ordenador entregó a este teléfono</string>
@@ -535,9 +536,6 @@
     <string name="mute_ever">Hasta que un administrador le quite el silencio</string>
     <string name="create_group">Crear un grupo</string>
     <string name="join_group">Unirse a un grupo</string>
-    <string name="join_admin">Unirse como administrador</string>
-    <string name="join_admin_title">Unirse como administrador</string>
-    <string name="join_admin_hint">En el teléfono raíz del grupo, toca + y escanea este código: solo la raíz añade un teléfono como administrador. Mantén esta pantalla abierta.</string>
     <string name="restore_link">Restaurar con la clave de recuperación</string>
     <string name="sync_on">La sincronización está activada</string>
     <string name="sync_off">La sincronización está desactivada</string>

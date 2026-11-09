@@ -33,6 +33,7 @@
     <string name="make_admin_title">جعل %1$s مشرفًا؟</string>
     <string name="make_admin_body">يمكنه بعد ذلك إضافة الأجهزة وإزالتها باستخدام cbb pair وcbb remove. مفاتيحه في ملف على الحاسوب: من ينسخ هذا الملف يمكنه التصرف كمشرف حتى يزيله مشرف آخر. افعل هذا فقط لحاسوب تحافظ على أمانه.</string>
     <string name="make_admin_hardware_body">يمكنه بعد ذلك إضافة الأجهزة وإزالتها باستخدام cbb pair وcbb remove. مفاتيحه في عتاده الذي لا يسمح بخروجها أبدًا.</string>
+    <string name="make_admin_phone_body">سيتمكن بعدها من إضافة الأجهزة وإزالتها، ومن تولّي المجموعة إذا ضاع هذا الهاتف.</string>
     <string name="made_admin">أصبح الآن مشرفًا: يضيف الأجهزة ويزيلها باستخدام cbb pair وcbb remove.</string>
     <string name="frozen">مجمّد</string>
     <string name="unfreeze">إلغاء التجميد</string>
@@ -56,7 +57,7 @@
     <string name="reason_join">الانضمام إلى المجموعة كمشرف</string>
     <string name="reason_add">إضافة حاسوب إلى مجموعتك</string>
     <string name="reason_remove">إزالة جهاز من مجموعتك</string>
-    <string name="reason_make_admin">جعل حاسوب مشرفًا</string>
+    <string name="reason_make_admin">جعل جهاز مشرفًا</string>
     <string name="reason_unfreeze">إلغاء تجميد حاسوب مشرف</string>
     <string name="reason_take_over">تولّي المجموعة من الهاتف المفقود</string>
     <string name="reason_take_handed">تولّي المجموعة التي سلّمها الحاسوب إلى هذا الهاتف</string>
@@ -535,9 +536,6 @@
     <string name="mute_ever">حتى يلغي مشرف كتمه</string>
     <string name="create_group">إنشاء مجموعة</string>
     <string name="join_group">الانضمام إلى مجموعة</string>
-    <string name="join_admin">الانضمام كمشرف</string>
-    <string name="join_admin_title">الانضمام كمشرف</string>
-    <string name="join_admin_hint">على الهاتف الجذر للمجموعة، اضغط + وامسح هذا الرمز: الجذر وحده يضيف هاتفًا كمشرف. أبقِ هذه الشاشة مفتوحة.</string>
     <string name="restore_link">الاستعادة بمفتاح الاسترداد</string>
     <string name="sync_on">المزامنة تعمل</string>
     <string name="sync_off">المزامنة متوقفة</string>

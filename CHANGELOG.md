@@ -1491,6 +1491,14 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- A phone joins a group with one button, "Join a group", on the iPhone and Android: it always
+  joins as a member, and "Join as an admin" is gone. The root makes it an admin later from the
+  phone's device page ("Make it an admin"), on a root phone, in the Mac app and the tray, and
+  with `cbb admin` on a root computer, with the admin key the phone's hellos now offer (made
+  without a prompt; none on a TV). The phone takes its admin CA from the root's admin message
+  once it names its key, its device and the current root. The root refuses an admin key that
+  the records already name for another device or a root (D-95; docs/protocol.md, section 10,
+  "Admins").
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program

@@ -42,6 +42,7 @@
   "Graphite": "石墨",
   "If the phone cannot connect, the firewall must let it reach TCP port %d here.": "如果手机无法连接，防火墙必须允许它访问这里的 TCP 端口 %d。",
   "It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.": "之后它就可以用 cbb pair 和 cbb remove 添加和移除设备。它的密钥是电脑上的一个文件，因此只对你妥善保管的电脑这样做。",
+  "It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.": "之后它可以添加和移除设备。它的密钥保存在手机硬件中，永远不会离开。",
   "It is a hub now that only passes the copies on, and reads none of them.": "它现在是只转发副本、不读取任何副本的中心节点。",
   "It is a hub now.": "它现在是中心节点。",
   "It is an admin now.": "它现在是管理员。",

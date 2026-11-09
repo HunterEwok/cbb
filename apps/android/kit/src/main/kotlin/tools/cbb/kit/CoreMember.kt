@@ -62,6 +62,8 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         val peers: List<String> = emptyList(),
         /** Whether the node finds the members by mDNS itself; the apps find them and hand them in. */
         val mdns: Boolean = false,
+        /** The phone's admin key (a SubjectPublicKeyInfo), which the hellos offer while it is no admin, for the root to make it one. */
+        val adminKey: ByteArray? = null,
     ) {
         internal fun toJson(): JsonObject = Wire.obj(
             "dir" to Wire.str(dir.path),
@@ -79,6 +81,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
             "roots" to JsonArray(roots.map { Wire.bytes(it)!! }),
             "peers" to JsonArray(peers.map { JsonPrimitive(it) }),
             "mdns" to JsonPrimitive(mdns),
+            "admin_key" to Wire.bytes(adminKey),
         )
     }
 

@@ -42,6 +42,7 @@
   "Graphite": "Графит",
   "If the phone cannot connect, the firewall must let it reach TCP port %d here.": "Если телефон не может подключиться, брандмауэр должен пропускать его к TCP-порту %d на этом компьютере.",
   "It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.": "Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb remove. Его ключ хранится в файле на компьютере, поэтому делайте так только для компьютера, который надёжно защищён.",
+  "It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.": "Тогда он сможет добавлять и удалять устройства. Его ключи хранятся в железе телефона и никогда его не покидают.",
   "It is a hub now that only passes the copies on, and reads none of them.": "Теперь это хаб, который только пересылает копии и ни одной не читает.",
   "It is a hub now.": "Теперь это хаб.",
   "It is an admin now.": "Теперь это админ.",

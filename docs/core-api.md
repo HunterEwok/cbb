@@ -79,7 +79,8 @@ renewed the certificate or a takeover made a new root, which the app keeps in it
 the core keeps no identity file for a key it does not hold; `mute`, an admin muted the phone or
 ended its mute, with how long it lasts and who. The node signs its TLS handshakes
 and its copies through the callback and presents itself as a phone (role `phone`, key store
-`hardware`, or `file` when the request's `key_store` says so); it dials the members mDNS finds
+`hardware`, or `file` when the request's `key_store` says so), its hellos offering the
+request's `admin_key` (a SubjectPublicKeyInfo, optional) for the root to make it an admin; it dials the members mDNS finds
 (`mdns`, on by default) and those the app hands in. `cbb_member_stop` stops it.
 
 `cbb_member_call` asks it everything else, a request `{"op", "args"}` and its answer `{"ok"}`
@@ -109,6 +110,8 @@ part, files by `"\u0000files:"` and the copy's ID).
 | `peers` | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, caps, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features, chain}]`, as their hellos and reach messages present them, `chain` the certificates the handshake checked, leaf first |
 | `answer` | `token` (a `command` event's), `status` (`done`, `refused` or `failed`), `reason` | `{}`: the result the command's sender gets |
 | `check_command` | `command` (a `command` event's record) | what `group_command` answers for it against the node's records, opened with the phone's key for sealed messages, and for a paste `clean`: its text as it may go in (newlines and tabs, no other control characters or terminal escapes); a command refused is an error. The app keeps the replay cache and its own switches |
+| `offer_admin_key` | `key` (the phone's admin key, a SubjectPublicKeyInfo in base64, or none) | `{}`: what the hellos offer the root from the next connection on: the phone's admin key while it is no admin, none once it is one |
+| `take_admin_ca` | `key` (the admin CA of the root's `admin` message, DER in base64) | `{}` once the member checked it: for the offered admin key, naming this phone, under the group's current root, not refused by the records; the hellos then offer the key no more. An error names what failed |
 | `tunnel_key` | `key`, `psk` (32 bytes each, base64), or neither while sync away from home is off | `{}`: what the hellos offer the group's hubs; the phone connects to the members again |
 | `evidence` | `evidence`: the attestations of the phone's keys | `{}`: every peer gets them after its hello (protocol.md, section 17) |
 | `disconnect` | `device` | `{}`: the connection to it ends with a goodbye; it is dialed again later |
@@ -134,7 +137,8 @@ both ways, a pause, an admin's mute and a renewal against a Go member through th
 lite member's (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
 dials the first that answers through its tunnel's loopback port),
 `TestFFIJoinerAdmin` the join as an admin, then that admin phone admitting a Go computer that
-listens, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
+listens, `TestFFIJoinerMadeAdmin` a phone joined as a member that the Go root makes an admin
+with the admin key its hellos offer, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
 root, and `TestFFIMember` the calls: an address handed in, the button's rule, images both ways,
 and pausing.
 
@@ -158,7 +162,7 @@ root did not record, since a root's record beats an admin's), a thaw of a frozen
 the member adds to its records and sends to the group, or a mute, an unmute or a turn of the
 device's sync (`sync_on`, `sync_off`: a `mode` command, shared or own), a command sealed
 to the device's key when its record names one, which the member sends and whose result it
-answers. As the root it makes a connected computer an admin (`make_admin`: an admin CA for the
+answers. As the root it makes a connected phone or computer an admin (`make_admin`: an admin CA for the
 admin key its hello offers, its device record again, and the admin message), and as any admin it
 renews (`renew`) every member certificate that is due, each connected member's, sent to it, and the
 phone's own, as the phone kits do when a peer connects; as the current root, also each connected

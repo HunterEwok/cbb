@@ -187,7 +187,6 @@ private fun StartScreen(model: AppModel) {
         Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
         AccentButton(stringResource(R.string.create_group), onClick = { adding = true }, modifier = Modifier.widthIn(max = 480.dp))
         QuietButton(stringResource(R.string.join_group), onClick = { model.startJoining() })
-        QuietButton(stringResource(R.string.join_admin), onClick = { model.startJoining(admin = true) })
         TextButton(onClick = { restoring = true }) {
             Text(stringResource(R.string.restore_link), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
         }
@@ -229,7 +228,7 @@ private fun JoinScreen(model: AppModel) {
     ) {
         Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
         Text(
-            stringResource(if (model.joinAsAdmin) R.string.join_admin_title else R.string.join_title),
+            stringResource(R.string.join_title),
             style = MaterialTheme.typography.headlineMedium,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
@@ -251,11 +250,7 @@ private fun JoinScreen(model: AppModel) {
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.semantics { contentDescription = code.code.toList().joinToString(" ") },
             )
-            val hint = when {
-                model.isTv -> R.string.join_hint_tv
-                model.joinAsAdmin -> R.string.join_admin_hint
-                else -> R.string.join_hint
-            }
+            val hint = if (model.isTv) R.string.join_hint_tv else R.string.join_hint
             Text(stringResource(hint), textAlign = TextAlign.Center, color = palette.textDim)
         } else if (model.message == null) {
             CircularProgressIndicator(color = palette.accent)

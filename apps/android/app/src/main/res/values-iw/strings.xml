@@ -33,6 +33,7 @@
     <string name="make_admin_title">להפוך את %1$s למנהל?</string>
     <string name="make_admin_body">אז הוא יוכל להוסיף ולהסיר מכשירים עם cbb pair ו-cbb remove. המפתחות שלו בקובץ במחשב: מי שמעתיק את הקובץ הזה יכול לפעול כמנהל עד שמנהל אחר יסיר אותו. עשו זאת רק למחשב שאתם שומרים עליו.</string>
     <string name="make_admin_hardware_body">אז הוא יוכל להוסיף ולהסיר מכשירים עם cbb pair ו-cbb remove. המפתחות שלו בחומרה שלו, שלעולם לא מוציאה אותם.</string>
+    <string name="make_admin_phone_body">אז הוא יוכל להוסיף ולהסיר מכשירים, ולקחת את הקבוצה אם הטלפון הזה יאבד.</string>
     <string name="made_admin">עכשיו הוא מנהל: הוא מוסיף ומסיר מכשירים עם cbb pair ו-cbb remove.</string>
     <string name="frozen">מוקפא</string>
     <string name="unfreeze">הפשרה</string>
@@ -56,7 +57,7 @@
     <string name="reason_join">הצטרפות לקבוצה כמנהל</string>
     <string name="reason_add">הוספת מחשב לקבוצה שלכם</string>
     <string name="reason_remove">הסרת מכשיר מהקבוצה שלכם</string>
-    <string name="reason_make_admin">הפיכת מחשב למנהל</string>
+    <string name="reason_make_admin">הפיכת מכשיר למנהל</string>
     <string name="reason_unfreeze">הפשרת מחשב מנהל</string>
     <string name="reason_take_over">השתלטות על הקבוצה מהטלפון שאבד</string>
     <string name="reason_take_handed">קבלת הקבוצה שהמחשב העביר לטלפון הזה</string>
@@ -535,9 +536,6 @@
     <string name="mute_ever">עד שמנהל יבטל את ההשתקה</string>
     <string name="create_group">יצירת קבוצה</string>
     <string name="join_group">הצטרפות לקבוצה</string>
-    <string name="join_admin">הצטרפות כמנהל</string>
-    <string name="join_admin_title">הצטרפות כמנהל</string>
-    <string name="join_admin_hint">בטלפון השורש של הקבוצה, הקישו על + וסרקו את הקוד הזה: רק השורש מוסיף טלפון כמנהל. השאירו את המסך הזה פתוח.</string>
     <string name="restore_link">שחזור עם מפתח השחזור</string>
     <string name="sync_on">הסנכרון פועל</string>
     <string name="sync_off">הסנכרון כבוי</string>

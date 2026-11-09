@@ -42,6 +42,7 @@
   "Graphite": "Grafito",
   "If the phone cannot connect, the firewall must let it reach TCP port %d here.": "Si el teléfono no puede conectarse, el cortafuegos debe dejarle llegar al puerto TCP %d aquí.",
   "It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.": "Entonces podrá añadir y quitar dispositivos con cbb pair y cbb remove. Su clave es un archivo en el ordenador, así que hazlo solo con un ordenador que mantengas seguro.",
+  "It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.": "Así podrá añadir y quitar dispositivos. Sus claves están en el hardware del teléfono, que nunca las deja salir.",
   "It is a hub now that only passes the copies on, and reads none of them.": "Ahora es un hub que solo reenvía las copias y no lee ninguna.",
   "It is a hub now.": "Ahora es un hub.",
   "It is an admin now.": "Ahora es administrador.",

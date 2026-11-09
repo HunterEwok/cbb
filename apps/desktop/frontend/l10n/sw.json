@@ -42,6 +42,7 @@
   "Graphite": "Grafiti",
   "If the phone cannot connect, the firewall must let it reach TCP port %d here.": "Ikiwa simu haiwezi kuunganisha, ngome lazima iiruhusu kufikia lango la TCP %d hapa.",
   "It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.": "Kisha kitaweza kuongeza na kuondoa vifaa kwa cbb pair na cbb remove. Ufunguo wake ni faili kwenye kompyuta, kwa hivyo fanya hivi tu kwa kompyuta unayoilinda.",
+  "It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.": "Kisha itaweza kuongeza na kuondoa vifaa. Funguo zake ziko kwenye maunzi ya simu, ambayo hayaziachii kamwe.",
   "It is a hub now that only passes the copies on, and reads none of them.": "Sasa ni kitovu kinachopitisha nakala tu, na hakisomi hata moja.",
   "It is a hub now.": "Sasa ni kitovu.",
   "It is an admin now.": "Sasa ni msimamizi.",
