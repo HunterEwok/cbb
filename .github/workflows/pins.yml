@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Checks the tool versions written out by hand in the workflows and build
-# scripts, which Dependabot does not see (tools/pins): a pin behind a
-# release that has been out for a week, one tool pinned at two versions, or
-# a pinned nightly Rust older than 60 days fails the run, which mails the
+# scripts, and Xray-core's tag in go.mod, which Dependabot does not see
+# (tools/pins): a pin behind a release that has been out for a week, one
+# tool pinned at two versions, or a pinned nightly Rust older than 60 days
+# fails the run, which mails the
 # maintainer, as GitHub does for a scheduled workflow; nothing is written
 # anywhere.
 name: pins
