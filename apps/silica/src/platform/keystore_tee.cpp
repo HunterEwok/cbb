@@ -12,6 +12,8 @@
 #include <QFile>
 #include <QMutex>
 #include <QSettings>
+#include <QStandardPaths>
+#include <QThread>
 #include <QVector>
 
 #include <dlfcn.h>
@@ -43,6 +45,17 @@ const char adminTokenLabel[] = "CBB admin";
 const QString soRandomKey = QStringLiteral("keys/admin_so_random");
 const QString staleKey = QStringLiteral("keys/admin_stale");
 const QString wrongKey = QStringLiteral("keys/admin_wrong");
+// Set once the member key's token was seen: from then on it is never made
+// again, since making it wipes the member key in it.
+const QString memberTokenKey = QStringLiteral("keys/member_token");
+
+// Whether the member key's token must already be there: the app saw it
+// before, or the phone is in a group, whose certificate names the key.
+bool memberTokenKnown()
+{
+    return QSettings().value(memberTokenKey).toBool()
+        || QFile::exists(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/member.json"));
+}
 // The tries Aurora's TA gives a user PIN before it locks (measured).
 const int pinTries = 7;
 // How long the admin token stays logged in after its last use.
@@ -153,7 +166,19 @@ public:
         CK_FUNCTION_LIST *f = m_f;
         CK_SLOT_ID slot = 0;
         CK_TOKEN_INFO info;
-        if (!findToken(&slot, &info)) {
+        Found found = findToken(&slot, &info);
+        // A token the app saw before and does not see now is a TEE that has
+        // not answered yet (as right after the app's last run let go of it),
+        // never a reason to make it again: that would wipe the member key.
+        for (int i = 0; i < 5 && found != Found::Yes && (found == Found::Unreadable || memberTokenKnown()); ++i) {
+            QThread::msleep(400);
+            found = findToken(&slot, &info);
+        }
+        if (found == Found::Unreadable)
+            return fail(failure, QStringLiteral("the TEE's slots do not read"));
+        if (found == Found::No && memberTokenKnown())
+            return fail(failure, QStringLiteral("the token \"%1\" is not there, though the app saw it before or is in a group; not making it again").arg(QLatin1String(QcaInit::tokenLabel)));
+        if (found == Found::No) {
             // Never initialized: the first run after the app was installed.
             // QCA's plugin opens libckteec in this process too, so the app
             // lets go of it until QCA is done, which only this Token may do.
@@ -177,9 +202,10 @@ public:
                 return State::Failed;
             }
             l.unlock();
-            if (!findToken(&slot, &info))
+            if (findToken(&slot, &info) != Found::Yes)
                 return fail(failure, QStringLiteral("no token \"%1\" after QCA initialized USERAPP").arg(QLatin1String(QcaInit::tokenLabel)));
         }
+        QSettings().setValue(memberTokenKey, true);
         const QString model = fixed(info.model, 16);
         if (model != QLatin1String("Aurora TA"))
             return fail(failure, QStringLiteral("the token's model is \"%1\", not Aurora TA").arg(model));
@@ -390,26 +416,34 @@ public:
     }
 
 private:
-    bool findToken(CK_SLOT_ID *slot, CK_TOKEN_INFO *info)
+    // Yes: the token QCA initialized for this app, labelled CBB. No: the
+    // slots read, and the app's QCA slot ("USERAPP") is there but not
+    // initialized, the first run's state. Unreadable: anything else, which
+    // never leads to making the token.
+    enum class Found { Yes, No, Unreadable };
+    Found findToken(CK_SLOT_ID *slot, CK_TOKEN_INFO *info)
     {
         CK_ULONG count = 0;
         if (m_f->C_GetSlotList(1, nullptr, &count) != CKR_OK || count == 0)
-            return false;
+            return Found::Unreadable;
         QVector<CK_SLOT_ID> slotIds(static_cast<int>(count));
         if (m_f->C_GetSlotList(1, slotIds.data(), &count) != CKR_OK)
-            return false;
+            return Found::Unreadable;
+        bool fresh = false;
         for (CK_ULONG i = 0; i < count; ++i) {
             CK_TOKEN_INFO t;
             std::memset(&t, 0, sizeof t);
-            if (m_f->C_GetTokenInfo(slotIds[int(i)], &t) != CKR_OK || !(t.flags & CKF_TOKEN_INITIALIZED))
-                continue;
-            if (fixed(t.label, 32) == QLatin1String(QcaInit::tokenLabel)) {
+            if (m_f->C_GetTokenInfo(slotIds[int(i)], &t) != CKR_OK)
+                return Found::Unreadable;
+            if ((t.flags & CKF_TOKEN_INITIALIZED) && fixed(t.label, 32) == QLatin1String(QcaInit::tokenLabel)) {
                 *slot = slotIds[int(i)];
                 *info = t;
-                return true;
+                return Found::Yes;
             }
+            if (fixed(t.serialNumber, 16) == QLatin1String("USERAPP") && !(t.flags & CKF_TOKEN_INITIALIZED))
+                fresh = true;
         }
-        return false;
+        return fresh ? Found::No : Found::Unreadable;
     }
 
     CK_FUNCTION_LIST *m_f = nullptr;

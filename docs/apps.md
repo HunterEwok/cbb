@@ -760,7 +760,10 @@ answer of 2026-11-09). So the Aurora app asks for a PIN of its own wherever the 
 for Face ID (D-94, docs/protocol.md section 3):
 
 - **The keys.** The member key stays in the token QCA initializes for the app (label "CBB",
-  PIN `0000`), so sync, copies and the keyboard need no PIN. The root or admin key sits in a
+  PIN `0000`), so sync, copies and the keyboard need no PIN. The app makes that token only on its first
+  run; once it saw the token, or while the phone is in a group, a TEE that does not answer is an
+  error the app retries and shows, never a reason to make the token again, which would wipe the
+  member key. The root or admin key sits in a
   second token of the app, the TEE's slot "APP", which the app initializes itself
   (`src/platform/keystore_tee.cpp`): its user PIN is the user's, its SO PIN starts as the same
   PIN and becomes a random one, kept nowhere, once the PIN has been entered right. Another app
