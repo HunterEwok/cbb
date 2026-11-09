@@ -136,7 +136,8 @@ both ways, a pause, an admin's mute and a renewal against a Go member through th
 lite member's (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
 dials the first that answers through its tunnel's loopback port),
 `TestFFIJoinerAdmin` the join as an admin, then that admin phone admitting a Go computer that
-listens, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
+listens, `TestFFIJoinerMadeAdmin` a phone joined as a member that the Go root makes an admin
+with the admin key its hellos offer, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
 root, and `TestFFIMember` the calls: an address handed in, the button's rule, images both ways,
 and pausing.
 

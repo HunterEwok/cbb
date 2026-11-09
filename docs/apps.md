@@ -31,10 +31,10 @@ they look, so both apps are built to the same plan.
    or StrongBox, becomes the group's root, admits the device and goes to Home), **Join a
    group** (one screen: this phone's QR code and six digits; a phone of the group scans the
    code, a computer of the group types the digits after "+", docs/protocol.md, section 6),
-   and, small, **Restore with the recovery key**. Admin rights come from the device that
-   admits the phone, not from a separate button. On Aurora the settings and the language are
-   in the pull-down menu, as in every Silica app, and the Start screen also has **Join a group
-   as an admin**.
+   and, small, **Restore with the recovery key**. A phone always joins as a member; the root
+   makes it an admin later from the phone's device page ("Make it an admin"), with the admin
+   key its hellos offer (docs/protocol.md, section 10, "Admins"). On Aurora the settings and
+   the language are in the pull-down menu, as in every Silica app.
 2. **Home**: how many devices are online, with the two switches beside it: the **house**
    (sync on this phone: a tap turns it off or on, touching and holding it turns it off for
    15 minutes, an hour, 8 hours or until turned on; off, the clipboard is this phone's own
@@ -118,14 +118,17 @@ they look, so both apps are built to the same plan.
    "seen 5 min ago" otherwise, and "this phone" on its own row. The list is the group's
    device records (section 10 of [protocol.md](protocol.md)), so every app and
    `cbb status` show the same. On an admin phone, a row opens the device: rename,
-   "Make it an admin" (phones only, on the root phone), "Unfreeze" for an admin computer
+   "Make it an admin" (on the root phone), "Unfreeze" for an admin computer
    that another admin froze (design.md, "Who may remove an admin"), and "Remove", which asks once, then
    needs Face ID, the fingerprint or the passcode, and is done; removing an admin phone shows
-   the devices it had admitted, which stay. On the root phone a computer's row also offers
-   "Make it an admin" when the computer offers an admin key (docs/protocol.md, section 10,
-   "A computer as admin"): it asks once, warns that the key is a file on the computer, needs
-   Face ID, and the computer then adds and removes devices with `cbb pair` and
-   `cbb remove`. If the removed phone held the root, this phone
+   the devices it had admitted, which stay. On the root phone the row of a phone or a computer
+   that is no admin offers "Make it an admin" when its hellos offer an admin key
+   (docs/protocol.md, section 10, "Admins"): it asks once, for a computer whose key is a file
+   it warns of that, needs Face ID, and the device then adds and removes devices (a computer
+   with `cbb pair` and `cbb remove`). A phone offers its admin key from the moment it is in
+   the group, and takes the admin CA from the root's admin message once it names its key, its
+   device and the current root; a TV offers none. On a computer that is the root, the Mac app
+   and the tray offer the same for a phone. If the removed phone held the root, this phone
    takes it over in the same step. On an admin phone a connected computer's house turns its sync
    on or off: the phone signs a `mode` command (docs/protocol.md, section 15) after
    Face ID or the fingerprint and sends it to that computer, which answers done or why it refused.
@@ -997,11 +1000,9 @@ the app on real devices.
   waits it announces itself by Bonjour (NsdManager on Android, mDNS through the core on
   Aurora) with the TXT `j=1` and its fingerprint (`Discovery.joinerTXT`), so that a computer
   of the group admits it by the digits typed there (`cbb pair -qr`). An admin phone scans it
-  in "Add a device". The screen has two buttons on both phones (docs/protocol.md, section 6): "Join"
-  ("I already use CBB on another phone" on the iPhone), answered by any admin of the group,
-  which admits the phone as a plain member, and "Join as an admin", which makes an admin key
-  and offers it, answered only by the root phone, which makes the phone an admin. Both
-  phones make the group, admit and join through the Rust core's admission (each kit's
+  in "Add a device". The Start screen has one button for it on every phone, "Join a group",
+  answered by any admin of the group, which admits the phone as a member; the root makes it
+  an admin later ("Make it an admin" on its device page). The phones make the group, admit and join through the Rust core's admission (each kit's
   `CorePairing` over ffi's `cbb_group_new`, `cbb_admit_*` and `cbb_join_*`; the Swift
   kit's `CorePairing.Listener` and `Connection` are the plain TCP sockets around it). An
   admin phone that removes the root
