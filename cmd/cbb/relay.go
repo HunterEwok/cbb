@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/HunterEwok/cbb/internal/refused"
 	"github.com/HunterEwok/cbb/internal/relay"
 )
 
@@ -31,6 +32,7 @@ func cmdRelay(args []string, stdout, stderr io.Writer) int {
 	groups := fs.String("group", "", "the tags of the groups to serve, separated by commas, as cbb status shows them")
 	open := fs.Bool("open", false, "serve every group that registers, within limits per group and per network, in place of -group")
 	showKey := fs.Bool("show-key", false, "print the key for cbb global relay -key and stop")
+	refusedFile := fs.String("refused", "", "the list of groups refused after an abuse report, a tag a line, read again when it changes (default: refused-groups next to the keys; \"none\" refuses none)")
 	if fs.Parse(args) != nil {
 		return 2
 	}
@@ -53,7 +55,11 @@ func cmdRelay(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	logf := func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) }
-	r, err := relay.Listen(relay.Config{Listen: *listen, Keys: keys, Groups: tags, Open: *open, Logf: logf, Verbose: os.Getenv("CBB_DEBUG") == "1"})
+	list, err := refused.Open(*refusedFile, *keyFile)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	r, err := relay.Listen(relay.Config{Listen: *listen, Keys: keys, Groups: tags, Open: *open, Refused: list, Logf: logf, Verbose: os.Getenv("CBB_DEBUG") == "1"})
 	if err != nil {
 		return fail(stderr, err)
 	}

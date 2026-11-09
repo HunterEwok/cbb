@@ -22,6 +22,7 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/frame"
 	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/refused"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
@@ -322,8 +323,14 @@ func (r *Relay) register(raw net.Conn, from netip.Addr) (*member, error) {
 			return refuse(err.Error())
 		}
 		m.tag, m.device = credentialTag(pr.Tag), group.Pseudonym(leaf)
+		if r.cfg.Refused.Refused(m.tag) {
+			return refuse(refused.Message)
+		}
 	} else {
 		m.tag, m.device = tag, device
+		if r.cfg.Refused.Refused(m.tag) {
+			return refuse(refused.Message)
+		}
 		// A registration the relay would refuse anyway sends it no records
 		// to keep.
 		r.mu.Lock()

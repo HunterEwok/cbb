@@ -22,6 +22,7 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/budget"
 	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/refused"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
@@ -86,6 +87,10 @@ type Config struct {
 	// Limits: the project's relay, or one a user runs for others.
 	Open   bool
 	Limits Limits
+	// Refused, if set, is the list of groups the operator refuses after an
+	// abuse report (docs/relay-budget.md, "Abuse reports"), read again
+	// when its file changes; the devices of a group put on it are dropped.
+	Refused *refused.List
 
 	Logf    func(format string, args ...any)
 	Verbose bool // also log WireGuard's own messages
@@ -263,12 +268,56 @@ func (r *Relay) Serve(ctx context.Context) error {
 		defer r.wg.Done()
 		r.acceptStreams()
 	}()
+	if r.cfg.Refused != nil {
+		r.wg.Add(1)
+		go func() {
+			defer r.wg.Done()
+			t := time.NewTicker(refusedCheck)
+			defer t.Stop()
+			for {
+				select {
+				case <-r.done:
+					return
+				case <-t.C:
+					r.reloadRefused()
+				}
+			}
+		}()
+	}
 	select {
 	case <-ctx.Done():
 	case <-r.done:
 	}
 	r.Close()
 	return nil
+}
+
+// refusedCheck is how often the relay looks whether the list of refused
+// groups changed.
+const refusedCheck = 10 * time.Second
+
+// reloadRefused reads the list of refused groups again when its file
+// changed, and drops the devices of the groups now on it.
+func (r *Relay) reloadRefused() {
+	changed, err := r.cfg.Refused.Reload()
+	if err != nil {
+		r.logf("cbb relay: the list of refused groups, kept as it was: %v", err)
+	}
+	if !changed {
+		return
+	}
+	r.logf("cbb relay: the list of refused groups has %d now", r.cfg.Refused.Len())
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for tag, g := range r.groups {
+		if r.cfg.Refused.Refused(tag) {
+			for _, m := range g {
+				// Its registration's goroutine drops it once the
+				// connection is gone.
+				m.raw.Close()
+			}
+		}
+	}
 }
 
 // Close stops the relay and drops every member.

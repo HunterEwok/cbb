@@ -331,12 +331,33 @@ when:
 - a signed file the devices fetch is close to its expiry: the channel's `keys.json` (21
   days: `release-sign renew -new-keys`) and `stable.json` (10 days: the `cbb-channel` timer
   stopped), the same two at `dl.cbb.tools`, and `attest/attest-status.json` (5 days: the
-  `attest-status` timer stopped).
+  `attest-status` timer stopped);
+- the server moved more than 1 TB in the last 24 hours, half of what its plan allows before
+  it is slowed, or `status/traffic.json` is more than two hours old (`cbb-traffic.timer`
+  stopped): [the servers' budget](relay-budget.md#money-and-traffic) says what to do.
 
 Before the first signed release these files are not served, which the check reports and
 passes; from v0.6.0 on the workflow runs it with `-require-files`. The steps to rebuild the
 server, where the backup of its configuration is and what to tell users are in the
 maintainer's private runbook, outside the repository.
+
+### An abuse report
+
+A report to `abuse@cbb.tools` about the forwarder or the relay gets the answer decided in
+advance ([the servers' budget](relay-budget.md#abuse-reports)): when it carries the tag of a
+group, add the tag with the date to `refused-groups` next to each server's key on cbb.tools,
+readable by the service, and both servers drop the group within ten seconds:
+
+```sh
+echo "TAG  # 2026-11-09, report of DATE" | sudo tee -a /var/lib/cbb-forward/refused-groups /var/lib/cbb-relay/refused-groups
+```
+
+A line that is not a tag keeps the list as it was and is logged
+(`journalctl -u cbb-forward -u cbb-relay`); taking the line out lets the group back. Answer the reporter that the group is refused; the servers have nothing else to
+give, no logs, addresses or content. A report without a tag gets that answer too, with a
+request for the tag. A report about a source that loads the servers on purpose is the
+firewall's, at the level of its network or provider, as the terms say. A vulnerability is
+not an abuse report: SECURITY.md.
 
 ## Ways out carry only cbb
 

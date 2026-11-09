@@ -172,6 +172,24 @@ installs and changes it; nothing here does it by itself.
    Tools](https://www.bing.com/webmasters) can import the site from Search Console. Neither
    puts anything on the pages.
 
+8. The traffic counter, for the budget of [docs/relay-budget.md](../docs/relay-budget.md),
+   "Money and traffic", which the `monitor` workflow reads:
+
+   ```sh
+   sudo useradd --system --no-create-home --shell /usr/sbin/nologin cbb-traffic
+   sudo install -d -o cbb-traffic -g cbb-traffic -m 755 /srv/cbb.tools/status
+   sudo install -D -m 755 site/deploy/cbb-traffic.sh /usr/local/lib/cbb/cbb-traffic.sh
+   sudo cp site/deploy/cbb-traffic.service site/deploy/cbb-traffic.timer /etc/systemd/system/
+   sudo systemctl daemon-reload && sudo systemctl enable --now cbb-traffic.timer
+   ```
+
+   It keeps 25 hours of samples of the interface's counters in `/var/lib/cbb-traffic` and
+   writes the totals of the last 24 hours, nothing more, to `/status/traffic.json`; the
+   default route's interface is counted unless `CBB_TRAFFIC_IFACE` is set in a drop-in.
+   nginx serves the file with the `location = /status/traffic.json` of
+   [`deploy/nginx.conf`](deploy/nginx.conf), and `status/` stays open while the site is
+   closed.
+
 Each change of the pages is step 6 again.
 
 ## VLESS
@@ -231,7 +249,7 @@ echo "https://cbb.tools/preview?key=$SECRET"
 Open that link once in each browser that should see the site: it sets a cookie for a year.
 The key must be 16 to 128 letters, digits, `-` or `_` (the hex above is), and `/preview`
 takes a few tries a minute from one address.
-The secret stays on the server; anyone given the link sees the site too. `/attest/`, the
-counter and `/static/` stay open. To launch, make the file
+The secret stays on the server; anyone given the link sees the site too. `/attest/`,
+`/channel/`, `/status/`, the counter and `/static/` stay open. To launch, make the file
 `map $cookie_cbb_preview $cbb_closed { default 0; }` and `sudo nginx -t && sudo systemctl
 reload nginx`.

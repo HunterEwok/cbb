@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/budget"
+	"github.com/HunterEwok/cbb/internal/refused"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless"
 )
@@ -133,6 +134,7 @@ type Forwarder struct {
 	vlessUser func(netip.AddrPort) (string, bool) // vless.Server.User
 	vlessCfg  *VLESSConfig
 	byVLESS   map[string]*reg // by the group's VLESS user ID
+	refused   *refused.List
 
 	closeOnce sync.Once
 	done      chan struct{}
@@ -193,7 +195,12 @@ type Config struct {
 	// the group removed cannot register with an older one after a
 	// restart; "" keeps them in memory only.
 	StateFile string
-	Logf      func(format string, args ...any)
+	// Refused, if set, is the list of groups the operator refuses after an
+	// abuse report (docs/relay-budget.md, "Abuse reports"), read again
+	// when its file changes; registered hubs of a group put on it are
+	// dropped.
+	Refused *refused.List
+	Logf    func(format string, args ...any)
 }
 
 // VLESSConfig configures the forwarder's VLESS, for the clients of hubs
@@ -321,7 +328,7 @@ func Listen(cfg Config) (*Forwarder, error) {
 		pending: map[clientKey]pending{}, byHubIdx: map[uint32]*session{}, byClient: map[clientKey]*session{},
 		byAddr: map[netip.AddrPort]map[*reg]int{}, byInit: map[int][]*reg{},
 		sources: newLRU[sourceKey, *bucket](4 * limits.Groups), netScans: newLRU[scanKey, *bucket](4 * limits.Groups),
-		done: make(chan struct{}),
+		refused: cfg.Refused, done: make(chan struct{}),
 	}
 	f.memory = newMemory(f.registered)
 	if f.versions, err = newVersions(cfg.StateFile, cfg.Cert.PrivateKey); err != nil {
@@ -856,6 +863,28 @@ func (f *Forwarder) dropRegLocked(r *reg) {
 	r.raw.Close()
 }
 
+// reloadRefused reads the list of refused groups again when its file
+// changed, and drops the registrations of the groups now on it.
+func (f *Forwarder) reloadRefused() {
+	changed, err := f.refused.Reload()
+	if err != nil {
+		f.logf("forward: the list of refused groups, kept as it was: %v", err)
+	}
+	if !changed {
+		return
+	}
+	f.logf("forward: the list of refused groups has %d now", f.refused.Len())
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for tag, r := range f.regs {
+		if f.refused.Refused(tag) {
+			// Its registration's goroutine drops it once the
+			// connection is gone.
+			r.raw.Close()
+		}
+	}
+}
+
 // sweep forgets old handshakes, sessions and sources.
 func (f *Forwarder) sweep() {
 	t := time.NewTicker(sweepEvery)
@@ -871,6 +900,7 @@ func (f *Forwarder) sweep() {
 }
 
 func (f *Forwarder) sweepAt(now time.Time) {
+	f.reloadRefused()
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for ck, pd := range f.pending {
