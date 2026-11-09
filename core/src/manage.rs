@@ -484,7 +484,9 @@ pub fn renewal(chain: &[Cert], roots: &[Cert], s: &Signer, now: i64) -> Result<O
 /// CA's start is wrong, and nothing is due then.
 pub fn due(cert: &Cert, ca: &Cert, now: i64) -> bool {
     const RENEW_BEFORE: i64 = 240 * 24 * 3600;
-    now >= ca.not_before && now > cert.not_after.saturating_sub(RENEW_BEFORE) && ca.not_after > cert.not_after
+    now >= ca.not_before
+        && now > cert.not_after.saturating_sub(crate::benchtime::d(RENEW_BEFORE))
+        && ca.not_after > cert.not_after
 }
 
 #[cfg(test)]

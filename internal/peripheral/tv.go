@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/pair"
 	"github.com/HunterEwok/cbb/internal/tvremote"
 	"github.com/HunterEwok/cbb/internal/tvremote/androidtv"
 	"github.com/HunterEwok/cbb/internal/tvremote/appletv"
@@ -59,8 +58,18 @@ func tvError(t tvremote.TV, what string, err error) error {
 	if tvIsState(err) || errors.Is(err, tvremote.ErrOutside) || errors.Is(err, appletv.ErrRefused) || errors.Is(err, appletv.ErrBusy) {
 		return fmt.Errorf("%s (%s): %w", t.Name, tvKind(t.Kind), err)
 	}
-	return &pair.CauseError{Msg: fmt.Sprintf("%s %s (%s)", what, t.Name, tvKind(t.Kind)), Err: err}
+	return &causeError{msg: fmt.Sprintf("%s %s (%s)", what, t.Name, tvKind(t.Kind)), err: err}
 }
+
+// causeError is a failure whose message is for the user and whose cause,
+// such as the TV's own words, is a detail.
+type causeError struct {
+	msg string
+	err error
+}
+
+func (e *causeError) Error() string { return e.msg + ": " + e.err.Error() }
+func (e *causeError) Unwrap() error { return e.err }
 
 // tvIsState is a failure that is the TV's state, not a fault: no text
 // field open, ECP off, or a TV that forgot this remote.

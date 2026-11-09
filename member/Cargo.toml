@@ -18,11 +18,28 @@ path = "src/lib.rs"
 name = "cbb"
 path = "src/main.rs"
 
+# The blind relay, a service of its own (src/relayd).
+[[bin]]
+name = "cbb-relay"
+path = "src/relay_main.rs"
+required-features = ["tunnel"]
+
+# cbbw.exe, the same program without a console window, which Windows starts
+# at sign-in for the agent (packaging/windows/install.ps1).
+[[bin]]
+name = "cbbw"
+path = "src/windowless.rs"
+required-features = ["windowless"]
+
 [features]
 default = ["tunnel"]
+# Builds cbbw as well; for Windows.
+windowless = []
+# The bench's time-scaled build (src/benchtime.rs), never a release's.
+benchtime = ["cbb-core/benchtime"]
 # Sync away from home. GotaTun needs 64-bit atomics, which 32-bit MIPS lacks,
 # so the MIPS builds leave it out (docs/roadmap.md, item 37).
-tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp", "dep:blake2", "dep:chacha20", "dep:chacha20poly1305", "dep:base64"]
+tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp", "dep:blake2", "dep:chacha20", "dep:chacha20poly1305"]
 
 [dependencies]
 cbb-core = { path = "../core", features = ["std", "tls"] }
@@ -56,7 +73,7 @@ blake2 = { version = "0.11.0", optional = true }
 chacha20 = { version = "0.10.2", optional = true }
 hmac = "0.13"
 chacha20poly1305 = { version = "0.11.0", optional = true }
-base64 = { version = "0.23.1", optional = true }
+base64 = "0.23.1"
 # The way over VLESS (src/vless.rs): rustls with the core's provider, and
 # its standard library's connections and system time.
 rustls = { version = "0.23.46", default-features = false, features = ["std"], optional = true }

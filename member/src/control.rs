@@ -309,6 +309,16 @@ pub struct Status {
     /// How many records of a later version this member keeps.
     #[serde(default, skip_serializing_if = "is_zero_u")]
     pub newer: usize,
+    /// When this device's member certificate ends, in Unix milliseconds.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub cert_ends_ms: i64,
+    /// The members at home that could not connect to this device and sync
+    /// with it only because it dials them back, as Go's Unreached.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unreached: Vec<String>,
+    /// The member port, as Go's Port; 0 when this device does not listen.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub port: i64,
 }
 
 /// A claim to take the group over, as Go's control.Claim: who claims it
@@ -406,6 +416,11 @@ pub struct Away {
     /// The underlying error, for debugging.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub detail: String,
+    /// The group's servers the service may reach beyond the home network:
+    /// its hub, forwarder and relay, which cbb global lets through the
+    /// system's limit.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allow: Vec<String>,
 }
 
 /// A hub's registration with its forwarder, as Go's control.Forwarder.
@@ -418,6 +433,11 @@ pub struct Forwarder {
     /// Where the forwarder reaches the hub's port.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub seen: String,
+    /// The project's forwarder does not answer and this device holds no
+    /// signed entry points that have not expired, so a new list may be what
+    /// it needs (docs/protocol.md, section 16).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub entries_stale: bool,
     /// Why the hub is not registered, and the underlying error.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,

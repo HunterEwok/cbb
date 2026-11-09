@@ -15,14 +15,17 @@ mod l10n;
 
 mod actions;
 mod admin;
+mod admit_cli;
 mod agent;
 #[cfg(feature = "tunnel")]
 mod away;
 #[cfg(not(feature = "tunnel"))]
 #[path = "away_off.rs"]
 mod away;
+mod awaynet;
 #[cfg(feature = "tunnel")]
 mod awg;
+mod benchtime;
 pub mod button;
 mod cli;
 pub mod content;
@@ -30,20 +33,25 @@ mod control;
 mod copies;
 pub mod credentials;
 mod device;
+mod devices_cli;
 pub mod discovery;
 pub mod entries;
 pub mod error;
+mod evidence;
 pub mod files;
 #[cfg(feature = "tunnel")]
 pub mod forward;
+mod global_cli;
 pub mod helper;
 #[cfg(feature = "tunnel")]
 pub mod hub;
+mod hubport;
 pub mod identity;
 mod interfaces;
 mod keys;
 mod leave;
 mod logfile;
+mod media_cli;
 mod mute;
 pub mod networks;
 mod next;
@@ -61,16 +69,21 @@ mod piv;
 pub mod records;
 #[cfg(feature = "tunnel")]
 pub mod relay;
+#[cfg(feature = "tunnel")]
+pub mod relayd;
 pub mod releases;
 mod remotepaste;
 mod rootless;
 pub mod sealkey;
 mod sekey;
+mod status_text;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod third_party {
     pub mod pcsclite;
 }
+mod servers;
 mod service;
+mod settings;
 mod signed;
 mod sync;
 mod sys;
@@ -79,6 +92,7 @@ pub mod tls;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
 mod update;
+mod update_os;
 pub mod uptime;
 #[cfg(feature = "tunnel")]
 pub mod vless;
@@ -95,101 +109,136 @@ use cbb_core::{certs, clip, hlc};
 use error::{Context, Error, Result};
 use identity::Stored as _;
 
-/// The help, in the user's language.
-fn usage() -> &'static str {
-    tr!("Usage: cbb [-state dir] [-socket path] [-debug] <command> [arguments]
+const USAGE: &str = "Usage: cbb <command> [arguments]
 
 Commands:
-  pair [-name name] [-port port] [-addr host[:port]]...
-                       Join a group: show a QR code for the phone app to scan
-                       (-addr: where the phone reaches this device, when the
-                       code would name the wrong addresses).
-  pair -code host:port Join with the code from cbb pair on a full member.
-  pair -invite file    Join with a remote invitation from cbb invite on the
-                       group's hub, through its tunnel; sync away from home
-                       goes on.
-  pair -caps list ...  Join as a member that can do list, a comma-separated
-                       subset of admin,dials,hub (the default: all three;
-                       the Next's Pi: admin,dials).
-  agent                Link this session's clipboard with the service
-                       (started at sign-in), through cbb-helper.
-  service [-name name] [-port port] [-peer host:port]... [-no-mdns]
-          [-no-listen] [-tunnel-via host:port] [-caps list] [-state dir]
-          [-socket path] [-user name]
-                       Run the service (started by systemd, procd, launchd,
-                       an rc script or Windows' service manager): it
-                       dials the computers, and phones and other lite
-                       members dial it on the member port (8764, CBB_PORT).
-                       -tunnel-via: the tunnel to the hub sends its packets
-                       there, a local UDP port that leads to the hub (cbb
-                       next link -udp on the ZX Spectrum Next).
-                       -caps: what this member says it can do in its
-                       hellos (as for pair; its device record decides).
-                       -state and -socket as before the command; -user:
-                       started as root, open the mDNS sockets, then run
-                       as this user (FreeBSD's rc script).
-  copy [-secret]       Send standard input to the group.
+  copy [-secret]          Send standard input to the group.
+  copy [-text TEXT] FILE...
+                          Send files and folders to the group; -type png|jpeg|html FILE
+                          sends one image or HTML as clipboard data.
   paste [-terminal [-lines] [-secret]]
-                       Print this member's clipboard text; -terminal makes
-                       it safe to paste into a terminal: no control
-                       characters, only the first line unless -lines, and
-                       no secret unless -secret.
-  status               Show this device, its group and the group's devices.
-  leave [-yes]         Leave the group: delete this device's keys and the
-                       group's files, keep the settings, turn remote paste
-                       and the quick actions off; then cbb pair joins this
-                       group or another one.
+                          Print this member's clipboard text; -terminal makes it
+                          safe to paste into a terminal.
+  paste -o DIR            Save the clipboard's images or files in the folder DIR.
+  paste -on DEVICE [-type] [-enter] [-secret]
+                          On an admin: put standard input, or this clipboard, where the
+                          focus is on another device that allows remote paste.
+  paste-receive [on [-enter] [-console] [-no-lock-check] | off]
+                          Show, or turn on or off, remote paste on this device;
+                          off -on DEVICE or off -all on an admin turns it off elsewhere.
+  watch [-0]              Print every text the group sends here, one per line
+                          (with -0, each followed by a zero byte).
+  keyboard [on [-layout us|ru] [-rate N] [-pastes] | off | pair | type [TEXT]]
+                          Make this Linux computer a Bluetooth keyboard for a TV, a tablet
+                          or a computer near it: pair shows it to a new one for two minutes,
+                          type types TEXT or standard input there.
+  remote [add [-appletv | -roku -consent] [-name NAME] ADDRESS | code CODE | cancel
+         | remove TV | pastes TV on|off | type [-tv TV] [TEXT]]
+                          Be the remote of a TV on the home network: an Android TV, a
+                          Google TV or an Apple TV pairs with the code it shows, a Roku over
+                          plain HTTP; type types TEXT or standard input in its text field.
+  action [enable NAME [-by KINDS] [-any-key] | disable NAME | off]
+                          Show this device's quick actions, or turn one on or off here.
+  action -on DEVICE NAME  On an admin: run the quick action NAME on another device;
+                          action off -on DEVICE or -all turns them off elsewhere.
+  status                  Show this device, its group and the group's devices.
+  remove <name or ID>     Remove a device from the group.
+  rename <name or ID> <new name>
+                          Give a device of the group another name (on an admin).
+  admin <name or ID>      Make a phone or a computer an admin (on the group's root).
+  takeover <name or ID>   Claim the group from its lost root computer (on an admin); it waits.
+  takeover -delay <duration>
+                          Set how long such a claim waits, 0s to 168h (on the root; 72h by default).
+  keys [proven|hardware|files]
+                          Show or set which keys may be the group's root, an admin or a hub
+                          (on the root; hardware by default, files for a root with a key in a file).
+  incoming [duration]     Show or set how long a copy from another device stays live after it
+                          arrives, 5s to 1h (on the root or an admin; 1m by default): it goes
+                          into the clipboard until then, and never after.
+  recovery [-yubikey]     Claim the group with its recovery key, typed from the sheet or on a
+                          YubiKey, when every phone with the group is lost; it waits as a
+                          takeover does.
+  handover <name or ID>   Let an admin take the group over at once, as a new phone (on the root).
+  freeze <name or ID>     Stop an admin computer, as a stolen one, until the root decides.
+  unfreeze <name or ID>   Make a frozen admin computer an admin again (on the group's root).
+  resolve                 Void both histories of a key that signed two (on the group's root).
+  global [on|off]         Show, or turn on or off, sync over the internet on this device;
+                          cbb global -h lists the rest (hub, move, relay, allow, entries).
+  global hub address:port Make this device the group's hub for sync over the internet.
+  global relay address:port
+                          Meet the group's other devices over the internet at a relay.
+  global hubs <name or ID>...
+                          Set the group's main hubs, in the order they serve, before the
+                          others (on the root, or an admin that may be a hub).
+  forward                 Run a forwarder for hubs that clients cannot reach directly
+                          (cbb-forward, beside cbb).
+  relay -group TAG        Run a blind relay for groups without a hub (cbb-relay, beside cbb).
+  new                     Create a group with this computer as its root.
+  leave [-yes]            Leave the group: delete this device's keys and the group's files,
+                          keep the settings; then it can join this group or another one.
   sync [on | off [-for DURATION]]
-                       Show sync, or turn it on or off here: off, the
-                       clipboard is this device's own, for a while or until
-                       cbb sync on (cbb copy and cbb paste work either way).
-  global [on|off]      Show sync away from home, or turn it on or off here:
-                       through the group's own WireGuard tunnel to its hub.
-  watch [-0]           Print every text the group sends here, one per line
-                       (with -0, each followed by a zero byte).
-  paste-receive [on [-enter] [-console] | off]
-                       Show remote paste here, or turn it on or off: whether
-                       the group's admins may put a text into tmux, or with
-                       -console into the active text console, here (-enter:
-                       and press Enter after it).
-  action [enable NAME [-by root,phone,computer,watch] [-any-key] [-yes] |
-         disable NAME | off]
-                       Show the quick actions here, or turn one on or off
-                       for the group's admins: reboot (a minute later, and
-                       only for keys in hardware unless -any-key),
-                       cancel-shutdown and restart. enable, with sudo, writes
-                       the polkit rule that lets the service reboot.
-  paste-helper tmux|console
-                       The paste targets: tmux starts the one for tmux, the
-                       cbb-console unit the one for the console.
-  next paste|copy|pair The same for the ZX Spectrum Next's .cbb dot command,
-                       in frames its Z80 reads (member/README.md).
-  update [-check]      Install the newest signed release, with sudo; -check
-                       only says whether there is one. The previous version
-                       goes back when the new one does not start.
-  update -auto [on|off]
-                       Show, or turn on or off, updating once a day by
-                       itself (a systemd timer, or cron on OpenWrt).
+                          Show or set whether this clipboard syncs with the group; off
+                          for a while, or until cbb sync on. A new device syncs.
+  sync -on DEVICE on|off  On an admin: turn sync on or off on another device of the group.
+  mute -on DEVICE [-for DURATION]
+                          On an admin: keep a device's copies from the group for a
+                          while, or until another admin's cbb unmute -on.
+  unmute -on DEVICE       On an admin: end a device's mute.
+  config [max-copy|max-copy-away SIZE]
+                          Show or set the largest copy of images and files this device
+                          sends or fetches, at home and away from home.
+  pair [-name name] [-port port] [-addr host[:port]]...
+                          In no group: join one by the phone's QR code, shown here (-addr:
+                          where the phone reaches this device, when the code would name
+                          the wrong addresses); -caps joins as a member that can do a
+                          comma-separated subset of admin,dials,hub (by default all three).
+  pair [-admin]           In a group, on its root or an admin: show a code for a new
+                          computer, or with -admin for a phone that becomes an admin.
+  pair -qr [-admin]       In a group: admit the new device that shows a code and waits;
+                          type its code, or paste its QR code's text.
+  pair -code [address]    Join with the code from cbb pair on the root or an admin.
+  pair -invite file       Join from afar with an invitation from cbb invite.
+  invite [-for 1h] [-o file]
+                          Invite a device from afar: run on the group's hub.
+  update [-check]         Install the newest signed release, as root or administrator;
+                          -check only says whether there is one. The previous version
+                          goes back when the new one does not start.
+  update -auto [on|off]   Show, or turn on or off, updating once a day by itself.
   update -mirror [URL|default]
-                       Show or set where updates come from: GitHub, then
-                       dl.cbb.tools, or another https:// mirror.
-  version              Print the version and that this is the lite member.
-  help                 Print this help.
+                          Show or set where updates come from: GitHub, then dl.cbb.tools,
+                          or another https:// mirror.
+  version                 Print the version and the platform.
+  help                    Print this help.
 
-This is the lite member: the commands of a full member, such as invite or
-remove, are not here, and pair only joins a group. The state directory is
-/var/lib/cbb (CBB_STATE), the control socket /run/cbb/control.sock
-(CBB_SOCKET); on OpenWrt /etc/cbb/state and
-/var/run/cbb/control.sock; installed without root (install.sh
---rootless, CBB_ROOTLESS=1), ~/.local/state/cbb and
-$XDG_RUNTIME_DIR/cbb/control.sock. CBB_INTERFACES limits the member
-port and mDNS to the network devices it names. -debug, or CBB_DEBUG=1, shows the details of errors.
-")
-}
+Rarely needed:
+  network                 Take the network this computer is on now as one where the group
+                          is: it publishes itself and takes connections only on those.
+  install [options]       Windows, after winget: install the service from this copy
+                          (the options of install.ps1, such as -Express).
+  service [-name name] [-port port] [-peer host:port]... [-no-mdns] [-no-listen]
+          [-tunnel-via host:port] [-caps list] [-user name]
+                          Run the service (started by systemd, procd, launchd, an rc script
+                          or Windows); -tunnel-via sends the tunnel's packets to a local UDP
+                          port that leads to the hub (cbb next link -udp on the ZX Spectrum
+                          Next); -caps: what this member says it can do in its hellos
+                          (as for pair; its device record decides); -user: started as root, open the mDNS sockets, then run as
+                          this user (FreeBSD's rc script).
+  agent                   Link this desktop's clipboard to the service (started at sign-in).
+  paste-helper tmux|console|uinput
+                          Take remote pastes into tmux (started by cbb.conf)
+                          or the Linux text console (the cbb-console unit), or press
+                          their keys for the desktop (uinput, the cbb-uinput unit).
+  next paste|copy|pair    The same for the ZX Spectrum Next's .cbb dot command, in frames
+                          its Z80 reads (member/README.md).
 
-/// The commands of a full member (cmd/cbb) that the lite member does not
-/// have, so that it says so instead of "unknown command".
-const FULL_ONLY: &[&str] = &["invite", "forward", "relay"];
+The state directory is /var/lib/cbb (CBB_STATE), the control socket /run/cbb/control.sock
+(CBB_SOCKET); on OpenWrt /etc/cbb/state and /var/run/cbb/control.sock; installed without
+root (install.sh --rootless, CBB_ROOTLESS=1), ~/.local/state/cbb and
+$XDG_RUNTIME_DIR/cbb/control.sock. CBB_INTERFACES limits the member port and mDNS to the
+network devices it names. Before the command, -state DIR and -socket PATH name others, and
+-debug, or CBB_DEBUG=1, shows the details of errors.
+The design is in docs/design.md.
+";
 
 /// Reports whether this is an OpenWrt router, whose /var is in RAM and
 /// which keeps /etc across upgrades.
@@ -206,6 +255,7 @@ pub(crate) struct Global {
 /// The program cbb: reads the arguments and runs the command.
 pub fn main() {
     error::from_env();
+    benchtime::start();
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let mut g = Global {
         state: std::env::var_os("CBB_STATE").map(PathBuf::from).unwrap_or_else(|| {
@@ -230,13 +280,18 @@ pub fn main() {
     }
     let code = match args.first().map(String::as_str) {
         None => {
-            eprint!("{}", usage());
+            eprint!("{USAGE}");
             2
         }
         Some(cmd) => {
             let rest = &args[1..];
             let res = match cmd {
+                "pair" if in_group(&g) => admit_cli::pair(&g, rest),
                 "pair" => join(&g, rest, false),
+                "invite" => admit_cli::invite(&g, rest),
+                "keyboard" => devices_cli::keyboard(&g, rest),
+                "recovery" => cli::recovery(&g, rest),
+                "remote" => devices_cli::remote(&g, rest),
                 "next" => std::process::exit(next::run(&g, rest)),
                 "service" => cmd_service(&g, rest),
                 "agent" if rest.is_empty() => agent::run(&g.socket),
@@ -245,7 +300,7 @@ pub fn main() {
                 "paste" => cmd_paste(&g, rest),
                 "status" => cmd_status(&g, rest),
                 "leave" => cmd_leave(&g, rest),
-                "global" => cmd_global(&g, rest),
+                "global" => global_cli::global(&g, rest),
                 "watch" => cmd_watch(&g, rest),
                 "sync" => cmd_sync(&g, rest),
                 "paste-receive" => cmd_paste_receive(&g, rest),
@@ -266,28 +321,41 @@ pub fn main() {
                 "mute" | "unmute" => cli::mute(&g, rest, cmd == "unmute"),
                 "config" => cli::config(&g, rest),
                 "network" => cli::network(&g, rest),
+                "forward" | "relay" => servers::run(&g, cmd, rest),
+                "install" => servers::install(rest),
                 "version" | "-version" | "--version" => {
+                    // Without its helper beside it, cbb is the lite member
+                    // (installers tell the two apart by this line).
+                    let lite = if helper::locate().is_some() { "" } else { ", the lite member" };
+                    // Never to be mistaken for a release: its certificates
+                    // last minutes.
+                    let scaled = if cbb_core::benchtime::ENABLED { " (time-scaled bench build)" } else { "" };
                     println!(
-                        "{}",
-                        tr!(
-                            "cbb {} ({}/{}), the lite member",
-                            service::VERSION,
-                            std::env::consts::OS,
-                            std::env::consts::ARCH
-                        )
+                        "cbb {} ({}/{}){lite}{scaled}",
+                        service::VERSION,
+                        std::env::consts::OS,
+                        std::env::consts::ARCH
                     );
                     println!("{}", core_version());
                     Ok(())
                 }
                 "help" | "-h" | "-help" | "--help" => {
-                    print!("{}", usage());
+                    print!("{USAGE}");
                     Ok(())
                 }
-                _ if FULL_ONLY.contains(&cmd) => Err(Error::msg(tr!(
-                    "cbb {} is a command of a full member; this device runs the lite member (see cbb help)",
-                    cmd
-                ))),
-                _ => Err(Error::msg(tr!("unknown command {}; see cbb help", format!("{cmd:?}")))),
+                // cbb cbb status: the program's name typed twice, as after a
+                // path to cbb.exe.
+                "cbb" if !rest.is_empty() => {
+                    eprintln!(
+                        "cbb: unknown command \"cbb\"; the command comes right after the program: cbb {}",
+                        rest.join(" ")
+                    );
+                    std::process::exit(2)
+                }
+                _ => {
+                    eprintln!("cbb: unknown command {cmd:?}; cbb help lists the commands");
+                    std::process::exit(2)
+                }
             };
             match res {
                 Ok(()) => 0,
@@ -348,20 +416,28 @@ fn parse_caps(list: &str) -> Result<Vec<String>> {
     Ok(out)
 }
 
-/// The member port: 8764, or CBB_PORT.
+/// The member port: 8764, or CBB_PORT from the environment or cbb.env.
 fn member_port() -> u16 {
-    std::env::var("CBB_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8764)
+    settings::get("CBB_PORT").and_then(|p| p.trim().parse().ok()).unwrap_or(8764)
 }
 
 /// Joins a group. For the Next (for_next), the QR code and the outcome come
 /// in its frames, and so do the log lines, as `CBB#` lines it skips.
+/// cbb pair's usage in no group.
+const PAIR_USE: &str =
+    "cbb pair [-code [ADDRESS:PORT] | -invite FILE | -app FILE] [-caps LIST] [-name NAME] [-port PORT] [-addr ADDRESS]";
+
 fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut name = host_name();
-    let mut port = member_port();
+    // The service's own port, which its firewall rule opens (OpenWrt's
+    // init script passes the one in /etc/config/cbb); out of a group the
+    // service does not listen on it, so the phone finds cbb pair there.
+    let mut port = service_port(g).unwrap_or_else(member_port);
     let mut addrs = Vec::new();
     let mut code_addr = None;
     let mut caps = default_caps(for_next);
     let mut invite = None;
+    let mut app = None;
     let mut i = 0;
     while i < args.len() {
         let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(tr!("{} needs a value", args[i])));
@@ -370,11 +446,50 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
             Some("name") => name = next()?,
             Some("port") => port = next()?.parse().context("the port is a number")?,
             Some("addr") => addrs.push(next()?),
-            Some("code") if !for_next => code_addr = Some(next()?),
+            // -code [address:port], as Go's: the code from standard input,
+            // the address of the window when mDNS cannot find it.
+            Some("code") if !for_next => match args.get(i + 1).filter(|a| !a.starts_with('-') && a.contains(':')) {
+                Some(a) => code_addr = Some(a.clone()),
+                None => {
+                    code_addr = Some(String::new());
+                    i += 1;
+                    continue;
+                }
+            },
             Some("invite") if !for_next => invite = Some(next()?),
-            _ => return Err(Error::msg(tr!("unknown argument {}; see cbb help", format!("{:?}", args[i])))),
+            Some("app") if !for_next => app = Some(next()?),
+            _ => return Err(cli::usage(PAIR_USE)),
         }
         i += 2;
+    }
+    // The code comes from standard input, never from the command line, and
+    // an invitation brings its own way in.
+    if [invite.is_some(), code_addr.is_some(), app.is_some()].iter().filter(|b| **b).count() > 1 {
+        return Err(cli::usage(PAIR_USE));
+    }
+    // For a desktop app, which runs cbb as the administrator and sees what
+    // it prints only once it ends: the app's own file, opened before
+    // anything else, gets the QR code's text.
+    let app_file = match &app {
+        Some(path) => Some(std::sync::Mutex::new(Some(open_app_file(path)?))),
+        None => None,
+    };
+    if invite.is_none() && code_addr.as_deref() == Some("") {
+        // As Go's joinWithCode: the service joins, by the window that mDNS
+        // finds, and keeps the identity it gets. With an address, cbb joins
+        // itself, into its state folder, before its service starts.
+        use std::io::IsTerminal;
+        if std::io::stdin().is_terminal() {
+            print!("{}", tr!("Pairing code: "));
+            std::io::stdout().flush().ok();
+        }
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line).context("cannot read the code")?;
+        let code = pair::normalize_code(line.trim())?;
+        let h = control::Header { op: "join".into(), code, ..Default::default() };
+        request(g, &control::Message::new(h, Vec::new()))?;
+        println!("{}", tr!("Joined the group."));
+        return Ok(());
     }
     let invite = match invite {
         Some(path) => Some(invite_consent(&path)?),
@@ -383,8 +498,8 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let (joiner, save) = joiner(&g.state, &name)?;
     let joiner = joiner.as_member(admin::os_name(), &caps.iter().map(String::as_str).collect::<Vec<_>>());
     let save = &*save;
-    let id = match (invite, code_addr) {
-        (Some((path, text)), _) => {
+    let id = match invite {
+        Some((path, text)) => {
             let shown = |fp: &str| {
                 println!("{}", tr!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp)));
                 println!("{}", tr!("Whoever invited you sees it on the hub and admits this device if it matches."));
@@ -397,7 +512,8 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
             let _ = std::fs::remove_file(&path);
             id
         }
-        (None, Some(a)) => {
+        None if code_addr.is_some() => {
+            let a = code_addr.unwrap_or_default();
             print!("{}", tr!("Pairing code: "));
             std::io::stdout().flush().ok();
             let mut line = String::new();
@@ -407,7 +523,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                 .context(format!("cannot connect to {a}"))?;
             pair::join(&joiner, sock, &code, save)?
         }
-        (None, None) => {
+        None => {
             let ln = TcpListener::bind(("::", port))
                 .or_else(|_| TcpListener::bind(("0.0.0.0", port)))
                 .or_else(|_| TcpListener::bind(("0.0.0.0", 0)))
@@ -418,6 +534,15 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                 addrs.into_iter().map(|a| if resolve(&a).is_ok() { a } else { join_host_port(&a, bound) }).collect();
             let code = pair::new_code();
             let shown = |text: &str| {
+                if let (Some(file), Some(path)) = (&app_file, &app) {
+                    let f = file.lock().unwrap_or_else(|e| e.into_inner()).take();
+                    if let Err(e) = f.map_or(Ok(()), |f| write_app_join(f, text, bound)) {
+                        eprintln!("cbb: writing {path}: {}", e.for_user());
+                        std::process::exit(1);
+                    }
+                    watch_app_file(path.clone());
+                    return;
+                }
                 if for_next {
                     let frame = next::qr_frame(text);
                     let mut out = std::io::stdout();
@@ -465,6 +590,61 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     Ok(())
 }
 
+/// Opens the desktop app's file for cbb pair -app once, at the start: a
+/// regular file, the one the path named when cbb looked, and never one that
+/// a link put in its place since leads to, since cbb runs as the
+/// administrator and the file's folder may be the user's.
+fn open_app_file(path: &str) -> Result<std::fs::File> {
+    let before = std::fs::symlink_metadata(path).context(format!("cannot open {path}"))?;
+    if !before.file_type().is_file() {
+        return Err(Error::msg(format!("{path} is not a regular file")));
+    }
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut o, libc::O_NOFOLLOW);
+    // FILE_FLAG_OPEN_REPARSE_POINT: a link opens as itself, not its target.
+    #[cfg(windows)]
+    std::os::windows::fs::OpenOptionsExt::custom_flags(&mut o, 0x0020_0000);
+    let f = o.open(path).context(format!("cannot open {path}"))?;
+    let opened = f.metadata().context(format!("cannot open {path}"))?;
+    #[cfg(unix)]
+    let same = {
+        use std::os::unix::fs::MetadataExt;
+        (before.dev(), before.ino()) == (opened.dev(), opened.ino())
+    };
+    #[cfg(not(unix))]
+    let same = true;
+    if !opened.file_type().is_file() || !same {
+        return Err(Error::msg(format!("{path} changed while cbb opened it")));
+    }
+    Ok(f)
+}
+
+/// Writes what cbb pair -app hands the app, one line of JSON: the QR code's
+/// text, how long the wait lasts, and the member port the phone dials.
+fn write_app_join(mut f: std::fs::File, text: &str, port: u16) -> Result<()> {
+    let line = serde_json::json!({"qr": text, "expires": pair::LIFETIME.as_secs(), "port": port});
+    f.set_len(0)
+        .and_then(|_| f.write_all(format!("{line}\n").as_bytes()))
+        .and_then(|_| f.sync_all())
+        .context("cannot write the code")
+}
+
+/// Ends cbb pair -app once the app removes its file: the app closed its
+/// window, and the wait for the phone ends with it.
+fn watch_app_file(path: String) {
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_millis(200));
+            if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
+                eprintln!("cbb: cancelled");
+                std::process::exit(1);
+            }
+        }
+    });
+}
+
 /// Reads a remote invitation's file for cbb pair -invite and asks the user
 /// to agree that sync away from home goes on with the join; returns the
 /// path and the invitation's text.
@@ -474,9 +654,13 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
     if inv.expired(uptime::wall_ms() / 1000) {
         return Err(Error::msg("the invitation has expired; ask for a new one"));
     }
-    println!("A device that joins with an invitation syncs away from home through the");
-    println!("group's hub, so sync away from home is turned on here.\n");
-    print!("Type yes to join and turn sync away from home on: ");
+    println!(
+        "{}",
+        tr!(
+            "A device that joins with an invitation syncs away from home through the\ngroup's hub, so sync away from home is turned on here.\n"
+        )
+    );
+    print!("{}", tr!("Type yes to join and turn sync away from home on: "));
     std::io::stdout().flush().ok();
     let mut line = String::new();
     std::io::stdin().read_line(&mut line).context("cannot read the answer")?;
@@ -507,7 +691,7 @@ pub(crate) fn joiner(state: &std::path::Path, name: &str) -> Result<(pair::Joine
     // otherwise.
     match keys::new_device_key() {
         (Some(key), _) => joiner = joiner.holding_key(key)?,
-        (None, why) if !why.is_empty() => eprintln!("cbb: the device key stays in a file: {why}"),
+        (None, why) if !why.is_empty() => eprintln!("{}", tr!("cbb: the device key stays in a file: {}", why)),
         (None, _) => {}
     }
     // The key for sealed messages the service will offer in its hello goes
@@ -516,7 +700,7 @@ pub(crate) fn joiner(state: &std::path::Path, name: &str) -> Result<(pair::Joine
         .and_then(|s| cbb_core::seal::public_key(&s).map_err(|e| e.context("the key for sealed messages")))
     {
         Ok(public) => joiner.seal = public,
-        Err(e) => eprintln!("cbb: the key for sealed commands: {e}; commands will come unsealed"),
+        Err(e) => eprintln!("{}", tr!("cbb: the key for sealed commands: {}; commands will come unsealed", e)),
     }
     let state = state.to_path_buf();
     let save = move |id: &identity::Identity, rs: &[records::Record], ts: &[records::ClaimTime]| {
@@ -556,7 +740,7 @@ fn wait_for_group(g: &Global) {
 
 /// Draws text as a QR code with half blocks, black on white whatever the
 /// terminal's colors, as cbb pair does.
-fn qr(text: &str) -> String {
+pub(crate) fn qr(text: &str) -> String {
     let Ok(code) = qrcode::QrCode::with_error_correction_level(text, qrcode::EcLevel::M) else {
         return String::new();
     };
@@ -692,9 +876,34 @@ fn hint(systemd: bool, systemctl: &str) -> String {
     }
 }
 
+/// The member port of the running service, None when none answers.
+fn service_port(g: &Global) -> Option<u16> {
+    let m =
+        request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))
+            .ok()?;
+    m.header.status.and_then(|s| u16::try_from(s.port).ok()).filter(|p| *p != 0)
+}
+
+/// Whether the service runs in a group: cbb pair then admits a device
+/// rather than joining.
+fn in_group(g: &Global) -> bool {
+    request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))
+        .is_ok_and(|m| m.header.status.is_some_and(|s| !s.group.is_empty()))
+}
+
 /// Sends one request to the service and returns its answer.
 pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
-    let conn = if control::needs_admin(&m.header) {
+    let conn = open(g, &m.header)?;
+    let mut w = conn.try_clone().context("cannot reach the service")?;
+    control::write(&mut w, m)?;
+    let answer = control::Reader::new(conn).read()?.ok_or_else(|| Error::msg("the service closed the connection"))?;
+    check(answer)
+}
+
+/// Connects to the socket for a request with the header h: the
+/// administrator's for what changes the group, the control socket else.
+pub(crate) fn open(g: &Global, h: &control::Header) -> Result<UnixStream> {
+    Ok(if control::needs_admin(h) {
         let path = control::admin_socket(&g.socket);
         match UnixStream::connect(&path) {
             Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
@@ -706,11 +915,7 @@ pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Messa
         }
     } else {
         connect(g)?
-    };
-    let mut w = conn.try_clone().context("cannot reach the service")?;
-    control::write(&mut w, m)?;
-    let answer = control::Reader::new(conn).read()?.ok_or_else(|| Error::msg("the service closed the connection"))?;
-    check(answer)
+    })
 }
 
 pub(crate) fn check(m: control::Message) -> Result<control::Message> {
@@ -734,11 +939,30 @@ impl std::fmt::Display for Detail {
 impl std::error::Error for Detail {}
 
 fn cmd_copy(g: &Global, args: &[String]) -> Result<()> {
-    let secret = match args {
-        [] => false,
-        [a] if flag(a) == Some("secret") => true,
-        _ => return Err(Error::msg("usage: cbb copy [-secret] < text")),
-    };
+    const USE: &str = "cbb copy [-secret] < text\n       cbb copy [-text TEXT] [-type png|jpeg|gif|html] FILE...";
+    let (mut secret, mut typ, mut alt, mut files) = (false, String::new(), String::new(), Vec::new());
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match flag(a) {
+            Some("secret") => secret = true,
+            Some("type") => typ = it.next().cloned().ok_or_else(|| cli::usage(USE))?,
+            Some("text") => alt = it.next().cloned().ok_or_else(|| cli::usage(USE))?,
+            Some(_) => return Err(cli::usage(USE)),
+            None => {
+                files.push(a.clone());
+                files.extend(it.by_ref().cloned());
+            }
+        }
+    }
+    if !files.is_empty() {
+        if secret {
+            return Err(cli::usage("-secret is for a text, not for files"));
+        }
+        return media_cli::copy(g, &files, &typ, &alt);
+    }
+    if !typ.is_empty() || !alt.is_empty() {
+        return Err(cli::usage("-type and -text go with FILE"));
+    }
     let mut text = Vec::new();
     std::io::stdin().take(clip::MAX_TEXT as u64 + 1).read_to_end(&mut text).context("cannot read standard input")?;
     let h = control::Header {
@@ -750,33 +974,29 @@ fn cmd_copy(g: &Global, args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Names an operating system for the user, as cbb status does.
-fn os_name(os: &str) -> &str {
-    match os {
-        "linux" => "Linux",
-        "windows" => "Windows",
-        "macos" => "macOS",
-        "ios" => "iOS",
-        "android" => "Android",
-        "aurora" => "Aurora OS",
-        "sailfish" => "Sailfish OS",
-        "none" => "device",
-        _ => "?",
-    }
-}
-
 fn cmd_paste(g: &Global, args: &[String]) -> Result<()> {
-    let (mut terminal, mut lines, mut secret) = (false, false, false);
-    for a in args {
+    if args.iter().any(|a| flag(a) == Some("on")) {
+        return media_cli::paste_on(g, args);
+    }
+    let (mut terminal, mut lines, mut secret, mut out) = (false, false, false, None);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
         match flag(a) {
             Some("terminal") => terminal = true,
             Some("lines") => lines = true,
             Some("secret") => secret = true,
-            _ => return Err(Error::msg("usage: cbb paste [-terminal [-lines] [-secret]]")),
+            Some("o") => out = Some(it.next().cloned().ok_or_else(|| cli::usage("-o takes a folder"))?),
+            _ => return Err(cli::usage("cbb paste [-terminal [-lines] [-secret]] | -o DIR | -on DEVICE ...")),
         }
     }
+    if let Some(dir) = out {
+        if terminal || lines || secret {
+            return Err(cli::usage("-o saves images or files; -terminal, -lines and -secret are for a text"));
+        }
+        return media_cli::paste_to(g, &dir);
+    }
     if (lines || secret) && !terminal {
-        return Err(Error::msg("-lines and -secret go with -terminal"));
+        return Err(cli::usage("-lines and -secret go with -terminal"));
     }
     let m =
         request(g, &control::Message::new(control::Header { op: "paste".into(), ..Default::default() }, Vec::new()))?;
@@ -787,11 +1007,17 @@ fn cmd_paste(g: &Global, args: &[String]) -> Result<()> {
         }
         let (text, dropped) = terminal_text(&String::from_utf8_lossy(&out), lines);
         if dropped > 0 {
-            eprintln!("cbb: pasted only the first line; {dropped} more left out (add -lines to paste them)");
+            eprintln!(
+                "{}",
+                tr!("cbb: pasted only the first line; {} more left out (add -lines to paste them)", dropped)
+            );
         }
         out = text.into_bytes();
     }
-    std::io::stdout().write_all(&out).context("cannot write the text")?;
+    // Flushed here: a full disk fails the paste rather than lose the text
+    // quietly at exit.
+    let mut stdout = std::io::stdout();
+    stdout.write_all(&out).and_then(|_| stdout.flush()).context("cannot write the text")?;
     Ok(())
 }
 
@@ -815,65 +1041,15 @@ fn terminal_text(text: &str, all: bool) -> (String, usize) {
 
 fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
     if !args.is_empty() {
-        return Err(Error::msg("status takes no arguments"));
+        return Err(cli::usage("status takes no arguments"));
     }
-    let m =
-        request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))?;
-    let s = m.header.status.unwrap_or_default();
-    if s.group.is_empty() {
-        // As Go's writeStatus.
-        println!("{}", s.version);
-        if s.left_old_group {
-            println!(
-                "{}",
-                tr!("This device left its group, which was made before 0.6: groups are set up again from 0.6 on.")
-            );
-        }
-        println!("{}", tr!("Not in a group. Run cbb new here to start one, or cbb pair to join one."));
-        return Ok(());
-    }
-    println!("{}", tr!("device  {}\ngroup   {}\nrole    {}\nversion {}", s.device, s.group, s.role, s.version));
-    if !s.mode.is_empty() {
-        println!("{}", tr!("mode    {}", s.mode));
-    }
-    match s.stop.as_str() {
-        "full" => println!(
-            "{}",
-            tr!(
-                "The group is stopped: its members exchange records only, no clipboard, until the group's root decides."
-            )
-        ),
-        "secrets" => println!("{}", tr!("The group sends no secrets until its root decides.")),
-        _ => {}
-    }
-    if s.removed {
-        println!(
-            "{}",
-            tr!(
-                "This device was removed from the group: its members refuse it. To join this group again or another one, leave it here first: sudo cbb leave, then cbb pair."
-            )
-        );
-    }
-    if s.peers.is_empty() {
-        println!("{}", tr!("no members connected"));
-    }
-    print_away(s.away.as_ref());
-    if s.group.is_empty() {
-        return Ok(());
-    }
-    let devs =
-        request(g, &control::Message::new(control::Header { op: "devices".into(), ..Default::default() }, Vec::new()))?;
-    for d in devs.header.devices {
-        let mut marks = [(d.this, tr!("this device")), (d.online, tr!("online")), (d.admin, tr!("admin"))]
-            .iter()
-            .filter(|(on, _)| *on)
-            .map(|(_, s)| s.to_string())
-            .collect::<Vec<_>>();
-        if let Some(p) = s.peers.iter().find(|p| p.id == d.id) {
-            marks.push(tr!("clock {} ms", format!("{:+}", p.skew_ms)));
-        }
-        println!("{}  {:<24} {:<8} {:<8} {}", d.id, d.name, os_name(&d.os), d.role, marks.join(", "));
-    }
+    let ask = |op: &str| {
+        request(g, &control::Message::new(control::Header { op: op.into(), ..Default::default() }, Vec::new()))
+    };
+    let s = ask("status")?.header.status.ok_or_else(|| Error::msg("the service sent no status"))?;
+    let devs = if s.group.is_empty() { Vec::new() } else { ask("devices")?.header.devices };
+    let limit = awaynet::limit_note(&awaynet::Net::system(), s.away.as_ref());
+    print!("{}", status_text::write_status(&s, &devs, uptime::wall_ms(), &limit));
     Ok(())
 }
 
@@ -930,41 +1106,48 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
 
 /// Shows sync, or turns it on or off here, as cbb sync on a full member.
 fn cmd_sync(g: &Global, args: &[String]) -> Result<()> {
-    let usage = || Error::msg("usage: cbb sync [on | off [-for DURATION]]");
-    let mut h = control::Header { op: "sync".into(), ..Default::default() };
+    const USE: &str = "cbb sync [on | off [-for DURATION]]\n       cbb sync -on DEVICE on|off";
+    let (mut on, mut for_ms, mut word) = (String::new(), 0, None);
     let mut it = args.iter();
-    match it.next().map(String::as_str) {
-        None => h.op = "status".into(),
-        Some(n @ ("on" | "off")) => h.name = n.into(),
-        Some(_) => return Err(usage()),
-    }
     while let Some(a) = it.next() {
         match flag(a) {
-            Some("for") if h.name == "off" => {
-                let d = it.next().ok_or_else(usage)?;
-                h.for_ms =
-                    parse_duration_ms(d).ok_or_else(|| Error::msg(tr!("-for: {} is no duration", format!("{d:?}"))))?;
-                if h.for_ms == 0 {
-                    return Err(Error::msg(tr!("-for is from 1ms to 720h")));
+            Some("on") => on = it.next().cloned().ok_or_else(|| cli::usage(USE))?,
+            Some("for") => {
+                let d = it.next().ok_or_else(|| cli::usage(USE))?;
+                for_ms = go_duration_ms(d).ok_or_else(|| cli::usage(USE))?;
+                if for_ms == 0 || for_ms > mute::MAX_MS {
+                    return Err(cli::usage(format!("-for is from 1ms to {}", cli::go_duration(mute::MAX_MS))));
                 }
             }
-            _ => return Err(usage()),
+            None if word.is_none() && (a == "on" || a == "off") => word = Some(a.clone()),
+            _ => return Err(cli::usage(USE)),
         }
     }
-    if h.op == "sync" {
-        request(g, &control::Message::new(h, Vec::new()))?;
+    if !on.is_empty() && word.is_none() {
+        return Err(cli::usage(USE));
+    }
+    if for_ms != 0 && (word.as_deref() != Some("off") || !on.is_empty()) {
+        return Err(cli::usage("-for goes with cbb sync off on this device"));
+    }
+    let h = match &word {
+        Some(w) => {
+            control::Header { op: "sync".into(), name: w.clone(), device: on.clone(), for_ms, ..Default::default() }
+        }
+        None => control::Header { op: "status".into(), ..Default::default() },
+    };
+    request(g, &control::Message::new(h, Vec::new()))?;
+    if let Some(w) = word.as_ref().filter(|_| !on.is_empty()) {
+        println!("Sync is {w} on {on} now.");
+        return Ok(());
     }
     let m =
         request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))?;
     let st = m.header.status.unwrap_or_default();
-    println!("{}", sync_line(&st.mode, st.sync_until_ms));
+    if st.group.is_empty() {
+        return Err(Error::msg("this device is in no group; run cbb new here to start one, or cbb pair to join one"));
+    }
+    println!("{}", status_text::sync_line(&st));
     Ok(())
-}
-
-/// Reads a duration as Go writes one, such as 90s, 15m, 1h or 1h30m, in
-/// milliseconds, for a mute.
-fn parse_duration_ms(s: &str) -> Option<i64> {
-    go_duration_ms(s).filter(|ms| *ms <= mute::MAX_MS)
 }
 
 /// The tunnel address of a device (docs/protocol.md, section 11):
@@ -1010,41 +1193,50 @@ pub(crate) fn go_duration_ms(s: &str) -> Option<i64> {
     Some(total)
 }
 
-/// What sync on or off means, as cbb sync on a full member says it.
-fn sync_line(mode: &str, until_ms: i64) -> String {
-    match mode {
-        "shared" => tr!("Sync is on: copies here go to the group, and the group's copies come here.").into(),
-        "own" if until_ms > 0 => tr!(
-            "Sync is off for {} min more: the clipboard is this device's own; cbb paste prints the group's text, and cbb copy sends to the group.",
-            ((until_ms - uptime::wall_ms()).max(0) + 59_999) / 60_000
-        ),
-        "own" => tr!("Sync is off until cbb sync on: the clipboard is this device's own; cbb paste prints the group's text, and cbb copy sends to the group.").into(),
-        "" => tr!("This lite member's service does not know sync on and off yet; update it.").into(),
-        m => tr!("Sync mode {}.", m),
-    }
-}
-
 fn cmd_paste_receive(g: &Global, args: &[String]) -> Result<()> {
-    let usage = || Error::msg("usage: cbb paste-receive [on [-enter] [-console] [-no-lock-check] | off]");
+    const USE: &str = "cbb paste-receive [on [-enter] [-console] [-no-lock-check] | off [-on DEVICE | -all]]";
+    // As on Go's flag package, the flags may come before on or off too.
     let mut h = control::Header { op: "status".into(), ..Default::default() };
-    for (i, a) in args.iter().enumerate() {
-        match (i, a.as_str(), flag(a)) {
-            (0, "on" | "off", _) => {
+    let (mut on_flags, mut off_flags) = (false, false);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match (a.as_str(), flag(a)) {
+            ("on" | "off", _) if h.name.is_empty() => {
                 h.op = "paste-receive".into();
                 h.name = a.clone();
             }
-            (1.., _, Some("enter")) if h.name == "on" => h.enter = true,
-            (1.., _, Some("console")) if h.name == "on" => h.console = true,
-            (1.., _, Some("no-lock-check")) if h.name == "on" => h.no_lock_check = true,
-            _ => return Err(usage()),
+            (_, Some("enter")) => (h.enter, on_flags) = (true, true),
+            (_, Some("console")) => (h.console, on_flags) = (true, true),
+            (_, Some("no-lock-check")) => (h.no_lock_check, on_flags) = (true, true),
+            (_, Some("on")) => {
+                h.device = it.next().cloned().ok_or_else(|| cli::usage(USE))?;
+                off_flags = true;
+            }
+            (_, Some("all")) => (h.all, off_flags) = (true, true),
+            _ => return Err(cli::usage(USE)),
         }
+    }
+    if on_flags && h.name != "on" || off_flags && h.name != "off" {
+        return Err(cli::usage(USE));
+    }
+    if h.all && !h.device.is_empty() {
+        return Err(cli::usage(USE));
     }
     if h.console && rootless::is() {
         return Err(Error::msg(
             "text consoles need the console helper, which runs as root; this device is installed without root, so remote paste reaches tmux only",
         ));
     }
+    let (all, device) = (h.all, h.device.clone());
     let m = request(g, &control::Message::new(h, Vec::new()))?;
+    if all {
+        println!("{}", tr!("Remote paste is off on every device of the group."));
+        return Ok(());
+    }
+    if !device.is_empty() {
+        println!("{}", tr!("Remote paste is off on {}.", device));
+        return Ok(());
+    }
     let p = m.header.status.and_then(|s| s.paste).ok_or_else(|| Error::msg("this device is in no group"))?;
     println!("{}", paste_line(&p));
     Ok(())
@@ -1070,7 +1262,9 @@ fn paste_line(p: &control::Paste) -> String {
         line.to_string()
     };
     if p.targets.is_empty() {
-        return format!("{line} Nothing here can paste yet: the tmux and console helpers do it.");
+        return format!(
+            "{line} Nothing here can paste yet: the desktop connector, the Mac app or the tmux and console helpers do it."
+        );
     }
     line
 }
@@ -1090,10 +1284,33 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
                 g,
                 &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()),
             )?;
-            let st = m.header.status.ok_or_else(|| Error::msg("this device is in no group"))?;
+            let st = m
+                .header
+                .status
+                .filter(|s| !s.group.is_empty())
+                .ok_or_else(|| Error::msg("this device is in no group"))?;
             for a in &st.actions {
                 println!("{:<16} {}", a.name, action_line(a));
             }
+            return Ok(());
+        }
+        [v, a, d] if v == "off" && flag(a) == Some("on") => {
+            let h = control::Header { op: "actions-off".into(), device: d.clone(), ..Default::default() };
+            request(g, &control::Message::new(h, Vec::new()))?;
+            println!("{}", tr!("The quick actions are off on {}.", d));
+            return Ok(());
+        }
+        [v, a] if v == "off" && flag(a) == Some("all") => {
+            let h = control::Header { op: "actions-off".into(), all: true, ..Default::default() };
+            request(g, &control::Message::new(h, Vec::new()))?;
+            println!("{}", tr!("The quick actions are off on every device of the group."));
+            return Ok(());
+        }
+        [a, d, name] if flag(a) == Some("on") && flag(name).is_none() => {
+            let h =
+                control::Header { op: "action-on".into(), device: d.clone(), name: name.clone(), ..Default::default() };
+            request(g, &control::Message::new(h, Vec::new()))?;
+            println!("{}", tr!("{} ran {}.", d, name));
             return Ok(());
         }
         [v] if v == "off" => {
@@ -1105,16 +1322,16 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             if let Err(e) = grant(&m)
                 && is_root()
             {
-                eprintln!("cbb: the actions are off, but the rights stay: {}", e.for_user());
+                eprintln!("{}", tr!("cbb: the actions are off, but the rights stay: {}", e.for_user()));
             }
-            println!("The quick actions are off here.");
+            println!("{}", tr!("The quick actions are off here."));
             return Ok(());
         }
         [v, name] if v == "remove" => {
             let h = control::Header { op: "action-remove".into(), name: name.clone(), ..Default::default() };
             let m = request(g, &control::Message::new(h, Vec::new()))?;
             grant(&m)?;
-            println!("{name} is removed.");
+            println!("{}", tr!("{} is removed.", name));
             return Ok(());
         }
         [v, name, ..] if v == "enable" || v == "disable" || v == "add" => (v.as_str(), name.clone()),
@@ -1147,12 +1364,12 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
         )));
     }
     if a.on && !yes {
-        print!("{}Type yes to turn it on: ", action_warning(&a));
+        print!("{}{}", action_warning(&a), tr!("Type yes to turn it on: "));
         std::io::stdout().flush().ok();
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).context("cannot read the answer")?;
         if !line.trim().eq_ignore_ascii_case("yes") {
-            println!("Nothing changed.");
+            println!("{}", tr!("Nothing changed."));
             return Err(Error::msg("the action stays as it was"));
         }
     }
@@ -1177,9 +1394,18 @@ fn grant(m: &control::Message) -> Result<()> {
     if rootless::is() {
         return Ok(());
     }
-    let on: Vec<String> =
-        m.header.status.iter().flat_map(|s| &s.actions).filter(|a| a.on).map(|a| a.name.clone()).collect();
+    let on = on_actions(m.header.status.as_ref());
+    // Only root writes the rule; a user's actions that need no right leave it
+    // to root, as the polkit directory is not theirs to read.
+    if actions::rights(&on).is_empty() && !is_root() {
+        return Ok(());
+    }
     actions::grant(std::path::Path::new("/"), &on).map(|_| ())
+}
+
+/// The names of the actions a status says are on.
+fn on_actions(st: Option<&control::Status>) -> Vec<String> {
+    st.iter().flat_map(|s| &s.actions).filter(|a| a.on).map(|a| a.name.clone()).collect()
 }
 
 fn is_root() -> bool {
@@ -1188,14 +1414,15 @@ fn is_root() -> bool {
 
 /// How an action stands and who may run it, as on a full member.
 fn action_line(a: &control::Action) -> String {
+    let run = if a.command.is_empty() { String::new() } else { format!(": {}", a.command.join(" ")) };
     if !a.on {
-        return "off".into();
+        return format!("off{run}");
     }
     let mut who = if a.by.is_empty() { "every admin".to_string() } else { a.by.join(", ") };
     if actions::hardware_by_default(&a.name) && !a.any_key {
         who += ", keys in hardware only";
     }
-    format!("on, for {who}")
+    format!("on, for {who}{run}")
 }
 
 /// What turning a on lets the group's admins do, and the rights it grants
@@ -1236,78 +1463,6 @@ fn action_warning(a: &control::Action) -> String {
         }
     }
     s + "Any admin can turn it off from afar, and only you turn it on again.\n\n"
-}
-
-/// What a user agrees to before the lite member, whose keys sit in files,
-/// syncs away from home (docs/design.md, "Turning it on, step by step").
-fn keys_warning() -> &'static str {
-    tr!("Sync away from home lets this device reach the group's hub from the internet,
-through the group's own WireGuard tunnel, with the clipboard encrypted end to end.
-
-This device keeps its keys in files, not in a security chip. Whoever copies those
-files (with root on this device, from its disk or memory card, or from an
-unencrypted backup) can act as this device from anywhere until you remove it from
-the group. To keep that from happening:
-
-  - encrypt the disk or memory card where you can (LUKS);
-  - keep the service's state directory out of unencrypted backups;
-  - remove the device at once (Remove on the phone, or cbb remove on a full
-    member) when it is lost or someone else may have had root on it.
-
-")
-}
-
-fn cmd_global(g: &Global, args: &[String]) -> Result<()> {
-    let mut h = control::Header { op: "away".into(), ..Default::default() };
-    match args {
-        // Only showing it needs no root: the status carries it.
-        [] => h.op = "status".into(),
-        [a] if a == "on" => {
-            print!("{}{}", keys_warning(), tr!("Type yes to turn sync away from home on: "));
-            std::io::stdout().flush().ok();
-            let mut line = String::new();
-            std::io::stdin().read_line(&mut line).context("cannot read the answer")?;
-            if !line.trim().eq_ignore_ascii_case("yes") {
-                println!("{}", tr!("Nothing changed."));
-                return Err(Error::msg(tr!("sync away from home stays as it was")));
-            }
-            h.name = "on".into();
-            h.consent = true;
-        }
-        [a] if a == "off" => h.name = "off".into(),
-        [a, rest @ ..] if a == "hubs" => return cli::hubs(g, rest),
-        _ => return Err(cli::usage("cbb global [on|off]")),
-    }
-    let m = request(g, &control::Message::new(h, Vec::new()))?;
-    print_away(m.header.status.and_then(|s| s.away).as_ref());
-    Ok(())
-}
-
-/// Prints sync away from home as cbb global on a full member does.
-fn print_away(a: Option<&control::Away>) {
-    let Some(a) = a else {
-        println!("{}", tr!("Sync away from home: off (cbb global on turns it on)."));
-        return;
-    };
-    let line = match () {
-        _ if a.hub_device.is_empty() && !a.keys_in_file => tr!("Sync away from home: off.").to_string(),
-        _ if a.hub_device.is_empty() => {
-            tr!("Sync away from home: on; waiting to meet the group's hub on the home network.").to_string()
-        }
-        _ if a.through => tr!("Sync away from home: on; connected to the hub {} through the tunnel.", a.hub_device),
-        _ => tr!(
-            "Sync away from home: on; the hub is {}, at {}; not connected through the tunnel.",
-            a.hub_device,
-            a.endpoints.join(", ")
-        ),
-    };
-    println!("{line}");
-    if !a.error.is_empty() {
-        println!("{}", tr!("  Last problem: {}.", a.error.trim_end_matches('.')));
-        if !a.detail.is_empty() && error::show_details() {
-            println!("{}", tr!("  Detail: {}", a.detail));
-        }
-    }
 }
 
 fn cmd_watch(g: &Global, args: &[String]) -> Result<()> {
@@ -1370,12 +1525,21 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
     if modes > 1 || (check && timer) {
         return Err(Error::msg(USAGE));
     }
+    // Refused before anything on the system is looked at.
+    if auto.as_deref().is_some_and(|a| !["", "on", "off"].contains(&a)) {
+        return Err(Error::msg("usage: cbb update -auto [on|off]"));
+    }
+    if method.as_deref().is_some_and(|m| !["get", "brew", "winget", "docker", "package"].contains(&m)) {
+        return Err(Error::msg("usage: cbb update -installed-by get|brew|winget|docker|package"));
+    }
     // A rootless install's user owns its files and updates it.
     let root = is_root() || rootless::is();
-    let need_root = || Err(Error::msg("run it with sudo"));
+    let need_root = || {
+        Err(Error::msg(if cfg!(windows) { "run it in a terminal opened as administrator" } else { "run it with sudo" }))
+    };
     let (dir, work) = update::paths();
     let mut st = if root { update::load_state(&dir)? } else { update::State::default() };
-    let exe = std::env::current_exe().context("cannot find this program")?;
+    let exe = update_os::installed_program()?;
     if let Some(m) = method {
         if !["get", "brew", "winget", "docker", "package"].contains(&m.as_str()) {
             return Err(Error::msg("-installed-by takes get, brew, winget, docker or package"));
@@ -1419,9 +1583,9 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         println!(
             "{}",
             if on {
-                "Automatic updates are on: once a day this device checks for a signed release and installs it."
+                tr!("Automatic updates are on: once a day this device checks for a signed release and installs it.")
             } else {
-                "Automatic updates are off; cbb update installs a release by hand."
+                tr!("Automatic updates are off; cbb update installs a release by hand.")
             }
         );
         return Ok(());
@@ -1432,9 +1596,9 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         }
         match m.as_str() {
             "" if st.mirror.is_empty() => {
-                println!("Updates come from GitHub, or {} when GitHub does not answer.", update::MIRROR)
+                println!("{}", tr!("Updates come from GitHub, or {} when GitHub does not answer.", update::MIRROR))
             }
-            "" => println!("Updates come from {}.", st.mirror),
+            "" => println!("{}", tr!("Updates come from {}.", st.mirror)),
             "default" => {
                 st.mirror.clear();
                 update::save_state(&dir, &st)?;
@@ -1449,6 +1613,11 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
     }
     if !check && !root {
         return need_root();
+    }
+    // install.ps1 stops every program in Program Files\cbb, this one too:
+    // the update runs from a copy outside it.
+    if cfg!(windows) && !check && std::env::var_os("CBB_UPDATE_FROM").is_none() {
+        return update_os::update_from_copy(&dir, &exe, args);
     }
 
     // The timer logs to update.log, each line stamped.
@@ -1482,8 +1651,9 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
             }
             None => (update::ROOTS.iter().map(|r| r.to_vec()).collect(), update::Source::defaults(&st.mirror)?),
         };
-        let archive = update::archive_name()
-            .ok_or_else(|| Error::msg(format!("there is no lite member's release for {}", std::env::consts::ARCH)))?;
+        let archive = update_os::archive_name(&exe).ok_or_else(|| {
+            Error::msg(format!("the release has no archive for {}/{}", std::env::consts::OS, std::env::consts::ARCH))
+        })?;
         let status = || -> Result<String> {
             let m = request(
                 g,
@@ -1502,7 +1672,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
             sources,
             installed: service::VERSION.into(),
             archive,
-            program: exe.clone(),
+            programs: update_os::programs(&exe),
             now_ms: update::now_ms(),
             install: &update::install,
             healthy: &healthy,
@@ -1540,7 +1710,8 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
                 }
             }
             _ if check => {
-                log(&format!("CBB {} is available; this device runs {v}. To install it: sudo cbb update", r.version))
+                let how = if cfg!(windows) { "cbb update, as administrator" } else { "sudo cbb update" };
+                log(&format!("CBB {} is available; this device runs {v}. To install it: {how}", r.version))
             }
             _ if v == "dev" => {
                 return Err(Error::msg(format!(
@@ -1707,12 +1878,24 @@ fn stamp(ms: i64) -> String {
 fn core_version() -> String {
     use cbb_core::api;
     let source = if api::SOURCE.is_empty() { String::from("unknown") } else { String::from(api::SOURCE) };
-    format!("core {}, abi {}, source {source}", api::VERSION, api::ABI)
+    // As the Go cbb's line, which the installers and sign.sh look for.
+    format!("rules: the Rust core {}, abi {}, source {source} (built in)", api::VERSION, api::ABI)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{core_version, hint, terminal_text};
+    use super::{control, core_version, hint, on_actions, qr, terminal_text};
+
+    #[test]
+    fn only_the_actions_that_are_on() {
+        assert!(on_actions(None).is_empty());
+        let a = |name: &str, on| control::Action { name: name.into(), on, ..Default::default() };
+        let st = control::Status {
+            actions: vec![a("lock", true), a("sleep", false), a("reboot", true)],
+            ..Default::default()
+        };
+        assert_eq!(on_actions(Some(&st)), ["lock", "reboot"]);
+    }
 
     /// Without systemd (NextPi), the hint names cbb service, not systemctl.
     #[test]
@@ -1727,9 +1910,42 @@ mod tests {
     fn names_the_core() {
         let line = core_version();
         assert!(
-            line.starts_with(&format!("core {}, abi {}, source ", cbb_core::api::VERSION, cbb_core::api::ABI)),
+            line.starts_with(&format!(
+                "rules: the Rust core {}, abi {}, source ",
+                cbb_core::api::VERSION,
+                cbb_core::api::ABI
+            )),
             "{line}"
         );
+    }
+
+    #[test]
+    fn qr_reads_back() {
+        // Two modules a line, a quiet zone of two on each side: read the
+        // modules back from the colors and compare.
+        let url = "http://192.168.1.20:8766/";
+        let out = qr(url);
+        let code = qrcode::QrCode::with_error_correction_level(url, qrcode::EcLevel::M).unwrap();
+        let size = code.width() as i32;
+        let lines: Vec<&str> = out.trim_end_matches('\n').split('\n').collect();
+        assert_eq!(lines.len() as i32, (size + 4 + 1) / 2);
+        for (i, line) in lines.iter().enumerate() {
+            let cells: Vec<&str> = line.split("\x1b[").skip(1).collect();
+            let cells = &cells[..cells.len() - 1]; // the reset
+            assert_eq!(cells.len() as i32, size + 4, "line {i}");
+            for (x, cell) in cells.iter().enumerate() {
+                let colors: Vec<&str> = cell.trim_end_matches("m▀").split(';').collect();
+                for (half, y) in [2 * i as i32, 2 * i as i32 + 1].into_iter().enumerate() {
+                    let (mx, my) = (x as i32 - 2, y - 2);
+                    let want = mx >= 0
+                        && my >= 0
+                        && mx < size
+                        && my < size
+                        && code[(mx as usize, my as usize)] == qrcode::Color::Dark;
+                    assert_eq!(colors[half] == "30" || colors[half] == "40", want, "module {mx},{my}");
+                }
+            }
+        }
     }
 
     #[test]

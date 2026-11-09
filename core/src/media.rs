@@ -247,6 +247,38 @@ fn device(name: &str) -> bool {
     }
 }
 
+/// A name a manifest may hold, made from a file's name as Go's
+/// clip.CleanName does: a character a path may not hold becomes "_", a
+/// device name of Windows gets "_" after its base, a name that ends in a
+/// dot or a space gets "_" after it, and the name loses characters at its
+/// end until it fits in MAX_NAME bytes. An empty name, "." and ".." become
+/// "_".
+pub fn clean_name(name: &str) -> String {
+    let mut name: String = name
+        .chars()
+        .map(|r| {
+            if r < ' ' || r == '\u{7f}' || ('\u{80}'..'\u{a0}').contains(&r) || "/\\:*?\"<>|".contains(r) {
+                '_'
+            } else {
+                r
+            }
+        })
+        .collect();
+    loop {
+        if name.is_empty() || name == "." || name == ".." {
+            return String::from("_");
+        }
+        let mut fixed = save_name(&name);
+        if fixed.ends_with('.') || fixed.ends_with(' ') {
+            fixed.push('_');
+        }
+        if fixed.len() <= MAX_NAME {
+            return fixed;
+        }
+        name.pop();
+    }
+}
+
 /// save_name for each name of a path, as Go's clip.SavePath.
 pub fn save_path(path: &str) -> String {
     path.split('/').map(save_name).collect::<Vec<_>>().join("/")
