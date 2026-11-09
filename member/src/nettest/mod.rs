@@ -174,3 +174,80 @@ pub fn wait_for(d: Duration, mut f: impl FnMut() -> bool) -> bool {
         std::thread::sleep(Duration::from_millis(20));
     }
 }
+
+/// A folder of its own for a test, removed when dropped.
+pub struct TempDir(pub std::path::PathBuf);
+
+impl TempDir {
+    pub fn new(what: &str) -> TempDir {
+        let p = std::env::temp_dir().join(format!("cbb-{what}-{}", crate::vless::random_uuid()));
+        std::fs::create_dir_all(&p).unwrap();
+        TempDir(p)
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Device i of the group as a node in a folder of its own, with the
+/// group's records as they are now; its log goes to logs.
+pub struct NodeAt {
+    pub dir: TempDir,
+    pub node: Arc<crate::node::Node>,
+    pub logs: Arc<std::sync::Mutex<Vec<String>>>,
+}
+
+impl NodeAt {
+    pub fn logged(&self, s: &str) -> bool {
+        self.logs.lock().unwrap().iter().any(|l| l.contains(s))
+    }
+
+    pub fn log(&self) -> Arc<dyn Fn(&str) + Send + Sync> {
+        let l = self.logs.clone();
+        Arc::new(move |s: &str| l.lock().unwrap().push(s.to_string()))
+    }
+}
+
+impl Group {
+    pub fn identity(&self, i: usize) -> crate::identity::Identity {
+        crate::identity::Identity {
+            id: self.devs[i].id.clone(),
+            key: Vec::new(),
+            external: Some(self.devs[i].key.clone()),
+            cert: Cert::parse(&self.devs[i].cert).unwrap(),
+            issuer: None,
+            group_ca: self.root.clone(),
+            roots: Vec::new(),
+        }
+    }
+
+    pub fn node(&self, i: usize) -> NodeAt {
+        let dir = TempDir::new("node");
+        let mut rs = crate::records::new(&self.root);
+        let (_, errs) = rs.add_all(&self.records.all());
+        assert!(errs.is_empty(), "{errs:?}");
+        let ident = self.identity(i);
+        let engine = Arc::new(crate::clip::Engine::new(
+            ident.id.as_str(),
+            crate::service::clock(&dir.0),
+            Box::new(crate::uptime::wall_ms),
+            Box::new(crate::uptime::now),
+        ));
+        let logs = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let l = logs.clone();
+        let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |s: &str| l.lock().unwrap().push(s.to_string()));
+        let node = Arc::new(crate::node::Node::new(
+            ident,
+            &format!("device {i}"),
+            engine,
+            rs,
+            dir.0.clone(),
+            Box::new(|_| {}),
+            log,
+        ));
+        NodeAt { dir, node, logs }
+    }
+}
