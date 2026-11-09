@@ -113,6 +113,12 @@ Page {
                                            : triesLeft > 0 ? qsTr("Wrong PIN. Tries left: %1.").arg(triesLeft)
                                            : qsTr("The admin PIN is not changed.")
             }
+            // Room between the PIN and leaving, which is far from undone.
+            Item {
+                visible: app.group !== ""
+                width: 1
+                height: Theme.paddingLarge * 2
+            }
             // The root's key goes with it: the group then has no root until
             // an admin phone takes it over.
             Button {
