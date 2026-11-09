@@ -15,8 +15,8 @@
 //
 // Run it (CI's `model` job does):
 //
-//	quint test docs/model/claims.qnt
-//	quint run --invariant=promises --max-steps=10 --max-samples=10000 docs/model/claims.qnt
+//	quint test --backend=typescript docs/model/claims.qnt
+//	quint run --backend=typescript --invariant=promises --max-steps=12 --max-samples=20000 docs/model/claims.qnt
 module claims {
   type Key = str
   type Record = {

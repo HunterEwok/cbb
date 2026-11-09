@@ -1,4 +1,5 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only. Drawn by tools/diagrams/diagrams.py; edit it there. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->
 <svg xmlns="http://www.w3.org/2000/svg" lang="ru" width="720" height="300" viewBox="0 0 720 300" role="img" aria-label="Телефон добавляет каждый компьютер по QR-коду; затем компьютеры используют один общий буфер обмена">
 <title>Телефон добавляет каждый компьютер по QR-коду; затем компьютеры используют один общий буфер обмена</title>
 <style>
