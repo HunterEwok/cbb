@@ -174,13 +174,13 @@ final class ReadersUITests: XCTestCase {
                 XCTAssertEqual(languageFirst, Self.rightToLeft.contains(language) ? !en : en, "\(language): the top row does not run \(Self.rightToLeft.contains(language) ? "right to left" : "left to right")")
             }
             picture("start-\(language)")
-            audit(app, checks, "the Start screen in \(language)"
+            audit(app, checks, "the Start screen in \(language)")
 
             settings.tap()
             XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10), "\(language): Settings did not open")
             XCTAssertTrue(app.buttons[tr("Ocean", language)].exists, "\(language): the colours are not translated")
             picture("settings-\(language)")
-            audit(app, checks, "Settings in \(language)"
+            audit(app, checks, "Settings in \(language)")
             app.terminate()
         }
     }
