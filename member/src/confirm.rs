@@ -463,8 +463,14 @@ mod mac {
 
     /// Writes both rights to the authorization database: an administrator
     /// of this Mac (Touch ID where the Mac has it, else the password), for
-    /// five minutes in the user's session, or each time.
+    /// five minutes in the user's session, or each time. Only root writes
+    /// them: for anyone else, changing a right asks for a password that a
+    /// service has no screen to show, and the call would wait for ever.
     pub fn install() -> Result<()> {
+        // SAFETY: geteuid has no preconditions and cannot fail.
+        if unsafe { libc::geteuid() } != 0 {
+            return Ok(());
+        }
         let mut auth: AuthorizationRef = std::ptr::null_mut();
         // SAFETY: an empty authorization; the service runs as root, which
         // may change the rights.
