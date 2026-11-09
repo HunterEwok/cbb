@@ -841,9 +841,8 @@ actions and the keyboard for each drag.
 - The collection tile, the list's sections, the collection's page, the search and filters
   and **Back to the group's order** are the iPhone's. The orbit keeps the group's order.
 
-**In the tray app** (`frontend/app.js`, the model in `arrange.go` through `Desk.Arrange`,
-kept as `arrangement` in `desktop.json`, which the window's other settings never
-overwrite):
+**In the tray app** (`frontend/app.js`, drawing the service's `view`; `Desk.Arrange` sends
+`arrange`):
 
 - The ⇅ button beside the views turns Arrange mode on and off, and Escape ends it. In it
   a click does not open a tile, tiles and rows have a dashed outline and are dragged, a
@@ -883,10 +882,10 @@ collection. The watch does not change the arrangement.
 
 The apps draw the device tiles from one answer of their member, the same on the phones
 (`cbb_member_call`) and the computers (the control socket): `view` gives
-`{"tiles", "online", "others"}`, the tiles in the user's order with this device among them,
+`{"tiles", "online", "others", "custom"}`, the tiles in the user's order with this device among them,
 each `{"device": {…}}` (a device as `devices` lists it) or
 `{"collection": {"id", "name", "devices": [{…}]}}`, and how many of the other devices are
-online, out of how many. `arrange` takes the user's change (`{"op": "move", "item",
+online, out of how many, and whether the user changed the order (`reset` undoes it). `arrange` takes the user's change (`{"op": "move", "item",
 "before"}`, `into`, `out`, `new`, `rename`, `ungroup` or `reset`, as rule 5 above names
 them), keeps it and answers as `view`; a change that does not fit is refused and changes
 nothing. Devices that left the group leave the arrangement when the member answers. No app

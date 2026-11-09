@@ -39,6 +39,8 @@ pub struct View {
     /// How many other devices of the group are online, and listed.
     pub online: usize,
     pub others: usize,
+    /// The user changed the order, which `reset` undoes.
+    pub custom: bool,
 }
 
 /// The arrangement of one member, kept in its state folder.
@@ -101,7 +103,7 @@ pub fn build(a: &Arrangement, devices: Vec<Device>, me: Option<&str>) -> View {
             }),
         })
         .collect();
-    View { tiles, online, others }
+    View { tiles, online, others, custom: !a.items.is_empty() }
 }
 
 #[cfg(test)]
@@ -148,12 +150,13 @@ mod tests {
 
         let v = t.view("G", all(), None).unwrap();
         assert_eq!(ids(&v), ["s", "a", "b", "c"]);
-        assert_eq!((v.online, v.others), (1, 3));
+        assert_eq!((v.online, v.others, v.custom), (1, 3, false));
         assert!(!tmp.join(FILE).exists(), "nothing is written until the user arranges");
 
         let op: Op = serde_json::from_str(r#"{"op":"new","name":"Desk","devices":["b","c"]}"#).unwrap();
         let v = t.view("G", all(), Some(&op)).unwrap();
         assert_eq!(ids(&v), ["s", "a", "Desk[b,c]"]);
+        assert!(v.custom);
         let op: Op = serde_json::from_str(r#"{"op":"move","item":{"device":"a"}}"#).unwrap();
         assert_eq!(ids(&t.view("G", all(), Some(&op)).unwrap()), ["s", "Desk[b,c]", "a"]);
 
