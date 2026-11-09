@@ -117,6 +117,10 @@ pub fn read_frame(c: &mut impl Read, max: usize) -> Result<Vec<u8>> {
     let mut head = [0u8; 4];
     c.read_exact(&mut head).map_err(|e| Error::msg(format!("cannot read a frame: {e}")))?;
     let n = cbb_core::wire::frame_len(head, max)?;
+    if n == 0 {
+        // As Go's readLine: a frame holds a JSON object.
+        return Err(Error::msg("an empty frame"));
+    }
     let mut body = vec![0u8; n];
     c.read_exact(&mut body).map_err(|e| Error::msg(format!("cannot read a frame: {e}")))?;
     Ok(body)
@@ -168,5 +172,56 @@ mod tests {
         assert_eq!(r, b"after");
         let mut big = &(u32::try_from(MAX_LINE + 1).unwrap().to_be_bytes())[..];
         assert!(read_frame(&mut big, MAX_LINE).is_err());
+    }
+
+    /// As Go's FuzzRelayWire, over random frames: a frame is never read past
+    /// its end, nor taken without its length, cut short, empty or over the
+    /// limit; what decodes it is only serde.
+    #[test]
+    fn random_frames_are_read_exactly() {
+        let mut x = 2026u64;
+        let mut next = move |n: usize| {
+            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((x >> 33) as usize) % n
+        };
+        let seeds: [&[u8]; 4] = [
+            br#"{"watch":true}"#,
+            br#"{"dial":"00112233445566778899aabbccddeeff"}"#,
+            br#"{"answer":"x"}"#,
+            br#"{"e":"AAAA","roots":true}"#,
+        ];
+        for i in 0..20_000 {
+            let mut data = Vec::new();
+            let seed = seeds[i % seeds.len()];
+            let n = match next(5) {
+                0 => seed.len(),
+                1 => next(MAX_LINE + 2),
+                2 => 0,
+                3 => MAX_LINE + 1 + next(1 << 20),
+                _ => seed.len() + next(8),
+            };
+            data.extend_from_slice(&u32::try_from(n).unwrap().to_be_bytes());
+            data.extend_from_slice(seed);
+            for _ in 0..next(64) {
+                data.push(next(256) as u8);
+            }
+            data.truncate(next(data.len() + 1).max(data.len().min(next(2) * data.len())));
+            let mut r = &data[..];
+            let got = read_frame(&mut r, MAX_LINE);
+            if data.len() < 4 {
+                assert!(got.is_err(), "a frame without its length");
+                continue;
+            }
+            if n == 0 || n > MAX_LINE {
+                assert!(got.is_err(), "a frame of {n} bytes");
+            } else if data.len() < 4 + n {
+                assert!(got.is_err(), "a frame cut short");
+            } else {
+                assert_eq!(got.unwrap(), &data[4..4 + n]);
+                assert_eq!(r, &data[4 + n..], "read past the frame");
+                let _ = serde_json::from_slice::<Request>(&data[4..4 + n]);
+                let _ = serde_json::from_slice::<Claim>(&data[4..4 + n]);
+            }
+        }
     }
 }

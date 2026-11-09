@@ -103,10 +103,10 @@ impl Limits {
 /// registers over and over to a small share of a processor (a record's
 /// check takes about 45 microseconds).
 pub const SETUP_COST: f64 = 4.0;
-const ADDRESS: Rate = Rate { per_second: 64.0, burst: 1536.0 };
-const NETWORK: Rate = Rate { per_second: 256.0, burst: 4096.0 };
-const WIDE: Rate = Rate { per_second: 1024.0, burst: 8192.0 };
-const PROVIDER: Rate = Rate { per_second: 2048.0, burst: 16384.0 };
+pub(super) const ADDRESS: Rate = Rate { per_second: 64.0, burst: 1536.0 };
+pub(super) const NETWORK: Rate = Rate { per_second: 256.0, burst: 4096.0 };
+pub(super) const WIDE: Rate = Rate { per_second: 1024.0, burst: 8192.0 };
+pub(super) const PROVIDER: Rate = Rate { per_second: 2048.0, burst: 16384.0 };
 
 /// What each source address, network, wide network and provider may still
 /// start (docs/relay-budget.md).

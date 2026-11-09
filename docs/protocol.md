@@ -164,7 +164,7 @@ these words depends on it.
 | Member ALPN | `cbb/3` | `group.MemberProtocol` |
 | Pairing ALPN | `cbb-pair/2` | `pair.Protocol` |
 | Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `cbb-forward/2` (section 13) | `internal/forward` |
-| Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `internal/relay` |
+| Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `member/src/relayd` (`cbb-relay`) |
 | Pairing code | six ASCII digits; users may type spaces and dashes, which are removed | `pair.NormalizeCode` |
 | Join QR text | `cbb://join?code=` followed by the six-digit code (section 7) | `phone.JoinQR`, `phone.ParseJoinQR` |
 
@@ -2900,8 +2900,9 @@ or to a log. With `CBB_DEBUG=1` it logs counts each minute.
 ## 14. The blind relay
 
 The meeting point, on the user's own server or the project's open relay, for a group that has
-no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Go (`internal/relay`,
-`cbb relay`, and on the devices `internal/service/relay.go`), and on the phones through
+no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Rust (`member/src/relayd`,
+`cbb-relay`, which `cbb relay` starts, and on the devices `member/src/relay.rs`), with Go's `internal/relay`
+kept as the reference its tests check it against, and on the phones through
 the Rust tunnel (`cbb_tunnel_relay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
 tunnel and joins two devices' connections inside the tunnels, and member TLS (section 4)
 runs end to end between the two devices.

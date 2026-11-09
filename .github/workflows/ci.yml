@@ -790,8 +790,9 @@ jobs:
           systemd-analyze verify packaging/linux/cbb.service
           systemd-analyze security --offline=true packaging/linux/cbb.service --threshold=30 # 3.0 on the scale it prints
           systemd-analyze verify member/packaging/cbb.service
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb-forward" ./cmd/cbb-forward
+          cp target/release/cbb-relay "$RUNNER_TEMP/cbb-relay"
           for u in cbb-forward cbb-relay; do
-            CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/$u" "./cmd/$u"
             sudo install -m 0755 "$RUNNER_TEMP/$u" "/usr/local/bin/$u"
             systemd-analyze verify "packaging/linux/$u.service"
             systemd-analyze security --offline=true "packaging/linux/$u.service" --threshold=20
@@ -1970,8 +1971,8 @@ jobs:
           rustup toolchain install stable --profile minimal
           cargo +stable build --locked --release -p cbb-lite
           mkdir -p "$RUNNER_TEMP/fleet"
-          cp target/release/cbb "$RUNNER_TEMP/fleet/cbb"
-          for p in cbb-helper cbb-forward cbb-relay; do
+          cp target/release/cbb target/release/cbb-relay "$RUNNER_TEMP/fleet/"
+          for p in cbb-helper cbb-forward; do
             CGO_ENABLED=0 go build -o "$RUNNER_TEMP/fleet/$p" "./cmd/$p"
           done
       - name: an emulator, with KVM
@@ -2438,7 +2439,7 @@ jobs:
       - name: the relay in Rust passes the Go relay's tests that check it from outside
         run: |
           CBB_TEST_RUST_RELAY="$PWD/target/release/cbb-relay" go test -race -count=1 ./internal/relay -v \
-            -run 'TestThroughRelay|TestGroupsApart|TestRefused|TestOpenRelay$|TestRemoved|TestCredentialedRelay|TestRelayDialsNothing|TestNoLogs'
+            -run 'TestThroughRelay|TestGroupsApart|TestRefused|TestOpenRelay$|TestRemoved|TestCredentialedRelay|TestRelayDialsNothing|TestNoLogs|TestRecordBytes'
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-lite-linux-arm64
@@ -2750,8 +2751,9 @@ jobs:
             t=$name goarch=$name goarm=
             if [ "$name" = armv7 ]; then t=arm/7 goarch=arm goarm=7; fi
             mkdir -p "$RUNNER_TEMP/$name"
-            cp "$(sh member/packaging/build.sh "linux/$t")/cbb" "$RUNNER_TEMP/$name/cbb"
-            for p in cbb-helper cbb-forward cbb-relay; do
+            rust=$(sh member/packaging/build.sh "linux/$t")
+            cp "$rust/cbb" "$rust/cbb-relay" "$RUNNER_TEMP/$name/"
+            for p in cbb-helper cbb-forward; do
               GOARCH=$goarch GOARM=$goarm go build -trimpath -o "$RUNNER_TEMP/$name/$p" "./cmd/$p"
             done
           done

@@ -17,3 +17,6 @@ pub mod server;
 pub mod wire;
 
 pub use server::{Config, Relay};
+
+#[cfg(test)]
+mod tests;
