@@ -6,7 +6,7 @@
 the job's log as small base64 JPEGs, so that a failed accessibility audit
 can be looked at from the log alone.
 
-Usage: pictures.py <folder of exported attachments> <marker>
+Usage: pictures.py <folder of exported attachments> <marker>...
 
 The folder holds what `xcrun xcresulttool export attachments` wrote, one
 folder for each result bundle, each with its manifest.json. A picture is
@@ -22,7 +22,7 @@ import tempfile
 
 
 def main() -> None:
-    root, marker = sys.argv[1], sys.argv[2]
+    root, markers = sys.argv[1], sys.argv[2:]
     for folder, _, files in os.walk(root):
         if "manifest.json" not in files:
             continue
@@ -31,7 +31,7 @@ def main() -> None:
         for test in manifest:
             for a in test.get("attachments", []):
                 name = a.get("suggestedHumanReadableName", "")
-                if marker not in name:
+                if not any(m in name for m in markers):
                     continue
                 path = os.path.join(folder, a["exportedFileName"])
                 with tempfile.TemporaryDirectory() as tmp:

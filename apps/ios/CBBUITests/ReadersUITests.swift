@@ -63,8 +63,13 @@ final class ReadersUITests: XCTestCase {
                 // The system's status bar is not the app's to fix.
                 if e.elementType == .statusBar || app.statusBars.firstMatch.exists && app.statusBars.firstMatch.frame.contains(e.frame) { return true }
                 if issue.auditType == .dynamicType && app.navigationBars.firstMatch.exists && app.navigationBars.firstMatch.frame.contains(e.frame) { return true }
-                // Each issue on a line of its own, with the element it is on.
-                XCTFail("\(screen): \(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' at \(e.frame)")
+                // Each issue on a line of its own, with the element it is on,
+                // and the element's picture, which CI prints into the log.
+                XCTFail("\(screen): \(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' at \(e.frame): \(issue.detailedDescription)")
+                let a = XCTAttachment(screenshot: e.screenshot())
+                a.name = "failed-\(screen)"
+                a.lifetime = .keepAlways
+                self.add(a)
                 return true
             }
         } catch {
