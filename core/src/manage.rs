@@ -376,7 +376,7 @@ pub struct NewAdmin {
 }
 
 /// Makes the computer device an admin, as the group's root
-/// (docs/protocol.md, section 10, "A computer as admin"): admin_key is the
+/// (docs/protocol.md, section 10, "Admins"): admin_key is the
 /// SubjectPublicKeyInfo its hello offered and key_store where its hello
 /// says its keys live; a computer that keeps them in a file becomes one
 /// only when the group's key level allows files and the user consented

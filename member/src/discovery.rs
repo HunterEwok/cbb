@@ -116,12 +116,7 @@ fn browse_txt<T>(
         let Ok(ev) = rx.recv_timeout(left) else { break };
         let mdns_sd::ServiceEvent::ServiceResolved(info) = ev else { continue };
         let Some(v) = pick(&info) else { continue };
-        let addrs = order(info.get_addresses().iter().map(|ip| match ip {
-            mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
-                SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, v6.scope_id().index))
-            }
-            other => SocketAddr::new(other.to_ip_addr(), info.port),
-        }));
+        let addrs = order(dial_addrs(&info).into_iter());
         if addrs.is_empty() {
             continue;
         }
@@ -207,6 +202,7 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
     let mut wait = FIRST_WAIT;
     let mut redials = node.redials();
     let mut since = std::time::Instant::now();
+    let mut last_failure = String::new();
     loop {
         if node.is_closed() {
             return;
@@ -240,11 +236,25 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
         }
         let mut up = false;
         let mut again = false;
+        let mut failed = Vec::new();
         for a in list {
-            if let Ok(d) = node.dial_ended(a, peer.clone()) {
-                (up, again) = (d.up, d.again);
-                break;
+            match node.dial_ended(a, peer.clone()) {
+                Ok(d) => {
+                    (up, again) = (d.up, d.again);
+                    failed.clear();
+                    break;
+                }
+                Err(e) => failed.push(format!("{a}: {e:#}")),
             }
+        }
+        // Why a member cannot be reached is logged once, until it changes.
+        let why = failed.join("; ");
+        if why != last_failure {
+            if !why.is_empty() && !node.is_closed() {
+                let who = peer.as_ref().map_or_else(|| "the member".to_string(), ToString::to_string);
+                node.logf(&format!("cbb: cannot reach {who}: {why}"));
+            }
+            last_failure = why;
         }
         wait = next_wait(wait, up, again);
         if wait.is_zero() {
@@ -559,6 +569,9 @@ fn browse(
         if at.as_ref().is_some_and(Vec::is_empty) {
             // On no known network: browse only.
             if let Some(name) = registered.take() {
+                log(
+                    "cbb: on no known network now: this device stops publishing itself by mDNS and only looks for the members",
+                );
                 let _ = daemon.unregister(&name);
             }
             return Ok(());
@@ -580,6 +593,16 @@ fn browse(
             None => mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &host, "", port, &txt[..])?.enable_addr_auto(),
         };
         registered = Some(info.get_fullname().to_string());
+        // Each change of what is published, so that a member nobody finds
+        // can be told from its log.
+        log(&format!(
+            "cbb: publishing this device by mDNS at {}{}",
+            match at {
+                Some(a) => a.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "),
+                None => "every address".into(),
+            },
+            if window { ", with the pairing window open" } else { "" }
+        ));
         daemon.register(info)
     };
     let mut window = node.window_open();
@@ -617,6 +640,7 @@ fn browse(
         }
         let Ok(ev) = ev else {
             if events.is_disconnected() {
+                log("cbb: looking for the members by mDNS ended: the mDNS daemon stopped sending what it finds");
                 break;
             }
             continue;
@@ -648,13 +672,12 @@ fn browse(
                     continue;
                 }
                 let later = !as_phone && !listens_only(r) && id < me;
-                let addrs = order(info.get_addresses().iter().map(|ip| match ip {
-                    mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
-                        SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, v6.scope_id().index))
-                    }
-                    other => SocketAddr::new(other.to_ip_addr(), info.port),
-                }));
+                let addrs = order(dial_addrs(&info).into_iter());
                 if addrs.is_empty() {
+                    log(&format!(
+                        "cbb: found {id} by mDNS with no address of a home network ({}); not dialed",
+                        info.get_addresses().iter().map(|a| a.to_ip_addr().to_string()).collect::<Vec<_>>().join(", ")
+                    ));
                     continue;
                 }
                 let addrs = if test_fallback().is_some() && id > me {
@@ -665,7 +688,16 @@ fn browse(
                 match found.get(&id) {
                     Some(cur) => {
                         node.found(&id, true);
-                        *cur.lock().unwrap() = Some(addrs)
+                        // mDNS may first resolve a member with only some of
+                        // its addresses (a link-local one from the interface
+                        // the answer came on, which another interface's scope
+                        // can make unreachable); its dial loop, maybe backing
+                        // off after failing those, tries the new ones at once.
+                        let mut cur = cur.lock().unwrap();
+                        if cur.as_ref() != Some(&addrs) {
+                            *cur = Some(addrs);
+                            node.kick();
+                        }
                     }
                     // Anyone on the network can announce the group's tag, so
                     // the members dialed are bounded, as in Go.
@@ -716,6 +748,32 @@ fn instance_id(fullname: &str) -> Option<DeviceId> {
     DeviceId::parse(&instance(label)).ok()
 }
 
+/// The addresses a resolved member is dialed at. A link-local address
+/// takes the scope of the interface the answer came on, except one of this
+/// device's own (another member on the same device, as in tests), which is
+/// reached only through the interface that has it.
+fn dial_addrs(info: &mdns_sd::ResolvedService) -> Vec<SocketAddr> {
+    let own = std::sync::OnceLock::new();
+    info.get_addresses()
+        .iter()
+        .map(|ip| match ip {
+            mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
+                let ifs: &Vec<interfaces::Iface> = own.get_or_init(interfaces::system);
+                let scope = link_scope(*v6.addr(), v6.scope_id().index, ifs);
+                SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, scope))
+            }
+            other => SocketAddr::new(other.to_ip_addr(), info.port),
+        })
+        .collect()
+}
+
+/// The scope of a link-local address that came on the interface arrived:
+/// that interface's, or, for an address of this device's own, the index of
+/// the interface that has it.
+fn link_scope(a: std::net::Ipv6Addr, arrived: u32, own: &[interfaces::Iface]) -> u32 {
+    own.iter().find(|i| i.ip == IpAddr::V6(a)).and_then(|i| i.index).unwrap_or(arrived)
+}
+
 /// The addresses that would be published, IPv4 first, then routable IPv6,
 /// then link-local IPv6.
 fn order(addrs: impl Iterator<Item = SocketAddr>) -> Vec<SocketAddr> {
@@ -732,6 +790,20 @@ fn order(addrs: impl Iterator<Item = SocketAddr>) -> Vec<SocketAddr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A link-local address of this device's own is dialed through the
+    /// interface that has it, whichever interface mDNS heard it on; another
+    /// device's through the interface it was heard on.
+    #[test]
+    fn own_link_local_takes_its_interface() {
+        let own = vec![
+            interfaces::Iface { name: "end0".into(), ip: "fe80::9e13".parse().unwrap(), prefix: 64, index: Some(2) },
+            interfaces::Iface { name: "veth1".into(), ip: "fe80::280e".parse().unwrap(), prefix: 64, index: Some(12) },
+        ];
+        assert_eq!(link_scope("fe80::9e13".parse().unwrap(), 12, &own), 2);
+        assert_eq!(link_scope("fe80::280e".parse().unwrap(), 2, &own), 12);
+        assert_eq!(link_scope("fe80::77".parse().unwrap(), 12, &own), 12);
+    }
 
     /// A name mDNS made unique by " (n)" names the same device.
     #[test]
