@@ -52,7 +52,7 @@ pub struct Iface {
     pub index: Option<u32>,
 }
 
-fn system() -> Vec<Iface> {
+pub fn system() -> Vec<Iface> {
     if_addrs::get_if_addrs()
         .unwrap_or_default()
         .into_iter()

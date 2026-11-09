@@ -183,7 +183,8 @@ class D:
                 ly = y - h/2 + 15 + 16*i
                 lab.append(f'<text class="lbl {kind}" x="{x}" y="{ly:.1f}" text-anchor="middle">{html.escape(l, quote=True)}</text>')
         lang_attr = '' if LANG == 'en' else f' lang="{LANG}"'
-        svg = ('<!-- SPDX-License-Identifier: AGPL-3.0-only. Drawn by tools/diagrams/diagrams.py; edit it there. -->\n'
+        svg = ('<!-- SPDX-' 'License-Identifier: AGPL-3.0-only -->\n'
+               '<!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->\n'
                f'<svg xmlns="http://www.w3.org/2000/svg"{lang_attr} width="{self.w}" height="{self.h}" viewBox="0 0 {self.w} {self.h}" role="img" aria-label="{esc(self.title)}">\n'
                f'<title>{esc(self.title)}</title>{STYLE}' + '\n'.join(self.parts + lab) + '\n</svg>\n')
         if LANG in RTL:
