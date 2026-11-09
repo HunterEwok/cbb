@@ -10,8 +10,8 @@ import (
 	"github.com/HunterEwok/cbb/internal/core"
 )
 
-// The rule of incoming copies (docs/protocol.md, section 5, "Writing to
-// the clipboard") is the Rust core's (cbb_core::rule): a build that links
+// The rule of incoming copies (docs/protocol.md, section 5, "Writing the
+// member's own clipboard") is the Rust core's (cbb_core::rule): a build that links
 // the core (every release build) asks it through copy_verdict, so that
 // every member keeps one rule; a build without it runs this copy of it,
 // which testdata/interop/copy-verdicts.json keeps the same.
