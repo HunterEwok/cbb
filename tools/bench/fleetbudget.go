@@ -13,7 +13,7 @@ import (
 
 // A device class's budget (E12, docs/testbench.md "Budgets"): the
 // container's cap, which stands in for the device's memory and CPU, and
-// the most the lite member may use there. A run records each number as a
+// the most the small device may use there. A run records each number as a
 // metric too, so that -baseline also catches a slow drift under the
 // budget.
 type budget struct {
@@ -26,7 +26,7 @@ type budget struct {
 	peakMemory float64 // KiB, the container's peak, its cgroup's
 }
 
-// budgets are the classes the lite member runs on that are smaller than a
+// budgets are the classes the small device runs on that are smaller than a
 // computer: a Raspberry Pi Zero (512 MiB, one slow core) and a router (128
 // MiB). A quarter of the controller's core is about a Pi Zero's ARM11 at 1
 // GHz. The first run (2026-11) measured about 8 MiB at rest and after the
@@ -37,18 +37,14 @@ var budgets = []budget{
 	{class: "router", cpus: "0.25", mem: "128m", idleRSS: 16 << 10, idleCPU: 2, p95: 1000, copiesRSS: 20 << 10, peakMemory: 48 << 10},
 }
 
-// AddLiteWith starts a lite member as AddLite does, with docker run's
+// AddSmallWith starts a small device as AddSmall does, with docker run's
 // options run.
-func (f *Fleet) AddLiteWith(ctx context.Context, run []string) (*Device, error) {
-	abs, err := liteBinary()
+func (f *Fleet) AddSmallWith(ctx context.Context, run []string) (*Device, error) {
+	d, err := f.container(ctx, f.net, run, nil, smallLoop)
 	if err != nil {
 		return nil, err
 	}
-	d, err := f.containerOf(ctx, abs, f.net, run, nil, liteLoop)
-	if err != nil {
-		return nil, err
-	}
-	if err := liteStarted(ctx, d); err != nil {
+	if err := smallStarted(ctx, d); err != nil {
 		return nil, err
 	}
 	return d, nil
@@ -86,16 +82,12 @@ func (b budget) within(r *Report, p, name, unit string, got, limit float64) {
 	})
 }
 
-// budgetsCase (E12): a lite member in the cap of each class joins a full
+// budgetsCase (E12): a small device in the cap of each class joins a full
 // member's group; its memory and CPU at rest, the time 20 copies take to
 // reach it, its memory after 200 more and the container's peak stay
 // within the class's budget.
 func budgetsCase(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const name = "fleet/E12-budgets"
-	if fleetLite == "" {
-		r.Skip(name, "give -cbb-lite FILE, the lite member's cbb for Linux, to measure the small devices' budgets")
-		return
-	}
 	g := fleetGroup(ctx, r, f, name, 1)
 	if g == nil || len(g.members) != 1 {
 		return
@@ -106,10 +98,10 @@ func budgetsCase(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 		var d *Device
 		if r.Do(p+"join", func() error {
 			var err error
-			if d, err = f.AddLiteWith(ctx, []string{"--cpus", b.cpus, "--memory", b.mem, "--memory-swap", b.mem}); err != nil {
+			if d, err = f.AddSmallWith(ctx, []string{"--cpus", b.cpus, "--memory", b.mem, "--memory-swap", b.mem}); err != nil {
 				return err
 			}
-			if err := joinLite(ctx, hub, d); err != nil {
+			if err := joinSmall(ctx, hub, d); err != nil {
 				return err
 			}
 			return syncs(ctx, g, hub, d, "to the "+b.class, timeout)
@@ -120,7 +112,7 @@ func budgetsCase(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 	}
 }
 
-// budgetOf measures the lite member d against b.
+// budgetOf measures the small device d against b.
 func budgetOf(ctx context.Context, r *Report, g *benchGroup, hub, d *Device, b budget, p string, timeout time.Duration) {
 	time.Sleep(time.Minute) // the join's work done
 	pid, rss, _, err := serviceUse(ctx, d)

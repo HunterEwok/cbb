@@ -22,19 +22,23 @@ import (
 // for as long as it runs and keeps the members it finds in DIR/peers, one
 // line each, "ID PORT TXT...", sorted, and each change in DIR/events, a
 // line "found ID" or "gone ID"; forge mdns:SECONDS:TXT,... publishes
-// a member with the highest device ID, whom every full member dials when
-// they share a group, with those TXT strings on port mdnsPort for SECONDS,
-// and prints a line "dialed from ADDR" for each connection to the port.
+// a member with the highest device ID, whom every member that dials dials
+// at once when they share a group, with those TXT strings on port mdnsPort
+// for SECONDS, and prints a line "dialed from ADDR" for each connection to
+// the port; mdns@ID:SECONDS:TXT,... does the same with the device ID ID,
+// such as a low one, whom a member dials at once only when it publishes
+// r=listen. A member keeps what it learned of an ID while it runs, so each
+// case takes an ID of its own.
 
 // mdnsPort is the port the forge's member publishes.
 const mdnsPort = 8790
 
-// mdnsID is the forge's device ID: higher than any other, so that a full
-// member of its group dials it at once.
+// mdnsID is the forge's device ID: higher than any other, so that a
+// member of its group that dials dials it at once.
 const mdnsID = "ffffffffffffffffffffffffffffffff"
 
 func mdnsCase(arg string) bool {
-	return arg == "mdns-browse" || strings.HasPrefix(arg, "mdns:")
+	return arg == "mdns-browse" || strings.HasPrefix(arg, "mdns:") || strings.HasPrefix(arg, "mdns@")
 }
 
 func runMDNS(dir, arg string) error {
@@ -80,6 +84,14 @@ func runMDNS(dir, arg string) error {
 		fmt.Println("mdns: browsing")
 		return r.Run(ctx)
 	}
+	id := mdnsID
+	if rest, ok := strings.CutPrefix(arg, "mdns@"); ok {
+		var ok bool
+		if id, rest, ok = strings.Cut(rest, ":"); !ok || len(id) != len(mdnsID) {
+			return fmt.Errorf("mdns@ID:SECONDS:TXT,..., not %q", arg)
+		}
+		arg = "mdns:" + rest
+	}
 	f := strings.SplitN(strings.TrimPrefix(arg, "mdns:"), ":", 2)
 	secs, err := strconv.Atoi(f[0])
 	if err != nil || len(f) != 2 {
@@ -107,7 +119,7 @@ func runMDNS(dir, arg string) error {
 			c.Close()
 		}
 	}()
-	r, err := mdns.New(mdns.Config{ID: mdnsID, Port: mdnsPort, TXT: strings.Split(f[1], ",")})
+	r, err := mdns.New(mdns.Config{ID: id, Port: mdnsPort, TXT: strings.Split(f[1], ",")})
 	if err != nil {
 		return err
 	}

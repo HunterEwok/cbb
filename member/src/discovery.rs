@@ -658,7 +658,7 @@ fn browse(
                 if !as_phone && !dials {
                     continue;
                 }
-                let later = !as_phone && !listens_only(r) && id < me;
+                let later = dials_later(as_phone, port.is_some(), r, &id, &me);
                 let addrs = order(info.get_addresses().iter().map(|ip| match ip {
                     mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
                         SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, v6.scope_id().index))
@@ -709,6 +709,15 @@ fn browse(
 /// Reports whether a TXT `r` value names a member that does not dial,
 /// which every other member dials; keys and values are compared without
 /// regard to case.
+/// Reports whether a member dials one it found with the TXT `r` and the
+/// device ID `id` only after FALLBACK: when that one also dials and has the
+/// lower ID, so that it is the one to dial. A phone dials everyone at once,
+/// and so does a member that does not listen (-no-listen), which no one
+/// else can reach.
+fn dials_later(as_phone: bool, listening: bool, r: Option<&str>, id: &DeviceId, me: &DeviceId) -> bool {
+    !as_phone && listening && !listens_only(r) && id < me
+}
+
 fn listens_only(r: Option<&str>) -> bool {
     r.is_some_and(|v| v.eq_ignore_ascii_case("listen"))
 }
@@ -803,6 +812,20 @@ mod tests {
         assert_eq!(instance_id(&format!("{id}._cbb._tcp.local.")).unwrap().as_str(), id);
         assert!(instance_id("printer._cbb._tcp.local.").is_none());
         assert!(instance_id(&format!("{id}._http._tcp.local.")).is_none());
+    }
+
+    #[test]
+    fn who_dials_later() {
+        let low = DeviceId::parse("00000000000000000000000000000001").unwrap();
+        let high = DeviceId::parse("fffffffffffffffffffffffffffffffe").unwrap();
+        // Of two that dial, the higher ID waits for the lower one.
+        assert!(dials_later(false, true, None, &low, &high));
+        assert!(!dials_later(false, true, None, &high, &low));
+        // Not for one that never dials, nor as a phone.
+        assert!(!dials_later(false, true, Some("listen"), &low, &high));
+        assert!(!dials_later(true, true, None, &low, &high));
+        // A member that does not listen cannot be dialed: it dials at once.
+        assert!(!dials_later(false, false, None, &low, &high));
     }
 
     #[test]

@@ -12,7 +12,7 @@ All notable changes to cbb are documented in this file. The format follows
   against its SHA256SUMS), and TestPreviousRelease joins it and this build to one group, syncs
   both ways, has it take a later device's record and its own removal. It skips until 0.6.0
   is out.
-- The bench's fleet holds the lite member to budgets on the small devices (E12): capped as a
+- The bench's fleet holds `cbb` to budgets on the small devices (E12): capped as a
   Raspberry Pi Zero and as a router, its memory at rest and after 200 copies, its CPU at rest,
   the time a copy takes to arrive and its peak stay under fixed limits, each also a metric for
   `-baseline`.
@@ -21,8 +21,8 @@ All notable changes to cbb are documented in this file. The format follows
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it
   from outside run against it (`CBB_TEST_RUST_RELAY`), and those that look inside it are
   ported beside it.
-- The bench's time-scaled build of the Rust `cbb` (`cargo build -p cbb-lite --features
-  benchtime`, never released), as the Go one's: certificates, renewals, credential periods and
+- The bench's time-scaled build of the Rust `cbb` (`cargo build --release --bin cbb
+  --features benchtime`, never released), as the Go one's: certificates, renewals, credential periods and
   the hub key's handover run 100000 times faster, and `CBB_TEST_CLOCK` moves the wall clock.
 - The ZX Spectrum Next shows the group's latest image: `.cbb show` asks the lite member on the
   Pi (`cbb next image`), which fits the PNG or JPEG to Layer 2 in 320×256 with 256 colours or
@@ -1506,6 +1506,11 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The bench's fleet runs its small devices with the same `cbb` as its computers, as the
+  service alone (`-cbb-lite` is gone, `-coverdir` takes the Rust `cbb`'s coverage too), and its
+  D3 case checks who dials as the Rust service does: a member with a higher device ID at once,
+  one with a lower ID only when it publishes `r=listen`.
+- CI counts the Rust service's coverage with Go's tests of it as well (`rust-service`).
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program
@@ -2020,6 +2025,8 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A member started with `-no-listen` dials the members it finds at once, also those with a
+  lower device ID: it waited 30 s for them to dial it, which they cannot.
 - The Rust member cleans the reason of a command's result before it shows or passes it on,
   as the Go service did: control characters become spaces and it is cut to 256 bytes.
 - A member that booted less than a minute ago no longer writes an old copy from the group to

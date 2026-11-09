@@ -185,3 +185,54 @@ jobs:
             gremlins.json
             gremlins.txt
           if-no-files-found: ignore
+
+  # The unsafe code of the Rust service and the phones' library
+  # (docs/testing.md, "Unsafe code"): Miri checks the C functions of ffi
+  # pointer by pointer; AddressSanitizer runs the Rust tests and Go's tests
+  # of the service against a cbb built with it, which reaches the system
+  # calls Miri cannot.
+  miri:
+    name: miri (the C functions of ffi)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the nightly toolchain with Miri
+        run: rustup toolchain install nightly --profile minimal --component miri,rust-src
+      - name: cargo miri test
+        run: cargo +nightly miri test --locked -p cbb-ffi --features join --lib
+
+  asan:
+    name: address sanitizer (the Rust cbb and ffi)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      RUSTFLAGS: -Zsanitizer=address
+      RUSTDOCFLAGS: -Zsanitizer=address
+      # Threads still running at exit are not leaks worth a failure.
+      ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the nightly toolchain, and swtpm for the keys in a TPM
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends swtpm
+      - name: the Rust tests
+        run: |
+          cargo +nightly test --locked -Zbuild-std --target x86_64-unknown-linux-gnu -p cbb-lite
+          cargo +nightly test --locked -Zbuild-std --target x86_64-unknown-linux-gnu -p cbb-ffi --features member,tunnel
+      - name: Go's tests of the service against the cbb built with it
+        run: |
+          cargo +nightly build --locked -Zbuild-std --target x86_64-unknown-linux-gnu --release -p cbb-lite
+          bin="$PWD/target/x86_64-unknown-linux-gnu/release"
+          CGO_ENABLED=0 go build -trimpath -o "$bin/cbb-helper" ./cmd/cbb-helper
+          CBB_TEST_RUST_SERVICE="$bin/cbb" CBB_LITE="$bin/cbb" go test -timeout 60m ./internal/service

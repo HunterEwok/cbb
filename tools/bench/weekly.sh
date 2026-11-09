@@ -9,8 +9,9 @@
 #
 # DIR holds a checkout of the repository in DIR/cbb, which the run brings
 # to origin/main and builds (Go and cargo): the bench, the Rust cbb under
-# test (also the fleet's lite member) with cbb-helper, cbb-forward and
-# cbb-relay beside it, and its time-scaled build (--features benchtime).
+# test (the fleet's computers and small devices) with cbb-helper,
+# cbb-forward and cbb-relay beside it, and its time-scaled build
+# (--features benchtime).
 # Each run's reports go to DIR/reports/DATE/fleet and DIR/reports/DATE/time, each compared with the newest earlier run's
 # metrics.json (-baseline). It keeps the last 12 runs, writes DIR/last.txt
 # with the commit and each suite's result, and exits 1 when a suite
@@ -37,8 +38,8 @@ echo "weekly.sh: $date, main at $commit"
 go build -o "$bin/bench" ./tools/bench
 # The Rust cbb with what it runs beside it (tools/bench/fleet.go), and its
 # time-scaled build in a directory of its own with the same helpers.
-cargo build -q --locked --release -p cbb-lite
-cargo build -q --locked --release -p cbb-lite --features benchtime --target-dir target/benchtime
+cargo build -q --locked --release --bin cbb
+cargo build -q --locked --release --bin cbb --features benchtime --target-dir target/benchtime
 mkdir -p "$bin/time"
 cp target/release/cbb "$bin/cbb"
 cp target/benchtime/release/cbb "$bin/time/cbb"
@@ -47,7 +48,6 @@ for p in cbb-helper cbb-forward; do
 	CGO_ENABLED=0 go build -trimpath -o "$bin/$p" "./cmd/$p"
 	cp "$bin/$p" "$bin/time/$p"
 done
-lite="-cbb-lite $bin/cbb"
 
 # baseline SUITE: the newest earlier run's metrics.json of SUITE, if any.
 baseline() {
@@ -68,7 +68,7 @@ echo "commit: $commit" >>"$out/summary.txt"
 scenario=
 if [ -n "${CBB_WEEKLY_SCENARIO:-}" ]; then scenario="-scenario $CBB_WEEKLY_SCENARIO"; fi
 # shellcheck disable=SC2046,SC2086 # the options split into words on purpose
-if sudo "$bin/bench" -cbb "$bin/cbb" $lite $scenario $(baseline fleet) -report "$out/fleet" fleet; then
+if sudo "$bin/bench" -cbb "$bin/cbb" $scenario $(baseline fleet) -report "$out/fleet" fleet; then
 	result fleet passed
 else
 	result fleet failed

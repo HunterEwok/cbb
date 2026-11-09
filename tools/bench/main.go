@@ -50,8 +50,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	stopForwarder := fs.Bool("stop-forwarder", false, "away: also stop and start the forwarder (F7), which other groups may use")
 	buildDir := fs.String("build", "", "reset: the directory with the release archives (and SHA256SUMS) to install")
 	quick := fs.Bool("quick", false, "reset: keep each device's install and only remove its state")
-	cbb := fs.String("cbb", "", "fleet, phone, all: a static Linux cbb of the build under test for this computer's CPU, which the fleet's containers run")
-	fs.StringVar(&fleetLite, "cbb-lite", "", "fleet, all: the lite member's cbb for Linux (cargo build --release at the top), for the fleet's cases with a lite member")
+	cbb := fs.String("cbb", "", "fleet, phone, all: the Linux cbb of the build under test for this computer's CPU (cargo build --release --bin cbb), which the fleet's containers run, computers and small devices alike")
 	cbbTime := fs.String("cbb-time", "", "time, all: the same cbb built with the feature benchtime, whose long times run 100000 times faster")
 	fleetSize := fs.Int("fleet-size", 16, "fleet: the members of the many-members case (E3)")
 	scenarioList := fs.String("scenario", "", "fleet, time: comma-separated scenarios to run instead of all, such as T2-tmux or K6-clock")
@@ -63,7 +62,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	repeat := fs.Int("repeat", 1, "fleet, time, phone: run the suite this many times and list the cases that both passed and failed (flaky.txt beside the report)")
 	baseline := fs.String("baseline", "", "fleet, time, all: an earlier run's metrics.json; a metric worse than it by more than -baseline-slack fails the run")
 	baselineSlack := fs.Float64("baseline-slack", 0.25, "how much worse than -baseline a metric may be, as a fraction (0.25 is a quarter), beyond its unit's noise")
-	coverDir := fs.String("coverdir", "", "fleet, time, all: with a cbb built with -cover, the directory where every container writes its coverage (docs/testbench.md, \"Code coverage\")")
+	coverDir := fs.String("coverdir", "", "fleet, time, all: with a cbb-helper built with -cover or a cbb built with instrument-coverage, the directory where every container writes its coverage (docs/testbench.md, \"Code coverage\")")
 	if fs.Parse(args) != nil {
 		return 2
 	}

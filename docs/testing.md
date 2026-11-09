@@ -129,6 +129,15 @@ cargo llvm-cov report --release --json --summary-only --output-path service.json
 go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/floor.json
 ```
 
+## Unsafe code
+
+The Rust core has no unsafe code (`forbid(unsafe_code)`). The unsafe code in `member/src` (system
+calls) and `ffi/src` (the C functions the phones call) is checked by the nightly workflow: Miri
+runs `ffi`'s tests of its C functions pointer by pointer (`cargo +nightly miri test -p cbb-ffi
+--features join --lib`), and AddressSanitizer runs the Rust tests of `cbb-lite` and `cbb-ffi`
+and Go's tests of the service against a `cbb` built with it, which reaches the system calls
+Miri cannot.
+
 ## Mutation testing
 
 Coverage says a line ran; mutation testing says whether a test would notice if it were wrong.
