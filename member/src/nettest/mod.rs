@@ -19,6 +19,7 @@ use cbb_core::issue;
 use serde_json::Value;
 
 pub mod forwarder;
+mod ipv6;
 mod props;
 mod races;
 pub mod xhttp;

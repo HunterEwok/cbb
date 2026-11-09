@@ -23,7 +23,7 @@ fn key() -> [u8; 32] {
 }
 
 /// An echo server; it counts the connections it served to their end.
-fn echo() -> (u16, Arc<AtomicUsize>) {
+pub(super) fn echo() -> (u16, Arc<AtomicUsize>) {
     let ln = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
     let port = ln.local_addr().unwrap().port();
     let done = Arc::new(AtomicUsize::new(0));
@@ -46,6 +46,11 @@ fn echo() -> (u16, Arc<AtomicUsize>) {
 /// A hub and one client's link to it, the hub passing every connection to
 /// port.
 fn hub_and_link(port: u16) -> (Server, Link, Peer, Ipv6Addr) {
+    hub_and_link_at(Ipv4Addr::LOCALHOST.into(), port)
+}
+
+/// A hub listening on ip, and one client's link to it.
+pub(super) fn hub_and_link_at(ip: std::net::IpAddr, port: u16) -> (Server, Link, Peer, Ipv6Addr) {
     let g = Group::new(2);
     let (hub_key, client_key, psk) = (key(), key(), key());
     let own = tunnel::addr(&g.id(0)).unwrap();
@@ -56,7 +61,7 @@ fn hub_and_link(port: u16) -> (Server, Link, Peer, Ipv6Addr) {
         &g.id(0),
         None,
         vec![peer.clone()],
-        SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+        SocketAddr::new(ip, 0),
         Arc::new(move |_| Some(port)),
         Arc::new(|_| {}),
     )
@@ -65,7 +70,7 @@ fn hub_and_link(port: u16) -> (Server, Link, Peer, Ipv6Addr) {
         device: g.id(0),
         key: tunnel::public_key_of(&hub_key),
         psk: psk.to_vec(),
-        endpoints: vec![SocketAddr::from((Ipv4Addr::LOCALHOST, server.udp_port()))],
+        endpoints: vec![SocketAddr::new(ip, server.udp_port())],
         next: Vec::new(),
         obfuscation: None,
         vless: None,
@@ -77,7 +82,7 @@ fn hub_and_link(port: u16) -> (Server, Link, Peer, Ipv6Addr) {
 
 /// One connection through the link: it sends n bytes and reads them back,
 /// or leaves halfway when cut.
-fn round_trip(at: SocketAddr, n: usize, cut: bool) -> bool {
+pub(super) fn round_trip(at: SocketAddr, n: usize, cut: bool) -> bool {
     let Ok(mut c) = TcpStream::connect_timeout(&at, Duration::from_secs(5)) else { return false };
     c.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
     let data: Vec<u8> = (0..n).map(|i| (i * 7 + n) as u8).collect();
