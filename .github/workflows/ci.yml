@@ -286,7 +286,7 @@ jobs:
   # and fails when one falls below its floor in tools/coverage/floor.json.
   coverage:
     name: coverage
-    needs: [changes, test, gocover, gowithcore, kit, android, lite]
+    needs: [changes, test, gocover, gowithcore, service, kit, android, lite]
     if: always() && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -2262,6 +2262,8 @@ jobs:
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lite == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      COVERPKG: ./cmd/...,./internal/...
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2280,7 +2282,13 @@ jobs:
         run: |
           cargo build --locked --release -p cbb-lite
           cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
-          CGO_ENABLED=0 go build -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
+          # Built with -cover, for the Go coverage (docs/testing.md,
+          # "Coverage"): cbb hands its helper only the environment it needs,
+          # so a script in the helper's place gives it GOCOVERDIR.
+          CGO_ENABLED=0 go build -trimpath -cover -coverpkg="$COVERPKG" -o target/release/cbb-helper.cover ./cmd/cbb-helper
+          mkdir -p "$RUNNER_TEMP/helper-cover"
+          printf '#!/bin/sh\nGOCOVERDIR=%s exec %s "$@"\n' "$RUNNER_TEMP/helper-cover" "$PWD/target/release/cbb-helper.cover" >target/release/cbb-helper
+          chmod 755 target/release/cbb-helper
       - name: go test ./internal/service and the desktop connector with every Linux member a Rust cbb
         run: |
           Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
@@ -2288,13 +2296,26 @@ jobs:
           DISPLAY=:5 CBB_TEST_X11=1 \
             CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_LITE="$PWD/target/release/cbb" \
             CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" \
-            go test -timeout 45m ./internal/service -v
+            go test -timeout 45m -coverpkg="$COVERPKG" -coverprofile=cover-go-service.out ./internal/service -v
           # One package at a time, so that -v streams each test's lines as
           # it runs and a test that hangs is named by the timeout's
           # goroutine dump before the job's own limit.
           DISPLAY=:5 CBB_TEST_X11=1 \
             CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_LITE="$PWD/target/release/cbb" \
-            go test -timeout 5m ./internal/connector -v
+            go test -timeout 5m -coverpkg="$COVERPKG" -coverprofile=cover-go-connector.out ./internal/connector -v
+      - name: the cbb-helpers' coverage
+        if: always()
+        run: |
+          if [ -n "$(ls -A "$RUNNER_TEMP/helper-cover" 2>/dev/null)" ]; then
+            go tool covdata textfmt -i "$RUNNER_TEMP/helper-cover" -o cover-go-helper.out
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: coverage-go-service
+          path: cover-go-*.out
+          retention-days: 7
+          if-no-files-found: ignore
 
   lite:
     name: lite member (Rust)
