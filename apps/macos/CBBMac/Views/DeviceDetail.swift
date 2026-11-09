@@ -54,7 +54,11 @@ struct DeviceDetail: View {
         .confirmationDialog(Text("Make \(device?.name ?? "") an admin?"), isPresented: $promoting) {
             Button { Task { await model.makeAdmin(id) } } label: { Text("Make it an admin") }
         } message: {
-            Text("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.")
+            if device?.role == "phone" {
+                Text("It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.")
+            } else {
+                Text("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.")
+            }
         }
         .confirmationDialog(Text("Make \(device?.name ?? "") a hub?"), isPresented: $hubbing) {
             // A hub that reads the copies is an admin, whose keys the
@@ -321,7 +325,9 @@ struct DeviceDetail: View {
                     line
                     action("snowflake", "Freeze", danger: true) { freezing = true }
                 }
-                if model.isRoot, !d.admin, !d.frozen, d.can("admin") {
+                // A phone joins as a member, and the root makes it an admin
+                // here as a computer, with the admin key its hello offers.
+                if model.isRoot, !d.admin, !d.frozen, d.can("admin") || d.role == "phone" {
                     line
                     action("star", "Make it an admin") { promoting = true }
                 }

@@ -42,6 +42,7 @@
   "Graphite": "ग्रेफ़ाइट",
   "If the phone cannot connect, the firewall must let it reach TCP port %d here.": "अगर फ़ोन कनेक्ट नहीं हो पाता, तो फ़ायरवॉल को उसे यहाँ TCP पोर्ट %d तक पहुँचने देना होगा।",
   "It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.": "फिर वह cbb pair और cbb remove से डिवाइस जोड़ और हटा सकता है। उसकी कुंजी कंप्यूटर पर एक फ़ाइल है, इसलिए यह केवल उसी कंप्यूटर के लिए करें जिसे आप सुरक्षित रखते हैं।",
+  "It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.": "फिर वह डिवाइस जोड़ और हटा सकेगा। उसकी कुंजियाँ फ़ोन के हार्डवेयर में हैं, जो उन्हें कभी बाहर नहीं जाने देता।",
   "It is a hub now that only passes the copies on, and reads none of them.": "अब यह ऐसा हब है जो कॉपी केवल आगे बढ़ाता है, और उनमें से कोई नहीं पढ़ता।",
   "It is a hub now.": "अब यह हब है।",
   "It is an admin now.": "अब यह एडमिन है।",
