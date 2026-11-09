@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/pair"
 )
 
 // A relay between two TLS sessions (G8, docs/protocol.md section 6): forge
@@ -61,7 +60,7 @@ func runRelay(state, listen, arg string) error {
 		MinVersion:   tls.VersionTLS13,
 		Certificates: []tls.Certificate{{Certificate: [][]byte{id.Cert.Raw}, PrivateKey: id.Key, Leaf: id.Cert}},
 		ClientAuth:   tls.RequireAnyClientCert,
-		NextProtos:   []string{pair.Protocol},
+		NextProtos:   []string{pairProtocol},
 	})
 	defer joiner.Close()
 	if err := joiner.Handshake(); err != nil {
@@ -104,6 +103,9 @@ func insecureRelayConfig(cert tls.Certificate) *tls.Config {
 		MinVersion:         tls.VersionTLS13,
 		Certificates:       []tls.Certificate{cert},
 		InsecureSkipVerify: true,
-		NextProtos:         []string{pair.Protocol},
+		NextProtos:         []string{pairProtocol},
 	}
 }
+
+// pairProtocol is the pairing's ALPN (docs/protocol.md, section 6).
+const pairProtocol = "cbb-pair/2"

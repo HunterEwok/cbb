@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,48 +26,20 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/mdns"
-	"github.com/HunterEwok/cbb/internal/node"
-	"github.com/HunterEwok/cbb/internal/pair"
 )
 
-func init() {
-	// The tests never fetch the revocation list from cbb.tools: a test
-	// that needs it serves its own (admin_test.go).
-	statusRoots = func() [][]byte { return nil }
-}
-
-// hub is a fake network for discovery: every member sees the others on the
-// loopback address. Like the mdns responder, each member gets its lists on
-// its own Run goroutine, in order, and none after Run returned.
+// hub is the network the tests' services share. Each is a Rust cbb that
+// finds the others by mDNS; hide puts one on another network.
 type hub struct {
-	mu      sync.Mutex
-	members map[*fakeDiscovery]bool
-	// sticky keeps a member that stopped in the lists, with its old port,
-	// until one with its device ID starts again, as mDNS does when a member
-	// restarts within a record's lifetime.
-	sticky bool
-	ghosts map[string]mdns.Peer
-	// hidden members neither see the others nor are seen, as on another
-	// network.
-	hidden map[string]bool
-	// rust are the Rust services started on this hub, which publish by
-	// mDNS themselves.
+	mu sync.Mutex
+	// rust are the services started on this hub.
 	rust map[*testService]bool
 }
 
-// hide puts the member with this device ID on another network.
+// hide puts the member with this device ID on another network: the Rust
+// service looks for its device ID in CBB_TEST_ELSEWHERE.
 func (h *hub) hide(id string) {
-	h.mu.Lock()
-	if h.hidden == nil {
-		h.hidden = map[string]bool{}
-	}
-	h.hidden[id] = true
-	h.mu.Unlock()
-	h.update()
-	if rustService() != "" {
-		// A Rust service looks for its device ID in CBB_TEST_ELSEWHERE.
-		os.WriteFile(filepath.Join(elsewhereDir(), id), nil, 0o600)
-	}
+	os.WriteFile(filepath.Join(elsewhereDir(), id), nil, 0o600)
 }
 
 // elsewhereDir is the folder the Rust services read as CBB_TEST_ELSEWHERE:
@@ -81,103 +52,18 @@ var elsewhereDir = sync.OnceValue(func() string {
 	return d
 })
 
-type fakeDiscovery struct {
-	h      *hub
-	cfg    DiscoveryConfig
-	mu     sync.Mutex
-	txt    []string
-	latest []mdns.Peer
-	fresh  bool
-	kick   chan struct{}
-}
-
-func (h *hub) discover(c DiscoveryConfig) (Discovery, error) {
-	return &fakeDiscovery{h: h, cfg: c, txt: slices.Clone(c.TXT), kick: make(chan struct{}, 1)}, nil
-}
-
-func (d *fakeDiscovery) Run(ctx context.Context) error {
-	d.h.mu.Lock()
-	if d.h.members == nil {
-		d.h.members = map[*fakeDiscovery]bool{}
-	}
-	d.h.members[d] = true
-	delete(d.h.ghosts, d.cfg.ID)
-	d.h.mu.Unlock()
-	d.h.update()
-	for {
-		select {
-		case <-ctx.Done():
-			d.h.mu.Lock()
-			delete(d.h.members, d)
-			if d.h.sticky && !d.cfg.BrowseOnly {
-				if d.h.ghosts == nil {
-					d.h.ghosts = map[string]mdns.Peer{}
-				}
-				d.h.ghosts[d.cfg.ID] = d.peer()
-			}
-			d.h.mu.Unlock()
-			d.h.update()
-			return nil
-		case <-d.kick:
-		}
-		d.mu.Lock()
-		peers, fresh := d.latest, d.fresh
-		d.fresh = false
-		d.mu.Unlock()
-		if fresh && d.cfg.OnPeers != nil {
-			d.cfg.OnPeers(peers)
-		}
-	}
-}
-
-func (d *fakeDiscovery) peer() mdns.Peer {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return mdns.Peer{ID: d.cfg.ID, Port: d.cfg.Port, TXT: slices.Clone(d.txt),
-		Addrs: []netip.Addr{netip.MustParseAddr("127.0.0.1")}}
-}
-
-func (d *fakeDiscovery) SetTXT(txt []string) {
-	d.mu.Lock()
-	d.txt = slices.Clone(txt)
-	d.mu.Unlock()
-	d.h.update()
-}
-
 // txtOf returns the TXT record that the member with this device ID
-// publishes: a Go service's from the hub, else one that real mDNS finds.
+// publishes, as mDNS finds it.
 func (h *hub) txtOf(id string) []string {
-	h.mu.Lock()
-	for m := range h.members {
-		if m.cfg.ID == id && !m.cfg.BrowseOnly {
-			h.mu.Unlock()
-			return m.peer().TXT
-		}
-	}
-	h.mu.Unlock()
-	// A Rust service shows in the shared browse once it announced itself.
-	for deadline := time.Now().Add(5 * time.Second); rustService() != ""; time.Sleep(100 * time.Millisecond) {
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(100 * time.Millisecond) {
 		if p, ok := h.found(id); ok || time.Now().After(deadline) {
 			return p.TXT
 		}
 	}
-	return nil
 }
 
-// anyPublishes says whether a member publishes the TXT string kv, in the
-// hub or, beside Rust services, by real mDNS.
+// anyPublishes says whether a member publishes the TXT string kv by mDNS.
 func (h *hub) anyPublishes(kv string) bool {
-	h.mu.Lock()
-	for m := range h.members {
-		if !m.cfg.BrowseOnly && slices.Contains(m.peer().TXT, kv) {
-			h.mu.Unlock()
-			return true
-		}
-	}
-	h.mu.Unlock()
-	if rustService() == "" {
-		return false
-	}
 	h.found("")
 	realBrowse.mu.Lock()
 	defer realBrowse.mu.Unlock()
@@ -189,13 +75,9 @@ func (h *hub) anyPublishes(kv string) bool {
 	return false
 }
 
-// found is the member with this device ID that real mDNS finds, where the
-// tests run Rust services (CBB_TEST_RUST_SERVICE): one browser runs for
-// all the tests.
+// found is the member with this device ID that mDNS finds: one browser runs
+// for all the tests.
 func (h *hub) found(id string) (mdns.Peer, bool) {
-	if rustService() == "" {
-		return mdns.Peer{}, false
-	}
 	realBrowse.once.Do(func() {
 		realBrowse.peers = map[string]mdns.Peer{}
 		r, err := mdns.New(mdns.Config{ID: "browse-test", BrowseOnly: true, OnPeers: func(peers []mdns.Peer) {
@@ -222,314 +104,131 @@ var realBrowse struct {
 	peers map[string]mdns.Peer
 }
 
-// realDiscovery is a Go service's discovery beside Rust services: real
-// mDNS, so that both find each other, while the hub still keeps its TXT
-// for txtOf and its hiding, which stops the real responder.
-type realDiscovery struct {
-	fake *fakeDiscovery
-	cfg  DiscoveryConfig
-	mu   sync.Mutex
-	r    *mdns.Responder
-}
-
-func (h *hub) discoverReal(c DiscoveryConfig) (Discovery, error) {
-	fc := c
-	fc.OnPeers = nil
-	return &realDiscovery{fake: &fakeDiscovery{h: h, cfg: fc, txt: slices.Clone(c.TXT), kick: make(chan struct{}, 1)}, cfg: c}, nil
-}
-
-func (d *realDiscovery) Run(ctx context.Context) error {
-	go d.fake.Run(ctx)
-	for ctx.Err() == nil {
-		d.fake.h.mu.Lock()
-		hidden := d.fake.h.hidden[d.cfg.ID]
-		d.fake.h.mu.Unlock()
-		if hidden {
-			time.Sleep(200 * time.Millisecond)
-			continue
-		}
-		d.fake.mu.Lock()
-		txt := slices.Clone(d.fake.txt)
-		d.fake.mu.Unlock()
-		r, err := mdnsDiscovery(DiscoveryConfig{ID: d.cfg.ID, Port: d.cfg.Port, TXT: txt, BrowseOnly: d.cfg.BrowseOnly,
-			Publish: d.cfg.Publish, Only: d.cfg.Only, OnPeers: d.cfg.OnPeers, Logf: d.cfg.Logf})
-		if err != nil {
-			return err
-		}
-		d.mu.Lock()
-		d.r = r.(*mdns.Responder)
-		d.mu.Unlock()
-		rctx, cancel := context.WithCancel(ctx)
-		go func() {
-			// Hiding puts the member on another network: the responder
-			// says goodbye and stops.
-			for rctx.Err() == nil {
-				d.fake.h.mu.Lock()
-				hidden := d.fake.h.hidden[d.cfg.ID]
-				d.fake.h.mu.Unlock()
-				if hidden {
-					if d.cfg.OnPeers != nil {
-						d.cfg.OnPeers(nil)
-					}
-					cancel()
-					return
-				}
-				time.Sleep(200 * time.Millisecond)
-			}
-		}()
-		r.Run(rctx)
-		cancel()
-		d.mu.Lock()
-		d.r = nil
-		d.mu.Unlock()
-	}
-	return nil
-}
-
-func (d *realDiscovery) SetTXT(txt []string) {
-	d.fake.SetTXT(txt)
-	d.mu.Lock()
-	r := d.r
-	d.mu.Unlock()
-	if r != nil {
-		r.SetTXT(txt)
-	}
-}
-
-// update tells every member about the others: it replaces the list each
-// member has not yet taken.
-func (h *hub) update() {
-	h.mu.Lock()
-	var all []mdns.Peer
-	var members []*fakeDiscovery
-	for m := range h.members {
-		members = append(members, m)
-		if !m.cfg.BrowseOnly && !h.hidden[m.cfg.ID] {
-			all = append(all, m.peer())
-		}
-	}
-	for _, g := range h.ghosts {
-		all = append(all, g)
-	}
-	slices.SortFunc(all, func(a, b mdns.Peer) int { return strings.Compare(a.ID, b.ID) })
-	for _, m := range members {
-		others := slices.DeleteFunc(slices.Clone(all), func(p mdns.Peer) bool { return p.ID == m.cfg.ID })
-		if h.hidden[m.cfg.ID] {
-			others = nil
-		}
-		m.mu.Lock()
-		m.latest, m.fresh = others, true
-		m.mu.Unlock()
-		select {
-		case m.kick <- struct{}{}:
-		default:
-		}
-	}
-	h.mu.Unlock()
-}
-
 type testService struct {
-	name     string
-	dir      string
-	os       string // group.OSLinux, OSWindows or OSMacOS
-	socket   string
-	cancel   context.CancelFunc
-	done     chan error
-	accepted atomic.Int32 // member connections accepted
-	cfg      func(*Config)
-	rust     bool // the Rust service (CBB_TEST_RUST_SERVICE)
-
-	mu         sync.Mutex
-	memberAddr string // where the member port listens
+	name string
+	dir  string
+	os   string // group.OSLinux: every service of the tests is a Linux computer's
+	// socket is the control socket.
+	socket string
+	done   chan error
+	cancel func()   // asks it to stop; stop then waits for done
+	env    []string // the Rust service's settings for the test
+	port   int      // the member port it listens on, 0 for any
+	rust   bool     // a Rust cbb: every service of the tests is
 
 	logMu   sync.Mutex
 	stopped bool     // the test may have ended: the log goes nowhere
 	lines   []string // what it logged
 }
 
-// logf logs to the test until the service stopped: the tunnel's
-// goroutines may still log while they wind down, and the testing package
-// does not allow logging after a test ended.
-func (s *testService) logf(t *testing.T, f string, a ...any) {
-	s.logMu.Lock()
-	defer s.logMu.Unlock()
-	s.lines = append(s.lines, fmt.Sprintf(f, a...))
-	if !s.stopped {
-		t.Logf(time.Now().Format("15:04:05.000")+" "+s.name+": "+f, a...)
-	}
-}
-
 // logged reports whether the service logged a line that contains part.
-// count returns how many of the service's log lines hold part.
-func (s *testService) count(part string) int {
-	s.logMu.Lock()
-	defer s.logMu.Unlock()
-	n := 0
-	for _, l := range s.lines {
-		if strings.Contains(l, part) {
-			n++
-		}
-	}
-	return n
-}
-
 func (s *testService) logged(part string) bool {
 	s.logMu.Lock()
 	defer s.logMu.Unlock()
 	return slices.ContainsFunc(s.lines, func(l string) bool { return strings.Contains(l, part) })
 }
 
-// addr returns the member port's address.
-func (s *testService) addr() string {
-	s.mu.Lock()
-	addr := s.memberAddr
-	s.mu.Unlock()
-	if addr != "" {
-		return addr
-	}
-	// A child service (the Rust one) says where it listens.
+// linesWith returns the lines the service logged that contain part.
+func (s *testService) linesWith(part string) []string {
 	s.logMu.Lock()
 	defer s.logMu.Unlock()
+	var out []string
 	for _, l := range s.lines {
-		if _, p, ok := strings.Cut(l, "listening on port "); ok {
-			return "127.0.0.1:" + strings.TrimSpace(p)
+		if strings.Contains(l, part) {
+			out = append(out, l)
 		}
 	}
-	return ""
+	return out
+}
+
+// addr returns the member port's address, which the service logs a moment
+// after it is in a group.
+func (s *testService) addr() string {
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		s.logMu.Lock()
+		for _, l := range s.lines {
+			if _, p, ok := strings.Cut(l, "listening on port "); ok {
+				s.logMu.Unlock()
+				return "127.0.0.1:" + strings.TrimSpace(p)
+			}
+		}
+		s.logMu.Unlock()
+		if time.Now().After(deadline) {
+			return ""
+		}
+	}
 }
 
 func startService(t *testing.T, h *hub, name string) *testService {
 	t.Helper()
-	return startRole(t, h, name, group.OSLinux)
+	return startEnv(t, h, name)
 }
 
-// startGoService starts the Go service even where CBB_TEST_RUST_SERVICE
-// names the Rust one: for tests of what only the Go service has, such as
-// its package's settings for tests.
-func startGoService(t *testing.T, h *hub, name string) *testService {
-	t.Helper()
-	return startWith(t, h, name, group.OSLinux, func(*Config) {})
-}
-
-func startRole(t *testing.T, h *hub, name string, system string) *testService {
-	t.Helper()
-	return startWith(t, h, name, system, nil)
-}
-
-func startWith(t *testing.T, h *hub, name string, system string, cfg func(*Config)) *testService {
+// startEnv starts a service with env, settings for the test that the Rust
+// service takes from its environment (docs/reference/config.md).
+func startEnv(t *testing.T, h *hub, name string, env ...string) *testService {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "cb")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	return startIn(t, h, &testService{name: name, dir: dir, os: system, cfg: cfg})
+	return startIn(t, h, &testService{name: name, dir: dir, os: group.OSLinux, env: env})
 }
 
 // restartService starts a stopped service again with its state.
 func restartService(t *testing.T, h *hub, old *testService) *testService {
 	t.Helper()
-	return startIn(t, h, &testService{name: old.name, dir: old.dir, os: old.os, cfg: old.cfg})
+	return startIn(t, h, &testService{name: old.name, dir: old.dir, os: old.os, env: old.env, port: old.port})
 }
 
-// countingListener counts the connections it accepts.
-type countingListener struct {
-	net.Listener
-	n *atomic.Int32
-}
-
-func (l countingListener) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err == nil {
-		l.n.Add(1)
+// portOf is the port of the address addr.
+func portOf(t *testing.T, addr string) int {
+	t.Helper()
+	ap, err := netip.ParseAddrPort(addr)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return c, err
+	return int(ap.Port())
 }
 
-// rustService is the Rust service's binary (member/) when
-// CBB_TEST_RUST_SERVICE names it: the tests that start a Linux member with
-// the default configuration then run it in place of the Go service, which
-// finds its peers by mDNS rather than through the hub.
+// rustService is the Rust cbb (member/) that CBB_TEST_RUST_SERVICE names,
+// with cbb-helper beside it: every service of the tests runs it.
 func rustService() string { return os.Getenv("CBB_TEST_RUST_SERVICE") }
+
+// renewEvery is how often the services renew certificates, and hubKeyAhead
+// how long before its key's end a hub offers its next key: the Rust
+// service's defaults, which a test may shorten for the services it starts
+// after.
+var (
+	renewEvery  = 12 * time.Hour
+	hubKeyAhead = 3 * 24 * time.Hour
+)
+
+// errBroken is what the service says while its group file is damaged.
+const errBroken = "this device's group file (identity.json in the service's state directory) is damaged, so the service does not start the group; restore the file from a backup, or leave the group (cbb leave) and join again"
+
+// ErrLeft and ErrRestart are how a service ends after cbb leave and after
+// an admin's restart, for systemd to start it again.
+var (
+	ErrLeft    = errors.New("restarting after leaving the group")
+	ErrRestart = errors.New("restarting at an admin's request")
+)
 
 func startIn(t *testing.T, h *hub, s *testService) *testService {
 	t.Helper()
-	if bin := rustService(); bin != "" && s.cfg == nil && s.os == group.OSLinux {
-		r := startRust(t, bin, s)
-		h.mu.Lock()
-		if h.rust == nil {
-			h.rust = map[*testService]bool{}
-		}
-		h.rust[r] = true
-		h.mu.Unlock()
-		return r
+	bin := rustService()
+	if bin == "" {
+		t.Skip("CBB_TEST_RUST_SERVICE is not set: the service's tests run the Rust cbb, with cbb-helper beside it")
 	}
-	s.socket, s.done = filepath.Join(s.dir, "c.sock"), make(chan error, 1)
-	ctx, cancel := context.WithCancel(context.Background())
-	s.cancel = cancel
-	name := s.name
-	cfg := Config{
-		StateDir: s.dir, Socket: s.socket, Role: node.Member, OS: s.os, Name: name, Discover: h.discover,
-		Logf: func(f string, a ...any) { s.logf(t, f, a...) },
-		listen: func() (net.Listener, error) {
-			ln, err := net.Listen("tcp", "127.0.0.1:0")
-			if err != nil {
-				return nil, err
-			}
-			s.mu.Lock()
-			s.memberAddr = ln.Addr().String()
-			s.mu.Unlock()
-			return countingListener{ln, &s.accepted}, nil
-		},
-		browseFor:  2 * time.Second,
-		joinListen: func() (net.Listener, error) { return net.Listen("tcp", "127.0.0.1:0") },
-		joinAddrs:  func(port uint16) []string { return []string{fmt.Sprintf("127.0.0.1:%d", port)} },
-		lookupIP: func(context.Context, string) ([]netip.Addr, error) {
-			return nil, errors.New("tests look up no names")
-		},
+	r := startRust(t, bin, s)
+	h.mu.Lock()
+	if h.rust == nil {
+		h.rust = map[*testService]bool{}
 	}
-	if rustService() != "" {
-		// Beside Rust services, which find their peers by mDNS, a Go one
-		// does too, on every address, as a release runs.
-		cfg.Discover, cfg.joinListen, cfg.joinAddrs = h.discoverReal, nil, nil
-		cfg.browseFor = 5 * time.Second
-		cfg.listen = func() (net.Listener, error) {
-			ln, err := net.Listen("tcp", ":0")
-			if err != nil {
-				return nil, err
-			}
-			s.mu.Lock()
-			s.memberAddr = fmt.Sprintf("127.0.0.1:%d", ln.Addr().(*net.TCPAddr).Port)
-			s.mu.Unlock()
-			return countingListener{ln, &s.accepted}, nil
-		}
-		cfg.joinListen = func() (net.Listener, error) { return net.Listen("tcp", ":0") }
-	}
-	if s.cfg != nil {
-		s.cfg(&cfg)
-	}
-	go func() { s.done <- Run(ctx, cfg) }()
-	t.Cleanup(s.stop)
-	// Wait for the admin socket, which the tests dial and which opens
-	// after the control socket, or for Run to fail.
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if c, err := control.Dial(control.AdminSocketFor(s.socket)); err == nil {
-			c.Close()
-			break
-		}
-		select {
-		case err := <-s.done:
-			s.cancel = nil
-			t.Fatalf("%s: the service ended at the start: %v", name, err)
-		default:
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("%s: the admin socket never appeared", name)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	return s
+	h.rust[r] = true
+	h.mu.Unlock()
+	return r
 }
 
 func (s *testService) stop() {
@@ -634,7 +333,19 @@ func makeAdmin(t *testing.T, root, s *testService) {
 		}
 		return false
 	})
-	m, err := root.do(t, control.Header{Op: control.OpAdmin, Name: s.name, Consent: true}, "")
+	// A connection seen a moment ago may be on its way to a new one, as
+	// right after a claim takes effect, when the members connect again with
+	// the new root's chain: the admin CA goes over the next.
+	var m *control.Message
+	var err error
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		m, err = root.do(t, control.Header{Op: control.OpAdmin, Name: s.name, Consent: true}, "")
+		if err == nil || !strings.Contains(err.Error(), "is not connected") || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if err != nil || m.Name != s.name {
 		t.Fatalf("admin %s on %s: %+v, %v", s.name, root.name, m, err)
 	}
@@ -711,12 +422,12 @@ func TestThreeMembers(t *testing.T) {
 
 func TestOneConnectionBetweenTwo(t *testing.T) {
 	// Only the member with the lower device ID dials, so the one with the
-	// higher ID accepts the only connection between them. The connections
-	// are counted at the Go service's listener; the Rust one keeps the same
-	// rule (member/src/discovery.rs).
+	// higher ID accepts the only connection between them
+	// (member/src/discovery.rs). Each member logs each connection with the
+	// address it went to or came from.
 	var h hub
-	a := startGoService(t, &h, "alpha")
-	b := startGoService(t, &h, "beta")
+	a := startService(t, &h, "alpha")
+	b := startService(t, &h, "beta")
 	pairWith(t, a, b)
 	waitFor(t, "connected", func() bool { return len(a.status(t).Peers) == 1 && len(b.status(t).Peers) == 1 })
 	since := a.status(t).Peers[0]
@@ -725,17 +436,21 @@ func TestOneConnectionBetweenTwo(t *testing.T) {
 	if b.status(t).Device < a.status(t).Device {
 		low, high = b, a
 	}
-	// The join itself was one connection to the admin's port.
-	pairing := map[*testService]int32{a: 1, b: 0}
-	if n := low.accepted.Load() - pairing[low]; n != 0 {
-		t.Errorf("the member with the lower ID accepted %d member connections", n)
+	lowID, highID := low.status(t).Device, high.status(t).Device
+	highPort := ":" + strconv.Itoa(portOf(t, high.addr()))
+	var dialed, other int
+	for _, l := range low.linesWith("connected to " + highID + " at ") {
+		if strings.HasSuffix(l, highPort) {
+			dialed++
+		} else {
+			other++
+		}
 	}
-	// A first connection that met records not yet counting the joiner's
-	// device (a slow machine) exchanges records only, and the lower ID dials
-	// again once they let it in: one more connection, from the same side.
-	again := int32(low.count("it connects again as a member") + high.count("it connects again as a member"))
-	if n := high.accepted.Load() - pairing[high]; n != 1+again {
-		t.Errorf("the member with the higher ID accepted %d member connections, want %d", n, 1+again)
+	if dialed != 1 || other != 0 {
+		t.Errorf("the member with the lower ID dialed %d connections and accepted %d", dialed, other)
+	}
+	if n := len(high.linesWith("connected to " + lowID + " at ")); n != 1 {
+		t.Errorf("the member with the higher ID has %d connections, want 1", n)
 	}
 	// The skew comes from the hello, which the engine may take only after
 	// the peer shows in the status: it is no sign of a new connection.
@@ -825,24 +540,10 @@ func TestWatcherGetsAMissedWrite(t *testing.T) {
 	waitFor(t, "beta knows the desktop text", func() bool { return b.paste(t) == "on the desktop" })
 }
 
-func TestWatcherKeepsTheNewestWrite(t *testing.T) {
-	w := &watcher{out: make(chan node.Write, 4)}
-	for i := uint64(1); i <= 10; i++ {
-		w.send(node.Write{Seq: i})
-	}
-	var got []uint64
-	for len(w.out) > 0 {
-		got = append(got, (<-w.out).Seq)
-	}
-	if !slices.Equal(got, []uint64{7, 8, 9, 10}) {
-		t.Errorf("a full queue kept %v", got)
-	}
-}
-
 func TestRestartWithANewPort(t *testing.T) {
 	// A member that restarts on a new port while discovery still lists it
 	// is dialed at the new port.
-	h := hub{sticky: true}
+	var h hub
 	a := startService(t, &h, "alpha")
 	b := startService(t, &h, "beta")
 	pairWith(t, a, b)
@@ -856,59 +557,15 @@ func TestRestartWithANewPort(t *testing.T) {
 	waitFor(t, "connected again", func() bool { return len(low.status(t).Peers) == 1 && len(high2.status(t).Peers) == 1 })
 }
 
-func TestMac(t *testing.T) {
-	// A Mac joins through a Linux member, admits no devices until it is an
-	// admin, and syncs in both directions. Its rules must hold whichever device ID is
-	// lower, so the test runs once with the Mac's ID below the pi's and
-	// once above it.
-	for _, macLower := range []bool{true, false} {
-		var h hub
-		pi := startService(t, &h, "pi")
-		if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
-			t.Fatal(err)
-		}
-		piID := group.DeviceID(pi.status(t).Device)
-		macID := group.DeviceID(strings.Repeat("f", 32))
-		if macLower {
-			macID = group.DeviceID(strings.Repeat("0", 32))
-		}
-		if macID == piID {
-			t.Fatalf("the pi has the ID %s the test gives the Mac", piID)
-		}
-		mac := startWith(t, &h, "mac", group.OSMacOS, func(c *Config) {
-			c.joinID = func() group.DeviceID { return macID }
-		})
-		pairWith(t, pi, mac)
-		if got := group.DeviceID(mac.status(t).Device); got != macID {
-			t.Fatalf("the Mac joined as %s, want %s", got, macID)
-		}
-		t.Logf("the Mac's ID is lower: %v", macLower)
-		waitFor(t, "connected", func() bool { return len(mac.status(t).Peers) == 1 })
-		if _, err := mac.do(t, control.Header{Op: control.OpPair}, ""); err == nil || !strings.Contains(err.Error(), "root or an admin") {
-			t.Errorf("pair on a Mac: %v", err)
-		}
-		if _, err := mac.do(t, control.Header{Op: control.OpCopy}, "from the Mac"); err != nil {
-			t.Fatal(err)
-		}
-		waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "from the Mac" })
-		if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "from the pi"); err != nil {
-			t.Fatal(err)
-		}
-		waitFor(t, "the Mac has it", func() bool { return mac.paste(t) == "from the pi" })
-		pi.stop()
-		mac.stop()
-	}
-}
-
 func TestRenewal(t *testing.T) {
 	// Eighteen months after pairing, the pi renews its own certificates
-	// when it starts and the Mac's when the Mac connects; both keep them.
+	// when it starts and the deck's when the deck connects; both keep them.
 	var h hub
 	pi := startService(t, &h, "pi")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
-	pairWith(t, pi, mac)
+	deck := startService(t, &h, "deck")
+	pairWith(t, pi, deck)
 	before := map[string]*group.Identity{}
-	for _, s := range []*testService{pi, mac} {
+	for _, s := range []*testService{pi, deck} {
 		s.stop()
 		id, err := group.Load(s.dir)
 		if err != nil {
@@ -916,41 +573,19 @@ func TestRenewal(t *testing.T) {
 		}
 		before[s.name] = id
 	}
-	later := func(c *Config) { c.now = func() time.Time { return time.Now().AddDate(1, 6, 0) } }
-	pi.cfg, mac.cfg = later, later
-	pi, mac = restartService(t, &h, pi), restartService(t, &h, mac)
-	for _, s := range []*testService{pi, mac} {
+	clock := newTestClock(t, 548*24*time.Hour)
+	pi.env, deck.env = []string{clock.env()}, []string{clock.env()}
+	pi, deck = restartService(t, &h, pi), restartService(t, &h, deck)
+	for _, s := range []*testService{pi, deck} {
 		waitFor(t, s.name+" keeps a renewed certificate", func() bool {
 			id, err := group.Load(s.dir)
 			return err == nil && id.Cert.NotAfter.After(before[s.name].Cert.NotAfter.AddDate(1, 0, 0))
 		})
 	}
 	// The renewed certificates work: the members connect again.
-	mac.stop()
-	mac = restartService(t, &h, mac)
-	waitFor(t, "connected with the renewed certificates", func() bool { return len(mac.status(t).Peers) == 1 })
-}
-
-func TestMacCreatesAGroup(t *testing.T) {
-	// A Mac starts a group as any computer does and is its root: it admits
-	// a Linux member and makes it an admin.
-	var h hub
-	mac := startRole(t, &h, "mac", group.OSMacOS)
-	pi := startService(t, &h, "pi")
-	pairWith(t, mac, pi)
-	id, err := group.Load(mac.dir)
-	if err != nil || !id.IsRoot() {
-		t.Fatalf("the Mac is not the group's root: %v", err)
-	}
-	if id, err := group.Load(pi.dir); err != nil || id.IsAdmin() || id.AdminKey == nil {
-		t.Fatalf("the pi holds keys, or no admin key: %v", err)
-	}
-	makeAdmin(t, mac, pi)
-	for _, d := range mac.devices(t) {
-		if d.Root != (d.Name == "mac") || d.Admin != (d.Name == "pi") && d.Name != "mac" {
-			t.Errorf("on the Mac: %+v", d)
-		}
-	}
+	deck.stop()
+	deck = restartService(t, &h, deck)
+	waitFor(t, "connected with the renewed certificates", func() bool { return len(deck.status(t).Peers) == 1 })
 }
 
 func TestWrongCode(t *testing.T) {
@@ -991,10 +626,9 @@ func TestPairingWindow(t *testing.T) {
 }
 
 func TestConcurrentPairs(t *testing.T) {
-	// Two pairs at once open one window. The count is of the Go service's
-	// discoveries.
+	// Two pairs at once open one window.
 	var h hub
-	a := startGoService(t, &h, "alpha")
+	a := startService(t, &h, "alpha")
 	if _, err := a.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -1026,21 +660,27 @@ func TestConcurrentPairs(t *testing.T) {
 	if (errs[0] == nil) == (errs[1] == nil) {
 		t.Fatalf("two pairs at once: %v, %v; want one to fail", errs[0], errs[1])
 	}
-	published := func() int {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		n := 0
-		for m := range h.members {
-			if !m.cfg.BrowseOnly {
-				n++
-			}
-		}
-		return n
+	// The window is published once.
+	id := a.status(t).Device
+	waitFor(t, "p=1 published", func() bool { return slices.Contains(h.txtOf(id), "p=1") })
+}
+
+// TestNoGroupSaysItsPort: out of a group the service says the member port
+// it was given, the one its firewall rule opens, so that cbb pair waits for
+// the phone there (OpenWrt's init script passes the port in
+// /etc/config/cbb).
+func TestNoGroupSaysItsPort(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
 	}
-	waitFor(t, "one discovery", func() bool { return published() == 1 })
-	time.Sleep(100 * time.Millisecond)
-	if n := published(); n != 1 {
-		t.Errorf("%d discoveries publish", n)
+	port := portOf(t, ln.Addr().String())
+	ln.Close()
+	dir := t.TempDir()
+	var h hub
+	s := startIn(t, &h, &testService{name: "router", dir: dir, os: group.OSLinux, port: port})
+	if st := s.status(t); st.Group != "" || st.Port != port {
+		t.Fatalf("status in no group: group %q, port %d; want port %d", st.Group, st.Port, port)
 	}
 }
 
@@ -1107,7 +747,8 @@ func TestJoinWaitsForASecondWindow(t *testing.T) {
 		_, err := b.do(t, control.Header{Op: control.OpJoin, Code: "123456"}, "")
 		done <- err
 	}()
-	time.Sleep(pairingSettle / 4)
+	// The second window opens while the joiner still looks for windows.
+	time.Sleep(500 * time.Millisecond)
 	cd, _ := openWindow(t, d)
 	defer cd.Close()
 	if err := <-done; err == nil || !strings.Contains(err.Error(), "2 devices announce a pairing window") {
@@ -1116,35 +757,26 @@ func TestJoinWaitsForASecondWindow(t *testing.T) {
 }
 
 // memberAddr returns the loopback address of the member port of the
-// service with this device ID, once its discovery runs.
+// service with this device ID, once it listens.
 func (h *hub) memberAddr(t *testing.T, id string) string {
 	t.Helper()
 	addr := ""
-	waitFor(t, "the member's discovery runs", func() bool {
+	waitFor(t, "the member listens", func() bool {
 		h.mu.Lock()
-		defer h.mu.Unlock()
-		for m := range h.members {
-			if m.cfg.ID == id {
-				addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(int(m.cfg.Port)))
+		rust := slices.Collect(maps.Keys(h.rust))
+		h.mu.Unlock()
+		// A service says where it listens, hidden or not.
+		for _, s := range rust {
+			c, err := control.Dial(control.AdminSocketFor(s.socket))
+			if err != nil {
+				continue // stopped, or not yet listening
 			}
-		}
-		if addr == "" {
-			rust := slices.Collect(maps.Keys(h.rust))
-			h.mu.Unlock()
-			// A Rust service says where it listens, hidden or not.
-			for _, s := range rust {
-				c, err := control.Dial(control.AdminSocketFor(s.socket))
-				if err != nil {
-					continue // stopped, or not yet listening
-				}
-				c.SetDeadline(time.Now().Add(5 * time.Second))
-				m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpStatus}})
-				c.Close()
-				if err == nil && m.Status != nil && m.Status.Device == id {
-					addr = s.addr()
-				}
+			c.SetDeadline(time.Now().Add(5 * time.Second))
+			m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpStatus}})
+			c.Close()
+			if err == nil && m.Status != nil && m.Status.Device == id {
+				addr = s.addr()
 			}
-			h.mu.Lock()
 		}
 		return addr != ""
 	})
@@ -1160,118 +792,26 @@ func TestJoinAClosedWindow(t *testing.T) {
 	c := startService(t, &h, "gamma")
 	pairWith(t, a, b)
 	addr := h.memberAddr(t, a.status(t).Device)
-	if _, err := c.do(t, control.Header{Op: control.OpJoin, Code: "123456", Address: addr}, ""); err == nil || !strings.Contains(err.Error(), pair.ErrClosed.Error()) {
+	if _, err := c.do(t, control.Header{Op: control.OpJoin, Code: "123456", Address: addr}, ""); err == nil || !strings.Contains(err.Error(), "the pairing window is closed") {
 		t.Errorf("join at %s without a window: %v", addr, err)
 	}
 }
 
-func TestDiscoveryFails(t *testing.T) {
-	// When the group's network part cannot start, the device stays in no
-	// group, and a second try fails the same way instead of crashing.
-	var h hub
-	a := startWith(t, &h, "alpha", group.OSLinux, func(c *Config) {
-		c.Discover = func(DiscoveryConfig) (Discovery, error) { return nil, errors.New("no network") }
-	})
-	for range 2 {
-		if _, err := a.do(t, control.Header{Op: control.OpNew}, ""); err == nil || !strings.Contains(err.Error(), "no network") {
-			t.Errorf("new: %v", err)
-		}
-		if st := a.status(t); st.Group != "" {
-			t.Errorf("in a group after a failed start: %+v", st)
-		}
-	}
-}
-
-func TestSleepDetector(t *testing.T) {
-	start := time.Now()
-	d := newSleepDetector(time.Hour, start)
-	up, mono := time.Hour, start
-	for range 10 {
-		up, mono = up+sleepCheckEvery, mono.Add(sleepCheckEvery)
-		if _, ok := d.check(up, mono); ok {
-			t.Fatal("steady ticks counted as sleep")
-		}
-	}
-	up, mono = up+10*time.Minute+sleepCheckEvery, mono.Add(sleepCheckEvery)
-	if slept, ok := d.check(up, mono); !ok || slept != 10*time.Minute {
-		t.Errorf("check after a sleep = %v, %v", slept, ok)
-	}
-	up, mono = up+sleepCheckEvery, mono.Add(sleepCheckEvery)
-	if _, ok := d.check(up, mono); ok {
-		t.Error("one sleep counted twice")
-	}
-}
-
-// flakyListener fails its first Accept calls with a temporary error.
-type flakyListener struct {
-	net.Listener
-	fails atomic.Int32
-}
-
-func (l *flakyListener) Accept() (net.Conn, error) {
-	if l.fails.Add(-1) >= 0 {
-		return nil, errors.New("accept: too many open files")
-	}
-	return l.Listener.Accept()
-}
-
-func TestAcceptSurvivesErrors(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fl := &flakyListener{Listener: ln}
-	fl.fails.Store(3)
-	got := make(chan net.Conn, 1)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		acceptLoop(ctx, fl, t.Logf, "test", func(c net.Conn) { got <- c })
-	}()
-	c, err := net.Dial("tcp", ln.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-	select {
-	case sc := <-got:
-		sc.Close()
-	case <-time.After(5 * time.Second):
-		t.Fatal("the loop stopped after an error")
-	}
-	cancel()
-	<-done
-}
-
 func TestControlSocketMode(t *testing.T) {
+	// The control socket is for the users of the service's group, the
+	// admin socket for root and the service's user only.
+	var h hub
+	pi := startService(t, &h, "pi")
 	for _, admin := range []bool{false, true} {
-		// Not t.TempDir: on macOS its path is too long for a socket.
-		dir, err := os.MkdirTemp("", "cb")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.RemoveAll(dir)
-		path := filepath.Join(dir, "c.sock")
+		path := pi.socket
 		if admin {
 			path = control.AdminSocketFor(path)
-		}
-		ln, err := listenControl(path, admin)
-		if err != nil {
-			t.Fatal(err)
 		}
 		fi, err := os.Lstat(path)
 		if err != nil {
 			t.Fatal(err)
 		}
 		checkSocketAccess(t, path, fi, admin)
-		if entries, _ := os.ReadDir(filepath.Dir(path)); len(entries) != 1 {
-			t.Errorf("left behind: %v", entries)
-		}
-		ln.Close()
-		if _, err := os.Lstat(path); !os.IsNotExist(err) {
-			t.Errorf("the socket is still there after Close: %v", err)
-		}
 	}
 }
 
@@ -1301,32 +841,6 @@ func TestAdminOpsOnlyOnTheAdminSocket(t *testing.T) {
 	}
 	if pi.status(t).Group != "" {
 		t.Error("a refused new made a group")
-	}
-}
-
-func TestListenPreferring(t *testing.T) {
-	taken, err := net.Listen("tcp", ":0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer taken.Close()
-	port := taken.Addr().(*net.TCPAddr).Port
-	ln, err := listenPreferring(port)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
-	if got := ln.Addr().(*net.TCPAddr).Port; got == port || got == 0 {
-		t.Errorf("listenPreferring(%d) listened on %d", port, got)
-	}
-	taken.Close()
-	free, err := listenPreferring(port)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer free.Close()
-	if got := free.Addr().(*net.TCPAddr).Port; got != port {
-		t.Errorf("listenPreferring(%d) on a free port listened on %d", port, got)
 	}
 }
 
@@ -1426,24 +940,24 @@ func TestDevicesAndRevoke(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
+	laptop := startService(t, &h, "laptop")
 	pairWith(t, pi, deck)
-	pairWith(t, pi, mac)
-	for _, s := range []*testService{pi, deck, mac} {
-		waitFor(t, s.name+" lists every device", func() bool { return listed(s.devices(t)) == "deck mac pi" })
+	pairWith(t, pi, laptop)
+	for _, s := range []*testService{pi, deck, laptop} {
+		waitFor(t, s.name+" lists every device", func() bool { return listed(s.devices(t)) == "deck laptop pi" })
 	}
-	waitFor(t, "the Mac connects to both", func() bool { return len(mac.status(t).Peers) == 2 })
-	for _, d := range mac.devices(t) {
+	waitFor(t, "the laptop connects to both", func() bool { return len(laptop.status(t).Peers) == 2 })
+	for _, d := range laptop.devices(t) {
 		if d.Admin || d.Root != (d.Name == "pi") || !d.Online || d.Role != "member" {
-			t.Errorf("on the Mac: %+v", d)
+			t.Errorf("on the laptop: %+v", d)
 		}
-		if d.Self != (d.Name == "mac") {
+		if d.Self != (d.Name == "laptop") {
 			t.Errorf("self is wrong: %+v", d)
 		}
 	}
 
-	if _, err := mac.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
-		t.Errorf("revoke on the Mac: %v", err)
+	if _, err := laptop.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
+		t.Errorf("revoke on the laptop: %v", err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "cannot remove itself") {
 		t.Errorf("revoking itself: %v", err)
@@ -1451,15 +965,15 @@ func TestDevicesAndRevoke(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "toaster"}, ""); err == nil {
 		t.Error("revoked a device that is not there")
 	}
-	if _, err := deck.do(t, control.Header{Op: control.OpAdmin, Name: "mac"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
+	if _, err := deck.do(t, control.Header{Op: control.OpAdmin, Name: "laptop"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
 		t.Errorf("admin on a member that is not the root: %v", err)
 	}
 	makeAdmin(t, pi, deck)
 	if _, err := pi.do(t, control.Header{Op: control.OpAdmin, Name: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "already an admin") {
 		t.Errorf("making an admin twice: %v", err)
 	}
-	waitFor(t, "the Mac sees the admin", func() bool {
-		for _, d := range mac.devices(t) {
+	waitFor(t, "the laptop sees the admin", func() bool {
+		for _, d := range laptop.devices(t) {
 			if d.Name == "deck" {
 				return d.Admin
 			}
@@ -1470,16 +984,16 @@ func TestDevicesAndRevoke(t *testing.T) {
 		t.Errorf("revoking the root: %v", err)
 	}
 	// The admin removes a member.
-	m, err := deck.do(t, control.Header{Op: control.OpRevoke, Name: "MAC"}, "")
-	if err != nil || m.Name != "mac" {
-		t.Fatalf("revoke the Mac: %+v, %v", m, err)
+	m, err := deck.do(t, control.Header{Op: control.OpRevoke, Name: "LAPTOP"}, "")
+	if err != nil || m.Name != "laptop" {
+		t.Fatalf("revoke the laptop: %+v, %v", m, err)
 	}
 	for _, s := range []*testService{pi, deck} {
-		waitFor(t, s.name+" drops the Mac", func() bool {
+		waitFor(t, s.name+" drops the laptop", func() bool {
 			return listed(s.devices(t)) == "deck pi" && len(s.status(t).Peers) == 1
 		})
 	}
-	waitFor(t, "the Mac is alone", func() bool { return len(mac.status(t).Peers) == 0 })
+	waitFor(t, "the laptop is alone", func() bool { return len(laptop.status(t).Peers) == 0 })
 	// The root removes the admin.
 	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err != nil {
 		t.Fatalf("revoke the admin: %v", err)
@@ -1920,20 +1434,24 @@ func TestThawReconnectsAtOnce(t *testing.T) {
 	waitUpTo(t, 3*time.Second, "b connects again", func() bool { return len(pi.status(t).Peers) == 1 })
 }
 
-// TestMacsListen checks that a Mac is a full member like the others: it
-// publishes no role and takes connections, so two Macs keep syncing when
-// no other computer is on.
+// TestMacsListen checks that every computer, a Mac as these Linux ones,
+// is a full member: it publishes no role and takes connections, so two of
+// them keep syncing when no other computer is on.
 func TestMacsListen(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
-	a := startRole(t, &h, "mac-a", group.OSMacOS)
-	b := startRole(t, &h, "mac-b", group.OSMacOS)
+	a := startService(t, &h, "mac-a")
+	b := startService(t, &h, "mac-b")
 	pairWith(t, pi, a)
 	pairWith(t, pi, b)
 	for _, s := range []*testService{pi, a, b} {
-		if txt := h.txtOf(s.status(t).Device); len(txt) != 2 {
-			t.Errorf("%s publishes %q, want only v and g", s.name, txt)
-		}
+		// The pi publishes p=1 until it sees its pairing window closed,
+		// which its mDNS loop checks once a second.
+		var txt []string
+		waitUpTo(t, 10*time.Second, s.name+" publishes only v and g", func() bool {
+			txt = h.txtOf(s.status(t).Device)
+			return len(txt) == 2
+		}, func() string { return fmt.Sprintf("it publishes %q", txt) })
 		waitFor(t, s.name+" meets the pi and the other Mac", func() bool { return len(s.status(t).Peers) == 2 })
 	}
 
@@ -1951,28 +1469,10 @@ func TestMacsListen(t *testing.T) {
 // when the one with the lower ID cannot reach it.
 func TestFallbackDial(t *testing.T) {
 	var h hub
-	// Each finds the members with a greater device ID at a closed port, so
-	// only the fallback connects.
-	cfg := func(c *Config) {
-		c.fallbackAfter = 500 * time.Millisecond
-		c.Discover = func(dc DiscoveryConfig) (Discovery, error) {
-			if !dc.BrowseOnly {
-				on := dc.OnPeers
-				dc.OnPeers = func(peers []mdns.Peer) {
-					peers = slices.Clone(peers)
-					for i, p := range peers {
-						if p.ID > dc.ID {
-							peers[i].Port = 1
-						}
-					}
-					on(peers)
-				}
-			}
-			return h.discover(dc)
-		}
-	}
-	a := startWith(t, &h, "alpha", group.OSLinux, cfg)
-	b := startWith(t, &h, "beta", group.OSMacOS, cfg)
+	// Each dials the members with a greater device ID at a closed port, so
+	// only the fallback connects, after 500 ms (CBB_TEST_FALLBACK).
+	a := startEnv(t, &h, "alpha", "CBB_TEST_FALLBACK=500")
+	b := startEnv(t, &h, "beta", "CBB_TEST_FALLBACK=500")
 	pairWith(t, a, b)
 	waitFor(t, "connected", func() bool { return len(a.status(t).Peers) == 1 && len(b.status(t).Peers) == 1 })
 	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "through the fallback"); err != nil {
@@ -1991,49 +1491,6 @@ func TestFallbackDial(t *testing.T) {
 	if u := lo.status(t).Unreached; len(u) != 0 {
 		t.Errorf("the member that dials says it is unreached: %v", u)
 	}
-}
-
-// TestRecordsTheSystem checks that an admin records a computer's system
-// from its hello when its record names another, as for a Windows PC that
-// joined as a Linux member.
-func TestRecordsTheSystem(t *testing.T) {
-	var h hub
-	pi := startService(t, &h, "pi")
-	pc := startService(t, &h, "pc")
-	pairWith(t, pi, pc)
-	waitFor(t, "pc is listed", func() bool { return listed(pi.devices(t)) == "pc pi" })
-	pc.stop()
-	pc.os = group.OSWindows
-	pc = restartService(t, &h, pc)
-	waitFor(t, "pc connects again", func() bool { return len(pi.status(t).Peers) == 1 })
-	// pi records the system while pc is connected; the list shows a
-	// connected device's system from its hello, so the record is read from
-	// pi's state before pc leaves.
-	id, err := group.Load(pi.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "pi's record says Windows", func() bool {
-		recs, err := group.LoadRecords(pi.dir, id.GroupCA.Cert)
-		if err != nil {
-			return false
-		}
-		for _, d := range recs.Devices() {
-			if d.Name == "pc" {
-				return d.OS == group.OSWindows
-			}
-		}
-		return false
-	})
-	pc.stop()
-	waitFor(t, "pi records Windows", func() bool {
-		for _, d := range pi.devices(t) {
-			if d.Name == "pc" {
-				return d.OS == group.OSWindows && !d.Online && !d.Admin && d.Role == group.RoleMember
-			}
-		}
-		return false
-	})
 }
 
 // A damaged identity file keeps the service running without its group: it
@@ -2068,17 +1525,10 @@ func TestPairingAcrossARenewal(t *testing.T) {
 	every := renewEvery
 	renewEvery = 200 * time.Millisecond
 	t.Cleanup(func() { renewEvery = every })
-	var ahead atomic.Bool
+	clock := newTestClock(t, 0)
 	var h hub
 	pi := startService(t, &h, "pi")
-	pi.cfg = func(c *Config) {
-		c.now = func() time.Time {
-			if ahead.Load() {
-				return time.Now().AddDate(1, 6, 0)
-			}
-			return time.Now()
-		}
-	}
+	pi.env = []string{clock.env()}
 	pi.stop()
 	pi = restartService(t, &h, pi)
 	b := startService(t, &h, "b")
@@ -2088,7 +1538,7 @@ func TestPairingAcrossARenewal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ahead.Store(true)
+	clock.set(t, 548*24*time.Hour)
 	waitFor(t, "the pi renews its certificate", func() bool {
 		id, err := group.Load(pi.dir)
 		return err == nil && !id.Cert.Equal(before.Cert)
@@ -2105,10 +1555,11 @@ func TestPairingAcrossARenewal(t *testing.T) {
 // of its own, which addr reads from its log once it is in a group.
 func startRust(t *testing.T, bin string, s *testService) *testService {
 	t.Helper()
-	r := startLiteEnv(t, bin, s.dir, []string{"CBB_TEST_ELSEWHERE=" + elsewhereDir()}, "-port", "0", "-name", s.name)
-	r.name, r.os, r.rust = s.name, s.os, true
-	// It ends with an error after cbb leave, for systemd to start it again,
-	// where Go's Run returns ErrLeft.
+	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir(), fmt.Sprintf("CBB_TEST_RENEW_EVERY=%d", renewEvery.Milliseconds()), fmt.Sprintf("CBB_HUB_KEY_AHEAD=%d", int64(hubKeyAhead.Seconds()))}, s.env...)
+	r := startLiteEnv(t, bin, s.dir, env, "-port", strconv.Itoa(s.port), "-name", s.name)
+	r.name, r.os, r.rust, r.env, r.port = s.name, s.os, true, s.env, s.port
+	// It ends with an error after cbb leave or an admin's restart, for
+	// systemd to start it again.
 	inner := r.done
 	r.done = make(chan error, 1)
 	go func() {
@@ -2118,9 +1569,37 @@ func startRust(t *testing.T, bin string, s *testService) *testService {
 			if err != nil && strings.Contains(l, "restarting after leaving the group") {
 				err = ErrLeft
 			}
+			if err != nil && strings.Contains(l, "restarting at an admin's request") {
+				err = ErrRestart
+			}
 		}
 		r.logMu.Unlock()
 		r.done <- err
 	}()
 	return r
 }
+
+// testClock moves a service's wall clock through the file
+// CBB_TEST_AHEAD_FILE names, which the service reads each time, so that a
+// test can move it while the service runs.
+type testClock struct {
+	file string
+}
+
+func newTestClock(t *testing.T, ahead time.Duration) *testClock {
+	t.Helper()
+	c := &testClock{file: filepath.Join(t.TempDir(), "clock")}
+	c.set(t, ahead)
+	return c
+}
+
+// set moves the clock to ahead of the real time.
+func (c *testClock) set(t *testing.T, ahead time.Duration) {
+	t.Helper()
+	if err := os.WriteFile(c.file, []byte(strconv.FormatInt(ahead.Milliseconds(), 10)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// env is the Rust service's environment for the clock.
+func (c *testClock) env() string { return "CBB_TEST_AHEAD_FILE=" + c.file }

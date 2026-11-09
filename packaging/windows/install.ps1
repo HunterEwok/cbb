@@ -136,6 +136,8 @@ $binHelper = Join-Path (Split-Path $Bin) 'cbb-helper.exe'
 if (-not (Test-Path $binHelper)) {
 	$binHelper = ''
 }
+# The servers, which cbb forward and cbb relay run, when the archive has them.
+$binServers = @('cbb-forward.exe', 'cbb-relay.exe') | Where-Object { Test-Path (Join-Path (Split-Path $Bin) $_) }
 $version = (exe $Bin @('version')).Trim()
 if ($version -notmatch 'windows/') {
 	throw "$Bin is not built for Windows: $version"
@@ -165,7 +167,7 @@ if ($service -and $service.Status -ne 'Stopped') {
 $parent = 0
 [void][int]::TryParse("$env:CBB_UPDATE_PARENT", [ref]$parent)
 $stopRunning = {
-	$running = @(Get-Process -Name cbbw, cbb, cbb-desktop, cbb-helper -ErrorAction SilentlyContinue | Where-Object {
+	$running = @(Get-Process -Name cbbw, cbb, cbb-desktop, cbb-helper, cbb-forward, cbb-relay -ErrorAction SilentlyContinue | Where-Object {
 		$_.Id -ne $parent -and $_.Path -and $_.Path.StartsWith("$programDir\", [StringComparison]::OrdinalIgnoreCase)
 	})
 	$running | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -182,7 +184,7 @@ for ($try = 1; ; $try++) {
 		Get-ChildItem -Path $programDir -Filter 'cbb*.exe.*.old' -ErrorAction SilentlyContinue |
 			Remove-Item -Force -ErrorAction SilentlyContinue
 		if ($parent) {
-			foreach ($f in @('cbb.exe', 'cbbw.exe', 'cbb-desktop.exe', 'cbb-helper.exe')) {
+			foreach ($f in @('cbb.exe', 'cbbw.exe', 'cbb-desktop.exe', 'cbb-helper.exe', 'cbb-forward.exe', 'cbb-relay.exe')) {
 				$prog = Join-Path $programDir $f
 				if (Test-Path $prog) {
 					Move-Item $prog "$prog.$([DateTime]::UtcNow.Ticks).old"
@@ -196,6 +198,9 @@ for ($try = 1; ; $try++) {
 		}
 		if ($binHelper) {
 			Copy-Item -Force $binHelper (Join-Path $programDir 'cbb-helper.exe')
+		}
+		foreach ($f in $binServers) {
+			Copy-Item -Force (Join-Path (Split-Path $Bin) $f) (Join-Path $programDir $f)
 		}
 		break
 	} catch {

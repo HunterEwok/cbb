@@ -35,6 +35,9 @@ const SECRET_MEMORY: Duration = Duration::from_secs(12 * 3600);
 const ECHO_WINDOW: Duration = Duration::from_secs(10);
 const MAX_AGE_MS: i64 = 365 * 24 * 3600 * 1000;
 const MAX_SECRETS: usize = 4096;
+/// How far the engine moves the uptime forward (Engine::now): more than
+/// the oldest age an event can carry.
+const UPTIME_BASE: Duration = Duration::from_secs(2 * 365 * 24 * 3600);
 const SEEN_IDS: usize = 4096;
 const AHEAD: &str = "the event's time is more than 7 days ahead of this device's clock; check the sender's date";
 
@@ -491,6 +494,14 @@ impl Engine {
         true
     }
 
+    /// The uptime, moved forward by UPTIME_BASE, so that the moment a copy
+    /// was made, its age before now, never falls below zero: on a member
+    /// that booted a minute ago a copy an hour old is still an hour old,
+    /// and not written as live.
+    fn now(&self) -> Duration {
+        (self.uptime)().saturating_add(UPTIME_BASE)
+    }
+
     fn sum(&self, text: &str) -> Sum {
         self.sum_key(text.as_bytes())
     }
@@ -506,7 +517,7 @@ impl Engine {
     /// none or it is a secret that expired or is known only by its mark.
     pub fn current(&self) -> Option<Event> {
         let st = self.inner.lock();
-        let now = (self.uptime)();
+        let now = self.now();
         self.live(&st, now).then(|| self.with_age(&st, now))
     }
 
@@ -515,7 +526,7 @@ impl Engine {
     /// For images or files, their plain-text alternative, as a text.
     pub fn local(&self) -> Option<(String, Kind, Duration)> {
         let st = self.inner.lock();
-        let now = (self.uptime)();
+        let now = self.now();
         if !local_live(&st, now) || st.local.text.is_empty() {
             return None;
         }
@@ -528,7 +539,7 @@ impl Engine {
     /// it holds none, as far as the engine knows.
     pub fn local_media(&self) -> Option<(Manifest, String, Duration)> {
         let st = self.inner.lock();
-        let now = (self.uptime)();
+        let now = self.now();
         let m = st.local.media.clone()?;
         Some((m, st.local.text.clone(), now.saturating_sub(st.local.at)))
     }
@@ -541,7 +552,7 @@ impl Engine {
             st.local = Local::default();
             return;
         }
-        let now = (self.uptime)();
+        let now = self.now();
         st.local = Local { text: text.to_string(), kind, at: now, media: None };
         if kind == Kind::Secret {
             add_secret(&mut st, self.sum(text), now);
@@ -557,7 +568,7 @@ impl Engine {
             return Err(Error::msg("a lite member makes no media events"));
         }
         let mut st = self.inner.lock();
-        let now = (self.uptime)();
+        let now = self.now();
         let sum = self.sum(text);
         if local_has(&st, text, now)
             || st.written.iter().any(|(s, at)| *s == sum && now.saturating_sub(*at) <= ECHO_WINDOW)
@@ -593,7 +604,7 @@ impl Engine {
         if self.muted(&mut st) {
             return Err(Error::msg("this device is muted: its copies do not reach the group until the mute ends"));
         }
-        let now = (self.uptime)();
+        let now = self.now();
         let sum = self.sum(text);
         if has_secret(&st, &sum, now) {
             kind = Kind::Secret;
@@ -631,7 +642,7 @@ impl Engine {
         if self.muted(&mut st) {
             return Err(Error::msg("this device is muted: its copies do not reach the group until the mute ends"));
         }
-        let now = (self.uptime)();
+        let now = self.now();
         let held = st.takes_media && local_holds(&st, &media.key(), true, now);
         let ev = self.new_media(&mut st, text, media, via, key, blob, now)?;
         let mut out = Outcome::default();
@@ -663,7 +674,7 @@ impl Engine {
         if !st.takes_media {
             return Err(Error::msg("this member takes no images or files from its clipboard"));
         }
-        let now = (self.uptime)();
+        let now = self.now();
         let k = media.key();
         let sum = self.sum_key(&k);
         if local_holds(&st, &k, true, now)
@@ -770,7 +781,7 @@ impl Engine {
         *n = n.saturating_add(1);
         let mut h = Hello { wall: (self.wall)(), current: None };
         if !st.current.id.is_empty() {
-            let ev = self.with_age(&st, (self.uptime)());
+            let ev = self.with_age(&st, self.now());
             // A reader sends a secret only as its mark.
             h.current = Some(if ev.kind == Kind::Secret && !ev.unread { ev.mark() } else { ev });
         }
@@ -825,7 +836,7 @@ impl Engine {
     }
 
     fn receive(&self, st: &mut Inner, ev: Event) -> Outcome {
-        let now = (self.uptime)();
+        let now = self.now();
         let age = Duration::from_millis(ev.age.min(MAX_AGE_MS) as u64);
         if st.seen.contains(&ev.id) {
             if st.current.id != ev.id {
@@ -985,6 +996,9 @@ fn add_secret(st: &mut Inner, sum: Sum, now: Duration) {
 fn has_secret(st: &Inner, sum: &Sum, now: Duration) -> bool {
     st.secrets.get(sum).is_some_and(|at| now.saturating_sub(*at) <= SECRET_MEMORY)
 }
+
+#[cfg(test)]
+mod engine_tests;
 
 #[cfg(test)]
 mod tests {

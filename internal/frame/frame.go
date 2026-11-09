@@ -4,7 +4,7 @@
 // Package frame is the one framing of every channel between devices and
 // servers (docs/protocol.md, Conventions, "Frames"): a 4-byte big-endian
 // length and that many bytes of one JSON object. The member protocol adds
-// its binary chunk frames on top (internal/node); pairing, the forwarder
+// its binary chunk frames on top (member/src/content.rs); pairing, the forwarder
 // and the relay use these frames as they are.
 package frame
 

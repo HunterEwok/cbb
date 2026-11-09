@@ -774,7 +774,7 @@ for Face ID (D-94, docs/protocol.md section 3):
   twice, at least four digits). A user who cancels it joins as a member whose hellos offer
   no key, and Settings' "Get ready to be an admin" makes it later. Then adding a device, an action on a device's
   page, the root's decision on an alert, the takeover and its finish. The app hands the PIN
-  to the TEE and wipes it at once; the token then stays logged in for two minutes after its
+  to the TEE and wipes it at once; the token then stays logged in for five minutes (as the iPhone app trusts one Face ID) after its
   last use and is logged out when the app leaves the screen; renewals of the members'
   certificates go only while it is logged in. The dialog asks not to reuse the phone's unlock
   code. Settings change it ("Change the
@@ -1023,9 +1023,9 @@ the app on real devices.
   `apps/ios/CBBKit`, the Swift package with the protocol core (CPace, the pairing
   frames, the join QR code, the member protocol and the phone's sync engine). It has no UI
   and runs on Linux too; its tests check it against the vectors that the Go tests write to
-  `testdata/interop/` (`go test ./internal/group ./internal/pair ./internal/phone ./internal/node -update`
-  regenerates them), and CI runs it against the Go code: pairing over plain TCP on Linux,
-  pairing and a member connection over real TLS on macOS.
+  `testdata/interop/` (`go test ./internal/group ./internal/phone -update` regenerates
+  Go's; the member protocol's and pairing's are fixed), and CI runs it against the Rust `cbb`:
+  pairing and a member connection over real TLS on macOS (`internal/service`, `TestSwift`).
 - The app finds the members by browsing `_cbb._tcp` (CBBKit's
   `BonjourBrowser` on iOS) and hands their addresses to its member in the Rust core
   (`CoreMember`, docs/core-api.md, "The member"), which keeps one connection to each member

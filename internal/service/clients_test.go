@@ -31,7 +31,7 @@ func TestLiteClients(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
 	}
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
 	pi := startService(t, &h, "pi")
 	dir := joinLite(t, bin, pi)

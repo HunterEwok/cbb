@@ -22,9 +22,6 @@ import (
 // here a table of main hubs,
 // (docs/protocol.md, section 10, "Going on after two histories").
 func TestRestoredAdminSignsAgain(t *testing.T) {
-	old := syncWait
-	syncWait = 0
-	t.Cleanup(func() { syncWait = old })
 	var h hub
 	pi := startService(t, &h, "pi")
 	a := startService(t, &h, "a")

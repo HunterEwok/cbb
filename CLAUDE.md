@@ -1,7 +1,8 @@
 # cbb: notes for Claude Code
 
 cbb syncs the clipboard between Linux computers, Windows PCs, Macs and an iPhone on
-the home network. A Go service (`cmd/cbb`, `internal/...`) runs on the computers; the iPhone
+the home network. The `cbb` service in Rust (`member/`, the Rust workspace below) runs on the computers, with the
+Go helper `cbb-helper` (`cmd/cbb-helper`, `internal/...`) beside it; the iPhone
 app (`apps/ios`) is in development, and in its groups the phone is the root of trust.
 Read [README.md](README.md), [docs/design.md](docs/design.md),
 [docs/protocol.md](docs/protocol.md) (the wire format, kept in step with the code) and
@@ -44,11 +45,12 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 - `internal/group`: identities, certificates (group CA, admin CAs, member certificates),
   member TLS, signed device and revocation records; `keys.go` puts new member and admin keys
   in the TPM (`internal/tpmkey`, go-tpm, tested against swtpm) on Linux.
-- `internal/pair`: pairing (CPace inside TLS, the Welcome), both directions.
 - `cmd/cbb-helper`, `internal/helper`: the Go helper the Rust `cbb` starts as its child and
   talks to over its inherited pipes (`member/src/helper.rs`, docs/design.md "The service and its
   helper"); it takes over what needs Go as the Rust service replaces the Go one.
-- `internal/node`: the member protocol and sync, commands passed on to members; `internal/service`: the daemon and CLI.
+- `internal/clip`, `internal/hlc`: Go's reference for the copies, the write rule and the clock, checked
+  against the interop vectors; the member protocol, pairing and sync are the Rust core's and `member/`;
+  `internal/service`: the end-to-end tests that run the Rust `cbb` (and `cbb-helper`).
 - Remote paste targets, each a `connector.Target`: `internal/desktop/x11paste.go` (XTEST),
   `waylandpaste.go` (the virtual keyboard), `portal.go` (the RemoteDesktop portal on GNOME and KDE,
   keys through `internal/ei`, the ei protocol, with `ei/eitest` an EIS server for tests), `internal/uinput`
@@ -87,8 +89,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   port does not answer) and the link to the blind relay; a loopback port leads to the hub's
   member port, and the kits dial it with their own member TLS. `TestRustPhone*` run it through
   the example `tunnel-on-linux`.
-- Windows: `cmd/cbb/platform_windows.go` (the Windows service, logs),
-  `internal/service/control_windows.go` (the socket's access list),
+- Windows: `member/src/sys/service_windows.rs` (the Windows service),
+  `member/src/sys/acl_windows.rs` (the control sockets' access lists),
   `internal/pasteboard/pasteboard_windows.go` (the Win32 clipboard), `internal/winpaste` (remote paste:
   Ctrl+V or SendInput's Unicode keys, the secure desktop and integrity checks), `packaging/windows`
   (`install.ps1`, `uninstall.ps1`, `get.ps1`); CI's `windows installer` job runs them.
