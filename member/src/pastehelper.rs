@@ -53,13 +53,24 @@ pub trait Target {
 const MIN_BACKOFF: Duration = Duration::from_secs(1);
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
 
-/// Runs cbb paste-helper: args is tmux or console.
+/// Runs cbb paste-helper: args is tmux, console or uinput.
 pub fn run(socket: &Path, args: &[String]) -> Result<()> {
     match args {
         [a] if a == "tmux" => run_tmux(socket),
         [a] if a == "console" => run_console(socket),
-        _ => Err(Error::msg("usage: cbb paste-helper tmux|console")),
+        [a] if a == "uinput" => run_uinput(),
+        _ => Err(Error::msg("usage: cbb paste-helper tmux|console|uinput")),
     }
+}
+
+/// The uinput helper, which the cbb-uinput unit runs as root: Go's uinput
+/// keyboard in cbb-helper (cbb-helper uinput), which this process becomes.
+fn run_uinput() -> Result<()> {
+    use std::os::unix::process::CommandExt;
+    let path = crate::helper::locate()
+        .ok_or_else(|| Error::msg("the uinput helper is in cbb-helper, which is not installed beside cbb"))?;
+    let err = Command::new(&path).arg("uinput").exec();
+    Err(Error::msg(format!("starting {}: {err}", path.display())))
 }
 
 /// Keeps a watch on the service for target, connecting again whenever the

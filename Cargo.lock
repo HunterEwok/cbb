@@ -143,6 +143,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake2"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b5d4d889834ee8ecfc0f8426ad30faf7cdcb10f741a8e6d7224d95325479f6f"
+dependencies = [
+ "digest 0.11.3",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -233,11 +242,11 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "base64 0.23.1",
- "blake2",
+ "blake2 0.11.0",
  "bytes",
  "cbb-core",
  "chacha20 0.10.2",
- "chacha20poly1305 0.10.1",
+ "chacha20poly1305 0.11.0",
  "getrandom 0.4.3",
  "gotatun",
  "hkdf",
@@ -480,6 +489,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
 dependencies = [
+ "getrandom 0.4.3",
  "hybrid-array",
  "rand_core 0.10.1",
 ]
@@ -1205,7 +1215,7 @@ dependencies = [
  "aead 0.5.2",
  "base64 0.22.1",
  "bitfield-struct",
- "blake2",
+ "blake2 0.10.6",
  "bytes",
  "chacha20poly1305 0.10.1",
  "constant_time_eq",

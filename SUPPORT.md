@@ -29,7 +29,7 @@ security reports, whose times SECURITY.md gives.
 Your group needs nothing from the project to keep working: at home the devices talk
 directly, and away from home they use your own hub. The project's servers at `cbb.tools`
 (the forwarder, the relay, the update mirror) are a convenience. If they go away, run your
-own: `cbb forward` and `cbb relay` on any server with a public address, as
+own: the forwarder `cbb-forward` and the relay `cbb-relay` on any server with a public address, as
 [running your own servers](docs/admin/self-hosting.md) shows. The code is under the AGPL and
 the [protocol](docs/protocol.md) under CC BY 4.0, so anyone may carry the project on, build
 the programs and sign their own releases.

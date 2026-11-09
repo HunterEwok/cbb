@@ -654,6 +654,34 @@ pub fn check_entries(
     Ok((e, next))
 }
 
+/// Checks attest-status.json as Go's release.CheckStatus does: keys.json
+/// under the pinned roots, the list under a status key of it, its expiry,
+/// and that neither is older than seen (docs/protocol.md, section 17,
+/// "Revoked attestations"). Returns the list and the Seen to keep.
+pub fn check_status(keys: &File, status: &File, roots: &[&[u8]], now_ms: i64, seen: &Seen) -> Result<(Status, Seen)> {
+    let k = verify_keys(keys, roots, now_ms, seen).map_err(|e| e.context("keys.json is not valid"))?;
+    let spkis: Vec<&[u8]> = k.keys.iter().filter(|key| key.usage == "status").map(|key| key.key.as_slice()).collect();
+    let bad = |e: Error| e.context("attest-status.json is not valid");
+    status.verify(&spkis).map_err(bad)?;
+    let s = decode_status(&status.body).map_err(bad)?;
+    if now_ms >= s.expires_ms {
+        return Err(Error::msg("attest-status.json has expired"));
+    }
+    if signed_ahead(s.time_ms, now_ms) {
+        return Err(Error::msg("attest-status.json was signed ahead of this device's clock"));
+    }
+    let at = floor(seen.status_seq, seen.status_keys_seq, seen.keys_seq, k.seq);
+    if s.seq < at {
+        return Err(Error::msg("attest-status.json is older than one already seen").answer());
+    }
+    if s.seq.saturating_sub(at) > MAX_SEQ_STEP {
+        return Err(Error::msg("attest-status.json is too far ahead of the one already seen"));
+    }
+    let channel_keys_seq = if seen.channel_keys_seq == 0 { seen.keys_seq } else { seen.channel_keys_seq };
+    let next = Seen { keys_seq: k.seq, status_seq: s.seq, status_keys_seq: k.seq, channel_keys_seq, ..seen.clone() };
+    Ok((s, next))
+}
+
 impl Release {
     /// Reports whether a device at installed may update to this release in
     /// one step, or must first take min_from.

@@ -110,13 +110,13 @@ pipx run typos==1.51.1         # spelling of the English text (_typos.toml)
 npx --yes @biomejs/biome@2.6.2 ci   # the tray app's HTML, CSS and JavaScript (biome.json)
 pipx run reuse==6.2.0 lint     # every file's copyright and license (REUSE.toml)
 go test -race ./...
-go build -o /dev/null ./cmd/cbb
-GOOS=linux GOARCH=arm GOARM=6 go build -o /dev/null ./cmd/cbb   # Raspberry Pi Zero W
+go build -o /dev/null ./cmd/...
+GOOS=linux GOARCH=arm GOARM=6 go build -o /dev/null ./cmd/cbb-helper   # Raspberry Pi Zero W
 GOOS=freebsd go vet ./...                                         # FreeBSD (the freebsd job runs the tests)
 # Big-endian, 32-bit MIPS, as on many routers (the mips job; qemu-user-static, or qemu-user and qemu-user-binfmt
 # on Ubuntu 26.04 (then qemu-mips), with binfmt
 # for the tests that start the test binary again):
-GOARCH=mips GOMIPS=softfloat go test -exec qemu-mips-static ./internal/service ./internal/mdns ./cmd/cbb
+GOARCH=mips GOMIPS=softfloat go test -exec qemu-mips-static ./internal/mdns ./internal/helper
 ```
 
 ### The other parts

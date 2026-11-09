@@ -7,6 +7,14 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
+  the Go relay's flags, key file, wire format and an open relay's budget with the same limits
+  and caps, and runs as its own systemd service as before. The Go relay's tests that check it
+  from outside run against it (`CBB_TEST_RUST_RELAY`), and those that look inside it are
+  ported beside it.
+- The bench's time-scaled build of the Rust `cbb` (`cargo build -p cbb-lite --features
+  benchtime`, never released), as the Go one's: certificates, renewals, credential periods and
+  the hub key's handover run 100000 times faster, and `CBB_TEST_CLOCK` moves the wall clock.
 - The ZX Spectrum Next shows the group's latest image: `.cbb show` asks the lite member on the
   Pi (`cbb next image`), which fits the PNG or JPEG to Layer 2 in 320×256 with 256 colours or
   640×256 with 16, whichever shows it closer, with dithering from the Next's 512 colours; the
@@ -53,6 +61,26 @@ All notable changes to cbb are documented in this file. The format follows
   exit codes (2 for a wrong use): `new`, `remove`, `rename`, `takeover -delay`, `incoming`,
   `keys`, `global hubs`, `freeze`, `unfreeze`, `admin`, `resolve`, `handover`, `mute`,
   `unmute`, `config` and `network`; `TestRustCommandLine` runs them against Rust services.
+  Its `cbb status` prints what the Go cbb's does, with the devices' table, and the Rust
+  service tells when this device's certificate ends.
+  In a group, its `cbb pair` opens a pairing window or, with `-qr`, admits the device that
+  shows a code, and `cbb invite` writes a remote invitation and asks before it admits.
+  `cbb copy FILE...` sends files and folders (or with `-type` one image or HTML), `cbb paste -o
+  DIR` saves the clipboard's images or files, and `cbb paste -on DEVICE` pastes text, files or
+  the group's current copy on another device, as the Go cbb's do.
+  `cbb sync -on DEVICE`, `cbb action -on DEVICE NAME`, `cbb action off -on DEVICE|-all` and
+  `cbb paste-receive off -on DEVICE|-all` act on other devices from an admin, and `cbb sync`
+  says until when sync is off as the Go cbb does.
+  `cbb keyboard` and `cbb remote` (the Bluetooth keyboard and a TV's remote) work from the
+  Rust cbb too, and `cbb recovery` claims the group with the recovery key or its YubiKey.
+  `cbb global` does all that the Go cbb's does: `hub` (with `-on`, `-forward-only`, `off`,
+  `-keep`, `-away-on` and the hub's port in the firewall), `move`, `relay`, `allow`, `entries`,
+  and it lets the service reach the group's servers through the system's limit (the systemd
+  drop-in, the Windows Firewall rule); the Rust service's status names those servers.
+  `cbb forward` and `cbb relay` run `cbb-forward` and `cbb-relay`, Go programs of their own
+  beside `cbb`, in its place, so that their systemd units keep them apart from the service and
+  from the keys of `cbb-helper`. An unknown command exits with 2, as in the Go cbb, `cbb help`
+  lists the commands as the Go cbb's does, and `cbb install` runs the Windows installer beside it.
   `cbb mute` and `cbb unmute` go through the administrator's socket, as in the Go service, and
   a command that does not reach a device names why.
 - The Go service's tests run on the Rust service (`CBB_TEST_RUST_SERVICE` names its
@@ -83,7 +111,10 @@ All notable changes to cbb are documented in this file. The format follows
   members dial each other at once, both keep the connection the lower device ID dialed; a
   hub that moves to another device offers itself to no member meanwhile; a member whose
   mDNS name got a conflict suffix is still found; `cbb global hub` serves at once on a hub
-  with no hub above it.
+  with no hub above it; a client keeps its link to a hub whose new offer only adds the
+  hub's next key; an admin CA goes again on a member's next connection; a device spaces the
+  changes of its mDNS registration, so a pairing window closed and opened again for the
+  next device does not rename it.
 - The Docker e2e (tools/e2e/e2e.sh) runs the Rust service too, with cbb-helper beside it
   and the Go cbb's commands against its socket, in CI's e2e job: the Rust service
   answers status in no group, and joins with a code (`join`: the member whose pairing
@@ -142,7 +173,7 @@ All notable changes to cbb are documented in this file. The format follows
   window with a code, which a computer joins as it joins a Go root (`TestLiteRootWindow`). It
   also sets the takeover delay and how long an incoming copy stays live, hands the group to
   an admin, and mutes and unmutes a device (`cbb takeover -delay`, `incoming`, `handover`,
-  `mute -on`, `unmute -on`). Started with `-full`, and joined with `cbb pair -full`, it is a
+  `mute -on`, `unmute -on`). With the capability `admin` (`-caps`, on by default), it is a
   computer's service in a Go computer's group: it offers an admin key, becomes an admin when
   the root makes it one, and takes the group over from a lost root with `cbb takeover`,
   becoming the root once the claim takes effect and giving the other admins admin CAs from
@@ -1464,6 +1495,22 @@ All notable changes to cbb are documented in this file. The format follows
 - From 0.6 on, a device works in one group with devices of the release before it, and an
   update never breaks a group (D-92; docs/design.md, "Versions in one group"). SUPPORT.md says
   what keeps a group working if the maintainer is gone.
+- The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
+  programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
+  `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program
+  without a console window. `cbb version` names the lite member only when no `cbb-helper` is
+  beside `cbb`.
+- The Rust `cbb update` updates every system the release builds for: it downloads the archive
+  of its system (the lite member's only when no `cbb-helper` is beside `cbb`), runs that
+  system's installer, puts the helper and the servers back with `cbb` when the new release
+  does not start, checks on Windows that the new programs carry the installed ones'
+  Authenticode signer and runs from a copy outside Program Files, and its daily timer is
+  launchd on a Mac, cron on FreeBSD and a scheduled task on Windows.
+- The Rust service refuses the group's keys in a container unless `CBB_KEYS_IN_FILE=yes`, as
+  the Go service does, and `cbb pair -code` without an address hands the code to the running
+  service. The Docker image carries the Rust `cbb` with the Go programs beside it, and the
+  systemd units of `cbb-forward` and `cbb-relay` run those programs, which the Homebrew
+  formula installs too.
 - The roles `full` and `lite` are one role, `member`, with capabilities (D-89; docs/protocol.md
   section 4, "Capabilities"): `admin` (it can hold an admin key), `dials` (it dials other
   members) and `hub` (it may be chosen as the hub), in its hello (`caps`), its device record
@@ -1937,6 +1984,10 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Removed
 
+- The Go command line `cmd/cbb` and the Go service in it: `cbb` is the Rust program on every
+  member, with `cbb-helper` beside it on computers. Its tests run on the Rust `cbb`
+  (`member/tests/cli_commands.rs`, the service tests in `internal/service`).
+
 - The way in for an iPhone without the app (D-80): every phone now joins through its app,
   with a key of its own. Gone with it are the iPhone shortcut and its token, `cbb pair
   -phone` and `-new-token`, the configuration profile and its pages, the iPhone CA and the
@@ -1958,9 +2009,15 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
-- The lite member fetches a copy's images or files once when two requests want them at the
-  same time (`cbb paste -o` while the copy is fetched in the background); the second waited on
-  chunks the first had taken and could fail.
+- A member that booted less than a minute ago no longer writes an old copy from the group to
+  its clipboard as if it had just been made: the age of a copy counted at most the time since
+  the boot.
+- `cbb pair` out of a group waits for the phone on the running service's port, the one its
+  firewall rule opens (on OpenWrt the port in `/etc/config/cbb`), not on the default one.
+- `cbb action`, run by a user, no longer fails on the polkit rule when the actions that are
+  on need no right.
+- The Rust service fetches a file or a release archive once when two requests want it at the
+  same time; the second waited on chunks the first had taken and could fail.
 - A lite member away from home reaches a hub that answers only one of its ways, as over VLESS
   when its UDP port is blocked: a tunnel link that ended before the hub answered left the next
   one to start at the same dead endpoint, and a dial gave up just as a link moved on to the

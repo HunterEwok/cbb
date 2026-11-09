@@ -27,7 +27,6 @@ require (
 	golang.org/x/term v0.47.0
 	google.golang.org/protobuf v1.36.12
 	gvisor.dev/gvisor v0.0.0-20260122175437-89a5d21be8f0
-	rsc.io/qr v0.2.0
 )
 
 require (

@@ -7,9 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"net"
-	"net/netip"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,9 +16,7 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
-	"github.com/HunterEwok/cbb/internal/node"
 	"github.com/HunterEwok/cbb/internal/release"
-	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
 // signEntries signs entry points with seq whose ways in to the project's
@@ -44,7 +40,7 @@ func (s *releaseSigner) signEntries(t *testing.T, seq uint64, path string) strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := json.Marshal(node.EntriesSet{Keys: keys, Entries: e})
+	data, err := json.Marshal(entriesSet{Keys: keys, Entries: e})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,10 +52,9 @@ func (s *releaseSigner) signEntries(t *testing.T, seq uint64, path string) strin
 // the project's forwarder registers over VLESS through them.
 func TestEntriesSpread(t *testing.T) {
 	signer := newReleaseSigner(t)
-	withRoots := func(c *Config) { c.ReleaseRoots = signer.roots(t) }
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", withRoots)
-	pc := startWith(t, &h, "pc", "linux", withRoots)
+	pi := startEnv(t, &h, "pi", signer.rootsEnv(t))
+	pc := startEnv(t, &h, "pc", signer.rootsEnv(t))
 	pairWith(t, pi, pc)
 	waitFor(t, "pc is connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -71,7 +66,7 @@ func TestEntriesSpread(t *testing.T) {
 		if err != nil {
 			return 0
 		}
-		var set node.EntriesSet
+		var set entriesSet
 		var e release.Entries
 		if json.Unmarshal(m.Payload, &set) != nil || json.Unmarshal(set.Entries.Body, &e) != nil {
 			return 0
@@ -88,54 +83,6 @@ func TestEntriesSpread(t *testing.T) {
 	}
 }
 
-// The ways in to the project's forwarder come from the signed entry points,
-// on its own address when the site is its host, else built in.
-func TestProjectVLESS(t *testing.T) {
-	signer := newReleaseSigner(t)
-	s := &Service{cfg: Config{StateDir: t.TempDir(), ReleaseRoots: signer.roots(t), Logf: t.Logf, now: time.Now}}
-	addr := netip.MustParseAddr("203.0.113.7")
-	if ways := s.projectVLESS(addr); len(ways) != 1 || !forward.ProjectVLESS(addr).Equal(&ways[0]) {
-		t.Fatalf("without entry points: %+v", ways)
-	}
-	var set node.EntriesSet
-	if err := json.Unmarshal([]byte(signer.signEntries(t, 1, "/the-new-path-1")), &set); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.takeEntries(set); err != nil {
-		t.Fatal(err)
-	}
-	ways := s.projectVLESS(addr)
-	if len(ways) != 1 || ways[0].Path != "/the-new-path-1" || ways[0].Endpoint != netip.AddrPortFrom(addr, 8443) || ways[0].ServerName != "cbb.tools" {
-		t.Fatalf("with entry points: %+v", ways)
-	}
-}
-
-// A hub of the project's forwarder that does not register is told the list
-// is out of date only while it holds none that has not expired.
-func TestEntriesStale(t *testing.T) {
-	signer := newReleaseSigner(t)
-	s := &Service{cfg: Config{StateDir: t.TempDir(), ReleaseRoots: signer.roots(t), Logf: t.Logf, now: time.Now}}
-	project := &tunnel.ForwarderLink{Project: true}
-	failed := errors.New("no answer")
-	if !s.entriesStale(project, failed) || s.entriesStale(project, nil) || s.entriesStale(&tunnel.ForwarderLink{}, failed) {
-		t.Fatal("without entry points")
-	}
-	var set node.EntriesSet
-	if err := json.Unmarshal([]byte(signer.signEntries(t, 1, "/the-new-path-1")), &set); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.takeEntries(set); err != nil {
-		t.Fatal(err)
-	}
-	if s.entriesStale(project, failed) {
-		t.Error("with entry points held")
-	}
-	s.cfg.now = func() time.Time { return time.Now().Add(60 * 24 * time.Hour) }
-	if !s.entriesStale(project, failed) {
-		t.Error("with entry points that have expired")
-	}
-}
-
 // TestLiteEntries: a lite member takes the signed entry points a computer
 // passes it, keeps them and says in its hello that it holds them, so the
 // computer does not send them again.
@@ -146,7 +93,7 @@ func TestLiteEntries(t *testing.T) {
 	}
 	signer := newReleaseSigner(t)
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", func(c *Config) { c.ReleaseRoots = signer.roots(t) })
+	pi := startEnv(t, &h, "pi", signer.rootsEnv(t))
 	dir := joinLite(t, bin, pi)
 	pemFile := filepath.Join(t.TempDir(), "roots.pem")
 	if err := os.WriteFile(pemFile, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.roots(t)[0]}), 0o644); err != nil {
@@ -169,7 +116,7 @@ func TestLiteEntries(t *testing.T) {
 	}
 	waitFor(t, "the lite member keeps the entry points", func() bool {
 		data, err := os.ReadFile(filepath.Join(dir, "entries.json"))
-		var set node.EntriesSet
+		var set entriesSet
 		var e release.Entries
 		return err == nil && json.Unmarshal(data, &set) == nil && json.Unmarshal(set.Entries.Body, &e) == nil && e.Seq == 2
 	})
@@ -181,4 +128,11 @@ func TestLiteEntries(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, other.signEntries(t, 3, "/forged-path-1")); err == nil {
 		t.Error("pi took entry points signed under other roots")
 	}
+}
+
+// entriesSet is the body of an entries message (docs/protocol.md): the
+// signer's keys.json and the entry points it signed.
+type entriesSet struct {
+	Keys    release.File `json:"keys"`
+	Entries release.File `json:"entries"`
 }
