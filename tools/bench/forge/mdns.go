@@ -95,7 +95,7 @@ func runMDNS(dir, arg string) error {
 	f := strings.SplitN(strings.TrimPrefix(arg, "mdns:"), ":", 2)
 	secs, err := strconv.Atoi(f[0])
 	if err != nil || len(f) != 2 {
-		return fmt.Errorf("mdns:SECONDS:TXT,..., not %q", arg)
+		return fmt.Errorf("mdns:SECONDS:TXT,... or mdns@ID:SECONDS:TXT,..., not %q", arg)
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(secs)*time.Second)
 	defer cancel()

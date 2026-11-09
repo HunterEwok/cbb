@@ -1515,8 +1515,9 @@ All notable changes to cbb are documented in this file. The format follows
 ### Changed
 - The bench's fleet runs its small devices with the same `cbb` as its computers, as the
   service alone (`-cbb-lite` is gone, `-coverdir` takes the Rust `cbb`'s coverage too), and its
-  D3 case checks who dials as the Rust service does: a member with a higher device ID at once,
-  one with a lower ID only when it publishes `r=listen`.
+  D3 case checks whom the members dial by D-89: one with a higher device ID at once, one with
+  a lower ID that publishes `r=listen` at once and one with a lower ID that dials only after
+  the fallback, in place of the old check that no one dials a member with `r=lite`.
 - CI counts the Rust service's coverage with Go's tests of it as well (`rust-service`).
 - docs/decisions.md lists the decisions in force apart from the replaced ones, which stay
   below as history, and `tools/repocheck` checks the register: each number once, a known
@@ -1552,7 +1553,8 @@ All notable changes to cbb are documented in this file. The format follows
   takes `-caps` (all three by default, `admin,dials` for the ZX Next's Pi), and an ESP32 has
   none. The apps show "Member" and decide what a device can do from its capabilities. Groups
   set up during development whose records name `full` or `lite` are set up again: no release
-  carried those records.
+  carried those records. The ZX Next's `.cbb net on` looks for a computer past the members
+  with `r=listen`, as it did past `r=lite`.
 - The Android and iPhone apps put one received image or video, and an image the button
   fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
   Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).
