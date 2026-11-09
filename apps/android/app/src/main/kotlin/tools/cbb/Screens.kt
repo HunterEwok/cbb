@@ -72,6 +72,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -85,6 +86,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -1033,7 +1035,8 @@ internal fun Choice(title: String, selected: Boolean, select: () -> Unit) {
 internal fun Page(title: String, back: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Tokens.spacingLarge), verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconText("←", stringResource(R.string.back)) { back() }
+            // Back points the way the screen came from: right in Arabic and Hebrew.
+            IconText(if (LocalLayoutDirection.current == LayoutDirection.Rtl) "→" else "←", stringResource(R.string.back)) { back() }
             Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = Tokens.spacingMedium))
         }
         content()
