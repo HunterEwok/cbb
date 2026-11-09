@@ -341,7 +341,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     WiFi's through Arduino's own tool, NINA through the SerialNINAPassthrough sketch), and
     whether a classic ESP32 (520 KB of RAM, no PSRAM) holds `core/` with TLS 1.3, which
     builds today for the C6 and the S3 only. The Uno R4 WiFi first.
-- **52.** **Planned for 0.7.** A clipboard history in the phone apps, where the system keeps
+- **52.** **Planned for 0.7 (confirmed by the owner, 2026-11-09).** A clipboard history in the phone apps, where the system keeps
     none (the iPhone has none, even in iOS 27; Android only on some phones). The computers
     keep using the system's history (Klipper, Win+V, Spotlight), where received copies
     already land. The history:
@@ -555,6 +555,32 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       `.sna` or `.z80` at once, so a game sent from the phone runs on the Next.
     - `.cbb snap`: the Next's screen (ULA or Layer 2) to the group as a PNG, which the Pi
       makes.
+- **65.** **Planned for 0.6 (the owner, 2026-11-09).** "Why it does not sync": one screen in
+    the advanced settings of every app (iPhone, Android, Aurora, the Mac app, the tray app) and
+    the same reason in `cbb status`, which names one cause and what to do about it: the device
+    is not on the group's network, sync is off, no hub away from home, "Everywhere" not
+    allowed, the forwarder or the relay does not answer, the network blocks the tunnel, a key
+    or certificate has expired, the device was removed or frozen, or a newer version is
+    needed (`newer`). The causes come from the Rust core's state, so every device reads them
+    alike; the texts are in all eight languages.
+- **66.** **Planned for 0.7 (the owner, 2026-11-09).** Sending to one device ("Share → the
+    laptop"): the copy is sealed for the chosen device alone and written only to its
+    clipboard; the other devices of the group never get it.
+- **67.** **Later, not planned (the owner, 2026-11-09).** Several people in one group, each with
+    a clipboard of their own inside it. Today a group is the devices of one person, and two
+    people make two groups ([how it works](guide/how-it-works.md#the-group)). The records
+    allow adding it without breaking groups: new fields and record types come only with a
+    new `v`, which older devices keep, pass on and ask to be updated for
+    ([protocol.md](protocol.md), section 10, "Records of a later version").
+- **68.** **Before 1.0 (the owner, 2026-11-09).** Fewer choices in the apps:
+    - key levels and attestation (item 31): one sensible default, the rest deep in the
+      advanced settings;
+    - away from home, one switch for the user; the hub, the forwarder, the relay and the
+      ways through blocking networks are chosen by themselves, by hand only in the advanced
+      settings;
+    - freezing and removing an admin, as far as possible one clear action;
+    - the ZX Spectrum Next, the ESP32, the TV remotes and the Bluetooth keyboards are shown
+      as experiments, not as what 1.0 promises.
 
 ## Devices that are hard to type into
 
