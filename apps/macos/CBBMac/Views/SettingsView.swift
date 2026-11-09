@@ -56,11 +56,16 @@ struct SettingsView: View {
                         .labelsHidden()
                         .fixedSize()
                     Spacer()
+                    // The globe beside the menu rather than as its label: a
+                    // labelled picker sized to fit takes the form's label
+                    // column too, which widened every row past the sheet.
+                    Image(systemName: "globe").foregroundStyle(palette.textDim).accessibilityHidden(true)
                     Picker(selection: Binding(get: { language }, set: { language = $0; AppLanguage.choose($0) })) {
                         Text("System language").tag("")
                         ForEach(AppLanguage.available, id: \.self) { l in Text(verbatim: AppLanguage.name(l)).tag(l) }
-                    } label: { Image(systemName: "globe").accessibilityLabel(Text("Language")) }
-                        .fixedSize()
+                    } label: { Text("Language") }
+                        .labelsHidden()
+                        .frame(maxWidth: 200)
                         .help(Text("Language"))
                 }
                 HStack(spacing: Tokens.spacingSmall) {
@@ -115,16 +120,13 @@ struct SettingsView: View {
                 // The whole row takes the clicks, so that a short version
                 // is as easy to hit as a long one.
                 // A build's version is long (a pseudo-version and the
-                // system), and a row of the grouped form takes its text's
-                // whole width, which widened every row past the sheet: one
-                // line in a width of its own, cut in the middle, the whole
-                // of it on hover.
+                // system): one line, cut in the middle, the whole of it on
+                // hover.
                 LabeledContent {
                     let version = model.status?.version ?? "–"
                     Text(verbatim: version).monospaced()
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .frame(width: Self.width / 2, alignment: .trailing)
                         .help(Text(verbatim: version))
                 } label: { Text("Version") }
                     .contentShape(Rectangle())

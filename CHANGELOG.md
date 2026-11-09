@@ -1952,9 +1952,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
-- The Mac app's Settings fit their width: a build's long version widened every row and cut
-  the rows' ends off on both sides; it is now one line cut in the middle, whole on hover.
-  The tray app's version wraps instead of reaching past its dialog.
+- The Mac app's Settings fit their width: the language menu, sized to fit with its label,
+  widened every row to some 600 points in a 460-point window and cut the rows' ends off on
+  both sides. A build's long version is one line cut in the middle, whole on hover; the tray
+  app's wraps instead of reaching past its dialog.
 - The lite member fetches a copy's images or files once when two requests want them at the
   same time (`cbb paste -o` while the copy is fetched in the background); the second waited on
   chunks the first had taken and could fail.

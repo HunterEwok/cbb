@@ -203,9 +203,10 @@ final class CBBMacTests: XCTestCase {
         defaults.removePersistentDomain(forName: "cbb-mac-arrange-test")
     }
 
-    /// Settings fit their sheet: no row, not even a build's long version,
-    /// reaches past its edges (the version once widened every row and cut
-    /// the rows' ends off). Laid out in a window that is never shown.
+    /// Settings fit their sheet: no row reaches past its edges (the language
+    /// menu, sized to fit with its label, once widened every row to 608
+    /// points and cut the rows' ends off). Laid out with a build's long
+    /// version in a window that is never shown.
     @MainActor
     func testSettingsFit() throws {
         let model = MacModel(defaults: try XCTUnwrap(UserDefaults(suiteName: "cbb-mac-settings-test")))
@@ -213,6 +214,7 @@ final class CBBMacTests: XCTestCase {
         model.show(status: Control.Status(device: "me", group: "g1", role: "member", version: version), devices: [])
         let host = NSHostingView(rootView: SettingsView().environmentObject(model).modifier(Themed()))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 900), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         window.contentView = host
         host.frame = NSRect(origin: .zero, size: host.fittingSize)
         host.layoutSubtreeIfNeeded()
@@ -231,6 +233,7 @@ final class CBBMacTests: XCTestCase {
             checked += 1
         }
         XCTAssertGreaterThan(checked, 3, "Settings laid out no views")
+        window.contentView = nil
         window.close()
     }
 }
