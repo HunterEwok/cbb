@@ -1371,8 +1371,14 @@ pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) ->
     }
     if b.down.is_empty() && !s.may_recv() && !s.can_recv() && s.state() != tcp::State::SynSent {
         let _ = b.local.shutdown(Shutdown::Write);
-        if !s.is_open() || b.local_eof {
+        // Both sides are done: close, and drop the bridge once smoltcp has
+        // sent the FIN. Aborting here would take the socket away before
+        // its reset went out, and the far end would hold the connection
+        // until its timeout.
+        if !s.is_open() || matches!(s.state(), tcp::State::TimeWait) {
             b.done = true;
+        } else if b.local_eof {
+            s.close();
         }
     }
     if b.done {

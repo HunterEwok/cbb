@@ -53,6 +53,8 @@ mod leave;
 mod logfile;
 mod media_cli;
 mod mute;
+#[cfg(all(test, feature = "tunnel"))]
+mod nettest;
 pub mod networks;
 mod next;
 mod nextimage;
