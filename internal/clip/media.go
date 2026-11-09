@@ -344,21 +344,6 @@ func fixName(name string) string {
 	return name
 }
 
-// key identifies a manifest's content for the engine's echo checks: the
-// parts' types or paths and hashes, so that the same content copied again
-// is the same.
-func (m *Manifest) key() string {
-	var b strings.Builder
-	b.WriteString("media\x00")
-	for _, p := range m.Parts {
-		b.WriteString(p.Type)
-		b.WriteString(p.Path)
-		b.WriteByte(0)
-		b.Write(p.SHA256)
-	}
-	return b.String()
-}
-
 // withUnderscore puts "_" after a name's base, the part before its first
 // dot: CON.txt becomes CON_.txt, as Windows reserves the base with any
 // extension.

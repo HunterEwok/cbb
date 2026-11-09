@@ -214,14 +214,17 @@ vm)
 		pgrep -f "cbb service" >/dev/null
 		echo "vm: it waited for NTP and started after it"
 
-		# UCI: the memory limit reaches the service as GOMEMLIMIT after a
-		# reload; procd starts a killed service again.
-		svcpid() { pgrep -f "cbb service" | head -n1; }
-		tr "\0" "\n" </proc/$(svcpid)/environ | grep -qx GOMEMLIMIT=64MiB
-		uci set cbb.main.memlimit=48MiB && uci commit cbb
-		/etc/init.d/cbb reload
-		for i in $(seq 20); do p=$(svcpid); [ -n "$p" ] && tr "\0" "\n" </proc/$p/environ | grep -qx GOMEMLIMIT=48MiB && break; sleep 1; done
-		tr "\0" "\n" </proc/$(svcpid)/environ | grep -qx GOMEMLIMIT=48MiB
+		# UCI: the port reaches the service as CBB_PORT after a reload, and
+		# back; procd starts a killed service again.
+		svcpid() { pgrep -x -f "/usr/bin/cbb service.*" | head -n1; }
+		hasenv() { p=$(svcpid); [ -n "$p" ] && tr "\0" "\n" </proc/$p/environ | grep -qx "$1"; }
+		hasenv CBB_PORT=9000
+		for port in 9001 9000; do
+			uci set cbb.main.port=$port && uci commit cbb
+			/etc/init.d/cbb reload
+			for i in $(seq 20); do hasenv CBB_PORT=$port && break; sleep 1; done
+			hasenv CBB_PORT=$port
+		done
 		old=$(svcpid)
 		kill -9 "$old"
 		for i in $(seq 30); do p=$(svcpid); [ -n "$p" ] && [ "$p" != "$old" ] && break; sleep 1; done

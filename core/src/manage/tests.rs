@@ -379,3 +379,35 @@ fn the_root_ends_two_histories_from_the_card() {
     apply(&mut g.rs, &root, "", &Change::Resolve(records), now_ms()).unwrap();
     assert!(alerts(&g.rs).iter().all(|a| a.kind != "two_histories"), "{:?}", alerts(&g.rs));
 }
+
+/// A member counts as an admin through its chain only with an admin CA that
+/// issued its certificate and that a root of the group certified, not with
+/// a CA named after it from another root (Go's TestAdminPeerNeedsARealAdminCA).
+#[test]
+fn an_admin_peer_needs_a_real_admin_ca() {
+    let g = group();
+    let now = now_ms() / 1000;
+    let dev = DeviceId::parse(&g.admin_phone).unwrap();
+    let member_key = soft();
+    // A CA the member made itself under a root of its own, named as its
+    // admin CA would be.
+    let own = soft();
+    let own_root =
+        Cert::parse(&issue::root_ca(&own.public(), now, &mut |b| identity::sign_external(&*own, b)).unwrap()).unwrap();
+    let fake_key = soft();
+    let fake = Cert::parse(
+        &issue::admin_ca(&dev, &fake_key.public(), &own_root, now, &mut |b| identity::sign_external(&*own, b)).unwrap(),
+    )
+    .unwrap();
+    let leaf = |ca: &Cert, key: &dyn ExternalKey| {
+        Cert::parse(
+            &issue::member(&dev, &member_key.public(), ca, now, &mut |b| identity::sign_external(key, b)).unwrap(),
+        )
+        .unwrap()
+    };
+    assert!(!g.rs.admin_peer(dev.as_str(), &[leaf(&fake, &*fake_key), fake.clone()]));
+    // The real admin CA, but a leaf it did not issue.
+    assert!(!g.rs.admin_peer(dev.as_str(), &[leaf(&fake, &*fake_key), g.admin_ca.clone()]));
+    // The real thing: the admin CA from the root, which issued the leaf.
+    assert!(g.rs.admin_peer(dev.as_str(), &[leaf(&g.admin_ca, &*g.admin_key), g.admin_ca.clone()]));
+}

@@ -169,6 +169,12 @@ else
 	if [ -f "$(dirname "$bin")/cbb-helper" ]; then
 		install -m 0755 "$(dirname "$bin")/cbb-helper" /usr/local/bin/cbb-helper
 	fi
+	# The servers, which cbb forward and cbb relay run.
+	for server in cbb-forward cbb-relay; do
+		if [ -f "$(dirname "$bin")/$server" ]; then
+			install -m 0755 "$(dirname "$bin")/$server" "/usr/local/bin/$server"
+		fi
+	done
 fi
 # The socket's directory: members of the group may reach the socket, and
 # only the service its state.

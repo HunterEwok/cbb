@@ -36,6 +36,41 @@ fn records(v: &Value) -> Vec<Record> {
     serde_json::from_value(v.clone()).unwrap()
 }
 
+/// The frames the phone app's CBBKit writes as a member
+/// (swift-member.json, from its tests), decoded as a member does: the
+/// phone's hello, whose current copy is a secret's mark, sealed copies, and
+/// pings or a goodbye.
+#[test]
+fn swift_member_frames() {
+    let frames: Vec<String> = serde_json::from_value(vectors("swift-member.json")).unwrap();
+    assert!(frames.len() >= 3, "{} frames, want a hello, an event and a ping at least", frames.len());
+    for (i, f) in frames.iter().enumerate() {
+        let raw = STANDARD.decode(f).unwrap();
+        let (len, body) = raw.split_at(4);
+        assert_eq!(u32::from_be_bytes(len.try_into().unwrap()) as usize, body.len(), "frame {i}'s length");
+        let m: Message = serde_json::from_slice(body).unwrap();
+        match m.kind.as_str() {
+            "hello" => {
+                assert_eq!((i, m.role.as_str()), (0, "phone"), "frame {i}: a hello other than the phone's first");
+                let (h, body) = wire::decode_hello(m.hello.as_ref()).unwrap();
+                assert_eq!(body.name, "iPhone");
+                // The phone's current copy is a secret, which a hello
+                // carries only as its mark.
+                let s = h.current.and_then(|c| c.sealed).expect("the hello carries the current copy");
+                s.validate().unwrap();
+                assert!(s.is_mark(), "the hello carries a secret's payload");
+            }
+            "event" => {
+                let s: crate::copy::Sealed = serde_json::from_value(m.event.clone().unwrap()).unwrap();
+                s.validate().unwrap();
+                assert!(!s.is_mark(), "frame {i}: an event that is a mark");
+            }
+            "ping" | "bye" => {}
+            t => panic!("frame {i}: unexpected type {t:?}"),
+        }
+    }
+}
+
 /// The member protocol's frames, timestamps, events and their order
 /// (member.json).
 #[test]
@@ -886,8 +921,6 @@ fn strict_wrong(v: &Value) -> Vec<String> {
 
 /// The server credentials and release files of strict-files.json, which
 /// Go's TestStrictGeneratedFiles writes from the tables of docs/protocol.md.
-/// The lite member reads no attest-status.json, the only kind it leaves to
-/// the others.
 #[test]
 fn strict_files() {
     let v = vectors("strict-files.json");
@@ -904,11 +937,11 @@ fn strict_files() {
             let kind = c["kind"].as_str().unwrap();
             let got = match (section, kind) {
                 ("credentials", _) => crate::credential::Body::parse(&body).map(|_| ()).map_err(|e| e.to_string()),
-                (_, "attest-status") => continue,
                 _ if body.len() > crate::release::MAX_BODY => Err("too large".to_string()),
                 (_, "keys") => crate::release::decode_keys(&body).map(|_| ()).map_err(|e| e.to_string()),
                 (_, "release") => crate::release::decode_release(&body).map(|_| ()).map_err(|e| e.to_string()),
                 (_, "channel") => crate::release::decode_channel(&body).map(|_| ()).map_err(|e| e.to_string()),
+                (_, "attest-status") => crate::release::decode_status(&body).map(|_| ()).map_err(|e| e.to_string()),
                 _ => panic!("unknown kind {kind}"),
             };
             if got.is_ok() != c["valid"].as_bool().unwrap() {
@@ -956,6 +989,15 @@ fn media_names() {
         if valid {
             assert_eq!(crate::media::save_name(name), c["save"].as_str().unwrap(), "{name:?}");
         }
+        assert_eq!(crate::media::clean_name(name), c["clean"].as_str().unwrap(), "{name:?}");
+    }
+    // The same as Go's TestCleanName and the kits' tests.
+    for (given, want) in [
+        ("x".repeat(300), "x".repeat(255)),
+        (format!("CON.{}.x", "a".repeat(249)), format!("CON_.{}", "a".repeat(249))),
+        (format!("{}.", "a".repeat(254)), "a".repeat(254)),
+    ] {
+        assert_eq!(crate::media::clean_name(&given), want, "{given:?}");
     }
 }
 

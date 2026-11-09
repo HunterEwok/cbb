@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// A port of internal/third_party/cpace/field.go, Copyright 2026 The Go
-// Authors, under the BSD-style license in internal/third_party/cpace/LICENSE.
+// A port of internal/cpace/ of rsc.io/cmd/mote v0.1.3, file field.go, Copyright 2026 The Go
+// Authors, under the BSD-style license in core/src/third_party/cpace/LICENSE.
 
 package tools.cbb.kit
 

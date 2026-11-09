@@ -427,3 +427,71 @@ pub fn run_as(name: &str) -> Result<()> {
 pub fn run_as(_name: &str) -> Result<()> {
     Err(crate::error::Error::msg("-user is for FreeBSD and Linux"))
 }
+
+/// Turns the terminal's echo off while it lives, so that what the user
+/// types next, such as a key or a PIN, stays off the screen; it does
+/// nothing where standard input is no terminal.
+pub struct NoEcho {
+    #[cfg(unix)]
+    saved: Option<libc::termios>,
+    #[cfg(windows)]
+    saved: Option<(windows_sys::Win32::Foundation::HANDLE, u32)>,
+}
+
+impl NoEcho {
+    pub fn new() -> NoEcho {
+        #[cfg(unix)]
+        {
+            // SAFETY: tcgetattr and tcsetattr on standard input, with a
+            // termios this function owns.
+            let saved = unsafe {
+                let mut t: libc::termios = std::mem::zeroed();
+                (libc::tcgetattr(0, &mut t) == 0).then(|| {
+                    let mut quiet = t;
+                    quiet.c_lflag &= !libc::ECHO;
+                    quiet.c_lflag |= libc::ECHONL;
+                    libc::tcsetattr(0, libc::TCSANOW, &quiet);
+                    t
+                })
+            };
+            NoEcho { saved }
+        }
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::System::Console::{
+                ENABLE_ECHO_INPUT, GetConsoleMode, GetStdHandle, STD_INPUT_HANDLE, SetConsoleMode,
+            };
+            // SAFETY: the console mode of standard input, read and set.
+            let saved = unsafe {
+                let h = GetStdHandle(STD_INPUT_HANDLE);
+                let mut mode = 0;
+                (GetConsoleMode(h, &mut mode) != 0).then(|| {
+                    SetConsoleMode(h, mode & !ENABLE_ECHO_INPUT);
+                    (h, mode)
+                })
+            };
+            NoEcho { saved }
+        }
+    }
+}
+
+impl Default for NoEcho {
+    fn default() -> NoEcho {
+        NoEcho::new()
+    }
+}
+
+impl Drop for NoEcho {
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        if let Some(t) = self.saved {
+            // SAFETY: puts back the termios that new read.
+            unsafe { libc::tcsetattr(0, libc::TCSANOW, &t) };
+        }
+        #[cfg(windows)]
+        if let Some((h, mode)) = self.saved {
+            // SAFETY: puts back the console mode that new read.
+            unsafe { windows_sys::Win32::System::Console::SetConsoleMode(h, mode) };
+        }
+    }
+}
