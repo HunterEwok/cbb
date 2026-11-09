@@ -574,15 +574,17 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     allow adding it without breaking groups: new fields and record types come only with a
     new `v`, which older devices keep, pass on and ask to be updated for
     ([protocol.md](protocol.md), section 10, "Records of a later version").
-- **68.** **Before 1.0 (the owner, 2026-11-09).** Fewer choices in the apps:
+- **68.** **Planned for 0.6 (the owner, 2026-11-09).** Fewer choices in the apps:
     - key levels and attestation (item 31): one sensible default, the rest deep in the
       advanced settings;
     - away from home, one switch for the user; the hub, the forwarder, the relay and the
       ways through blocking networks are chosen by themselves, by hand only in the advanced
       settings;
-    - freezing and removing an admin, as far as possible one clear action;
     - the ZX Spectrum Next, the ESP32, the TV remotes and the Bluetooth keyboards are shown
-      as experiments, not as what 1.0 promises.
+      as "the lab" in the README, on the site and in the docs: experiments, not what 1.0
+      promises.
+
+    Freezing and removing an admin stay two separate actions.
 
 ## Devices that are hard to type into
 
