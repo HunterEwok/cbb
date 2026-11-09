@@ -94,6 +94,32 @@ public enum Core {
         try run(op, Optional<None>.none, as: R.self)
     }
 
+    /// Decodes an answer that should be a refusal, as the panics' answers
+    /// are (docs/core-api.md, "Panics").
+    private static func refusal(_ answer: UnsafeMutablePointer<UInt8>, _ count: Int) throws -> Refusal {
+        defer { cbb_free(answer, count) }
+        let a = try JSONDecoder().decode(Answer<None>.self, from: Data(bytes: answer, count: count))
+        guard let e = a.error else { throw Mismatch(reason: "a panic's answer has no error") }
+        return e
+    }
+
+    /// Makes the core's library panic on purpose and returns the refusal it
+    /// answers, code 5 `panic`: the tests check that a panic is an answer
+    /// and the app goes on.
+    public static func testPanic() throws -> Refusal {
+        var count = 0
+        guard let answer = cbb_test_panic(&count) else { throw Mismatch(reason: "the core gave no answer") }
+        return try refusal(answer, count)
+    }
+
+    /// The refusal of the last panic the core's library caught, for a call
+    /// that could answer only nil; nil when nothing panicked.
+    public static func lastPanic() -> Refusal? {
+        var count = 0
+        guard let answer = cbb_last_panic(&count) else { return nil }
+        return try? refusal(answer, count)
+    }
+
     /// The linked core's version, ABI and the commit it was built from.
     public static func version() throws -> Version { try run("version") }
 

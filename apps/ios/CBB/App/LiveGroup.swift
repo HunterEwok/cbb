@@ -1777,6 +1777,10 @@ final class LiveGroup: GroupController {
             modeLog.notice("\(by, privacy: .public) \(muted ? "muted" : "unmuted", privacy: .public) this phone")
         case let .log(line):
             syncLog.notice("\(line, privacy: .public)")
+        case let .panic(details):
+            // A member that broke stops and starts again.
+            syncLog.error("the member broke, starting it again: \(details, privacy: .public)")
+            Task { await restartSync() }
         case .identity:
             // The core kept the certificate an admin renewed for this phone;
             // the app renews its own (renewOwnCertificate) and keeps that.

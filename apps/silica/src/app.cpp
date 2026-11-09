@@ -190,6 +190,15 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
     });
     m_claimTimer.setInterval(claimEveryMs);
     connect(&m_claimTimer, &QTimer::timeout, this, &App::finishTakeover);
+    // A member that broke stops and starts again; the user sees what
+    // broke, the details only in debug mode (Errors::showDetails).
+    connect(&m_node, &Member::panicked, this, [this](const QString &details) {
+        show(Errors::shown({QCoreApplication::translate("Errors", "Something in CBB broke. It starts again."), details}));
+        QTimer::singleShot(0, this, [this]() {
+            m_node.stop();
+            startMember();
+        });
+    });
     connect(&m_join, &Join::joined, this, [this](const Membership &m) {
         m_member = m;
         emit groupChanged();

@@ -86,6 +86,10 @@
         <translation>Эта сборка CBB повреждена.</translation>
     </message>
     <message>
+        <source>Something in CBB broke. It starts again.</source>
+        <translation>Что-то в CBB сломалось. Запускаем заново.</translation>
+    </message>
+    <message>
         <source>This phone has no secure element for keys.</source>
         <translation>В этом телефоне нет защищённого элемента для ключей.</translation>
     </message>

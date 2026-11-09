@@ -213,6 +213,10 @@ public final class CoreMember: @unchecked Sendable {
         /// admin lifts it), or ended its mute (muted false): the member
         /// carried the command out and keeps it.
         case mute(muted: Bool, forMS: Int64, by: String)
+        /// Something in the member broke (docs/core-api.md, "Panics"):
+        /// details say what and where. The app logs it, shows it and
+        /// starts the member again.
+        case panic(details: String)
     }
 
     /// A part of images or files the app hands in: clipboard data with its
@@ -784,6 +788,7 @@ public final class CoreMember: @unchecked Sendable {
         var muted: Bool?
         var for_ms: Int64?
         var by: String?
+        var details: String?
     }
 
     struct WireMessage: Decodable {
@@ -818,6 +823,7 @@ public final class CoreMember: @unchecked Sendable {
         case "mute":
             guard let muted = w.muted else { return nil }
             return .mute(muted: muted, forMS: w.for_ms ?? 0, by: w.by ?? "")
+        case "panic": return .panic(details: w.details ?? "")
         case "caller":
             guard let token = w.token, let port = w.port, let device = w.device else { return nil }
             return .caller(token: token, port: port, device: device)
