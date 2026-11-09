@@ -1,4 +1,5 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only. Drawn by tools/diagrams/diagrams.py; edit it there. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="420" viewBox="0 0 1000 420" role="img" aria-label="The system context: a group of devices, the user, the systems&#x27; clipboards, an optional forwarder or relay, and the release mirror">
 <title>The system context: a group of devices, the user, the systems&#x27; clipboards, an optional forwarder or relay, and the release mirror</title>
 <style>

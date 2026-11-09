@@ -1,0 +1,43 @@
+# The spelling check of the English text (typos, CI's check job). The
+# translations, test data and lock files are not English prose.
+[files]
+extend-exclude = [
+  "*.xcstrings",
+  "**/res/values-*/strings.xml",
+  "**/l10n/*.json",
+  "apps/silica/translations/*.ts",
+  "fastlane/metadata/android/*/",
+  "site/docs/*/",
+  "testdata/",
+  "go.sum",
+  "Cargo.lock",
+  "apps/android/gradlew",
+  "**/third_party/",
+]
+
+# Words that are right where they stand: names in the code, registers of the
+# Z80, Qt's and other libraries' names, and test inputs.
+[default.extend-words]
+nd = "nd"
+pn = "pn"
+wel = "wel"
+ba = "ba"
+iy = "iy"
+iz = "iz"
+parms = "parms"
+fo = "fo"
+caf = "caf"
+froms = "froms"
+encrypter = "encrypter"
+udid = "udid"
+heade = "heade"
+builded = "builded"
+nformation = "nformation"
+hel = "hel"
+alikes = "alikes"
+eis = "eis"
+invokable = "invokable"
+gost = "gost"
+iif = "iif"
+entrys = "entrys"
+

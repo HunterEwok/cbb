@@ -376,7 +376,7 @@ pub struct NewAdmin {
 }
 
 /// Makes device an admin, as the group's root (docs/protocol.md, section
-/// 10, "Making a device an admin"): a phone, which joined as a member, or
+/// 10, "Admins"): a phone, which joined as a member, or
 /// a member with the cap admin. admin_key is the SubjectPublicKeyInfo its
 /// hello offered and key_store where its hello says its keys live; a
 /// computer that keeps them in a file becomes one only when the group's

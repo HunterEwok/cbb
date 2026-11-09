@@ -289,10 +289,10 @@ class PhoneGroupTest {
     }
 
     /**
-     * A phone joins as a member, and the root makes it an admin later with
-     * the admin key its hello offers (protocol.md, section 10, "Making a
-     * device an admin"); the phone takes the admin CA only for its own key
-     * and device, from the current root.
+     * A phone joins as a member, and the root makes it an admin later with the
+     * admin key its hello offers (protocol.md, section 10, "Admins"); the phone
+     * takes the admin CA only for its own key and device, from the current
+     * root.
      */
     @Test
     fun makePhoneAdmin() {

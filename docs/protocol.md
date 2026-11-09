@@ -23,6 +23,29 @@ meaning for an old one; the registries (section 19) list every name in use. Wher
 code and this document differ, the Go code is the source of truth and the difference is a
 bug in one of them; a "Note:" line marks a known difference.
 
+### Contents
+
+- [1. Identifiers, names and ports](#1-identifiers-names-and-ports)
+- [2. Certificates](#2-certificates)
+- [3. Discovery (mDNS)](#3-discovery-mdns)
+- [4. Member protocol](#4-member-protocol)
+- [5. Sync semantics](#5-sync-semantics)
+- [6. Pairing a computer](#6-pairing-a-computer)
+- [7. The join QR code](#7-the-join-qr-code)
+- [8. Local control socket](#8-local-control-socket)
+- [9. The phone as the root](#9-the-phone-as-the-root)
+- [10. Admin CAs, device records and revocation](#10-admin-cas-device-records-and-revocation)
+- [11. Tunnel keys](#11-tunnel-keys)
+- [12. Remote invitations](#12-remote-invitations)
+- [13. The forwarder](#13-the-forwarder)
+- [14. The blind relay](#14-the-blind-relay)
+- [15. Commands](#15-commands)
+- [16. Signed releases](#16-signed-releases)
+- [17. Key stores](#17-key-stores)
+- [18. Server credentials](#18-server-credentials)
+- [19. Registries](#19-registries)
+- [20. Security considerations](#20-security-considerations)
+
 ### Conventions
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
@@ -107,7 +130,7 @@ these words depends on it.
   checkpoint, section 10; `size/commands`, section 15; `size/releases`, 256 KiB, section 16;
   `size/credentials`, 16 KiB, section 18) before anything else; then these rules, and for a
   record its canonical form (it encodes the value it parsed and compares bytes); then each
-  field against its row in the tables of its kind ("Field rows" in section 10, "The command"
+  field against its row in the tables of its kind ("Field rows" in section 10 and "The command"
   in section 15); then the group, the signature and the rules of evaluation. A body that
   fails a step is refused there, so a member never verifies a signature over a body it
   cannot read alike, and never evaluates a record whose fields another member reads
@@ -1062,7 +1085,8 @@ signs what"). The user chooses that the window makes an admin, never the joiner:
 window (a plain `cbb pair`, an invitation) refuses a joiner that offers `admin_key` after the key
 confirmation, with `{"error": "refused"}`, and so does an admin computer that is not the root. A
 phone that offers no admin key joins any admin's window as a member: the admin signs its
-`device` record with role `phone` and no `admin`. A phone that listens and shows its QR code
+`device` record with role `phone` and no `admin`, since a role gives no rights and only an
+admin key does (D-90). A phone that listens and shows its QR code
 ("The joiner listens" below) offers none: the apps have one button to join, and the root makes
 the phone an admin later with the admin key its hellos offer (section 10, "Admins"). A joiner
 that does offer one is admitted as an admin only by the root with `cbb pair -qr -admin`. Before it certifies an

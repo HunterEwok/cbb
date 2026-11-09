@@ -444,8 +444,7 @@ final class LiveGroup: GroupController {
     }
 
     /// The admin key a member phone's hellos offer, for the root's "Make it
-    /// an admin" (docs/protocol.md, section 10, "Making a device an
-    /// admin"); none on the root and on an admin.
+    /// an admin" (docs/protocol.md, section 10, "Admins"); none on the root and on an admin.
     private func offeredAdminKey(_ g: PhoneGroup) -> Data? {
         guard !g.isAdmin else { return nil }
         do {
@@ -1236,7 +1235,7 @@ final class LiveGroup: GroupController {
     }
 
     /// Makes a phone or a computer an admin (docs/protocol.md, section 10,
-    /// "Making a device an admin"): the root key, after Face ID, certifies
+    /// "Admins"): the root key, after Face ID, certifies
     /// the admin key the device offers; the device gets its admin CA and
     /// every member the new record.
     func makeAdmin(_ id: String) async throws {

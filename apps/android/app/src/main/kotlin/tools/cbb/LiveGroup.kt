@@ -1768,7 +1768,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /**
      * Makes a phone or a computer an admin (docs/protocol.md, section 10,
-     * "Making a device an admin"): the root key certifies the admin key the
+     * "Admins"): the root key certifies the admin key the
      * device offers; the device gets its admin CA and every member the new
      * record. A computer whose keys sit in a file becomes one only with
      * allowFileKey, after the user read the warning; else
@@ -1805,7 +1805,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /**
      * The admin key a member phone's hellos offer, for the root's "Make it
-     * an admin" (docs/protocol.md, section 10, "Making a device an admin"),
+     * an admin" (docs/protocol.md, section 10, "Admins"),
      * made now behind the screen lock if it has none: making it asks
      * nothing, only a signature does. None on the root, on an admin, and on
      * a TV, which has no fingerprint or face to guard it.

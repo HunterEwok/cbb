@@ -313,7 +313,7 @@
   "checking a download": "בדיקת הורדה",
   "conventions, building and testing every part": "מוסכמות, בנייה ובדיקה של כל חלק",
   "every `cbb` command, on a full and on the lite member, with every flag": "כל פקודת `cbb`, בחבר מלא ובחבר קל, עם כל דגל",
-  "every architecture decision, D-1 to D-78, with its status": "כל החלטת ארכיטקטורה, מ-D-1 עד D-78, עם מצבה",
+  "the architecture decisions in force, and the replaced ones as their history": "החלטות הארכיטקטורה התקפות, וההחלטות שהוחלפו כהיסטוריה שלהן",
   "every bench case of 0.6 in one line, with how it runs and what it still needs": "כל מקרה בדיקה של 0.6 בשורה אחת, עם איך הוא רץ ומה עוד חסר לו",
   "every function of the product with the cases that check it, for the coverage report": "כל פונקציה של המוצר עם המקרים שבודקים אותה, לדוח הכיסוי",
   "every primitive, library, key, its size, lifetime and where it is kept": "כל פרימיטיב, ספרייה ומפתח: גודלו, תוקפו והיכן הוא נשמר",

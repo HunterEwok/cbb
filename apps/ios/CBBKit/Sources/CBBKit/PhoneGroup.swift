@@ -17,7 +17,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// names it for good.
     public var groupCA: Data
     /// The roots that took the group over from groupCA, in order, DER; the
-    /// last is the current root (docs/protocol.md, section 10, "Roots").
+    /// last is the current root (docs/protocol.md, section 10, "Handing the group over").
     public var roots: [Data] = []
     /// This phone's member certificate, DER, from one of the roots or from
     /// memberIssuer.
@@ -36,7 +36,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     public var records = RecordSet()
     /// The admin CAs this phone, as the root, issued to computers, DER, by
     /// device ID: sent again to a computer that offers the same admin key
-    /// (section 10, "A computer as admin").
+    /// (section 10, "Admins").
     public var computerAdmins: [String: Data] = [:]
     /// The new root of this admin's claim to take the group over, DER,
     /// while the claim waits (docs/protocol.md, section 10, "Handing the group
@@ -629,17 +629,16 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         return try sign(b, caSigner: caSigner)
     }
 
-    /// Makes a phone or a computer an admin (section 10, "Making a device
-    /// an admin"): the root issues an admin CA for the admin key the
-    /// device's hello offered (a SubjectPublicKeyInfo) and signs its device
-    /// record again, naming that CA. It returns the admin CA, for the admin
-    /// message, and the record to send. Only the root makes admins. A
-    /// phone joined as a member and keeps its store; for a computer,
-    /// keyStore is where its hello says its keys live; one that keeps them
-    /// in a file becomes an admin only with allowFileKey, else
-    /// Failure.fileKey, and a rootless install never (Failure.rootless). A
-    /// key the group already names for another device or a root is
-    /// refused (Failure.keyTaken).
+    /// Makes a phone or a computer an admin (section 10, "Admins"): the root
+    /// issues an admin CA for the admin key the device's hello offered (a
+    /// SubjectPublicKeyInfo) and signs its device record again, naming that CA.
+    /// It returns the admin CA, for the admin message, and the record to send.
+    /// Only the root makes admins. A phone joined as a member and keeps its
+    /// store; for a computer, keyStore is where its hello says its keys live;
+    /// one that keeps them in a file becomes an admin only with allowFileKey,
+    /// else Failure.fileKey, and a rootless install never (Failure.rootless). A
+    /// key the group already names for another device or a root is refused
+    /// (Failure.keyTaken).
     public mutating func makeAdmin(device: String, adminKey: Data, rootSigner: CertificateSigner, now: Date,
                                    keyStore: String? = nil, allowFileKey: Bool = false) throws -> (adminCA: Data, record: Member.Record) {
         guard isRoot else { throw Failure.notRoot }
@@ -666,12 +665,11 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         return (ca, r)
     }
 
-    /// Takes the admin CA the root sent in the admin message when it made
-    /// this member phone an admin (section 10, "Making a device an
-    /// admin"): it must name this phone, certify adminKey (the
-    /// SubjectPublicKeyInfo its hellos offered) and come from the group's
-    /// current root, else Failure.notThisAdminCA. The phone is an admin
-    /// from then on.
+    /// Takes the admin CA the root sent in the admin message when it made this
+    /// member phone an admin (section 10, "Admins"): it must name this phone,
+    /// certify adminKey (the SubjectPublicKeyInfo its hellos offered) and come
+    /// from the group's current root, else Failure.notThisAdminCA. The phone is
+    /// an admin from then on.
     public mutating func takeAdminCA(_ ca: Data, adminKey: Data) throws {
         guard !isRoot, adminCA == nil else { throw Failure.alreadyAdmin }
         guard let info = try? CertificateInfo(der: ca), info.publicKey == adminKey, info.commonName == "cbb admin " + device,
