@@ -52,6 +52,10 @@ pub struct Config {
     /// Where the phone's key lives, as its hello says: `hardware` (a TEE)
     /// or `file`.
     pub key_store: String,
+    /// The SubjectPublicKeyInfo of the phone's admin key, which its hellos
+    /// offer while it is no admin, for the root's "Make it an admin"
+    /// (docs/protocol.md, section 10); empty for none.
+    pub admin_key: Vec<u8>,
     /// Where the records, the clock's mark and the entries are kept.
     pub state_dir: PathBuf,
     /// Members to dial at these addresses besides those mDNS finds.
@@ -186,6 +190,7 @@ impl Member {
             log(&format!("cbb: sync on or off: {}; sync is on", e.for_log()));
         }
         let state_dir = cfg.state_dir.clone();
+        let admin_key = cfg.admin_key;
         let node = Node::new(ident, &cfg.name, engine.clone(), records, cfg.state_dir, cfg.on_write, log.clone())
             .presenting(Presence {
                 role: "phone".into(),
@@ -194,7 +199,7 @@ impl Member {
                 os: cfg.os,
                 key_store: cfg.key_store,
                 device,
-                admin_key: Default::default(),
+                admin_key: Arc::new(RwLock::new((!admin_key.is_empty()).then_some(admin_key))),
             })
             .keeping_identity(cfg.keep_identity)
             .with_content();
@@ -501,7 +506,13 @@ impl Member {
         self.node.send_to(to, wire::cert(cert, issuer))
     }
 
-    /// Sends a full member the admin CA for the admin key its hello offered.
+    /// Sets the admin key the hellos offer from the next connection on:
+    /// the phone's while it is no admin, None once it is one.
+    pub fn offer_admin_key(&self, spki: Option<Vec<u8>>) {
+        self.node.offer_admin_key(spki.filter(|k| !k.is_empty()));
+    }
+
+    /// Sends a member the admin CA for the admin key its hello offered.
     pub fn send_admin_ca(&self, to: &DeviceId, ca: &[u8]) -> bool {
         self.node.send_to(to, wire::admin(ca))
     }
@@ -708,18 +719,18 @@ impl Member {
         self.node.command(&r, timeout)
     }
 
-    /// Makes the computer device an admin as the group's root: the admin CA
-    /// for the admin key its hello offers, its device record again, added
-    /// and sent, and the admin message with the CA. The computer must be
-    /// connected, since the key comes from its hello.
+    /// Makes device, a phone or a computer, an admin as the group's root:
+    /// the admin CA for the admin key its hello offers, its device record
+    /// again, added and sent, and the admin message with the CA. The device
+    /// must be connected, since the key comes from its hello.
     pub fn make_admin(&self, s: &Signer, device: &str, allow_file_key: bool) -> Result<()> {
         let p = self
             .node
             .peers()
             .into_iter()
             .find(|p| p.id.as_str() == device)
-            .ok_or_else(|| Error::msg("the computer is not connected; it offers its admin key when it is"))?;
-        let key = p.admin_key.ok_or_else(|| Error::msg("the computer offers no admin key"))?;
+            .ok_or_else(|| Error::msg("the device is not connected; it offers its admin key when it is"))?;
+        let key = p.admin_key.ok_or_else(|| Error::msg("the device offers no admin key: it runs an older CBB"))?;
         let records = self.node.records();
         let made = manage::make_admin(
             &records.lock().unwrap(),
@@ -732,10 +743,10 @@ impl Member {
         )?;
         self.node.add_own_records(std::slice::from_ref(&made.record));
         if !records.lock().unwrap().devices().iter().any(|d| d.id == device && d.admin) {
-            return Err(Error::msg("the group's records did not take the computer as an admin; the log says why"));
+            return Err(Error::msg("the group's records did not take the device as an admin; the log says why"));
         }
         if !self.node.send_to(&p.id, wire::admin(&made.admin_ca)) {
-            return Err(Error::msg("the computer is an admin now, but it went away before it got its admin CA"));
+            return Err(Error::msg("the device is an admin now, but it went away before it got its admin CA"));
         }
         Ok(())
     }

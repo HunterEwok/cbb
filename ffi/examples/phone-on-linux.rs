@@ -7,6 +7,9 @@
 //! text after "QR: ", takes connections until one joins, and prints
 //! "Joined <device> <group tag>"; with -admin it offers an admin key too,
 //! and prints "Admin CA <base64>" when the member made it an admin. With
+//! -offer-admin it joins as a member and its member's hellos offer that
+//! key, for the root to make it an admin later: it prints "ADMIN CA
+//! <base64>" when the admin message brings the CA. With
 //! -dir, it then runs the member there,
 //! dialing each -peer: it prints "WRITE <kind> <text>" for each text for
 //! the clipboard, "IDENTITY <certificate in base64>" when an admin renewed
@@ -191,6 +194,12 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
     let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
+    // The key the hellos offer for the root's "Make it an admin", kept
+    // beside what the joiner gave.
+    if !admin && args.iter().any(|a| a == "-offer-admin") {
+        let spki = cbb_core::certs::p256_spki_of(admin_key.verifying_key().to_sec1_point(false).as_bytes());
+        joined["offer_admin_key"] = STANDARD.encode(spki).into();
+    }
     let admin = admin.then_some((&admin_key, admin_public.as_str()));
     run_member(&key, &public_b64, &name, &dir, peers, &joined, admin)
 }
@@ -208,6 +217,9 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
         Some("peer") => println!("PEER {}", v["peer"]),
         Some("command") => println!("COMMAND {} {}", v["token"], v["command"]),
         Some("mute") => println!("MUTE {} {} {}", v["muted"], v["for_ms"], s("by")),
+        Some("message") if v["message"]["t"] == "admin" => {
+            println!("ADMIN CA {}", v["message"]["admin_ca"].as_str().unwrap_or_default())
+        }
         _ => {}
     }
 }
@@ -233,6 +245,7 @@ fn run_member(
         "device": joined["device"], "public": public_b64,
         "seal": STANDARD.encode(SEAL), "cert": joined["cert"], "issuer": joined["issuer"],
         "group_ca": joined["group_ca"], "roots": joined["roots"], "peers": peers, "mdns": false,
+        "admin_key": joined.get("offer_admin_key"),
     })
     .to_string();
     let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);

@@ -23,8 +23,8 @@ import (
 // admins and the operating system"): the root makes a full member an admin
 // by certifying the admin key its hello offers.
 
-// makeAdmin makes the device that target names an admin, on the group's
-// root: it issues the admin CA for the admin key the device's hello
+// makeAdmin makes the device that target names, a phone or a member with
+// the cap admin, an admin, on the group's root: it issues the admin CA for the admin key the device's hello
 // offers, records it in the device's record and sends it. The device must
 // be connected. A device whose keys sit in a
 // file becomes an admin only with allowFileKey, which the user gives after
@@ -42,8 +42,8 @@ func (s *Service) makeAdmin(target string, allowFileKey bool) (string, error) {
 		return "", errors.New("only the group's root makes admins: run cbb admin on the computer that created the group, or use \"Make it an admin\" on the root phone")
 	case d.Self:
 		return "", errors.New("this device is the group's root, which is more than an admin")
-	case !d.Can(group.CapAdmin):
-		return "", fmt.Errorf("%s cannot hold an admin key; only a member with the cap admin can be an admin", d.Name)
+	case d.Role != group.RolePhone && !d.Can(group.CapAdmin):
+		return "", fmt.Errorf("%s cannot hold an admin key; only a phone or a member with the cap admin can be an admin", d.Name)
 	case d.Admin:
 		return "", fmt.Errorf("%s is already an admin", d.Name)
 	}
@@ -62,9 +62,22 @@ func (s *Service) makeAdmin(target string, allowFileKey bool) (string, error) {
 	case peer.AdminKey == nil:
 		return "", fmt.Errorf("%s offers no admin key: it runs an older CBB, or in a container that may not hold the group's keys (its log says so)", d.Name)
 	}
+	// A key another device holds, or a root's, would give its holder a
+	// second device's admin CA.
+	if s.keyTaken(group.KeyHash(sha256.Sum256(peer.AdminKey))) {
+		return "", fmt.Errorf("the admin key that %s offers belongs to another key of the group", d.Name)
+	}
+	phone := d.Role == group.RolePhone
 	store, kind, proof := group.StoreOf(peer.KeyStore, group.RoleMember), "", ""
-	if rec := s.deviceRecord(peer.ID); rec != nil && rec.Key == peer.Key && rec.Store == group.StoreProven {
+	if rec := s.deviceRecord(peer.ID); rec != nil && rec.Key == peer.Key && (rec.Store == group.StoreProven || phone) {
+		// A phone's keys stay where its record says.
 		store, kind, proof = rec.Store, rec.Kind, rec.Proof
+	}
+	// A phone admin has every power, as one admitted as an admin; a
+	// computer's come from computerAdminPowers when signed.
+	var powers, commands []string
+	if phone {
+		powers, commands = slices.Clone(authority.Powers), slices.Clone(authority.Commands)
 	}
 	if err := levelAllows(s.keyLevel(), store, d.Name, "run cbb admin -allow-file-key "+target, allowFileKey); err != nil {
 		return "", err
@@ -104,8 +117,9 @@ func (s *Service) makeAdmin(target string, allowFileKey bool) (string, error) {
 		sealKey = rec.Seal
 	}
 	s.awaitRecords(id)
-	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(peer.ID), Name: d.Name, Role: group.RoleMember,
-		Caps: d.Caps, OS: d.OS, Key: &peer.Key, Admin: &adminKey, Store: store, Kind: kind, Proof: proof, Seal: sealKey})
+	r, err := s.signRecord(id, group.RecordBody{Type: group.RecordDevice, Device: string(peer.ID), Name: d.Name, Role: d.Role,
+		Caps: d.Caps, OS: d.OS, Key: &peer.Key, Admin: &adminKey, Powers: powers, Commands: commands, Store: store, Kind: kind, Proof: proof,
+		Seal: sealKey})
 	if err != nil {
 		undo()
 		return "", err
@@ -591,4 +605,22 @@ func (s *Service) afterTakeover(oldRoot group.KeyHash) {
 	// new root, so that a takeover by it later stays on this root.
 	s.renewAdminCAs(nd.Peers())
 	s.logf("cbb: the claim took effect; this device is the group's root now")
+}
+
+// keyTaken reports whether k is a key the group's records already name:
+// a device's member or admin key, or one of its roots'.
+func (s *Service) keyTaken(k group.KeyHash) bool {
+	s.recMu.Lock()
+	defer s.recMu.Unlock()
+	for _, d := range s.records.Devices() {
+		if d.AdminKey != nil && *d.AdminKey == k || slices.Contains(d.Keys, k) {
+			return true
+		}
+	}
+	for _, r := range s.records.Roots() {
+		if group.KeyHashOf(r) == k {
+			return true
+		}
+	}
+	return group.KeyHashOf(s.records.GroupCA()) == k
 }

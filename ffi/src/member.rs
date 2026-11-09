@@ -51,6 +51,10 @@ struct StartArgs {
     /// Where the key lives: `hardware` (the default) or `file`.
     #[serde(default = "hardware")]
     key_store: String,
+    /// The SubjectPublicKeyInfo of the phone's admin key, which its hellos
+    /// offer while it is no admin, for the root to make it one.
+    #[serde(with = "certs::b64::opt", default)]
+    admin_key: Option<Vec<u8>>,
     device: String,
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
@@ -156,6 +160,12 @@ struct ToArgs {
 }
 
 #[derive(Deserialize)]
+struct OfferArgs {
+    #[serde(with = "certs::b64::opt", default)]
+    key: Option<Vec<u8>>,
+}
+
+#[derive(Deserialize)]
 struct CommandArgs {
     command: Record,
     #[serde(default = "ten_seconds")]
@@ -163,7 +173,7 @@ struct CommandArgs {
 }
 
 /// What cbb_member_manage does: `action` is remove, rename, thaw,
-/// make_admin (as the root, for a computer connected), mute or unmute, for
+/// make_admin (as the root, for a phone or a computer connected), mute or unmute, for
 /// `device`; renew, which renews every certificate due; or resolve, the
 /// root's decision on an alert, which voids its `records`.
 #[derive(Deserialize)]
@@ -476,6 +486,7 @@ impl Member {
                 os_version: a.os_version,
                 version: a.version,
                 key_store: a.key_store,
+                admin_key: a.admin_key.unwrap_or_default(),
                 state_dir: PathBuf::from(a.dir),
                 peers,
                 mdns: a.mdns,
@@ -781,6 +792,13 @@ impl Member {
                 let a: ToArgs = args(a)?;
                 let ca = a.ca.ok_or_else(|| Error::msg("send_admin_ca needs the admin CA"))?;
                 Ok(json!({ "sent": n.send_admin_ca(&device(&a.to)?, &ca) }))
+            }
+            // The admin key the hellos offer: the phone's while it is no
+            // admin, none once it is one.
+            "offer_admin_key" => {
+                let a: OfferArgs = args(a)?;
+                n.offer_admin_key(a.key);
+                done()
             }
             "send_tunnel" => {
                 let a: ToArgs = args(a)?;

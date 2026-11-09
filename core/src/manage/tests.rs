@@ -307,6 +307,52 @@ fn the_root_makes_a_computer_an_admin() {
 }
 
 #[test]
+fn the_root_makes_a_member_phone_an_admin() {
+    let mut g = group();
+    let phone = DeviceId::random().to_string();
+    let r = Body {
+        v: 2,
+        alg: authority::ALG_ES256.into(),
+        kind: authority::TYPE_DEVICE.into(),
+        signer: Hash(g.root.key_hash()),
+        time_ms: now_ms(),
+        device: phone.clone(),
+        name: "iPhone".into(),
+        role: "phone".into(),
+        os: "ios".into(),
+        key: Some(Hash(certs::random_bytes())),
+        store: "hardware".into(),
+        ..Default::default()
+    };
+    let body = g.rs.next_body(r).unwrap();
+    let sig = identity::sign_external(&*g.root_key, &body).unwrap();
+    assert!(g.rs.add(&Record::new(body, sig, None)).unwrap());
+    let root = Signer { ca: &g.root, key: &*g.root_key, me: &g.root_phone };
+
+    // Another admin's key, or the root's, is refused: it would hand its
+    // holder a second device's admin CA.
+    let taken = certs::p256_spki_of(&g.admin_key.public());
+    let e = make_admin(&g.rs, &root, &phone, &taken, "", false, now_ms()).err().unwrap();
+    assert!(e.message().contains("belongs to another key"));
+    let rootk = certs::p256_spki_of(&g.root_key.public());
+    assert!(make_admin(&g.rs, &root, &phone, &rootk, "", false, now_ms()).is_err());
+
+    let key = soft();
+    let spki = certs::p256_spki_of(&key.public());
+    // The phone's hello says nothing of a file: its record's store counts.
+    let made = make_admin(&g.rs, &root, &phone, &spki, "file", false, now_ms()).unwrap();
+    let ca = Cert::parse(&made.admin_ca).unwrap();
+    certs::check_admin_ca(&ca, &g.root).unwrap();
+    assert!(g.rs.add(&made.record).unwrap());
+    let d = g.rs.devices().into_iter().find(|d| d.id == phone).unwrap();
+    assert!(d.admin && d.admin_key == Some(ca.key_hash()));
+    assert_eq!((d.role.as_str(), d.store.as_str()), ("phone", "hardware"));
+    assert!(d.may("admit"));
+    let e = make_admin(&g.rs, &root, &phone, &spki, "hardware", false, now_ms()).err().unwrap();
+    assert!(e.message().contains("an admin already"));
+}
+
+#[test]
 fn a_due_certificate_is_renewed() {
     let g = group();
     let now = now_ms() / 1000;
