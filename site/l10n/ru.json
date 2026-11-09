@@ -313,7 +313,7 @@
   "checking a download": "проверка загрузки",
   "conventions, building and testing every part": "правила, сборка и тестирование каждой части",
   "every `cbb` command, on a full and on the lite member, with every flag": "каждая команда `cbb` для полного и лёгкого участника, со всеми флагами",
-  "every architecture decision, D-1 to D-78, with its status": "все архитектурные решения, от D-1 до D-78, со статусом каждого",
+  "the architecture decisions in force, and the replaced ones as their history": "действующие архитектурные решения и заменённые как их история",
   "every bench case of 0.6 in one line, with how it runs and what it still needs": "каждый сценарий стенда версии 0.6 в одной строке: как он выполняется и что ему ещё нужно",
   "every function of the product with the cases that check it, for the coverage report": "каждая функция продукта и проверяющие её сценарии, для отчёта о покрытии",
   "every primitive, library, key, its size, lifetime and where it is kept": "каждый примитив, библиотека и ключ: размер, срок жизни и где он хранится",

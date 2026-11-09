@@ -313,7 +313,7 @@
   "checking a download": "डाउनलोड की जाँच",
   "conventions, building and testing every part": "परिपाटियाँ, हर हिस्से का बिल्ड और परीक्षण",
   "every `cbb` command, on a full and on the lite member, with every flag": "`cbb` की हर कमांड, पूर्ण और लाइट सदस्य पर, हर फ़्लैग के साथ",
-  "every architecture decision, D-1 to D-78, with its status": "हर वास्तुकला-निर्णय, D-1 से D-78 तक, उसकी स्थिति के साथ",
+  "the architecture decisions in force, and the replaced ones as their history": "लागू वास्तुकला-निर्णय, और बदले गए निर्णय उनके इतिहास के रूप में",
   "every bench case of 0.6 in one line, with how it runs and what it still needs": "0.6 का हर बेंच मामला एक पंक्ति में: वह कैसे चलता है और उसे अभी क्या चाहिए",
   "every function of the product with the cases that check it, for the coverage report": "उत्पाद का हर फ़ंक्शन और उसे जाँचने वाले मामले, कवरेज रिपोर्ट के लिए",
   "every primitive, library, key, its size, lifetime and where it is kept": "हर आदिम, लाइब्रेरी और कुंजी: उसका आकार, अवधि और वह कहाँ रखी जाती है",

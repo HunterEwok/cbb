@@ -1,8 +1,9 @@
 # Nightly: the differential comparison of the four implementations with a
 # fresh seed and more cases than a pull request's run, the native fuzz
-# targets of the readers of network input (docs/differential.md), and
+# targets of the readers of network input (docs/differential.md),
 # mutation testing of the records' code (docs/testing.md, "Mutation
-# testing"). It only
+# testing"), and the members' tests run many times over, to find the ones
+# that fail only now and then (docs/testing.md, "Unstable tests"). It only
 # reads the repository; a failure prints the cases, which become vectors of
 # testdata/interop.
 name: nightly
@@ -184,4 +185,63 @@ jobs:
           path: |
             gremlins.json
             gremlins.txt
+          if-no-files-found: ignore
+
+  # A test that fails one run in ten never shows on a pull request's single run
+  # until it blocks one. Each test of the members runs ten times here, with the
+  # Go service and with the Rust cbb, and the summary lists every test that
+  # failed and how often; docs/testing.md, "Unstable tests", keeps the list.
+  unstable:
+    name: unstable tests (${{ matrix.member }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        member: [go, rust]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the Rust cbb
+        if: matrix.member == 'rust'
+        run: |
+          rustup toolchain install stable --profile minimal && rustup default stable
+          cargo build --locked --release -p cbb-lite
+      - name: each test ten times
+        env:
+          MEMBER: ${{ matrix.member }}
+        run: |
+          if [ "$MEMBER" = rust ]; then
+            export CBB_LITE="$PWD/target/release/cbb"
+            set -- ./internal/service -run 'TestLite'
+          else
+            set -- ./internal/service ./internal/node ./internal/tunnel ./internal/pair
+          fi
+          go test -json -count=10 -timeout 100m "$@" >"$RUNNER_TEMP/tests.json" || true
+          jq -r 'select(.Action == "fail" and .Test != null) | "\(.Package) \(.Test)"' "$RUNNER_TEMP/tests.json" |
+            sort | uniq -c | sort -rn >"$RUNNER_TEMP/failed.txt"
+          jq -r 'select(.Action == "fail" and .Test == null) | .Package' "$RUNNER_TEMP/tests.json" |
+            sort -u >"$RUNNER_TEMP/packages.txt"
+          {
+            echo "### Unstable tests ($MEMBER), failures in 10 runs"
+            echo '```'
+            if [ -s "$RUNNER_TEMP/failed.txt" ]; then cat "$RUNNER_TEMP/failed.txt"; else echo "(none)"; fi
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          # A package that failed without a failing test timed out or crashed.
+          if [ -s "$RUNNER_TEMP/failed.txt" ] || [ -s "$RUNNER_TEMP/packages.txt" ]; then
+            cat "$RUNNER_TEMP/failed.txt" "$RUNNER_TEMP/packages.txt"
+            exit 1
+          fi
+      - name: the tests' output
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unstable-${{ matrix.member }}
+          path: ${{ runner.temp }}/tests.json
           if-no-files-found: ignore

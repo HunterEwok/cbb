@@ -35,6 +35,8 @@ a checked box means the setting is in place.
   `codeql-swift.yml` scans the iPhone app and its kit when `apps/ios` changes, weekly, by
   hand and before each release. GitHub rejects their results while the default setup is on.
   The default setup cannot build the Kotlin app and builds only the kit, not the iPhone app.
+  OpenSSF Scorecard (`.github/workflows/scorecard.yml`) puts its findings there as well,
+  weekly and on each push to `main`, and publishes the score for the README's badge.
 
 **Settings → Actions → General**
 
@@ -113,8 +115,11 @@ environment secret**.
   [the repository rules](../tools/repocheck/main.go) (English only, apart from the apps'
   translations; license headers in Go and Rust files; copied code with its license; the documentation's
   links, the old name, the command reference with every flag, the environment variables,
-  the ports, the index of the documentation), and the design
-  tokens (`go run ./tools/tokens -check`);
+  the ports, the index of the documentation, the register of decisions, the references to
+  protocol.md's sections, no notes of work left in the code), the design tokens
+  (`go run ./tools/tokens -check`), shellcheck on every shell script, the spelling of the
+  English text (typos), the tray app's HTML, CSS and JavaScript (Biome), and every file's
+  copyright and license (`reuse lint`);
 - **test**: `go test -race` on Linux x86-64, Linux ARM64, macOS and Windows, each with its
   own files' coverage;
 - **go coverage**: Go's tests across packages with `-coverpkg`, the desktop clipboards, the
@@ -131,8 +136,8 @@ environment secret**.
   ([tools/e2e/e2e.sh](../tools/e2e/e2e.sh));
 - **desktop clipboards**: the Wayland data-control client under a headless sway and the X11
   client under Xvfb, against wl-clipboard and xclip;
-- **packaging**: shellcheck for the scripts, `systemd-analyze verify` and `security` for the
-  unit, and the desktop entry;
+- **packaging**: `systemd-analyze verify` and `security` for the unit, and the desktop
+  entry;
 - **homebrew**: the formula written by `packaging/homebrew/formula.sh`, installed with
   Homebrew on macOS;
 - **windows installer**: `install.ps1`, the service, the agent and `uninstall.ps1` on

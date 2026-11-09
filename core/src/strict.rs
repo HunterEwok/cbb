@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The strict form of signed bodies (docs/protocol.md, section 1, "Signed
+//! The strict form of signed bodies (docs/protocol.md, Conventions, "Signed
 //! bodies"), which every member reads alike, as Go's checkStrict.
 
 // The parser's arithmetic is on positions in the input, each at most one or
