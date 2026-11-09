@@ -539,3 +539,4 @@ line here with every new function, and a case for it in the catalogue.
 | E.8 | A blocked member port | E8 |
 | E.9 | Restarts at random | E9 |
 | E.10 | Days of running | E10 |
+| E.11 | The small devices' budgets | E12 |

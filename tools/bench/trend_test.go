@@ -130,3 +130,16 @@ func TestRepeatFlag(t *testing.T) {
 		t.Errorf("a missing -baseline: exit %d, %q", code, out.String())
 	}
 }
+
+func TestBudgetWithin(t *testing.T) {
+	r := NewReport("fleet", io.Discard, false)
+	b := budget{class: "router"}
+	b.within(r, "fleet/E12-budgets/router/", "idle-rss", "KiB", 9000, 16<<10)
+	b.within(r, "fleet/E12-budgets/router/", "p95", "ms", 1200, 1000)
+	if r.Failed() != 1 || r.cases[1].Name != "fleet/E12-budgets/router/p95" || r.cases[1].Failure == "" {
+		t.Errorf("cases %+v, want only p95 over its budget", r.cases)
+	}
+	if ms := r.Metrics(); len(ms) != 2 || ms[0] != (Metric{"E12/router/idle-rss", "KiB", 9000}) {
+		t.Errorf("metrics %+v", ms)
+	}
+}

@@ -7,6 +7,10 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The bench's fleet holds the lite member to budgets on the small devices (E12): capped as a
+  Raspberry Pi Zero and as a router, its memory at rest and after 200 copies, its CPU at rest,
+  the time a copy takes to arrive and its peak stay under fixed limits, each also a metric for
+  `-baseline`.
 - The ZX Spectrum Next shows the group's latest image: `.cbb show` asks the lite member on the
   Pi (`cbb next image`), which fits the PNG or JPEG to Layer 2 in 320×256 with 256 colours or
   640×256 with 16, whichever shows it closer, with dithering from the Next's 512 colours; the

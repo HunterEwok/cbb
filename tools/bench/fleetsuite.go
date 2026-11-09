@@ -116,6 +116,7 @@ func FleetSuite(ctx context.Context, r *Report, cbb string, size int, timeout ti
 		{"U9-lite", func() { liteMember(ctx, r, f, timeout) }},
 		{"D9-subnets", func() { acrossSubnets(ctx, r, f, timeout) }},
 		{"O14-router", func() { routerMedia(ctx, r, f, timeout) }},
+		{"E12-budgets", func() { budgetsCase(ctx, r, f, timeout) }},
 		{"E3-many", func() { manyMembers(ctx, r, f, size, timeout) }},
 		{"E10-soak", func() { soak(ctx, r, f, timeout) }},
 	} {

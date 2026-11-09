@@ -478,6 +478,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | E9 | Restarts during everything: members killed at random every 30 s for 10 minutes while copying | fleet | |
 | E10 | Soak for 24 h: a copy every 30 s from a random member, a fault every hour, memory and descriptors sampled every 5 minutes; flat, no restarts [Soak] | real, fleet | |
 | E11 | The service hung [F13]: SIGSTOP; commands answer within seconds; after SIGCONT it catches up | real | |
+| E12 | Budgets of the small devices: a lite member capped as a Raspberry Pi Zero (512 MiB, a quarter of a core) and as a router (128 MiB, a quarter of a core) joins a group; its memory and CPU at rest, the time 20 copies take to arrive (p95), its memory after 200 more and the container's peak stay within each class's budget (testbench.md, "Budgets"); a real Pi Zero and router confirm it before a release | fleet, real | |
 
 ## 16. What the bench needs for this
 

@@ -22,25 +22,35 @@ var fleetLite string
 // AddLite starts a lite member in no group on the fleet's network; its
 // sh stands in for the service manager as for a full member.
 func (f *Fleet) AddLite(ctx context.Context) (*Device, error) {
+	return f.AddLiteWith(ctx, nil)
+}
+
+// liteLoop is what a lite container runs: its service, started again when
+// it ends.
+const liteLoop = "mkdir -p /run/cbb /var/lib/cbb; while :; do cbb service $(cat /tmp/cbb-run-opts 2>/dev/null); sleep 1; done"
+
+// liteBinary is -cbb-lite's absolute path, once it is there.
+func liteBinary() (string, error) {
 	abs, err := filepath.Abs(fleetLite)
 	if err == nil {
 		_, err = os.Stat(abs)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("-cbb-lite: %w", err)
+		return "", fmt.Errorf("-cbb-lite: %w", err)
 	}
-	d, err := f.containerOf(ctx, abs, f.net, nil, nil, "mkdir -p /run/cbb /var/lib/cbb; while :; do cbb service $(cat /tmp/cbb-run-opts 2>/dev/null); sleep 1; done")
-	if err != nil {
-		return nil, err
-	}
+	return abs, nil
+}
+
+// liteStarted marks d a lite member and waits for its service to answer.
+func liteStarted(ctx context.Context, d *Device) error {
 	d.Roles = []string{"lite"}
 	if err := eventually(ctx, 20*time.Second, func() error {
 		_, err := groupOf(ctx, d)
 		return err
 	}); err != nil {
-		return nil, fmt.Errorf("%s did not start: %w", d.Name, err)
+		return fmt.Errorf("%s did not start: %w", d.Name, err)
 	}
-	return d, nil
+	return nil
 }
 
 // joinLite joins the lite member d to hub's group with the code of cbb

@@ -24,7 +24,7 @@ import (
 // the bench records: times, memory, descriptors.
 type Metric struct {
 	Name  string  `json:"name"`
-	Unit  string  `json:"unit"` // ms, KiB, fds or s
+	Unit  string  `json:"unit"` // ms, KiB, fds, s or % (of one core)
 	Value float64 `json:"value"`
 }
 
@@ -77,7 +77,7 @@ func readMetrics(path string) ([]Metric, error) {
 // noise is how much a metric of each unit may move between two runs of the
 // same build before the fraction counts: a few milliseconds of a 20 ms
 // latency are noise, not a regression.
-var noise = map[string]float64{"ms": 100, "KiB": 4096, "fds": 4, "s": 2}
+var noise = map[string]float64{"ms": 100, "KiB": 4096, "fds": 4, "s": 2, "%": 1}
 
 // compareBaseline adds a case "baseline/NAME" for every metric of the run
 // that the baseline also has: it fails when the run's value is worse than
