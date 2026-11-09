@@ -5,7 +5,6 @@ package service
 
 import (
 	"bytes"
-	"encoding/pem"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,11 +16,7 @@ import (
 // names and returns the Rust member's environment for it.
 func writeRoots(t *testing.T, signer *releaseSigner) []string {
 	t.Helper()
-	pemFile := filepath.Join(t.TempDir(), "roots.pem")
-	if err := os.WriteFile(pemFile, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.roots(t)[0]}), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return []string{"CBB_RELEASE_ROOTS=" + pemFile}
+	return []string{signer.rootsEnv(t)}
 }
 
 // TestLiteRelease: a signed release passes between the Go service and the
@@ -30,10 +25,9 @@ func writeRoots(t *testing.T, signer *releaseSigner) []string {
 func TestLiteRelease(t *testing.T) {
 	bin := liteBin(t)
 	signer := newReleaseSigner(t)
-	roots := signer.roots(t)
 	env := writeRoots(t, signer)
 	var h hub
-	desk := startWith(t, &h, "desk", "linux", func(c *Config) { c.ReleaseRoots = roots })
+	desk := startEnv(t, &h, "desk", signer.rootsEnv(t))
 	dir := joinFull(t, bin, desk)
 	args := []string{"-no-mdns", "-no-listen", "-peer", desk.addr()}
 	rust := startLiteEnv(t, bin, dir, env, args...)
@@ -84,7 +78,7 @@ func TestLiteReleaseArchives(t *testing.T) {
 	signer := newReleaseSigner(t)
 	env := writeRoots(t, signer)
 	var h hub
-	desk := startWith(t, &h, "desk", "linux", func(c *Config) { c.ReleaseRoots = signer.roots(t) })
+	desk := startEnv(t, &h, "desk", signer.rootsEnv(t))
 	dir := joinFull(t, bin, desk)
 	rust := startLiteEnv(t, bin, dir, env, "-no-mdns", "-no-listen", "-peer", desk.addr())
 	waitFor(t, "the Rust member connected", func() bool {

@@ -12,10 +12,12 @@ import (
 	"crypto/x509/pkix"
 	"encoding/binary"
 	"encoding/json"
+	"encoding/pem"
 	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -171,62 +173,6 @@ func TestComputerAdmin(t *testing.T) {
 	waitFor(t, "the laptop is cut off", func() bool { return len(c.status(t).Peers) == 0 })
 }
 
-// TestAdminPeerNeedsARealAdminCA checks that a member counts as an admin
-// through its chain only with an admin CA that issued its certificate and
-// that a root of the group certified, not with any CA named after it.
-func TestAdminPeerNeedsARealAdminCA(t *testing.T) {
-	now := time.Now()
-	root, err := group.Create(now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := &Service{id: root, records: group.NewRecords(root.GroupCA.Cert)}
-	key, err := group.NewKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	dev := group.NewDeviceID()
-	leaf, err := root.GroupCA.IssueMember(dev, &key.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// A CA the member made itself, named as its admin CA would be.
-	own, err := group.NewGroupCA(now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: group.AdminName(dev)},
-		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(time.Hour), IsCA: true, BasicConstraintsValid: true,
-		MaxPathLenZero: true, KeyUsage: x509.KeyUsageCertSign}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, group.PublicKey(own.Key), own.Key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fake, err := x509.ParseCertificate(der)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s.adminPeer(dev, []*x509.Certificate{leaf, fake}) {
-		t.Error("a member counted as an admin with a CA it made itself")
-	}
-	// The real thing: an admin CA from the root, which issued the leaf.
-	adminKey, err := group.NewKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	adminCA, err := root.GroupCA.IssueAdmin(dev, &adminKey.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	issued, err := (&group.CA{Cert: adminCA, Key: adminKey}).IssueMember(dev, &key.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !s.adminPeer(dev, []*x509.Certificate{issued, adminCA}) {
-		t.Error("a member with its admin CA did not count as an admin")
-	}
-}
-
 // The root makes a computer whose keys sit in a file an admin only when
 // the user allows it, and its record says where its keys live.
 func TestAdminOfFileKeys(t *testing.T) {
@@ -255,48 +201,24 @@ func TestKeyLevelSetting(t *testing.T) {
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	waitFor(t, "deck is connected to the root", func() bool { return len(pi.status(t).Peers) == 1 })
-	if l := pi.status(t).KeyLevel; l != LevelFiles {
+	if l := pi.status(t).KeyLevel; l != "files" {
 		t.Fatalf("the level of a group with a root key in a file: %q", l)
 	}
-	waitFor(t, "deck has the level", func() bool { return deck.status(t).KeyLevel == LevelFiles })
-	if _, err := deck.do(t, control.Header{Op: control.OpKeyLevel, Value: LevelFiles}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
+	waitFor(t, "deck has the level", func() bool { return deck.status(t).KeyLevel == "files" })
+	if _, err := deck.do(t, control.Header{Op: control.OpKeyLevel, Value: "files"}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
 		t.Errorf("the level set on a member: %v", err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpKeyLevel, Value: "any"}, ""); err == nil || !strings.Contains(err.Error(), "proven, hardware or files") {
 		t.Errorf("an unknown level: %v", err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpKeyLevel, Value: LevelHardware}, ""); err == nil || !strings.Contains(err.Error(), "the group's root, keeps its keys in a file") {
+	if _, err := pi.do(t, control.Header{Op: control.OpKeyLevel, Value: "hardware"}, ""); err == nil || !strings.Contains(err.Error(), "the group's root, keeps its keys in a file") {
 		t.Errorf("a level above the root's own key: %v", err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpDelay, Value: "24h"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if l := pi.status(t).KeyLevel; l != LevelFiles {
+	if l := pi.status(t).KeyLevel; l != "files" {
 		t.Errorf("the level after a new takeover delay: %q", l)
-	}
-}
-
-// levelAllows lets in what each level allows, and a key in a file only with
-// the user's consent.
-func TestLevelAllows(t *testing.T) {
-	for _, c := range []struct {
-		level, store string
-		consent      bool
-		want         string
-	}{
-		{LevelFiles, group.StoreRootless, true, "without root"},
-		{LevelProven, group.StoreHardware, true, "attestation does not prove"},
-		{LevelProven, group.StoreProven, false, ""},
-		{LevelHardware, group.StoreHardware, false, ""},
-		{LevelHardware, group.StoreFile, true, "cbb keys files"},
-		{LevelFiles, group.StoreFile, false, "allow it anyway, HINT"},
-		{LevelFiles, group.StoreFile, true, ""},
-		{LevelFiles, group.StoreHardware, false, ""},
-	} {
-		err := levelAllows(c.level, c.store, "desk", "HINT", c.consent)
-		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
-			t.Errorf("%s, %s, consent %v: %v", c.level, c.store, c.consent, err)
-		}
 	}
 }
 
@@ -308,13 +230,13 @@ func TestRename(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
+	laptop := startService(t, &h, "laptop")
 	pairWith(t, pi, deck)
-	pairWith(t, pi, mac)
-	waitFor(t, "the Mac lists every device", func() bool { return listed(mac.devices(t)) == "deck mac pi" })
+	pairWith(t, pi, laptop)
+	waitFor(t, "the laptop lists every device", func() bool { return listed(laptop.devices(t)) == "deck laptop pi" })
 	makeAdmin(t, pi, deck)
-	if _, err := mac.do(t, control.Header{Op: control.OpRename, Name: "deck", NewName: "steam deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
-		t.Errorf("rename on the Mac: %v", err)
+	if _, err := laptop.do(t, control.Header{Op: control.OpRename, Name: "deck", NewName: "steam deck"}, ""); err == nil || !strings.Contains(err.Error(), "only an admin") {
+		t.Errorf("rename on the laptop: %v", err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpRename, Name: "deck", NewName: " "}, ""); err == nil || !strings.Contains(err.Error(), "1 to 64") {
 		t.Errorf("an empty name: %v", err)
@@ -331,10 +253,10 @@ func TestRename(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpRename, Name: "pi", NewName: "pi4"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	for _, s := range []*testService{pi, deck, mac} {
-		waitFor(t, s.name+" takes the new names", func() bool { return listed(s.devices(t)) == "mac pi4 steam deck" })
+	for _, s := range []*testService{pi, deck, laptop} {
+		waitFor(t, s.name+" takes the new names", func() bool { return listed(s.devices(t)) == "laptop pi4 steam deck" })
 	}
-	for _, d := range mac.devices(t) {
+	for _, d := range laptop.devices(t) {
 		if d.Name == "steam deck" && (!d.Admin || d.Role != group.RoleMember) || d.Name == "pi4" && !d.Root {
 			t.Errorf("after the rename: %+v", d)
 		}
@@ -372,14 +294,18 @@ func TestEvidence(t *testing.T) {
 		json.NewEncoder(w).Encode(f)
 	}))
 	defer mirror.Close()
-	oldURL, oldRoots, oldEvery := statusURL, statusRoots, statusEvery
-	statusURL, statusRoots, statusEvery = mirror.URL+"/", func() [][]byte { return [][]byte{rootSPKI} }, 100*time.Millisecond
-	t.Cleanup(func() { statusURL, statusRoots, statusEvery = oldURL, oldRoots, oldEvery })
+	dir := t.TempDir()
+	statusRoots := dir + "/release-roots.pem"
+	if err := os.WriteFile(statusRoots, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: rootSPKI}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The attestation roots the root's cbb-helper reads at each check.
+	attestRoots := dir + "/attest-roots.pem"
 
-	// The mirror and the attestation roots are the Go service's own.
 	var h hub
-	pi := startGoService(t, &h, "pi")
-	deck := startGoService(t, &h, "deck")
+	pi := startEnv(t, &h, "pi", "CBB_TEST_ATTEST_ROOTS="+attestRoots, "CBB_TEST_STATUS_URL="+mirror.URL+"/",
+		"CBB_TEST_STATUS_EVERY=100", "CBB_RELEASE_ROOTS="+statusRoots)
+	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	waitFor(t, "deck is listed", func() bool { return listed(pi.devices(t)) == "deck pi" })
 	deck.stop()
@@ -398,8 +324,13 @@ func TestEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	attestRoots = [][]byte{wrongRoot, root}
-	t.Cleanup(func() { attestRoots = nil })
+	var roots []byte
+	for _, r := range [][]byte{wrongRoot, root} {
+		roots = append(roots, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: r})...)
+	}
+	if err := os.WriteFile(attestRoots, roots, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	p := &fakePhone{t: t, id: id}
 	p.dial(pi.addr(), mustLoad(t, pi.dir))
@@ -446,13 +377,13 @@ func TestHubsTable(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
+	laptop := startService(t, &h, "laptop")
 	pairWith(t, pi, deck)
-	pairWith(t, pi, mac)
-	waitFor(t, "the Mac lists every device", func() bool { return listed(mac.devices(t)) == "deck mac pi" })
+	pairWith(t, pi, laptop)
+	waitFor(t, "the laptop lists every device", func() bool { return listed(laptop.devices(t)) == "deck laptop pi" })
 	makeAdmin(t, pi, deck)
-	if _, err := mac.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
-		t.Errorf("hubs on the Mac: %v", err)
+	if _, err := laptop.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
+		t.Errorf("hubs on the laptop: %v", err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"deck", "deck"}}, ""); err == nil || !strings.Contains(err.Error(), "twice") {
 		t.Errorf("a hub named twice: %v", err)
@@ -461,7 +392,7 @@ func TestHubsTable(t *testing.T) {
 		t.Errorf("no hubs: %v", err)
 	}
 	var deckID string
-	for _, d := range mac.devices(t) {
+	for _, d := range laptop.devices(t) {
 		if d.Name == "deck" {
 			deckID = d.ID
 		}
@@ -469,7 +400,7 @@ func TestHubsTable(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{deckID, "pi"}}, ""); err != nil {
 		t.Fatal(err)
 	}
-	for _, s := range []*testService{pi, deck, mac} {
+	for _, s := range []*testService{pi, deck, laptop} {
 		waitFor(t, s.name+" puts the deck first", func() bool {
 			order := hubOrderIn(s.dir)
 			return len(order) == 2 && string(order[0]) == deckID

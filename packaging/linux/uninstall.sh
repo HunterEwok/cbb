@@ -115,7 +115,7 @@ rm -f /etc/systemd/system/cbb.service /etc/systemd/system/cbb-console.service \
 	/etc/systemd/system/cbb-uinput.service /etc/modules-load.d/cbb-uinput.conf \
 	/etc/systemd/system/cbb-update.service /etc/systemd/system/cbb-update.timer \
 	/etc/xdg/autostart/cbb-desktop.desktop /etc/xdg/autostart/cbb-tray.desktop \
-	/usr/local/share/applications/cbb.desktop /usr/local/bin/cbb-desktop /usr/local/bin/cbb-helper \
+	/usr/local/share/applications/cbb.desktop /usr/local/bin/cbb-desktop /usr/local/bin/cbb-helper /usr/local/bin/cbb-forward /usr/local/bin/cbb-relay \
 	/etc/systemd/user/cbb-agent.service \
 	/etc/profile.d/cbb-console.sh /usr/lib/sysusers.d/cbb.conf /usr/local/bin/cbb \
 	/etc/profile.d/cbb-path.sh /etc/sysusers.d/cbb.conf /etc/atomic-update.conf.d/cbb.conf \

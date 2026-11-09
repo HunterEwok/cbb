@@ -49,6 +49,11 @@ if [ -x /etc/init.d/cbb ]; then
 	/etc/init.d/cbb stop || true
 	/etc/init.d/cbb disable || true
 fi
+# procd sends the service SIGTERM and returns before it has exited.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+	pgrep -x -f "/usr/bin/cbb service.*" >/dev/null 2>&1 || break
+	sleep 1
+done
 rm -f /etc/cbb/firewall.hub
 /etc/init.d/firewall reload >/dev/null 2>&1 || true
 rm -f /etc/init.d/cbb /etc/hotplug.d/ntp/50-cbb /lib/upgrade/keep.d/cbb \

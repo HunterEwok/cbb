@@ -28,6 +28,7 @@ type Host struct {
 	Bus  BusDialer
 	Logf func(format string, args ...any)
 
+	//lint:ignore U1000 only Linux has a keyboard; elsewhere its state is empty and unread
 	kbd keyboardState
 	tv  tvState
 

@@ -140,6 +140,12 @@ install -m 0755 "$bin" /usr/local/bin/cbb
 if [ -f "$(dirname "$bin")/cbb-helper" ]; then
 	install -m 0755 "$(dirname "$bin")/cbb-helper" /usr/local/bin/cbb-helper
 fi
+# The servers, which cbb forward and cbb relay run.
+for server in cbb-forward cbb-relay; do
+	if [ -f "$(dirname "$bin")/$server" ]; then
+		install -m 0755 "$(dirname "$bin")/$server" "/usr/local/bin/$server"
+	fi
+done
 install -d -m 0755 /usr/local/etc/rc.d /usr/local/share/cbb /usr/local/etc/cbb
 install -m 0555 "$here/cbb" /usr/local/etc/rc.d/cbb
 install -d -o cbb -g cbb -m 0700 /var/db/cbb

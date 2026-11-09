@@ -348,3 +348,129 @@ fn group_members() -> Result<Vec<String>> {
         Ok(out)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertSecurityDescriptorToStringSecurityDescriptorW, GetNamedSecurityInfoW,
+    };
+    use windows_sys::Win32::Security::{GetSecurityDescriptorControl, SE_DACL_PROTECTED};
+
+    /// A folder of its own under the system's temporary folder.
+    fn temp_dir(name: &str) -> PathBuf {
+        let tag = getrandom::u64().unwrap();
+        let dir = std::env::temp_dir().join(format!("cbb-acl-{name}-{tag:016x}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// The access list of what is at path, as SDDL, and whether it is
+    /// protected from its folder's.
+    fn dacl_of(path: &Path) -> (String, bool) {
+        let w = wide(&path.to_string_lossy());
+        let mut psd: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+        // SAFETY: w is NUL-ended; the descriptor is read, then freed.
+        unsafe {
+            let r = GetNamedSecurityInfoW(
+                w.as_ptr(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut psd,
+            );
+            assert_eq!(r, 0, "the access list of {}", path.display());
+            let (mut control, mut revision) = (0u16, 0u32);
+            assert_ne!(GetSecurityDescriptorControl(psd, &mut control, &mut revision), 0);
+            let mut s: *mut u16 = std::ptr::null_mut();
+            let mut len = 0u32;
+            assert_ne!(
+                ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                    psd,
+                    SDDL_REVISION_1,
+                    DACL_SECURITY_INFORMATION,
+                    &mut s,
+                    &mut len
+                ),
+                0
+            );
+            let n = (0..).take_while(|&i| *s.add(i) != 0).count();
+            let text = String::from_utf16_lossy(std::slice::from_raw_parts(s, n));
+            LocalFree(s.cast());
+            LocalFree(psd);
+            (text, control & SE_DACL_PROTECTED != 0)
+        }
+    }
+
+    /// What lies beside path under the name move_aside gives it.
+    fn aside(path: &Path) -> Vec<PathBuf> {
+        let name = format!("{}.untrusted-", path.file_name().unwrap().to_string_lossy());
+        std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().starts_with(&name))
+            .map(|e| e.path())
+            .collect()
+    }
+
+    /// A junction or a file in the place of the admin socket's folder is
+    /// moved aside, never followed: what the junction points to keeps its
+    /// files and its access list. A folder own_dir makes has its list from
+    /// the start, and the service's own folder stays where it is.
+    #[test]
+    fn own_dir_moves_links_aside() {
+        let run = temp_dir("own");
+        let target = run.join("elsewhere");
+        std::fs::create_dir(&target).unwrap();
+        let kept = target.join("kept.txt");
+        std::fs::write(&kept, "x").unwrap();
+        let before = dacl_of(&target);
+        let dir = run.join("admin");
+        let out =
+            std::process::Command::new("cmd").args(["/c", "mklink", "/J"]).arg(&dir).arg(&target).output().unwrap();
+        assert!(out.status.success(), "mklink: {}", String::from_utf8_lossy(&out.stdout));
+        drop(listen(&dir.join("cbb.sock"), true).unwrap());
+        assert!(kept.exists(), "the junction's target lost its file");
+        assert_eq!(dacl_of(&target), before, "the junction's target was narrowed");
+        let m = std::fs::symlink_metadata(&dir).unwrap();
+        assert!(m.is_dir() && !m.file_type().is_symlink(), "{} is not a plain folder now", dir.display());
+        assert_eq!(aside(&dir).len(), 1, "moved aside: {:?}, want the junction", aside(&dir));
+
+        // A file in its place goes aside too.
+        let sd = Descriptor::new("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)").unwrap();
+        let file = run.join("admin2");
+        std::fs::write(&file, "x").unwrap();
+        // SAFETY: own_dir returns an open handle.
+        unsafe { CloseHandle(own_dir(&file, &sd).unwrap()) };
+        assert!(std::fs::symlink_metadata(&file).unwrap().is_dir(), "{} is not a folder now", file.display());
+
+        // A folder it makes has its list from the start.
+        let fresh = run.join("admin3");
+        // SAFETY: as above.
+        unsafe { CloseHandle(own_dir(&fresh, &sd).unwrap()) };
+        let (list, protected) = dacl_of(&fresh);
+        assert!(protected, "{} was made without its protected list: {list}", fresh.display());
+
+        // The service's own folder stays as it is.
+        // SAFETY: as above.
+        unsafe { CloseHandle(own_dir(&dir, &sd).unwrap()) };
+        assert_eq!(aside(&dir).len(), 1, "the service's own folder was moved: {:?}", aside(&dir));
+        let _ = std::fs::remove_dir_all(&run);
+    }
+
+    /// A folder in the place of the control socket does not keep the
+    /// service from listening: it is moved aside.
+    #[test]
+    fn control_moves_names_aside() {
+        let dir = temp_dir("control");
+        let path = dir.join("control.sock");
+        std::fs::create_dir_all(path.join("inside")).unwrap();
+        drop(listen(&path, false).unwrap());
+        assert_eq!(aside(&path).len(), 1, "moved aside: {:?}, want the folder", aside(&path));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

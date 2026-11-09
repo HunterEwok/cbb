@@ -72,7 +72,7 @@ if (Get-Service -Name $name -ErrorAction SilentlyContinue) {
 }
 
 $step = T 'stopping the agents and the tray app'
-Get-Process -Name cbbw, cbb, cbb-desktop, cbb-helper -ErrorAction SilentlyContinue | Where-Object {
+Get-Process -Name cbbw, cbb, cbb-desktop, cbb-helper, cbb-forward, cbb-relay -ErrorAction SilentlyContinue | Where-Object {
 	$_.Path -and $_.Path.StartsWith("$programDir\", [StringComparison]::OrdinalIgnoreCase)
 } | Stop-Process -Force
 Start-Sleep -Milliseconds 500

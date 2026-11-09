@@ -40,9 +40,9 @@ the same record set of the same signed records in any order and subset.
 A verdict is one line:
 
 - `refused` when the implementation refuses the body;
-- `skip` when it does not read bodies of that kind: the lite member reads no
-  `attest-status.json`, and the kits read records (version 2) and record sets only through
-  the Rust core (docs/core-api.md), which the comparison reads as the lite core's;
+- `skip` when it does not read bodies of that kind: the kits read records (version 2) and
+  record sets only through the Rust core (docs/core-api.md), which the comparison reads as
+  the lite core's;
 - `taken` and, for records, commands and server credentials, every field the body gives, as
   ` name=value` in a fixed order (`tools/difffuzz/main.go` lists them): strings as the hex of
   their UTF-8 bytes, integers in decimal, booleans as 0 or 1, bytes in hex, lists joined by

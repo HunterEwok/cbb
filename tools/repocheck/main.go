@@ -293,7 +293,7 @@ func isPE(data []byte) bool {
 
 // thirdPartyDir returns the directory of the copied package that the file
 // name belongs to: the directory right below a third_party directory, such
-// as internal/third_party/cpace. It returns "" for the project's own files.
+// as core/src/third_party/cpace. It returns "" for the project's own files.
 func thirdPartyDir(name string) string {
 	parts := strings.Split(name, "/")
 	for i, p := range parts {

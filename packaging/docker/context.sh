@@ -3,8 +3,9 @@
 # Copyright (C) 2026 HunterEwok
 
 # Lays out the build context of the cbb image in DIR: the
-# Dockerfile, the static cbb of each platform, named as the Dockerfile wants
-# them (cbb-amd64, cbb-arm64, cbb-armv7), and the few directories and files
+# Dockerfile, the static cbb of each platform with the programs beside it
+# (cbb-helper, cbb-forward, cbb-relay), in the folder the Dockerfile wants
+# for it (bin-amd64, bin-arm64, bin-armv7), and the few directories and files
 # the service needs in an image built from scratch, with LICENSE and, given
 # notices=FILE, a release archive's THIRD_PARTY_NOTICES in
 # /usr/share/doc/cbb.
@@ -38,8 +39,12 @@ for a in "$@"; do
 		exit 2
 		;;
 	esac
-	cp "$bin" "$dir/cbb-$arch"
-	chmod 0755 "$dir/cbb-$arch"
+	mkdir -p "$dir/bin-$arch"
+	cp "$bin" "$dir/bin-$arch/cbb"
+	for f in cbb-helper cbb-forward cbb-relay; do
+		[ ! -f "$(dirname "$bin")/$f" ] || cp "$(dirname "$bin")/$f" "$dir/bin-$arch/$f"
+	done
+	chmod 0755 "$dir/bin-$arch/"*
 done
 
 # The service's user, 65532, owns its state and its sockets' directory.

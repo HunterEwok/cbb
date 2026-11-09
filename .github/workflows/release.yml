@@ -72,42 +72,60 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # a release builds from scratch
-      - name: the Rust core as WebAssembly, which cbb runs for the group's rules (internal/core)
+      - name: the Rust core as WebAssembly, which the Go programs run for the group's rules (internal/core)
         run: |
           CBB_SOURCE="$GITHUB_SHA" sh wasm/build.sh
           sh member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
-      - name: build
+      - name: zig, which links cbb for FreeBSD and Windows, and the nightly Rust of the routers' builds
+        if: matrix.goos == 'freebsd' || matrix.goos == 'windows' || matrix.gomips
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zig"
+          "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
+          echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
+          if [ -n "$GOMIPS" ]; then
+            rustup toolchain install "$(sed -n 's/^nightly="\(.*\)"$/\1/p' member/packaging/mips.sh)" --profile minimal --component rust-src
+          fi
+      - name: cbb, the Rust program (member/packaging/build.sh), with its crates' notices
+        env:
+          CBB_SOURCE: ${{ github.sha }}
+        run: |
+          rustup toolchain install stable --profile minimal
+          dir=$(CBB_VERSION="${GITHUB_REF_NAME#v}" sh member/packaging/build.sh "$GOOS/$GOARCH${GOARM:+/$GOARM}")
+          if [ "$GOOS" = windows ]; then
+            cp "$dir/cbb.exe" "$dir/cbbw.exe" "$dir/cbb-relay.exe" "$RUNNER_TEMP/"
+          elif [ -z "$GOMIPS" ]; then
+            # cbb-relay, the relay in Rust, a service of its own beside cbb.
+            cp "$dir/cbb" "$dir/cbb-relay" "$RUNNER_TEMP/"
+          else
+            cp "$dir/cbb" "$RUNNER_TEMP/"
+          fi
+          sh member/packaging/notices.sh "$(basename "$(dirname "$dir")")" >"$RUNNER_TEMP/rust-notices"
+      - name: cbb-helper and cbb-forward, the Go programs beside cbb
         run: |
           ldflags="-s -w -X github.com/HunterEwok/cbb/internal/version.Version=$GITHUB_REF_NAME"
           # Every release build runs the Rust core under wazero, never Go's
           # own rules, which only the tests use.
           overlay=$GITHUB_WORKSPACE/target/cbb-core-overlay.json
+          exe=; if [ "$GOOS" = windows ]; then exe=.exe; fi
           if [ "$GOOS" = windows ]; then
-            # cbbw.exe is the same program without a console window, for the agent.
-            go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb.exe" ./cmd/cbb
-            go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags -H=windowsgui" -o "$RUNNER_TEMP/cbbw.exe" ./cmd/cbb
             # The tray app, a module of its own; on Windows it needs no cgo.
             (cd apps/desktop && go build -trimpath -ldflags "-s -w -H=windowsgui" -o "$RUNNER_TEMP/cbb-desktop.exe" .)
-          else
-            go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           fi
-          # cbb-helper, the Go helper the Rust cbb starts as its child, with the
-          # same version: a release cbb takes only a helper of its own release.
-          # The routers' builds (mips) go without it, like the lite member there.
+          # cbb-helper, the Go helper cbb starts as its child, with the same
+          # version: a release cbb takes only a helper of its own release. The
+          # routers' builds (mips) go without the Go programs, as cbb runs
+          # there alone (the lite member).
           case $GOARCH in
           mips | mipsle) ;;
           *)
-            exe=; if [ "$GOOS" = windows ]; then exe=.exe; fi
-            go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/cbb-helper$exe" ./cmd/cbb-helper
+            for p in cbb-helper cbb-forward; do
+              go build -overlay "$overlay" -tags cbbwasm -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/$p$exe" "./cmd/$p"
+              go version -m "$RUNNER_TEMP/$p$exe" | grep -q -- '-tags=cbbwasm'
+              # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.
+              grep -aqF -- "$GITHUB_REF_NAME" "$RUNNER_TEMP/$p$exe"
+            done
             ;;
           esac
-          for f in "$RUNNER_TEMP"/cbb "$RUNNER_TEMP"/cbb.exe "$RUNNER_TEMP"/cbbw.exe "$RUNNER_TEMP"/cbb-helper "$RUNNER_TEMP"/cbb-helper.exe; do
-            [ ! -f "$f" ] || go version -m "$f" | grep -q -- '-tags=cbbwasm'
-          done
-          # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.
-          for f in "$RUNNER_TEMP"/cbb-helper "$RUNNER_TEMP"/cbb-helper.exe; do
-            [ ! -f "$f" ] || grep -aqF -- "$GITHUB_REF_NAME" "$f"
-          done
       - name: the tray app for Linux
         if: matrix.tray
         env:
@@ -135,16 +153,16 @@ jobs:
           cert="$RUNNER_TEMP/cert.pfx" pass="$RUNNER_TEMP/cert.pass"
           (umask 077 && printf '%s' "$CERT_BASE64" | base64 -d >"$cert" && printf '%s' "$CERT_PASSWORD" >"$pass")
           trap 'rm -f "$cert" "$pass"' EXIT
-          for f in cbb.exe cbbw.exe cbb-desktop.exe cbb-helper.exe; do
+          for f in cbb.exe cbbw.exe cbb-desktop.exe cbb-helper.exe cbb-forward.exe cbb-relay.exe; do
             osslsigncode sign -pkcs12 "$cert" -readpass "$pass" -h sha256 \
               -n cbb -i https://github.com/HunterEwok/cbb \
               -ts http://timestamp.digicert.com \
               -in "$RUNNER_TEMP/$f" -out "$RUNNER_TEMP/$f.signed"
             mv "$RUNNER_TEMP/$f.signed" "$RUNNER_TEMP/$f"
           done
-      - name: the agent has the pasteboard
+      - name: the agent's helper has the pasteboard
         if: matrix.goos == 'darwin'
-        run: otool -L "$RUNNER_TEMP/cbb" | grep -q AppKit.framework
+        run: otool -L "$RUNNER_TEMP/cbb-helper" | grep -q AppKit.framework
       - name: sign cbb with the Developer ID and notarize it, with the certificate in the secrets
         # The Developer ID Application certificate as a base64 PKCS#12 file and
         # its password, and the App Store Connect API key that notarytool signs
@@ -160,14 +178,15 @@ jobs:
         run: |
           if [ -z "$P12" ] || [ -z "$ASC_KEY" ]; then
             echo "::warning::no CBB_APPLE_DEVID_APP_P12 or CBB_ASC_KEY in the secrets; cbb for macOS is not signed with the Developer ID"
-            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb"
-            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-helper"
+            for f in cbb cbb-helper cbb-forward cbb-relay; do
+              sh packaging/macos/sign.sh - "$RUNNER_TEMP/$f"
+            done
             exit 0
           fi
           sh packaging/macos/keychain.sh create "$RUNNER_TEMP/signing"
           trap 'sh packaging/macos/keychain.sh delete "$RUNNER_TEMP/signing"' EXIT
           id=$(sh packaging/macos/keychain.sh import "$RUNNER_TEMP/signing" "Developer ID Application" U2ZJ8F2JCJ)
-          for f in cbb cbb-helper; do
+          for f in cbb cbb-helper cbb-forward cbb-relay; do
             sh packaging/macos/sign.sh "$id" "$RUNNER_TEMP/$f"
             sh packaging/macos/notarize.sh "$RUNNER_TEMP/$f"
           done
@@ -175,7 +194,8 @@ jobs:
         run: |
           bin=$RUNNER_TEMP/cbb
           if [ "$GOOS" = windows ]; then bin=$bin.exe; fi
-          CORE_NOTICES=$RUNNER_TEMP/core-notices sh packaging/archive.sh "$bin" "$GOOS" "${{ matrix.name }}" "$RUNNER_TEMP/dist"
+          RUST_NOTICES=$RUNNER_TEMP/rust-notices CORE_NOTICES=$RUNNER_TEMP/core-notices \
+            sh packaging/archive.sh "$bin" "$GOOS" "${{ matrix.name }}" "$RUNNER_TEMP/dist"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.ARCHIVE }}
@@ -588,15 +608,16 @@ jobs:
           cache: false # a release builds from scratch
       - name: the software bills of materials (tools/sbom, docs/maintaining.md)
         # The Go programs' modules from the programs themselves; the crates of
-        # the lite member and of the phones' Rust core on their targets; the
-        # Swift kit's packages. The Android apps' came with their APKs.
+        # cbb (the Rust program, also the lite member's) and of the phones'
+        # Rust core on their targets; the Swift kit's packages. The Android
+        # apps' came with their APKs.
         run: |
           go run ./tools/sbom go -o dist/sbom-go.cdx.json -version "$GITHUB_REF_NAME" \
             dist/cbb-linux-*.tar.gz dist/cbb-darwin-*.tar.gz \
             dist/cbb-freebsd-*.tar.gz dist/cbb-windows-*.zip
           go run ./tools/sbom cargo -o dist/sbom-lite.cdx.json -version "$GITHUB_REF_NAME" -manifest Cargo.toml \
             -package cbb-lite \
-            -target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,arm-unknown-linux-musleabihf,mips-unknown-linux-musl,mipsel-unknown-linux-musl
+            -target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,armv7-unknown-linux-musleabihf,arm-unknown-linux-musleabihf,mips-unknown-linux-musl,mipsel-unknown-linux-musl,x86_64-unknown-freebsd,aarch64-unknown-freebsd,x86_64-apple-darwin,aarch64-apple-darwin,x86_64-pc-windows-gnu,aarch64-pc-windows-gnullvm
           go run ./tools/sbom cargo -o dist/sbom-phone-core.cdx.json -version "$GITHUB_REF_NAME" -manifest Cargo.toml \
             -package cbb-ffi \
             -target aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android

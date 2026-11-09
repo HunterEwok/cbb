@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# cbb forward on a server (docs/admin/self-hosting.md): it passes the
+# cbb-forward, the server cbb forward runs, on a server (docs/admin/self-hosting.md): it passes the
 # encrypted WireGuard packets of the hubs whose clients cannot reach them
 # directly. It holds no group's keys and keeps nothing about the devices: no
 # log names an address, a group or a device, and on disk there is only its
@@ -18,7 +18,7 @@ Type=simple
 # CBB_FORWARD_FLAGS in /etc/cbb/forward.env.
 Environment=CBB_FORWARD_FLAGS=
 EnvironmentFile=-/etc/cbb/forward.env
-ExecStart=/usr/local/bin/cbb forward $CBB_FORWARD_FLAGS
+ExecStart=/usr/local/bin/cbb-forward $CBB_FORWARD_FLAGS
 DynamicUser=yes
 StateDirectory=cbb-forward
 StateDirectoryMode=0700

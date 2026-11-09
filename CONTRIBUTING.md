@@ -109,13 +109,13 @@ go run ./tools/repocheck       # English only, license headers, copied code, no 
 go run ./tools/tokens -check   # apps/design/tokens.json -> Swift and Kotlin, WCAG contrast
 go run ./tools/icon -check     # the apps' icons
 go test -race ./...
-go build -o /dev/null ./cmd/cbb
-GOOS=linux GOARCH=arm GOARM=6 go build -o /dev/null ./cmd/cbb   # Raspberry Pi Zero W
+go build -o /dev/null ./cmd/...
+GOOS=linux GOARCH=arm GOARM=6 go build -o /dev/null ./cmd/cbb-helper   # Raspberry Pi Zero W
 GOOS=freebsd go vet ./...                                         # FreeBSD (the freebsd job runs the tests)
 # Big-endian, 32-bit MIPS, as on many routers (the mips job; qemu-user-static, or qemu-user and qemu-user-binfmt
 # on Ubuntu 26.04 (then qemu-mips), with binfmt
 # for the tests that start the test binary again):
-GOARCH=mips GOMIPS=softfloat go test -exec qemu-mips-static ./internal/service ./internal/mdns ./cmd/cbb
+GOARCH=mips GOMIPS=softfloat go test -exec qemu-mips-static ./internal/mdns ./internal/helper
 ```
 
 ### The other parts

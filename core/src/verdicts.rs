@@ -117,17 +117,16 @@ fn verdict(c: &Value) -> String {
             let ok = crate::media::Manifest::parse(&body).is_ok();
             if ok { "taken" } else { "refused" }.into()
         }
-        "keys" | "release" | "channel" => {
+        "keys" | "release" | "channel" | "attest-status" => {
             let ok = body.len() <= crate::release::MAX_BODY
                 && match kind {
                     "keys" => crate::release::decode_keys(&body).is_ok(),
                     "release" => crate::release::decode_release(&body).is_ok(),
-                    _ => crate::release::decode_channel(&body).is_ok(),
+                    "channel" => crate::release::decode_channel(&body).is_ok(),
+                    _ => crate::release::decode_status(&body).is_ok(),
                 };
             if ok { "taken" } else { "refused" }.into()
         }
-        // The lite member reads no attest-status.json.
-        "attest-status" => "skip".into(),
         "set" => set(c),
         _ => panic!("unknown kind {kind}"),
     }
@@ -186,6 +185,6 @@ fn verdicts() {
     }
     match out {
         Some(o) => std::fs::write(o, lines).unwrap(),
-        None => assert_eq!(lines, "refused\nskip\n"),
+        None => assert_eq!(lines, "refused\nrefused\n"),
     }
 }

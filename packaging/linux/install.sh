@@ -216,6 +216,13 @@ install -m 0755 "$bin" "$cbb"
 if [ -f "$(dirname "$bin")/cbb-helper" ]; then
 	install -m 0755 "$(dirname "$bin")/cbb-helper" "${cbb%/*}/cbb-helper"
 fi
+# The servers, which cbb forward and cbb relay run, and their systemd units
+# (cbb-forward.service, cbb-relay.service) start by themselves.
+for server in cbb-forward cbb-relay; do
+	if [ -f "$(dirname "$bin")/$server" ]; then
+		install -m 0755 "$(dirname "$bin")/$server" "${cbb%/*}/$server"
+	fi
+done
 install -d -m 0755 "${sysusers%/*}"
 # SteamOS may drop /etc/group's changes with an update, so the sysusers
 # file says who is in the group too: the user who ran sudo, and those it

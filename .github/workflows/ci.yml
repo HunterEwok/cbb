@@ -136,11 +136,17 @@ jobs:
         # package has 20.
         shell: bash
         run: go test -race -timeout 20m -coverprofile="cover-go-${{ matrix.os }}.out" ./...
-      # int is 32 bits there, as on the Raspberry Pi's armv7 and the routers'
-      # mips, and 386 runs on the runner without an emulator.
-      - name: go test of the member protocol on a 32-bit build
+      # The Rust service's own Windows parts: the control sockets' folders
+      # and access lists.
+      - name: cargo test of the Rust service's Windows parts
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: cargo test --locked -p cbb-lite --lib sys::acl
+      # int is 32 bits there, as on the Raspberry Pi's armv7, and 386 runs
+      # on the runner without an emulator.
+      - name: go test of the group and the copies on a 32-bit build
         if: matrix.os == 'ubuntu-latest'
-        run: go test ./internal/node
+        run: go test ./internal/group ./internal/clip ./internal/helper
         env:
           GOARCH: "386"
       # Each system's own files (Windows, macOS) for the coverage summary; the
@@ -188,11 +194,10 @@ jobs:
           name: coverage-go-withcore
           path: cover-go-withcore.out
           retention-days: 7
-      - name: the build says it runs the core
+      - name: cbb-helper is built with the core, as the release builds it
         run: |
-          go build -overlay target/cbb-core-overlay.json -tags cbbwasm -o "$RUNNER_TEMP/cbb" ./cmd/cbb
-          "$RUNNER_TEMP/cbb" version | tee "$RUNNER_TEMP/version.txt"
-          grep -q '^rules: the Rust core' "$RUNNER_TEMP/version.txt"
+          go build -overlay target/cbb-core-overlay.json -tags cbbwasm -o "$RUNNER_TEMP/cbb-helper" ./cmd/cbb-helper
+          go version -m "$RUNNER_TEMP/cbb-helper" | grep -q -- '-tags=cbbwasm'
 
   # Go's test coverage across packages (a test of internal/service counts for
   # internal/group too), with the TPM, the desktop clipboards and the e2e's
@@ -258,12 +263,17 @@ jobs:
           '
           sudo cp "$RUNNER_TEMP/mdns-cover/cover.out" cover-go-mdns.out
           sudo chown "$(id -u)" cover-go-mdns.out
-      - name: the e2e with a cbb built with -cover
+      - name: the e2e with the Rust cbb and a cbb-helper built with -cover
         env:
           CGO_ENABLED: "0"
         run: |
-          go build -trimpath -cover -coverpkg="$COVERPKG" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
-          CBB_E2E_COVERDIR="$RUNNER_TEMP/e2e-cover" sh tools/e2e/e2e.sh "$RUNNER_TEMP/cbb"
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          cargo build --locked --release -p cbb-lite
+          mkdir -p "$RUNNER_TEMP/e2e"
+          cp target/release/cbb "$RUNNER_TEMP/e2e/cbb"
+          go build -trimpath -cover -coverpkg="$COVERPKG" -o "$RUNNER_TEMP/e2e/cbb-helper" ./cmd/cbb-helper
+          CBB_E2E_COVERDIR="$RUNNER_TEMP/e2e-cover" sh tools/e2e/e2e.sh "$RUNNER_TEMP/e2e/cbb"
           sudo chown -R "$(id -u)" "$RUNNER_TEMP/e2e-cover"
           go tool covdata textfmt -i "$RUNNER_TEMP/e2e-cover" -o cover-go-e2e.out
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -307,9 +317,17 @@ jobs:
           go run ./tools/coverage -floor tools/coverage/floor.json -summary "$GITHUB_STEP_SUMMARY" "$@"
 
   build:
-    name: build (Linux, FreeBSD, Windows)
+    name: build (${{ matrix.systems }})
     needs: changes
     if: needs.changes.outputs.core == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - systems: Linux
+            targets: linux/amd64 linux/arm64 linux/arm/7 linux/arm/6
+          - systems: FreeBSD, Windows
+            targets: freebsd/amd64/vet freebsd/arm64 windows/amd64/vet windows/arm64
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -320,24 +338,29 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
-      - name: the Rust core as WebAssembly, which cbb runs for the group's rules (internal/core)
+      - name: the Rust core as WebAssembly, which the Go programs run for the group's rules (internal/core)
         run: |
           sh wasm/build.sh
           sh member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
-      - name: go build and the release archive of each system and architecture, with the core as at a release
-        # One job for every target: Go builds for each from here, and a job per
-        # target spent more time starting than building. go vet runs once per
-        # operating system: the code differs by system, not by architecture,
-        # and the check job vets Linux. MIPS is for OpenWrt routers without an
-        # FPU (softfloat; the mips job runs the tests), ARMv6 for the Raspberry
-        # Pi Zero W.
+      - name: zig, which links cbb for FreeBSD and Windows, and the nightly Rust of FreeBSD's ARM64 build
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zig"
+          "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
+          echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
+      - name: cbb and the Go programs beside it, and the release archive of each target, as at a release
+        # Two jobs, each building cbb (Rust, member/packaging/build.sh) and the
+        # Go programs for its targets: Rust builds each target from the start.
+        # go vet runs once per operating system: the code differs by system,
+        # not by architecture, and the check job vets Linux. ARMv6 is for the
+        # Raspberry Pi Zero W; the routers' MIPS builds are the litemips job's.
         env:
           CGO_ENABLED: "0"
+          TARGETS: ${{ matrix.targets }}
         run: |
-          sh .github/build-targets.sh "$RUNNER_TEMP/core-notices" "$RUNNER_TEMP" \
-            linux/amd64 linux/arm64 linux/arm/7 linux/arm/6 linux/mips linux/mipsle \
-            freebsd/amd64/vet freebsd/arm64 windows/amd64/vet windows/arm64
+          # shellcheck disable=SC2086 # the targets are words
+          sh .github/build-targets.sh "$RUNNER_TEMP/core-notices" "$RUNNER_TEMP" $TARGETS
       - name: keep the Windows archive for the installer test
+        if: contains(matrix.targets, 'windows/amd64')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-windows-amd64.zip
@@ -363,21 +386,24 @@ jobs:
         run: |
           sh wasm/build.sh
           sh member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
-      - name: go build and the release archives, with the core as at a release
+      - name: cbb, the Go programs beside it and the release archives, with the core as at a release
         env:
           CGO_ENABLED: "1"
         run: sh .github/build-targets.sh "$RUNNER_TEMP/core-notices" "$RUNNER_TEMP" darwin/arm64/vet darwin/amd64
-      - name: the agent has the pasteboard
-        # Without cgo the agent would start and fail; this build must link AppKit.
+      - name: the agent's helper has the pasteboard
+        # Without cgo the agent would start and fail; the helper must link AppKit.
         run: |
           for a in arm64 amd64; do
-            otool -L "$RUNNER_TEMP/darwin-$a/cbb" | grep -q AppKit.framework
+            otool -L "$RUNNER_TEMP/darwin-$a/cbb-helper" | grep -q AppKit.framework
           done
-      - name: cbb runs under the hardened runtime, as a release signs it (ad hoc here)
+      - name: the programs run under the hardened runtime, as a release signs them (ad hoc here)
         run: |
           for a in arm64 amd64; do
-            sh packaging/macos/sign.sh - "$RUNNER_TEMP/darwin-$a/cbb"
+            for f in cbb cbb-helper cbb-forward cbb-relay; do
+              sh packaging/macos/sign.sh - "$RUNNER_TEMP/darwin-$a/$f"
+            done
           done
+          "$RUNNER_TEMP/darwin-arm64/cbb" version
   mips:
     name: test (linux/mips under qemu)
     needs: changes
@@ -402,13 +428,11 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q qemu-user qemu-user-binfmt
-      - name: go test the network, the group and the service under qemu-mips
-        # Emulated, internal/service takes close to go test's default 10
-        # minutes (586 and 597 seconds in runs that passed), so it gets 20.
+      - name: go test the network and the group under qemu-mips
         run: >-
-          go test -timeout 20m -exec "$(command -v qemu-mips-static || command -v qemu-mips)" ./cmd/cbb ./internal/clip ./internal/control ./internal/group
-          ./internal/hlc ./internal/mdns ./internal/netguard ./internal/node ./internal/openwrt
-          ./internal/pair ./internal/service ./internal/sysinfo ./internal/tunnel ./internal/uptime
+          go test -timeout 20m -exec "$(command -v qemu-mips-static || command -v qemu-mips)" ./internal/clip ./internal/control ./internal/group
+          ./internal/hlc ./internal/mdns ./internal/netguard ./internal/openwrt
+          ./internal/sysinfo ./internal/tunnel ./internal/uptime
           ./internal/vless </dev/null
 
   freebsd:
@@ -421,6 +445,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: cbb for FreeBSD, linked with zig as the release links it, and cbb-helper beside it
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zig"
+          "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
+          export PATH="$RUNNER_TEMP/zig/bin:$PATH"
+          rustup toolchain install stable --profile minimal
+          dir=$(sh member/packaging/build.sh freebsd/amd64)
+          mkdir -p freebsd-bin
+          cp "$dir/cbb" freebsd-bin/cbb
+          CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -trimpath -o freebsd-bin/cbb-helper ./cmd/cbb-helper
       - name: go test in a FreeBSD 15.1 virtual machine
         uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
         with:
@@ -448,9 +486,11 @@ jobs:
             # FreeBSD shares it only with a socket root opened.
             go test -c -o /tmp/mdns.test ./internal/mdns
             CBB_TEST_MDNS_USERS=1 /tmp/mdns.test -test.run 'TestOtherUsers$' -test.v
-            # The installer, the rc.d script and pf's anchor on the real system.
-            go build -trimpath -o /tmp/cbb ./cmd/cbb
-            sh packaging/freebsd/install.sh --no-firewall /tmp/cbb
+            # The installer, the rc.d script and pf's anchor on the real system,
+            # with the cbb and cbb-helper built for FreeBSD before.
+            mkdir -p /tmp/cbbbin
+            cp freebsd-bin/cbb freebsd-bin/cbb-helper /tmp/cbbbin/
+            sh packaging/freebsd/install.sh --no-firewall /tmp/cbbbin/cbb
             service cbb status
             test -f /usr/local/etc/xdg/autostart/cbb-desktop.desktop
             # cbb opens its mDNS sockets as root, then runs as its user.
@@ -486,7 +526,7 @@ jobs:
             printf '#!/bin/sh\nprintf "anchor \\"cbb\\"\\npass all\\n" | pfctl -f -\n' >/usr/local/sbin/configctl
             chmod 0755 /usr/local/sbin/configctl
             cp /etc/pf.conf /tmp/pf.conf.before
-            sh packaging/freebsd/install.sh --express /tmp/cbb
+            sh packaging/freebsd/install.sh --express /tmp/cbbbin/cbb
             test -f /usr/local/etc/inc/plugins.inc.d/cbb.inc
             test ! -e /usr/local/etc/xdg/autostart/cbb-desktop.desktop
             test "$(sh /usr/local/share/cbb/firewall.sh kind)" = opnsense
@@ -537,13 +577,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: the release archives, the full member's and the lite one's, as get.sh takes them
+      - name: the release archives, the computers' (cbb with cbb-helper) and the lite one's, as get.sh takes them
         run: |
-          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
           rel="$RUNNER_TEMP/release"
-          sh packaging/archive.sh "$RUNNER_TEMP/cbb" linux amd64 "$rel"
           rustup toolchain install stable --profile minimal --target x86_64-unknown-linux-musl
           cargo +stable build --locked --release --target x86_64-unknown-linux-musl
+          mkdir -p "$RUNNER_TEMP/full"
+          cp target/x86_64-unknown-linux-musl/release/cbb "$RUNNER_TEMP/full/cbb"
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/full/cbb-helper" ./cmd/cbb-helper
+          sh packaging/archive.sh "$RUNNER_TEMP/full/cbb" linux amd64 "$rel"
           sh member/packaging/archive.sh target/x86_64-unknown-linux-musl/release/cbb x86_64-unknown-linux-musl amd64 "$rel"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
           # get.sh as the release publishes it, with its translations.
@@ -562,7 +604,6 @@ jobs:
   upgrade:
     name: upgrade from the last release
     needs: changes
-    # The Rust service (member/) takes over from the Go one here too.
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lite == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -587,30 +628,22 @@ jobs:
           for a in *-linux-amd64.tar.gz; do
             case $a in *-lite-*) ;; *) tar -xzf "$a" ;; esac
           done
-          mkdir member
-          mv "$(find . -mindepth 2 -maxdepth 2 -type f -name cbb -not -path './member/*')" member/cbb
+          # The folder that holds cbb, with cbb-helper beside it from 0.6 on.
+          mv "$(dirname "$(find . -mindepth 2 -maxdepth 2 -type f -name cbb)")" member
           member/cbb version
-      - name: the build under test, as the release after it
+      - name: the build under test, cbb and cbb-helper beside it, as the release after it
         run: |
-          old=$("$RUNNER_TEMP/old/member/cbb" version | sed -n 's/^[a-z]* v\([0-9][0-9.]*\).*/\1/p')
+          old=$("$RUNNER_TEMP/old/member/cbb" version | sed -n 's/^[a-z]* v\{0,1\}\([0-9][0-9.]*\).*/\1/p' | head -n 1)
           new="${old%.*}.$((${old##*.} + 1))"
-          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$new" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
-      - name: members of the release update one at a time and keep syncing (tools/e2e/upgrade.sh)
-        run: sh tools/e2e/upgrade.sh "$RUNNER_TEMP/old/member/cbb" "$RUNNER_TEMP/cbb"
-      - name: the computers move from the Go service to the Rust one on the same state
-        run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
-          # Both sides are 0.6, so the group stays: the Go service as 0.6.0,
-          # the Rust one and its helper as 0.6.1.
-          mkdir -p "$RUNNER_TEMP/go6" "$RUNNER_TEMP/rust"
-          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v0.6.0" \
-            -o "$RUNNER_TEMP/go6/cbb" ./cmd/cbb
-          CBB_VERSION=0.6.1 cargo build --locked --release -p cbb-lite
-          cp target/release/cbb "$RUNNER_TEMP/rust/cbb"
-          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v0.6.1" \
-            -o "$RUNNER_TEMP/rust/cbb-helper" ./cmd/cbb-helper
-          sh tools/e2e/upgrade.sh "$RUNNER_TEMP/go6/cbb" "$RUNNER_TEMP/rust/cbb" "$RUNNER_TEMP/go6/cbb"
+          CBB_VERSION=$new cargo build --locked --release -p cbb-lite
+          mkdir -p "$RUNNER_TEMP/new"
+          cp target/release/cbb "$RUNNER_TEMP/new/cbb"
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$new" \
+            -o "$RUNNER_TEMP/new/cbb-helper" ./cmd/cbb-helper
+      - name: members of the release update one at a time and keep syncing (tools/e2e/upgrade.sh)
+        run: sh tools/e2e/upgrade.sh "$RUNNER_TEMP/old/member/cbb" "$RUNNER_TEMP/new/cbb"
 
   avahi:
     name: mdns with avahi
@@ -645,7 +678,6 @@ jobs:
   e2e:
     name: e2e
     needs: changes
-    # The Rust service (member/) runs it too.
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lite == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -657,13 +689,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: go build
-        env:
-          CGO_ENABLED: "0"
-        run: go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
-      - name: three members and a resolver in containers
-        run: sh tools/e2e/e2e.sh "$RUNNER_TEMP/cbb"
-      - name: the Rust service and cbb-helper beside it
+      - name: cbb and cbb-helper beside it
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
@@ -671,8 +697,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/rust"
           cp target/release/cbb "$RUNNER_TEMP/rust/cbb"
           CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/rust/cbb-helper" ./cmd/cbb-helper
-      - name: the same, with the Rust service and the Go cbb's commands
-        run: sh tools/e2e/e2e.sh "$RUNNER_TEMP/rust/cbb" "$RUNNER_TEMP/cbb"
+      - name: four members and avahi in containers
+        run: sh tools/e2e/e2e.sh "$RUNNER_TEMP/rust/cbb"
 
   desktop:
     name: desktop clipboards
@@ -727,15 +753,15 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/l10n.sh packaging/l10n-embed.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh ffi/bind.sh wasm/build.sh .github/ci-changes.sh .github/build-targets.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
+        run: shellcheck packaging/archive.sh packaging/l10n.sh packaging/l10n-embed.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh member/packaging/build.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh ffi/bind.sh wasm/build.sh .github/ci-changes.sh .github/build-targets.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
       - name: the software bills of materials, as the release makes them (tools/sbom)
         run: |
-          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/sbom-cbb" ./cmd/cbb
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/sbom-cbb-helper" ./cmd/cbb-helper
           out=$RUNNER_TEMP/sbom
           mkdir -p "$out"
-          go run ./tools/sbom go -o "$out/sbom-go.cdx.json" -version v0.0.0 "$RUNNER_TEMP/sbom-cbb"
+          go run ./tools/sbom go -o "$out/sbom-go.cdx.json" -version v0.0.0 "$RUNNER_TEMP/sbom-cbb-helper"
           go run ./tools/sbom cargo -o "$out/sbom-lite.cdx.json" -version v0.0.0 -manifest Cargo.toml \
             -package cbb-lite -target x86_64-unknown-linux-musl,mips-unknown-linux-musl
           go run ./tools/sbom cargo -o "$out/sbom-phone-core.cdx.json" -version v0.0.0 -manifest Cargo.toml \
@@ -747,15 +773,28 @@ jobs:
           # The Go programs carry golang.org/x/crypto; the lite member, rustls.
           jq -e 'any(.components[]; .name == "golang.org/x/crypto")' "$out/sbom-go.cdx.json" >/dev/null
           jq -e 'any(.components[]; .name == "rustls")' "$out/sbom-lite.cdx.json" >/dev/null
+      - name: cbb and cbb-helper beside it, as the release packs them
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          cargo build --locked --release -p cbb-lite
+          cp target/release/cbb "$RUNNER_TEMP/cbb"
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb-helper" ./cmd/cbb-helper
       - name: systemd-analyze verify
         run: |
-          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+          # With cbb-helper beside it, as the full member's archive installs
+          # it: cbb alone is the lite member, which get.sh below would
+          # refuse to replace.
           sudo install -m 0755 "$RUNNER_TEMP/cbb" /usr/local/bin/cbb
+          sudo install -m 0755 "$RUNNER_TEMP/cbb-helper" /usr/local/bin/cbb-helper
           sudo systemd-sysusers "$PWD/packaging/linux/cbb.sysusers"
           systemd-analyze verify packaging/linux/cbb.service
           systemd-analyze security --offline=true packaging/linux/cbb.service --threshold=30 # 3.0 on the scale it prints
           systemd-analyze verify member/packaging/cbb.service
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb-forward" ./cmd/cbb-forward
+          cp target/release/cbb-relay "$RUNNER_TEMP/cbb-relay"
           for u in cbb-forward cbb-relay; do
+            sudo install -m 0755 "$RUNNER_TEMP/$u" "/usr/local/bin/$u"
             systemd-analyze verify "packaging/linux/$u.service"
             systemd-analyze security --offline=true "packaging/linux/$u.service" --threshold=20
           done
@@ -803,7 +842,6 @@ jobs:
         run: |
           # The archive as the release workflow makes it, with cbb-helper.
           rel="$RUNNER_TEMP/release"
-          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb-helper" ./cmd/cbb-helper
           sh packaging/archive.sh "$RUNNER_TEMP/cbb" linux amd64 "$rel"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
           sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall
@@ -863,10 +901,16 @@ jobs:
           CBB_VERIFY=skip sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep "Not checked" >/dev/null
       - name: cbb update installs a newer signed release, puts the old one back, and sets the timer
         run: |
-          version() { CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$1" -o "$2" ./cmd/cbb; }
+          # cbb and its helper of one version: a release cbb takes only a
+          # helper of its own release.
+          version() {
+            CBB_VERSION=$1 cargo build --locked --release -p cbb-lite
+            cp target/release/cbb "$2/cbb"
+            CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$1" -o "$2/cbb-helper" ./cmd/cbb-helper
+          }
           mkdir -p "$RUNNER_TEMP/v060" "$RUNNER_TEMP/v061"
-          version 0.6.0 "$RUNNER_TEMP/v060/cbb"
-          version 0.6.1 "$RUNNER_TEMP/v061/cbb"
+          version 0.6.0 "$RUNNER_TEMP/v060"
+          version 0.6.1 "$RUNNER_TEMP/v061"
           sudo CBB_FIREWALL=no sh packaging/linux/install.sh --auto-update off "$RUNNER_TEMP/v060/cbb"
           test "$(sudo cbb update -auto)" = off
           # 0.6.1, signed with throwaway keys (tools/release-sign drill),
@@ -879,7 +923,7 @@ jobs:
           export CBB_RELEASE_DIR="$rel" CBB_RELEASE_ROOTS="$RUNNER_TEMP/update.pem"
           cbb update -check | grep -q '0.6.1 is available'
           sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY cbb update
-          cbb version | grep -q ' v0.6.1 '
+          cbb version | grep -q '^cbb 0.6.1 '
           sudo cbb status | grep -q 'Not in a group'
           sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY cbb update | grep -q 'is the newest release'
           # 0.6.2, whose service never starts: 0.6.1 goes back, and 0.6.2 is a failed version.
@@ -888,7 +932,7 @@ jobs:
           cat >"$RUNNER_TEMP/v062/cbb" <<'EOF'
           #!/bin/sh
           case $1 in
-          version) echo "cbb v0.6.2 linux/amd64" ;;
+          version) echo "cbb 0.6.2 (linux/x86_64)" ;;
           service) exit 1 ;;
           esac
           EOF
@@ -901,7 +945,7 @@ jobs:
           fi
           cat "$RUNNER_TEMP/err"
           grep -q '0.6.1 is back' "$RUNNER_TEMP/err"
-          cbb version | grep -q ' v0.6.1 '
+          cbb version | grep -q '^cbb 0.6.1 '
           sudo cbb status | grep -q 'Not in a group'
           sudo grep -q '"0.6.2"' /var/lib/cbb-update/update.json
           # The timer.
@@ -1046,8 +1090,13 @@ jobs:
           # The archive as the release workflow makes it; the formula wants the
           # other three too, so they are copies of it.
           rel="$RUNNER_TEMP/release"
-          go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v0.0.1" -o "$RUNNER_TEMP/cbb" ./cmd/cbb
-          sh packaging/archive.sh "$RUNNER_TEMP/cbb" darwin arm64 "$rel"
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          mkdir -p "$RUNNER_TEMP/bin"
+          CBB_VERSION=0.0.1 cargo build --locked --release -p cbb-lite
+          cp target/release/cbb "$RUNNER_TEMP/bin/cbb"
+          go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v0.0.1" -o "$RUNNER_TEMP/bin/cbb-helper" ./cmd/cbb-helper
+          sh packaging/archive.sh "$RUNNER_TEMP/bin/cbb" darwin arm64 "$rel"
           for n in darwin-amd64 linux-amd64 linux-arm64; do
             cp "$rel/cbb-darwin-arm64.tar.gz" "$rel/cbb-$n.tar.gz"
           done
@@ -1062,7 +1111,7 @@ jobs:
           brew audit --strict local/test/cbb
           brew install local/test/cbb
           brew test local/test/cbb
-          "$(brew --prefix)/bin/cbb" version | grep -q v0.0.1
+          "$(brew --prefix)/bin/cbb" version | grep -q '^cbb 0.0.1 '
       - name: install.sh --in-place runs a root-owned copy of Homebrew's binary, and uninstall.sh removes it all
         run: |
           opt="$(brew --prefix)/opt/cbb"
@@ -1150,7 +1199,7 @@ jobs:
     needs: [changes, build]
     if: needs.changes.outputs.core == 'true'
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         shell: pwsh
@@ -1420,20 +1469,29 @@ jobs:
         env:
           CBB_ERROR_DETAILS: "1"
         run: |
+          # The Rust cbb and cbbw.exe of release v, and beside them the Go
+          # helper of the same release, which cbb updates from its system's
+          # archive with and which a release cbb requires.
           function build($v) {
             $dir = Join-Path $env:RUNNER_TEMP "v$v\cbb"
             New-Item -ItemType Directory -Force "$dir\packaging" | Out-Null
+            $env:CBB_VERSION = $v
+            $env:CBB_ARCH = 'amd64'
+            cargo build --locked -p cbb-lite --features windowless --target-dir "$env:RUNNER_TEMP\target"
+            if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
+            Copy-Item "$env:RUNNER_TEMP\target\debug\cbb.exe", "$env:RUNNER_TEMP\target\debug\cbbw.exe" $dir
             $ld = "-X github.com/HunterEwok/cbb/internal/version.Version=v$v"
-            go build -trimpath -ldflags $ld -o "$dir\cbb.exe" ./cmd/cbb
-            if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
-            go build -trimpath -ldflags "$ld -H=windowsgui" -o "$dir\cbbw.exe" ./cmd/cbb
+            go build -trimpath -ldflags $ld -o "$dir\cbb-helper.exe" ./cmd/cbb-helper
             if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
             Copy-Item -Recurse packaging\windows "$dir\packaging\"
             Copy-Item -Recurse packaging\l10n "$dir\packaging\"
             return $dir
           }
+          rustup toolchain install stable --profile minimal
+          rustup default stable
           $old = build '0.6.0'
           $new = build '0.6.1'
+          Remove-Item Env:CBB_VERSION, Env:CBB_ARCH
           powershell -NoProfile -ExecutionPolicy Bypass -File "$old\packaging\windows\install.ps1" -AutoUpdate off -NoFirewall
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $cbb = "$env:ProgramFiles\cbb\cbb.exe"
@@ -1451,7 +1509,7 @@ jobs:
           & $cbb update
           if ($LASTEXITCODE -ne 0) { throw 'cbb update failed' }
           $v = & $cbb version | Out-String
-          if ($v -notmatch ' v0\.6\.1 ') { throw "after the update: $v" }
+          if ($v -notmatch '^cbb 0\.6\.1 ') { throw "after the update: $v" }
           if ((Get-Service cbb).Status -ne 'Running') { throw 'the service does not run' }
           $out = & $cbb update | Out-String
           if ($out -notmatch 'newest release') { throw "a second cbb update: $out" }
@@ -1476,7 +1534,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1497,14 +1555,13 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: the Swift phone admits the Go joiner, and Go reads its member frames
+      - name: the core and Go read what the Swift phone wrote
         if: runner.os == 'Linux'
         run: |
-          CBB_SWIFT_INTEROP="$PWD/cbb-interop" go test ./internal/pair -run TestSwiftMemberAdmitsGoJoiner -v
           # swift test just wrote testdata/interop/swift-member.json, and to
           # interop-out the records it signed, a certificate it renewed and
           # what an admin phone makes.
-          go test ./internal/node -run TestSwiftMemberFrames -v
+          cargo test --locked -p cbb-core --lib vectors::swift_member_frames
           CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
       - name: swift test
         if: runner.os == 'macOS'
@@ -1519,17 +1576,19 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: the Swift phone admits the Go joiner and syncs with a Go member over TLS
+      - name: the Swift phone pairs both ways with the computers' cbb and syncs with it over TLS
         if: runner.os == 'macOS'
         run: |
+          # The computer is the Rust cbb, with cbb-helper beside it.
+          cargo build --locked --release -p cbb-lite
+          go build -o target/release/cbb-helper ./cmd/cbb-helper
           # A throwaway keychain for the tool's identity, unlocked and the default.
           security create-keychain -p ci ci.keychain
           security list-keychains -d user -s ci.keychain
           security default-keychain -s ci.keychain
           security unlock-keychain -p ci ci.keychain
           security set-keychain-settings ci.keychain
-          CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 3m ./internal/pair -run 'TestSwiftMemberAdmitsGoJoinerTLS|TestSwiftHubAdmitsInvitedGoJoiner|TestSwiftJoinsComputerRoot' -v
-          CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 3m ./internal/node -run 'TestSwiftMemberTLS|TestSwiftRestoresWithRecoveryKey' -v
+          CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 5m ./internal/service -run 'TestSwift' -v
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: runner.os == 'macOS'
         with:
@@ -1701,13 +1760,14 @@ jobs:
             ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO | tail -n 50)
           app="$RUNNER_TEMP/derived/Build/Products/Release/CBB.app"
           sh packaging/macos/sign.sh - "$app"
+          rustup toolchain install stable --profile minimal --target aarch64-apple-darwin,x86_64-apple-darwin
           for a in arm64 amd64; do
-            CGO_ENABLED=1 GOARCH=$a go build -trimpath -o "$RUNNER_TEMP/cbb-$a" ./cmd/cbb
+            t=aarch64-apple-darwin
+            [ "$a" = arm64 ] || t=x86_64-apple-darwin
+            cargo +stable build --locked --release -p cbb-lite --target "$t"
+            cp "target/$t/release/cbb" "$RUNNER_TEMP/cbb-$a"
             CGO_ENABLED=1 GOARCH=$a go build -trimpath -o "$RUNNER_TEMP/cbb-helper-$a" ./cmd/cbb-helper
-            # A build without the Rust core, which sign.sh's run would refuse;
-            # the build job checks that the release's runs signed.
-            codesign --force --options runtime --identifier tools.cbb.cli \
-              --entitlements packaging/macos/cbb.entitlements --sign - "$RUNNER_TEMP/cbb-$a"
+            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-$a"
             sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-helper-$a"
           done
           lipo -create "$RUNNER_TEMP/cbb-arm64" "$RUNNER_TEMP/cbb-amd64" -output "$RUNNER_TEMP/cbb"
@@ -1808,7 +1868,10 @@ jobs:
         if: runner.os == 'Linux'
         working-directory: .
         run: |
-          go build -trimpath -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+          # Only the archive's layout is checked here: a stand-in for cbb,
+          # which the build job builds and packs.
+          printf '#!/bin/sh\n' >"$RUNNER_TEMP/cbb"
+          chmod 0755 "$RUNNER_TEMP/cbb"
           cp apps/desktop/cbb-desktop "$RUNNER_TEMP/cbb-desktop"
           sh packaging/archive.sh "$RUNNER_TEMP/cbb" linux amd64 "$RUNNER_TEMP/dist"
           tar -tzf "$RUNNER_TEMP/dist/cbb-linux-amd64.tar.gz" >"$RUNNER_TEMP/list"
@@ -1853,15 +1916,17 @@ jobs:
           cache: false
       - name: Go reads what the Kotlin kit signed
         run: CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
-      - name: Go pairs and syncs with the Kotlin kit over TLS
+      - name: the Kotlin kit pairs both ways with the computers' cbb and syncs with it over TLS
         # The Kotlin twin of cbb-interop plays the phone; Conscrypt
         # gives it TLS 1.3 on Linux as on Android.
         run: |
           (cd apps/android && ./gradlew --no-daemon -p kit interopScript)
           tool="$PWD/apps/android/kit/build/interop/cbb-interop"
-          CBB_SWIFT_INTEROP="$tool" go test ./internal/pair -run 'TestSwiftMemberAdmitsGoJoiner$' -v
-          CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/pair -run 'TestSwiftMemberAdmitsGoJoinerTLS|TestSwiftHubAdmitsInvitedGoJoiner|TestSwiftJoinsComputerRoot' -v
-          CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 3m ./internal/node -run 'TestSwiftMemberTLS|TestSwiftRestoresWithRecoveryKey' -v
+          # The computer is the Rust cbb, with cbb-helper beside it.
+          rustup toolchain install stable --profile minimal
+          cargo +stable build --locked --release -p cbb-lite
+          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 5m ./internal/service -run 'TestSwift' -v
       - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
@@ -1919,8 +1984,15 @@ jobs:
           rustup toolchain install "$(sed -n 's/^cbb.rust=//p' gradle.properties)" --profile minimal \
             --target aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
           cargo install --locked cargo-ndk@4.1.2
-      - name: the fleet's cbb
-        run: CGO_ENABLED=0 go build -o "$RUNNER_TEMP/cbb" ./cmd/cbb
+      - name: the fleet's cbb, and cbb-helper, cbb-forward and cbb-relay beside it
+        run: |
+          rustup toolchain install stable --profile minimal
+          cargo +stable build --locked --release -p cbb-lite
+          mkdir -p "$RUNNER_TEMP/fleet"
+          cp target/release/cbb target/release/cbb-relay "$RUNNER_TEMP/fleet/"
+          for p in cbb-helper cbb-forward; do
+            CGO_ENABLED=0 go build -o "$RUNNER_TEMP/fleet/$p" "./cmd/$p"
+          done
       - name: an emulator, with KVM
         # The runner has KVM for its user once udev lets it.
         timeout-minutes: 15
@@ -1997,7 +2069,7 @@ jobs:
             exit 1
           fi
       - name: the phone suite
-        run: go run ./tools/bench -cbb "$RUNNER_TEMP/cbb" -android apps/android -report "$RUNNER_TEMP/phone" phone
+        run: go run ./tools/bench -cbb "$RUNNER_TEMP/fleet/cbb" -android apps/android -report "$RUNNER_TEMP/phone" phone
       - name: the emulator's log
         if: failure() || cancelled()
         timeout-minutes: 2
@@ -2117,9 +2189,16 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: the MIPS builds under qemu with Go members, all but sync away from home
+      - name: the computers' cbb, and cbb-helper beside it
+        run: |
+          rustup toolchain install stable --profile minimal
+          cargo +stable build --locked --release -p cbb-lite
+          go build -o target/release/cbb-helper ./cmd/cbb-helper
+      - name: the MIPS builds under qemu with computers, all but sync away from home
         # The hubs' and the invitations' tests need the tunnel, which the
         # MIPS build leaves out.
+        env:
+          CBB_TEST_RUST_SERVICE: ${{ github.workspace }}/target/release/cbb
         run: |
           for a in mips mipsel; do
             skip='TestLiteMemberAway|TestLiteHub|TestLiteForwardOnly|TestLiteRelay|TestLiteInvite|TestLiteJoinInvite'
@@ -2129,6 +2208,49 @@ jobs:
             "$RUNNER_TEMP/cbb-$a" version | grep -q 'linux/mips'
             CBB_LITE="$RUNNER_TEMP/cbb-$a" go test ./internal/service -run 'TestLite' -skip "$skip" -v
           done
+
+  # The service's tests (internal/service) against the Rust service that
+  # every release ships: each member is a Rust cbb with cbb-helper beside
+  # it, a phone is phone-on-linux, and they find each other by mDNS.
+  service:
+    name: service tests on the Rust cbb
+    needs: changes
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lite == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the Rust toolchain, swtpm for the keys in a TPM, and Xvfb for an X11 session's clipboard
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends swtpm xvfb xclip
+      - name: the Rust cbb, cbb-helper beside it, and the phone's member on Linux
+        run: |
+          cargo build --locked --release -p cbb-lite
+          cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
+          CGO_ENABLED=0 go build -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
+      - name: go test ./internal/service and the desktop connector with every Linux member a Rust cbb
+        run: |
+          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
+          DISPLAY=:5 CBB_TEST_X11=1 \
+            CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_LITE="$PWD/target/release/cbb" \
+            CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" \
+            go test -timeout 45m ./internal/service -v
+          # One package at a time, so that -v streams each test's lines as
+          # it runs and a test that hangs is named by the timeout's
+          # goroutine dump before the job's own limit.
+          DISPLAY=:5 CBB_TEST_X11=1 \
+            CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_LITE="$PWD/target/release/cbb" \
+            go test -timeout 5m ./internal/connector -v
 
   lite:
     name: lite member (Rust)
@@ -2157,6 +2279,7 @@ jobs:
       - name: cargo clippy
         run: |
           cargo clippy --locked --workspace --all-targets -- -D warnings
+          cargo clippy --locked -p cbb-lite --features benchtime --all-targets -- -D warnings # the bench's time-scaled build
           cargo clippy --locked -p cbb-embassy --features host --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member,tunnel --all-targets -- -D warnings
@@ -2205,12 +2328,6 @@ jobs:
           cargo clippy --locked -p cbb-wasm --target wasm32-unknown-unknown -- -D warnings
           sh wasm/build.sh
           go test -race -overlay target/cbb-core-overlay.json -tags cbbwasm ./internal/core -v
-      - name: the lite member joins by the phone, syncs with Go members, takes their remote pastes and serves the Go command line and agent
-        # TestLiteAgent links an X11 session's clipboard under Xvfb.
-        run: |
-          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
-          for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
-          DISPLAY=:5 CBB_TEST_X11=1 CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run 'TestLite' -v
       - name: get.sh --lite installs the lite member, and uninstall.sh removes it
         run: |
           rel="$RUNNER_TEMP/release"
@@ -2232,11 +2349,15 @@ jobs:
             sleep 0.5
           done
           echo "$out" | grep -q 'Not in a group'
-          out=$(sudo cbb invite 2>&1) || true
-          echo "$out" | grep -q 'command of a full member'
-          # The full member cannot take over the lite member's keys.
-          go build -o "$RUNNER_TEMP/cbb-full" ./cmd/cbb
-          if sudo CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/cbb-full"; then
+          # The lite archive carries no forwarder: cbb forward says what it runs.
+          out=$(sudo cbb forward -show-key 2>&1) || true
+          echo "$out" | grep -q 'runs cbb-forward, which is not beside this cbb'
+          # A computer's cbb (with cbb-helper beside it) cannot take over the
+          # lite member's keys.
+          mkdir -p "$RUNNER_TEMP/full"
+          cp target/release/cbb "$RUNNER_TEMP/full/cbb"
+          go build -o "$RUNNER_TEMP/full/cbb-helper" ./cmd/cbb-helper
+          if sudo CBB_FIREWALL=no sh packaging/linux/install.sh "$RUNNER_TEMP/full/cbb"; then
             echo "install.sh put the full member over the lite member" >&2
             exit 1
           fi
@@ -2331,15 +2452,18 @@ jobs:
           sudo ip tuntap add name tap0 mode tap user "$USER"
           sudo ip addr add 192.168.69.1/24 dev tap0
           sudo ip link set tap0 up
-          CBB_ESP32_ON_LINUX="$PWD/target/release/esp32-on-linux" go test -race ./internal/service -run TestEmbassyJoiner -v
-      - name: the phones' member through ffi/ joins a computer's group, syncs texts and images with it, and syncs away from home through its tunnel
-        run: |
-          cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
-          CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" go test -race ./internal/service -run 'TestFFIJoiner|TestFFIMember|TestFFIPhoneRoot|TestFFIPhoneAway|TestFFIPhoneTakeover' -v
+          # The computer it joins is a cbb, with cbb-helper beside it.
+          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          CBB_ESP32_ON_LINUX="$PWD/target/release/esp32-on-linux" CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" \
+            go test -race ./internal/service -run TestEmbassyJoiner -v
       - name: the phones' Rust tunnel and hub through ffi/ work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
         run: |
           cargo test --locked -p cbb-ffi --features tunnel tunnel && cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
           CBB_TUNNEL_ON_LINUX="$PWD/target/release/examples/tunnel-on-linux" go test -race ./internal/tunnel -run TestRustPhone -v
+      - name: the relay in Rust passes the Go relay's tests that check it from outside
+        run: |
+          CBB_TEST_RUST_RELAY="$PWD/target/release/cbb-relay" go test -race -count=1 ./internal/relay -v \
+            -run 'TestThroughRelay|TestGroupsApart|TestRefused|TestOpenRelay$|TestRemoved|TestCredentialedRelay|TestRelayDialsNothing|TestNoLogs|TestRecordBytes'
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-lite-linux-arm64
@@ -2641,18 +2765,26 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: go build for each platform of the image
+      - name: cbb and the Go programs beside it for each platform of the image
         env:
           CGO_ENABLED: "0"
           GOOS: linux
         run: |
-          GOARCH=amd64 go build -trimpath -o "$RUNNER_TEMP/cbb-amd64" ./cmd/cbb
-          GOARCH=arm64 go build -trimpath -o "$RUNNER_TEMP/cbb-arm64" ./cmd/cbb
-          GOARCH=arm GOARM=7 go build -trimpath -o "$RUNNER_TEMP/cbb-armv7" ./cmd/cbb
+          rustup toolchain install stable --profile minimal
+          for name in amd64 arm64 armv7; do
+            t=$name goarch=$name goarm=
+            if [ "$name" = armv7 ]; then t=arm/7 goarch=arm goarm=7; fi
+            mkdir -p "$RUNNER_TEMP/$name"
+            rust=$(sh member/packaging/build.sh "linux/$t")
+            cp "$rust/cbb" "$rust/cbb-relay" "$RUNNER_TEMP/$name/"
+            for p in cbb-helper cbb-forward; do
+              GOARCH=$goarch GOARM=$goarm go build -trimpath -o "$RUNNER_TEMP/$name/$p" "./cmd/$p"
+            done
+          done
       - name: the image for every platform
         run: |
           ctx="$RUNNER_TEMP/image"
-          sh packaging/docker/context.sh "$ctx" amd64="$RUNNER_TEMP/cbb-amd64" arm64="$RUNNER_TEMP/cbb-arm64" armv7="$RUNNER_TEMP/cbb-armv7"
+          sh packaging/docker/context.sh "$ctx" amd64="$RUNNER_TEMP/amd64/cbb" arm64="$RUNNER_TEMP/arm64/cbb" armv7="$RUNNER_TEMP/armv7/cbb"
           docker build -t cbb:ci "$ctx"
           for p in linux/arm64 linux/arm/v7; do
             docker build --platform "$p" -t "cbb:ci-$(echo "$p" | tr / -)" "$ctx"
@@ -2765,7 +2897,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gowithcore, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, lite, litemips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gowithcore, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service, lite, litemips, esp32, zxnext, silica, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

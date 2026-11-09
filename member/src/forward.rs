@@ -264,7 +264,7 @@ fn run(cfg: &Config, report: &Mutex<Report>, stop: &AtomicBool, log: &Arc<dyn Fn
 }
 
 #[derive(Debug)]
-struct SystemClock;
+pub(crate) struct SystemClock;
 
 impl rustls::time_provider::TimeProvider for SystemClock {
     fn current_time(&self) -> Option<UnixTime> {
