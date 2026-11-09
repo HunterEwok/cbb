@@ -6,7 +6,8 @@ labels and codes, and IBM Plex Sans Arabic, Hebrew and Devanagari for those scri
 served from cbb.tools itself so that pages load nothing from other sites: the WOFF2 files
 Google Fonts serves, unchanged. IBM Plex Sans is one variable file per subset (Latin, Latin
 Extended, Cyrillic), with every weight from 400 to 600 in it. Chinese uses the system's font
-(Noto Sans SC where it is installed). Each family is under the SIL Open Font License 1.1, in
+(Noto Sans SC where it is installed). The second look of the site, the chalkboard, uses Forum
+for headings, Jost for the text and Caveat for the chalk. Each family is under the SIL Open Font License 1.1, in
 the `OFL-*.txt` file of its name:
 
 | Family | Source | License |
@@ -16,3 +17,6 @@ the `OFL-*.txt` file of its name:
 | IBM Plex Sans Arabic | <https://fonts.google.com/specimen/IBM+Plex+Sans+Arabic> | `OFL-ibmplexsansarabic.txt` |
 | IBM Plex Sans Hebrew | <https://fonts.google.com/specimen/IBM+Plex+Sans+Hebrew> | `OFL-ibmplexsanshebrew.txt` |
 | IBM Plex Sans Devanagari | <https://fonts.google.com/specimen/IBM+Plex+Sans+Devanagari> | `OFL-ibmplexsansdevanagari.txt` |
+| Forum | <https://fonts.google.com/specimen/Forum> | `OFL-forum.txt` |
+| Jost | <https://fonts.google.com/specimen/Jost> | `OFL-jost.txt` |
+| Caveat | <https://fonts.google.com/specimen/Caveat> | `OFL-caveat.txt` |

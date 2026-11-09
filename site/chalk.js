@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Draws the site's pictures as the lines of a technical drawing and writes
-// them to templates/chalk.html: rough.js with no roughness, so every line is
-// straight and drawn once. The seeds are fixed, so the drawings come out the
-// same each time; run `npm run chalk` after changing them.
+// Draws the site's pictures twice and writes them to templates/chalk.html:
+// as the lines of a technical drawing ("ink": rough.js with no roughness, so
+// every line is straight and drawn once), and as a hand would with chalk on
+// a board ("hand": every line wobbles a little and is gone over twice). The
+// page's look shows one of the two. The seeds are fixed, so the drawings
+// come out the same each time; run `npm run chalk` after changing them.
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -11,14 +13,19 @@ const rough = require("roughjs");
 
 const g = rough.generator();
 let seed = 7;
-const opts = (o = {}) => Object.assign({ roughness: 0, bowing: 0, disableMultiStroke: true, strokeWidth: 1, seed: seed++, preserveVertices: true }, o);
+const hand = process.env.CHALK_MODE === "hand";
+const opts = (o = {}) => Object.assign(hand
+  ? { roughness: 0.75, bowing: 0.7, strokeWidth: 1, seed: seed++, preserveVertices: true }
+  : { roughness: 0, bowing: 0, disableMultiStroke: true, strokeWidth: 1, seed: seed++, preserveVertices: true }, o);
+// A little less wobble for straight lines and circles, by hand.
+const less = (r) => (hand ? { roughness: r } : {});
 const round = (d) => d.replace(/-?\d+\.\d+/g, (n) => String(Math.round(parseFloat(n) * 10) / 10));
 const paths = (d) => g.toPaths(d).map((p) => round(p.d)).join(" ");
 const shapes = {
   rect: (x, y, w, h, r) => g.path(`M${x + r} ${y}H${x + w - r}Q${x + w} ${y} ${x + w} ${y + r}V${y + h - r}Q${x + w} ${y + h} ${x + w - r} ${y + h}H${x + r}Q${x} ${y + h} ${x} ${y + h - r}V${y + r}Q${x} ${y} ${x + r} ${y}Z`, opts()),
-  line: (x1, y1, x2, y2) => g.line(x1, y1, x2, y2, opts()),
+  line: (x1, y1, x2, y2) => g.line(x1, y1, x2, y2, opts(less(0.7))),
   path: (d) => g.path(d, opts()),
-  circle: (cx, cy, d) => g.circle(cx, cy, d, opts()),
+  circle: (cx, cy, d) => g.circle(cx, cy, d, opts(less(0.6))),
 };
 const draw = (list) => list.map(([kind, ...args]) => paths(shapes[kind](...args))).join(" ");
 
@@ -168,15 +175,22 @@ const part = ([cls, d]) => (cls.startsWith("g ") ? `<g class="${cls.slice(2)}">$
 // only its own small box, not the whole board, on every frame.
 const still = (d) => line("y link", d.links) + line("w", d.white) + line("y", d.yellow);
 const lines = (d) => (d.parts ? `<g>${still(d)}</g><g>${d.parts.map(part).join("")}</g>` : `<g>${still(d)}</g>`);
-const out = `<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+const names = ["hero", "computer", "phones", "step1", "step2", "step3"];
+const drawings = { hero, computer, phones, step1, step2, step3 };
+// Run with CHALK_MODE set, it prints the lines of that look; run alone, it
+// draws both looks in children of its own and writes the template.
+if (require.main === module && process.env.CHALK_MODE) {
+  process.stdout.write(JSON.stringify(Object.fromEntries(names.map((n) => [n, lines(drawings[n])]))));
+} else if (require.main === module) {
+  const { execFileSync } = require("child_process");
+  const run = (mode) => JSON.parse(execFileSync(process.execPath, [__filename], { env: { ...process.env, CHALK_MODE: mode } }));
+  const ink = run("ink"), chalk = run("hand");
+  const out = `<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Written by chalk.js: the lines of the drawings, without their
-     labels, which the pages add in their own language. -->
-{{define "chalk-hero"}}${lines(hero)}{{end}}
-{{define "chalk-computer"}}${lines(computer)}{{end}}
-{{define "chalk-phones"}}${lines(phones)}{{end}}
-{{define "chalk-step1"}}${lines(step1)}{{end}}
-{{define "chalk-step2"}}${lines(step2)}{{end}}
-{{define "chalk-step3"}}${lines(step3)}{{end}}
+     labels, which the pages add in their own language; each in ink and by
+     hand, of which the page's look shows one. -->
+${names.map((n) => `{{define "chalk-${n}"}}<g class="ink">${ink[n]}</g><g class="hand">${chalk[n]}</g>{{end}}`).join("\n")}
 `;
-if (require.main === module) fs.writeFileSync(path.join(__dirname, "templates", "chalk.html"), out);
+  fs.writeFileSync(path.join(__dirname, "templates", "chalk.html"), out);
+}
 module.exports = { draw, device, group, qr, hero, step1, step2, step3, computer, phones, setSeed: (n) => { seed = n; } };

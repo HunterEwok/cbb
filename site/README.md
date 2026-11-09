@@ -38,8 +38,14 @@ every way to download is shown. It also has error pages (`404`, `50x`) in every 
   until the reader picks one with the button in the header. Motion is CSS only, 0.2 to 0.6 s
   (a drawing's lines are drawn in about a second), and off under `prefers-reduced-motion`.
   Buttons are at least 44 px high.
+- For now the site keeps its earlier look beside the blueprint, to compare the two: the
+  chalkboard (`static/board.css`: wool felt, chalk drawings in walnut frames, Forum, Jost and
+  Caveat; `textures.py` makes the felt and the wood). The button beside the theme's switches
+  between them (`theme.js` turns the reader's pick on before drawing, kept as `cbb-look`);
+  each look hides what belongs to the other.
 - The pictures are line drawings with numbered callouts, explained in a list under them. The
-  lines are drawn once by rough.js with no roughness: change `chalk.js` and run
+  lines are drawn once by rough.js with no roughness, and again by hand for the chalkboard:
+  change `chalk.js` and run
   `npm run chalk`, which writes `templates/chalk.html`; the labels stay in the pages, in each
   language.
 - `static/og/<language>.jpg` (1200×630) is the picture links to the site show in chats and

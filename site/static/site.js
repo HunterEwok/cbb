@@ -33,7 +33,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    var button = document.querySelector(".theme");
+    var button = document.querySelector(".theme:not(.look)");
     if (button) {
       var order = ["", "light", "dark"];
       var show = function (choice) {
@@ -51,6 +51,30 @@
         } catch (e) { /* a browser that keeps nothing still switches for this page */ }
         apply(next);
         show(next);
+      });
+    }
+
+    // The look: the blueprint, or the chalkboard, kept like the theme.
+    var looks = document.querySelector(".look");
+    var ink = document.getElementById("look-ink"), board = document.getElementById("look-board");
+    if (looks && ink && board) {
+      var showLook = function () {
+        var on = root.getAttribute("data-look") === "board" ? "board" : "ink";
+        var label = looks.getAttribute("data-" + on);
+        looks.setAttribute("aria-label", label);
+        looks.title = label;
+      };
+      showLook();
+      looks.hidden = false;
+      looks.addEventListener("click", function () {
+        var next = root.getAttribute("data-look") === "board" ? "" : "board";
+        try {
+          if (next) localStorage.setItem("cbb-look", next); else localStorage.removeItem("cbb-look");
+        } catch (e) { /* a browser that keeps nothing still switches for this page */ }
+        if (next) root.setAttribute("data-look", next); else root.removeAttribute("data-look");
+        board.media = next ? "all" : "not all";
+        ink.media = next ? "not all" : "all";
+        showLook();
       });
     }
 
