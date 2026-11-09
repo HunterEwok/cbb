@@ -69,6 +69,12 @@ struct AdminFile {
     claim_key: Option<Vec<u8>>,
 }
 
+/// Whether this device holds the group's root key, which is a file on a
+/// computer, so that it counts as keys in a file, as Go's keyStore.
+pub fn holds_root_key(dir: &Path) -> bool {
+    admin_file(dir).is_ok_and(|f| f.group_ca_key.is_some() || f.root_key.is_some())
+}
+
 /// The key this member signs records with, from the identity file in dir:
 /// the root's, as Go's Identity.Signer, or its admin key under its admin
 /// CA; None on a member that is no admin.
@@ -144,11 +150,10 @@ pub fn new_group(dir: &Path, name: &str) -> Result<(Identity, String)> {
         Some(k) => k.public(),
         None => identity::public_key(&key)?,
     };
-    let store = match (&external, crate::rootless::is()) {
-        (Some(_), _) => "hardware",
-        (None, true) => "rootless",
-        (None, false) => "file",
-    };
+    // The root counts as keys in a file whatever its member key, as Go's
+    // keyStore: its group CA key, which signs the records and the
+    // certificates, is a file on a computer (docs/guide/keys.md).
+    let store = if crate::rootless::is() { "rootless" } else { "file" };
     let seal = match sealkey::load(dir)
         .and_then(|s| cbb_core::seal::public_key(&s).map_err(|e| e.context("the key for sealed messages")))
     {
@@ -169,21 +174,20 @@ pub fn new_group(dir: &Path, name: &str) -> Result<(Identity, String)> {
     };
     let now_ms = uptime::wall_ms();
     let mut g = admit::new_group(&root, &own, now_ms)?;
-    if store != "hardware" {
-        let b = Body {
-            v: 2,
-            alg: authority::ALG_ES256.into(),
-            kind: authority::TYPE_SETTINGS.into(),
-            signer: Hash(g.root.key_hash()),
-            time_ms: now_ms,
-            key_level: "files".into(),
-            ..Default::default()
-        };
-        let body = g.records.next_body(b)?;
-        let sig = identity::sign_external(&root, &body)?;
-        if !g.records.add(&Record::new(body, sig, None))? {
-            return Err(Error::msg("the new group's key level was not taken"));
-        }
+    // So the group starts at the level files.
+    let b = Body {
+        v: 2,
+        alg: authority::ALG_ES256.into(),
+        kind: authority::TYPE_SETTINGS.into(),
+        signer: Hash(g.root.key_hash()),
+        time_ms: now_ms,
+        key_level: "files".into(),
+        ..Default::default()
+    };
+    let body = g.records.next_body(b)?;
+    let sig = identity::sign_external(&root, &body)?;
+    if !g.records.add(&Record::new(body, sig, None))? {
+        return Err(Error::msg("the new group's key level was not taken"));
     }
     let ident =
         Identity { id: g.device, key, external, cert: g.cert, issuer: None, group_ca: g.root, roots: Vec::new() };
@@ -346,7 +350,8 @@ pub fn finish_takeover(dir: &Path, node: &Node, name: &str) -> Result<bool> {
     if ident.roots.last().is_some_and(|r| r.der == claim_cert.der) {
         let key = FileKey::new(claim_key)?;
         let me = ident.id.to_string();
-        let store = if ident.external.is_some() { "hardware" } else { "file" };
+        // It holds the root key from here on, a file (own_store).
+        let store = if crate::rootless::is() { "rootless" } else { "file" };
         let seal = sealkey::load(dir).ok().and_then(|k| cbb_core::seal::public_key(&k).ok()).unwrap_or_default();
         let own = Own { name, role: authority::ROLE_MEMBER, caps: node.caps(), os: os_name(), store, seal: &seal };
         let s = Signer { ca: &claim_cert, key: &key, me: &me };
@@ -375,10 +380,10 @@ pub fn finish_takeover(dir: &Path, node: &Node, name: &str) -> Result<bool> {
     Ok(false)
 }
 
-/// The root each admin got its admin CA from, by device: from cbb admin
-/// (make_admin) or renew_admin_cas, so neither gives a second one. One
-/// service runs in a process.
-static ADMIN_CAS_SENT: Mutex<std::collections::BTreeMap<String, [u8; 32]>> =
+/// The root each admin got its admin CA from, and on which connection, by
+/// device: from cbb admin (make_admin) or renew_admin_cas, so neither gives
+/// a second one on that connection. One service runs in a process.
+static ADMIN_CAS_SENT: Mutex<std::collections::BTreeMap<String, crate::takeover::AdminCaSent>> =
     Mutex::new(std::collections::BTreeMap::new());
 
 /// On the group's root, gives each connected admin computer whose admin
@@ -870,7 +875,8 @@ impl Admin<'_> {
         // key: renew_admin_cas, which may run as soon as the record below is
         // in the set, must not give it a second one, as in Go. Noted before
         // signing, and undone if it never gets this one.
-        let before = ADMIN_CAS_SENT.lock().unwrap().insert(d.id.clone(), s.ca.key_hash());
+        let conn = self.node.connection(&peer.id);
+        let before = ADMIN_CAS_SENT.lock().unwrap().insert(d.id.clone(), (s.ca.key_hash(), conn));
         let undo = || {
             let mut sent = ADMIN_CAS_SENT.lock().unwrap();
             match before {
@@ -928,7 +934,7 @@ impl Admin<'_> {
         if !s.root {
             return Err(root_only());
         }
-        let own = own_store(&self.node.identity());
+        let own = own_store(self.dir, &self.node.identity());
         level_allows(level, own, "this device, the group's root,", "", true)?;
         let delay = self.current_delay(&s.hash());
         self.sign(
@@ -1689,12 +1695,15 @@ fn level_allows(level: &str, store: &str, name: &str, hint: &str, consent: bool)
     Err(Error::msg(msg))
 }
 
-/// Where this device keeps its member key: hardware, rootless or file.
-pub(crate) fn own_store(ident: &crate::identity::Identity) -> &'static str {
-    if ident.external.is_some() {
-        "hardware"
-    } else if crate::rootless::is() {
+/// Where this device says its keys live, as Go's keyStore: rootless for a
+/// rootless install; on the group's root file, as its group CA key, which
+/// signs the records and the certificates, is a file on a computer,
+/// whatever its member key; else where its member key is.
+pub(crate) fn own_store(dir: &Path, ident: &crate::identity::Identity) -> &'static str {
+    if crate::rootless::is() {
         "rootless"
+    } else if ident.external.is_some() && !holds_root_key(dir) {
+        "hardware"
     } else {
         "file"
     }

@@ -26,6 +26,9 @@ never leave it; each signature with the group's root key or an admin key asks fo
 fingerprint or passcode, while the key it syncs with works without asking. A computer keeps its
 keys in files that only Copy Beyond Borders reads.
 
+A group is the devices of one person, who share one clipboard. Two people who want
+clipboards of their own make two groups.
+
 ### Rootless members
 
 Normally the installer needs `sudo` once, so that Copy Beyond Borders runs under an

@@ -54,6 +54,11 @@ const MAX_HOME: usize = 64;
 const PING_EVERY: Duration = Duration::from_secs(5);
 const TIMEOUT: Duration = Duration::from_secs(15);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long a dial waits for a member's TCP connection, much longer than it
+/// takes on a home network: a member is found at several addresses, and one
+/// that does not answer (an interface the peer cannot be reached through)
+/// holds up the next only this long.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const QUEUE_LEN: usize = 256;
 const RECORDS_CHUNK: usize = 1 << 20;
 /// The slowest transfer a frame is given time for.
@@ -383,7 +388,13 @@ struct Conn {
     sinks: Mutex<HashMap<[u8; 32], SyncSender<Piece>>>,
     /// The reach message last sent to it, a phone (send_reach).
     reach_sent: Mutex<Option<Vec<DeviceId>>>,
+    /// Tells this connection from the peer's earlier and later ones.
+    serial: u64,
 }
+
+/// The serial of the last connection; a lock, since 32-bit MIPS has no
+/// 64-bit atomics.
+static CONN_SERIAL: Mutex<u64> = Mutex::new(0);
 
 impl Node {
     pub fn new(
@@ -688,6 +699,11 @@ impl Node {
         near(self.home.lock().unwrap().get(id).copied(), uptime::now())
     }
 
+    /// The state directory.
+    pub fn state_dir(&self) -> &std::path::Path {
+        &self.state_dir
+    }
+
     pub fn identity(&self) -> Arc<Identity> {
         self.ident.read().unwrap().clone()
     }
@@ -930,6 +946,12 @@ impl Node {
 
     /// Queues a message for the member id; reports whether it is
     /// connected as a member.
+    /// The serial of the member connection to id, which a connection after
+    /// it does not share; None when it is not connected.
+    pub fn connection(&self, id: &DeviceId) -> Option<u64> {
+        self.conns.lock().unwrap().get(id).filter(|c| !c.records_only).map(|c| c.serial)
+    }
+
     pub fn send_to(&self, id: &DeviceId, m: Message) -> bool {
         let c = self.conns.lock().unwrap().get(id).cloned();
         match c {
@@ -1574,7 +1596,7 @@ impl Node {
                 "{addr} is not on the home network; away from home this device reaches the group only through its tunnel (cbb global on)"
             )));
         }
-        let sock = TcpStream::connect_timeout(&addr, HANDSHAKE_TIMEOUT).context(format!("cannot connect to {addr}"))?;
+        let sock = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT).context(format!("cannot connect to {addr}"))?;
         let _ = sock.set_nodelay(true);
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
         sock.set_write_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
@@ -1782,6 +1804,11 @@ impl Node {
             gets: Mutex::new(VecDeque::new()),
             sinks: Mutex::new(HashMap::new()),
             reach_sent: Mutex::new(None),
+            serial: {
+                let mut n = CONN_SERIAL.lock().unwrap();
+                *n += 1;
+                *n
+            },
         });
         {
             let mut conns = self.conns.lock().unwrap();
@@ -1882,6 +1909,16 @@ impl Node {
                 Err(e) => return Err(e),
             };
             if c.closed.load(Ordering::SeqCst) {
+                // The records a peer sends before it ends the connection, as
+                // those that remove or freeze this device, still count when
+                // this side's writer has failed meanwhile (the peer hung up
+                // while this member was still answering its hello): dropped,
+                // this member would never hear it was removed, since its next
+                // connection is refused.
+                if !first && m.kind == "records" && !m.records.is_empty() {
+                    self.add_records(&m.records, &c.id);
+                    continue;
+                }
                 return Ok(());
             }
             if first {
@@ -2276,6 +2313,13 @@ impl Node {
         for c in self.conns.lock().unwrap().values() {
             if let Some(Refusal::Refused(why)) = st.refused_peer(&c.chain) {
                 self.logf(&format!("cbb: closing the connection to {}: {why}", c.id));
+                // The records go first, so that it hears why, as in
+                // add_records.
+                if c.peer.lock().unwrap().is_some() {
+                    for chunk in chunk_records(st.all()) {
+                        self.enqueue(c, Out::Records(chunk));
+                    }
+                }
                 c.close(true);
             }
         }
@@ -2303,11 +2347,6 @@ impl Node {
             fresh
         };
         self.apply_copy_rules();
-        {
-            let (m, cv) = &self.changed;
-            *m.lock().unwrap() += 1;
-            cv.notify_all();
-        }
         // A thaw lets in devices refused until now, and a claim, a resolve,
         // a settings, a checkpoint or a recovery record may, as Go's
         // updateRecords.
@@ -2356,6 +2395,13 @@ impl Node {
                 }
             }
         }
+        drop(st);
+        // Only now are those waiting for a change woken: the service's
+        // loop may settle at once, and a connection it closes must have the
+        // records that refuse it queued first.
+        let (m, cv) = &self.changed;
+        *m.lock().unwrap() += 1;
+        cv.notify_all();
     }
 }
 

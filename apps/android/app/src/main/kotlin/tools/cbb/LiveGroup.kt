@@ -1782,8 +1782,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
 
     /**
-     * Makes a computer an admin (docs/protocol.md, section 10, "A computer
-     * as admin"): the root key certifies the admin key the computer offers;
+     * Makes a computer an admin (docs/protocol.md, section 10, "Admins"): the root key certifies the admin key the computer offers;
      * the computer gets its admin CA and every member the new record. A
      * computer whose keys sit in a file becomes one only with allowFileKey,
      * after the user read the warning; else PhoneGroup.FileKey. A rootless

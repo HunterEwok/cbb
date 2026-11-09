@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-// The rule of incoming copies (docs/protocol.md, section 5, "Writing to
-// the clipboard") is the Rust core's (cbb_core::rule); this is Go's copy
-// of it, which testdata/interop/copy-verdicts.json keeps the same.
+// The rule of incoming copies (docs/protocol.md, section 5, "Writing the
+// member's own clipboard") is the Rust core's (cbb_core::rule); this is Go's
+// copy of it, which testdata/interop/copy-verdicts.json keeps the same.
 
 // Incoming is what the member knows of the group's current copy when it
 // decides whether the copy goes into its clipboard.

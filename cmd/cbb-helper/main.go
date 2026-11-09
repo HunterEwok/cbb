@@ -39,6 +39,7 @@ func run(args []string, in io.Reader, out, errw io.Writer, terminal bool) int {
 		fmt.Fprintln(errw, "cbb-helper: the service cbb starts this program itself; run cbb instead")
 		return 2
 	}
+	watchParent()
 	err := newServer().Serve(in, out)
 	// The keys it loaded leave the TPM with it.
 	group.CloseTPM()

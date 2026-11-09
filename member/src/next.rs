@@ -62,7 +62,7 @@ pub fn run(g: &Global, args: &[String]) -> i32 {
 const MAX_CHECK_LIST: u64 = 16 << 10;
 
 /// `.cbb update`'s check of the site's list for a newer CBB (apps/zxnext,
-/// docs/protocol.md section 16, "The ZX Spectrum Next's files"): the file
+/// docs/protocol.md section 16, "Where the files are"): the file
 /// holds keys.json and zxnext.json, a line each, as cbb.tools serves them
 /// in SIGNED. This cbb checks them under its pinned release roots and
 /// writes the Next's files, `CBBL <name> <size> <crc32> <sha256>` CR each,
