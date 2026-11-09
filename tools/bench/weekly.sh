@@ -51,10 +51,10 @@ done
 
 # baseline SUITE: the newest earlier run's metrics.json of SUITE, if any.
 baseline() {
-	for d in $(ls -1d "$dir"/reports/*/ | sort -r); do
-		[ "${d%/}" = "$out" ] && continue
-		if [ -f "$d$1/metrics.json" ]; then
-			echo "-baseline $d$1/metrics.json"
+	for d in $(find "$dir/reports" -mindepth 1 -maxdepth 1 -type d | sort -r); do
+		[ "$d" = "$out" ] && continue
+		if [ -f "$d/$1/metrics.json" ]; then
+			echo "-baseline $d/$1/metrics.json"
 			return
 		fi
 	done
@@ -85,6 +85,6 @@ sudo chown -R "$(id -u):$(id -g)" "$out"
 cp "$out/summary.txt" "$dir/last.txt"
 
 # The last 12 runs stay.
-ls -1d "$dir"/reports/*/ | sort -r | tail -n +13 | while read -r old; do rm -rf "$old"; done
+find "$dir/reports" -mindepth 1 -maxdepth 1 -type d | sort -r | tail -n +13 | while read -r old; do rm -rf "$old"; done
 cat "$dir/last.txt"
 exit $status
