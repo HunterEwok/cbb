@@ -1486,10 +1486,15 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
-- The Mac app and the tray app mute and unmute their own computer without the administrator's
-  password: the service takes muting or unmuting the device itself on the control socket,
-  where it is an admin, and `cbb unmute -on` this device works without `sudo`. Any other
-  device still takes the administrator.
+- Admin actions no longer ask for the password every time (D-95). The user confirms them
+  with the system's own prompt, checked by the service: Touch ID or the password on a Mac,
+  polkit on Linux (with the fingerprint where it is set up), Windows Hello on Windows. One
+  confirmation lasts five minutes for the group's everyday changes; making, leaving, taking
+  over or handing on a group asks each time; muting or unmuting the computer itself asks
+  nothing. `cbb` run without `sudo` does the same, and the apps fall back to the
+  administrator's prompt where nothing else confirms. On Android one fingerprint, face or
+  screen lock now lets a new group's root or admin key sign for five minutes, as on the
+  iPhone; keys made before keep asking for each signature.
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program

@@ -1,0 +1,940 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+
+//! Confirming an admin action that comes on the control socket
+//! (docs/design.md, "Confirming admin actions"). What changes the group
+//! goes to the admin socket, which only root reaches (D-62); a user of the
+//! apps confirms it instead with the system's own prompt, without running
+//! cbb as the administrator: Touch ID or the password on a Mac, polkit's
+//! dialog on Linux, Windows Hello on Windows. One confirmation lasts five
+//! minutes for the group's everyday changes; what cannot be undone, or
+//! changes who holds the group, asks every time.
+//!
+//! The service checks the confirmation itself, from the system, never from
+//! what the caller claims: on a Mac the caller's authorization (its external
+//! form in the request's `auth`) must hold the right, on Linux polkit must
+//! authorize the calling process, which the kernel names, and on Windows the
+//! request carries a Windows Hello signature of a challenge the service gave,
+//! by the key the user's account registered once as the administrator.
+
+// FreeBSD keeps the administrator's way.
+#![cfg_attr(not(any(target_os = "macos", target_os = "linux", windows)), allow(dead_code))]
+
+use crate::control::Header;
+use crate::error::{Error, Result};
+#[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
+use crate::sys::UnixStream;
+
+/// How long one confirmation of an everyday change lasts, in seconds.
+#[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
+pub const KEEP_SECS: u32 = 300;
+
+/// What the service says when the user cancelled the prompt; cbb then exits
+/// with CANCELLED_EXIT, and the apps say nothing.
+pub const CANCELLED: &str = "the confirmation was cancelled";
+/// What the service says when nothing here confirms an admin action for
+/// this user (no polkit, no prompt in the session, a user who may not);
+/// cbb then exits with NEED_ADMIN_EXIT, and the apps run it as the
+/// administrator instead.
+pub const UNAVAILABLE: &str =
+    "this computer cannot confirm the admin action for this user, so only the administrator may run it";
+
+pub const CANCELLED_EXIT: i32 = 75;
+pub const NEED_ADMIN_EXIT: i32 = 77;
+
+/// The right, or polkit action, that one confirmation for five minutes
+/// gives.
+pub const RIGHT_KEPT: &str = "tools.cbb.admin";
+/// The right that is asked for each time.
+pub const RIGHT_EACH: &str = "tools.cbb.admin.each";
+
+/// Whether op is confirmed each time: making a group, leaving it, taking it
+/// over or handing it on, recovering its root, and the settings that decide
+/// who may hold it.
+pub fn each_time(op: &str) -> bool {
+    matches!(op, "new" | "leave" | "takeover" | "recovery" | "handover" | "key-level" | "takeover-delay")
+}
+
+/// The right op takes.
+pub fn right(op: &str) -> &'static str {
+    if each_time(op) { RIGHT_EACH } else { RIGHT_KEPT }
+}
+
+/// The exit code of cbb for an error that comes from confirming.
+pub fn exit_code(e: &Error) -> Option<i32> {
+    match e.message() {
+        CANCELLED => Some(CANCELLED_EXIT),
+        UNAVAILABLE => Some(NEED_ADMIN_EXIT),
+        m if m == crate::awaynet::NEED_ROOT => Some(NEED_ADMIN_EXIT),
+        _ => None,
+    }
+}
+
+/// The prompt's text for the right, in English; the catalogs translate it
+/// (`member/l10n`), and the system shows the user's language.
+pub fn prompt(right: &str) -> &'static str {
+    if right == RIGHT_EACH { PROMPT_EACH } else { PROMPT_KEPT }
+}
+
+const PROMPT_KEPT: &str = "Confirm a change to your CBB group.";
+const PROMPT_EACH: &str = "Confirm an important change to your CBB group: it cannot be undone.";
+
+/// Marks the prompts for the catalogs, which take what tr! names
+/// (l10n.rs, catalogs_are_complete).
+#[cfg(test)]
+fn _catalog_marks() -> [&'static str; 2] {
+    [
+        tr!("Confirm a change to your CBB group."),
+        tr!("Confirm an important change to your CBB group: it cannot be undone."),
+    ]
+}
+
+/// The prompt in each language of the project: the language's code ("" for
+/// English) and the text.
+pub fn prompts(right: &str) -> Vec<(&'static str, &'static str)> {
+    let english = prompt(right);
+    let mut out = vec![("", english)];
+    for lang in crate::l10n::LANGS {
+        out.push((lang, crate::l10n::lookup(lang, english).unwrap_or(english)));
+    }
+    out
+}
+
+/// Whether cbb confirms an admin action itself on this system, instead of
+/// running as the administrator.
+pub fn supported() -> bool {
+    cfg!(any(target_os = "macos", target_os = "linux", all(windows, feature = "tunnel")))
+}
+
+/// The service's check of the admin request h, which came on the control
+/// socket on conn: Ok when the user at the screen confirmed it.
+#[cfg_attr(not(any(target_os = "linux", windows)), allow(unused_variables))]
+pub fn check(conn: &UnixStream, h: &Header) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    return mac::check(&h.auth, right(&h.op));
+    #[cfg(target_os = "linux")]
+    return linux::check(conn, right(&h.op));
+    #[cfg(all(windows, feature = "tunnel"))]
+    return win::check(conn, h);
+    #[cfg(not(any(target_os = "macos", target_os = "linux", all(windows, feature = "tunnel"))))]
+    Err(Error::msg(UNAVAILABLE))
+}
+
+/// The operations of confirming on the control socket that take no admin:
+/// on Windows, the challenge to sign (`confirm`); everywhere else nothing.
+pub const OP_CHALLENGE: &str = "confirm";
+/// The administrator's registration of a user's Windows Hello key, on the
+/// admin socket.
+pub const OP_REGISTER: &str = "confirm-key";
+
+/// The service's answer to a confirm request on conn (OP_CHALLENGE), or to
+/// a registration on the admin socket (OP_REGISTER).
+#[cfg_attr(not(all(windows, feature = "tunnel")), allow(unused_variables))]
+pub fn answer(conn: &UnixStream, h: &Header) -> Result<crate::control::Message> {
+    #[cfg(all(windows, feature = "tunnel"))]
+    return if h.op == OP_REGISTER { win::register(h) } else { win::challenge(conn, h) };
+    #[cfg(not(all(windows, feature = "tunnel")))]
+    Err(Error::msg(UNAVAILABLE))
+}
+
+/// Sets up what the prompts need when the service starts: the rights on a
+/// Mac, the polkit actions on Linux. A failure is logged and leaves the
+/// administrator's way.
+#[cfg_attr(not(all(windows, feature = "tunnel")), allow(unused_variables))]
+pub fn install(log: &dyn Fn(&str), state: &std::path::Path) {
+    #[cfg(all(windows, feature = "tunnel"))]
+    win::install(state);
+    #[cfg(target_os = "macos")]
+    if let Err(e) = mac::install() {
+        log(&format!("cbb: the rights that confirm admin actions: {}", e.for_log()));
+    }
+    #[cfg(target_os = "linux")]
+    if let Err(e) = linux::install(std::path::Path::new(linux::ACTIONS_DIR)) {
+        log(&format!("cbb: the polkit actions that confirm admin actions: {}", e.for_log()));
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    let _ = log;
+}
+
+/// Fills in h.auth before cbb sends an admin request on the control socket:
+/// on a Mac it asks for the right first, so the prompt comes from cbb
+/// itself, in the user's session; on Windows it signs the service's
+/// challenge with Windows Hello, which ask sends for (a request on the
+/// control socket). On Linux there is nothing to add.
+#[cfg_attr(not(all(windows, feature = "tunnel")), allow(unused_variables))]
+pub fn prepare(h: &mut Header, ask: &dyn Fn(Header) -> Result<Header>) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        h.auth = mac::authorize(right(&h.op))?;
+    }
+    #[cfg(all(windows, feature = "tunnel"))]
+    win::prepare(h, ask)?;
+    #[cfg(not(any(target_os = "macos", all(windows, feature = "tunnel"))))]
+    let _ = h;
+    Ok(())
+}
+
+/// cbb confirm-key SID KEY, which cbb runs as the administrator through
+/// UAC to register the user's Windows Hello key (OP_REGISTER).
+#[cfg_attr(not(all(windows, feature = "tunnel")), allow(unused_variables))]
+pub fn register_cli(args: &[String], request: &dyn Fn(Header) -> Result<Header>) -> Result<()> {
+    let [sid, key] = args else { return Err(Error::msg("usage: cbb confirm-key SID KEY")) };
+    request(Header { op: OP_REGISTER.into(), name: sid.clone(), value: key.clone(), ..Default::default() })?;
+    Ok(())
+}
+
+/// What a confirmation on Windows signs: the operation and the service's
+/// challenge, after a fixed prefix that nothing else signs.
+#[cfg_attr(not(all(windows, feature = "tunnel")), allow(dead_code))]
+pub fn hello_message(op: &str, nonce: &[u8]) -> Vec<u8> {
+    let mut m = b"cbb confirm v1\n".to_vec();
+    m.extend_from_slice(op.as_bytes());
+    m.push(b'\n');
+    m.extend_from_slice(nonce);
+    m
+}
+
+/// polkit's action file, with one action for each right.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub fn polkit_policy() -> String {
+    let mut out = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+         <!DOCTYPE policyconfig PUBLIC \"-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN\"\n \
+         \"http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd\">\n\
+         <!-- Written by the cbb service (docs/design.md, \"Confirming admin actions\"). -->\n\
+         <policyconfig>\n  <vendor>CBB</vendor>\n  <vendor_url>https://cbb.tools</vendor_url>\n",
+    );
+    for (right, keep) in [(RIGHT_KEPT, true), (RIGHT_EACH, false)] {
+        out.push_str(&format!("  <action id=\"{right}\">\n"));
+        for (lang, text) in prompts(right) {
+            let attr = if lang.is_empty() { String::new() } else { format!(" xml:lang=\"{lang}\"") };
+            out.push_str(&format!("    <message{attr}>{}</message>\n", xml_escape(text)));
+        }
+        let active = if keep { "auth_admin_keep" } else { "auth_admin" };
+        out.push_str(&format!(
+            "    <defaults>\n      <allow_any>no</allow_any>\n      <allow_inactive>no</allow_inactive>\n      \
+             <allow_active>{active}</allow_active>\n    </defaults>\n  </action>\n"
+        ));
+    }
+    out.push_str("</policyconfig>\n");
+    out
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
+#[cfg(target_os = "linux")]
+mod linux {
+    use std::os::fd::AsRawFd;
+    use std::path::Path;
+    use std::process::{Command, Stdio};
+
+    use super::{CANCELLED, UNAVAILABLE};
+    use crate::error::{Context, Error, Result};
+    use crate::sys::UnixStream;
+
+    /// Where polkit reads the actions.
+    pub const ACTIONS_DIR: &str = "/usr/share/polkit-1/actions";
+    const FILE: &str = "tools.cbb.admin.policy";
+
+    /// Writes the actions where polkit reads them, unless they are there
+    /// already; nothing on a system without polkit.
+    pub fn install(dir: &Path) -> Result<()> {
+        if !dir.is_dir() {
+            return Ok(());
+        }
+        let path = dir.join(FILE);
+        let want = super::polkit_policy();
+        if std::fs::read_to_string(&path).is_ok_and(|have| have == want) {
+            return Ok(());
+        }
+        let tmp = dir.join(format!(".{FILE}.{}", std::process::id()));
+        std::fs::write(&tmp, &want).context(format!("cannot write {}", tmp.display()))?;
+        std::fs::rename(&tmp, &path).map_err(|e| {
+            let _ = std::fs::remove_file(&tmp);
+            Error::msg(format!("cannot move the actions to {}: {e}", path.display()))
+        })
+    }
+
+    /// Asks polkit whether the process at the other end of conn may take
+    /// the action, letting it ask the user in the session: pkcheck with the
+    /// process's ID, start time and user, which polkit checks against the
+    /// process itself, so another process cannot pass for it.
+    pub fn check(conn: &UnixStream, action: &str) -> Result<()> {
+        let Some((pid, uid)) = peer(conn) else { return Err(Error::msg(UNAVAILABLE)) };
+        let Some(start) = start_time(pid) else { return Err(Error::msg(UNAVAILABLE)) };
+        let out = match Command::new(pkcheck())
+            .args(["--action-id", action, "--process", &format!("{pid},{start},{uid}"), "--allow-user-interaction"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+        {
+            Ok(o) => o,
+            Err(e) => return Err(Error::msg(format!("pkcheck: {e}")).context(UNAVAILABLE)),
+        };
+        verdict(out.status.code(), &String::from_utf8_lossy(&out.stderr))
+    }
+
+    /// pkcheck's answer: 0 authorized, 3 the dialog dismissed; 1 and 2 not
+    /// authorized (no agent in the session, a user who may not), the rest
+    /// an error.
+    pub fn verdict(code: Option<i32>, stderr: &str) -> Result<()> {
+        match code {
+            Some(0) => Ok(()),
+            Some(3) => Err(Error::msg(CANCELLED)),
+            _ => Err(Error::msg(format!("pkcheck exited with {code:?}: {}", stderr.trim())).context(UNAVAILABLE)),
+        }
+    }
+
+    /// pkcheck from the system's own directories, never from PATH.
+    fn pkcheck() -> &'static str {
+        ["/usr/bin/pkcheck", "/bin/pkcheck"].into_iter().find(|p| Path::new(p).exists()).unwrap_or("/usr/bin/pkcheck")
+    }
+
+    /// The process and user at the other end of conn, from the kernel.
+    fn peer(conn: &UnixStream) -> Option<(i32, u32)> {
+        let mut cred = libc::ucred { pid: 0, uid: 0, gid: 0 };
+        let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
+        // SAFETY: cred and len are valid for the kernel to write a ucred,
+        // and the descriptor stays open while conn lives.
+        let ok = unsafe {
+            libc::getsockopt(conn.as_raw_fd(), libc::SOL_SOCKET, libc::SO_PEERCRED, (&raw mut cred).cast(), &mut len)
+        } == 0;
+        (ok && cred.pid > 0).then_some((cred.pid, cred.uid))
+    }
+
+    /// When the process started, in clock ticks after boot: the 22nd field
+    /// of /proc/PID/stat, counted after the name in parentheses, which may
+    /// hold spaces.
+    pub fn start_time(pid: i32) -> Option<u64> {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+        parse_start(&stat)
+    }
+
+    pub fn parse_start(stat: &str) -> Option<u64> {
+        let rest = &stat[stat.rfind(')')? + 1..];
+        // After the name: state is field 3, start time field 22.
+        rest.split_whitespace().nth(19)?.parse().ok()
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod mac {
+    use std::ffi::{CString, c_char, c_long, c_void};
+
+    use base64::Engine as _;
+
+    use super::{CANCELLED, KEEP_SECS, RIGHT_EACH, RIGHT_KEPT, UNAVAILABLE};
+    use crate::error::{Error, Result};
+    use crate::sekey::CFDictionaryCallBacks;
+
+    type OSStatus = i32;
+    type AuthorizationRef = *mut c_void;
+    type CFTypeRef = *const c_void;
+    type CFStringRef = CFTypeRef;
+    type CFDictionaryRef = CFTypeRef;
+
+    #[repr(C)]
+    struct AuthorizationItem {
+        name: *const c_char,
+        value_length: usize,
+        value: *mut c_void,
+        flags: u32,
+    }
+
+    #[repr(C)]
+    struct AuthorizationRights {
+        count: u32,
+        items: *mut AuthorizationItem,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct AuthorizationExternalForm {
+        bytes: [u8; 32],
+    }
+
+    const INTERACTION_ALLOWED: u32 = 1 << 0;
+    const EXTEND_RIGHTS: u32 = 1 << 1;
+    const ERR_CANCELED: OSStatus = -60006;
+    const ERR_DENIED: OSStatus = -60005;
+    const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+    const K_CF_NUMBER_INT_TYPE: c_long = 9;
+
+    #[link(name = "Security", kind = "framework")]
+    unsafe extern "C" {
+        fn AuthorizationCreate(
+            rights: *const AuthorizationRights,
+            env: *const c_void,
+            flags: u32,
+            out: *mut AuthorizationRef,
+        ) -> OSStatus;
+        fn AuthorizationCopyRights(
+            a: AuthorizationRef,
+            rights: *const AuthorizationRights,
+            env: *const c_void,
+            flags: u32,
+            out: *mut *mut AuthorizationRights,
+        ) -> OSStatus;
+        fn AuthorizationMakeExternalForm(a: AuthorizationRef, out: *mut AuthorizationExternalForm) -> OSStatus;
+        fn AuthorizationCreateFromExternalForm(
+            form: *const AuthorizationExternalForm,
+            out: *mut AuthorizationRef,
+        ) -> OSStatus;
+        fn AuthorizationFree(a: AuthorizationRef, flags: u32) -> OSStatus;
+        fn AuthorizationRightSet(
+            a: AuthorizationRef,
+            right: *const c_char,
+            definition: CFTypeRef,
+            description_key: CFStringRef,
+            bundle: CFTypeRef,
+            table: CFStringRef,
+        ) -> OSStatus;
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        static kCFTypeDictionaryKeyCallBacks: CFDictionaryCallBacks;
+        static kCFTypeDictionaryValueCallBacks: CFDictionaryCallBacks;
+        static kCFBooleanTrue: CFTypeRef;
+        static kCFBooleanFalse: CFTypeRef;
+        fn CFRelease(cf: CFTypeRef);
+        fn CFStringCreateWithCString(a: CFTypeRef, s: *const c_char, enc: u32) -> CFStringRef;
+        fn CFNumberCreate(a: CFTypeRef, t: c_long, v: *const c_void) -> CFTypeRef;
+        fn CFDictionaryCreate(
+            a: CFTypeRef,
+            keys: *const CFTypeRef,
+            values: *const CFTypeRef,
+            n: c_long,
+            kcb: *const CFDictionaryCallBacks,
+            vcb: *const CFDictionaryCallBacks,
+        ) -> CFDictionaryRef;
+    }
+
+    /// Owns Core Foundation objects and releases them when dropped.
+    struct Owned(Vec<CFTypeRef>);
+
+    impl Owned {
+        fn keep(&mut self, cf: CFTypeRef) -> Result<CFTypeRef> {
+            if cf.is_null() {
+                return Err(Error::msg("Core Foundation could not make an object"));
+            }
+            self.0.push(cf);
+            Ok(cf)
+        }
+
+        fn string(&mut self, s: &str) -> Result<CFStringRef> {
+            let c = CString::new(s).map_err(|_| Error::msg("a text with a NUL"))?;
+            // SAFETY: c is a NUL-terminated UTF-8 string that outlives the call.
+            let cf = unsafe { CFStringCreateWithCString(std::ptr::null(), c.as_ptr(), K_CF_STRING_ENCODING_UTF8) };
+            self.keep(cf)
+        }
+
+        fn dict(&mut self, pairs: &[(CFTypeRef, CFTypeRef)]) -> Result<CFDictionaryRef> {
+            let keys: Vec<CFTypeRef> = pairs.iter().map(|p| p.0).collect();
+            let values: Vec<CFTypeRef> = pairs.iter().map(|p| p.1).collect();
+            // SAFETY: keys and values hold pairs.len() live objects each, and
+            // the callbacks are Core Foundation's own statics.
+            let cf = unsafe {
+                CFDictionaryCreate(
+                    std::ptr::null(),
+                    keys.as_ptr(),
+                    values.as_ptr(),
+                    pairs.len() as c_long,
+                    &raw const kCFTypeDictionaryKeyCallBacks,
+                    &raw const kCFTypeDictionaryValueCallBacks,
+                )
+            };
+            self.keep(cf)
+        }
+    }
+
+    impl Drop for Owned {
+        fn drop(&mut self) {
+            for cf in self.0.drain(..) {
+                // SAFETY: each object was created here and is released once.
+                unsafe { CFRelease(cf) };
+            }
+        }
+    }
+
+    /// Writes both rights to the authorization database: an administrator
+    /// of this Mac (Touch ID where the Mac has it, else the password), for
+    /// five minutes in the user's session, or each time.
+    pub fn install() -> Result<()> {
+        let mut auth: AuthorizationRef = std::ptr::null_mut();
+        // SAFETY: an empty authorization; the service runs as root, which
+        // may change the rights.
+        let st = unsafe { AuthorizationCreate(std::ptr::null(), std::ptr::null(), 0, &mut auth) };
+        if st != 0 {
+            return Err(Error::msg(format!("AuthorizationCreate: {st}")));
+        }
+        let res = (|| {
+            for right in [RIGHT_KEPT, RIGHT_EACH] {
+                let mut o = Owned(Vec::new());
+                let keep = right == RIGHT_KEPT;
+                let timeout: i32 = if keep { KEEP_SECS as i32 } else { 0 };
+                let mut prompts = Vec::new();
+                for (lang, text) in super::prompts(right) {
+                    prompts.push((o.string(lang)?, o.string(text)?));
+                }
+                let prompt = o.dict(&prompts)?;
+                // SAFETY: timeout lives for the call; the number copies it.
+                let timeout = o.keep(unsafe {
+                    CFNumberCreate(std::ptr::null(), K_CF_NUMBER_INT_TYPE, (&raw const timeout).cast())
+                })?;
+                // SAFETY: Core Foundation's boolean constants live forever.
+                let (yes, no) = unsafe { (kCFBooleanTrue, kCFBooleanFalse) };
+                let pairs = [
+                    ("class", o.string("user")?),
+                    ("group", o.string("admin")?),
+                    ("authenticate-user", yes),
+                    ("session-owner", no),
+                    ("allow-root", yes),
+                    ("shared", if keep { yes } else { no }),
+                    ("timeout", timeout),
+                    ("default-prompt", prompt),
+                    ("comment", o.string("Written by the cbb service: confirms an admin action of CBB.")?),
+                ];
+                let mut keyed = Vec::with_capacity(pairs.len());
+                for (k, v) in pairs {
+                    keyed.push((o.string(k)?, v));
+                }
+                let def = o.dict(&keyed)?;
+                let name = CString::new(right).map_err(|_| Error::msg("a right with a NUL"))?;
+                let key = o.string(super::prompt(right))?;
+                // SAFETY: every argument is a live object or null where the
+                // API takes null (no bundle, no table).
+                let st =
+                    unsafe { AuthorizationRightSet(auth, name.as_ptr(), def, key, std::ptr::null(), std::ptr::null()) };
+                if st != 0 {
+                    return Err(Error::msg(format!("AuthorizationRightSet {right}: {st}")));
+                }
+            }
+            Ok(())
+        })();
+        // SAFETY: auth was created above and is freed once.
+        unsafe { AuthorizationFree(auth, 0) };
+        res
+    }
+
+    fn rights_of(name: &CString, item: &mut AuthorizationItem) -> AuthorizationRights {
+        *item = AuthorizationItem { name: name.as_ptr(), value_length: 0, value: std::ptr::null_mut(), flags: 0 };
+        AuthorizationRights { count: 1, items: item }
+    }
+
+    fn status(st: OSStatus, what: &str) -> Result<()> {
+        match st {
+            0 => Ok(()),
+            ERR_CANCELED => Err(Error::msg(CANCELLED)),
+            ERR_DENIED => Err(Error::msg(format!("{what}: denied ({st})")).context(UNAVAILABLE)),
+            _ => Err(Error::msg(format!("{what}: {st}")).context(UNAVAILABLE)),
+        }
+    }
+
+    /// cbb's side: an authorization that holds the right, asked for with
+    /// the system's prompt in the user's session, as its external form. The
+    /// authorization stays for as long as cbb runs, so that the service
+    /// finds it.
+    pub fn authorize(right: &str) -> Result<String> {
+        let mut auth: AuthorizationRef = std::ptr::null_mut();
+        // SAFETY: an empty authorization of this process.
+        status(
+            unsafe { AuthorizationCreate(std::ptr::null(), std::ptr::null(), 0, &mut auth) },
+            "AuthorizationCreate",
+        )?;
+        let name = CString::new(right).map_err(|_| Error::msg("a right with a NUL"))?;
+        let mut item =
+            AuthorizationItem { name: std::ptr::null(), value_length: 0, value: std::ptr::null_mut(), flags: 0 };
+        let rights = rights_of(&name, &mut item);
+        // SAFETY: rights points at one item whose name lives for the call.
+        let st = unsafe {
+            AuthorizationCopyRights(
+                auth,
+                &rights,
+                std::ptr::null(),
+                INTERACTION_ALLOWED | EXTEND_RIGHTS,
+                std::ptr::null_mut(),
+            )
+        };
+        status(st, "AuthorizationCopyRights")?;
+        let mut form = AuthorizationExternalForm { bytes: [0; 32] };
+        // SAFETY: auth is live and form has room for the external form.
+        status(unsafe { AuthorizationMakeExternalForm(auth, &mut form) }, "AuthorizationMakeExternalForm")?;
+        Ok(base64::engine::general_purpose::STANDARD.encode(form.bytes))
+    }
+
+    /// The service's side: the caller's authorization, from its external
+    /// form, must hold the right. It may ask the user again, where the
+    /// right's five minutes have passed meanwhile.
+    pub fn check(auth: &str, right: &str) -> Result<()> {
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(auth)
+            .ok()
+            .filter(|b| b.len() == 32)
+            .ok_or_else(|| Error::msg(UNAVAILABLE))?;
+        let mut form = AuthorizationExternalForm { bytes: [0; 32] };
+        form.bytes.copy_from_slice(&bytes);
+        let mut a: AuthorizationRef = std::ptr::null_mut();
+        // SAFETY: form holds 32 bytes, as the API reads.
+        status(unsafe { AuthorizationCreateFromExternalForm(&form, &mut a) }, "AuthorizationCreateFromExternalForm")?;
+        let name = CString::new(right).map_err(|_| Error::msg("a right with a NUL"))?;
+        let mut item =
+            AuthorizationItem { name: std::ptr::null(), value_length: 0, value: std::ptr::null_mut(), flags: 0 };
+        let rights = rights_of(&name, &mut item);
+        // SAFETY: a is live, rights points at one item whose name lives for
+        // the call.
+        let st = unsafe {
+            AuthorizationCopyRights(
+                a,
+                &rights,
+                std::ptr::null(),
+                INTERACTION_ALLOWED | EXTEND_RIGHTS,
+                std::ptr::null_mut(),
+            )
+        };
+        // SAFETY: a was made above and is freed once; the caller's own
+        // authorization stays.
+        unsafe { AuthorizationFree(a, 0) };
+        status(st, "AuthorizationCopyRights")
+    }
+}
+
+#[cfg(all(windows, feature = "tunnel"))]
+mod win {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
+    use base64::Engine as _;
+    use windows::Security::Credentials::{
+        KeyCredential, KeyCredentialCreationOption, KeyCredentialManager, KeyCredentialStatus,
+    };
+    use windows::Security::Cryptography::Core::CryptographicPublicKeyBlobType;
+    use windows::Security::Cryptography::CryptographicBuffer;
+    use windows::Storage::Streams::IBuffer;
+    use windows::core::{Array, HSTRING};
+
+    use super::{CANCELLED, KEEP_SECS, OP_CHALLENGE, RIGHT_KEPT, UNAVAILABLE};
+    use crate::control::{Header, Message};
+    use crate::error::{Context, Error, Result};
+    use crate::sys::UnixStream;
+
+    /// The Windows Hello key's name, the same for every user.
+    const KEY_NAME: &str = "tools.cbb.admin";
+    /// The users' keys, by SID, in the service's state folder.
+    const FILE: &str = "confirm-keys.json";
+    /// How long a challenge waits for its signature.
+    const CHALLENGE_TIME: Duration = Duration::from_secs(120);
+    /// At most this many challenges wait at once; the oldest go first.
+    const MAX_CHALLENGES: usize = 32;
+
+    struct State {
+        dir: PathBuf,
+        challenges: Vec<(Vec<u8>, String, String, Instant)>,
+        kept: HashMap<String, Instant>,
+    }
+
+    static STATE: Mutex<Option<State>> = Mutex::new(None);
+
+    pub fn install(dir: &Path) {
+        *STATE.lock().unwrap_or_else(|e| e.into_inner()) =
+            Some(State { dir: dir.to_path_buf(), challenges: Vec::new(), kept: HashMap::new() });
+    }
+
+    fn with<T>(f: impl FnOnce(&mut State) -> Result<T>) -> Result<T> {
+        let mut g = STATE.lock().unwrap_or_else(|e| e.into_inner());
+        f(g.as_mut().ok_or_else(|| Error::msg(UNAVAILABLE))?)
+    }
+
+    fn keys(dir: &Path) -> HashMap<String, String> {
+        std::fs::read(dir.join(FILE)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+    }
+
+    /// The user at the screen at the other end of conn, by SID.
+    fn user(conn: &UnixStream) -> Result<String> {
+        match crate::peer::sid_at_screen(conn) {
+            Some((sid, true)) => Ok(sid),
+            _ => Err(Error::msg(UNAVAILABLE)),
+        }
+    }
+
+    fn kept(st: &State, sid: &str, op: &str) -> bool {
+        super::right(op) == RIGHT_KEPT && st.kept.get(sid).is_some_and(|t| Instant::now() < *t)
+    }
+
+    /// The answer to a confirm request: "kept" while the user's last
+    /// confirmation lasts, "register" for a user with no key, else "sign"
+    /// with a new challenge for the operation h.value.
+    pub fn challenge(conn: &UnixStream, h: &Header) -> Result<Message> {
+        let sid = user(conn)?;
+        let (name, value) = with(|st| {
+            if kept(st, &sid, &h.value) {
+                return Ok(("kept", String::new()));
+            }
+            if !keys(&st.dir).contains_key(&sid) {
+                return Ok(("register", String::new()));
+            }
+            let mut nonce = vec![0u8; 32];
+            getrandom::fill(&mut nonce).map_err(|e| Error::msg(format!("no random numbers: {e}")))?;
+            st.challenges.retain(|c| c.3.elapsed() < CHALLENGE_TIME);
+            if st.challenges.len() >= MAX_CHALLENGES {
+                st.challenges.remove(0);
+            }
+            st.challenges.push((nonce.clone(), sid.clone(), h.value.clone(), Instant::now()));
+            Ok(("sign", base64::engine::general_purpose::STANDARD.encode(nonce)))
+        })?;
+        let header = Header { op: OP_CHALLENGE.into(), name: name.into(), value, done: true, ..Default::default() };
+        Ok(crate::control::reply(header, Vec::new()))
+    }
+
+    /// The service's check: the user's last confirmation still lasts, or
+    /// h.auth signs a challenge given to this user for this operation, with
+    /// the key the user registered.
+    pub fn check(conn: &UnixStream, h: &Header) -> Result<()> {
+        let sid = user(conn)?;
+        with(|st| {
+            if kept(st, &sid, &h.op) {
+                return Ok(());
+            }
+            let b64 = &base64::engine::general_purpose::STANDARD;
+            let (nonce, sig) = h
+                .auth
+                .split_once('.')
+                .and_then(|(n, s)| Some((b64.decode(n).ok()?, b64.decode(s).ok()?)))
+                .ok_or_else(|| Error::msg(UNAVAILABLE))?;
+            let at = st
+                .challenges
+                .iter()
+                .position(|c| c.0 == nonce && c.1 == sid && c.2 == h.op && c.3.elapsed() < CHALLENGE_TIME)
+                .ok_or_else(|| Error::msg("the confirmation came too late or for another action; try again"))?;
+            st.challenges.remove(at);
+            let key =
+                keys(&st.dir).get(&sid).and_then(|k| b64.decode(k).ok()).ok_or_else(|| Error::msg(UNAVAILABLE))?;
+            if !cbb_core::tls::web::verify_rsa_pkcs1_sha256(&key, &super::hello_message(&h.op, &nonce), &sig) {
+                return Err(Error::msg("the Windows Hello signature does not match this user's key"));
+            }
+            if super::right(&h.op) == RIGHT_KEPT {
+                st.kept.insert(sid.clone(), Instant::now() + Duration::from_secs(KEEP_SECS.into()));
+            }
+            Ok(())
+        })
+    }
+
+    /// Registers the user h.name's key h.value, on the admin socket.
+    pub fn register(h: &Header) -> Result<Message> {
+        if !h.name.starts_with("S-1-") || h.name.len() > 200 {
+            return Err(Error::msg("cbb confirm-key takes the user's SID"));
+        }
+        let key = base64::engine::general_purpose::STANDARD
+            .decode(&h.value)
+            .ok()
+            .filter(|k| (64..=2048).contains(&k.len()))
+            .ok_or_else(|| Error::msg("cbb confirm-key takes the key in base64"))?;
+        with(|st| {
+            let mut all = keys(&st.dir);
+            all.insert(h.name.clone(), base64::engine::general_purpose::STANDARD.encode(key));
+            let path = st.dir.join(FILE);
+            let tmp = st.dir.join(format!(".{FILE}.tmp"));
+            std::fs::write(&tmp, serde_json::to_vec_pretty(&all).unwrap_or_default())
+                .context(format!("cannot write {}", tmp.display()))?;
+            std::fs::rename(&tmp, &path).context(format!("cannot write {}", path.display()))?;
+            st.kept.remove(&h.name);
+            Ok(())
+        })?;
+        Ok(crate::control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+    }
+
+    // cbb's side, as the user.
+
+    pub fn prepare(h: &mut Header, ask: &dyn Fn(Header) -> Result<Header>) -> Result<()> {
+        let mut registered = false;
+        loop {
+            let a = ask(Header { op: OP_CHALLENGE.into(), value: h.op.clone(), ..Default::default() })?;
+            match a.name.as_str() {
+                "kept" => return Ok(()),
+                "sign" => {
+                    let b64 = &base64::engine::general_purpose::STANDARD;
+                    let nonce =
+                        b64.decode(&a.value).map_err(|_| Error::msg("the service's challenge is not base64"))?;
+                    match sign(&super::hello_message(&h.op, &nonce))? {
+                        Some(sig) => {
+                            h.auth = format!("{}.{}", a.value, b64.encode(sig));
+                            return Ok(());
+                        }
+                        // The key is gone from this account: make it again.
+                        None if !registered => {}
+                        None => return Err(Error::msg(UNAVAILABLE)),
+                    }
+                }
+                "register" if !registered => {}
+                _ => return Err(Error::msg(UNAVAILABLE)),
+            }
+            let key = create()?;
+            elevate_register(&key)?;
+            registered = true;
+        }
+    }
+
+    fn status(s: KeyCredentialStatus) -> Result<()> {
+        match s {
+            KeyCredentialStatus::Success => Ok(()),
+            KeyCredentialStatus::UserCanceled => Err(Error::msg(CANCELLED)),
+            other => Err(Error::msg(format!("Windows Hello: status {}", other.0)).context(UNAVAILABLE)),
+        }
+    }
+
+    fn win(e: windows::core::Error) -> Error {
+        Error::msg(format!("Windows Hello: {e}")).context(UNAVAILABLE)
+    }
+
+    fn bytes(b: &IBuffer) -> Result<Vec<u8>> {
+        let mut out = Array::<u8>::new();
+        CryptographicBuffer::CopyToByteArray(b, &mut out).map_err(win)?;
+        Ok(out.to_vec())
+    }
+
+    /// Makes the user's Windows Hello key, replacing an old one, and
+    /// returns its public key (PKCS #1).
+    fn create() -> Result<Vec<u8>> {
+        if !KeyCredentialManager::IsSupportedAsync().map_err(win)?.join().map_err(win)? {
+            return Err(Error::msg("Windows Hello is not set up for this user").context(UNAVAILABLE));
+        }
+        let r = KeyCredentialManager::RequestCreateAsync(
+            &HSTRING::from(KEY_NAME),
+            KeyCredentialCreationOption::ReplaceExisting,
+        )
+        .map_err(win)?
+        .join()
+        .map_err(win)?;
+        status(r.Status().map_err(win)?)?;
+        let cred: KeyCredential = r.Credential().map_err(win)?;
+        bytes(&cred.RetrievePublicKeyWithBlobType(CryptographicPublicKeyBlobType::Pkcs1RsaPublicKey).map_err(win)?)
+    }
+
+    /// Signs data with the user's Windows Hello key, which shows its
+    /// prompt; None when the account has no such key.
+    fn sign(data: &[u8]) -> Result<Option<Vec<u8>>> {
+        let r = KeyCredentialManager::OpenAsync(&HSTRING::from(KEY_NAME)).map_err(win)?.join().map_err(win)?;
+        if r.Status().map_err(win)? == KeyCredentialStatus::NotFound {
+            return Ok(None);
+        }
+        status(r.Status().map_err(win)?)?;
+        let buf = CryptographicBuffer::CreateFromByteArray(data).map_err(win)?;
+        let s = r.Credential().map_err(win)?.RequestSignAsync(&buf).map_err(win)?.join().map_err(win)?;
+        status(s.Status().map_err(win)?)?;
+        Ok(Some(bytes(&s.Result().map_err(win)?)?))
+    }
+
+    /// Runs cbb confirm-key with this user's SID and key as the
+    /// administrator, through the UAC prompt, once for the account.
+    fn elevate_register(key: &[u8]) -> Result<()> {
+        use windows_sys::Win32::Foundation::{CloseHandle, ERROR_CANCELLED, WAIT_OBJECT_0};
+        use windows_sys::Win32::System::Threading::{GetExitCodeProcess, INFINITE, WaitForSingleObject};
+        use windows_sys::Win32::UI::Shell::{SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW};
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
+        let sid = crate::peer::own_sid().ok_or_else(|| Error::msg("cannot read this user's SID"))?;
+        let exe = std::env::current_exe().context("cannot find cbb itself")?;
+        let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
+        let file = wide(&exe.to_string_lossy());
+        let params = wide(&format!("confirm-key {sid} {}", base64::engine::general_purpose::STANDARD.encode(key)));
+        let verb = wide("runas");
+        // SAFETY: an all-zero SHELLEXECUTEINFOW is a valid start; the
+        // strings outlive the call, and the process handle it returns is
+        // waited on and closed.
+        unsafe {
+            let mut info: SHELLEXECUTEINFOW = std::mem::zeroed();
+            info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+            info.fMask = SEE_MASK_NOCLOSEPROCESS;
+            info.lpVerb = verb.as_ptr();
+            info.lpFile = file.as_ptr();
+            info.lpParameters = params.as_ptr();
+            info.nShow = SW_HIDE;
+            if ShellExecuteExW(&mut info) == 0 {
+                let e = std::io::Error::last_os_error();
+                if e.raw_os_error() == Some(ERROR_CANCELLED as i32) {
+                    return Err(Error::msg(CANCELLED));
+                }
+                return Err(Error::msg(format!("cannot run cbb as the administrator: {e}")).context(UNAVAILABLE));
+            }
+            let mut code = 1u32;
+            let waited = WaitForSingleObject(info.hProcess, INFINITE) == WAIT_OBJECT_0;
+            let read = GetExitCodeProcess(info.hProcess, &mut code) != 0;
+            CloseHandle(info.hProcess);
+            if !(waited && read && code == 0) {
+                return Err(Error::msg(format!("cbb confirm-key exited with {code}")).context(UNAVAILABLE));
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tiers() {
+        assert_eq!(right("revoke"), RIGHT_KEPT);
+        assert_eq!(right("pair"), RIGHT_KEPT);
+        assert_eq!(right("mute"), RIGHT_KEPT);
+        for op in ["new", "leave", "takeover", "recovery", "handover", "key-level", "takeover-delay"] {
+            assert_eq!(right(op), RIGHT_EACH, "{op}");
+        }
+    }
+
+    /// What Windows Hello signs names the action and the challenge.
+    #[test]
+    fn hello() {
+        assert_eq!(hello_message("remove", b"\x01\x02"), b"cbb confirm v1\nremove\n\x01\x02");
+        assert!(crate::control::is_admin(OP_REGISTER) && !crate::control::is_admin(OP_CHALLENGE));
+    }
+
+    #[test]
+    fn exit_codes() {
+        assert_eq!(exit_code(&Error::msg(CANCELLED)), Some(CANCELLED_EXIT));
+        assert_eq!(exit_code(&Error::msg("pkcheck").context(UNAVAILABLE)), Some(NEED_ADMIN_EXIT));
+        assert_eq!(exit_code(&Error::msg(crate::awaynet::NEED_ROOT)), Some(NEED_ADMIN_EXIT));
+        assert_eq!(exit_code(&Error::msg("no device")), None);
+    }
+
+    /// The prompts come in every language of the project, and polkit's file
+    /// names both actions with them.
+    #[test]
+    fn policy() {
+        let p = polkit_policy();
+        assert!(p.contains("<action id=\"tools.cbb.admin\">") && p.contains("<action id=\"tools.cbb.admin.each\">"));
+        assert!(
+            p.contains("<allow_active>auth_admin_keep</allow_active>")
+                && p.contains("<allow_active>auth_admin</allow_active>")
+        );
+        assert_eq!(p.matches("<allow_any>no</allow_any>").count(), 2);
+        for lang in crate::l10n::LANGS {
+            assert!(p.contains(&format!("xml:lang=\"{lang}\"")), "{lang}");
+            assert_ne!(crate::l10n::lookup(lang, PROMPT_KEPT), None, "{lang}");
+            assert_ne!(crate::l10n::lookup(lang, PROMPT_EACH), None, "{lang}");
+        }
+        assert_eq!(_catalog_marks(), [PROMPT_KEPT, PROMPT_EACH]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn polkit() {
+        assert_eq!(linux::parse_start("42 (a b) c) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 777 19"), Some(777));
+        assert!(linux::start_time(std::process::id() as i32).is_some());
+        assert!(linux::verdict(Some(0), "").is_ok());
+        assert_eq!(linux::verdict(Some(3), "").unwrap_err().message(), CANCELLED);
+        assert_eq!(linux::verdict(Some(1), "not authorized").unwrap_err().message(), UNAVAILABLE);
+        let dir = std::env::temp_dir().join(format!("cbb-polkit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        linux::install(&dir).unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join("tools.cbb.admin.policy")).unwrap(), polkit_policy());
+        linux::install(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        linux::install(&dir).unwrap();
+    }
+}

@@ -76,5 +76,7 @@
  "{} is muted until {}: its copies do not reach the group.": "{} está silenciado hasta {}: sus copias no llegan al grupo.",
  "{} is no longer muted: its copies reach the group again.": "{} ya no está silenciado: sus copias vuelven a llegar al grupo.",
  "{} is removed.": "{} se ha quitado.",
- "{} ran {}.": "{} ejecutó {}."
+ "{} ran {}.": "{} ejecutó {}.",
+ "Confirm a change to your CBB group.": "Confirma un cambio en tu grupo de CBB.",
+ "Confirm an important change to your CBB group: it cannot be undone.": "Confirma un cambio importante en tu grupo de CBB: no se puede deshacer."
 }

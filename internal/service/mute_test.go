@@ -121,7 +121,7 @@ func TestMute(t *testing.T) {
 		_, err = c.Do(&control.Message{Header: h})
 		return err
 	}
-	if err := plain(a, control.Header{Op: control.OpMute, Device: "beta"}); err == nil || !strings.Contains(err.Error(), "admin socket") {
+	if err := plain(a, control.Header{Op: control.OpMute, Device: "beta"}); err == nil || !strings.Contains(err.Error(), "administrator") {
 		t.Fatalf("the control socket muted another device: %v", err)
 	}
 	if err := plain(b, control.Header{Op: control.OpMute, Device: "beta"}); err == nil || !strings.Contains(err.Error(), "only an admin") {

@@ -381,6 +381,7 @@ pub fn run(cfg: Config) -> Result<()> {
     // so the status says it until the service listens there itself.
     *svc.port.lock().unwrap() = cfg.port;
     let admin_socket = control::admin_socket(&cfg.socket);
+    crate::confirm::install(&|l: &str| log(l), &cfg.state_dir);
     for (ln, admin) in [(listen(&cfg.socket, false)?, false), (listen(&admin_socket, true)?, true)] {
         let svc = svc.clone();
         std::thread::spawn(move || accept_control(ln, move |conn| svc.serve(conn, admin)));
@@ -2010,13 +2011,31 @@ impl Service {
         if let Ok(c) = idle {
             let _ = c.set_read_timeout(None);
         }
-        if control::needs_admin(&m.header) && !admin && !self.own_device_op(&m.header) {
-            let e = Error::msg(format!(
-                "{:?} changes the group, so the service takes it only on its admin socket, which only the administrator reaches",
-                m.header.op
-            ));
-            let _ = control::write(&mut out, &control::failure(&e));
+        // Confirming itself (confirm.rs): the challenge to sign, and on the
+        // admin socket a user's key.
+        if m.header.op == crate::confirm::OP_CHALLENGE || (admin && m.header.op == crate::confirm::OP_REGISTER) {
+            let answer = crate::confirm::answer(&out, &m.header).unwrap_or_else(|e| control::failure(&e));
+            let _ = control::write(&mut out, &answer);
             return;
+        }
+        if control::needs_admin(&m.header) && !admin && !self.own_device_op(&m.header) {
+            // The user at the screen confirms it with the system's prompt
+            // instead (confirm.rs), where this system has one.
+            let res = if crate::confirm::supported() {
+                crate::confirm::check(&out, &m.header)
+            } else {
+                Err(Error::msg(format!(
+                    "{:?} changes the group, so the service takes it only on its admin socket, which only the administrator reaches",
+                    m.header.op
+                )))
+            };
+            match res {
+                Ok(()) => (self.log)(&format!("cbb: {} confirmed by the user at the screen", m.header.op)),
+                Err(e) => {
+                    let _ = control::write(&mut out, &control::failure(&e));
+                    return;
+                }
+            }
         }
         let broken = self.broken.lock().unwrap().clone();
         if let Some(detail) = broken.filter(|_| m.header.op != "leave") {

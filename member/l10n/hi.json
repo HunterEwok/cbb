@@ -76,5 +76,7 @@
  "{} is muted until {}: its copies do not reach the group.": "{} {} तक म्यूट है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।",
  "{} is no longer muted: its copies reach the group again.": "{} अब म्यूट नहीं है: इसकी कॉपियाँ फिर से समूह तक पहुँचती हैं।",
  "{} is removed.": "{} हटा दिया गया।",
- "{} ran {}.": "{} ने {} चलाया।"
+ "{} ran {}.": "{} ने {} चलाया।",
+ "Confirm a change to your CBB group.": "अपने CBB समूह में बदलाव की पुष्टि करें।",
+ "Confirm an important change to your CBB group: it cannot be undone.": "अपने CBB समूह में एक अहम बदलाव की पुष्टि करें: इसे पलटा नहीं जा सकता।"
 }

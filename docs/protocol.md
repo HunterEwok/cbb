@@ -1168,13 +1168,27 @@ socket's and makes again at each start unless the system, the administrators or 
 it), with mode 0600: only root and the
 service's user (on Windows the system, administrators and the service's account) can
 connect. `CBB_ADMIN_SOCKET` overrides its path for clients. The control socket takes only
-`copy`, `paste`, `copy-media`, `copied-media`, `paste-media`, `config`, `status`, `devices`, `release`, `release-get`, `release-held`, `entries`, `entries-get`, `keys` (from root only) and `watch` (with
-the watcher's `copied`, `clipboard`, `injected` and `acted`) and refuses every other operation with an error; the admin socket takes them
-all, and MUST be the only way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
+`copy`, `paste`, `copy-media`, `copied-media`, `paste-media`, `config`, `status`, `devices`, `release`, `release-get`, `release-held`, `entries`, `entries-get`, `keys` (from root only), `confirm` and `watch` (with
+the watcher's `copied`, `clipboard`, `injected` and `acted`), and every other operation only once the user at the screen
+confirmed it with the system's prompt, which the service checks itself (below); the admin socket takes them
+all without one, and MUST be the only other way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
 rename, freeze or make admin a device, take over, or change sync away from home. `cbb` dials the socket each operation needs. The lite member does the same
 with its own two sockets, but its control socket takes fewer: no `copy-media`, `copied-media`,
 `paste-media`, `config`, `release`, `release-get`, `entries`, `entries-get` or `keys`, and of the watcher's reports no
 `acted`.
+
+An admin operation on the control socket carries `auth` where the system needs it, and the
+service takes it only when the confirmation holds (docs/design.md, "Confirming admin actions"):
+on macOS `auth` is the base64 external form (32 bytes) of the caller's authorization, which
+must hold the right `tools.cbb.admin` for five minutes, or `tools.cbb.admin.each` for `new`,
+`leave`, `takeover`, `recovery`, `handover`, `key-level` and `takeover-delay`; on Linux polkit
+must authorize the calling process for the action of the same name, and `auth` is empty; on
+Windows `auth` is `CHALLENGE.SIGNATURE`, both base64: the RSASSA-PKCS1-v1_5 SHA-256 signature,
+by the user's registered Windows Hello key, of `cbb confirm v1\n`, the operation, `\n` and the
+challenge's 32 bytes. `mute` and `unmute` of the device itself need no `auth`. A refusal says
+`the confirmation was cancelled` when the user cancelled the prompt, and `this computer cannot
+confirm the admin action for this user, so only the administrator may run it` when nothing
+confirms it.
 
 ### Framing
 
@@ -1277,6 +1291,8 @@ A connection carries one request: the service reads the first message and dispat
 | `release-held` | none | payload = the release this device holds in JSON, `{keys, channel, release}`, or an error when it holds none: `cbb update` takes it when no update server answers, and checks it as it checks what it downloads (section 16) |
 | `entries` | payload = the signed entry points in JSON, `{keys, entries}` (section 16, "Entry points"), from `cbb update` or `cbb global entries import` | `{done}`: the service checks them, keeps them when they are newer than those it holds, and passes them on to its peers; an error when they do not check out |
 | `entries-get` | none | payload = the signed entry points this device holds, in the same JSON, or an error when it holds none or they have expired: `cbb global entries` shows them and `export` gives them as a string |
+| `confirm` | `{value}`: the operation to confirm | `{name, value}`: on Windows, `kept` while this user's last confirmation lasts (five minutes, not for what is confirmed each time), `register` when the user has no Windows Hello key registered, else `sign` with a 32-byte challenge in base64 in `value`, good for 120 seconds, for this user and this operation; elsewhere an error |
+| `confirm-key` | `{name, value}`: a user's SID and the public key (PKCS #1 RSAPublicKey, base64) of the user's Windows Hello key | `{done}`: the key that confirms this user's admin actions on Windows. Only on the admin socket |
 | `release-want` | none | payload = the names of the held release's archives that the members' hellos name and this device does not hold whole, a JSON array, at most 16; `null` on a device that is no hub: its `cbb update` downloads them for the group (section 16). Only on the admin socket |
 | `update-way` | none | payload = the VLESS settings (section 11) of the hub this device reaches away from home, with the group's VLESS user ID, or none without VLESS: `cbb update` reaches the mirror through them (section 16). Only on the admin socket |
 | `release-get` | `{value}`: an archive's SHA-256 | `{part}`, its bytes in `data` answers, then `{done}`: the archive of the held release, from this device or fetched from its peers |

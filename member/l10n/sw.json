@@ -76,5 +76,7 @@
  "{} is muted until {}: its copies do not reach the group.": "{} kimenyamazishwa hadi {}: nakala zake hazifiki kwenye kikundi.",
  "{} is no longer muted: its copies reach the group again.": "{} hakijanyamazishwa tena: nakala zake zinafika kwenye kikundi tena.",
  "{} is removed.": "{} kimeondolewa.",
- "{} ran {}.": "{} kiliendesha {}."
+ "{} ran {}.": "{} kiliendesha {}.",
+ "Confirm a change to your CBB group.": "Thibitisha badiliko katika kikundi chako cha CBB.",
+ "Confirm an important change to your CBB group: it cannot be undone.": "Thibitisha badiliko muhimu katika kikundi chako cha CBB: haliwezi kutenduliwa."
 }

@@ -76,5 +76,7 @@
  "{} is muted until {}: its copies do not reach the group.": "{} מושתק עד {}: העותקים שלו לא מגיעים לקבוצה.",
  "{} is no longer muted: its copies reach the group again.": "{} כבר לא מושתק: העותקים שלו שוב מגיעים לקבוצה.",
  "{} is removed.": "{} הוסר.",
- "{} ran {}.": "{} הריץ את {}."
+ "{} ran {}.": "{} הריץ את {}.",
+ "Confirm a change to your CBB group.": "אשרו שינוי בקבוצת ה-CBB שלכם.",
+ "Confirm an important change to your CBB group: it cannot be undone.": "אשרו שינוי חשוב בקבוצת ה-CBB שלכם: אי אפשר לבטל אותו."
 }

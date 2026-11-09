@@ -132,6 +132,22 @@ final class CBBMacTests: XCTestCase {
         )
     }
 
+    /// cbb runs as the user, with macOS's confirmation, except where it
+    /// needs root itself; its exit codes say a cancelled prompt and an
+    /// action only the administrator may take.
+    func testAdminAsUser() throws {
+        XCTAssertTrue(Admin.needsRoot(["update"]))
+        XCTAssertTrue(Admin.needsRoot(["pair", "-app", "/tmp/x.json"]))
+        XCTAssertFalse(Admin.needsRoot(["pair", "-qr"]))
+        XCTAssertFalse(Admin.needsRoot(["remove", "ab12"]))
+        XCTAssertEqual(try Admin.userResult(0, printed: "Removed.\n", stderr: ""), .done("Removed."))
+        XCTAssertEqual(try Admin.userResult(77, printed: "", stderr: "cbb: only the administrator"), .needsAdmin)
+        XCTAssertThrowsError(try Admin.userResult(75, printed: "", stderr: "")) { XCTAssertEqual($0 as? Admin.Failure, .cancelled) }
+        XCTAssertThrowsError(try Admin.userResult(1, printed: "", stderr: "cbb: no device \"x\" in the group\n")) {
+            XCTAssertEqual($0 as? Admin.Failure, .failed("no device \"x\" in the group", detail: "cbb: no device \"x\" in the group"))
+        }
+    }
+
     func testKind() {
         var phone = Control.Device(id: "1", name: "phone", role: "phone", os: "ios")
         XCTAssertEqual(phone.kind, .phone)

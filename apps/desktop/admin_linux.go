@@ -16,6 +16,11 @@ import (
 
 const deniedText = "No permission to use the service: add your user to the cbb group and log in again."
 
+// userConfirms: the service has polkit confirm admin actions on Linux.
+const userConfirms = true
+
+func hideWindow(*exec.Cmd) {}
+
 // runAdmin runs cbb through pkexec, which asks for the password in the
 // desktop's own dialog; pkexec passes the arguments as they are, without a
 // shell, and clears the environment, so CBB_DEBUG goes through env. input,

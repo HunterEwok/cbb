@@ -39,6 +39,11 @@ pub struct Header {
     /// cbb global on: the user agreed to what the warning says.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub consent: bool,
+    /// An admin request on the control socket: what confirms that the user
+    /// at the screen asked for it (confirm.rs): on a Mac the external form
+    /// of the caller's authorization, on Windows a Windows Hello signature.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auth: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub name: String,
     /// mode: the device whose mode an admin sets; this device if empty.
@@ -647,6 +652,8 @@ pub fn is_admin(op: &str) -> bool {
             | "release-held"
             | "entries"
             | "entries-get"
+            // The challenge that confirms an admin action (confirm.rs).
+            | "confirm"
             // The uinput helper, as root, through the socket's group; the
             // service checks that it is root.
             | "keys"

@@ -76,5 +76,7 @@
  "{} is muted until {}: its copies do not reach the group.": "كُتم {} حتى {}: لا تصل نسخه إلى المجموعة.",
  "{} is no longer muted: its copies reach the group again.": "لم يعد {} مكتومًا: تصل نسخه إلى المجموعة من جديد.",
  "{} is removed.": "أُزيل {}.",
- "{} ran {}.": "شغّل {} الإجراء {}."
+ "{} ran {}.": "شغّل {} الإجراء {}.",
+ "Confirm a change to your CBB group.": "أكّد تغييرًا في مجموعة CBB الخاصة بك.",
+ "Confirm an important change to your CBB group: it cannot be undone.": "أكّد تغييرًا مهمًا في مجموعة CBB الخاصة بك: لا يمكن التراجع عنه."
 }

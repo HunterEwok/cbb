@@ -76,5 +76,7 @@
  "{} is muted until {}: its copies do not reach the group.": "{} заглушён до {}: его копии не доходят до группы.",
  "{} is no longer muted: its copies reach the group again.": "{} больше не заглушён: его копии снова доходят до группы.",
  "{} is removed.": "{} удалено.",
- "{} ran {}.": "{} выполнил {}."
+ "{} ran {}.": "{} выполнил {}.",
+ "Confirm a change to your CBB group.": "Подтвердите изменение в вашей группе CBB.",
+ "Confirm an important change to your CBB group: it cannot be undone.": "Подтвердите важное изменение в вашей группе CBB: его нельзя отменить."
 }

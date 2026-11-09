@@ -76,5 +76,7 @@
  "{} is muted until {}: its copies do not reach the group.": "{} 已被静音，直到 {}：它的副本不会到达群组。",
  "{} is no longer muted: its copies reach the group again.": "{} 已取消静音：它的副本又会到达群组。",
  "{} is removed.": "{} 已移除。",
- "{} ran {}.": "{} 运行了 {}。"
+ "{} ran {}.": "{} 运行了 {}。",
+ "Confirm a change to your CBB group.": "确认对你的 CBB 群组的更改。",
+ "Confirm an important change to your CBB group: it cannot be undone.": "确认对你的 CBB 群组的重要更改：此操作无法撤销。"
 }

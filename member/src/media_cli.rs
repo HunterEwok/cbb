@@ -163,8 +163,8 @@ pub(crate) fn copy(g: &Global, paths: &[String], typ: &str, text: &str) -> Resul
     if total > MAX_MEDIA {
         return Err(Error::msg(format!("the copy is {}; CBB carries at most 1 GiB", size_text(total))));
     }
-    let h = Header { op: "copy-media".into(), ..Default::default() };
-    let conn = open(g, &h)?;
+    let mut h = Header { op: "copy-media".into(), ..Default::default() };
+    let conn = open(g, &mut h)?;
     let mut w = conn.try_clone().context("cannot reach the service")?;
     let mut r = Reader::new(conn);
     if let Err(e) = send(&mut w, h, &parts, text) {
@@ -249,8 +249,8 @@ pub(crate) fn paste_to(g: &Global, dir: &str) -> Result<()> {
     if !Path::new(dir).is_dir() {
         return Err(Error::msg(format!("{dir} is not a folder")));
     }
-    let h = Header { op: "paste-media".into(), ..Default::default() };
-    let conn = open(g, &h)?;
+    let mut h = Header { op: "paste-media".into(), ..Default::default() };
+    let conn = open(g, &mut h)?;
     let mut w = conn.try_clone().context("cannot reach the service")?;
     control::write(&mut w, &Message::new(h, Vec::new()))?;
     let mut r = Reader::new(conn);

@@ -727,11 +727,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /** Asks the user, on the activity open now, for one signature. */
-    private fun prompter(reason: Int, subtitle: String?, prompts: Prompts): (Signature) -> Signature = { s ->
+    private fun prompter(reason: Int, subtitle: String?, prompts: Prompts): (Signature?) -> Signature? = { s ->
         val ui = activity ?: throw Failure(Failure.Kind.NO_SCREEN)
         val n = prompts.made.incrementAndGet()
         val total = prompts.total
+        // A timed key asks once for all of them (s null): no count then.
         val which = when {
+            s == null -> null
             total != null && total > 1 && n <= total -> ui.getString(R.string.signature_of, n, total)
             n > 1 -> ui.getString(R.string.signature_n, n)
             else -> null
