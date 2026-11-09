@@ -42,15 +42,17 @@ const siteURL = "https://cbb.tools"
 // engines as a FAQPage. An answer is plain text: no links.
 var faq = []struct{ Q, A string }{
 	{"Is it free?", "Yes. Copy Beyond Borders is free software: no price, no subscription, no ads."},
-	{"Can anyone else read what I copy?", "No. Every copy is encrypted end to end on the device that makes it, for your own devices alone. Whatever passes it on, a hub, a forwarder or a relay, cannot read it."},
+	{"Can anyone else read what I copy?", "No. Every copy is encrypted end to end on the device that makes it, for your own devices alone. Whatever passes it on, a base or a server, cannot read it."},
 	{"Do I need a computer?", "No. A group of phones only works too. A computer that is often on keeps sync away from home going at any time."},
-	{"Does it work away from home?", "Yes. Your devices reach the group through its hub, a computer of yours or a phone while its app is open. For now this takes a port forward on your router or a small server of your own."},
+	{"Does it work away from home?", "Yes. Turn on Everywhere, and your devices reach each other through the group's base, a computer of yours or a phone while its app is open, or through a backup server that cannot read your copies. It works on hotel, office and campus Wi-Fi too."},
 	{"Why does the iPhone need a gesture?", "iOS does not let apps read the clipboard in the background. You send a copy with the Action button or a double tap on the back of the phone."},
 	{"Are my passwords synced?", "What password managers mark as secret is not synced automatically."},
 	{"Where is the iPhone app?", "It comes with TestFlight, which is not open yet."},
+	{"Does it work on hotel or office Wi-Fi?", "Yes. Away from home it also works on strict networks, such as hotel, office and campus Wi-Fi, which let few apps through."},
 	{"Does it need the internet?", "No. At home your devices need only your own network, with or without the internet."},
-	{"What if I lose my phone?", "Remove it from the group on another device that can admit devices. If the lost phone made the group, another phone of yours that is an admin takes the group over."},
-	{"How is it different from Universal Clipboard or KDE Connect?", "Universal Clipboard joins only Apple devices near each other, signed in to one Apple Account. KDE Connect works on one local network. Copy Beyond Borders joins iPhone, Android, Windows, Mac and Linux, at home and away, with no account."},
+	{"What if I lose my phone?", "Remove it from the group on another device you trust. If the lost phone made the group, another phone of yours that you trust becomes the group's owner."},
+	{"Who makes it?", "One developer, HunterEwok, in the United Kingdom. There is no company, no investors and no ads, and Copy Beyond Borders will always be free and open source."},
+	{"How is it different from Universal Clipboard or KDE Connect?", "Universal Clipboard joins only Apple devices near each other, signed in to one Apple Account. KDE Connect works on one local network. Copy Beyond Borders joins iPhone, Android, Aurora, Windows, Mac and Linux, at home and away, with no account."},
 }
 
 // Language is one language of the site.
