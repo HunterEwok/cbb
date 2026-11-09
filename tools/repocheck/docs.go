@@ -492,16 +492,18 @@ func checkPorts(files map[string][]byte) []string {
 }
 
 // controlOp is an operation of the control socket in internal/control.
-var controlOp = regexp.MustCompile(`(?m)^\tOp\w+\s+= "([a-z-]+)"`)
+var controlOp = regexp.MustCompile(`(?m)^\tOp\w+\s+= "([a-z_-]+)"`)
 
-// checkOps reports the operations of the control socket that section 8 of
-// docs/protocol.md, "Local control socket", does not name and no table row
-// of the protocol starts with.
+// checkOps reports the operations of the control socket that no row of
+// the members' one list of operations in docs/core-api.md, "The member's
+// operations", starts with, and the header fields that neither that list
+// nor section 8 of docs/protocol.md, "Local control socket", names.
 func checkOps(files map[string][]byte) []string {
-	const src, ref = "internal/control/control.go", "docs/protocol.md"
+	const src, ref, list = "internal/control/control.go", "docs/protocol.md", "docs/core-api.md"
 	code, ok1 := files[src]
 	doc, ok2 := files[ref]
-	if !ok1 || !ok2 {
+	api, ok3 := files[list]
+	if !ok1 || !ok2 || !ok3 {
 		return nil
 	}
 	section := string(doc)
@@ -513,16 +515,25 @@ func checkOps(files map[string][]byte) []string {
 	if end := strings.Index(section, "\n## "); end >= 0 {
 		section = section[:end]
 	}
+	ops := string(api)
+	start = strings.Index(ops, "\n### The member's operations\n")
+	if start < 0 {
+		return []string{list + ":1: the members' operations are missing"}
+	}
+	ops = ops[start+1:]
+	if end := strings.Index(ops, "\n#"); end >= 0 {
+		ops = ops[:end]
+	}
 	var problems []string
 	for _, f := range headerFields(string(code)) {
-		if !strings.Contains(section, "`"+f+"`") {
-			problems = append(problems, fmt.Sprintf("%s:1: the control header field %s (%s) is not described in section 8", ref, f, src))
+		if !strings.Contains(section, "`"+f+"`") && !strings.Contains(ops, "`"+f+"`") {
+			problems = append(problems, fmt.Sprintf("%s:1: the control header field %s (%s) is described neither in section 8 nor in %s", ref, f, src, list))
 		}
 	}
 	for _, m := range controlOp.FindAllSubmatch(code, -1) {
 		op := string(m[1])
-		if !strings.Contains(section, "`"+op+"`") && !strings.Contains(string(doc), "\n| `"+op+"` |") {
-			problems = append(problems, fmt.Sprintf("%s:1: the control operation %s (%s) is not described in section 8", ref, op, src))
+		if !strings.Contains(ops, "\n| `"+op+"` |") && !strings.Contains(section, "`"+op+"`") {
+			problems = append(problems, fmt.Sprintf("%s:1: the control operation %s (%s) is not in the members' operations", list, op, src))
 		}
 	}
 	return problems

@@ -240,8 +240,9 @@ func TestCheckPorts(t *testing.T) {
 
 func TestCheckOps(t *testing.T) {
 	files := map[string][]byte{
-		"internal/control/control.go": []byte("const (\n\tOpCopy       = \"copy\" // a copy\n\tOpPasteOn = \"paste-on\"\n\tOpNew = \"new\"\n\tOpThaw = \"thaw\"\n)\n"),
-		"docs/protocol.md":            []byte("# P\n\n## 7. Before\n\n`new`\n\n## 8. Local control socket\n\n| `copy` | |\n\n- `paste-on`: a paste\n\n## 9. After\n\n| `thaw` | |\n"),
+		"internal/control/control.go": []byte("const (\n\tOpCopy       = \"copy\" // a copy\n\tOpPasteOn = \"paste_on\"\n\tOpNew = \"new\"\n\tOpThaw = \"thaw\"\n\tOpPart = \"part\"\n)\n"),
+		"docs/protocol.md":            []byte("# P\n\n## 7. Before\n\n`new`\n\n## 8. Local control socket\n\nparts as `part` messages\n\n## 9. After\n\n| `new` | |\n"),
+		"docs/core-api.md":            []byte("# C\n\n### The member's operations\n\n| `op` | where |\n|---|---|\n| `copy` | both |\n| `paste_on` | computer |\n| `thaw` | computer |\n\n## Operations\n\n| `new` | |\n"),
 	}
 	got := checkOps(files)
 	if len(got) != 1 || !strings.Contains(got[0], "operation new ") {
@@ -269,7 +270,8 @@ func TestCheckStyle(t *testing.T) {
 func TestCheckOpsHeader(t *testing.T) {
 	files := map[string][]byte{
 		"internal/control/control.go": []byte("type Header struct {\n\tOp string `json:\"op\"`\n\tLen int `json:\"len,omitempty\"` // the length\n\tRelayKey string `json:\"relay_key,omitempty\"`\n}\n\ntype Other struct {\n\tX int `json:\"x\"`\n}\n"),
-		"docs/protocol.md":            []byte("# P\n\n## 8. Local control socket\n\n| `op` | string |\n| `relay`, `relay_key` | strings |\n\n## 9. After\n\n`len`\n"),
+		"docs/protocol.md":            []byte("# P\n\n## 8. Local control socket\n\n| `op` | string |\n\n## 9. After\n\n`len`\n"),
+		"docs/core-api.md":            []byte("# C\n\n### The member's operations\n\n| `away` | computer | `relay`, `relay_key` | |\n\n## After\n\n`len`\n"),
 	}
 	got := checkOps(files)
 	if len(got) != 1 || !strings.Contains(got[0], "header field len ") {

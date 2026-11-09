@@ -1186,7 +1186,10 @@ request or a watcher's message is `{"op", "args", "len", "seq"}`, an answer `{"o
 when 0. The operations, what goes in `args` and what comes back in `ok`, are in
 [core-api.md](core-api.md), "The member's operations": one list for this socket and the phones'
 `cbb_member_call`, with the same names and bodies. On the socket a text or other bytes travel as
-the payload after the header, `len` bytes, and `done` marks the last answer to a request.
+the payload after the header, `len` bytes, and `done` marks the last answer to a request. A client
+reads an answer as op `reply`; `copy_media`, `copied_media` and `release_file` send their
+parts as `part` messages and their bytes as `data` messages, and `paste_media` and
+`release_get` answer the same way.
 
 A connection carries one request: the service reads the first message and dispatches on
 `op`; an unknown `op` fails. An answer has no `op`. A failure is
