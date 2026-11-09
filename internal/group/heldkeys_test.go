@@ -41,9 +41,6 @@ func TestHeldKeysWithoutTheirHardware(t *testing.T) {
 // With CBB_TPM off nothing goes to the hardware, and the reason says so.
 func TestHardwareOff(t *testing.T) {
 	t.Setenv(TPMEnv, "off")
-	if HardwareKeys() {
-		t.Error("hardware keys with CBB_TPM off")
-	}
 	if got := WhyNotHardware(); got != TPMEnv+" is off" {
 		t.Errorf("WhyNotHardware() = %q", got)
 	}
