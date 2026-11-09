@@ -1455,6 +1455,9 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The Mac app's Settings are a sheet on its window, as the tray app's dialog, instead of a
+  window of their own; "Settings…" in the menu bar item and Command-comma open the window
+  with them.
 - The roles `full` and `lite` are one role, `member`, with capabilities (D-89; docs/protocol.md
   section 4, "Capabilities"): `admin` (it can hold an admin key), `dials` (it dials other
   members) and `hub` (it may be chosen as the hub), in its hello (`caps`), its device record
@@ -1949,6 +1952,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The Mac app's Settings fit their width: a build's long version widened every row and cut
+  the rows' ends off on both sides; it is now one line cut in the middle, whole on hover.
+  The tray app's version wraps instead of reaching past its dialog.
 - The lite member fetches a copy's images or files once when two requests want them at the
   same time (`cbb paste -o` while the copy is fetched in the background); the second waited on
   chunks the first had taken and could fail.

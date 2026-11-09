@@ -390,9 +390,10 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   problem, a group, another device online), which macOS draws white or black for the menu
   bar. The app makes itself a login item on its first run (`SMAppService`); Settings, "Open
   at sign-in", turns that off.
-- **Settings**: the appearance as icons, the colour and the language in a row (the phones'
-  `Theme.swift` and `Tokens.swift`, shared; the language through `AppleLanguages`, shown once
-  the app opens again), "Open at sign-in", "Advanced settings" (whether the app may press
+- **Settings**, a sheet on the window (the menu bar item's "Settings…" and Command-comma
+  open the window with it): the appearance as icons, the colour and the language in a row
+  (the phones' `Theme.swift` and `Tokens.swift`, shared; the language through
+  `AppleLanguages`, shown once the app opens again), "Open at sign-in", "Advanced settings" (whether the app may press
   keys for remote paste, the recovery key), and about: the version, where seven clicks show
   error details (on in debug builds, off in release ones, and the `ShowErrorDetails` default
   either way).

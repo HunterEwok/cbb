@@ -17,15 +17,31 @@ struct CBBMacApp: App {
             MainView().environmentObject(model).modifier(Themed())
         }
         .defaultSize(width: 920, height: 620)
+        .commands { SettingsCommand(model: model) }
 
         MenuBarExtra {
             MenuContent().environmentObject(model)
         } label: {
             TrayLabel().environmentObject(model)
         }
+    }
+}
 
-        Settings {
-            SettingsView().environmentObject(model).modifier(Themed())
+/// The app menu's "Settings…" (Command-comma): Settings are a sheet on the
+/// window rather than a window of their own, so it opens the window with
+/// them.
+struct SettingsCommand: Commands {
+    let model: MacModel
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button {
+                openWindow(id: "main")
+                NSApp.activate(ignoringOtherApps: true)
+                model.settingsShown = true
+            } label: { Text("Settings…") }
+                .keyboardShortcut(",")
         }
     }
 }

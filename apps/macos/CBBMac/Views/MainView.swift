@@ -111,12 +111,13 @@ struct MainView: View {
                 }
             }
             ToolbarItem {
-                SettingsLink { Label("Settings", systemImage: "gearshape") }
+                Button { model.settingsShown = true } label: { Label("Settings", systemImage: "gearshape") }
             }
         }
         .sheet(isPresented: $adding) { AddDeviceSheet().modifier(Themed()) }
         .sheet(isPresented: Binding(get: { model.joining }, set: { if !$0 { model.cancelJoin() } })) { JoinSheet().modifier(Themed()) }
         .sheet(isPresented: $recovering) { RecoverySheet().modifier(Themed()) }
+        .sheet(isPresented: $model.settingsShown) { SettingsView().environmentObject(model).modifier(Themed()) }
         .modifier(ArrangePrompts())
         .environmentObject(arrange)
         // Arrange mode is off while a search or a filter is on.

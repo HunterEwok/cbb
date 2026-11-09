@@ -30,6 +30,8 @@ final class MacModel: ObservableObject {
     /// The window asks before Everywhere turns on (D-82); the menu bar's
     /// item sets it and opens the window.
     @Published var askingAway = false
+    /// Settings, a sheet on the window, which the menu bar item opens too.
+    @Published var settingsShown = false
     private var joinFile: URL?
     private var joinCancelled = false
     /// Whether macOS lets the app press keys for remote paste.
