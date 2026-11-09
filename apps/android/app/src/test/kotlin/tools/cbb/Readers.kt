@@ -31,11 +31,17 @@ internal object Readers {
         return listOf(text, description).filter { it.isNotBlank() }.joinToString(" / ")
     }
 
+    /**
+     * Whether the node was laid out on the screen: a node of a list that
+     * was never scrolled to, or of a part being animated in, has no size.
+     */
+    private fun SemanticsNode.placed() = layoutInfo.isPlaced && size.width > 0 && size.height > 0
+
     /** Texts cut off or ended with "…": the text did not fit where the screen put it. */
     fun clipped(compose: ComposeContentTestRule): List<String> {
         val out = mutableListOf<String>()
         val nodes = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true).fetchSemanticsNodes()
-        for (node in nodes) {
+        for (node in nodes.filter { it.placed() }) {
             val action = node.config.getOrNull(SemanticsActions.GetTextLayoutResult) ?: continue
             val results = mutableListOf<TextLayoutResult>()
             action.action?.invoke(results)
@@ -50,12 +56,12 @@ internal object Readers {
     /** Controls with neither text nor a description, which TalkBack could only call "button". */
     fun unnamed(compose: ComposeContentTestRule): List<String> =
         compose.onAllNodes(hasClickAction()).fetchSemanticsNodes()
-            .filter { it.label().isBlank() }
+            .filter { it.placed() && it.label().isBlank() }
             .map { "a control without a name at ${it.boundsInRoot}" }
 
     /** Controls smaller than 48 by 48 dp to touch, below Android's and WCAG's target size. */
     fun small(compose: ComposeContentTestRule): List<String> =
-        compose.onAllNodes(hasClickAction()).fetchSemanticsNodes().mapNotNull { node ->
+        compose.onAllNodes(hasClickAction()).fetchSemanticsNodes().filter { it.placed() }.mapNotNull { node ->
             val min = with(node.layoutInfo.density) { 48.dp.toPx() } - 1f
             val b = node.touchBoundsInRoot
             if (b.width < min || b.height < min) {

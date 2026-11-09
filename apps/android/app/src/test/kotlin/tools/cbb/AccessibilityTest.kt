@@ -17,6 +17,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
+import org.robolectric.annotation.GraphicsMode
 
 /**
  * The app for a person who uses TalkBack or large text (docs/testing.md, "The
@@ -26,7 +27,8 @@ import org.robolectric.annotation.ConscryptMode
  * contrast is checked once for every app, in tools/tokens.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [35])
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class AccessibilityTest {
     @get:Rule val compose = createComposeRule()
@@ -67,7 +69,7 @@ class AccessibilityTest {
 
     /** U16: Swahili, among the longest of the eight, at twice the font size. */
     @Test
-    @Config(qualifiers = "sw")
+    @Config(qualifiers = "+sw")
     fun largestFontInSwahili() {
         RuntimeEnvironment.setFontScale(2f)
         screens { screen -> assertNone("$screen in Swahili at font scale 2", Readers.clipped(compose)) }

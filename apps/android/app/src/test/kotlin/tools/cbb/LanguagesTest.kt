@@ -24,6 +24,7 @@ import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
+import org.robolectric.annotation.GraphicsMode
 
 /**
  * The app in each of the project's eight languages (docs/testbench-catalogue.md,
@@ -33,7 +34,8 @@ import org.robolectric.annotation.ConscryptMode
  * TalkBack reads in that language.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
-@Config(sdk = [35])
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class LanguagesTest(private val lang: String) {
     companion object {
