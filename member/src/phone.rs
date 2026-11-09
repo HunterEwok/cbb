@@ -124,6 +124,8 @@ pub struct Member {
     away: Arc<Away>,
     /// The admins given a new admin CA, by device, with the root it is from.
     admin_cas: Mutex<std::collections::BTreeMap<String, [u8; 32]>>,
+    /// The user's order of the tiles (crate::view).
+    tiles: crate::view::Tiles,
 }
 
 /// What a member port a phone opens is for.
@@ -239,12 +241,23 @@ impl Member {
             listeners: Mutex::new(HashMap::new()),
             own: Own::default(),
             log,
-            state_dir,
             others,
             tunnels,
             away,
             admin_cas: Mutex::new(std::collections::BTreeMap::new()),
+            tiles: crate::view::Tiles::new(&state_dir),
+            state_dir,
         })
+    }
+
+    /// The tiles to draw for devices, the group's devices as the app's
+    /// devices call lists them, with the user's change op first (crate::view).
+    pub fn view(
+        &self,
+        devices: Vec<crate::control::Device>,
+        op: Option<&cbb_core::arrange::Op>,
+    ) -> Result<crate::view::View> {
+        self.tiles.view(&self.node.identity().tag(), devices, op)
     }
 
     /// Turns sync away from home on (docs/protocol.md, section 11): new

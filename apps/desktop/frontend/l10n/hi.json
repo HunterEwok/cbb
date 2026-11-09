@@ -317,5 +317,12 @@
   "Offline: %s.": "ऑफ़लाइन: %s।",
   "Sync is off on: %s.": "इन पर सिंक बंद है: %s।",
   "Muted by an admin: %s.": "एडमिन द्वारा म्यूट: %s।",
-  "CBB %s is available.": "CBB %s उपलब्ध है।"
+  "CBB %s is available.": "CBB %s उपलब्ध है।",
+  "Oops, something broke": "उफ़, कुछ टूट गया",
+  "Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.": "माफ़ कीजिए! क्या आप हमें एक छोटी रिपोर्ट भेजने की अनुमति देंगे ताकि हम इसे ठीक कर सकें? इसमें केवल यह होता है कि क्या टूटा, CBB और सिस्टम के संस्करण, डिवाइस का मॉडल और CBB के अपने रिकॉर्ड। इसमें आपके टेक्स्ट, फ़ाइलें, कुंजियाँ, डिवाइस के नाम और पते नहीं हैं। रिपोर्ट गुमनाम है।",
+  "Allow": "अनुमति दें",
+  "Always allow": "हमेशा अनुमति दें",
+  "Technical details": "तकनीकी विवरण",
+  "Version %s fixes this: update CBB.": "संस्करण %s में यह ठीक है: CBB अपडेट करें।",
+  "Something in CBB broke. It started again.": "CBB में कुछ टूट गया। यह फिर से शुरू हो गया।"
 }

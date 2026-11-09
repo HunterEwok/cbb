@@ -228,6 +228,25 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertThrowsError(try a.member.current()) { XCTAssertTrue($0 is CoreMember.Stopped) }
     }
 
+    /// The member keeps the tiles' order: a change shows in its view, and
+    /// one that does not fit throws and changes nothing.
+    func testKeepsTheTilesOrder() throws {
+        let t = try CoreGroup(test: self)
+        let m = t.phones[0].member
+        let v = try m.view()
+        XCTAssertFalse(v.custom)
+        let me = try XCTUnwrap(v.devices.first?.id)
+        let other = try XCTUnwrap(v.devices.dropFirst().first?.id)
+        let after = try m.view(.new(name: "Desk", devices: [other]))
+        XCTAssertTrue(after.custom)
+        guard case let .collection(id, name, ds) = try XCTUnwrap(after.tiles.last) else { return XCTFail("no collection") }
+        XCTAssertEqual(name, "Desk")
+        XCTAssertEqual(ds.map(\.id), [other])
+        XCTAssertThrowsError(try m.view(.rename(collection: id, name: String(repeating: "x", count: 65))))
+        XCTAssertEqual(try m.view(.move(.collection(id), before: .device(me))).tiles.count, after.tiles.count)
+        guard case .collection = try XCTUnwrap(m.view().tiles.first) else { return XCTFail("the collection did not move first") }
+    }
+
     func testRefusesABadStart() throws {
         let k = SoftwareSigner()
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-core-bad-\(UUID().uuidString)")

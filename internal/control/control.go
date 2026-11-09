@@ -46,6 +46,11 @@ const (
 	OpAway        = "away"           // client → service: Name "on", "off", "hub", "hub-off", "move" (to Device) or "relay": sync away from home
 	OpSync        = "sync"           // client → service: On true or false (for ForMS, 0 for until turned on): sync this device's clipboard with the group, or with Device as an admin (no ForMS); answer: SyncOff, SyncOffMS, Muted, MutedMS
 	OpMuted       = "muted"          // client → service: where sync and an admin's mute stand, as sync answers
+	OpBug         = "bug"            // client → service: the bug report of the panic before the last restart, as the core made it (empty when none waits)
+	OpBugAllow    = "bug_allow"      // client → service: the user allowed it (payload {"always"}), and it goes
+	OpBugCancel   = "bug_cancel"     // client → service: the user cancelled it: nothing goes
+	OpView        = "view"           // client → service: the tiles to draw (docs/apps.md, "What the member shows")
+	OpArrange     = "arrange"        // client → service: the user's change of the tiles' order (Header.Arrange), answered as view
 	OpNetwork     = "network"        // client → service: take the networks this device is on now as known
 	OpMakeAdmin   = "make_admin"     // client → service: on the root, make the device Device names an admin (AllowFileKey: even with its keys in a file)
 	OpTakeOver    = "take_over"      // client → service: on an admin, take the group over from the lost root Device names
@@ -192,6 +197,11 @@ type Header struct {
 	Joining      *Joining `json:"joining,omitempty"`      // invite: a device to confirm, before it is admitted
 	Status       *Status  `json:"status,omitempty"`
 	Devices      []Device `json:"devices,omitempty"`
+	// View is the answer to view and arrange: the tiles to draw, as the
+	// member builds them (docs/apps.md, "What the member shows").
+	View json.RawMessage `json:"view,omitempty"`
+	// Arrange is the user's change in an arrange (cbb_core::arrange::Op).
+	Arrange json.RawMessage `json:"arrange,omitempty"`
 
 	// Images and files: in a part message, the part whose bytes follow;
 	// Value, in config, the setting's new value. Images, Files and HTML,
@@ -328,6 +338,9 @@ type Status struct {
 	// itself, in Unix milliseconds; 0 for until it is turned on.
 	Mode        string `json:"mode,omitempty"`
 	SyncUntilMS int64  `json:"sync_until_ms,omitempty"`
+	// Bug says that a panic before the last restart waits for the user to
+	// allow or cancel its bug report (OpBug, OpBugAllow, OpBugCancel).
+	Bug bool `json:"bug,omitempty"`
 	// Muted says that an admin muted this device, its copies its own,
 	// until MutedUntilMS in Unix milliseconds, 0 for until an admin
 	// unmutes it.

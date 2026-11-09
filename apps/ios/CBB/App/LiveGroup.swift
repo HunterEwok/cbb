@@ -26,6 +26,12 @@ private let syncLog = Logger(subsystem: "tools.cbb", category: "sync")
 /// keeps a connection to each, and syncs with them.
 @MainActor
 final class LiveGroup: GroupController {
+    /// Something in the member broke (a `panic` event): what broke and the
+    /// member's recent log lines, oldest first, for the bug report
+    /// (docs/core-api.md, "Bug reports"); the member starts again by itself.
+    var onPanic: ((String, [String]) -> Void)?
+    /// The member's recent log lines, for a bug report.
+    private var recentLog: [String] = []
     enum Failure: Error, Equatable { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin, noWindow, twoWindows, needsRoot, noGroupComputer, noGroup, rootLeaves([String]) }
 
     /// The clipboard holds something the app could not read as text: the
@@ -202,6 +208,11 @@ final class LiveGroup: GroupController {
     var hasGroup: Bool { state != nil }
 
     var groupTag: String? { state?.tag }
+
+    /// The member's tiles (docs/apps.md, "What the member shows").
+    func view(_ op: Arrangement.Op?) throws -> Arrangement.View<CoreMember.TileDevice>? {
+        try node?.view(op)
+    }
 
     /// Whether this phone may add and remove devices: it made the group, or
     /// the phone that did made it an admin. A phone without a group makes
@@ -1777,9 +1788,12 @@ final class LiveGroup: GroupController {
             modeLog.notice("\(by, privacy: .public) \(muted ? "muted" : "unmuted", privacy: .public) this phone")
         case let .log(line):
             syncLog.notice("\(line, privacy: .public)")
+            recentLog.append(line)
+            if recentLog.count > 300 { recentLog.removeFirst(recentLog.count - 300) }
         case let .panic(details):
             // A member that broke stops and starts again.
             syncLog.error("the member broke, starting it again: \(details, privacy: .public)")
+            onPanic?(details, recentLog)
             Task { await restartSync() }
         case .identity:
             // The core kept the certificate an admin renewed for this phone;

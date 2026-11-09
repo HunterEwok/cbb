@@ -625,4 +625,12 @@
     <string name="why_devices_sync_off_t">इन पर सिंक बंद है: %1$s।</string>
     <string name="why_devices_muted_t">एडमिन द्वारा म्यूट: %1$s।</string>
     <string name="why_update_t">CBB %1$s उपलब्ध है।</string>
+    <string name="bug_title">उफ़, कुछ टूट गया</string>
+    <string name="bug_text">माफ़ कीजिए! क्या आप हमें एक छोटी रिपोर्ट भेजने की अनुमति देंगे ताकि हम इसे ठीक कर सकें? इसमें केवल यह होता है कि क्या टूटा, CBB और सिस्टम के संस्करण, डिवाइस का मॉडल और CBB के अपने रिकॉर्ड। इसमें आपके टेक्स्ट, फ़ाइलें, कुंजियाँ, डिवाइस के नाम और पते नहीं हैं। रिपोर्ट गुमनाम है।</string>
+    <string name="bug_allow">अनुमति दें</string>
+    <string name="bug_cancel">रद्द करें</string>
+    <string name="bug_always">हमेशा अनुमति दें</string>
+    <string name="bug_details">तकनीकी विवरण</string>
+    <string name="bug_fixed_in">संस्करण %1$s में यह ठीक है: CBB अपडेट करें।</string>
+    <string name="bug_broke_restarted">CBB में कुछ टूट गया। यह फिर से शुरू हो गया।</string>
 </resources>

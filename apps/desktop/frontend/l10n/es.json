@@ -317,5 +317,12 @@
   "Offline: %s.": "Sin conexión: %s.",
   "Sync is off on: %s.": "La sincronización está desactivada en: %s.",
   "Muted by an admin: %s.": "Silenciados por un administrador: %s.",
-  "CBB %s is available.": "CBB %s está disponible."
+  "CBB %s is available.": "CBB %s está disponible.",
+  "Oops, something broke": "Vaya, algo se rompió",
+  "Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.": "¡Lo sentimos! ¿Nos permites enviar un informe breve para arreglarlo? Solo contiene lo que se rompió, las versiones de CBB y del sistema, el modelo del dispositivo y los registros propios de CBB. Tus textos, archivos, claves, nombres de dispositivos y direcciones no están en él. El informe es anónimo.",
+  "Allow": "Permitir",
+  "Always allow": "Permitir siempre",
+  "Technical details": "Detalles técnicos",
+  "Version %s fixes this: update CBB.": "La versión %s lo corrige: actualiza CBB.",
+  "Something in CBB broke. It started again.": "Algo se rompió en CBB. Se ha vuelto a iniciar."
 }

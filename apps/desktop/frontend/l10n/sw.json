@@ -317,5 +317,12 @@
   "Offline: %s.": "Nje ya mtandao: %s.",
   "Sync is off on: %s.": "Usawazishaji umezimwa kwenye: %s.",
   "Muted by an admin: %s.": "Vimenyamazishwa na msimamizi: %s.",
-  "CBB %s is available.": "CBB %s inapatikana."
+  "CBB %s is available.": "CBB %s inapatikana.",
+  "Oops, something broke": "Lo, kuna kitu kimeharibika",
+  "Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.": "Samahani! Unaturuhusu kutuma ripoti fupi ili tuirekebishe? Ina tu kilichoharibika, matoleo ya CBB na ya mfumo, muundo wa kifaa na kumbukumbu za CBB yenyewe. Maandishi yako, faili, funguo, majina ya vifaa na anwani hazimo. Ripoti haina jina.",
+  "Allow": "Ruhusu",
+  "Always allow": "Ruhusu kila mara",
+  "Technical details": "Maelezo ya kiufundi",
+  "Version %s fixes this: update CBB.": "Toleo %s linarekebisha hili: sasisha CBB.",
+  "Something in CBB broke. It started again.": "Kuna kitu kimeharibika katika CBB. Kimeanza upya."
 }

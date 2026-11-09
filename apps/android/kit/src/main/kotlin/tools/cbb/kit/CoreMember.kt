@@ -16,6 +16,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.Closeable
 import java.io.File
@@ -344,6 +345,16 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     // What the app shows.
 
     /** The members connected now, those whose connection carries records only too when all. */
+    /**
+     * The device tiles in the user's order, with the user's change op applied
+     * and kept first (docs/apps.md, "What the member shows"); a change that
+     * does not fit throws and changes nothing.
+     */
+    fun view(op: Arrangement.Op? = null): Arrangement.View {
+        val answer = if (op == null) call("view") else call("arrange", Wire.obj("arrange" to Arrangement.json(op)))
+        return Arrangement.view(answer.getValue("view").jsonObject)
+    }
+
     fun peers(all: Boolean = false): List<Peer> =
         call("peers", Wire.obj("all" to JsonPrimitive(all))).optArray("peers").orEmpty().mapNotNull { (it as? JsonObject)?.let(Peer::fromJson) }
 

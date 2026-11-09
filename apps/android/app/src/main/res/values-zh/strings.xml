@@ -625,4 +625,12 @@
     <string name="why_devices_sync_off_t">以下设备已关闭同步：%1$s。</string>
     <string name="why_devices_muted_t">已被管理员静音：%1$s。</string>
     <string name="why_update_t">CBB %1$s 已可用。</string>
+    <string name="bug_title">哎呀，出问题了</string>
+    <string name="bug_text">抱歉！允许我们发送一份简短的报告，以便修复这个问题吗？报告只包含出错的内容、CBB 和系统的版本、设备型号以及 CBB 自己的记录。其中没有你的文本、文件、密钥、设备名称和地址。报告是匿名的。</string>
+    <string name="bug_allow">允许</string>
+    <string name="bug_cancel">取消</string>
+    <string name="bug_always">始终允许</string>
+    <string name="bug_details">技术详情</string>
+    <string name="bug_fixed_in">版本 %1$s 已修复此问题：请更新 CBB。</string>
+    <string name="bug_broke_restarted">CBB 出了点问题，已重新启动。</string>
 </resources>

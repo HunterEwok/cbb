@@ -317,5 +317,12 @@
   "Offline: %s.": "غير متصل: %s.",
   "Sync is off on: %s.": "المزامنة متوقفة على: %s.",
   "Muted by an admin: %s.": "مكتومة من مسؤول: %s.",
-  "CBB %s is available.": "يتوفر CBB %s."
+  "CBB %s is available.": "يتوفر CBB %s.",
+  "Oops, something broke": "عذرًا، حدث عطل ما",
+  "Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.": "نعتذر! هل تسمح لنا بإرسال تقرير قصير لنصلح المشكلة؟ يحتوي فقط على ما تعطّل، وإصدارَي CBB والنظام، وطراز الجهاز، وسجلات CBB الخاصة. لا يحتوي على نصوصك أو ملفاتك أو مفاتيحك أو أسماء أجهزتك أو عناوينك. التقرير مجهول الهوية.",
+  "Allow": "السماح",
+  "Always allow": "السماح دائمًا",
+  "Technical details": "التفاصيل التقنية",
+  "Version %s fixes this: update CBB.": "الإصدار %s يصلح هذا: حدّث CBB.",
+  "Something in CBB broke. It started again.": "حدث عطل في CBB، وأُعيد تشغيله."
 }

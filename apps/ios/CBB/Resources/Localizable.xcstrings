@@ -24890,6 +24890,328 @@
         }
       }
     },
+    "Oops, something broke": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ой, что-то сломалось"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vaya, algo se rompió"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "哎呀，出问题了"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عذرًا، حدث عطل ما"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אופס, משהו נשבר"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उफ़, कुछ टूट गया"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo, kuna kitu kimeharibika"
+          }
+        }
+      }
+    },
+    "Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Простите! Разрешите отправить нам короткий отчёт, чтобы мы это исправили? В нём только что сломалось, версия CBB и системы, модель устройства и служебные записи CBB. Ваших текстов, файлов, ключей, имён устройств и адресов там нет. Отчёт анонимный."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¡Lo sentimos! ¿Nos permites enviar un informe breve para arreglarlo? Solo contiene lo que se rompió, las versiones de CBB y del sistema, el modelo del dispositivo y los registros propios de CBB. Tus textos, archivos, claves, nombres de dispositivos y direcciones no están en él. El informe es anónimo."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "抱歉！允许我们发送一份简短的报告，以便修复这个问题吗？报告只包含出错的内容、CBB 和系统的版本、设备型号以及 CBB 自己的记录。其中没有你的文本、文件、密钥、设备名称和地址。报告是匿名的。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نعتذر! هل تسمح لنا بإرسال تقرير قصير لنصلح المشكلة؟ يحتوي فقط على ما تعطّل، وإصدارَي CBB والنظام، وطراز الجهاز، وسجلات CBB الخاصة. لا يحتوي على نصوصك أو ملفاتك أو مفاتيحك أو أسماء أجهزتك أو عناوينك. التقرير مجهول الهوية."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "סליחה! מאשרים לנו לשלוח דוח קצר כדי שנוכל לתקן את זה? יש בו רק מה שנשבר, הגרסאות של CBB ושל המערכת, דגם המכשיר והרישומים של CBB עצמו. אין בו את הטקסטים, הקבצים, המפתחות, שמות המכשירים והכתובות שלך. הדוח אנונימי."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "माफ़ कीजिए! क्या आप हमें एक छोटी रिपोर्ट भेजने की अनुमति देंगे ताकि हम इसे ठीक कर सकें? इसमें केवल यह होता है कि क्या टूटा, CBB और सिस्टम के संस्करण, डिवाइस का मॉडल और CBB के अपने रिकॉर्ड। इसमें आपके टेक्स्ट, फ़ाइलें, कुंजियाँ, डिवाइस के नाम और पते नहीं हैं। रिपोर्ट गुमनाम है।"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Samahani! Unaturuhusu kutuma ripoti fupi ili tuirekebishe? Ina tu kilichoharibika, matoleo ya CBB na ya mfumo, muundo wa kifaa na kumbukumbu za CBB yenyewe. Maandishi yako, faili, funguo, majina ya vifaa na anwani hazimo. Ripoti haina jina."
+          }
+        }
+      }
+    },
+    "Allow": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разрешить"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitir"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "السماح"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לאשר"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अनुमति दें"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruhusu"
+          }
+        }
+      }
+    },
+    "Always allow": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разрешать всегда"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitir siempre"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "始终允许"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "السماح دائمًا"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לאשר תמיד"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हमेशा अनुमति दें"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruhusu kila mara"
+          }
+        }
+      }
+    },
+    "Technical details": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Технические подробности"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detalles técnicos"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技术详情"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التفاصيل التقنية"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פרטים טכניים"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "तकनीकी विवरण"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maelezo ya kiufundi"
+          }
+        }
+      }
+    },
+    "Version %@ fixes this: update CBB.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это исправлено в версии %@: обновите CBB."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La versión %@ lo corrige: actualiza CBB."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版本 %@ 已修复此问题：请更新 CBB。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإصدار %@ يصلح هذا: حدّث CBB."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "גרסה %@ מתקנת את זה: יש לעדכן את CBB."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संस्करण %@ में यह ठीक है: CBB अपडेट करें।"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toleo %@ linarekebisha hili: sasisha CBB."
+          }
+        }
+      }
+    },
+    "Something in CBB broke. It started again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В CBB что-то сломалось. Он запустился заново."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algo se rompió en CBB. Se ha vuelto a iniciar."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB 出了点问题，已重新启动。"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حدث عطل في CBB، وأُعيد تشغيله."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "משהו ב-CBB נשבר. הוא הופעל מחדש."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB में कुछ टूट गया। यह फिर से शुरू हो गया।"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kuna kitu kimeharibika katika CBB. Kimeanza upya."
+          }
+        }
+      }
+    },
     "Why it does not sync": {
       "localizations": {
         "ru": {

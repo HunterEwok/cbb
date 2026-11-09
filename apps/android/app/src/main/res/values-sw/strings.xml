@@ -625,4 +625,12 @@
     <string name="why_devices_sync_off_t">Usawazishaji umezimwa kwenye: %1$s.</string>
     <string name="why_devices_muted_t">Vimenyamazishwa na msimamizi: %1$s.</string>
     <string name="why_update_t">CBB %1$s inapatikana.</string>
+    <string name="bug_title">Lo, kuna kitu kimeharibika</string>
+    <string name="bug_text">Samahani! Unaturuhusu kutuma ripoti fupi ili tuirekebishe? Ina tu kilichoharibika, matoleo ya CBB na ya mfumo, muundo wa kifaa na kumbukumbu za CBB yenyewe. Maandishi yako, faili, funguo, majina ya vifaa na anwani hazimo. Ripoti haina jina.</string>
+    <string name="bug_allow">Ruhusu</string>
+    <string name="bug_cancel">Ghairi</string>
+    <string name="bug_always">Ruhusu kila mara</string>
+    <string name="bug_details">Maelezo ya kiufundi</string>
+    <string name="bug_fixed_in">Toleo %1$s linarekebisha hili: sasisha CBB.</string>
+    <string name="bug_broke_restarted">Kuna kitu kimeharibika katika CBB. Kimeanza upya.</string>
 </resources>

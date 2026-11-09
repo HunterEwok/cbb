@@ -116,56 +116,45 @@ func TestTranslations(t *testing.T) {
 	}
 }
 
-// The window's arrangement: kept in desktop.json for the group, never
-// overwritten by the window's other settings, pruned once the list is
-// whole, and a change that does not fit says so.
+// The window's arrangement: the member keeps it and answers view, the
+// window draws what it answers, and a change that does not fit says so.
 func TestDeskArrange(t *testing.T) {
+	svc := newFakeService(t)
 	off := false
-	d := &Desk{tr: map[string]string{}, settingsPath: filepath.Join(t.TempDir(), "desktop.json")}
+	d := &Desk{socket: svc.path, tr: map[string]string{}, settingsPath: filepath.Join(t.TempDir(), "desktop.json")}
 	d.settings.Details = &off
-	d.status = &control.Status{Group: "g1"}
-	d.devices = []control.Device{{ID: "me", Self: true}, {ID: "a"}, {ID: "b"}, {ID: "c"}}
-	if st := d.snapshot(); st.Custom || len(st.Arranged) != 4 || st.Arranged[0].Device != "me" {
+	st := d.State()
+	if st.Custom || len(st.Arranged) != len(svc.devices) || st.Arranged[0].Device != "self" {
 		t.Fatalf("default: %+v", st.Arranged)
 	}
-	d.Arrange(ArrangeOp{Op: "new", Name: "Office", Devices: []string{"b", "c"}})
-	st := d.snapshot()
-	if !st.Custom || len(st.Arranged) != 3 || st.Arranged[2].Collection == nil || st.Arranged[2].Collection.Name != "Office" {
+	d.Arrange(ArrangeOp{Op: "new", Name: "Office", Devices: []string{"win", "iphone"}})
+	st = d.snapshot()
+	var office *Collection
+	for _, it := range st.Arranged {
+		if it.Collection != nil {
+			office = it.Collection
+		}
+	}
+	if !st.Custom || office == nil || office.Name != "Office" || len(office.Devices) != 2 {
 		t.Fatalf("after new: %+v", st.Arranged)
 	}
-	if st.Settings.Arrangement != nil {
-		t.Error("the state hands the stored arrangement to the window")
+	if b, _ := json.Marshal(svc.arranged()); !strings.Contains(string(b), `"Office"`) {
+		t.Errorf("the member keeps %s", b)
 	}
-	// The window saves its other settings without the arrangement.
+	// The window's own settings never hold the order.
 	if err := d.SaveSettings(Settings{Layout: "list", Details: &off}); err != nil {
 		t.Fatal(err)
 	}
-	var saved Settings
-	data, err := os.ReadFile(d.settingsPath)
-	if err != nil {
-		t.Fatal(err)
+	if data, err := os.ReadFile(d.settingsPath); err != nil || strings.Contains(string(data), "Office") {
+		t.Fatalf("saved: %s, %v", data, err)
 	}
-	if err := json.Unmarshal(data, &saved); err != nil {
-		t.Fatal(err)
-	}
-	if saved.Layout != "list" || saved.Arrangement == nil || saved.Arrangement.Group != "g1" || len(saved.Arrangement.Items) != 3 {
-		t.Fatalf("saved: %s", data)
-	}
-	d.Arrange(ArrangeOp{Op: "rename", Collection: "c1", Name: strings.Repeat("x", 65)})
+	d.Arrange(ArrangeOp{Op: "rename", Collection: office.ID, Name: strings.Repeat("x", 65)})
 	if d.message != "The tiles stay as they were: that change does not fit." {
 		t.Errorf("refused: %q", d.message)
 	}
-	// b leaves the group: the stored arrangement drops it.
-	d.devices = []control.Device{{ID: "me", Self: true}, {ID: "a"}, {ID: "c"}}
-	if !d.pruneLocked() {
-		t.Error("nothing pruned")
-	}
-	if c := d.settings.Arrangement.Items[2].Collection; c == nil || len(c.Devices) != 1 || c.Devices[0] != "c" {
-		t.Errorf("pruned: %+v", d.settings.Arrangement.Items)
-	}
-	// Another group starts afresh.
-	d.status = &control.Status{Group: "g2"}
-	if st := d.snapshot(); st.Custom {
-		t.Error("another group's arrangement shows")
+	// Back to the group's order.
+	d.Arrange(ArrangeOp{Op: "ungroup", Collection: office.ID})
+	if st := d.State(); st.Custom && len(st.Arranged) != len(svc.devices) {
+		t.Errorf("after ungroup: %+v", st.Arranged)
 	}
 }

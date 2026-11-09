@@ -23,70 +23,52 @@ final class ArrangementTests: XCTestCase {
 
         var value: Arrangement.Op? {
             switch op {
-            case "move": return .move(item!.ref, before: before?.ref)
-            case "into": return .into(device: device!, collection: collection!)
-            case "out": return .out(device: device!)
-            case "new": return .new(name: name!, devices: devices ?? [])
-            case "rename": return .rename(collection: collection!, name: name!)
-            case "ungroup": return .ungroup(collection: collection!)
+            case "move": return item.map { .move($0.ref, before: before?.ref) }
+            case "into": return .into(device: device ?? "", collection: collection ?? "")
+            case "out": return .out(device: device ?? "")
+            case "new": return .new(name: name ?? "", devices: devices ?? [])
+            case "rename": return .rename(collection: collection ?? "", name: name ?? "")
+            case "ungroup": return .ungroup(collection: collection ?? "")
             case "reset": return .reset
             default: return nil
             }
         }
     }
 
-    struct Case: Decodable {
-        var name: String
-        var group: String
-        var me: String
-        var devices: [String]
-        var stored: Arrangement?
-        var prune: Bool
-        var ops: [OpJSON]
-        var error: Bool
-        var items: [Arrangement.Item]
-        var view: [Arrangement.Item]
-
-        enum CodingKeys: String, CodingKey {
-            case name, group, me = "self", devices, stored, prune, ops, error, items, view
-        }
-    }
-
-    struct Doc: Decodable {
-        var cases: [Case]
-    }
-
-    /// testdata/arrangement/vectors.json, which the tray app and the Android kit read too.
-    func testVectors() throws {
+    /// Each change of testdata/arrangement/vectors.json goes to the member
+    /// as the vectors write it, which cbb_core::arrange reads.
+    func testChangesAsTheMemberReadsThem() throws {
         var url = URL(fileURLWithPath: #filePath)
         for _ in 0..<6 { url.deleteLastPathComponent() }
         let data = try Data(contentsOf: url.appendingPathComponent("testdata/arrangement/vectors.json"))
-        let cases = try JSONDecoder().decode(Doc.self, from: data).cases
-        XCTAssertFalse(cases.isEmpty)
+        let doc = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let cases = try XCTUnwrap(doc["cases"] as? [[String: Any]])
+        var n = 0
         for c in cases {
-            var a = c.stored.map { Arrangement.decode(try? JSONEncoder().encode($0), group: c.group) } ?? Arrangement(group: c.group)
-            if c.prune { a.prune(devices: c.devices) }
-            for (i, op) in c.ops.enumerated() {
-                let wantError = c.error && i == c.ops.count - 1
-                var failed = false
-                do {
-                    guard let o = op.value else { throw Arrangement.Refused(reason: "no such operation") }
-                    try a.apply(o, devices: c.devices, self: c.me)
-                } catch is Arrangement.Refused {
-                    failed = true
-                }
-                XCTAssertEqual(failed, wantError, "\(c.name): op \(i)")
+            for raw in c["ops"] as? [[String: Any]] ?? [] {
+                let parsed = try JSONDecoder().decode(OpJSON.self, from: JSONSerialization.data(withJSONObject: raw))
+                guard let op = parsed.value else { continue }
+                var want = raw.filter { !($0.value is NSNull) }
+                if case .new = op, want["devices"] == nil { want["devices"] = [String]() }
+                let got = try XCTUnwrap(JSONSerialization.jsonObject(with: op.data) as? [String: Any])
+                XCTAssertEqual(NSDictionary(dictionary: got), NSDictionary(dictionary: want), "\(c["name"] ?? "")")
+                n += 1
             }
-            XCTAssertEqual(a.items, c.items, "\(c.name): items")
-            XCTAssertEqual(a.view(devices: c.devices, self: c.me), c.view, "\(c.name): view")
-            XCTAssertEqual(Arrangement.decode(a.encoded(), group: c.group).items, a.items, "\(c.name): encoded")
         }
+        XCTAssertGreaterThan(n, 10)
     }
 
-    func testBadJSONStartsFresh() {
-        XCTAssertEqual(Arrangement.decode(Data("{".utf8), group: "G").items, [])
-        XCTAssertEqual(Arrangement.decode(Data(#"{"v":1,"group":"G","items":[{"x":1}]}"#.utf8), group: "G").items, [])
-        XCTAssertEqual(Arrangement.decode(nil, group: "G").items, [])
-        XCTAssertEqual(Arrangement.decode(Data(#"{"v":1,"group":"old","items":[{"device":"a"}]}"#.utf8), group: "G").items, [])
+    struct Dev: Decodable, Sendable { var id: String }
+
+    /// The member's view reads as tiles, with its devices in their order.
+    func testView() throws {
+        let json = #"{"tiles":[{"device":{"id":"s"}},{"collection":{"id":"c1","name":"Desk","devices":[{"id":"a"},{"id":"b"}]}}],"online":1,"others":2,"custom":true}"#
+        let v = try JSONDecoder().decode(Arrangement.View<Dev>.self, from: Data(json.utf8))
+        XCTAssertEqual(v.devices.map(\.id), ["s", "a", "b"])
+        XCTAssertTrue(v.custom)
+        XCTAssertEqual(v.online, 1)
+        guard case let .collection(id, name, ds) = v.tiles[1] else { return XCTFail("no collection") }
+        XCTAssertEqual([id, name], ["c1", "Desk"])
+        XCTAssertEqual(ds.count, 2)
     }
 }

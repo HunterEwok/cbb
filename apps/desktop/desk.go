@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,6 +42,8 @@ type Desk struct {
 	settings Settings
 	status   *control.Status
 	devices  []control.Device
+	arranged []Item // the tiles as the member keeps them (view)
+	custom   bool
 	problem  string
 	message  string
 	busy     bool
@@ -68,9 +71,9 @@ type State struct {
 	Message  string           `json:"message,omitempty"`
 	Settings Settings         `json:"settings"`
 	Version  string           `json:"version"`
-	// Arranged is the devices and collections below this computer in the
-	// user's order (Arrangement.View); Custom whether the user changed
-	// the order, which Back to the group's order undoes.
+	// Arranged is the devices and collections, this computer among them,
+	// in the user's order as the member keeps it (view); Custom whether the
+	// user changed the order, which Back to the group's order undoes.
 	Arranged []Item `json:"arranged"`
 	Custom   bool   `json:"custom"`
 	// ShowDetails is whether messages show the error underneath, as
@@ -96,10 +99,6 @@ type Settings struct {
 	// Advanced shows the advanced settings: why the computer does not
 	// sync, making a device the hub and the hub's tunnel.
 	Advanced bool `json:"advanced,omitempty"`
-	// Arrangement is the user's order of the tiles and their collections
-	// (arrange.go); nil until the user changes something. The window never
-	// sends it: Arrange changes it.
-	Arrangement *Arrangement `json:"arrangement,omitempty"`
 }
 
 // NewDesk reads the settings and the language; it reaches the service only
@@ -146,89 +145,54 @@ func (d *Desk) snapshot() State {
 	if st.Devices == nil {
 		st.Devices = []control.Device{} // the window takes null for no list
 	}
-	if a, ids, self, ok := d.arrangementLocked(); ok {
-		st.Arranged = a.View(ids, self)
-		st.Custom = len(a.Items) > 0
+	if d.status != nil && d.status.Group != "" && !d.status.Removed {
+		st.Arranged, st.Custom = d.arranged, d.custom
 	}
-	st.Settings.Arrangement = nil
 	return st
 }
 
-// arrangementLocked is the arrangement for the group this computer is in,
-// with the devices' IDs and this computer's; ok is false outside a group.
-func (d *Desk) arrangementLocked() (a Arrangement, ids []string, self string, ok bool) {
-	if d.status == nil || d.status.Group == "" || d.status.Removed {
-		return Arrangement{}, nil, "", false
-	}
-	var stored Arrangement
-	if d.settings.Arrangement != nil {
-		stored = *d.settings.Arrangement
-	}
-	for _, dev := range d.devices {
-		ids = append(ids, dev.ID)
-		if dev.Self {
-			self = dev.ID
-		}
-	}
-	return arrangeFor(stored, d.status.Group), ids, self, true
-}
-
-// Arrange makes a change to the arrangement of the tiles and keeps it; one
-// that does not fit leaves it as it was and says so.
+// Arrange makes a change to the arrangement of the tiles, which the member
+// keeps; one that does not fit leaves it as it was and says so.
 func (d *Desk) Arrange(op ArrangeOp) {
-	d.mu.Lock()
-	a, ids, self, ok := d.arrangementLocked()
-	d.mu.Unlock()
-	if !ok {
+	raw, err := json.Marshal(op)
+	if err != nil {
 		return
 	}
-	if err := a.Apply(op, ids, self); err != nil {
-		msg := d.describe(err)
+	m, _, err := d.requestHeader(control.Header{Op: control.OpArrange, Arrange: raw}, nil)
+	var devices []control.Device
+	var items []Item
+	var custom bool
+	if err == nil {
+		devices, items, custom, err = readView(m.View)
+	}
+	if err != nil {
+		msg := d.T("The tiles stay as they were: that change does not fit.")
+		if d.showDetails() {
+			msg += "\n\n" + err.Error()
+		}
+		log.Printf("arrange: %v", err)
 		d.mu.Lock()
 		d.message = msg
 		d.mu.Unlock()
 		return
 	}
 	d.mu.Lock()
-	d.settings.Arrangement = &a
-	d.message = ""
+	d.devices, d.arranged, d.custom, d.message = devices, items, custom, ""
 	d.mu.Unlock()
-	if err := d.writeSettings(); err != nil {
-		log.Printf("settings: %v", err)
-	}
-}
-
-// pruneLocked drops the devices that left the group from the stored
-// arrangement, once the list is whole: the group loaded, this computer in
-// it. It reports whether the settings changed.
-func (d *Desk) pruneLocked() bool {
-	if d.settings.Arrangement == nil {
-		return false
-	}
-	a, ids, self, ok := d.arrangementLocked()
-	if !ok || self == "" {
-		return false
-	}
-	before, _ := json.Marshal(a)
-	a.Prune(ids)
-	after, _ := json.Marshal(a)
-	if string(before) == string(after) {
-		return false
-	}
-	d.settings.Arrangement = &a
-	return true
 }
 
 func (d *Desk) refresh() {
 	var st *control.Status
 	var devices []control.Device
+	var items []Item
+	var custom bool
 	m, _, err := d.request(control.OpStatus, nil)
 	if err == nil {
 		st = m.Status
 		if st != nil && st.Group != "" && !st.Removed {
-			var dm *control.Message
-			if dm, _, err = d.request(control.OpDevices, nil); err == nil {
-				devices = dm.Devices
+			var vm *control.Message
+			if vm, _, err = d.request(control.OpView, nil); err == nil {
+				devices, items, custom, err = readView(vm.View)
 			}
 		}
 	}
@@ -243,14 +207,7 @@ func (d *Desk) refresh() {
 		d.problem = problem
 		return
 	}
-	d.problem, d.status, d.devices = "", st, devices
-	if d.pruneLocked() {
-		go func() {
-			if err := d.writeSettings(); err != nil {
-				log.Printf("settings: %v", err)
-			}
-		}()
-	}
+	d.problem, d.status, d.devices, d.arranged, d.custom = "", st, devices, items, custom
 }
 
 // request sends one request on its own connection and returns the answer
@@ -461,8 +418,6 @@ func (d *Desk) SaveSettings(s Settings) error {
 	lang := pickLang(s.Lang)
 	tr := translations(lang)
 	d.mu.Lock()
-	// The window does not send the arrangement; Arrange keeps it.
-	s.Arrangement = d.settings.Arrangement
 	d.settings = s
 	changed := lang != d.lang
 	d.lang, d.tr = lang, tr
@@ -566,8 +521,6 @@ func (d *Desk) summary(err error) (string, string) {
 		return req.Msg, req.Detail
 	case errors.As(err, &adm):
 		return d.T(adm.msg), adm.detail
-	case errors.Is(err, errArrange):
-		return d.T("The tiles stay as they were: that change does not fit."), err.Error()
 	}
 	return d.T("Something failed on this computer."), err.Error()
 }
@@ -694,4 +647,73 @@ func (d *Desk) headline(s State) string {
 		}
 	}
 	return fmt.Sprintf(d.T("%d of %d online"), online, len(s.Devices))
+}
+
+// BugOffer is the bug report the window asks about in release mode
+// (docs/core-api.md, "Bug reports"): the report as "Technical details"
+// shows it, whether to offer "Always allow", and the version that fixes
+// the break, as the server said.
+type BugOffer struct {
+	Report      string `json:"report"`
+	OfferAlways bool   `json:"offer_always"`
+	FixedIn     string `json:"fixed_in"`
+}
+
+// Bug reads the bug report of the service's panic before its last
+// restart, when the status says one waits. In debug mode the message
+// shows the break whole and nothing is asked; a report the core would not
+// make again stops waiting. It returns nil when there is nothing to ask.
+func (d *Desk) Bug() *BugOffer {
+	_, data, err := d.requestHeader(control.Header{Op: control.OpBug}, nil)
+	if err != nil || len(data) == 0 {
+		if err != nil {
+			log.Printf("bug: %v", err)
+		}
+		return nil
+	}
+	var o struct {
+		Action      string          `json:"action"`
+		OfferAlways bool            `json:"offer_always"`
+		FixedIn     string          `json:"fixed_in"`
+		Report      json.RawMessage `json:"report"`
+	}
+	if err := json.Unmarshal(data, &o); err != nil {
+		log.Printf("bug: the report does not read: %v", err)
+		return nil
+	}
+	var details struct {
+		Details string `json:"details"`
+	}
+	_ = json.Unmarshal(o.Report, &details)
+	log.Printf("bug: the service broke and started again: %s", details.Details)
+	if d.showDetails() || o.Action != "ask" {
+		if d.showDetails() {
+			d.mu.Lock()
+			d.message = d.T("Something in CBB broke. It started again.") + "\n\n" + details.Details
+			d.mu.Unlock()
+		}
+		d.BugCancel()
+		return nil
+	}
+	var pretty bytes.Buffer
+	if json.Indent(&pretty, o.Report, "", "  ") != nil {
+		pretty.Reset()
+		pretty.Write(o.Report)
+	}
+	return &BugOffer{Report: pretty.String(), OfferAlways: o.OfferAlways, FixedIn: o.FixedIn}
+}
+
+// BugAllow sends the report the user allowed, and maybe always.
+func (d *Desk) BugAllow(always bool) {
+	body, _ := json.Marshal(map[string]bool{"always": always})
+	if _, _, err := d.requestHeader(control.Header{Op: control.OpBugAllow}, body); err != nil {
+		log.Printf("bug: %v", err)
+	}
+}
+
+// BugCancel drops the report: nothing goes.
+func (d *Desk) BugCancel() {
+	if _, _, err := d.requestHeader(control.Header{Op: control.OpBugCancel}, nil); err != nil {
+		log.Printf("bug: %v", err)
+	}
 }

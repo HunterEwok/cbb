@@ -392,7 +392,11 @@ void Member::event(const QByteArray &json)
     const QJsonObject e = QJsonDocument::fromJson(json).object();
     const QString type = e.value(QStringLiteral("type")).toString();
     if (type == QStringLiteral("log")) {
-        Errors::log(e.value(QStringLiteral("line")).toString());
+        const QString line = e.value(QStringLiteral("line")).toString();
+        Errors::log(line);
+        m_recentLog.append(line);
+        if (m_recentLog.size() > 300)
+            m_recentLog.removeFirst();
     } else if (type == QStringLiteral("write")) {
         write(e.value(QStringLiteral("text")).toString(), e.value(QStringLiteral("kind")).toString() == QStringLiteral("secret"),
               qint64(e.value(QStringLiteral("ttl_ms")).toDouble()));

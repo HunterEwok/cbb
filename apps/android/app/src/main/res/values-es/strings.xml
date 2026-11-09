@@ -625,4 +625,12 @@
     <string name="why_devices_sync_off_t">La sincronización está desactivada en: %1$s.</string>
     <string name="why_devices_muted_t">Silenciados por un administrador: %1$s.</string>
     <string name="why_update_t">CBB %1$s está disponible.</string>
+    <string name="bug_title">Vaya, algo se rompió</string>
+    <string name="bug_text">¡Lo sentimos! ¿Nos permites enviar un informe breve para arreglarlo? Solo contiene lo que se rompió, las versiones de CBB y del sistema, el modelo del dispositivo y los registros propios de CBB. Tus textos, archivos, claves, nombres de dispositivos y direcciones no están en él. El informe es anónimo.</string>
+    <string name="bug_allow">Permitir</string>
+    <string name="bug_cancel">Cancelar</string>
+    <string name="bug_always">Permitir siempre</string>
+    <string name="bug_details">Detalles técnicos</string>
+    <string name="bug_fixed_in">La versión %1$s lo corrige: actualiza CBB.</string>
+    <string name="bug_broke_restarted">Algo se rompió en CBB. Se ha vuelto a iniciar.</string>
 </resources>

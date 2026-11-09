@@ -28,6 +28,7 @@ mod awg;
 mod benchtime;
 #[cfg(feature = "tunnel")]
 pub mod bugd;
+mod bugs;
 pub mod button;
 mod cli;
 pub mod content;
@@ -96,6 +97,7 @@ pub mod tunnel;
 mod update;
 mod update_os;
 pub mod uptime;
+pub mod view;
 #[cfg(feature = "tunnel")]
 pub mod vless;
 pub mod why;

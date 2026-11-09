@@ -317,5 +317,12 @@
   "Offline: %s.": "לא מחוברים: %s.",
   "Sync is off on: %s.": "הסנכרון כבוי ב: %s.",
   "Muted by an admin: %s.": "הושתקו על ידי מנהל: %s.",
-  "CBB %s is available.": "CBB %s זמין."
+  "CBB %s is available.": "CBB %s זמין.",
+  "Oops, something broke": "אופס, משהו נשבר",
+  "Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.": "סליחה! מאשרים לנו לשלוח דוח קצר כדי שנוכל לתקן את זה? יש בו רק מה שנשבר, הגרסאות של CBB ושל המערכת, דגם המכשיר והרישומים של CBB עצמו. אין בו את הטקסטים, הקבצים, המפתחות, שמות המכשירים והכתובות שלך. הדוח אנונימי.",
+  "Allow": "לאשר",
+  "Always allow": "לאשר תמיד",
+  "Technical details": "פרטים טכניים",
+  "Version %s fixes this: update CBB.": "גרסה %s מתקנת את זה: יש לעדכן את CBB.",
+  "Something in CBB broke. It started again.": "משהו ב-CBB נשבר. הוא הופעל מחדש."
 }

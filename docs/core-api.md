@@ -105,7 +105,12 @@ after the header, and an operation that answers more than once marks the last an
 | `copy_media` | both | on a phone: `text` (optional), `parts`: `[{type, path, dir, data, file}]`, clipboard data with its bytes in `data` (base64) or a file or folder with the file on the phone in `file`; `board` (optional, `false` by default). On a computer the parts stream instead: the payload is the plain-text alternative, or none; then for each part `{"op":"part", part}` (`part` = `{type?, path?, dir?, size?}`), followed for a file or clipboard data by `{"op":"data"}` messages whose payloads, at most 1 MiB each, are exactly its `size` bytes; last `{"op":"part", done}` | a phone answers `{"copy"}`, a computer `{}`: the parts are in the cache and the copy went to the group as a `media` event (protocol.md, section 4, "Media"), also written to the member's own clipboard. An error when the copy is over this device's limit, its manifest is not valid or the bytes do not come as said. `cbb copy FILE...` reads the files as the user and sends them |
 | `sync` | both | `on` (required), `for_ms` (only with `on: false`, from 1 to 2 592 000 000, 30 days; 0 or absent for until it is turned on), `device` (on a computer, an admin, on the admin socket: another device by name or device ID, with no `for_ms`; a phone turns another device's sync with `cbb_member_manage`) | `{"sync_off", "sync_off_ms", "muted", "muted_ms"}`, as `muted` gives it: turns the device's sync on or off, saved in `sync.json` and in effect (design.md, "Sync on and off"); the members see it at the next connection. With `device`: `{}` once that device answered `done` to the `mode` command (protocol.md, section 15), or an error with its reason. Without `device` on either socket, so that the apps switch it without the administrator |
 | `muted` | both | none | `{"sync_off", "sync_off_ms", "muted", "muted_ms"}`: `sync_off` and `sync_off_ms`, `muted` and `muted_ms` say whether sync is off and an admin muted the device, and how long each lasts, 0 for until lifted |
+| `bug` | computer | none | the bug report of the panic before the last restart as `bug_report` answers it (payload; empty when none waits); see "Bug reports" |
+| `bug_allow` | computer | payload `{"always"}` | the user allowed the report, and maybe always: it goes, and the panic no longer waits |
+| `bug_cancel` | computer | none | the user cancelled the report: nothing goes |
 | `devices` | both | none | `{"devices"}`: every device of the group, `[{id, name, role, caps, os, store, skew_ms, form, os_version, version, mac, mode, muted, muted_until_ms, admin, root, frozen, online, last_seen_ms, self, listed, may_hub, forward_only, hub}]` (`control::Device`; empty fields left out): the group's device records, whether it is connected and whether it is this device, what a connected member's hello says (`form`, `os_version`, `version`, `mac`, `mode` `shared` or `own`, `muted` and `muted_until_ms` in Unix milliseconds, 0 for until lifted), then the connected members no record lists yet (`listed` false). `last_seen_ms` is when this member last saw the device connected. A phone fills in what its node knows: no `store`, `skew_ms`, `last_seen_ms` or hub fields |
+| `view` | both | none | `{"view": {"tiles", "online", "others", "custom"}}`: the device tiles to draw in the user's order and collections, each `{"device"}` (as `devices` lists it) or `{"collection": {id, name, devices}}`, this device among them, and how many other devices are online out of how many, and whether the user changed the order (`member/src/view.rs`; docs/apps.md, "What the member shows") |
+| `arrange` | both | `arrange` (`{"op": "move", "item", "before"}`, `into`, `out`, `new`, `rename`, `ungroup` or `reset`, as `testdata/arrangement/vectors.json` names them) | as `view`, after the change, which the member keeps in `arrangement.json`; a change that does not fit is refused whole |
 | `current` | phone | none | `{"copy"}`: the group's current copy, or null |
 | `waiting` | phone | none | `{"copy"}`: the copy from another device that waits for the phone (design.md, "The one button"), or null |
 | `took` | phone | `id` | `{}`: the app took that copy into the clipboard, or saved its files |
@@ -368,12 +373,21 @@ sends one report for each fingerprint and version, and `fixed_in` lets the dialo
 update fixes it. A report that could not be sent waits, at most five for seven days
 (`bug_pending`). The app keeps the `state` the calls give back in its own settings.
 
+On a computer the service is built with `panic = "abort"`. Its panic hook writes what broke and
+the service's recent log lines to `panic.json` in the state folder, the system starts the
+service again, and its status then says `bug`: the Mac and tray apps ask the user with `bug`,
+`bug_allow` and `bug_cancel`, and the service posts the report with curl. With "Always allow"
+it goes at the start without asking.
+
 On cbb.tools, nginx (`packaging/linux/nginx-bug.conf`, a server block of its own that logs no
 client address) passes each POST to `cbb-bug` (`member/src/bugd.rs`, `cbb-bug.service`) on a
 loopback port. It checks that the body is a sealed report, keeps it in a folder of the day and
 the break, and answers `fixed_in` from the robot's `fixed.json`. At most 20 reports of one break
 and version and 5000 in all are kept each day; the rest are answered as taken and dropped, so
-that no app sends them again. The robot opens the reports elsewhere with its secret.
+that no app sends them again. The robot opens the reports elsewhere with its secret:
+`cbb-bug keygen SECRET` makes the key once (the secret stays on the robot's computer, the public
+key goes into `cbb_core::bug::ROBOT_KEY_B64`), and `cbb-bug read SECRET FOLDER...` opens the
+reports copied from the server.
 
 ## Member chains
 

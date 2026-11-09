@@ -625,4 +625,12 @@
     <string name="why_devices_sync_off_t">المزامنة متوقفة على: %1$s.</string>
     <string name="why_devices_muted_t">مكتومة من مسؤول: %1$s.</string>
     <string name="why_update_t">يتوفر CBB %1$s.</string>
+    <string name="bug_title">عذرًا، حدث عطل ما</string>
+    <string name="bug_text">نعتذر! هل تسمح لنا بإرسال تقرير قصير لنصلح المشكلة؟ يحتوي فقط على ما تعطّل، وإصدارَي CBB والنظام، وطراز الجهاز، وسجلات CBB الخاصة. لا يحتوي على نصوصك أو ملفاتك أو مفاتيحك أو أسماء أجهزتك أو عناوينك. التقرير مجهول الهوية.</string>
+    <string name="bug_allow">السماح</string>
+    <string name="bug_cancel">إلغاء</string>
+    <string name="bug_always">السماح دائمًا</string>
+    <string name="bug_details">التفاصيل التقنية</string>
+    <string name="bug_fixed_in">الإصدار %1$s يصلح هذا: حدّث CBB.</string>
+    <string name="bug_broke_restarted">حدث عطل في CBB، وأُعيد تشغيله.</string>
 </resources>

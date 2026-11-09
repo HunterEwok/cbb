@@ -1428,4 +1428,35 @@
         <translation>CBB %1 está disponible.</translation>
     </message>
 </context>
+<context>
+    <name>BugDialog</name>
+    <message>
+        <source>Oops, something broke</source>
+        <translation>Vaya, algo se rompió</translation>
+    </message>
+    <message>
+        <source>Allow</source>
+        <translation>Permitir</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancelar</translation>
+    </message>
+    <message>
+        <source>Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</source>
+        <translation>¡Lo sentimos! ¿Nos permites enviar un informe breve para arreglarlo? Solo contiene lo que se rompió, las versiones de CBB y del sistema, el modelo del dispositivo y los registros propios de CBB. Tus textos, archivos, claves, nombres de dispositivos y direcciones no están en él. El informe es anónimo.</translation>
+    </message>
+    <message>
+        <source>Version %1 fixes this: update CBB.</source>
+        <translation>La versión %1 lo corrige: actualiza CBB.</translation>
+    </message>
+    <message>
+        <source>Always allow</source>
+        <translation>Permitir siempre</translation>
+    </message>
+    <message>
+        <source>Technical details</source>
+        <translation>Detalles técnicos</translation>
+    </message>
+</context>
 </TS>

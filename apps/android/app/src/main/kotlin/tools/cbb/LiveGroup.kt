@@ -362,8 +362,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     val hasGroup: Boolean get() = synchronized(lock) { state != null }
 
-    /** The group's tag, which the arrangement of the tiles is kept for; null without a group. */
+    /** The group's tag; null without a group. */
     val groupTag: String? get() = synchronized(lock) { state?.tag }
+
+    /**
+     * The device tiles as the member keeps them, with the user's change op
+     * applied first (docs/apps.md, "What the member shows"); null while no
+     * member runs. A change that does not fit throws and changes nothing.
+     */
+    fun view(op: tools.cbb.kit.Arrangement.Op? = null): tools.cbb.kit.Arrangement.View? = synchronized(lock) { node }?.view(op)
 
     /**
      * Whether this phone may add and remove devices: it made the group, or
@@ -2388,6 +2395,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             // A member that broke stops and starts again, off its own events' thread.
             is CoreMember.Event.Panic -> {
                 Log.e(TAG, "the node broke, starting it again: ${e.details}")
+                val lines = synchronized(nodeLog) { nodeLog.toList() }
+                onPanic?.invoke(e.details, lines)
                 Thread({ restartSync() }, "restart").start()
             }
             is CoreMember.Event.Identity -> Log.i(TAG, "the node holds a renewed certificate or new roots; the group's file keeps its own")
@@ -2912,6 +2921,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** Called on the node's thread when records arrived that change the group, for the notifications. */
     @Volatile var onRecords: (() -> Unit)? = null
+
+    /** Something in the node broke (a `panic` event): what broke and CBB's log lines, oldest first, for the bug report; the node starts again by itself. */
+    @Volatile var onPanic: ((details: String, log: List<String>) -> Unit)? = null
 
     /** This phone's secret for sealed messages (docs/protocol.md, section 15), 32 random bytes under a Keystore key. */
     private val sealFile = SealedFile(File(file.parentFile, "seal-secret"), "cbb.seal")

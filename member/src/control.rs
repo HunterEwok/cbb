@@ -48,6 +48,12 @@ pub struct Header {
     pub status: Option<Status>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub devices: Vec<Device>,
+    /// view and arrange (docs/apps.md, "What the member shows"): the
+    /// tiles to draw in the answer, and the user's change in an arrange.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arrange: Option<serde_json::Value>,
     /// Remote paste (docs/protocol.md, section 8): in an inject, paste or
     /// type, and Enter after the text; in paste-receive, the switches.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -255,6 +261,10 @@ pub struct Status {
     pub mode: String,
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub sync_until_ms: i64,
+    /// A panic before the last restart waits for the user to allow or
+    /// cancel its bug report (ops `bug`, `bug_allow`, `bug_cancel`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bug: bool,
     /// Whether an admin muted this device, until muted_until_ms in Unix
     /// milliseconds, 0 for until an admin unmutes it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -718,6 +728,8 @@ pub fn is_admin(op: &str) -> bool {
             | "status"
             | "version"
             | "devices"
+            | "view"
+            | "arrange"
             | "muted"
             | "watch"
             | "copied"
@@ -739,6 +751,10 @@ pub fn is_admin(op: &str) -> bool {
             // The uinput helper, as root, through the socket's group; the
             // service checks that it is root.
             | "keys"
+            // The user's answer to a bug report (src/bugs.rs).
+            | "bug"
+            | "bug_allow"
+            | "bug_cancel"
     )
 }
 

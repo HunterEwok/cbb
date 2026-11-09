@@ -625,4 +625,12 @@
     <string name="why_devices_sync_off_t">הסנכרון כבוי ב: %1$s.</string>
     <string name="why_devices_muted_t">הושתקו על ידי מנהל: %1$s.</string>
     <string name="why_update_t">CBB %1$s זמין.</string>
+    <string name="bug_title">אופס, משהו נשבר</string>
+    <string name="bug_text">סליחה! מאשרים לנו לשלוח דוח קצר כדי שנוכל לתקן את זה? יש בו רק מה שנשבר, הגרסאות של CBB ושל המערכת, דגם המכשיר והרישומים של CBB עצמו. אין בו את הטקסטים, הקבצים, המפתחות, שמות המכשירים והכתובות שלך. הדוח אנונימי.</string>
+    <string name="bug_allow">לאשר</string>
+    <string name="bug_cancel">ביטול</string>
+    <string name="bug_always">לאשר תמיד</string>
+    <string name="bug_details">פרטים טכניים</string>
+    <string name="bug_fixed_in">גרסה %1$s מתקנת את זה: יש לעדכן את CBB.</string>
+    <string name="bug_broke_restarted">משהו ב-CBB נשבר. הוא הופעל מחדש.</string>
 </resources>

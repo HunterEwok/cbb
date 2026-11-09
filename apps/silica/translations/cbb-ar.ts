@@ -1428,4 +1428,35 @@
         <translation>يتوفر CBB %1.</translation>
     </message>
 </context>
+<context>
+    <name>BugDialog</name>
+    <message>
+        <source>Oops, something broke</source>
+        <translation>عذرًا، حدث عطل ما</translation>
+    </message>
+    <message>
+        <source>Allow</source>
+        <translation>السماح</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>إلغاء</translation>
+    </message>
+    <message>
+        <source>Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</source>
+        <translation>نعتذر! هل تسمح لنا بإرسال تقرير قصير لنصلح المشكلة؟ يحتوي فقط على ما تعطّل، وإصدارَي CBB والنظام، وطراز الجهاز، وسجلات CBB الخاصة. لا يحتوي على نصوصك أو ملفاتك أو مفاتيحك أو أسماء أجهزتك أو عناوينك. التقرير مجهول الهوية.</translation>
+    </message>
+    <message>
+        <source>Version %1 fixes this: update CBB.</source>
+        <translation>الإصدار %1 يصلح هذا: حدّث CBB.</translation>
+    </message>
+    <message>
+        <source>Always allow</source>
+        <translation>السماح دائمًا</translation>
+    </message>
+    <message>
+        <source>Technical details</source>
+        <translation>التفاصيل التقنية</translation>
+    </message>
+</context>
 </TS>

@@ -6,6 +6,7 @@
 
 #include "admit.h"
 #include "blekeyboard.h"
+#include "bugs.h"
 #include "events.h"
 #include "join.h"
 #include "member.h"
@@ -42,6 +43,8 @@ class App : public QObject
     Q_PROPERTY(Member *member READ member CONSTANT)
     Q_PROPERTY(Admit *admit READ admit CONSTANT)
     Q_PROPERTY(Events *events READ events CONSTANT)
+    // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
+    Q_PROPERTY(Bugs *bugs READ bugs CONSTANT)
     Q_PROPERTY(BleKeyboard *keyboard READ keyboard CONSTANT)
     Q_PROPERTY(PasteReceiver *paste READ paste CONSTANT)
     // Settings: the error details under each error message (Errors::
@@ -87,6 +90,7 @@ public:
     Member *member() { return &m_node; }
     Admit *admit() { return &m_admit; }
     Events *events() { return &m_events; }
+    Bugs *bugs() { return &m_bugs; }
     BleKeyboard *keyboard() { return &m_keyboard; }
     PasteReceiver *paste() { return &m_paste; }
 
@@ -190,6 +194,7 @@ private:
     Member m_node;
     Admit m_admit;
     Events m_events;
+    Bugs m_bugs;
     BleKeyboard m_keyboard;
     PasteReceiver m_paste{&m_node, &m_keyboard};
     bool m_busy = false;

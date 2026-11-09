@@ -143,6 +143,10 @@ func (w *window) open(lang string) *Desk {
 		settings:     Settings{Color: "terminal", Appearance: "system", Layout: "tiles"},
 		settingsPath: filepath.Join(w.t.TempDir(), "desktop.json")}
 	w.desk.Store(d)
+	// Each window starts from the group's order, as a fresh member would.
+	w.svc.mu.Lock()
+	w.svc.arrangement = Arrangement{}
+	w.svc.mu.Unlock()
 	w.page.call(w.t, "Page.navigate", map[string]any{"url": w.url}, nil)
 	w.wait(`document.readyState === "complete" && $h() !== ""`)
 	return d
@@ -265,12 +269,26 @@ func (w *window) waitSettings(d *Desk, ok func(Settings) bool) {
 	w.t.Fatalf("desktop.json holds %+v", s)
 }
 
+// waitArranged waits until the arrangement the member keeps passes ok.
+func (w *window) waitArranged(ok func(string) bool) {
+	w.t.Helper()
+	var b []byte
+	for range 50 {
+		b, _ = json.Marshal(w.svc.arranged())
+		if ok(string(b)) {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	w.t.Fatalf("the member keeps %s", b)
+}
+
 // collections (A8): a new collection from a device's menu, another device
 // moved in, its page, a rename, the keyboard's move, Ungroup, Back to the
 // group's order; the search and the filters with more than 12 devices.
 func (w *window) collections(t *testing.T) {
 	w.t = t
-	d := w.open("en")
+	w.open("en")
 	w.wait(`$all("#devices .tile").length === 14 && $all(".cell[draggable]").length === 14`)
 	// This computer comes first, and moves as the others do.
 	w.wait(`$order()[0] === "d:self" && $q('.cell[data-ref="d:self"] .tile').textContent.includes("This computer")`)
@@ -288,12 +306,8 @@ func (w *window) collections(t *testing.T) {
 	w.wait(`$q("#tile-menu").open`)
 	w.eval(`$clickText("#tile-menu-items button", "Move to Work")`, nil)
 	w.wait(`$q('[data-open]')?.textContent.includes("1 of 2 online")`)
-	w.waitSettings(d, func(s Settings) bool {
-		if s.Arrangement == nil {
-			return false
-		}
-		b, _ := json.Marshal(s.Arrangement)
-		return strings.Contains(string(b), `"Work"`) && strings.Contains(string(b), `"mac"`) && strings.Contains(string(b), `"win"`)
+	w.waitArranged(func(b string) bool {
+		return strings.Contains(b, `"Work"`) && strings.Contains(b, `"mac"`) && strings.Contains(b, `"win"`)
 	})
 
 	// Alt and an arrow key move the focused tile.
@@ -728,6 +742,63 @@ type fakeService struct {
 	ln      net.Listener
 	// sync is the last sync request.
 	sync control.Header
+	// arrangement is the user's order of the tiles, as the member keeps it.
+	arrangement Arrangement
+}
+
+// arranged is the stand-in's stored arrangement.
+func (s *fakeService) arranged() Arrangement {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return arrangeFor(s.arrangement, s.status.Group)
+}
+
+// view answers view and arrange as the member does (member/src/view.rs):
+// the tiles in the user's order, each with its device.
+func (s *fakeService) view(op *ArrangeOp) (json.RawMessage, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a := arrangeFor(s.arrangement, s.status.Group)
+	var ids []string
+	self := ""
+	byID := map[string]control.Device{}
+	for _, d := range s.devices {
+		ids = append(ids, d.ID)
+		byID[d.ID] = d
+		if d.Self {
+			self = d.ID
+		}
+	}
+	a.Prune(ids)
+	if op != nil {
+		if err := a.Apply(*op, ids, self); err != nil {
+			return nil, err
+		}
+	}
+	s.arrangement = a
+	type coll struct {
+		ID      string           `json:"id"`
+		Name    string           `json:"name"`
+		Devices []control.Device `json:"devices"`
+	}
+	type tile struct {
+		Device     *control.Device `json:"device,omitempty"`
+		Collection *coll           `json:"collection,omitempty"`
+	}
+	var tiles []tile
+	for _, it := range a.View(ids, self) {
+		if it.Collection == nil {
+			d := byID[it.Device]
+			tiles = append(tiles, tile{Device: &d})
+			continue
+		}
+		c := &coll{ID: it.Collection.ID, Name: it.Collection.Name, Devices: []control.Device{}}
+		for _, id := range it.Collection.Devices {
+			c.Devices = append(c.Devices, byID[id])
+		}
+		tiles = append(tiles, tile{Collection: c})
+	}
+	return json.Marshal(map[string]any{"tiles": tiles, "custom": len(a.Items) > 0})
 }
 
 func (s *fakeService) lastSync() control.Header {
@@ -824,6 +895,21 @@ func (s *fakeService) serve(c net.Conn) {
 		a.Status = &st
 	case control.OpDevices:
 		a.Devices = s.devices
+	case control.OpView, control.OpArrange:
+		var op *ArrangeOp
+		if m.Op == control.OpArrange {
+			op = new(ArrangeOp)
+			if err := json.Unmarshal(m.Arrange, op); err != nil {
+				a.Error = err.Error()
+				break
+			}
+		}
+		v, err := s.view(op)
+		if err != nil {
+			a.Error = err.Error()
+			break
+		}
+		a.View = v
 	case control.OpSync:
 		s.mu.Lock()
 		s.sync = m.Header

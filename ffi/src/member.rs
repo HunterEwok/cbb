@@ -744,36 +744,13 @@ impl Member {
             }
             "away_status" => Ok(json!({ "away": n.away_status() })),
             // Every device of the group as the app shows it.
-            "devices" => {
-                // The same devices, in the same form, as the control
-                // socket's devices answers on a computer.
-                let ds: Vec<cbb_lite::control::Device> = n
-                    .device_views()
-                    .into_iter()
-                    .map(|d| cbb_lite::control::Device {
-                        id: d.id,
-                        name: d.name,
-                        role: d.role,
-                        caps: d.caps,
-                        os: d.os,
-                        admin: d.admin,
-                        root: d.root,
-                        frozen: d.frozen,
-                        online: d.online,
-                        this: d.this,
-                        listed: d.listed,
-                        mode: match d.sync.as_str() {
-                            "on" => "shared".into(),
-                            "off" => "own".into(),
-                            _ => String::new(),
-                        },
-                        version: d.version,
-                        os_version: d.os_version,
-                        mac: d.mac,
-                        ..Default::default()
-                    })
-                    .collect();
-                Ok(json!({ "devices": ds }))
+            "devices" => Ok(json!({ "devices": devices_of(n) })),
+            // The tiles to draw, and the user's change of their order
+            // (docs/apps.md, "What the member shows").
+            "view" => Ok(json!({ "view": n.view(devices_of(n), None)? })),
+            "arrange" => {
+                let op: cbb_core::arrange::Op = args(arg(&a, "arrange").clone())?;
+                Ok(json!({ "view": n.view(devices_of(n), Some(&op))? }))
             }
             // What an admin's app signed.
             "add_records" => {
@@ -933,4 +910,34 @@ impl Member {
     pub fn admit(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::admit::Admit>, Vec<u8>) {
         crate::admit::Admit::new(self.node.clone(), request, sign, ctx)
     }
+}
+
+/// Every device of the group as the app shows it: the same devices, in the
+/// same form, as the control socket's devices answers on a computer.
+fn devices_of(n: &cbb_lite::phone::Member) -> Vec<cbb_lite::control::Device> {
+    n.device_views()
+        .into_iter()
+        .map(|d| cbb_lite::control::Device {
+            id: d.id,
+            name: d.name,
+            role: d.role,
+            caps: d.caps,
+            os: d.os,
+            admin: d.admin,
+            root: d.root,
+            frozen: d.frozen,
+            online: d.online,
+            this: d.this,
+            listed: d.listed,
+            mode: match d.sync.as_str() {
+                "on" => "shared".into(),
+                "off" => "own".into(),
+                _ => String::new(),
+            },
+            version: d.version,
+            os_version: d.os_version,
+            mac: d.mac,
+            ..Default::default()
+        })
+        .collect()
 }

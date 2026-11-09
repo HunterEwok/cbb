@@ -806,10 +806,9 @@ The user can put the device tiles in their own order and gather devices into
 which means a copied folder of files, nor "group", the sync group. The arrangement is a
 view setting like tiles, list or orbit:
 
-- **Kept on this installation only**, beside the app's other settings: `deviceArrangement`
-  in UserDefaults on the iPhone, the iPad and the Mac, `device_arrangement` in the
-  Android app's settings, `arrangement` in the tray app's `desktop.json`. It is never sent
-  to the group, the hub, the forwarder or the relay. The watches show their phone's.
+- **Kept on this device only**, by its member: `arrangement.json` in the state folder of
+  the computer's service or the phone's member. It is never sent to the group, the hub,
+  the forwarder or the relay. The watches show their phone's.
 - **One level.** A device is in at most one collection, and a collection holds devices
   only, as folders on a phone's home screen.
 - **This device** ("this phone", "this computer", "this Mac") is a tile as the others are:
@@ -818,11 +817,9 @@ view setting like tiles, list or orbit:
   watch's sections and the remote paste device picker. Actions on a whole collection may
   come later; a remote paste to several devices never.
 
-The model is the same in the places that hold it: `apps/desktop/arrange.go` (the
-tray app), the Kotlin kit's `Arrangement.kt` (Android) and the Swift kit's
-`Arrangement.swift` (iPhone, iPad, Mac) and the Rust core's `cbb_core::arrange` (the Aurora
-app, through the core's `arrange` call). All of them pass
-`testdata/arrangement/vectors.json`. It is stored as JSON:
+The model is the Rust core's `cbb_core::arrange`, checked against
+`testdata/arrangement/vectors.json`; the member keeps it (`member/src/view.rs`), and the apps
+only draw what it answers (see "What the member shows" below). It is stored as JSON:
 
 ```json
 {"v": 1, "group": "<group tag>", "items": [
@@ -858,7 +855,7 @@ The rules:
 The apps reach every change in an Arrange mode, with a menu path, VoiceOver and TalkBack
 actions and the keyboard for each drag.
 
-**On the iPhone and the iPad** (`Views/Arrange.swift`, the model in `AppModel`):
+**On the iPhone and the iPad** (`Views/Arrange.swift`, drawing the member's `view` in `AppModel`, which sends `arrange`):
 
 - Arrange mode starts from **Arrange devices** in the "…" menu or **Arrange** in a tile's
   menu (a long press), and ends with **Done**. In it a tap does not open a tile, tiles have
@@ -879,7 +876,7 @@ actions and the keyboard for each drag.
 - **Back to the group's order** in the "…" menu is *reset*.
 - The orbit on a big screen keeps the group's order for now.
 
-**On Android** (`Arrange.kt`, the model in `AppModel`, kept as `device_arrangement`):
+**On Android** (`Arrange.kt`, drawing the member's `view` in `AppModel`, which sends `arrange`):
 
 - Arrange mode starts from **Arrange devices** in the ⇅ menu beside the view button or
   **Arrange** in a tile's menu (a long press), and ends with **Done**. In it a tap does
@@ -893,9 +890,8 @@ actions and the keyboard for each drag.
 - The collection tile, the list's sections, the collection's page, the search and filters
   and **Back to the group's order** are the iPhone's. The orbit keeps the group's order.
 
-**In the tray app** (`frontend/app.js`, the model in `arrange.go` through `Desk.Arrange`,
-kept as `arrangement` in `desktop.json`, which the window's other settings never
-overwrite):
+**In the tray app** (`frontend/app.js`, drawing the service's `view`; `Desk.Arrange` sends
+`arrange`):
 
 - The ⇅ button beside the views turns Arrange mode on and off, and Escape ends it. In it
   a click does not open a tile, tiles and rows have a dashed outline and are dragged, a
@@ -908,8 +904,8 @@ overwrite):
   devices, Arrange mode for them and its menu. The search and filters come with more than
   12 devices. The orbit keeps the group's order.
 
-**In the Mac app** (`Views/Arrange.swift`, the model in `MacModel`, which builds the Swift
-kit's `Arrangement.swift` in; kept as `deviceArrangement` in its defaults): as on the
+**In the Mac app** (`Views/Arrange.swift`, drawing the service's `view` in `MacModel`, which
+sends `arrange`): as on the
 iPhone, with **Arrange devices** and **Back to the group's order** in the toolbar, each
 tile's menu on a right click, and Option with the arrow keys, Home or End moving the
 focused tile in Arrange mode.
@@ -930,6 +926,19 @@ collection…** and **Back to the group's order**.
 of its collection (`collection` in WatchState), and the
 watch lists the devices in no collection under **Devices**, then a section for each
 collection. The watch does not change the arrangement.
+
+## What the member shows
+
+The apps draw the device tiles from one answer of their member, the same on the phones
+(`cbb_member_call`) and the computers (the control socket): `view` gives
+`{"tiles", "online", "others", "custom"}`, the tiles in the user's order with this device among them,
+each `{"device": {…}}` (a device as `devices` lists it) or
+`{"collection": {"id", "name", "devices": [{…}]}}`, and how many of the other devices are
+online, out of how many, and whether the user changed the order (`reset` undoes it). `arrange` takes the user's change (`{"op": "move", "item",
+"before"}`, `into`, `out`, `new`, `rename`, `ungroup` or `reset`, as rule 5 above names
+them), keeps it and answers as `view`; a change that does not fit is refused and changes
+nothing. Devices that left the group leave the arrangement when the member answers. No app
+keeps an order of its own or works one out.
 
 ## Releasing the Android app
 
