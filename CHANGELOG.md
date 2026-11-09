@@ -2000,6 +2000,14 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The blind relay in Rust keeps the watches of every device it registers: it passed at most 32
+  connections through its tunnel at once, all groups together, so from the 33rd device on the
+  watches ended and the devices registered again and again. It passes up to 8192 now (the
+  `streams` limit).
+- A hub, and the relay, answer every connection a burst of them opens at once: past the four
+  sockets it kept listening, a connection found the port closed and ended at once.
+- A connection through the tunnel to a hub or a relay ends on the far side at once when the
+  local side closes or breaks; the far side held it until its timeout, some 30 seconds.
 - A member that booted less than a minute ago no longer writes an old copy from the group to
   its clipboard as if it had just been made: the age of a copy counted at most the time since
   the boot.

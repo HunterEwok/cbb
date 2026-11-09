@@ -54,6 +54,9 @@ pub(crate) const MAX_BRIDGES: usize = 32;
 pub(crate) const HANDSHAKE_RATE_LIMIT: u64 = 100;
 pub(crate) const MAX_POLL: Duration = Duration::from_millis(250);
 
+/// How long a bridge whose local side broke waits for its reset to go out.
+const RESET_WAIT: Duration = Duration::from_secs(2);
+
 /// The tunnel state, kept while sync away from home is on: the device's own
 /// key and preshared key, made on it, and the offers of the group's hubs.
 #[derive(Serialize, Deserialize, Clone)]
@@ -1001,6 +1004,9 @@ pub(crate) struct Bridge {
     /// From the tunnel, not yet written to the local side.
     pub(crate) down: Vec<u8>,
     pub(crate) local_eof: bool,
+    /// The local side broke: the connection is aborted, and the bridge
+    /// waits from then for smoltcp to send its reset.
+    pub(crate) ending: Option<Instant>,
     pub(crate) done: bool,
 }
 
@@ -1227,6 +1233,7 @@ impl Pump {
                 up: Vec::new(),
                 down: Vec::new(),
                 local_eof: false,
+                ending: None,
                 done: false,
             });
         }
@@ -1328,6 +1335,13 @@ impl Pump {
 /// ways, and closes each side when the other ended; reports whether
 /// anything moved.
 pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) -> bool {
+    if let Some(since) = b.ending {
+        // smoltcp forgets the far end once its reset went out; dropping the
+        // socket before that would leave the far end holding the connection
+        // until its timeout. A reset that cannot go out is given up on.
+        b.done = s.remote_endpoint().is_none() || since.elapsed() >= RESET_WAIT;
+        return false;
+    }
     let mut busy = false;
     // Local to the hub.
     if !b.local_eof && b.up.len() < TCP_BUFFER {
@@ -1338,7 +1352,7 @@ pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) ->
                 busy = true;
             }
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
-            Err(_) => b.done = true,
+            Err(_) => b.ending = Some(Instant::now()),
         }
     }
     if !b.up.is_empty()
@@ -1366,7 +1380,7 @@ pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) ->
                 busy |= n > 0;
             }
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
-            Err(_) => b.done = true,
+            Err(_) => b.ending = Some(Instant::now()),
         }
     }
     if b.down.is_empty() && !s.may_recv() && !s.can_recv() && s.state() != tcp::State::SynSent {
@@ -1381,7 +1395,7 @@ pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) ->
             s.close();
         }
     }
-    if b.done {
+    if b.done || b.ending.is_some() {
         s.abort();
         let _ = b.local.shutdown(Shutdown::Both);
     }

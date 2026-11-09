@@ -274,6 +274,9 @@ impl Relay {
             Vec::new(),
             SocketAddr::new(local.ip(), local.port()),
             Arc::new(move |_| Some(streams_port)),
+            // A relay of a fixed list of groups is not limited otherwise,
+            // and holds as many streams as an open one.
+            inner.cfg.limits.with_defaults().streams,
             hub_log,
         )?;
         *inner.hub.lock().map_err(|_| Error::msg("relay: broken"))? = Some(hub);
