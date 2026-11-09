@@ -41,6 +41,10 @@ final class ReadersUITests: XCTestCase {
             let app = launch(language: language)
             let title = app.staticTexts[tr("The service does not answer", language)]
             XCTAssertTrue(title.waitForExistence(timeout: 30), "\(language): no translated notice in \(app.debugDescription)")
+            // The notice is there as soon as the app starts, while the
+            // window still fades in over the desktop: the picture and the
+            // audit's contrast wait for the window as the user sees it.
+            Thread.sleep(forTimeInterval: 2)
             let window = app.windows.firstMatch
             let a = XCTAttachment(screenshot: window.screenshot())
             a.name = "window-\(language)"

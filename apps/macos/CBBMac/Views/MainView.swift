@@ -85,6 +85,9 @@ struct MainView: View {
             }
         }
         .background(AppBackground())
+        // The window's content is one group, named as the window is.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(verbatim: "CBB"))
         .animation(.snappy, value: selected)
         .toolbar {
             if model.inGroup {
