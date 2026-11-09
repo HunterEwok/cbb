@@ -2,7 +2,7 @@
 
 import Foundation
 
-/// The strict form of signed bodies (docs/protocol.md, section 1, "Signed
+/// The strict form of signed bodies (docs/protocol.md, Conventions, "Signed
 /// bodies"), which every member reads alike, as Go's checkStrict.
 enum Strict {
     /// How deeply a signed body nests arrays and objects at most.
