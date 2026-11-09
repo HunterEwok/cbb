@@ -74,6 +74,11 @@ pub fn update_dir() -> PathBuf {
     xdg("XDG_STATE_HOME", ".local/state").join("cbb-update")
 }
 
+/// The installer's settings, cbb.env: ~/.config/cbb.
+pub fn config_dir() -> PathBuf {
+    xdg("XDG_CONFIG_HOME", ".config").join("cbb")
+}
+
 /// The user's systemd units: ~/.config/systemd/user.
 pub fn unit_dir() -> PathBuf {
     xdg("XDG_CONFIG_HOME", ".config").join("systemd/user")
