@@ -2379,6 +2379,19 @@ docs/protocol.md, section 16.
    downgrade, a refused unsigned build, a rotation of the release key by a root, and a drill
    for a lost release key.
 
+### Versions in one group
+
+From 0.6 on (D-92), a device of one release works in a group with devices of the release
+before it, and an update never breaks a group: the devices can be updated one at a time,
+in any order, and a group never has to be set up again. The group's records carry this: a
+new record type or field comes only with a new `v`, and a device of the older release keeps
+such a record, passes it on in sync and tells the user to update, while the group goes on
+under the records it can read ([protocol](protocol.md), section 10, "Records of a later
+version"). CI checks it: `tools/e2e/upgrade.sh` updates the members of the last published
+release to the build under test, one at a time, and the group, its devices and sync must
+survive. A group of 0.5 is not carried over: 0.6 reads no records of version 1, so such a
+group is set up again once.
+
 ## 7. Deployment view
 
 Where each part runs and how it is installed:

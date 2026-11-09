@@ -457,7 +457,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       (alias `cbb`, certificate SHA-256 `16:99:CD:37:…:7C:E6:B3:6D`), which the environment
       **release** already holds. Write its fingerprint in docs/maintaining.md, "Android
       signing key"; 0.5.0's APK is signed by the old key, so 0.5.0 does not update to 0.6.0
-      in place (no compatibility before 1.0.0).
+      in place (compatibility starts with 0.6, D-92).
     - RuStore, Android: upload the release's signed `cbb-fdroid-X.Y.Z.apk` (the flavor
       without an update of its own and without Wear OS), not an AAB, so that RuStore never
       holds the key and its copy, the GitHub APK and F-Droid's share one certificate. The

@@ -1461,6 +1461,9 @@ All notable changes to cbb are documented in this file. The format follows
   records that a role gives no rights, so any admin with `admit` admits a phone without an
   admin key; D-26 is marked replaced by D-80, D-11 partly replaced by D-80 and D-40 partly
   replaced by D-87.
+- From 0.6 on, a device works in one group with devices of the release before it, and an
+  update never breaks a group (D-92; docs/design.md, "Versions in one group"). SUPPORT.md says
+  what keeps a group working if the maintainer is gone.
 - The roles `full` and `lite` are one role, `member`, with capabilities (D-89; docs/protocol.md
   section 4, "Capabilities"): `admin` (it can hold an admin key), `dials` (it dials other
   members) and `hub` (it may be chosen as the hub), in its hello (`caps`), its device record
