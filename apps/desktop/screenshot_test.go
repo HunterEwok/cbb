@@ -33,6 +33,10 @@ import (
 //
 //	CBB_UPDATE_SCREENSHOTS=1 go test -run 'TestWindow/screenshots' .
 //
+// The pictures committed are CI's (ubuntu-latest's Chrome): those drawn
+// elsewhere are for looking at, and the ones to commit come from the
+// tray-screenshots artifact of the failed job (docs/testing.md).
+//
 // A failed comparison leaves the new picture and a picture of the
 // difference in $CBB_SCREENSHOT_OUT (by default a directory the test names).
 

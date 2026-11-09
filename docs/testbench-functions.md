@@ -485,14 +485,14 @@ line here with every new function, and a case for it in the catalogue.
 | A.12 | Notifications of the group's events | A6 |
 | A.13 | The Dynamic Island | A7 |
 | A.14 | Collections and the order of tiles | A8 |
-| A.15 | Languages and right-to-left | A9 |
-| A.16 | Accessibility labels | A9 |
+| A.15 | Languages and right-to-left | A9, U18 |
+| A.16 | Accessibility: names, contrast, large text, the keyboard | A9, U14, U15, U16, U17 |
 | A.17 | The F-Droid flavour | A10 |
 | A.18 | Background app refresh | A11 |
 | A.19 | App Intents, widgets, the Control Center control | A12 |
 | A.20 | The share extension | A13 |
 | A.21 | First launch and the Start screen | A14 |
-| A.22 | Themes and layouts | A15 |
+| A.22 | Themes and layouts | A15, U15, U18 |
 | A.23 | Plain-language paths | A16 |
 | A.24 | Add a device: camera and six digits | A1, G3 |
 | A.25 | The Aurora OS app: join by QR, sync in front, leave | A17 |

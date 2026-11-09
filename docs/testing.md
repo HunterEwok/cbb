@@ -128,6 +128,10 @@ cd apps/desktop && CBB_UPDATE_SCREENSHOTS=1 go test -run 'TestWindow/screenshots
 cd apps/android && ./gradlew :app:recordRoborazziFullDebug
 ```
 
+The tray's references are CI's pictures: another build of Chrome smooths text differently in
+more than 0.3% of the pixels. When a run elsewhere draws them, compare them by eye and take
+the ones to commit from the `tray-screenshots` artifact of the failed CI job.
+
 ## Coverage
 
 CI measures how much of the code the tests run, part by part, and its `coverage` job prints
