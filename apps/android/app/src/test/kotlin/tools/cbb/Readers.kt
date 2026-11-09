@@ -47,7 +47,11 @@ internal object Readers {
             action.action?.invoke(results)
             for (r in results) {
                 val last = r.lineCount - 1
-                if (r.hasVisualOverflow || (last >= 0 && r.isLineEllipsized(last))) out += "cut off: \"${r.layoutInput.text}\""
+                // Not hasVisualOverflow: Robolectric reports a one-line text narrower than
+                // its room as wider than its own size. A line wider than the text's box is
+                // the overflow across.
+                val across = (0 until r.lineCount).any { r.multiParagraph.getLineWidth(it) > r.size.width + 1 }
+                if (r.didOverflowHeight || across || (last >= 0 && r.isLineEllipsized(last))) out += "cut off: \"${r.layoutInput.text}\""
             }
         }
         return out
