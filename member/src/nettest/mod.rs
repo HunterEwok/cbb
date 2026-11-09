@@ -17,6 +17,8 @@ use cbb_core::identity::{self, ExternalKey, FileKey};
 use cbb_core::issue;
 use serde_json::Value;
 
+pub mod xhttp;
+
 pub fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64
 }
