@@ -70,6 +70,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -77,11 +78,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -1046,8 +1049,19 @@ internal fun IconText(symbol: String, label: String, small: Boolean = false, onC
             .focusRing(CircleShape).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Text(symbol, color = if (small) palette.textDim else palette.text, style = MaterialTheme.typography.titleMedium)
+        Text(symbol, color = if (small) palette.textDim else palette.text, style = glyph(if (small) 16.dp else 18.dp))
     }
+}
+
+/**
+ * A symbol's style in a round button of a fixed size: its size does not
+ * follow the font scale, which would push it out of its circle, and the
+ * button's name for TalkBack carries the meaning.
+ */
+@Composable
+internal fun glyph(size: Dp): TextStyle {
+    val sp = with(LocalDensity.current) { size.toSp() }
+    return MaterialTheme.typography.titleMedium.copy(fontSize = sp, lineHeight = sp)
 }
 
 /**
@@ -1160,10 +1174,10 @@ private fun ColorSwatches(selection: String, choose: (String) -> Unit) {
                                 .clip(CircleShape).background(fill),
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (chosen) Text("✓", color = swatch.onAccent, fontWeight = FontWeight.Bold)
+                            if (chosen) Text("✓", color = swatch.onAccent, fontWeight = FontWeight.Bold, style = glyph(16.dp))
                         }
-                        // Two lines: "Material You" and the longer names in Spanish and Swahili do not fit one.
-                        Text(stringResource(ColorChoice.title(name)), style = MaterialTheme.typography.labelSmall, maxLines = 2, textAlign = TextAlign.Center, color = palette.textDim)
+                        // As many lines as it takes: "Material You", the longer names in Spanish and Swahili, and large text.
+                        Text(stringResource(ColorChoice.title(name)), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, color = palette.textDim)
                     }
                 }
                 repeat(5 - row.size) { Spacer(Modifier.weight(1f)) }

@@ -49,8 +49,13 @@ internal object Readers {
                 val last = r.lineCount - 1
                 // Not hasVisualOverflow: Robolectric reports a one-line text narrower than
                 // its room as wider than its own size. A line wider than the text's box is
-                // the overflow across.
-                val across = (0 until r.lineCount).any { r.multiParagraph.getLineWidth(it) > r.size.width + 1 }
+                // the overflow across, measured to its last visible character: a wrapped
+                // line's width counts the space it broke at.
+                val across = (0 until r.lineCount).any { line ->
+                    val end = r.getLineEnd(line, visibleEnd = true)
+                    val start = r.getLineStart(line)
+                    end > start && (start until end).map { r.getBoundingBox(it) }.let { boxes -> boxes.maxOf { it.right } - boxes.minOf { it.left } } > r.size.width + 1
+                }
                 if (r.didOverflowHeight || across || (last >= 0 && r.isLineEllipsized(last))) out += "cut off: \"${r.layoutInput.text}\""
             }
         }
