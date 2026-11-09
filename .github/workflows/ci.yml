@@ -2435,6 +2435,10 @@ jobs:
         run: |
           cargo test --locked -p cbb-ffi --features tunnel tunnel && cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
           CBB_TUNNEL_ON_LINUX="$PWD/target/release/examples/tunnel-on-linux" go test -race ./internal/tunnel -run TestRustPhone -v
+      - name: the relay in Rust passes the Go relay's tests that check it from outside
+        run: |
+          CBB_TEST_RUST_RELAY="$PWD/target/release/cbb-relay" go test -race -count=1 ./internal/relay -v \
+            -run 'TestThroughRelay|TestGroupsApart|TestRefused|TestOpenRelay$|TestRemoved|TestCredentialedRelay|TestRelayDialsNothing|TestNoLogs'
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-lite-linux-arm64
