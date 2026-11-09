@@ -10,13 +10,13 @@ final class CBBMacTests: XCTestCase {
     func testEncode() throws {
         let data = try Control.encode(.init(op: "copy"), payload: Data("hi".utf8))
         let text = String(decoding: data, as: UTF8.self)
-        XCTAssertEqual(text, "{\"len\":2,\"op\":\"copy\"}\nhi")
+        XCTAssertEqual(text, "{\"args\":{},\"len\":2,\"op\":\"copy\"}\nhi")
     }
 
     /// An answer is read only once all of it has come, and its devices
     /// keep what the service leaves out as false.
     func testDecode() throws {
-        let line = #"{"op":"reply","len":3,"devices":[{"id":"ab12","name":"deck","role":"member","caps":["admin","dials","hub"],"os":"linux","online":true,"self":true,"os_version":"Ubuntu 24.04","last_seen_ms":5,"mode":"own"},{"id":"cd34"}]}"#
+        let line = #"{"len":3,"ok":{"devices":[{"id":"ab12","name":"deck","role":"member","caps":["admin","dials","hub"],"os":"linux","online":true,"self":true,"os_version":"Ubuntu 24.04","last_seen_ms":5,"mode":"own"},{"id":"cd34"}]}}"#
         let whole = Data((line + "\nxyz").utf8)
         XCTAssertNil(try Control.decode(whole.prefix(10)))
         XCTAssertNil(try Control.decode(whole.dropLast()))
@@ -42,8 +42,8 @@ final class CBBMacTests: XCTestCase {
     func testMute() throws {
         var h = Control.Header(op: "mute")
         h.forMS = 900_000
-        XCTAssertEqual(String(decoding: try Control.encode(h), as: UTF8.self), "{\"for_ms\":900000,\"len\":0,\"op\":\"mute\"}\n")
-        let line = #"{"op":"reply","status":{"device":"me","role":"member","version":"dev","group":"g","mode":"own","sync_until_ms":1700000000000,"muted":true,"muted_until_ms":0},"devices":[{"id":"ab12","muted":true,"muted_until_ms":1700000000000},{"id":"cd34"}]}"#
+        XCTAssertEqual(String(decoding: try Control.encode(h), as: UTF8.self), "{\"args\":{\"for_ms\":900000},\"len\":0,\"op\":\"mute\"}\n")
+        let line = #"{"ok":{"status":{"device":"me","role":"member","version":"dev","group":"g","mode":"own","sync_until_ms":1700000000000,"muted":true,"muted_until_ms":0},"devices":[{"id":"ab12","muted":true,"muted_until_ms":1700000000000},{"id":"cd34"}]}}"#
         let (header, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
         let st = try XCTUnwrap(header.status)
         XCTAssertEqual(st.muted, true)
@@ -112,7 +112,7 @@ final class CBBMacTests: XCTestCase {
 
     /// The update the group passed around reads from the status.
     func testUpdate() throws {
-        let line = #"{"op":"reply","status":{"device":"me","role":"member","version":"0.5.0","group":"g","update":"0.6.0"}}"#
+        let line = #"{"ok":{"status":{"device":"me","role":"member","version":"0.5.0","group":"g","update":"0.6.0"}}}"#
         let (header, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
         XCTAssertEqual(header.status?.update, "0.6.0")
     }
@@ -148,8 +148,8 @@ final class CBBMacTests: XCTestCase {
         h.inject = "desktop"
         h.pasteOnly = true
         let text = String(decoding: try Control.encode(h), as: UTF8.self)
-        XCTAssertEqual(text, "{\"inject\":\"desktop\",\"len\":0,\"op\":\"watch\",\"paste_only\":true}\n")
-        let line = #"{"op":"inject","seq":7,"method":"type","enter":true,"kind":"secret","name":"pi"}"#
+        XCTAssertEqual(text, "{\"args\":{\"inject\":\"desktop\",\"paste_only\":true},\"len\":0,\"op\":\"watch\"}\n")
+        let line = #"{"op":"inject","seq":7,"args":{"method":"type","enter":true,"kind":"secret","name":"pi"}}"#
         let (m, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
         XCTAssertEqual(m.seq, 7)
         XCTAssertEqual(m.method, "type")

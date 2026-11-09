@@ -551,7 +551,7 @@ pub fn write(w: &mut impl Write, m: &Message) -> Result<()> {
     }
     let mut h = m.header.clone();
     h.len = m.payload.len();
-    let mut buf = serde_json::to_vec(&h).context("cannot encode a message")?;
+    let mut buf = serde_json::to_vec(&envelope(&h)?).context("cannot encode a message")?;
     if buf.len() > MAX_HEADER {
         return Err(Error::msg("the header is too long"));
     }
@@ -559,6 +559,79 @@ pub fn write(w: &mut impl Write, m: &Message) -> Result<()> {
     buf.extend_from_slice(&m.payload);
     w.write_all(&buf).context("the connection to the service broke")?;
     w.flush().context("the connection to the service broke")
+}
+
+/// The fields of an answer that stand beside its `ok`, not in it.
+const ANSWER_FIELDS: [&str; 6] = ["error", "detail", "details", "done", "len", "seq"];
+/// The fields of a request or a message that stand beside its `args`:
+/// its payload's length and the sequence number that its answer repeats.
+const REQUEST_FIELDS: [&str; 2] = ["len", "seq"];
+
+/// What goes on the wire for h: a request or a watcher's message as
+/// `{"op", "args", "len", "seq"}`, an answer as `{"ok", "len", "seq",
+/// "done"}` or `{"error", "detail", "seq", "done"}`, the envelope of cbb_member_call
+/// (docs/core-api.md, "Operations").
+fn envelope(h: &Header) -> Result<serde_json::Value> {
+    let serde_json::Value::Object(mut fields) = serde_json::to_value(h).context("cannot encode a message")? else {
+        return Err(Error::msg("cannot encode a message"));
+    };
+    let op = fields.remove("op").and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
+    let mut out = serde_json::Map::new();
+    if op.is_empty() || op == "reply" {
+        for k in ANSWER_FIELDS {
+            if let Some(v) = fields.remove(k) {
+                out.insert(k.to_string(), v);
+            }
+        }
+        if !out.contains_key("error") {
+            out.insert("ok".to_string(), serde_json::Value::Object(fields));
+        }
+    } else {
+        for k in REQUEST_FIELDS {
+            if let Some(v) = fields.remove(k) {
+                out.insert(k.to_string(), v);
+            }
+        }
+        out.insert("op".to_string(), serde_json::Value::String(op));
+        out.insert("args".to_string(), serde_json::Value::Object(fields));
+    }
+    Ok(serde_json::Value::Object(out))
+}
+
+/// The header that the envelope v carries: a request's or a message's
+/// args, or an answer's ok, with the fields beside them.
+fn unwrap_envelope(v: serde_json::Value) -> Result<Header> {
+    let serde_json::Value::Object(mut outer) = v else {
+        return Err(Error::msg("a bad header: not an object"));
+    };
+    let inner = match outer.remove("op") {
+        Some(op) => {
+            let args = outer.remove("args").unwrap_or_default();
+            let mut fields = match args {
+                serde_json::Value::Object(m) => m,
+                serde_json::Value::Null => serde_json::Map::new(),
+                _ => return Err(Error::msg("a bad header: args is not an object")),
+            };
+            fields.insert("op".to_string(), op);
+            fields
+        }
+        None => {
+            let mut fields = match outer.remove("ok") {
+                Some(serde_json::Value::Object(m)) => m,
+                None | Some(serde_json::Value::Null) => serde_json::Map::new(),
+                Some(_) => return Err(Error::msg("a bad header: ok is not an object")),
+            };
+            fields.insert("op".to_string(), serde_json::Value::String("reply".into()));
+            fields
+        }
+    };
+    let mut fields = inner;
+    for (k, v) in outer {
+        if ANSWER_FIELDS.contains(&k.as_str()) {
+            fields.insert(k, v);
+        }
+    }
+    serde_json::from_value(serde_json::Value::Object(fields)).context("a bad header")
 }
 
 /// Reads messages from a connection.
@@ -582,7 +655,7 @@ impl<R: Read> Reader<R> {
         if line.last() != Some(&b'\n') {
             return Err(Error::msg("the header is too long"));
         }
-        let header: Header = serde_json::from_slice(&line).context("a bad header")?;
+        let header = unwrap_envelope(serde_json::from_slice(&line).context("a bad header")?)?;
         if header.len > MAX_PAYLOAD {
             return Err(Error::msg(format!("a bad payload length {}", header.len)));
         }
@@ -666,4 +739,48 @@ pub fn admin_socket(socket: &std::path::Path) -> std::path::PathBuf {
     // On Windows it sits in a folder of its own, whose access list lets
     // only the service and the administrators in (Go's adminSocketName).
     if cfg!(windows) { socket.with_file_name("admin").join("admin.sock") } else { socket.with_file_name("admin.sock") }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A request goes as {"op", "args", "len", "seq"}, an answer as {"ok"}
+    /// or {"error", "detail"}, as Go's control.TestEnvelope checks, and
+    /// both read back.
+    #[test]
+    fn envelope() {
+        let cases = [
+            (
+                Message::new(
+                    Header { op: "mute".into(), device: "pi".into(), for_ms: 5, ..Default::default() },
+                    vec![],
+                ),
+                r#"{"args":{"device":"pi","for_ms":5},"op":"mute"}"#,
+            ),
+            (
+                Message::new(
+                    Header { op: "inject".into(), seq: 7, method: "type".into(), ..Default::default() },
+                    b"hi".to_vec(),
+                ),
+                r#"{"args":{"method":"type"},"len":2,"op":"inject","seq":7}"#,
+            ),
+            (reply(Header { name: "pi".into(), ..Default::default() }, vec![]), r#"{"done":true,"ok":{"name":"pi"}}"#),
+            (failure(&Error::msg("no")), r#"{"done":true,"error":"no"}"#),
+        ];
+        for (m, want) in cases {
+            let mut buf = Vec::new();
+            write(&mut buf, &m).unwrap();
+            let line = String::from_utf8(buf.clone()).unwrap();
+            assert_eq!(line.split('\n').next().unwrap(), want);
+            let got = Reader::new(&buf[..]).read().unwrap().unwrap();
+            assert_eq!(
+                (got.header.op, got.header.name, got.header.seq, got.payload),
+                (m.header.op, m.header.name, m.header.seq, m.payload)
+            );
+        }
+        for bad in [&b"[]\n"[..], b"{\"op\":\"copy\",\"args\":[]}\n", b"{\"ok\":1}\n"] {
+            assert!(Reader::new(bad).read().is_err(), "{}", String::from_utf8_lossy(bad));
+        }
+    }
 }

@@ -1180,7 +1180,10 @@ with its own two sockets, but its control socket takes fewer: no `copy-media`, `
 
 Each message is a JSON header on one line ending in `\n`, at most 64 KiB, followed by exactly
 `len` bytes of raw payload (at most 1 MiB + 64 bytes), usually a clipboard text in UTF-8.
-Header fields (all omitted when empty):
+The header is the envelope of the core's requests (docs/core-api.md, "Requests and answers"): a
+request or a watcher's message is `{"op", "args", "len", "seq"}`, an answer `{"ok", "len",
+"seq", "done"}` or, failed, `{"error", "detail", "seq", "done"}`; `len` and `seq` are omitted
+when 0. The fields below go in `args` or `ok` (all omitted when empty):
 
 | Field | Type | Meaning |
 |-------|------|---------|
@@ -1238,8 +1241,8 @@ Header fields (all omitted when empty):
 | `joining` | object | `invite`: a device to confirm before it is admitted, `{id, name, os, fingerprint}` |
 
 A connection carries one request: the service reads the first message and dispatches on
-`op`; an unknown `op` fails. Every answer has `op` `reply`. A failure is
-`{"op":"reply","error":"...","done":true}`.
+`op`; an unknown `op` fails. An answer has no `op`. A failure is
+`{"error":"...","done":true}`.
 
 ### Operations
 
@@ -1280,7 +1283,7 @@ A connection carries one request: the service reads the first message and dispat
 | `release-want` | none | payload = the names of the held release's archives that the members' hellos name and this device does not hold whole, a JSON array, at most 16; `null` on a device that is no hub: its `cbb update` downloads them for the group (section 16). Only on the admin socket |
 | `update-way` | none | payload = the VLESS settings (section 11) of the hub this device reaches away from home, with the group's VLESS user ID, or none without VLESS: `cbb update` reaches the mirror through them (section 16). Only on the admin socket |
 | `release-get` | `{value}`: an archive's SHA-256 | `{part}`, its bytes in `data` answers, then `{done}`: the archive of the held release, from this device or fetched from its peers |
-| `watch` | `{kind, via, inject?, paste_only?, act?, images?, files?}` + payload = what the clipboard holds now (may be empty) | `{"op":"reply"}` without `done`; then the watcher protocol below |
+| `watch` | `{kind, via, inject?, paste_only?, act?, images?, files?}` + payload = what the clipboard holds now (may be empty) | an answer `{"ok":{}}` without `done`; then the watcher protocol below |
 
 ### Watcher protocol
 

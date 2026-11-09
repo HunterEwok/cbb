@@ -258,13 +258,55 @@ enum Control {
         guard payload.count <= maxPayload else { throw Failure.broken("the text is larger than 1 MiB") }
         var h = header
         h.len = payload.count
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        var data = try encoder.encode(h)
+        var data = try envelope(JSONEncoder().encode(h))
         guard data.count <= maxHeader else { throw Failure.broken("header too long") }
         data.append(UInt8(ascii: "\n"))
         data.append(payload)
         return data
+    }
+
+    /// The fields of an answer that stand beside its ok, not in it.
+    static let answerFields = ["error", "detail", "details", "done", "len", "seq"]
+    /// The fields of a request or a message that stand beside its args.
+    static let requestFields = ["len", "seq"]
+
+    /// The header flat as Header encodes it, put as it goes on the wire: a
+    /// request or a watcher's message as {"op", "args", "len", "seq"}, an
+    /// answer as {"ok", "len", "seq", "done"} or {"error", "detail", "seq",
+    /// "done"}, the
+    /// envelope of cbb_member_call (docs/core-api.md, "Operations").
+    static func envelope(_ flat: Data) throws -> Data {
+        guard var fields = try JSONSerialization.jsonObject(with: flat) as? [String: Any] else {
+            throw Failure.broken("bad header")
+        }
+        let op = fields.removeValue(forKey: "op") as? String ?? ""
+        var out: [String: Any] = [:]
+        if op.isEmpty || op == "reply" {
+            for k in answerFields { if let v = fields.removeValue(forKey: k) { out[k] = v } }
+            if out["error"] == nil { out["ok"] = fields }
+        } else {
+            for k in requestFields { if let v = fields.removeValue(forKey: k) { out[k] = v } }
+            out["op"] = op
+            out["args"] = fields
+        }
+        return try JSONSerialization.data(withJSONObject: out, options: [.sortedKeys, .withoutEscapingSlashes])
+    }
+
+    /// The header flat, for Header to decode, that the envelope line carries.
+    static func unwrapEnvelope(_ line: Data) throws -> Data {
+        guard let outer = try JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+            throw Failure.broken("bad header: not an object")
+        }
+        var fields: [String: Any]
+        if let op = outer["op"] {
+            fields = outer["args"] as? [String: Any] ?? [:]
+            fields["op"] = op
+        } else {
+            fields = outer["ok"] as? [String: Any] ?? [:]
+            fields["op"] = "reply"
+        }
+        for k in answerFields { if let v = outer[k] { fields[k] = v } }
+        return try JSONSerialization.data(withJSONObject: fields)
     }
 
     /// The first message in data, and how many bytes it took; nil while
@@ -276,7 +318,7 @@ enum Control {
         }
         let header: Header
         do {
-            header = try JSONDecoder().decode(Header.self, from: data[data.startIndex..<newline])
+            header = try JSONDecoder().decode(Header.self, from: unwrapEnvelope(Data(data[data.startIndex..<newline])))
         } catch {
             throw Failure.broken("bad header: \(error)")
         }

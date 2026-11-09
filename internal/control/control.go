@@ -502,13 +502,98 @@ type Message struct {
 	Payload []byte
 }
 
+// answerFields stand beside an answer's ok, not in it.
+var answerFields = []string{"error", "detail", "details", "done", "len", "seq"}
+
+// requestFields stand beside a request's or a message's args: its
+// payload's length and the sequence number that its answer repeats.
+var requestFields = []string{"len", "seq"}
+
+// marshalEnvelope writes h as it goes on the wire: a request or a watcher's
+// message as {"op", "args", "len", "seq"}, an answer as {"ok", "len",
+// "seq", "done"} or {"error", "detail", "seq", "done"}, the envelope of cbb_member_call
+// (docs/core-api.md, "Operations").
+func marshalEnvelope(h Header) ([]byte, error) {
+	flat, err := json.Marshal(h)
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(flat, &fields); err != nil {
+		return nil, err
+	}
+	op := h.Op
+	delete(fields, "op")
+	out := map[string]any{}
+	if op == "" || op == OpReply {
+		for _, k := range answerFields {
+			if v, ok := fields[k]; ok {
+				out[k] = v
+				delete(fields, k)
+			}
+		}
+		if _, failed := out["error"]; !failed {
+			out["ok"] = fields
+		}
+	} else {
+		for _, k := range requestFields {
+			if v, ok := fields[k]; ok {
+				out[k] = v
+				delete(fields, k)
+			}
+		}
+		out["op"] = op
+		out["args"] = fields
+	}
+	return json.Marshal(out)
+}
+
+// unmarshalEnvelope reads into h the header that line carries: a
+// request's or a message's args, or an answer's ok, with the fields
+// beside them.
+func unmarshalEnvelope(line []byte, h *Header) error {
+	var outer map[string]json.RawMessage
+	if err := json.Unmarshal(line, &outer); err != nil {
+		return err
+	}
+	inner := []byte("{}")
+	op := json.RawMessage(`"` + OpReply + `"`)
+	if v, ok := outer["op"]; ok {
+		op = v
+		if a, ok := outer["args"]; ok && string(a) != "null" {
+			inner = a
+		}
+	} else if v, ok := outer["ok"]; ok && string(v) != "null" {
+		inner = v
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(inner, &fields); err != nil {
+		return errors.New("args or ok is not an object")
+	}
+	if fields == nil {
+		fields = map[string]json.RawMessage{}
+	}
+	fields["op"] = op
+	for _, k := range answerFields {
+		if v, ok := outer[k]; ok {
+			fields[k] = v
+		}
+	}
+	flat, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
+	*h = Header{}
+	return json.Unmarshal(flat, h)
+}
+
 // Write sends a message.
 func Write(w io.Writer, m *Message) error {
 	m.Len = len(m.Payload)
 	if m.Len > maxPayload {
 		return errors.New("control: the text is larger than 1 MiB")
 	}
-	line, err := json.Marshal(m.Header)
+	line, err := marshalEnvelope(m.Header)
 	if err != nil {
 		return err
 	}
@@ -549,7 +634,7 @@ func (r *Reader) Read() (*Message, error) {
 		}
 	}
 	var m Message
-	if err := json.Unmarshal(line, &m.Header); err != nil {
+	if err := unmarshalEnvelope(line, &m.Header); err != nil {
 		return nil, fmt.Errorf("control: bad header: %w", err)
 	}
 	if m.Len < 0 || m.Len > maxPayload {
