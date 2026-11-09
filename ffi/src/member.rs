@@ -747,10 +747,15 @@ impl Member {
             "devices" => Ok(json!({ "devices": devices_of(n) })),
             // The tiles to draw, and the user's change of their order
             // (docs/apps.md, "What the member shows").
-            "view" => Ok(json!({ "view": n.view(devices_of(n), None)? })),
+            // The view's warnings are why: `away` is the app's own tunnel.
+            "view" => {
+                let away: Option<cbb_core::why::AwayFacts> = args(arg(&a, "away").clone())?;
+                Ok(json!({ "view": n.view(devices_of(n), None, away)? }))
+            }
             "arrange" => {
                 let op: cbb_core::arrange::Op = args(arg(&a, "arrange").clone())?;
-                Ok(json!({ "view": n.view(devices_of(n), Some(&op))? }))
+                let away: Option<cbb_core::why::AwayFacts> = args(arg(&a, "away").clone())?;
+                Ok(json!({ "view": n.view(devices_of(n), Some(&op), away)? }))
             }
             // What an admin's app signed.
             "add_records" => {

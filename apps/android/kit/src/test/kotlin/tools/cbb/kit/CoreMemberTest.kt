@@ -73,9 +73,12 @@ class CoreMemberTest {
         assertEquals(listOf("only_device"), m.why().map { it.code })
         m.setSync(false)
         assertEquals(listOf("sync_off", "only_device"), m.why().map { it.code })
+        assertEquals(listOf("sync_off", "only_device"), m.view().warnings.map { it.code }, "the view carries the same reasons")
         m.setSync(true)
-        val r = m.why(WhyAway(hub = true, forwarder = true, error = "no answer"))
+        val away = WhyAway(hub = true, forwarder = true, error = "no answer")
+        val r = m.why(away)
         assertEquals("no answer", r.first { it.code == "forwarder_down" }.detail)
+        assertTrue(m.view(away = away).warnings.any { it.code == "forwarder_down" })
         m.close()
     }
 

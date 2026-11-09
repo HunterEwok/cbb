@@ -184,11 +184,13 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertFalse(try b.member.why().contains { $0.level == "stop" })
         try b.member.setSync(on: false)
         XCTAssertEqual(try b.member.why().first?.code, "sync_off")
+        XCTAssertEqual(try b.member.view().warnings.first?.code, "sync_off", "the view carries the same reasons")
         try b.member.setSync(on: true)
         var away = WhyAway()
         (away.hub, away.forwarder, away.error) = (true, true, "no answer")
         let r = try b.member.why(away: away)
         XCTAssertEqual(r.first { $0.code == "forwarder_down" }?.detail, "no answer", "\(r)")
+        XCTAssertTrue(try b.member.view(away: away).warnings.contains { $0.code == "forwarder_down" })
     }
 
     /// Calls from other threads while the member stops answer or fail, and

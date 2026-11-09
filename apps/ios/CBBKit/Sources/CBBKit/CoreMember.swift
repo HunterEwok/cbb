@@ -576,12 +576,12 @@ public final class CoreMember: @unchecked Sendable {
 
     /// The device tiles in the user's order, with the user's change op
     /// applied and kept first (docs/apps.md, "What the member shows"); a
-    /// change that does not fit throws and changes nothing.
-    public func view(_ op: Arrangement.Op? = nil) throws -> Arrangement.View<TileDevice> {
-        struct A: Encodable { var arrange: Arrangement.Op }
+    /// change that does not fit throws and changes nothing. Its warnings
+    /// are `why(away:)`'s reasons, with away the app's own tunnel.
+    public func view(_ op: Arrangement.Op? = nil, away: WhyAway? = nil) throws -> Arrangement.View<TileDevice> {
+        struct A: Encodable { var arrange: Arrangement.Op?; var away: WhyAway? }
         struct R: Decodable { var view: Arrangement.View<TileDevice> }
-        if let op { return try run("arrange", A(arrange: op), as: R.self).view }
-        return try run("view", Optional<Empty>.none, as: R.self).view
+        return try run(op == nil ? "view" : "arrange", A(arrange: op, away: away), as: R.self).view
     }
 
     /// The group's records the core holds.

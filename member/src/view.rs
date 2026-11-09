@@ -8,7 +8,8 @@
 //! answers `view` with the tiles ready to draw: this device and the
 //! others, in that order and those collections, each with what the group
 //! knows of it, and how many others are online. `arrange` changes the
-//! order and answers the same. The arrangement stays on this device and is
+//! order and answers the same. The view carries `warnings`: why this
+//! device does not sync (`crate::why`). The arrangement stays on this device and is
 //! never sent to the group.
 
 use std::path::{Path, PathBuf};
@@ -41,6 +42,11 @@ pub struct View {
     pub others: usize,
     /// The user changed the order, which `reset` undoes.
     pub custom: bool,
+    /// Why this device does not sync (`cbb_core::why`, docs/apps.md "Why it
+    /// does not sync"), the reason that stops the most first; the same as
+    /// status's `why`, empty when everything syncs.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<cbb_core::why::Reason>,
 }
 
 /// The arrangement of one member, kept in its state folder.
@@ -103,7 +109,7 @@ pub fn build(a: &Arrangement, devices: Vec<Device>, me: Option<&str>) -> View {
             }),
         })
         .collect();
-    View { tiles, online, others, custom: !a.items.is_empty() }
+    View { tiles, online, others, custom: !a.items.is_empty(), warnings: Vec::new() }
 }
 
 #[cfg(test)]
@@ -182,5 +188,20 @@ mod tests {
         assert_eq!(json["tiles"][0]["device"]["self"], true);
         assert_eq!(json["tiles"][1]["device"]["name"], "A");
         assert_eq!(json["online"], 1);
+        assert!(json.get("warnings").is_none(), "no warnings when everything syncs");
+        let reason = cbb_core::why::Reason {
+            code: "sync_off".into(),
+            level: cbb_core::why::Level::Stop,
+            until_ms: 0,
+            device: String::new(),
+            devices: Vec::new(),
+            value: String::new(),
+            detail: String::new(),
+        };
+        let json = serde_json::to_value(View { warnings: vec![reason], ..v }).unwrap();
+        assert_eq!(
+            (json["warnings"][0]["code"].as_str(), json["warnings"][0]["level"].as_str()),
+            (Some("sync_off"), Some("stop"))
+        );
     }
 }

@@ -251,13 +251,16 @@ impl Member {
     }
 
     /// The tiles to draw for devices, the group's devices as the app's
-    /// devices call lists them, with the user's change op first (crate::view).
+    /// devices call lists them, with the user's change op first (crate::view),
+    /// and why this device does not sync, with away the app's own tunnel.
     pub fn view(
         &self,
         devices: Vec<crate::control::Device>,
         op: Option<&cbb_core::arrange::Op>,
+        away: Option<cbb_core::why::AwayFacts>,
     ) -> Result<crate::view::View> {
-        self.tiles.view(&self.node.identity().tag(), devices, op)
+        let view = self.tiles.view(&self.node.identity().tag(), devices, op)?;
+        Ok(crate::view::View { warnings: self.why(away), ..view })
     }
 
     /// Turns sync away from home on (docs/protocol.md, section 11): new

@@ -121,11 +121,16 @@ public enum Arrangement {
         public var others: Int
         /// The user changed the order, which `reset` undoes.
         public var custom: Bool
+        /// Why this device does not sync (docs/apps.md, "Why it does not
+        /// sync"), the reason that stops the most first; empty when
+        /// everything syncs.
+        public var warnings: [WhyReason]
 
-        private enum Keys: String, CodingKey { case tiles, online, others, custom }
+        private enum Keys: String, CodingKey { case tiles, online, others, custom, warnings }
 
-        public init(tiles: [Tile<D>] = [], online: Int = 0, others: Int = 0, custom: Bool = false) {
-            (self.tiles, self.online, self.others, self.custom) = (tiles, online, others, custom)
+        public init(tiles: [Tile<D>] = [], online: Int = 0, others: Int = 0, custom: Bool = false,
+                    warnings: [WhyReason] = []) {
+            (self.tiles, self.online, self.others, self.custom, self.warnings) = (tiles, online, others, custom, warnings)
         }
 
         public init(from decoder: Decoder) throws {
@@ -134,6 +139,7 @@ public enum Arrangement {
             online = try c.decodeIfPresent(Int.self, forKey: .online) ?? 0
             others = try c.decodeIfPresent(Int.self, forKey: .others) ?? 0
             custom = try c.decodeIfPresent(Bool.self, forKey: .custom) ?? false
+            warnings = try c.decodeIfPresent([WhyReason].self, forKey: .warnings) ?? []
         }
 
         /// Every device of the tiles, in their order.

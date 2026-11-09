@@ -1767,6 +1767,92 @@ impl Service {
         res
     }
 
+    /// The status op's answer, with why this device does not sync
+    /// (crate::why), which the view carries too.
+    fn status(&self) -> Result<Status> {
+        let peripherals = self.peripherals.status();
+        // A device in no group still answers, with what needs no
+        // group: its version, a TV's remote and the keyboard.
+        let node = match self.node() {
+            Ok(node) => node,
+            Err(_) if !matches!(Identity::load(&self.state_dir), Ok(Some(_))) => {
+                let status = Status {
+                    version: VERSION.into(),
+                    os: crate::admin::os_name().into(),
+                    keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
+                    tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
+                    left_old_group: self.left_old,
+                    port: self.port.lock().unwrap().map_or(0, i64::from),
+                    ..Default::default()
+                };
+                let status = Status { why: crate::why::reasons(&status, &[], uptime::wall_ms()), ..status };
+                return Ok(status);
+            }
+            Err(e) => return Err(e),
+        };
+        let id = node.identity();
+        let skews = node.engine.skews();
+        let peers = node
+            .peers()
+            .into_iter()
+            .map(|p| Device {
+                skew_ms: skews.get(p.id.as_str()).copied().unwrap_or(0),
+                id: p.id.to_string(),
+                name: p.name,
+                role: p.role,
+                os: p.os,
+                ..Default::default()
+            })
+            .collect();
+        // Read apart: a guard in the literal would live through it,
+        // and group_status takes the records too.
+        let (key_level, incoming_ms) = {
+            let records = node.records();
+            let st = records.lock().unwrap().state();
+            (st.key_level, st.incoming_ms)
+        };
+        let group = crate::why::group_status(&node);
+        let status = Status {
+            device: id.id.to_string(),
+            group: id.tag(),
+            role: node.role().into(),
+            os: node.os().into(),
+            peers,
+            version: VERSION.into(),
+            left_old_group: false,
+            mode: node.engine.mode().name().into(),
+            muted: node.engine.mute_left().is_some(),
+            muted_until_ms: node.engine.mute_left().filter(|l| *l > 0).map_or(0, |l| uptime::wall_ms() + l),
+            sync_until_ms: node.engine.sync().1,
+            away: self.away()?.status(&node),
+            paste: self.paste_status(),
+            keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
+            tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
+            release: node.releases().version(uptime::wall_ms()).unwrap_or_default(),
+            update: node
+                .releases()
+                .version(uptime::wall_ms())
+                .filter(|v| crate::releases::offered(v))
+                .unwrap_or_default(),
+            actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
+            stop: node.stop(),
+            removed: node.removed() && !group.frozen && group.taken_over_by.is_empty(),
+            media: Some(self.media_status()),
+            key_level: if key_level.is_empty() { "hardware".into() } else { key_level },
+            key_problem: String::new(),
+            incoming_ms: incoming_ms.unwrap_or(cbb_core::authority::DEFAULT_INCOMING),
+            unreached: node.unreached(),
+            port: self.port.lock().unwrap().map_or(0, i64::from),
+            quiet: node.networks().map(|n| n.unknown()).unwrap_or_default(),
+            cert_ends_ms: id.cert.not_after * 1000,
+            bug: self.bugs.waiting(),
+            ..group
+        };
+        let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
+        let status = Status { why: crate::why::reasons(&status, &devices(&node, &hubs), uptime::wall_ms()), ..status };
+        Ok(status)
+    }
+
     /// Remote paste here, for the status: the switches and the targets that
     /// run.
     fn paste_status(&self) -> Option<control::Paste> {
@@ -2340,90 +2426,7 @@ impl Service {
                 },
                 Vec::new(),
             )),
-            "status" => {
-                let peripherals = self.peripherals.status();
-                // A device in no group still answers, with what needs no
-                // group: its version, a TV's remote and the keyboard.
-                let node = match self.node() {
-                    Ok(node) => node,
-                    Err(_) if !matches!(Identity::load(&self.state_dir), Ok(Some(_))) => {
-                        let status = Status {
-                            version: VERSION.into(),
-                            os: crate::admin::os_name().into(),
-                            keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
-                            tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
-                            left_old_group: self.left_old,
-                            port: self.port.lock().unwrap().map_or(0, i64::from),
-                            ..Default::default()
-                        };
-                        let status = Status { why: crate::why::reasons(&status, &[], uptime::wall_ms()), ..status };
-                        return Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()));
-                    }
-                    Err(e) => return Err(e),
-                };
-                let id = node.identity();
-                let skews = node.engine.skews();
-                let peers = node
-                    .peers()
-                    .into_iter()
-                    .map(|p| Device {
-                        skew_ms: skews.get(p.id.as_str()).copied().unwrap_or(0),
-                        id: p.id.to_string(),
-                        name: p.name,
-                        role: p.role,
-                        os: p.os,
-                        ..Default::default()
-                    })
-                    .collect();
-                // Read apart: a guard in the literal would live through it,
-                // and group_status takes the records too.
-                let (key_level, incoming_ms) = {
-                    let records = node.records();
-                    let st = records.lock().unwrap().state();
-                    (st.key_level, st.incoming_ms)
-                };
-                let group = crate::why::group_status(&node);
-                let status = Status {
-                    device: id.id.to_string(),
-                    group: id.tag(),
-                    role: node.role().into(),
-                    os: node.os().into(),
-                    peers,
-                    version: VERSION.into(),
-                    left_old_group: false,
-                    mode: node.engine.mode().name().into(),
-                    muted: node.engine.mute_left().is_some(),
-                    muted_until_ms: node.engine.mute_left().filter(|l| *l > 0).map_or(0, |l| uptime::wall_ms() + l),
-                    sync_until_ms: node.engine.sync().1,
-                    away: self.away()?.status(&node),
-                    paste: self.paste_status(),
-                    keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
-                    tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
-                    release: node.releases().version(uptime::wall_ms()).unwrap_or_default(),
-                    update: node
-                        .releases()
-                        .version(uptime::wall_ms())
-                        .filter(|v| crate::releases::offered(v))
-                        .unwrap_or_default(),
-                    actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
-                    stop: node.stop(),
-                    removed: node.removed() && !group.frozen && group.taken_over_by.is_empty(),
-                    media: Some(self.media_status()),
-                    key_level: if key_level.is_empty() { "hardware".into() } else { key_level },
-                    key_problem: String::new(),
-                    incoming_ms: incoming_ms.unwrap_or(cbb_core::authority::DEFAULT_INCOMING),
-                    unreached: node.unreached(),
-                    port: self.port.lock().unwrap().map_or(0, i64::from),
-                    quiet: node.networks().map(|n| n.unknown()).unwrap_or_default(),
-                    cert_ends_ms: id.cert.not_after * 1000,
-                    bug: self.bugs.waiting(),
-                    ..group
-                };
-                let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
-                let status =
-                    Status { why: crate::why::reasons(&status, &devices(&node, &hubs), uptime::wall_ms()), ..status };
-                Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
-            }
+            "status" => Ok(control::reply(Header { status: Some(self.status()?), ..Default::default() }, Vec::new())),
             "devices" => {
                 let node = self.node()?;
                 let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
@@ -2442,6 +2445,7 @@ impl Service {
                     _ => None,
                 };
                 let view = self.tiles.view(&node.identity().tag(), devices(&node, &hubs), op.as_ref())?;
+                let view = crate::view::View { warnings: self.status().map(|s| s.why).unwrap_or_default(), ..view };
                 let view = serde_json::to_value(view).context("cannot encode the view")?;
                 Ok(control::reply(Header { view: Some(view), ..Default::default() }, Vec::new()))
             }

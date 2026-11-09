@@ -46,8 +46,14 @@ object Arrangement {
         data object Reset : Op
     }
 
-    /** The member's answer to view and arrange: the tiles in order, and whether the user changed it. */
-    data class View(val tiles: List<Item> = emptyList(), val online: Int = 0, val others: Int = 0, val custom: Boolean = false)
+    /** The member's answer to view and arrange: the tiles in order, whether the user changed it, and why this device does not sync (docs/apps.md). */
+    data class View(
+        val tiles: List<Item> = emptyList(),
+        val online: Int = 0,
+        val others: Int = 0,
+        val custom: Boolean = false,
+        val warnings: List<WhyReason> = emptyList(),
+    )
 
     private fun json(r: Ref): JsonObject = when (r) {
         is Ref.Device -> JsonObject(mapOf("device" to JsonPrimitive(r.id)))
@@ -86,6 +92,7 @@ object Arrangement {
             o["online"]?.jsonPrimitive?.intOrNull ?: 0,
             o["others"]?.jsonPrimitive?.intOrNull ?: 0,
             o["custom"]?.jsonPrimitive?.booleanOrNull ?: false,
+            (o["warnings"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(WhyReason::fromJson) },
         )
     }
 }

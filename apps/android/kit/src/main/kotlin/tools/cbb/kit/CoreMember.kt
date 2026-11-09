@@ -350,8 +350,9 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
      * and kept first (docs/apps.md, "What the member shows"); a change that
      * does not fit throws and changes nothing.
      */
-    fun view(op: Arrangement.Op? = null): Arrangement.View {
-        val answer = if (op == null) call("view") else call("arrange", Wire.obj("arrange" to Arrangement.json(op)))
+    fun view(op: Arrangement.Op? = null, away: WhyAway? = null): Arrangement.View {
+        val a = away?.toJson() ?: JsonNull
+        val answer = if (op == null) call("view", Wire.obj("away" to a)) else call("arrange", Wire.obj("arrange" to Arrangement.json(op), "away" to a))
         return Arrangement.view(answer.getValue("view").jsonObject)
     }
 
