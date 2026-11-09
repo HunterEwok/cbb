@@ -1499,6 +1499,14 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The member keeps the user's order of the device tiles and their collections, in
+  `arrangement.json` in its state folder, and answers `view` with the tiles ready to draw
+  and `arrange` with the user's change (docs/apps.md, "What the member shows"). The iPhone,
+  Android, Aurora, Mac and tray apps only draw it: none keeps an order in its settings or
+  applies the rules itself, and the core's stateless `arrange` call is gone. The order kept
+  by an earlier version is not carried over. The kits' and the tray app's copies of the
+  rules and their vector tests go with them; the core's tests, and the tray window's
+  stand-in service, keep checking `testdata/arrangement/vectors.json`.
 - One list of operations for the phones' member and the computers' control socket
   (docs/core-api.md, "The member's operations"): the same names and bodies on both. Every control
   message is the core's envelope, a request `{"op", "args"}` and an answer `{"ok"}` or

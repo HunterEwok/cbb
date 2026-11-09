@@ -176,6 +176,19 @@ mod tests {
     }
 
     #[test]
+    fn bad_json_starts_fresh() {
+        let tmp = std::env::temp_dir().join(format!("cbb-view-bad-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(tmp.join(FILE), b"not json").unwrap();
+        let t = Tiles::new(&tmp);
+        let v = t.view("G", vec![device("s", true, true), device("a", false, false)], None).unwrap();
+        let _ = std::fs::remove_dir_all(&tmp);
+        assert_eq!(ids(&v), ["s", "a"]);
+        assert!(!v.custom);
+    }
+
+    #[test]
     fn a_tile_carries_the_device() {
         let v = build(&Arrangement::empty("G"), vec![device("a", false, true), device("s", true, true)], Some("s"));
         let json = serde_json::to_value(&v).unwrap();
