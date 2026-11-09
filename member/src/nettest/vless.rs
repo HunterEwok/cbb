@@ -125,10 +125,13 @@ fn a_refused_upload() {
     let tunnel = UdpSocket::bind("127.0.0.1:0").unwrap();
     tunnel.send_to(b"one", addr).unwrap();
     assert!(wait_for(Duration::from_secs(10), || logged(&logs, "answers an upload with 403")), "{:?}", logs);
-    // Within the backoff nothing more goes; after it a new session.
-    std::thread::sleep(Duration::from_millis(1200));
-    tunnel.send_to(b"two", addr).unwrap();
-    assert!(wait_for(Duration::from_secs(10), || site.posts().len() >= 2));
+    // After the backoff a new session takes the packets that keep coming,
+    // as a tunnel's do.
+    assert!(wait_for(Duration::from_secs(10), || {
+        tunnel.send_to(b"two", addr).unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        site.posts().len() >= 2
+    }));
     let posts = site.posts();
     assert_ne!(posts[0].session, posts[1].session);
     assert_eq!(posts[1].seq, 0);

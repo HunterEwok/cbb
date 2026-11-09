@@ -340,3 +340,93 @@ fn pause_stops() {
     pause(Duration::from_millis(50), &[&go]);
     assert!(t.elapsed() >= Duration::from_millis(50));
 }
+
+/// Two devices register with the group's credentials in place of their
+/// member certificates: on an open relay and on one that serves the group,
+/// which asks for the roots; each knows the other by its pseudonym. A
+/// change of the credentials makes the link register again.
+#[test]
+fn registers_with_credentials() {
+    let mut g = Group::new(2);
+    let servers = [crate::nettest::new_key(), crate::nettest::new_key()];
+    // The lower pseudonym dials.
+    let pseudo = |k: &Arc<cbb_core::identity::FileKey>| {
+        cbb_core::credential::pseudonym(&certs::sha256(&certs::p256_spki_of(&crate::identity::ExternalKey::public(
+            &**k,
+        ))))
+    };
+    let mut servers = servers.to_vec();
+    if pseudo(&servers[0]) > pseudo(&servers[1]) {
+        servers.swap(0, 1);
+    }
+    let creds = g.period(&servers, 1);
+    let names = |i: usize| HashMap::from([(pseudo(&servers[1 - i]), g.id(1 - i))]);
+    let cred = |i: usize, creds: &[cbb_core::credential::Credential]| {
+        Arc::new(
+            Credentialed::new(
+                servers[i].clone(),
+                creds.to_vec(),
+                vec![g.root.der.clone()],
+                names(i),
+                crate::nettest::now_ms(),
+            )
+            .unwrap(),
+        )
+    };
+    for open in [true, false] {
+        let groups = if open { Vec::new() } else { vec![certs::tag(&g.root)] };
+        let (s, pins) = server(open, groups);
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let (a, b) = (Arc::new(Seen::default()), Arc::new(Seen::default()));
+        let ca = config(&g, 0, &s, &pins, 1);
+        *ca.credentials.lock().unwrap() = Some(cred(0, &creds));
+        let creds_a = ca.credentials.clone();
+        let cb = config(&g, 1, &s, &pins, listener.local_addr().unwrap().port());
+        *cb.credentials.lock().unwrap() = Some(cred(1, &creds));
+        let _ra = Relay::start(ca, a.clone());
+        let _rb = Relay::start(cb, b.clone());
+        assert!(
+            wait_for(Duration::from_secs(20), || connected(&a, 1) && connected(&b, 1)),
+            "open {open}: {:?} {:?} {:?}",
+            a.last(),
+            b.last(),
+            a.logs.lock().unwrap()
+        );
+        assert_eq!(a.last().unwrap().online, vec![g.id(1)], "the pseudonym stands for its device");
+        *a.want.lock().unwrap() = true;
+        assert!(wait_for(Duration::from_secs(20), || !a.dials.lock().unwrap().is_empty()), "no dial");
+        let (_, port) = a.dials.lock().unwrap()[0].clone();
+        let _c = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let _k = listener.accept().unwrap();
+        assert!(wait_for(Duration::from_secs(5), || b.calls.lock().unwrap().first().is_some_and(|c| c.0 == g.id(0))));
+        // A new period: the link registers again with it.
+        let newer = g.period(&servers, 2);
+        *creds_a.lock().unwrap() = Some(cred(0, &newer));
+        assert!(wait_for(Duration::from_secs(20), || a.logged("credentials changed")), "{:?}", a.logs.lock().unwrap());
+    }
+    // Credentials that do not list the server key, a key that is not
+    // P-256's, too many roots, a pseudonym that is not one.
+    let other = crate::nettest::new_key();
+    assert!(Credentialed::new(other, creds.to_vec(), Vec::new(), HashMap::new(), crate::nettest::now_ms()).is_err());
+    assert!(
+        Credentialed::new(
+            servers[0].clone(),
+            creds.to_vec(),
+            vec![Vec::new(); MAX_ROOTS + 1],
+            HashMap::new(),
+            crate::nettest::now_ms()
+        )
+        .is_err()
+    );
+    assert!(
+        Credentialed::new(
+            servers[0].clone(),
+            creds.to_vec(),
+            Vec::new(),
+            HashMap::from([("x".to_string(), g.id(0))]),
+            crate::nettest::now_ms()
+        )
+        .is_err()
+    );
+    g.add();
+}

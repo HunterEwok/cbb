@@ -11,12 +11,14 @@ use std::time::{Duration, Instant};
 
 use cbb_core::admit::{OwnDevice, new_group};
 use cbb_core::authority::{self, Body, Hash, Record};
-use cbb_core::certs::{Cert, DeviceId};
+use cbb_core::certs::{self, Cert, DeviceId};
+use cbb_core::credential::{self, Credential};
 use cbb_core::group::Records;
 use cbb_core::identity::{self, ExternalKey, FileKey};
 use cbb_core::issue;
 use serde_json::Value;
 
+pub mod forwarder;
 pub mod xhttp;
 
 pub fn now_ms() -> i64 {
@@ -133,6 +135,25 @@ impl Group {
 
     pub fn id(&self, i: usize) -> String {
         self.devs[i].id.to_string()
+    }
+
+    /// A period of the group's credentials (docs/protocol.md, section 18)
+    /// whose hubs' and members' credentials list the server keys given:
+    /// the period, hubs' and members' credentials, the last two signed by
+    /// the period key, of the given version.
+    pub fn period(&self, servers: &[Arc<FileKey>], version: u64) -> [Credential; 3] {
+        let period_key = new_key();
+        let spki = |k: &FileKey| certs::p256_spki_of(&k.public());
+        let tag = credential::new_period_tag().unwrap();
+        let pb = credential::period_body(&certs::tag(&self.root), &tag, &spki(&period_key), version, now_ms());
+        let rk = self.root_key.clone();
+        let period = credential::sign(pb.clone(), &spki(&rk), &mut |b| identity::sign_external(&*rk, b)).unwrap();
+        let hashes: Vec<certs::KeyHash> = servers.iter().map(|k| certs::sha256(&spki(k))).collect();
+        let pk = period_key.clone();
+        let mut by_period = |b| credential::sign(b, &spki(&pk), &mut |x| identity::sign_external(&*pk, x)).unwrap();
+        let hubs = by_period(credential::hubs_body(&pb, &hashes, &[], version).unwrap());
+        let members = by_period(credential::members_body(&pb, &hashes, version).unwrap());
+        [period, hubs, members]
     }
 
     pub fn records_json(&self) -> Vec<Value> {

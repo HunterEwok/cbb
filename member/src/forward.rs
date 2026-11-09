@@ -721,3 +721,7 @@ mod tests {
         assert_eq!(h[20..], m.finalize().into_bytes()[..16]);
     }
 }
+
+#[cfg(test)]
+#[path = "nettest/forward.rs"]
+mod net_tests;
