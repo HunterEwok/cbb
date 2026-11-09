@@ -97,6 +97,7 @@ pub mod tunnel;
 mod update;
 mod update_os;
 pub mod uptime;
+pub mod view;
 #[cfg(feature = "tunnel")]
 pub mod vless;
 mod window;

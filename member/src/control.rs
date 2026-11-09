@@ -48,6 +48,12 @@ pub struct Header {
     pub status: Option<Status>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub devices: Vec<Device>,
+    /// view and arrange (docs/apps.md, "What the member shows"): the
+    /// tiles to draw in the answer, and the user's change in an arrange.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arrange: Option<serde_json::Value>,
     /// Remote paste (docs/protocol.md, section 8): in an inject, paste or
     /// type, and Enter after the text; in paste-receive, the switches.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -717,6 +723,8 @@ pub fn is_admin(op: &str) -> bool {
             | "status"
             | "version"
             | "devices"
+            | "view"
+            | "arrange"
             | "muted"
             | "watch"
             | "copied"

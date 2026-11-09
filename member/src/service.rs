@@ -247,6 +247,7 @@ struct Service {
     port: Mutex<Option<u16>>,
     /// The bug report of a panic before the last restart (src/bugs.rs).
     bugs: crate::bugs::Bugs,
+    tiles: crate::view::Tiles,
 }
 
 /// A pairing that runs on this device.
@@ -361,6 +362,7 @@ pub fn run(cfg: Config) -> Result<()> {
         pairing: Mutex::new(None),
         port: Mutex::new(None),
         bugs: crate::bugs::Bugs::new(&cfg.state_dir),
+        tiles: crate::view::Tiles::new(&cfg.state_dir),
     });
     {
         // The helper puts a keyboard that is on back on BlueZ.
@@ -2422,6 +2424,22 @@ impl Service {
                 let node = self.node()?;
                 let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
                 Ok(control::reply(Header { devices: devices(&node, &hubs), ..Default::default() }, Vec::new()))
+            }
+            // The tiles to draw, and the user's change of their order.
+            "view" | "arrange" => {
+                let node = self.node()?;
+                let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
+                let op = match (&*h.op, &h.arrange) {
+                    ("arrange", Some(v)) => Some(
+                        serde_json::from_value::<cbb_core::arrange::Op>(v.clone())
+                            .map_err(|e| Error::msg(format!("arrange: the change does not read: {e}")))?,
+                    ),
+                    ("arrange", None) => return Err(Error::msg("arrange: which change?")),
+                    _ => None,
+                };
+                let view = self.tiles.view(&node.identity().tag(), devices(&node, &hubs), op.as_ref())?;
+                let view = serde_json::to_value(view).context("cannot encode the view")?;
+                Ok(control::reply(Header { view: Some(view), ..Default::default() }, Vec::new()))
             }
             "away" => self.global(h),
             // The networks this device is on now are known: the user says
