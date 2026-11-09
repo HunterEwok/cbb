@@ -89,6 +89,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | I24 | Windows binaries carry a valid Authenticode signature; `cbb update` checks it; SmartScreen lets the installer run | real | signing |
 | I25 | The installers' errors: a failed step names its exit status; `CBB_ERROR_DETAILS=1` shows every command and the full Windows error record | real | |
 | I26 | The upgrade from 0.5 to 0.6, once: a group made before 0.6 is not carried over (records version 2 have no migration); each member leaves it at its first start, says so in `cbb status`, keeps its settings, and a new group made on 0.6 works; a 0.5 member left in the old group reaches no 0.6 member | real, fleet | |
+| I27 | From 0.6 on a device of version N works in one group with N-1: the previous release's cbb (`tools/e2e/previous.sh`) and this build's join one group, sync both ways, take the record of a device admitted later, and the previous one takes its removal (TestPreviousRelease in CI; I6 with the bench's two versions) | fleet | |
 
 ## 2. Groups, pairing and roles (G)
 

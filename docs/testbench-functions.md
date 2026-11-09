@@ -76,6 +76,7 @@ line here with every new function, and a case for it in the catalogue.
 | I.57 | Authenticode on Windows | I24 |
 | I.58 | `CBB_ERROR_DETAILS` and the installers' errors | I25 |
 | I.59 | The one-time move from 0.5: the old group left, settings kept, said in status | I26 |
+| I.60 | A device of version N in one group with N-1, from 0.6 on | I27 |
 
 ## G. Groups, pairing and roles
 

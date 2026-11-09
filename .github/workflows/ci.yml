@@ -2193,6 +2193,10 @@ jobs:
           Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
           for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
           DISPLAY=:5 CBB_TEST_X11=1 CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run 'TestLite' -v
+      - name: a device of the previous release works in one group with this build (from 0.6 on; skips until 0.6.0 is out)
+        run: |
+          prev=$(sh tools/e2e/previous.sh "$RUNNER_TEMP/previous")
+          CBB_PREVIOUS="$prev" CBB_LITE="$PWD/target/release/cbb" go test -race ./internal/service -run '^TestPreviousRelease$' -v
       - name: get.sh --lite installs the lite member, and uninstall.sh removes it
         run: |
           rel="$RUNNER_TEMP/release"

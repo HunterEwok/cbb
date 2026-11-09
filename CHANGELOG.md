@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- CI tests the promise that from 0.6 on a device of version N works in one group with N-1:
+  `tools/e2e/previous.sh` downloads the previous release's `cbb` (0.6.0 or later, checked
+  against its SHA256SUMS), and TestPreviousRelease joins it and this build to one group, syncs
+  both ways, has it take a later device's record and its own removal. It skips until 0.6.0
+  is out.
 - The bench's fleet holds the lite member to budgets on the small devices (E12): capped as a
   Raspberry Pi Zero and as a router, its memory at rest and after 200 copies, its CPU at rest,
   the time a copy takes to arrive and its peak stay under fixed limits, each also a metric for
