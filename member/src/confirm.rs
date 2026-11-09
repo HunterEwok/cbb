@@ -186,11 +186,11 @@ pub fn register_cli(args: &[String], request: &dyn Fn(Header) -> Result<Header>)
 /// What a confirmation on Windows signs: the operation and the service's
 /// challenge, after a fixed prefix that nothing else signs.
 #[cfg_attr(not(all(windows, feature = "tunnel")), allow(dead_code))]
-pub fn hello_message(op: &str, nonce: &[u8]) -> Vec<u8> {
+pub fn hello_message(op: &str, challenge: &[u8]) -> Vec<u8> {
     let mut m = b"cbb confirm v1\n".to_vec();
     m.extend_from_slice(op.as_bytes());
     m.push(b'\n');
-    m.extend_from_slice(nonce);
+    m.extend_from_slice(challenge);
     m
 }
 
@@ -702,7 +702,7 @@ mod win {
                 return Ok(());
             }
             let b64 = &base64::engine::general_purpose::STANDARD;
-            let (nonce, sig) = h
+            let (challenge, sig) = h
                 .auth
                 .split_once('.')
                 .and_then(|(n, s)| Some((b64.decode(n).ok()?, b64.decode(s).ok()?)))
@@ -710,12 +710,12 @@ mod win {
             let at = st
                 .challenges
                 .iter()
-                .position(|c| c.0 == nonce && c.1 == sid && c.2 == h.op && c.3.elapsed() < CHALLENGE_TIME)
+                .position(|c| c.0 == challenge && c.1 == sid && c.2 == h.op && c.3.elapsed() < CHALLENGE_TIME)
                 .ok_or_else(|| Error::msg("the confirmation came too late or for another action; try again"))?;
             st.challenges.remove(at);
             let key =
                 keys(&st.dir).get(&sid).and_then(|k| b64.decode(k).ok()).ok_or_else(|| Error::msg(UNAVAILABLE))?;
-            if !cbb_core::tls::web::verify_rsa_pkcs1_sha256(&key, &super::hello_message(&h.op, &nonce), &sig) {
+            if !cbb_core::tls::web::verify_rsa_pkcs1_sha256(&key, &super::hello_message(&h.op, &challenge), &sig) {
                 return Err(Error::msg("the Windows Hello signature does not match this user's key"));
             }
             if super::right(&h.op) == RIGHT_KEPT {
@@ -890,7 +890,8 @@ mod tests {
     /// What Windows Hello signs names the action and the challenge.
     #[test]
     fn hello() {
-        assert_eq!(hello_message("remove", b"\x01\x02"), b"cbb confirm v1\nremove\n\x01\x02");
+        let challenge: Vec<u8> = (1..=2).collect();
+        assert_eq!(hello_message("remove", &challenge), b"cbb confirm v1\nremove\n\x01\x02");
         assert!(crate::control::is_admin(OP_REGISTER) && !crate::control::is_admin(OP_CHALLENGE));
     }
 
