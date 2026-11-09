@@ -171,8 +171,10 @@ fn admin_hint(g: &Global) {
 /// admin that is not the hub it goes through a hub, the first connected
 /// one or -hub's.
 pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
-    const USE: &str = "cbb invite [-for 1h] [-o file] [-hub DEVICE]   (valid for up to 24h)";
+    const USE: &str =
+        "cbb invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]   (valid for up to 24h)";
     let (mut valid, mut out, mut hub) = (INVITE_LIFETIME_MS, INVITE_FILE.to_string(), String::new());
+    let (mut app, mut answers) = (None, None);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match flag(a) {
@@ -181,13 +183,18 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
             }
             Some("o") => out = it.next().cloned().ok_or_else(|| usage(USE))?,
             Some("hub") => hub = it.next().cloned().ok_or_else(|| usage(USE))?,
+            Some("app") => app = Some(it.next().cloned().ok_or_else(|| usage(USE))?),
+            Some("answers") => answers = Some(it.next().cloned().ok_or_else(|| usage(USE))?),
             _ => return Err(usage(USE)),
         }
     }
-    if valid <= 0 || valid > INVITE_MAX_MS {
+    if valid <= 0 || valid > INVITE_MAX_MS || app.is_some() != answers.is_some() {
         return Err(usage(USE));
     }
     let h = Header { op: "invite".into(), expires: valid / 1000, device: hub, ..Default::default() };
+    if let (Some(app), Some(answers)) = (app, answers) {
+        return invite_app(g, h, &app, &answers);
+    }
     let (mut w, mut r, m) = stream(g, h)?;
     // The file is a secret until it is used: only its owner reads it, and
     // it never replaces another file.
@@ -231,6 +238,72 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
         if !yes {
             println!("Not admitted. The invitation stays open for another attempt.");
         }
+    }
+}
+
+/// cbb invite -app: the desktop apps' invitation, as cbb runs as the
+/// administrator for them. The app makes both files; cbb writes the
+/// invitation's state into app, one line of JSON each time it changes
+/// ({"invite","expires"}, with "joining" {"name","os","id","fingerprint"}
+/// while it asks, and "done" with "name" at the end), and reads the user's
+/// answers, a line of yes or no each, from answers. Removing app cancels.
+fn invite_app(g: &Global, h: Header, app: &str, answers: &str) -> Result<()> {
+    let out = std::sync::Mutex::new(crate::open_app_file(app)?);
+    // Opened now, as app is, so that no link put in its place later counts.
+    let mut answers = crate::open_app_file_read(answers)?;
+    let (mut w, mut r, m) = stream(g, h)?;
+    let (text, expires) = (m.header.invite.clone(), m.header.expires);
+    let write = |extra: serde_json::Value| -> Result<()> {
+        let mut line = serde_json::json!({"invite": text, "expires": expires});
+        if let (Some(o), Some(e)) = (line.as_object_mut(), extra.as_object()) {
+            o.extend(e.clone());
+        }
+        let mut f = out.lock().unwrap_or_else(|e| e.into_inner());
+        f.set_len(0)
+            .and_then(|_| std::io::Seek::rewind(&mut *f))
+            .and_then(|_| f.write_all(format!("{line}\n").as_bytes()))
+            .and_then(|_| f.sync_all())
+            .context("cannot write the invitation")
+    };
+    write(serde_json::json!({}))?;
+    crate::watch_app_file(app.to_string());
+    let mut used = 0;
+    loop {
+        let m = check(next(&mut r)?)?;
+        if m.header.done {
+            write(serde_json::json!({"done": true, "name": m.header.name}))?;
+            return Ok(());
+        }
+        let Some(j) = m.header.joining else { continue };
+        write(serde_json::json!({"joining": {"name": j.name, "os": j.os, "id": j.id, "fingerprint": j.fingerprint}}))?;
+        let yes = next_answer(&mut answers, &mut used)?;
+        control::write(
+            &mut w,
+            &Message::new(Header { op: "answer".into(), consent: yes, ..Default::default() }, Vec::new()),
+        )?;
+        write(serde_json::json!({}))?;
+    }
+}
+
+/// The app's next answer in its answers file, the line after the used
+/// ones: waits for it as long as the service waits for the user.
+fn next_answer(f: &mut std::fs::File, used: &mut usize) -> Result<bool> {
+    let until = std::time::Instant::now() + crate::window::CONFIRM_WAIT + std::time::Duration::from_secs(10);
+    loop {
+        let mut all = String::new();
+        std::io::Seek::rewind(f).context("cannot read the answers")?;
+        Read::by_ref(f).take(64 * 1024).read_to_string(&mut all).context("cannot read the answers")?;
+        if let Some(line) = all.lines().nth(*used) {
+            if all.ends_with('\n') || all.lines().count() > *used + 1 {
+                *used += 1;
+                return Ok(line.trim().eq_ignore_ascii_case("yes"));
+            }
+        }
+        if std::time::Instant::now() > until {
+            *used = all.lines().count();
+            return Ok(false);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
     }
 }
 

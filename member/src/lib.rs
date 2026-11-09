@@ -197,7 +197,7 @@ Commands:
   pair -code [address]    Join with the code from cbb pair on the root or an admin.
   pair -invite file       Join from afar with an invitation from cbb invite
                           (its file, or its text cbb://invite#...).
-  invite [-for 1h] [-o file] [-hub DEVICE]
+  invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]
                           Invite a device from afar, on the root or an admin: shows a QR
                           code for the app and writes a file for a computer. Through the
                           group's hub, the first connected one or -hub's.
@@ -632,13 +632,26 @@ fn wait_for_hub(g: &Global) {
 /// regular file, the one the path named when cbb looked, and never one that
 /// a link put in its place since leads to, since cbb runs as the
 /// administrator and the file's folder may be the user's.
-fn open_app_file(path: &str) -> Result<std::fs::File> {
+pub(crate) fn open_app_file(path: &str) -> Result<std::fs::File> {
+    open_app_file_with(path, true)
+}
+
+/// As open_app_file, for reading what the app writes into it.
+pub(crate) fn open_app_file_read(path: &str) -> Result<std::fs::File> {
+    open_app_file_with(path, false)
+}
+
+fn open_app_file_with(path: &str, write: bool) -> Result<std::fs::File> {
     let before = std::fs::symlink_metadata(path).context(format!("cannot open {path}"))?;
     if !before.file_type().is_file() {
         return Err(Error::msg(format!("{path} is not a regular file")));
     }
     let mut o = std::fs::OpenOptions::new();
-    o.write(true);
+    if write {
+        o.write(true);
+    } else {
+        o.read(true);
+    }
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::custom_flags(&mut o, libc::O_NOFOLLOW);
     // FILE_FLAG_OPEN_REPARSE_POINT: a link opens as itself, not its target.
@@ -671,7 +684,7 @@ fn write_app_join(mut f: std::fs::File, text: &str, port: u16) -> Result<()> {
 
 /// Ends cbb pair -app once the app removes its file: the app closed its
 /// window, and the wait for the phone ends with it.
-fn watch_app_file(path: String) {
+pub(crate) fn watch_app_file(path: String) {
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(Duration::from_millis(200));

@@ -4,7 +4,11 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -19,6 +23,24 @@ import (
 // there.
 func inviteHub(t *testing.T, h *hub, pi *testService) (inv *control.Client, text string) {
 	t.Helper()
+	makeHub(t, h, pi)
+	inv = pi.dial(t)
+	t.Cleanup(func() { inv.Close() })
+	inv.SetDeadline(time.Now().Add(60 * time.Second))
+	m, err := inv.Do(&control.Message{Header: control.Header{Op: control.OpInvite, Expires: 600}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Expires != 600 {
+		t.Errorf("the invitation is valid for %d s, want 600", m.Expires)
+	}
+	return inv, m.Invite
+}
+
+// makeHub makes the pi a group's hub on the loopback address, on another
+// network than the other test services.
+func makeHub(t *testing.T, h *hub, pi *testService) {
+	t.Helper()
 	c, _ := openWindow(t, pi) // creates the group
 	c.Close()
 	if _, err := pi.do(t, control.Header{Op: control.OpInvite}, ""); err == nil || !strings.Contains(err.Error(), "hub") {
@@ -32,17 +54,81 @@ func inviteHub(t *testing.T, h *hub, pi *testService) (inv *control.Client, text
 		t.Fatal(err)
 	}
 	h.hide(pi.status(t).Device)
-	inv = pi.dial(t)
-	t.Cleanup(func() { inv.Close() })
-	inv.SetDeadline(time.Now().Add(60 * time.Second))
-	m, err := inv.Do(&control.Message{Header: control.Header{Op: control.OpInvite, Expires: 600}})
-	if err != nil {
+}
+
+// TestInviteApp runs cbb invite -app as the desktop apps do: cbb writes
+// the invitation's state into the app's file, a device on another network
+// uses it, and the user's answer in the answers file admits it.
+func TestInviteApp(t *testing.T) {
+	var h hub
+	pi := startService(t, &h, "pi")
+	deck := startService(t, &h, "deck")
+	makeHub(t, &h, pi)
+	dir := t.TempDir()
+	state, answers := filepath.Join(dir, "invite.json"), filepath.Join(dir, "answers")
+	for _, f := range []string{state, answers} {
+		if err := os.WriteFile(f, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command(rustService(), "-state", pi.dir, "-socket", pi.socket, "invite", "-for", "10m", "-app", state, "-answers", answers)
+	out := &strings.Builder{}
+	cmd.Stdout, cmd.Stderr = out, out
+	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	if m.Expires != 600 {
-		t.Errorf("the invitation is valid for %d s, want 600", m.Expires)
+	ended := make(chan error, 1)
+	go func() { ended <- cmd.Wait() }()
+	t.Cleanup(func() { cmd.Process.Kill() })
+	type appState struct {
+		Invite  string `json:"invite"`
+		Expires int64  `json:"expires"`
+		Joining *struct {
+			Name        string `json:"name"`
+			Fingerprint string `json:"fingerprint"`
+		} `json:"joining"`
+		Done bool   `json:"done"`
+		Name string `json:"name"`
 	}
-	return inv, m.Invite
+	read := func() appState {
+		var a appState
+		data, _ := os.ReadFile(state)
+		json.Unmarshal(data, &a)
+		return a
+	}
+	waitUpTo(t, 60*time.Second, "cbb writes the invitation", func() bool { return read().Invite != "" })
+	if a := read(); a.Expires != 600 {
+		t.Errorf("the invitation is valid for %d s, want 600", a.Expires)
+	}
+
+	j := deck.dial(t)
+	defer j.Close()
+	j.SetDeadline(time.Now().Add(90 * time.Second))
+	m, err := j.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Invite: read().Invite, Consent: true}})
+	if err != nil || m.Fingerprint == "" {
+		t.Fatalf("join: %+v, %v", m, err)
+	}
+	waitUpTo(t, 60*time.Second, "cbb asks about the deck", func() bool { return read().Joining != nil })
+	if a := read(); a.Joining.Name != "deck" || a.Joining.Fingerprint != m.Fingerprint {
+		t.Fatalf("cbb asks about %+v; the deck shows %s", a.Joining, m.Fingerprint)
+	}
+	if err := os.WriteFile(answers, []byte("yes\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-ended:
+		if err != nil {
+			t.Fatalf("cbb invite -app: %v\n%s", err, out)
+		}
+	case <-time.After(60 * time.Second):
+		t.Fatalf("cbb invite -app did not end\n%s", out)
+	}
+	if a := read(); !a.Done || a.Name != "deck" {
+		t.Errorf("cbb wrote %+v at the end", a)
+	}
+	if m, err := j.Receive(); err != nil || !m.Done {
+		t.Fatalf("the join ended with %+v, %v", m, err)
+	}
 }
 
 // TestInvite checks a remote invitation from end to end: a device on
