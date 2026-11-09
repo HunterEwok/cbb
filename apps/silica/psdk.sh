@@ -28,6 +28,7 @@ system=${SYSTEM:-aurora5}
 
 # Where each SDK's parts come from, and their SHA-256.
 qca=
+# shellcheck disable=SC2034 # the target_* and qca_* sums are read through eval below
 case $system in
 aurora5)
 	sdk=AuroraOS-5.1.5.105-base
@@ -42,7 +43,7 @@ aurora5)
 	target_aarch64=b4b6c83cbf189a1f0f9e0ab91e75ea6d25fe14266ba7f8b77e27bb70fd1446b5
 	# QCA's headers, which the SDK lacks, for the key in OP-TEE.
 	omp=https://releases.omprussia.ru/releases/5.1.5.105/omp/main/pj:oss:
-	qca=qca-qt5-devel-2.3.2+omp46-1.1.19.omp
+	qca="qca-qt5-devel-2.3.2+omp46-1.1.19.omp"
 	qca_armv7hl=92f348d40872bf419d25905a0b02f9d017730b2a0c395ba9cea8d58fee148c0a
 	qca_aarch64=db2eca799fa3c0a208753d0303dcf18f4bf77f055c77ede37345b9077d63c126
 	;;
@@ -134,6 +135,7 @@ for a in $archs; do
 	aurora4) url=${base}SDK_Target-$a.tar.bz2 ;;
 	sailfish) url=${base}Target-$a.tar.7z ;;
 	esac
+	# shellcheck disable=SC2154 # sum is set by the eval above
 	fetch "target-$a.tar.$ext" "$url" "$sum"
 	if [ -n "$qca" ]; then
 		eval "sum=\$qca_$a"

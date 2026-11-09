@@ -312,7 +312,7 @@
   "checking a download": "kukagua upakuaji",
   "conventions, building and testing every part": "kanuni, kujenga na kujaribu kila sehemu",
   "every `cbb` command, on a full and on the lite member, with every flag": "kila amri ya `cbb`, kwa mwanachama kamili na mwepesi, na kila bendera",
-  "every architecture decision, D-1 to D-78, with its status": "kila uamuzi wa usanifu, kuanzia D-1 hadi D-78, pamoja na hali yake",
+  "the architecture decisions in force, and the replaced ones as their history": "maamuzi ya usanifu yanayotumika, na yaliyobadilishwa kama historia yake",
   "every bench case of 0.6 in one line, with how it runs and what it still needs": "kila kisa cha benchi cha 0.6 kwa mstari mmoja, jinsi kinavyoendeshwa na kinachohitaji bado",
   "every function of the product with the cases that check it, for the coverage report": "kila kazi ya bidhaa pamoja na visa vinavyoikagua, kwa ripoti ya ufunikaji",
   "every primitive, library, key, its size, lifetime and where it is kept": "kila kanuni ya msingi, maktaba na ufunguo: ukubwa wake, muda wake na mahali unapohifadhiwa",
