@@ -495,6 +495,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let (joiner, save) = joiner(&g.state, &name)?;
     let joiner = joiner.as_member(admin::os_name(), &caps.iter().map(String::as_str).collect::<Vec<_>>());
     let save = &*save;
+    let invited = invite.is_some();
     let id = match invite {
         Some((path, text)) => {
             let shown = |fp: &str| {
@@ -584,7 +585,41 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     } else {
         println!("{}", tr!("Joined the group {} as {}.", id.tag(), id.id));
     }
+    if invited {
+        wait_for_hub(g);
+    }
     Ok(())
+}
+
+/// After a join by invitation, waits a while for the service to hand this
+/// device's own tunnel key to the hub through the invitation's guest
+/// tunnel, and says how it went: the join is done either way, and the
+/// service keeps trying for a day.
+fn wait_for_hub(g: &Global) {
+    let status = control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new());
+    println!("{}", tr!("Handing this device's tunnel key to the hub..."));
+    std::io::stdout().flush().ok();
+    let deadline = std::time::Instant::now() + Duration::from_secs(120);
+    let mut running = false;
+    while std::time::Instant::now() < deadline {
+        match request(g, &status) {
+            Ok(m) => {
+                running = true;
+                if m.header.status.as_ref().and_then(|s| s.away.as_ref()).is_some_and(|a| !a.hub_device.is_empty()) {
+                    println!("{}", tr!("The hub took it: this device syncs from afar now."));
+                    return;
+                }
+            }
+            Err(_) if !running => break,
+            Err(_) => {}
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    if running {
+        println!("{}", tr!("The hub has not answered yet; the service keeps trying for a day."));
+    } else {
+        println!("{}", tr!("Start the service (cbb service) within a day: it hands this device's key to the hub."));
+    }
 }
 
 /// Opens the desktop app's file for cbb pair -app once, at the start: a

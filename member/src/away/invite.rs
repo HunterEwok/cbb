@@ -37,8 +37,9 @@ const MAX_LIFETIME: Duration = Duration::from_secs(24 * 3600);
 /// How long a guest tunnel stays at most after its device was admitted,
 /// for the device's first member connection, in which it offers its own
 /// tunnel key; once the hub answered that offer, the guest goes as soon as
-/// that connection ends.
-const GUEST_GRACE: Duration = Duration::from_secs(120);
+/// that connection ends. It reaches only that device's member TLS by then,
+/// so it may wait for a device whose service starts late: a day.
+const GUEST_GRACE: Duration = Duration::from_secs(24 * 3600);
 /// How long a guest tunnel stays after its invitation ended without a
 /// device, for the last answer to reach the device.
 const FAIL_GRACE: Duration = Duration::from_secs(10);
@@ -55,6 +56,11 @@ pub(super) struct Guest {
     /// after the hub answered its key: the guest can go.
     done: bool,
 }
+
+/// What an invitation gives of its hub: its key, its addresses, the group's
+/// AmneziaWG settings and the way to its forwarder over VLESS.
+type GuestWay =
+    ([u8; 32], Vec<std::net::SocketAddr>, Option<cbb_core::invite::Obfuscation>, Option<cbb_core::invite::Vless>);
 
 /// The guests of the open invitations, by their tunnel addresses.
 pub(super) type Guests = Arc<Mutex<HashMap<Ipv6Addr, Guest>>>;
@@ -141,7 +147,7 @@ impl Away {
         }
         let addr = hub::guest_addr(&guest_public);
         let peer = hub::Peer { key: guest_public, psk: guest_psk, addr, until: None };
-        let (hub_key, endpoints, obfuscation) = match self.open_guest(peer, w.clone()) {
+        let (hub_key, endpoints, obfuscation, vless) = match self.open_guest(peer, w.clone()) {
             Ok(h) => h,
             Err(e) => {
                 w.close();
@@ -159,6 +165,7 @@ impl Away {
             secret,
             expires: now.saturating_add(lifetime.as_secs() as i64),
             obfuscation,
+            vless,
         };
         (self.log)(&format!("cbb: an invitation is open for {} minutes", lifetime.as_secs() / 60));
         let opened = control::partial(Header {
@@ -213,13 +220,9 @@ impl Away {
     }
 
     /// Lets the guest of an invitation into the running hub, and returns
-    /// what the invitation gives of the hub: its key, its addresses and the
-    /// group's AmneziaWG settings.
-    fn open_guest(
-        &self,
-        peer: hub::Peer,
-        window: Arc<Window>,
-    ) -> Result<([u8; 32], Vec<std::net::SocketAddr>, Option<cbb_core::invite::Obfuscation>)> {
+    /// what the invitation gives of the hub: its key, its addresses, the
+    /// group's AmneziaWG settings and the way to its forwarder over VLESS.
+    fn open_guest(&self, peer: hub::Peer, window: Arc<Window>) -> Result<GuestWay> {
         // A hub that was just made starts its tunnel in a moment: the
         // invitation waits for it, or for its failure, a little.
         let until = Instant::now() + TUNNEL_START;
@@ -249,10 +252,16 @@ impl Away {
             ),
             None => None,
         };
+        // The way over VLESS is the one the hub's offer gives its clients;
+        // a hub still waiting for its forwarder's answer has none yet, and
+        // REALITY is left out, since the joiner may be a phone.
+        let vless = super::serve::own_offer(st, &[0u8; 32])
+            .and_then(|o| o.vless)
+            .and_then(|v| cbb_core::invite::vless_from_offer(&v));
         let addr = peer.addr;
         self.guests.lock().unwrap().insert(addr, Guest { peer, window, admitted: None, offered: false, done: false });
         self.set_peers(st);
-        Ok((crate::tunnel::key32(&crate::tunnel::public_of(&st.serving_key()?))?, endpoints, obfuscation))
+        Ok((crate::tunnel::key32(&crate::tunnel::public_of(&st.serving_key()?))?, endpoints, obfuscation, vless))
     }
 
     /// Forgets a guest tunnel: its packets are dropped from then on.
@@ -323,9 +332,9 @@ pub(super) fn serve_guests(ln: TcpListener, hub: std::sync::Weak<Hub>, node: std
 /// joined with until it has the hub's offer: the service dials the hub
 /// through its guest tunnel meanwhile, to offer its own key.
 const GUEST_FILE: &str = "invite-guest";
-/// How long after the join the guest tunnel is tried at most; the hub lets
-/// the guest go two minutes after it admitted the device.
-const GUEST_FILE_LIFE: Duration = Duration::from_secs(600);
+/// How long after the join the guest tunnel is tried at most: as long as
+/// the hub keeps the guest for the admitted device.
+const GUEST_FILE_LIFE: Duration = GUEST_GRACE;
 
 /// Joins the group of a remote invitation (cbb pair -invite), as Go's
 /// joinInvite: through the guest tunnel to the hub, with the invitation's
@@ -377,7 +386,7 @@ fn guest_link(inv: &Invitation, log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<
         endpoints: inv.endpoints.clone(),
         next: Vec::new(),
         obfuscation,
-        vless: None,
+        vless: inv.vless.as_ref().map(cbb_core::invite::Vless::to_json),
     };
     let own = hub::guest_addr(&crate::tunnel::key32(&crate::tunnel::public_of(&inv.guest_key))?);
     let peer = crate::tunnel::addr(&inv.hub).ok_or_else(|| Error::msg("the invitation names no hub"))?;
@@ -428,6 +437,11 @@ impl Away {
                         "cbb: the hub {hub} took this device's key; the invitation's guest tunnel is closed"
                     ));
                 } else if let Err(e) = res {
+                    let e = if link.answered() {
+                        e
+                    } else {
+                        e.context("the hub does not answer through the invitation's guest tunnel; it tries again, and if the hub was restarted since the join, ask its admin to remove this device and invite it again")
+                    };
                     (self.log)(&format!(
                         "cbb: offering this device's key to the hub {hub} through the invitation's guest tunnel: {}",
                         e.for_log()

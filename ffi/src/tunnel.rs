@@ -32,11 +32,12 @@
 //!   (`{"udp_port", "log"}`) and `hub_stop` with `id`;
 //! - `hub_invite` with `id`, `group` (the group's tag), `endpoints` (the
 //!   hub's addresses away from home, "ip:port"), `lifetime` (seconds, at
-//!   most a day) and `guest_port` (the app's pairing window):
+//!   most a day), `guest_port` (the app's pairing window) and `vless` (the
+//!   VLESS settings of the hub's offers, or none):
 //!   `{"guest", "text", "secret", "expires"}`, a remote invitation
 //!   (docs/protocol.md, section 12) whose guest tunnel leads to the window;
 //! - `guest_admitted` with `id` and `guest`: the window admitted the device,
-//!   whose connections now go to the member port for 2 minutes;
+//!   whose connections now go to the member port, for a day at most;
 //!   `guest_close` with `id` and `guest` drops the guest;
 //! - `hub_set_records` with `id` and `records`: the group's authority
 //!   records the next registration with the forwarder carries;
@@ -164,6 +165,10 @@ enum Request {
         lifetime: u64,
         /// The loopback port of the app's pairing window for it.
         guest_port: u16,
+        /// The VLESS settings of the hub's offers, for a guest whose
+        /// network lets no UDP through.
+        #[serde(default)]
+        vless: Option<Value>,
     },
     GuestAdmitted {
         id: u64,
@@ -423,10 +428,12 @@ struct Guest {
     admitted: bool,
 }
 
-/// The longest an invitation is valid, and how long its guest stays after
-/// the window admitted the device, as on a computer's hub.
+/// The longest an invitation is valid, and how long its guest stays at most
+/// after the window admitted the device, for its first member connection,
+/// as on a computer's hub: it reaches only that device's member TLS by
+/// then.
 const MAX_LIFETIME: u64 = 24 * 60 * 60;
-const GUEST_GRACE: Duration = Duration::from_secs(120);
+const GUEST_GRACE: Duration = Duration::from_secs(24 * 60 * 60);
 /// The pairing secret's length.
 const SECRET: usize = 16;
 
@@ -442,7 +449,14 @@ impl RunningHub {
         self.hub.set_peers(peers, &self.device)
     }
 
-    fn invite(&self, group: &str, endpoints: &[String], lifetime: u64, guest_port: u16) -> Result<Value> {
+    fn invite(
+        &self,
+        group: &str,
+        endpoints: &[String],
+        lifetime: u64,
+        guest_port: u16,
+        vless: Option<&Value>,
+    ) -> Result<Value> {
         if lifetime == 0 || lifetime > MAX_LIFETIME {
             return Err(Error::msg("an invitation is valid for a day at most"));
         }
@@ -475,6 +489,7 @@ impl RunningHub {
             secret: secret.clone(),
             expires,
             obfuscation,
+            vless: vless.and_then(invite::vless_from_offer),
         };
         let text = inv.to_text();
         // Read back as the joiner will: the group's tag, 1 to 8 endpoints.
@@ -555,9 +570,9 @@ fn handle(request: &[u8]) -> Result<Value> {
             r.set_peers()?;
             Ok(json!({}))
         }),
-        Request::HubInvite { id, group, endpoints, lifetime, guest_port } => hubs(|t| {
+        Request::HubInvite { id, group, endpoints, lifetime, guest_port, vless } => hubs(|t| {
             let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
-            r.invite(&group, &endpoints, lifetime, guest_port)
+            r.invite(&group, &endpoints, lifetime, guest_port, vless.as_ref())
         }),
         Request::GuestAdmitted { id, guest } => hubs(|t| {
             let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
