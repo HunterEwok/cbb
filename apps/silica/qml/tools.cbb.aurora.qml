@@ -19,4 +19,36 @@ ApplicationWindow {
     // systems lack; a missing one leaves the rest of the app working.
     Loader { source: "system/Notifier.qml" }
     Loader { source: "system/ShareTarget.qml" }
+
+    // The admin PIN, asked before the admin key signs, again after a wrong
+    // one; a request while the app is off the screen waits for it.
+    property bool pinWaiting: false
+    property bool pinFresh: false
+    function askPin(fresh, triesLeft) {
+        pageStack.push(Qt.resolvedUrl("pages/PinDialog.qml"), { fresh: fresh, triesLeft: triesLeft })
+    }
+    Connections {
+        target: app
+        onPinNeeded: {
+            if (Qt.application.state === Qt.ApplicationActive && !pageStack.busy) {
+                askPin(fresh, -1)
+            } else {
+                pinFresh = fresh
+                pinWaiting = true
+            }
+        }
+        onPinRefused: {
+            if (!locked && triesLeft > 0)
+                askPin(false, triesLeft)
+        }
+    }
+    Connections {
+        target: Qt.application
+        onStateChanged: {
+            if (pinWaiting && Qt.application.state === Qt.ApplicationActive) {
+                pinWaiting = false
+                askPin(pinFresh, -1)
+            }
+        }
+    }
 }

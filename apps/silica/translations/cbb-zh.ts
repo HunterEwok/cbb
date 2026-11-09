@@ -6,6 +6,26 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>需要先输入管理员 PIN。</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>手机的安全元件未接受该 PIN。</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>连续七次输错 PIN，管理员密钥已被永久锁定；手机仍作为成员留在群组中。</translation>
+    </message>
+    <message>
+        <source>Joining as an admin needs the admin PIN.</source>
+        <translation>以管理员身份加入需要管理员 PIN。</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>添加设备需要管理员 PIN。</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>群组的根设备取消了申请；手机仍是管理员。</translation>
     </message>
@@ -441,6 +461,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>更改管理员 PIN</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>连续七次输错 PIN，管理员密钥已被永久锁定。手机仍作为成员留在群组中；若要重新成为管理员，请重新安装 CBB 并作为新设备加入。</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>管理员 PIN 已更改。</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN 错误。剩余次数：%1。</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>管理员 PIN 未更改。</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>蓝牙键盘</translation>
@@ -1199,6 +1239,72 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>手机不在家庭网络中时，它通过你自己的中枢的 WireGuard 隧道同步；中枢是群组中用 cbb global hub 设置的一台电脑，它的端口可从互联网访问，但只能通过带有群组密钥的 WireGuard。中枢会在这部手机下次在家连接时回应它。数据不会去往别处，没有隧道就没有连接。关闭它会让这部手机忘记它的隧道密钥。</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>设置管理员 PIN</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>管理员 PIN</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>设置</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>确认</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>再次输入 PIN</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>PIN 错误。只剩一次机会：再输错一次将永久锁定管理员密钥。</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN 错误。剩余次数：%1。</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB 自己的 PIN，至少四位数字，与手机的 PIN 无关。每次管理员操作前由手机的安全元件验证；七次输错将永久锁定管理员密钥，任何人都无法解锁。</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN 由手机的安全元件验证；七次输错将永久锁定管理员密钥。</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>更改管理员 PIN</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>更改</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>当前 PIN</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>新 PIN</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>再次输入新 PIN</translation>
     </message>
 </context>
 </TS>

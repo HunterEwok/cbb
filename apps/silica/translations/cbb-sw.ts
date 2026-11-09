@@ -6,6 +6,26 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>PIN ya msimamizi inahitajika kwanza.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>Kipengele salama cha simu hakikukubali PIN.</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>PIN saba zisizo sahihi zimefunga ufunguo wa msimamizi kabisa; simu inabaki kwenye kikundi kama mwanachama.</translation>
+    </message>
+    <message>
+        <source>Joining as an admin needs the admin PIN.</source>
+        <translation>Kujiunga kama msimamizi kunahitaji PIN ya msimamizi.</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>Kuongeza kifaa kunahitaji PIN ya msimamizi.</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>Mzizi wa kikundi umeghairi ombi; simu inabaki kuwa msimamizi.</translation>
     </message>
@@ -441,6 +461,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Badilisha PIN ya msimamizi</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>PIN saba zisizo sahihi zimefunga ufunguo wa msimamizi kabisa. Simu inabaki kwenye kikundi kama mwanachama; ili kuwa msimamizi tena, sakinisha CBB upya na ujiunge kama kifaa kipya.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>PIN ya msimamizi imebadilishwa.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN si sahihi. Majaribio yaliyobaki: %1.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>PIN ya msimamizi haijabadilishwa.</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>Kibodi ya Bluetooth</translation>
@@ -1199,6 +1239,72 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Simu isipokuwa kwenye mtandao wa nyumbani, husawazisha kupitia handaki la WireGuard la kitovu chako mwenyewe, kompyuta ya kikundi iliyowekwa kwa cbb global hub; mlango wake unafikika kutoka intaneti, lakini kupitia WireGuard yenye funguo za kikundi pekee. Kitovu hujibu simu hii itakapounganika nyumbani wakati ujao. Hakuna kinachoenda kwingine, na bila handaki hakuna muunganisho. Kuzima husahaulisha simu hii ufunguo wake wa handaki.</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>Chagua PIN ya msimamizi</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>PIN ya msimamizi</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>Weka</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Thibitisha</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>PIN tena</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>PIN si sahihi. Imebaki jaribio moja: PIN nyingine isiyo sahihi itafunga ufunguo wa msimamizi kabisa.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN si sahihi. Majaribio yaliyobaki: %1.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>PIN ya CBB yenyewe, angalau tarakimu nne, tofauti na ya simu. Kipengele salama cha simu huikagua kabla ya kila kitendo cha msimamizi; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa, na hakuna anayeweza kuufungua.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>Kipengele salama cha simu hukagua PIN; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Badilisha PIN ya msimamizi</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>Badilisha</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>PIN ya sasa</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>PIN mpya</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>PIN mpya tena</translation>
     </message>
 </context>
 </TS>

@@ -6,6 +6,26 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>पहले एडमिन PIN चाहिए।</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>फ़ोन के सुरक्षित तत्व ने PIN स्वीकार नहीं किया।</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>सात गलत PIN ने एडमिन कुंजी को हमेशा के लिए लॉक कर दिया; फ़ोन समूह में सदस्य के रूप में रहता है।</translation>
+    </message>
+    <message>
+        <source>Joining as an admin needs the admin PIN.</source>
+        <translation>एडमिन के रूप में जुड़ने के लिए एडमिन PIN चाहिए।</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>डिवाइस जोड़ने के लिए एडमिन PIN चाहिए।</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>समूह के रूट ने अनुरोध रद्द कर दिया; फ़ोन एडमिन बना रहेगा।</translation>
     </message>
@@ -441,6 +461,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>एडमिन PIN बदलें</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>सात गलत PIN ने एडमिन कुंजी को हमेशा के लिए लॉक कर दिया। फ़ोन समूह में सदस्य के रूप में रहता है; फिर से एडमिन बनने के लिए CBB दोबारा इंस्टॉल करें और नए डिवाइस के रूप में जुड़ें।</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>एडमिन PIN बदल दिया गया।</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>गलत PIN। बचे प्रयास: %1।</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>एडमिन PIN नहीं बदला।</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>ब्लूटूथ कीबोर्ड</translation>
@@ -1199,6 +1239,72 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>जब फ़ोन घर के नेटवर्क पर नहीं होता, तो वह आपके अपने हब की WireGuard सुरंग से सिंक करता है, जो समूह का एक कंप्यूटर है जिसे cbb global hub से सेट किया गया है; उसका पोर्ट इंटरनेट से पहुँचा जा सकता है, पर केवल समूह की कुंजियों वाले WireGuard से। हब इस फ़ोन को अगली बार जवाब देता है जब यह घर पर जुड़ता है। कुछ भी कहीं और नहीं जाता, और सुरंग के बिना कोई कनेक्शन नहीं होता। इसे बंद करने पर यह फ़ोन अपनी सुरंग कुंजी भूल जाता है।</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>एडमिन PIN चुनें</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>एडमिन PIN</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>सेट करें</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>पुष्टि करें</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>PIN फिर से</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>गलत PIN। एक प्रयास बचा है: अगला गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देगा।</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>गलत PIN। बचे प्रयास: %1।</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB का अपना PIN, कम से कम चार अंक, फ़ोन के PIN से अलग। फ़ोन का सुरक्षित तत्व हर एडमिन कार्य से पहले इसे जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं, और कोई इसे अनलॉक नहीं कर सकता।</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>फ़ोन का सुरक्षित तत्व PIN जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं।</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>एडमिन PIN बदलें</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>बदलें</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>मौजूदा PIN</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>नया PIN</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>नया PIN फिर से</translation>
     </message>
 </context>
 </TS>

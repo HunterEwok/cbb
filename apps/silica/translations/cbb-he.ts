@@ -6,6 +6,26 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>קודם צריך את קוד ה-PIN של המנהל.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>הרכיב המאובטח של הטלפון לא קיבל את ה-PIN.</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>שבעה קודי PIN שגויים נעלו את מפתח המנהל לתמיד; הטלפון נשאר בקבוצה כחבר.</translation>
+    </message>
+    <message>
+        <source>Joining as an admin needs the admin PIN.</source>
+        <translation>הצטרפות כמנהל דורשת את ה-PIN של המנהל.</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>הוספת מכשיר דורשת את ה-PIN של המנהל.</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>השורש של הקבוצה ביטל את הבקשה; הטלפון נשאר מנהל.</translation>
     </message>
@@ -441,6 +461,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>שינוי PIN של מנהל</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>שבעה קודי PIN שגויים נעלו את מפתח המנהל לתמיד. הטלפון נשאר בקבוצה כחבר; כדי להיות מנהל שוב, התקינו מחדש את CBB והצטרפו כמכשיר חדש.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>ה-PIN של המנהל שונה.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN שגוי. ניסיונות שנותרו: %1.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>ה-PIN של המנהל לא שונה.</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>מקלדת בלוטות'</translation>
@@ -1199,6 +1239,72 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>כשהטלפון אינו ברשת הביתית, הוא מסתנכרן דרך מנהרת ה-WireGuard של הרכזת שלך, מחשב בקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם מפתחות הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. כיבוי גורם לטלפון לשכוח את מפתח המנהרה שלו.</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>בחרו PIN של מנהל</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>PIN של מנהל</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>הגדרה</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>אישור</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>ה-PIN שוב</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>PIN שגוי. נותר ניסיון אחד: ה-PIN השגוי הבא ינעל את מפתח המנהל לתמיד.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN שגוי. ניסיונות שנותרו: %1.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>PIN משלו של CBB, לפחות ארבע ספרות, נפרד מזה של הטלפון. הרכיב המאובטח של הטלפון בודק אותו לפני כל פעולת מנהל; שבעה קודים שגויים נועלים את מפתח המנהל לתמיד, ואיש אינו יכול לשחרר אותו.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>הרכיב המאובטח של הטלפון בודק את ה-PIN; שבעה קודים שגויים נועלים את מפתח המנהל לתמיד.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>שינוי PIN של מנהל</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>שינוי</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>PIN נוכחי</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>PIN חדש</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>ה-PIN החדש שוב</translation>
     </message>
 </context>
 </TS>

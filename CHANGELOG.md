@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The Aurora app asks for a PIN of its own before its root or admin key signs, since Aurora OS
+  gives an app neither its authentication service nor the fingerprint. The key moves to a
+  second token of the app in the TEE, whose PIN the user chooses (at least four digits) and
+  the TEE checks; seven wrong PINs lock it for good. The member key stays where it was, so
+  sync needs no PIN. Settings change the PIN.
 - The ZX Spectrum Next shows the group's latest image: `.cbb show` asks the lite member on the
   Pi (`cbb next image`), which fits the PNG or JPEG to Layer 2 in 320×256 with 256 colours or
   640×256 with 16, whichever shows it closer, with dithering from the Next's 512 colours; the

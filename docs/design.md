@@ -1822,7 +1822,8 @@ made, so two phones cannot share one CA key. Instead:
 - Every admin phone, the first one included, has an **admin CA** of its own: a key in its
   Secure Enclave or StrongBox, certified by the root as a CA with path length 0. Admin keys
   sign only when the user confirms with Face ID, Touch ID, the fingerprint or the passcode,
-  so a locked phone in a thief's hand signs nothing.
+  so a locked phone in a thief's hand signs nothing. Aurora OS gives an app none of these,
+  so its app asks for a PIN of its own, which the TEE checks and counts (D-94).
 - Each phone also has a separate member key and certificate, as every member has, for its
   everyday connections; that key needs no confirmation.
 - A member certificate comes from whichever admin admitted the device. Members present

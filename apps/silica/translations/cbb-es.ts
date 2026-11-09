@@ -6,6 +6,26 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>Primero hace falta el PIN de administrador.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>El elemento seguro del teléfono no aceptó el PIN.</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>Siete PIN incorrectos bloquearon la clave de administrador para siempre; el teléfono sigue en el grupo como miembro.</translation>
+    </message>
+    <message>
+        <source>Joining as an admin needs the admin PIN.</source>
+        <translation>Unirse como administrador requiere el PIN de administrador.</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>Añadir un dispositivo requiere el PIN de administrador.</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>La raíz del grupo canceló la solicitud; el teléfono sigue siendo administrador.</translation>
     </message>
@@ -441,6 +461,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Cambiar el PIN de administrador</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>Siete PIN incorrectos bloquearon la clave de administrador para siempre. El teléfono sigue en el grupo como miembro; para volver a ser administrador, reinstala CBB y únete como un dispositivo nuevo.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>El PIN de administrador ha cambiado.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN incorrecto. Intentos restantes: %1.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>El PIN de administrador no ha cambiado.</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>Teclado Bluetooth</translation>
@@ -1199,6 +1239,72 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Cuando el teléfono no está en la red de casa, se sincroniza por el túnel WireGuard de tu propio hub, un ordenador del grupo configurado con cbb global hub; su puerto es accesible desde internet, pero solo por WireGuard con las claves del grupo. El hub responde a este teléfono la próxima vez que se conecte en casa. Nada va a ningún otro sitio y, sin el túnel, no hay conexión. Al desactivarlo, este teléfono olvida su clave del túnel.</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>Elige el PIN de administrador</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>PIN de administrador</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>Fijar</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>El PIN otra vez</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>PIN incorrecto. Queda un intento: el próximo PIN incorrecto bloquea la clave de administrador para siempre.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN incorrecto. Intentos restantes: %1.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>El PIN propio de CBB, de al menos cuatro cifras, distinto del del teléfono. El elemento seguro del teléfono lo comprueba antes de cada acción de administrador; siete PIN incorrectos bloquean la clave de administrador para siempre y nadie puede desbloquearla.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>El elemento seguro del teléfono comprueba el PIN; siete PIN incorrectos bloquean la clave de administrador para siempre.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Cambiar el PIN de administrador</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>Cambiar</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>PIN actual</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>PIN nuevo</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>El PIN nuevo otra vez</translation>
     </message>
 </context>
 </TS>

@@ -6,6 +6,26 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>Сначала нужен PIN администратора.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>Защищённый модуль телефона не принял PIN.</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>Семь неверных PIN навсегда заблокировали ключ администратора; телефон остаётся в группе участником.</translation>
+    </message>
+    <message>
+        <source>Joining as an admin needs the admin PIN.</source>
+        <translation>Чтобы вступить администратором, нужен PIN администратора.</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>Чтобы добавить устройство, нужен PIN администратора.</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>Корень группы отменил заявку; телефон остаётся админом.</translation>
     </message>
@@ -441,6 +461,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Сменить PIN администратора</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>Семь неверных PIN навсегда заблокировали ключ администратора. Телефон остаётся в группе участником; чтобы снова стать администратором, переустановите CBB и вступите как новое устройство.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>PIN администратора изменён.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>Неверный PIN. Осталось попыток: %1.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>PIN администратора не изменён.</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>Bluetooth-клавиатура</translation>
@@ -1199,6 +1239,72 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Когда телефон не в домашней сети, он синхронизируется через туннель WireGuard вашего собственного хаба: компьютера группы, настроенного командой cbb global hub. Его порт доступен из интернета, но только через WireGuard с ключами группы. Хаб ответит этому телефону, когда тот в следующий раз подключится дома. Больше никуда ничего не уходит, а без туннеля нет и соединения. При выключении телефон забывает свой ключ туннеля.</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>Выберите PIN администратора</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>PIN администратора</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>Задать</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Подтвердить</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>PIN ещё раз</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>Неверный PIN. Осталась одна попытка: следующий неверный PIN навсегда заблокирует ключ администратора.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>Неверный PIN. Осталось попыток: %1.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>Собственный PIN CBB, не короче четырёх цифр, отдельный от PIN телефона. Защищённый модуль телефона проверяет его перед каждым действием администратора; семь неверных PIN навсегда блокируют ключ администратора, и разблокировать его нельзя.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN проверяет защищённый модуль телефона; семь неверных PIN навсегда блокируют ключ администратора.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Сменить PIN администратора</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>Сменить</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>Текущий PIN</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>Новый PIN</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>Новый PIN ещё раз</translation>
     </message>
 </context>
 </TS>

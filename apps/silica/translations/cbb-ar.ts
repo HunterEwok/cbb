@@ -6,6 +6,26 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>يلزم رمز PIN للمشرف أولًا.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>لم يقبل العنصر الآمن في الهاتف رمز PIN.</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>قفلت سبعة رموز PIN خاطئة مفتاح المشرف نهائيًا؛ يبقى الهاتف في المجموعة عضوًا.</translation>
+    </message>
+    <message>
+        <source>Joining as an admin needs the admin PIN.</source>
+        <translation>الانضمام كمشرف يتطلب رمز PIN للمشرف.</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>إضافة جهاز تتطلب رمز PIN للمشرف.</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>ألغى جذر المجموعة الطلب؛ يبقى الهاتف مشرفًا.</translation>
     </message>
@@ -441,6 +461,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>تغيير رمز PIN للمشرف</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>قفلت سبعة رموز PIN خاطئة مفتاح المشرف نهائيًا. يبقى الهاتف في المجموعة عضوًا؛ لتصبح مشرفًا مرة أخرى، أعد تثبيت CBB وانضم كجهاز جديد.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>تم تغيير رمز PIN للمشرف.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>رمز PIN خاطئ. المحاولات المتبقية: %1.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>لم يتغير رمز PIN للمشرف.</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>لوحة مفاتيح بلوتوث</translation>
@@ -1199,6 +1239,72 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>عندما لا يكون الهاتف على الشبكة المنزلية، يُزامن عبر نفق WireGuard الخاص بالمحور الخاص بك، وهو حاسوب من المجموعة مُعدّ باستخدام cbb global hub؛ منفذه متاح من الإنترنت، ولكن فقط عبر WireGuard بمفاتيح المجموعة. يردّ المحور على هذا الهاتف في المرة التالية التي يتصل فيها في المنزل. لا يذهب شيء إلى أي مكان آخر، ومن دون النفق لا يوجد اتصال. إيقافه يجعل هذا الهاتف ينسى مفتاح النفق الخاص به.</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>اختر رمز PIN للمشرف</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>رمز PIN للمشرف</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>تعيين</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>تأكيد</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>رمز PIN مرة أخرى</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>رمز PIN خاطئ. بقيت محاولة واحدة: الرمز الخاطئ التالي يقفل مفتاح المشرف نهائيًا.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>رمز PIN خاطئ. المحاولات المتبقية: %1.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>رمز PIN خاص بـ CBB، من أربعة أرقام على الأقل، منفصل عن رمز الهاتف. يتحقق منه العنصر الآمن في الهاتف قبل كل إجراء للمشرف؛ سبعة رموز خاطئة تقفل مفتاح المشرف نهائيًا، ولا يستطيع أحد فتحه.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>يتحقق العنصر الآمن في الهاتف من رمز PIN؛ سبعة رموز خاطئة تقفل مفتاح المشرف نهائيًا.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>تغيير رمز PIN للمشرف</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>تغيير</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>رمز PIN الحالي</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>رمز PIN الجديد</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>رمز PIN الجديد مرة أخرى</translation>
     </message>
 </context>
 </TS>

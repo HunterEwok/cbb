@@ -15,6 +15,8 @@
 
 #include <QJsonObject>
 #include <QObject>
+
+#include <functional>
 #include <QString>
 #include <QTimer>
 #include <QVariantList>
@@ -58,6 +60,10 @@ class App : public QObject
     // group's order".
     Q_PROPERTY(bool hasArrangement READ hasArrangement NOTIFY arrangementChanged)
     Q_PROPERTY(bool languagePending READ languagePending NOTIFY settingsChanged)
+    // The admin key's PIN (KeyStore::adminPin): "none" where the store
+    // needs none, "unknown" until the TEE answered, "not_set", "set" or
+    // "locked".
+    Q_PROPERTY(QString adminPin READ adminPin NOTIFY adminPinChanged)
 
 public:
     explicit App(QObject *parent = nullptr);
@@ -145,6 +151,15 @@ public:
     // Leaves the group on this phone: stops the member and deletes the
     // membership. The group still lists the phone until an admin removes it.
     Q_INVOKABLE void leave();
+    // The admin key's PIN, which the TEE checks (docs/protocol.md, section
+    // 3): pinNeeded asks for it before the admin key signs; enterPin hands
+    // it over, sets it when fresh, and then does what waited for it;
+    // cancelPin drops that.
+    Q_INVOKABLE void enterPin(const QString &pin);
+    Q_INVOKABLE void cancelPin();
+    // Changes the PIN; pinChanged tells how it went.
+    Q_INVOKABLE void changePin(const QString &old, const QString &pin);
+    QString adminPin() const { return m_adminPin; }
 
 signals:
     void keyChanged();
@@ -155,8 +170,20 @@ signals:
     void managed(const QString &action, const QString &device, bool ok);
     void claimChanged();
     void arrangementChanged();
+    void adminPinChanged();
+    // fresh: no PIN yet, so the user chooses one and types it twice.
+    void pinNeeded(bool fresh);
+    // A wrong PIN, with the tries left, or locked for good.
+    void pinRefused(bool locked, int triesLeft);
+    void pinAccepted();
+    void pinChanged(bool ok, bool locked, int triesLeft);
 
 private:
+    // Before the admin key signs: true when the PIN is asked first, run
+    // then running once it is right and cancel when the user cancels.
+    bool askPin(std::function<void()> run, std::function<void()> cancel = std::function<void()>());
+    void refreshAdminPin();
+    void setAdminPin(const QString &state);
     void show(const QString &error);
     // Starts the member once the phone has both its key and a group.
     void startMember();
@@ -197,4 +224,6 @@ private:
     QString m_startLanguage;
     int m_arrangement = 0;
     QStringList m_arrangeIds; // the devices arranged was last given
+    QString m_adminPin = QStringLiteral("unknown");
+    std::function<void()> m_pinRun, m_pinCancel;
 };
