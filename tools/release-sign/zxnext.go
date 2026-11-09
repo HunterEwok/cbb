@@ -20,7 +20,7 @@ import (
 
 // zxnextName is the release file in which a release key lists the ZX
 // Spectrum Next's files of cbb-zxnext.tar.gz (docs/protocol.md, section 16,
-// "The ZX Spectrum Next's files"), and zxnextSigned the file of the Next's
+// "Where the files are"), and zxnextSigned the file of the Next's
 // directory on cbb.tools that holds keys.json and it, a line each, for
 // `.cbb update`, whose Pi checks them.
 const (
