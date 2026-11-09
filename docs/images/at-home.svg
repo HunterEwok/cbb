@@ -1,4 +1,5 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only. Drawn by tools/diagrams/diagrams.py; edit it there. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="732" height="250" viewBox="0 0 732 250" role="img" aria-label="At home every device talks to every other one directly">
 <title>At home every device talks to every other one directly</title>
 <style>

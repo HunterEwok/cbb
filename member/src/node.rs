@@ -54,6 +54,11 @@ const MAX_HOME: usize = 64;
 const PING_EVERY: Duration = Duration::from_secs(5);
 const TIMEOUT: Duration = Duration::from_secs(15);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long a dial waits for a member's TCP connection, much longer than it
+/// takes on a home network: a member is found at several addresses, and one
+/// that does not answer (an interface the peer cannot be reached through)
+/// holds up the next only this long.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const QUEUE_LEN: usize = 256;
 const RECORDS_CHUNK: usize = 1 << 20;
 /// The slowest transfer a frame is given time for.
@@ -1528,7 +1533,7 @@ impl Node {
                 "{addr} is not on the home network; away from home this device reaches the group only through its tunnel (cbb global on)"
             )));
         }
-        let sock = TcpStream::connect_timeout(&addr, HANDSHAKE_TIMEOUT).context(format!("cannot connect to {addr}"))?;
+        let sock = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT).context(format!("cannot connect to {addr}"))?;
         let _ = sock.set_nodelay(true);
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
         sock.set_write_timeout(Some(HANDSHAKE_TIMEOUT)).context("the connection broke")?;
@@ -1841,6 +1846,16 @@ impl Node {
                 Err(e) => return Err(e),
             };
             if c.closed.load(Ordering::SeqCst) {
+                // The records a peer sends before it ends the connection, as
+                // those that remove or freeze this device, still count when
+                // this side's writer has failed meanwhile (the peer hung up
+                // while this member was still answering its hello): dropped,
+                // this member would never hear it was removed, since its next
+                // connection is refused.
+                if !first && m.kind == "records" && !m.records.is_empty() {
+                    self.add_records(&m.records, &c.id);
+                    continue;
+                }
                 return Ok(());
             }
             if first {
