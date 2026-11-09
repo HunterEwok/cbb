@@ -625,6 +625,11 @@ impl Node {
         near(self.home.lock().unwrap().get(id).copied(), uptime::now())
     }
 
+    /// The state directory.
+    pub fn state_dir(&self) -> &std::path::Path {
+        &self.state_dir
+    }
+
     pub fn identity(&self) -> Arc<Identity> {
         self.ident.read().unwrap().clone()
     }
