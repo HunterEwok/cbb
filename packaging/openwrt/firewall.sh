@@ -15,6 +15,12 @@
 # hub-open writes that file and reloads the service, which publishes the
 # rule; hub-close removes it. /etc/config/firewall is never touched.
 set -eu
+# The messages in the user's language (packaging/l10n.sh, beside this file
+# where install.sh put it, or in the archive).
+cbb_l10n=$(cd "$(dirname "$0")" && pwd)/l10n
+[ -f "$cbb_l10n.sh" ] || cbb_l10n=${cbb_l10n%/l10n}/../l10n
+# shellcheck source=packaging/l10n.sh
+. "$cbb_l10n.sh"
 
 hubstate=/etc/cbb/firewall.hub
 
@@ -60,7 +66,7 @@ hub-open)
 	[ $# -eq 1 ] || usage
 	case $1 in '' | *[!0-9]*) usage ;; esac
 	[ "$(id -u)" -eq 0 ] || {
-		echo "firewall.sh: run it as root" >&2
+		note firewall.sh "run it as root"
 		exit 1
 	}
 	mkdir -p /etc/cbb
@@ -69,14 +75,14 @@ hub-open)
 	;;
 hub-close)
 	[ "$(id -u)" -eq 0 ] || {
-		echo "firewall.sh: run it as root" >&2
+		note firewall.sh "run it as root"
 		exit 1
 	}
 	[ -f "$hubstate" ] || exit 0
 	read -r _ p <"$hubstate" || true
 	rm -f "$hubstate"
 	apply
-	echo "Firewall: closed the hub's UDP port $p."
+	say "Firewall: closed the hub's UDP port %s." "$p"
 	;;
 *) usage ;;
 esac

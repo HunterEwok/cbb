@@ -60,6 +60,12 @@ The maintainer follows these rules; they are written down to keep the history co
   release and checks it against `SHA256SUMS`, an `install` for an unpacked archive, and an
   `uninstall` that the install leaves on the machine. `get.sh` serves Linux and macOS,
   `get.ps1` Windows; CI runs each of them.
+  The installers speak the user's language through `packaging/l10n.sh` (`say`, `sayerr`, `t`,
+  `note`) and `packaging/windows/l10n.ps1` (`T`): a message is a constant printf format whose
+  only directive is `%s`, with its values as arguments, and every catalog
+  `packaging/l10n/<language>.tsv` (English text, a tab, the translation) translates it with
+  its `%s` in the same order. `repocheck` checks both ways. The release puts the catalogs
+  into `get.sh` and `get.ps1` (`packaging/l10n-embed.sh`), which run alone.
 - **Documentation.** Each page says at the top who it is for and sits in its reader's part
   of [docs/README.md](docs/README.md), which `repocheck` checks: users' guides in plain
   words (`docs/guide`), administrators' pages (`docs/admin`), exact reference without the

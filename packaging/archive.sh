@@ -111,7 +111,7 @@ if [ "$os" = windows ]; then
 	if [ -n "$desktop" ]; then
 		cp "$desktop" "$work/cbb/cbb-desktop.exe"
 	fi
-	cp -R "$root/packaging/windows" "$work/cbb/packaging/"
+	cp -R "$root/packaging/windows" "$root/packaging/l10n" "$work/cbb/packaging/"
 	rm -f "$out/cbb-$os-$name.zip"
 	(cd "$work" && zip -qrX "$out/cbb-$os-$name.zip" cbb)
 	echo "$out/cbb-$os-$name.zip"
@@ -121,7 +121,8 @@ cp "$bin" "$work/cbb/cbb"
 if [ -n "$helper" ]; then
 	cp "$helper" "$work/cbb/cbb-helper"
 fi
-cp -R "$root/packaging/$dir" "$root/packaging/tmux" "$root/packaging/update.sh" "$root/packaging/pair.sh" "$work/cbb/packaging/"
+cp -R "$root/packaging/$dir" "$root/packaging/tmux" "$root/packaging/update.sh" "$root/packaging/pair.sh" \
+	"$root/packaging/l10n.sh" "$root/packaging/l10n" "$work/cbb/packaging/"
 if [ -n "$desktop" ]; then
 	cp "$desktop" "$work/cbb/cbb-desktop"
 	cp "$root/apps/desktop/icon.png" "$work/cbb/packaging/linux/cbb.png"

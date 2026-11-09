@@ -52,10 +52,15 @@ fi
 failed() {
 	rc=$1
 	if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ] && [ "${CBB_ERROR_DETAILS:-}" != 1 ]; then
-		echo "install.sh: failed (exit status $rc). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." >&2
+		note install.sh "failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." "$rc"
 	fi
 }
 trap 'failed $?' EXIT
+# The messages in the user's language (packaging/l10n.sh), read before
+# LC_ALL=C below.
+cbb_l10n=$(cd "$(dirname "$0")" && pwd)/../l10n
+# shellcheck source=packaging/l10n.sh
+. "$cbb_l10n.sh"
 # The firewall tools answer in the user's language; what this reads is English.
 export LC_ALL=C
 
@@ -63,7 +68,7 @@ export LC_ALL=C
 for a in "$@"; do
 	if [ "$a" = --rootless ]; then
 		if [ ! -f "$(dirname "$0")/install-rootless.sh" ]; then
-			echo "install.sh: this archive has no install-rootless.sh, so it cannot install without root" >&2
+			note install.sh "this archive has no install-rootless.sh, so it cannot install without root"
 			exit 2
 		fi
 		exec sh "$(dirname "$0")/install-rootless.sh" "$@"
@@ -115,7 +120,7 @@ done
 case $cgnat in
 '' | 0 | 1) ;;
 *)
-	echo "install.sh: CBB_HOME_CGNAT is 1 or 0, not $cgnat" >&2
+	note install.sh "CBB_HOME_CGNAT is 1 or 0, not %s" "$cgnat"
 	exit 2
 	;;
 esac
@@ -124,7 +129,7 @@ case $port in
 *[!0-9]*) usage ;;
 *)
 	if [ "$port" -lt 1024 ] || [ "$port" -gt 65535 ]; then
-		echo "install.sh: --port takes a port from 1024 to 65535" >&2
+		note install.sh "--port takes a port from 1024 to 65535"
 		exit 2
 	fi
 	;;
@@ -138,11 +143,11 @@ esac
 here=$(cd "$(dirname "$0")" && pwd)
 
 if [ "$(id -u)" -ne 0 ]; then
-	echo "install.sh: run it with sudo" >&2
+	note install.sh "run it with sudo"
 	exit 1
 fi
 if ! command -v systemctl >/dev/null 2>&1; then
-	echo "install.sh: systemd is required" >&2
+	note install.sh "systemd is required"
 	exit 1
 fi
 # CBB_OS_RELEASE names another os-release file, for the tests.
@@ -167,7 +172,7 @@ place() {
 	mv "$3.new" "$3"
 }
 if ! "$bin" version >/dev/null 2>&1; then
-	echo "install.sh: $bin does not run on this machine; is it built for $(uname -m)?" >&2
+	note install.sh "%s does not run on this machine; is it built for %s?" "$bin" "$(uname -m)"
 	exit 1
 fi
 
@@ -178,12 +183,15 @@ kind_of() {
 }
 kind=$(kind_of "$bin")
 if [ -x "$cbb" ] && [ "$(kind_of "$cbb")" != "$kind" ]; then
-	echo "install.sh: the $(kind_of "$cbb") member is installed here, and the $kind member cannot use its keys;" >&2
-	echo "remove it first: sudo sh $share/uninstall.sh --purge" >&2
+	if [ "$kind" = lite ]; then
+		note install.sh "the full member is installed here, and the lite member cannot use its keys; remove it first: %s" "sudo sh $share/uninstall.sh --purge"
+	else
+		note install.sh "the lite member is installed here, and the full member cannot use its keys; remove it first: %s" "sudo sh $share/uninstall.sh --purge"
+	fi
 	exit 1
 fi
 if [ "$kind" = lite ] && [ "$cgnat" = 1 ]; then
-	echo "install.sh: --home-cgnat is for the full member" >&2
+	note install.sh "--home-cgnat is for the full member"
 	exit 2
 fi
 
@@ -193,13 +201,11 @@ fi
 # never taken over, nor a group cbb of others without that account.
 if pw=$(getent passwd cbb); then
 	if [ "$(printf '%s\n' "$pw" | cut -d: -f5)" != "cbb service" ]; then
-		echo "install.sh: an account named cbb exists here and is not this service's (its comment is not \"cbb service\");" >&2
-		echo "it would get the group's keys. Rename or remove it, then run install.sh again." >&2
+		note install.sh "an account named cbb exists here and is not this service's (its comment is not \"cbb service\"); it would get the group's keys. Rename or remove it, then run install.sh again."
 		exit 1
 	fi
 elif gr=$(getent group cbb) && [ -n "$(printf '%s\n' "$gr" | cut -d: -f4)" ]; then
-	echo "install.sh: a group named cbb exists here with members ($(printf '%s\n' "$gr" | cut -d: -f4)), and no service account;" >&2
-	echo "they would reach the service. Rename or remove the group, then run install.sh again." >&2
+	note install.sh "a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again." "$(printf '%s\n' "$gr" | cut -d: -f4)"
 	exit 1
 fi
 
@@ -259,8 +265,7 @@ fi
 traybin=$(dirname "$bin")/cbb-desktop
 if [ "$kind" = full ] && [ -f "$traybin" ]; then
 	if ! command -v ldd >/dev/null 2>&1 || ldd "$traybin" 2>&1 | grep -q 'not found'; then
-		echo "Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu:"
-		echo "libgtk-4-1 libwebkitgtk-6.0-4; Fedora: gtk4 webkitgtk6.0). Install them and run this again to add it."
+		say "Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it." "libgtk-4-1 libwebkitgtk-6.0-4" "gtk4 webkitgtk6.0"
 	else
 		install -m 0755 "$traybin" "${cbb%/*}/cbb-desktop"
 		install -d -m 0755 "$share"
@@ -291,17 +296,17 @@ if [ "$console" = yes ]; then
 fi
 if [ "$uinput" = yes ]; then
 	if [ "$kind" != full ]; then
-		echo "install.sh: --uinput is for the full member, which runs the desktop connector" >&2
+		note install.sh "--uinput is for the full member, which runs the desktop connector"
 		exit 2
 	fi
 	echo uinput >/etc/modules-load.d/cbb-uinput.conf
-	modprobe uinput 2>/dev/null || echo "install.sh: could not load the uinput module now; it loads at the next boot" >&2
+	modprobe uinput 2>/dev/null || note install.sh "could not load the uinput module now; it loads at the next boot"
 	place 0644 "$here/cbb-uinput.service" /etc/systemd/system/cbb-uinput.service
 fi
 
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
 	usermod -a -G cbb "$SUDO_USER"
-	echo "Added $SUDO_USER to the cbb group; log in again to use cbb copy and paste."
+	say "Added %s to the cbb group; log in again to use cbb copy and paste." "$SUDO_USER"
 fi
 
 if [ "$steamos" = yes ]; then
@@ -379,7 +384,7 @@ if [ "$cgnat" = 1 ]; then
 		echo "IPAddressAllow=100.64.0.0/10"
 	} >"$cgnatconf"
 	chmod 0644 "$cgnatconf"
-	echo "100.64.0.0/10 counts as the home network on this device (--home-cgnat on)."
+	say "100.64.0.0/10 counts as the home network on this device (--home-cgnat on)."
 else
 	rm -f "$cgnatconf"
 	rmdir "${cgnatconf%/*}" 2>/dev/null || true
@@ -401,7 +406,7 @@ if [ "$kind" = full ] && [ -c /dev/tpmrm0 ] && getent group tss >/dev/null 2>&1;
 		echo "SupplementaryGroups=tss"
 	} >"$tpmconf"
 	chmod 0644 "$tpmconf"
-	echo "New member and admin keys of this device go into its TPM."
+	say "New member and admin keys of this device go into its TPM."
 else
 	rm -f "$tpmconf"
 	rmdir "${tpmconf%/*}" 2>/dev/null || true
@@ -413,18 +418,21 @@ fi
 # nothing open behind it.
 install -m 0644 "$here/firewall.sh" "$share/firewall.sh"
 install -m 0644 "$here/uninstall.sh" "$share/uninstall.sh"
+# uninstall.sh speaks the user's language too.
+install -m 0644 "$here/../l10n.sh" "$share/l10n.sh"
+rm -rf "$share/l10n"
+cp -R "$here/../l10n" "$share/l10n"
 case $firewall in
 ask | express | no) ;;
 yes) firewall=ask ;; # what get.sh passed before --express
 *)
-	echo "install.sh: CBB_FIREWALL is ask, express or no, not $firewall" >&2
+	note install.sh "CBB_FIREWALL is ask, express or no, not %s" "$firewall"
 	exit 2
 	;;
 esac
 sh "$share/firewall.sh" setup "$firewall" "$port"
 if [ "$port" != 8764 ]; then
-	echo "CBB uses TCP port $port instead of 8764. If a firewall on the network"
-	echo "limits incoming connections, allow TCP $port from the home network."
+	say "CBB uses TCP port %s instead of 8764. If a firewall on the network limits incoming connections, allow TCP %s from the home network." "$port" "$port"
 fi
 
 systemctl daemon-reload
@@ -439,7 +447,7 @@ if [ -f /etc/systemd/system/cbb-console.service ]; then
 fi
 if [ -f /etc/systemd/system/cbb-uinput.service ]; then
 	systemctl enable cbb-uinput.service
-	systemctl restart cbb-uinput.service || echo "install.sh: the uinput helper did not start; see journalctl -u cbb-uinput" >&2
+	systemctl restart cbb-uinput.service || note install.sh "the uinput helper did not start; see journalctl -u cbb-uinput"
 fi
 # answers waits up to 10 s until the service answers on its socket: in no
 # group cbb status says so, which is an answer too. A command right after
@@ -452,7 +460,7 @@ answers() { # cbb
 		sleep 0.25
 		i=$((i + 1))
 	done
-	echo "install.sh: the service did not answer within 10 s: $out" >&2
+	note install.sh "the service did not answer within 10 s: %s" "$out"
 	return 1
 }
 answers "$cbb" || true
@@ -471,7 +479,7 @@ if [ "$kind" = full ]; then
 		if systemctl --user -M "$user@" is-active -q graphical-session.target 2>/dev/null; then
 			systemctl --user -M "$user@" daemon-reload >/dev/null 2>&1 || true
 			systemctl --user -M "$user@" restart cbb-agent.service >/dev/null 2>&1 ||
-				echo "install.sh: the desktop agent of $user did not start again; it starts at their next login" >&2
+				note install.sh "the desktop agent of %s did not start again; it starts at their next login" "$user"
 		fi
 	done
 fi
@@ -479,14 +487,14 @@ fi
 # asks for now, once it answers.
 if [ "$kind" = full ] && [ -f /etc/systemd/system/cbb.service.d/away.conf ]; then
 	if ! "$cbb" global allow; then
-		echo "install.sh: cbb global allow failed; run sudo cbb global allow once the service runs." >&2
+		note install.sh "cbb global allow failed; run sudo cbb global allow once the service runs."
 	fi
 fi
 # How this copy came, and automatic updates.
 # shellcheck source=packaging/update.sh
 . "$here/../update.sh"
 update_setup "$cbb" "$bin" "$auto"
-echo "CBB is running on TCP port $port. To remove it: sudo sh $share/uninstall.sh"
+say "CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh" "$port" "$share"
 # sudo looks for commands in its own PATH, without /opt/cbb/bin.
 run=cbb
 if [ "$steamos" = yes ]; then
@@ -496,8 +504,8 @@ if [ "$kind" = lite ]; then
 	# shellcheck source=packaging/pair.sh
 	. "$here/../pair.sh"
 	if ! pair_now "$cbb" cbb; then
-		echo "Next: see member/README.md; in short, sudo -u cbb $run pair here, and scan its QR code with the phone app."
+		say "Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app." "$run"
 	fi
 else
-	echo "Next: run sudo $run pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md."
+	say "Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md." "$run"
 fi

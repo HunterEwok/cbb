@@ -546,7 +546,8 @@ jobs:
           cargo +stable build --locked --release --target x86_64-unknown-linux-musl
           sh member/packaging/archive.sh target/x86_64-unknown-linux-musl/release/cbb x86_64-unknown-linux-musl amd64 "$rel"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
-          cp packaging/get.sh "$rel/"
+          # get.sh as the release publishes it, with its translations.
+          sh packaging/l10n-embed.sh packaging/get.sh >"$rel/get.sh"
       - name: get.sh installs both in OpenWrt's root file system, and uninstall.sh removes them
         run: sh tools/e2e/openwrt.sh rootfs "$RUNNER_TEMP/release"
       - name: the apk feed, signed with a test key, installs and removes it
@@ -726,7 +727,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh ffi/bind.sh wasm/build.sh .github/ci-changes.sh .github/build-targets.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
+        run: shellcheck packaging/archive.sh packaging/l10n.sh packaging/l10n-embed.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh ffi/bind.sh wasm/build.sh .github/ci-changes.sh .github/build-targets.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
       - name: the software bills of materials, as the release makes them (tools/sbom)
@@ -1170,6 +1171,22 @@ jobs:
           $found = Invoke-ScriptAnalyzer -Path packaging/windows -Recurse -ExcludeRule PSAvoidUsingWriteHost
           $found | Format-Table -AutoSize -Wrap
           if ($found) { exit 1 }
+      - name: the release's get.ps1 carries its translations
+        shell: bash
+        run: sh packaging/l10n-embed.sh packaging/windows/get.ps1 >"$RUNNER_TEMP/get.ps1"
+      - name: the release's get.ps1 speaks the user's language, in Windows PowerShell
+        # Windows PowerShell 5.1 reads a downloaded script as Latin-1; the
+        # translations come through it in base64. The Spanish catalog's
+        # "fallo" with an acute o, written as a code point to keep this file
+        # ASCII for PowerShell.
+        shell: powershell
+        env:
+          CBB_LANG: es
+          CBB_VERSION: bogus
+        run: |
+          $out = Get-Content (Join-Path $env:RUNNER_TEMP 'get.ps1') -Raw -Encoding Default | Invoke-Expression 6>&1 | Out-String
+          Write-Host $out
+          if (-not $out.Contains('fall' + [char]0x00F3) -or -not $out.Contains('CBB_VERSION debe tener la forma v1.2.3')) { throw 'get.ps1 did not speak Spanish' }
       - name: get.ps1 installs a release archive and refuses a changed one
         env:
           CBB_RELEASE_DIR: ${{ runner.temp }}/release

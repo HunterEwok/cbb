@@ -9,7 +9,9 @@
 //     res/values-<language>/strings.xml, the tray app's
 //     frontend/l10n/<language>.json, the Aurora app's
 //     translations/cbb-<language>.ts, the command line's
-//     member/l10n/<language>.json, the website's site/l10n/<language>.json
+//     member/l10n/<language>.json, the installers' packaging/l10n/<language>.tsv,
+//     the localized keys of a .desktop file, such as Comment[ru]=,
+//     the website's site/l10n/<language>.json
 //     and the Android app's store texts, fastlane/metadata/android/<locale>/
 //     for a language other than English);
 //   - every Go and Rust file, except generated Go code, starts with the
@@ -125,6 +127,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 	problems = append(problems, checkPlanned(contents)...)
 	problems = append(problems, checkAndroidVersion(contents)...)
 	problems = append(problems, checkSpecVersions(contents)...)
+	problems = append(problems, checkInstallerL10n(contents)...)
 	if testsSince != "" {
 		lost, err := checkTestsKept(testsSince, contents)
 		if err != nil {
@@ -196,6 +199,10 @@ var silicaTranslation = regexp.MustCompile(`^apps/silica/translations/cbb-[a-z]{
 // command line, the Rust cbb (member/src/l10n.rs).
 var cliTranslation = regexp.MustCompile(`^member/l10n/[a-z]{2,3}\.json$`)
 
+// desktopEntryTranslation matches a localized key of a .desktop file, the
+// Desktop Entry Specification's way to translate it (Comment[ru]=...).
+var desktopEntryTranslation = regexp.MustCompile(`^(Name|GenericName|Comment|Keywords)\[[A-Za-z_@]+\]=`)
+
 // storeTranslation matches the store texts of a locale in an Android
 // project (F-Droid's fastlane layout); the first group is its language.
 var storeTranslation = regexp.MustCompile(`(^|/)fastlane/metadata/android/([a-z]{2,3})(-[A-Za-z0-9]+)?/`)
@@ -206,7 +213,7 @@ func isTranslation(name string) bool {
 	if m := storeTranslation.FindStringSubmatch(name); m != nil && m[2] != "en" {
 		return true
 	}
-	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name) || cliTranslation.MatchString(name)
+	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name) || cliTranslation.MatchString(name) || installerTranslation.MatchString(name)
 }
 
 // check returns the rule violations in one file; listed holds the paths of
@@ -225,6 +232,9 @@ func check(name string, data []byte, listed map[string]bool) []string {
 	for i, line := range strings.Split(string(data), "\n") {
 		if isTranslation(name) {
 			break
+		}
+		if strings.HasSuffix(name, ".desktop") && desktopEntryTranslation.MatchString(line) {
+			continue
 		}
 		if r, ok := firstCyrillic(line); ok {
 			problems = append(problems, fmt.Sprintf("%s:%d: Cyrillic letter %q; the repository is in English only", name, i+1, r))

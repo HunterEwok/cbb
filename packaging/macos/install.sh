@@ -35,10 +35,14 @@ fi
 failed() {
 	rc=$1
 	if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ] && [ "${CBB_ERROR_DETAILS:-}" != 1 ]; then
-		echo "install.sh: failed (exit status $rc). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." >&2
+		note install.sh "failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." "$rc"
 	fi
 }
 trap 'failed $?' EXIT
+# The messages in the user's language (packaging/l10n.sh).
+cbb_l10n=$(cd "$(dirname "$0")" && pwd)/../l10n
+# shellcheck source=packaging/l10n.sh
+. "$cbb_l10n.sh"
 
 usage() {
 	echo "usage: sudo sh install.sh [--in-place] [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] path/to/cbb" >&2
@@ -81,7 +85,7 @@ done
 case $cgnat in
 '' | 0 | 1) ;;
 *)
-	echo "install.sh: CBB_HOME_CGNAT is 1 or 0, not $cgnat" >&2
+	note install.sh "CBB_HOME_CGNAT is 1 or 0, not %s" "$cgnat"
 	exit 2
 	;;
 esac
@@ -89,7 +93,7 @@ case $firewall in
 ask | express | no) ;;
 yes) firewall=ask ;; # what get.sh passed before --express
 *)
-	echo "install.sh: CBB_FIREWALL is ask, express or no, not $firewall" >&2
+	note install.sh "CBB_FIREWALL is ask, express or no, not %s" "$firewall"
 	exit 2
 	;;
 esac
@@ -98,7 +102,7 @@ case $port in
 *[!0-9]*) usage ;;
 *)
 	if [ "$port" -lt 1024 ] || [ "$port" -gt 65535 ]; then
-		echo "install.sh: --port takes a port from 1024 to 65535" >&2
+		note install.sh "--port takes a port from 1024 to 65535"
 		exit 2
 	fi
 	;;
@@ -111,17 +115,17 @@ case $bin in
 esac
 here=$(cd "$(dirname "$0")" && pwd)
 if [ "$(id -u)" -ne 0 ]; then
-	echo "install.sh: run it with sudo" >&2
+	note install.sh "run it with sudo"
 	exit 1
 fi
 if ! "$bin" version >/dev/null 2>&1; then
-	echo "install.sh: $bin does not run on this Mac" >&2
+	note install.sh "%s does not run on this Mac" "$bin"
 	exit 1
 fi
 # A build without cgo has no pasteboard: its agent would only exit, and
 # launchd start it again, over and over.
 if "$bin" version | grep -q 'no pasteboard support'; then
-	echo "install.sh: $bin was built without cgo, so it cannot link this Mac's clipboard; use a release build, or build it with CGO_ENABLED=1" >&2
+	note install.sh "%s was built without cgo, so it cannot link this Mac's clipboard; use a release build, or build it with CGO_ENABLED=1" "$bin"
 	exit 1
 fi
 
@@ -148,7 +152,7 @@ if [ "$inplace" = yes ]; then
 	run=$(cd "$(dirname "$bin")" && pwd)/$(basename "$bin")
 	case $run in
 	*[!A-Za-z0-9/._+-]*)
-		echo "install.sh: --in-place needs a path of letters, digits and / . _ + -, not $run" >&2
+		note install.sh "--in-place needs a path of letters, digits and / . _ + -, not %s" "$run"
 		exit 2
 		;;
 	esac
@@ -160,7 +164,7 @@ if [ "$inplace" = yes ]; then
 else
 	run=/usr/local/bin/cbb
 	if [ -L "$run" ]; then
-		echo "install.sh: $run is a link, likely Homebrew's; run this with --in-place $run" >&2
+		note install.sh "%s is a link, likely Homebrew's; run this with --in-place %s" "$run" "$run"
 		exit 1
 	fi
 	install -d -m 0755 /usr/local/bin
@@ -235,7 +239,7 @@ else
 	chmod 0644 "$env"
 fi
 if [ "$cgnat" = 1 ]; then
-	echo "100.64.0.0/10 counts as the home network on this Mac (--home-cgnat on)."
+	say "100.64.0.0/10 counts as the home network on this Mac (--home-cgnat on)."
 fi
 
 # The service takes connections from phones, other Macs and lite members at
@@ -258,41 +262,36 @@ if [ -x "$fw" ]; then
 		"$fw" --remove "$(cat "$listed")" >/dev/null 2>&1 || true
 		rm -f "$listed"
 	fi
-	fwstate=off
 	if "$fw" --getglobalstate 2>/dev/null | grep -q enabled; then
-		fwstate=on
+		say "Firewall: the macOS application firewall (on). CBB requires this rule:"
+	else
+		say "Firewall: the macOS application firewall (off). CBB requires this rule:"
 	fi
-	echo "Firewall: the macOS application firewall ($fwstate). CBB requires this rule:"
-	echo "  1. Allow incoming connections to $service. Purpose: connections from the group's devices"
-	echo "     on TCP $port and finding them on UDP 5353 (mDNS). The application firewall allows a"
-	echo "     program on every port and from every address; CBB itself accepts only"
-	echo "     the home network."
+	say "  1. Allow incoming connections to %s. Purpose: connections from the group's devices on TCP %s and finding them on UDP 5353 (mDNS). The application firewall allows a program on every port and from every address; CBB itself accepts only the home network." "$service" "$port"
 	yes=$firewall
 	how=
 	if [ "$yes" = express ]; then
-		how=" (express installation)"
+		how=$(t " (express installation)")
 	elif [ "$yes" = ask ]; then
 		yes=$(cat "$answer" 2>/dev/null || true)
-		how=" (as answered before)"
+		how=$(t " (as answered before)")
 		if [ -n "$earlier" ]; then
-			yes=yes how=" (kept from an earlier installation)"
+			yes=yes how=$(t " (kept from an earlier installation)")
 		fi
 	fi
 	if [ "$yes" != yes ] && [ "$yes" != no ] && [ "$yes" != express ]; then
-		echo "With Yes, CBB adds this rule, keeps it current on every update and removes it on uninstall."
-		printf 'Add this rule now? [y/N] '
+		say "With Yes, CBB adds this rule, keeps it current on every update and removes it on uninstall."
+		t "Add this rule now? [y/N]"
+		printf ' '
 		yes=
 		how=
 		if (: </dev/tty) 2>/dev/null; then
 			reply=
 			read -r reply </dev/tty || reply=
-			case $reply in
-			y | Y | yes | Yes | YES) yes=yes ;;
-			*) yes=no ;;
-			esac
+			if is_yes "$reply"; then yes=yes; else yes=no; fi
 		else
 			echo
-			echo "No terminal to answer on; taken as No."
+			say "No terminal to answer on; taken as No."
 		fi
 	fi
 	case $yes in
@@ -303,13 +302,12 @@ if [ -x "$fw" ]; then
 		"$fw" --add "$service" >/dev/null
 		"$fw" --unblockapp "$service" >/dev/null
 		echo "$service" >"$listed"
-		echo "Added the rule above$how. CBB manages it from now on."
+		say "Added the rule above%s. CBB manages it from now on." "$how"
 	else
-		echo "No firewall rule was added. CBB works only while the firewall allows the rule above."
-		echo "To add it by hand, run:"
+		say "No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:"
 		echo "  sudo $fw --add \"$service\""
 		echo "  sudo $fw --unblockapp \"$service\""
-		echo "To let CBB add and manage it, run the installer again with --express."
+		say "To let CBB add and manage it, run the installer again with --express."
 	fi
 fi
 
@@ -317,6 +315,10 @@ fi
 # as on Linux.
 install -d -m 0755 /usr/local/share/cbb
 install -m 0644 "$here/uninstall.sh" /usr/local/share/cbb/uninstall.sh
+# uninstall.sh speaks the user's language too.
+install -m 0644 "$here/../l10n.sh" /usr/local/share/cbb/l10n.sh
+rm -rf /usr/local/share/cbb/l10n
+cp -R "$here/../l10n" /usr/local/share/cbb/l10n
 
 # restart DOMAIN LABEL PLIST stops the job if it runs and starts it again.
 # bootout returns before launchd has let the job go, and a bootstrap in that
@@ -342,7 +344,7 @@ answers() { # cbb
 		sleep 0.25
 		i=$((i + 1))
 	done
-	echo "install.sh: the service did not answer within 10 s: $out" >&2
+	note install.sh "the service did not answer within 10 s: %s" "$out"
 	return 1
 }
 answers "$run" || true
@@ -354,12 +356,11 @@ if [ -n "$user" ] && [ "$user" != root ]; then
 	restart "gui/$(id -u "$user")" "$agent" "/Library/LaunchAgents/$agent.plist"
 fi
 if [ "$port" != 8764 ]; then
-	echo "CBB uses TCP port $port instead of 8764. If a firewall on the network limits"
-	echo "incoming connections, allow TCP $port from the home network."
+	say "CBB uses TCP port %s instead of 8764. If a firewall on the network limits incoming connections, allow TCP %s from the home network." "$port" "$port"
 fi
 # An update of a device in a group keeps its group: no need to join.
 if [ -f "/Library/Application Support/cbb/state/identity.json" ]; then
-	echo "CBB is running on TCP port $port, in its group."
+	say "CBB is running on TCP port %s, in its group." "$port"
 else
-	echo "CBB is running on TCP port $port. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new."
+	say "CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new." "$port"
 fi

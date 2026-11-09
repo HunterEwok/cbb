@@ -27,10 +27,14 @@ fi
 failed() {
 	rc=$1
 	if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ] && [ "${CBB_ERROR_DETAILS:-}" != 1 ]; then
-		echo "install.sh: failed (exit status $rc). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." >&2
+		note install.sh "failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." "$rc"
 	fi
 }
 trap 'failed $?' EXIT
+# The messages in the user's language (packaging/l10n.sh), read before LC_ALL=C below.
+cbb_l10n=$(cd "$(dirname "$0")" && pwd)/../l10n
+# shellcheck source=packaging/l10n.sh
+. "$cbb_l10n.sh"
 export LC_ALL=C
 
 usage() {
@@ -72,7 +76,7 @@ done
 case $cgnat in
 '' | 0 | 1) ;;
 *)
-	echo "install.sh: CBB_HOME_CGNAT is 1 or 0, not $cgnat" >&2
+	note install.sh "CBB_HOME_CGNAT is 1 or 0, not %s" "$cgnat"
 	exit 2
 	;;
 esac
@@ -81,7 +85,7 @@ case $port in
 *[!0-9]*) usage ;;
 *)
 	if [ "$port" -lt 1024 ] || [ "$port" -gt 65535 ]; then
-		echo "install.sh: --port takes a port from 1024 to 65535" >&2
+		note install.sh "--port takes a port from 1024 to 65535"
 		exit 2
 	fi
 	;;
@@ -90,7 +94,7 @@ case $firewall in
 ask | express | no) ;;
 yes) firewall=ask ;;
 *)
-	echo "install.sh: CBB_FIREWALL is ask, express or no, not $firewall" >&2
+	note install.sh "CBB_FIREWALL is ask, express or no, not %s" "$firewall"
 	exit 2
 	;;
 esac
@@ -102,15 +106,15 @@ esac
 here=$(cd "$(dirname "$0")" && pwd)
 
 if [ "$(id -u)" -ne 0 ]; then
-	echo "install.sh: run it as root (sudo or doas)" >&2
+	note install.sh "run it as root (sudo or doas)"
 	exit 1
 fi
 if [ "$(uname -s)" != FreeBSD ]; then
-	echo "install.sh: this installer is for FreeBSD" >&2
+	note install.sh "this installer is for FreeBSD"
 	exit 1
 fi
 if ! "$bin" version >/dev/null 2>&1; then
-	echo "install.sh: $bin does not run on this machine; is it built for $(uname -m)?" >&2
+	note install.sh "%s does not run on this machine; is it built for %s?" "$bin" "$(uname -m)"
 	exit 1
 fi
 
@@ -119,13 +123,11 @@ fi
 # program's, is never taken over, nor a group cbb of others without it.
 if pw=$(pw usershow cbb 2>/dev/null); then
 	if [ "$(printf '%s\n' "$pw" | cut -d: -f8)" != CBB ]; then
-		echo "install.sh: an account named cbb exists here and is not this service's (its comment is not \"CBB\");" >&2
-		echo "it would get the group's keys. Rename or remove it, then run install.sh again." >&2
+		note install.sh "an account named cbb exists here and is not this service's (its comment is not \"CBB\"); it would get the group's keys. Rename or remove it, then run install.sh again."
 		exit 1
 	fi
 elif gr=$(pw groupshow cbb 2>/dev/null) && [ -n "$(printf '%s\n' "$gr" | cut -d: -f4)" ]; then
-	echo "install.sh: a group named cbb exists here with members, and no service account;" >&2
-	echo "they would reach the service. Rename or remove the group, then run install.sh again." >&2
+	note install.sh "a group named cbb exists here with members, and no service account; they would reach the service. Rename or remove the group, then run install.sh again."
 	exit 1
 fi
 if ! pw groupshow cbb >/dev/null 2>&1; then
@@ -145,7 +147,7 @@ install -d -o cbb -g cbb -m 0700 /var/db/cbb
 user=${SUDO_USER:-${DOAS_USER:-}}
 if [ -n "$user" ] && [ "$user" != root ]; then
 	pw groupmod cbb -m "$user"
-	echo "Added $user to the cbb group; log in again to use cbb copy and paste."
+	say "Added %s to the cbb group; log in again to use cbb copy and paste." "$user"
 fi
 
 env=/usr/local/etc/cbb/cbb.env
@@ -193,6 +195,10 @@ EOF
 fi
 install -m 0644 "$here/firewall.sh" /usr/local/share/cbb/firewall.sh
 install -m 0644 "$here/uninstall.sh" /usr/local/share/cbb/uninstall.sh
+# uninstall.sh speaks the user's language too.
+install -m 0644 "$here/../l10n.sh" /usr/local/share/cbb/l10n.sh
+rm -rf /usr/local/share/cbb/l10n
+cp -R "$here/../l10n" /usr/local/share/cbb/l10n
 # Desktop sessions (KDE, GNOME, Xfce and others that read XDG autostart)
 # start the clipboard agent, cbb agent, at login; a firewall has none.
 if [ -z "$appliance" ]; then
@@ -201,7 +207,7 @@ if [ -z "$appliance" ]; then
 fi
 sh /usr/local/share/cbb/firewall.sh setup "$firewall" "$port"
 if [ "$port" != 8764 ]; then
-	echo "CBB uses TCP port $port instead of 8764."
+	say "CBB uses TCP port %s instead of 8764." "$port"
 fi
 
 sysrc -q cbb_enable=YES >/dev/null
@@ -215,7 +221,7 @@ answers() { # cbb
 		sleep 0.25
 		i=$((i + 1))
 	done
-	echo "install.sh: the service did not answer within 10 s: $out" >&2
+	note install.sh "the service did not answer within 10 s: %s" "$out"
 	return 1
 }
 answers /usr/local/bin/cbb || true
@@ -223,9 +229,9 @@ answers /usr/local/bin/cbb || true
 # shellcheck source=packaging/update.sh
 . "$here/../update.sh"
 update_setup /usr/local/bin/cbb "$bin" "$auto"
-echo "CBB is running on TCP port $port. To remove it: sh /usr/local/share/cbb/uninstall.sh"
+say "CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh" "$port"
 case $appliance in
-opnsense) echo "OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload." ;;
-pfsense) echo "pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one." ;;
+opnsense) say "OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload." ;;
+pfsense) say "pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one." ;;
 esac
-echo "Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md."
+say "Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md."
