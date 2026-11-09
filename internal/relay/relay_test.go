@@ -61,7 +61,7 @@ func newDevice(t *testing.T, ca *group.CA) device {
 	return device{cert: tls.Certificate{Certificate: [][]byte{leaf.Raw, ca.Cert.Raw}, PrivateKey: key, Leaf: leaf}, id: string(id), key: wg}
 }
 
-func startRelay(t *testing.T, groups ...*group.CA) (*Relay, Link) {
+func startRelay(t *testing.T, groups ...*group.CA) (testRelay, Link) {
 	t.Helper()
 	keys, err := NewKeys()
 	if err != nil {
@@ -71,7 +71,7 @@ func startRelay(t *testing.T, groups ...*group.CA) (*Relay, Link) {
 	for _, g := range groups {
 		tags = append(tags, group.Tag(g.Cert))
 	}
-	return startWith(t, Config{Keys: keys, Groups: tags})
+	return startAny(t, Config{Keys: keys, Groups: tags})
 }
 
 // startWith runs a relay with cfg on a port of its own.
@@ -363,7 +363,7 @@ func TestRefused(t *testing.T) {
 // TestOpenRelay: an open relay serves any group that registers, within
 // its limits on groups and on registrations from one address.
 func TestOpenRelay(t *testing.T) {
-	r, link := startWith(t, Config{Open: true, Limits: Limits{Groups: 2, PerAddress: 3}})
+	r, link := startAny(t, Config{Open: true, Limits: Limits{Groups: 2, PerAddress: 3}})
 	ctx := context.Background()
 	reg := func(d device) error {
 		tc, _, _, err := register(ctx, MemberConfig{Link: link, Key: d.key, Cert: func() tls.Certificate { return d.cert }})

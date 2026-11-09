@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// cbb-interop plays the phone against the Go code in tests
-// (internal/pair, TestSwiftMemberAdmitsGoJoiner): it creates a group as the
+// cbb-interop plays the phone against a computer's cbb in tests
+// (internal/service, TestSwiftAdmitsComputer): it creates a group as the
 // app does (PhoneGroup, a root CA with path length 1), dials
-// a Go joiner over plain TCP, exchanges certificates in place of a TLS
+// a joiner, over plain TCP exchanging certificates in place of a TLS
 // handshake, and admits the joiner with PairingMember.
 //
 //   cbb-interop admit HOST PORT CODE
@@ -13,10 +13,10 @@
 //
 //   cbb-interop member-tls HOST PORT PEER   (macOS)
 //
-// plays the phone as a member (internal/node, TestSwiftMemberTLS): it makes
+// plays the phone as a member (internal/service, TestSwiftMemberTLS): it makes
 // a key in the keychain and prints "key <SubjectPublicKeyInfo, base64>",
 // reads "cert <DER, base64>" and "ca <DER, base64>" from standard input,
-// dials the Go member PEER through the phone's member in the Rust core
+// dials the member PEER through the phone's member in the Rust core
 // (CoreMember), sends "from swift", waits for "from
 // go", then for Go's picture "go picture", which it fetches, sends its
 // bytes reversed as "phone picture", which Go fetches, waits for "done",
@@ -25,23 +25,22 @@
 //   cbb-interop join-tls HOST PORT CODE   (macOS)
 //
 // joins a computer's group through the pairing window that `cbb pair`
-// opened at HOST:PORT (internal/pair, TestSwiftJoinsComputerRoot), as a
+// opened at HOST:PORT (internal/service, TestSwiftJoinsComputerRoot), as a
 // phone with an admin key, and prints the group CA and then the admin CA
 // the root issued, each in base64 on a line.
 //
 //   cbb-interop invite-window SECRET yes|no   (macOS)
 //
 // opens a remote invitation's pairing window (InvitationWindow) with SECRET
-// (base64), as the phone that is the hub does (internal/pair,
-// TestSwiftHubAdmitsInvitedGoJoiner), and prints "port N"; for the device
+// (base64), as the phone that is the hub does, and prints "port N"; for the device
 // that proves it knows the secret it prints "fingerprint F" and admits it or
 // not; then it prints the group CA in base64, or fails with the first failed
 // attempt. Test use only.
 //
 //   cbb-interop restore-tls HOST PORT KEY CERT GROUP   (macOS)
 //
-// restores the group of the Go member at HOST:PORT on a new phone with the
-// group's recovery key (internal/node, TestSwiftRestoresWithRecoveryKey):
+// restores the group of the member at HOST:PORT on a new phone with the
+// group's recovery key (internal/service, TestSwiftRestoresWithRecoveryKey):
 // KEY (its 32 bytes) and CERT (its admin CA, DER), both base64, and GROUP,
 // the group's tag, make the sheet's QR code, which the tool reads as the
 // app does. It takes the records, checks them, claims the group for a new

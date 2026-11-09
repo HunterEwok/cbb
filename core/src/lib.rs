@@ -44,6 +44,7 @@ pub mod admit;
 pub mod api;
 pub mod arrange;
 pub mod authority;
+pub mod benchtime;
 pub mod certs;
 pub mod clip;
 pub mod command;

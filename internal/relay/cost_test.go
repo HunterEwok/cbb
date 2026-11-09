@@ -346,7 +346,7 @@ func TestRecordsVerifiedOnce(t *testing.T) {
 // all, and gives a group's records up when its last device goes.
 func TestRecordBytesBounded(t *testing.T) {
 	one := recordSize(deviceRecords(t, newGroup(t), 2)[1]) // with prev, as all but a group's first
-	r, link := startWith(t, Config{Open: true, Limits: Limits{PerAddress: 100, PerNetwork: 100, GroupRecordBytes: 40 * one, RecordBytes: 70 * one}})
+	r, link := startAny(t, Config{Open: true, Limits: Limits{PerAddress: 100, PerNetwork: 100, GroupRecordBytes: 40 * one, RecordBytes: 70 * one}})
 	a, b, c := newGroup(t), newGroup(t), newGroup(t)
 	if err := registerWith(t, link, a, deviceRecords(t, a, 30)); err != nil {
 		t.Fatalf("30 records of a group with room for 40: %v", err)
@@ -360,11 +360,18 @@ func TestRecordBytesBounded(t *testing.T) {
 	if err := registerWith(t, link, c, deviceRecords(t, c, 20)); err == nil || !strings.Contains(err.Error(), "as many records") {
 		t.Errorf("records past the relay's total: %v", err)
 	}
-	// A refused registration of a group the relay holds no device of keeps nothing.
-	r.mu.Lock()
-	_, kept := r.records[group.Tag(c.Cert)]
-	r.mu.Unlock()
-	if kept {
-		t.Error("records kept for a group whose registration was refused")
+	// A refused registration of a group the relay holds no device of keeps
+	// nothing: the room it would have taken is still there.
+	if gr := goRelay(r); gr != nil {
+		gr.mu.Lock()
+		_, kept := gr.records[group.Tag(c.Cert)]
+		gr.mu.Unlock()
+		if kept {
+			t.Error("records kept for a group whose registration was refused")
+		}
+	}
+	d := newGroup(t)
+	if err := registerWith(t, link, d, deviceRecords(t, d, 10)); err != nil {
+		t.Errorf("10 records of a fourth group, 70 in all: %v", err)
 	}
 }

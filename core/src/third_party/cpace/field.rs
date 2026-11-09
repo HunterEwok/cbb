@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Translated to Rust from internal/third_party/cpace/field.go and
+// Translated to Rust from internal/cpace/ of rsc.io/cmd/mote v0.1.3, file field.go and
 // elligator.go; see README.md.
 
 //! Arithmetic in GF(2^255-19) and the Elligator 2 map to Curve25519.

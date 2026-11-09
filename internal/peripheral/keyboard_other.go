@@ -19,6 +19,8 @@ import (
 type BusDialer = func() (any, error)
 
 // keyboardState is empty: there is never a keyboard here.
+//
+//lint:ignore U1000 the Host's field has this type on every system
 type keyboardState struct{}
 
 // ApplyKeyboard does nothing: there is no keyboard here.

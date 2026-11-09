@@ -6,14 +6,11 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net"
-	"net/netip"
 	"testing"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/node"
 	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/release"
 )
@@ -29,7 +26,7 @@ func (s *releaseSigner) signRelayKeys(t *testing.T, seq uint64, relays ...relay.
 func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, relays ...relay.Keys) string {
 	t.Helper()
 	s.keysSeq = seq
-	var set node.EntriesSet
+	var set entriesSet
 	if err := json.Unmarshal([]byte(s.signEntries(t, seq, "/relay-path-01")), &set); err != nil {
 		t.Fatal(err)
 	}
@@ -69,15 +66,7 @@ func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, 
 func TestProjectRelayNewKey(t *testing.T) {
 	signer := newReleaseSigner(t)
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", func(c *Config) {
-		c.ReleaseRoots = signer.roots(t)
-		c.lookupIP = func(_ context.Context, host string) ([]netip.Addr, error) {
-			if host == "relay.example.org" {
-				return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
-			}
-			return nil, errors.New("tests look up no other names")
-		}
-	})
+	pi := startEnv(t, &h, "pi", signer.rootsEnv(t), "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	group := pi.status(t).Group

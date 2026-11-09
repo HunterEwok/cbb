@@ -277,6 +277,16 @@ extern "C" fn on_signal(_: libc::c_int) {
     STOP.store(true, Ordering::SeqCst);
 }
 
+/// Sleeps for d, or less once the service is stopping, so that SIGTERM
+/// stops it at once: launchctl bootout returns before the process has
+/// exited, and uninstall.sh checks right after.
+fn wait_unless_stopping(d: Duration) {
+    let until = std::time::Instant::now() + d;
+    while !STOP.load(Ordering::SeqCst) && std::time::Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 /// Has the service stop, as SIGTERM does; Windows' service manager asks
 /// with it.
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -366,6 +376,10 @@ pub fn run(cfg: Config) -> Result<()> {
     if !only.is_empty() {
         log(&format!("cbb: the member port and mDNS work only on {} (CBB_INTERFACES)", only.join(", ")));
     }
+    // Out of a group the member port is the one cbb pair waits on for the
+    // phone (its firewall rule opens it, OpenWrt's init script passes it),
+    // so the status says it until the service listens there itself.
+    *svc.port.lock().unwrap() = cfg.port;
     let admin_socket = control::admin_socket(&cfg.socket);
     for (ln, admin) in [(listen(&cfg.socket, false)?, false), (listen(&admin_socket, true)?, true)] {
         let svc = svc.clone();
@@ -392,7 +406,7 @@ pub fn run(cfg: Config) -> Result<()> {
                     *broken = Some(e.for_log());
                 }
                 drop(broken);
-                std::thread::sleep(Duration::from_secs(2));
+                wait_unless_stopping(Duration::from_secs(2));
             }
             Ok(None) => {
                 *svc.broken.lock().unwrap() = None;
@@ -400,7 +414,7 @@ pub fn run(cfg: Config) -> Result<()> {
                     log("cbb: this device is in no group yet; run cbb pair");
                     said = true;
                 }
-                std::thread::sleep(Duration::from_secs(2));
+                wait_unless_stopping(Duration::from_secs(2));
             }
         }
     };
@@ -420,7 +434,7 @@ pub fn run(cfg: Config) -> Result<()> {
     let tag = ident.tag();
     let away =
         Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()).via(cfg.tunnel_via));
-    let presence = presence_of(&ident, &records, &cfg.name, &cfg.caps);
+    let presence = presence_of(&cfg.state_dir, &ident, &records, &cfg.name, &cfg.caps);
     // The blobs of the copies are a cache that a service starts empty, as
     // Go's: the group's current copy is fetched again when it is pasted.
     crate::content::empty(&cfg.state_dir, &|s| log(s));
@@ -476,12 +490,19 @@ pub fn run(cfg: Config) -> Result<()> {
         }
     }
     {
+        let attest = crate::evidence::Attestations::new(&cfg.state_dir);
+        attest.send_own(&node);
+        attest.status_loop(Arc::downgrade(&node));
         let (dir, n, log, away, creds) =
             (cfg.state_dir.clone(), Arc::downgrade(&node), log.clone(), away.clone(), creds.clone());
         node.on_message(Box::new(move |from, m| {
             let Some(node) = n.upgrade() else { return };
             if let (Some(v), "credentials") = (m.credentials.as_ref(), m.kind.as_str()) {
                 creds.received(&node, from, v);
+                return;
+            }
+            if let (Some(e), "evidence") = (m.evidence.as_ref(), m.kind.as_str()) {
+                attest.received(&node, from, e);
                 return;
             }
             if let Some(der) = m.admin_ca.as_deref().filter(|_| may_admin && m.kind == "admin")
@@ -556,7 +577,15 @@ pub fn run(cfg: Config) -> Result<()> {
             // A root's resolve may have voided both histories of this
             // device's key: what it signed is signed again (signed.rs).
             let mut resign_seen = String::new();
+            // Certificates are renewed at the start, when a member connects
+            // and twice a day, as Go's renewLoop.
+            let (mut renew_peers, mut renew_at, every) = (None, std::time::Instant::now(), renew_every());
             while !node.is_closed() {
+                let peers: Vec<_> = node.peer_chains().into_iter().map(|(id, _)| id).collect();
+                if renew_peers.as_ref() != Some(&peers) || renew_at.elapsed() >= every {
+                    crate::admin::renew_certificates(&dir, &node);
+                    (renew_peers, renew_at) = (Some(peers), std::time::Instant::now());
+                }
                 let digest = node.records().lock().unwrap().digest();
                 if digest != resign_seen {
                     resign_seen = digest;
@@ -564,7 +593,7 @@ pub fn run(cfg: Config) -> Result<()> {
                 }
                 crate::admin::renew_admin_cas(&dir, &node);
                 let seen = (node.records().lock().unwrap().digest(), creds.changes());
-                if seen != cred_seen || cred_at.elapsed() >= CREDENTIAL_CHECK {
+                if seen != cred_seen || cred_at.elapsed() >= credential_check() {
                     creds.refresh(&node);
                     cred_seen = (node.records().lock().unwrap().digest(), creds.changes());
                     cred_at = std::time::Instant::now();
@@ -585,7 +614,7 @@ pub fn run(cfg: Config) -> Result<()> {
                     Err(_) => {}
                     Ok(_) => failed.clear(),
                 }
-                std::thread::sleep(CLAIM_CHECK);
+                node.records_nap(CLAIM_CHECK);
             }
         });
     }
@@ -623,9 +652,32 @@ pub fn run(cfg: Config) -> Result<()> {
 
 /// How often the claims to take the group over are looked at again.
 const CLAIM_CHECK: Duration = Duration::from_secs(2);
+/// How often the root and the admins check whether certificates are due
+/// for renewal besides when a member connects: the renewal periods are
+/// months long, so twice a day is plenty, as Go's renewEvery. The Go
+/// service's tests shorten it with CBB_TEST_RENEW_EVERY (milliseconds).
+fn renew_every() -> Duration {
+    std::env::var("CBB_TEST_RENEW_EVERY")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map_or_else(scaled_twice_a_day, Duration::from_millis)
+}
+
+/// Twelve hours, or in the bench's time-scaled build that scaled and at
+/// least five seconds, as Go's renewEvery.
+fn scaled_twice_a_day() -> Duration {
+    Duration::from_secs((cbb_core::benchtime::d(12 * 3600) as u64).max(if cbb_core::benchtime::scale() > 1 {
+        5
+    } else {
+        0
+    }))
+}
+
 /// How often the server credentials are looked at when nothing changed, as
 /// Go's renewEvery.
-const CREDENTIAL_CHECK: Duration = Duration::from_secs(12 * 3600);
+fn credential_check() -> Duration {
+    scaled_twice_a_day()
+}
 
 /// Every claim of the records with its state: what changes when a claim
 /// takes effect.
@@ -637,22 +689,21 @@ fn claim_states(node: &Node) -> String {
 /// How this member presents itself in its hellos: as a member with the
 /// caps its own device record names, or those it was started with while
 /// no record names it. Its keys are in the hardware when cbb-helper holds
-/// the device key.
-fn presence_of(ident: &Identity, records: &Records, name: &str, caps: &[String]) -> crate::node::Presence {
+/// the device key, unless it holds the group's root key too.
+fn presence_of(
+    dir: &std::path::Path,
+    ident: &Identity,
+    records: &Records,
+    name: &str,
+    caps: &[String],
+) -> crate::node::Presence {
     let own = records.devices().into_iter().find(|d| d.id == ident.id.as_str());
     crate::node::Presence {
         role: "member".into(),
         caps: own.map(|d| d.caps).unwrap_or_else(|| caps.to_vec()),
         name: name.to_string(),
         os: crate::admin::os_name().into(),
-        key_store: if ident.external.is_some() {
-            "hardware"
-        } else if crate::rootless::is() {
-            "rootless"
-        } else {
-            "file"
-        }
-        .into(),
+        key_store: crate::admin::own_store(dir, ident).into(),
         device: crate::device::own().clone(),
         admin_key: Default::default(),
     }
@@ -964,16 +1015,8 @@ impl Service {
                     .into(),
             );
         }
-        {
-            let mut seen = self.commands.lock().unwrap();
-            seen.retain(|_, exp| *exp > now);
-            if seen.contains_key(&body.id) {
-                return refused(&body.id, "this command was carried out already".into());
-            }
-            if seen.len() >= MAX_COMMANDS {
-                return refused(&body.id, "too many commands; try again in a minute".into());
-            }
-            seen.insert(body.id.clone(), body.expires_ms);
+        if let Err(why) = remember_command(&mut self.commands.lock().unwrap(), &body.id, body.expires_ms, now) {
+            return refused(&body.id, why.into());
         }
         match body.kind.as_str() {
             "paste" | "action" if node.forward_only() => {
@@ -1250,11 +1293,7 @@ impl Service {
                 "nobody is signed in here with CBB's agent running, and the actions run in the user's session".into(),
             ));
         }
-        let ws: Vec<SyncSender<ToWatcher>> = ws
-            .into_iter()
-            .filter(|(uid, _)| peer::may_take(*uid, ACT, peer::at_screen) == peer::Verdict::Allowed)
-            .map(|(_, tx)| tx)
-            .collect();
+        let ws = act_takers(ws, peer::at_screen);
         if ws.is_empty() {
             return Err(actions::Failure::Refused(
                 "CBB's agent runs here only as users who are not signed in at the screen, and the actions run in that user's session".into(),
@@ -1511,39 +1550,18 @@ impl Service {
             (targets, console)
         };
         if targets.is_empty() {
-            res.reason = if console && !set.console {
-                "only a text console is here, and its user did not allow consoles (sudo cbb paste-receive on -console)"
-            } else {
-                "nothing on this device can paste: no tmux or console helper of CBB, nor cbb next link, runs here"
-            }
-            .into();
+            res.reason = no_target(console, set.console, cfg!(target_os = "macos")).into();
             return res;
         }
         // Only the user at the screen takes them, and a secret only where
         // the system tells who that is.
-        let secret = body.paste_kind == "secret";
-        let mut why = "";
-        let targets: Vec<(String, Option<peer::Who>, SyncSender<ToWatcher>)> = targets
-            .into_iter()
-            .filter(|(t, uid, _)| match peer::may_take(*uid, t, peer::at_screen) {
-                peer::Verdict::Allowed => true,
-                peer::Verdict::Unchecked if !secret => true,
-                peer::Verdict::Unchecked => {
-                    why = "this device cannot tell which user is at its screen, so it takes no secret pastes; send it as a paste or a typed text";
-                    false
-                }
-                peer::Verdict::Refused => {
-                    if why.is_empty() {
-                        why = "the paste targets here run as users who are not at the screen";
-                    }
-                    false
-                }
-            })
-            .collect();
-        if targets.is_empty() {
-            res.reason = why.into();
-            return res;
-        }
+        let targets = match paste_takers(targets, body.paste_kind == "secret", peer::at_screen) {
+            Ok(t) => t,
+            Err(why) => {
+                res.reason = why.into();
+                return res;
+            }
+        };
         let wait = if body.mode == "type" { INJECT_WAIT + TYPE_WAIT * text.len() as u32 } else { INJECT_WAIT };
         let mut reasons: Vec<String> = Vec::new();
         for (target, uid, tx) in targets {
@@ -1598,37 +1616,17 @@ impl Service {
     /// Makes the grant of a remote paste for uid, a desktop session's user,
     /// valid for wait, as Go's grantKeys.
     fn grant_keys(&self, uid: peer::Who, enter: bool, wait: Duration) -> String {
-        let mut b = [0u8; 16];
-        if getrandom::fill(&mut b).is_err() {
-            return String::new();
-        }
-        let token: String = b.iter().map(|x| format!("{x:02x}")).collect();
-        let now = Instant::now();
-        let mut grants = self.grants.lock().unwrap();
-        grants.retain(|_, g| g.until > now);
-        grants.insert(token.clone(), Grant { uid, enter, pasted: false, done: false, until: now + wait });
-        token
+        grant_keys(&mut self.grants.lock().unwrap(), uid, enter, wait)
     }
 
     /// Answers the uinput helper's keys (Go's takeKeys): whether it may
     /// press the keys req, paste or enter, for the user uid under the grant.
     fn take_keys(&self, grant: &str, req: &str, uid: &str) -> Result<()> {
-        let mut grants = self.grants.lock().unwrap();
-        let ok = match grants.get_mut(grant) {
-            Some(g) if g.until > Instant::now() && g.uid.to_string() == uid => match req {
-                "paste" if !g.pasted => {
-                    g.pasted = true;
-                    true
-                }
-                "enter" if g.enter && g.pasted && !g.done => {
-                    g.done = true;
-                    true
-                }
-                _ => false,
-            },
-            _ => false,
-        };
-        if ok { Ok(()) } else { Err(Error::msg("no remote paste asked for these keys now")) }
+        if take_keys(&mut self.grants.lock().unwrap(), grant, req, uid) {
+            Ok(())
+        } else {
+            Err(Error::msg("no remote paste asked for these keys now"))
+        }
     }
 
     /// Carries out a paste of the group's copy of images or files that body
@@ -2333,6 +2331,7 @@ impl Service {
                             keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
                             tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
                             left_old_group: self.left_old,
+                            port: self.port.lock().unwrap().map_or(0, i64::from),
                             ..Default::default()
                         };
                         return Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()));
@@ -2390,7 +2389,10 @@ impl Service {
                     key_level: if key_level.is_empty() { "hardware".into() } else { key_level },
                     key_problem: String::new(),
                     incoming_ms: incoming_ms.unwrap_or(cbb_core::authority::DEFAULT_INCOMING),
+                    unreached: node.unreached(),
+                    port: self.port.lock().unwrap().map_or(0, i64::from),
                     quiet: node.networks().map(|n| n.unknown()).unwrap_or_default(),
+                    cert_ends_ms: id.cert.not_after * 1000,
                     ..group
                 };
                 Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
@@ -2866,7 +2868,9 @@ impl Service {
             role: "member".into(),
             os: crate::admin::os_name().into(),
             version: VERSION.into(),
-            key_level: if ident.external.is_some() { "hardware" } else { "files" }.into(),
+            // A group made on a computer starts at the level files
+            // (admin::new_group), whatever its member key.
+            key_level: "files".into(),
             key_problem: why,
             ..Default::default()
         };
@@ -3295,7 +3299,7 @@ fn devices(node: &Node, hubs: &[String]) -> Vec<Device> {
             role: node.role().into(),
             caps: node.caps().to_vec(),
             os: node.os().into(),
-            store: crate::admin::own_store(&ident).into(),
+            store: crate::admin::own_store(node.state_dir(), &ident).into(),
             ..Default::default()
         }));
     }
@@ -3315,11 +3319,234 @@ fn devices(node: &Node, hubs: &[String]) -> Vec<Device> {
     out
 }
 
+/// Makes a grant of a remote paste for uid, a desktop session's user,
+/// valid for wait, as Go's grantKeys; its token, empty when none.
+fn grant_keys(grants: &mut HashMap<String, Grant>, uid: peer::Who, enter: bool, wait: Duration) -> String {
+    let mut b = [0u8; 16];
+    if getrandom::fill(&mut b).is_err() {
+        return String::new();
+    }
+    let token: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    let now = Instant::now();
+    grants.retain(|_, g| g.until > now);
+    grants.insert(token.clone(), Grant { uid, enter, pasted: false, done: false, until: now + wait });
+    token
+}
+
+/// Whether the uinput helper may press the keys req, paste or enter, for
+/// the user uid under the grant, as Go's takeKeys: the paste keys once,
+/// then Enter once when the paste asked for it.
+fn take_keys(grants: &mut HashMap<String, Grant>, grant: &str, req: &str, uid: &str) -> bool {
+    match grants.get_mut(grant) {
+        Some(g) if g.until > Instant::now() && g.uid.to_string() == uid => match req {
+            "paste" if !g.pasted => {
+                g.pasted = true;
+                true
+            }
+            "enter" if g.enter && g.pasted && !g.done => {
+                g.done = true;
+                true
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// A paste target: its kind, its user, and what reaches it.
+type Target<T> = (String, Option<peer::Who>, T);
+
+/// The paste targets that take a remote paste: those of the user at the
+/// screen, as at_screen tells, and of root and the service's own user, and
+/// where the system cannot tell who is at the screen, those that are no
+/// secret's. None left, it gives why, as Go's.
+fn paste_takers<T>(
+    targets: Vec<Target<T>>,
+    secret: bool,
+    at_screen: impl Fn(peer::Who, &str) -> peer::Verdict + Copy,
+) -> std::result::Result<Vec<Target<T>>, &'static str> {
+    let mut why = "";
+    let out: Vec<_> = targets
+        .into_iter()
+        .filter(|(t, uid, _)| match peer::may_take(*uid, t, at_screen) {
+            peer::Verdict::Allowed => true,
+            peer::Verdict::Unchecked if !secret => true,
+            peer::Verdict::Unchecked => {
+                why = "this device cannot tell which user is at its screen, so it takes no secret pastes; send it as a paste or a typed text";
+                false
+            }
+            peer::Verdict::Refused => {
+                if why.is_empty() {
+                    why = "the paste targets here run as users who are not at the screen";
+                }
+                false
+            }
+        })
+        .collect();
+    if out.is_empty() { Err(why) } else { Ok(out) }
+}
+
+/// Why nothing pastes here: only a console its user did not allow, a Mac
+/// without the app, or no paste target at all.
+fn no_target(console_here: bool, consoles_allowed: bool, macos: bool) -> &'static str {
+    if console_here && !consoles_allowed {
+        "only a text console is here, and its user did not allow consoles (sudo cbb paste-receive on -console)"
+    } else if macos {
+        // Only the app pastes on a Mac, as Go's: macOS lets an app press
+        // keys once its user allowed it in Accessibility, and the service
+        // and its agent are not apps.
+        "a Mac pastes through the CBB app, and it is not open here; its user opens it and allows it in System Settings, Privacy & Security, Accessibility"
+    } else {
+        "nothing on this device can paste: no tmux or console helper of CBB, nor cbb next link, runs here"
+    }
+}
+
+/// Remembers the command id until it expires at expires_ms, so it is
+/// carried out once; refuses one seen before, and a new one while
+/// MAX_COMMANDS that have not expired are held.
+fn remember_command(seen: &mut HashMap<String, i64>, id: &str, expires_ms: i64, now: i64) -> Result<(), &'static str> {
+    seen.retain(|_, exp| *exp > now);
+    if seen.contains_key(id) {
+        return Err("this command was carried out already");
+    }
+    if seen.len() >= MAX_COMMANDS {
+        return Err("too many commands; try again in a minute");
+    }
+    seen.insert(id.to_string(), expires_ms);
+    Ok(())
+}
+
+/// The agents that run the quick actions: only those of the user at the
+/// screen, as Go's sessionRunner, never where the system cannot tell.
+fn act_takers<T>(
+    agents: Vec<(Option<peer::Who>, T)>,
+    at_screen: impl Fn(peer::Who, &str) -> peer::Verdict + Copy,
+) -> Vec<T> {
+    agents
+        .into_iter()
+        .filter(|(uid, _)| peer::may_take(*uid, ACT, at_screen) == peer::Verdict::Allowed)
+        .map(|(_, tx)| tx)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(unix)]
+    use super::{CONSOLE, DESKTOP, TMUX, act_takers, grant_keys, paste_takers, peer, take_keys};
+
+    /// Users that the tests' fake system names, far from real accounts', as
+    /// Go's uidAtScreen and friends.
+    #[cfg(unix)]
+    const AT_SCREEN: peer::Who = 2_000_000_000;
+    #[cfg(unix)]
+    const AWAY: peer::Who = 2_000_000_001;
+    #[cfg(unix)]
+    const UNKNOWN: peer::Who = 2_000_000_002;
+
+    #[cfg(unix)]
+    fn fake_screen(uid: peer::Who, _: &str) -> peer::Verdict {
+        match uid {
+            AT_SCREEN => peer::Verdict::Allowed,
+            UNKNOWN => peer::Verdict::Unchecked,
+            _ => peer::Verdict::Refused,
+        }
+    }
+
+    /// As Go's TestPasteTargetUser: pastes go only to the user at the
+    /// screen, a console's only to root, a secret only where the system
+    /// tells who is at the screen, and none to another user or to a
+    /// connection whose user the system does not name.
+    #[cfg(unix)]
+    #[test]
+    fn paste_goes_to_the_user_at_the_screen() {
+        let t = |target: &str, uid: Option<peer::Who>, n: u8| (target.to_string(), uid, n);
+        let others = vec![t(DESKTOP, Some(AWAY), 1), t(CONSOLE, Some(AWAY), 2), t(TMUX, None, 3)];
+        let why = paste_takers(others.clone(), false, fake_screen).unwrap_err();
+        assert!(why.contains("not at the screen"), "{why}");
+
+        let mut unknown = others.clone();
+        unknown.push(t(DESKTOP, Some(UNKNOWN), 4));
+        let got: Vec<u8> =
+            paste_takers(unknown.clone(), false, fake_screen).unwrap().into_iter().map(|x| x.2).collect();
+        assert_eq!(got, [4]);
+        let why = paste_takers(unknown.clone(), true, fake_screen).unwrap_err();
+        assert!(why.contains("takes no secret pastes"), "{why}");
+
+        let mut screen = unknown;
+        screen.push(t(DESKTOP, Some(AT_SCREEN), 5));
+        let got: Vec<u8> = paste_takers(screen.clone(), true, fake_screen).unwrap().into_iter().map(|x| x.2).collect();
+        assert_eq!(got, [5]);
+        let got: Vec<u8> = paste_takers(screen, false, fake_screen).unwrap().into_iter().map(|x| x.2).collect();
+        assert_eq!(got, [4, 5]);
+
+        // Root takes the console.
+        let got = paste_takers(vec![t(CONSOLE, Some(0), 6)], true, fake_screen).unwrap();
+        assert_eq!(got.len(), 1);
+    }
+
+    /// As Go's TestKeysGrant: the helper presses keys only under a grant
+    /// the service made, for its user, the paste keys once and Enter once
+    /// when the paste asked for it, and none once the grant is gone.
+    #[cfg(unix)]
+    #[test]
+    fn keys_only_under_a_grant() {
+        for enter in [true, false] {
+            let mut gs = std::collections::HashMap::new();
+            let g = grant_keys(&mut gs, AT_SCREEN, enter, std::time::Duration::from_secs(60));
+            assert!(!g.is_empty());
+            let (me, away) = (AT_SCREEN.to_string(), AWAY.to_string());
+            assert!(!take_keys(&mut gs, &g, "paste", &away), "another user's paste keys");
+            assert!(!take_keys(&mut gs, &g, "enter", &me), "Enter before the paste");
+            assert!(take_keys(&mut gs, &g, "paste", &me), "the paste keys");
+            assert!(!take_keys(&mut gs, &g, "paste", &me), "the paste keys again");
+            assert_eq!(take_keys(&mut gs, &g, "enter", &me), enter, "Enter");
+            assert!(!take_keys(&mut gs, &g, "enter", &me), "Enter again");
+            gs.remove(&g);
+            assert!(!take_keys(&mut gs, &g, "paste", &me), "after the session answered");
+            assert!(!take_keys(&mut gs, "00", "paste", &me), "a grant the service did not make");
+        }
+        let mut gs = std::collections::HashMap::new();
+        let g = grant_keys(&mut gs, AT_SCREEN, false, std::time::Duration::ZERO);
+        assert!(!take_keys(&mut gs, &g, "paste", &AT_SCREEN.to_string()), "an ended grant");
+    }
+
+    /// As Go's TestActionsAgentUser: the actions go only to an agent of the
+    /// user at the screen, not where the system cannot tell.
+    #[cfg(unix)]
+    #[test]
+    fn actions_go_to_the_agent_at_the_screen() {
+        assert!(act_takers(vec![(Some(AWAY), 1), (Some(UNKNOWN), 2), (None, 3)], fake_screen).is_empty());
+        assert_eq!(act_takers(vec![(Some(AWAY), 1), (Some(AT_SCREEN), 2)], fake_screen), [2]);
+    }
+
+    #[cfg(unix)]
     use super::ControlUsers;
-    use super::{MAX_CONTROL_PER_USER, accept_control};
+    use super::{MAX_COMMANDS, MAX_CONTROL_PER_USER, accept_control, remember_command};
+
+    /// Without the app a Mac says that it pastes through it; a console its
+    /// user did not allow is named as such.
+    #[test]
+    fn why_nothing_pastes() {
+        assert!(super::no_target(false, false, true).contains("a Mac pastes through the CBB app"));
+        assert!(super::no_target(true, false, true).contains("did not allow consoles"));
+        assert!(super::no_target(false, false, false).contains("nothing on this device can paste"));
+        assert!(super::no_target(true, true, false).contains("nothing on this device can paste"));
+    }
+
+    /// A command is carried out once, until it expires; the commands held
+    /// are bounded, and an expired one makes room.
+    #[test]
+    fn a_command_is_carried_out_once() {
+        let mut seen = std::collections::HashMap::new();
+        assert!(remember_command(&mut seen, "c1", 2000, 1000).is_ok());
+        assert!(remember_command(&mut seen, "c1", 2000, 1500).unwrap_err().contains("already"));
+        for i in 1..MAX_COMMANDS {
+            assert!(remember_command(&mut seen, &format!("d{i}"), 5000, 1500).is_ok());
+        }
+        assert!(remember_command(&mut seen, "one-more", 5000, 1500).unwrap_err().contains("too many"));
+        // c1 expired: it makes room.
+        assert!(remember_command(&mut seen, "one-more", 5000, 2500).is_ok());
+    }
     use crate::sys::{UnixListener, UnixStream};
     use std::io::Read;
     use std::time::Duration;

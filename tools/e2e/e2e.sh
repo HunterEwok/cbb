@@ -6,29 +6,25 @@
 # containers on one network find each other with mDNS, pair with codes,
 # and sync copies; a fourth container browses them with avahi.
 #
-#   sh tools/e2e/e2e.sh path/to/cbb [path/to/cli]
+#   sh tools/e2e/e2e.sh path/to/cbb
 #
-# path/to/cbb is the service, a Linux binary: the Rust program (member/), or
-# the Go one (cmd/cbb); cbb-helper, the Go helper the Rust one starts for what
-# needs Go, goes into the containers too when it is beside it. path/to/cli,
-# when given, runs the commands against that service over its socket in
-# place of path/to/cbb: the Go cbb, whose output the checks below read.
+# path/to/cbb is the service, a Linux binary of the Rust program (member/);
+# cbb-helper, the Go helper it starts for what needs Go, goes into the
+# containers too when it is beside it. The members run as computers
+# (-full).
 #
-# With CBB_E2E_COVERDIR set to a directory, a cbb built with -cover writes its
-# coverage there (GOCOVERDIR in every container), for CI's coverage summary.
+# With CBB_E2E_COVERDIR set to a directory, a cbb-helper built with -cover
+# writes its coverage there (GOCOVERDIR in every container), for CI's
+# coverage summary.
 #
 # The containers and the network are removed at the end.
 set -eu
 
 bin=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
-cli=$bin
-if [ $# -gt 1 ]; then
-	cli=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
-fi
-# The containers' mounts: the service, its helper when it has one, the
-# commands' program.
+# The containers' mounts: the service, which is also the command line, and
+# its helper when it has one.
 mounts() {
-	printf -- '-v %s:/cb/cbb:ro -v %s:/cb/cli:ro' "$bin" "$cli"
+	printf -- '-v %s:/cb/cbb:ro -v %s:/cb/cli:ro' "$bin" "$bin"
 	if [ -f "$(dirname "$bin")/cbb-helper" ]; then
 		printf -- ' -v %s/cbb-helper:/cb/cbb-helper:ro' "$(dirname "$bin")"
 	fi
@@ -37,7 +33,7 @@ image=${E2E_IMAGE:-debian:stable-slim}
 run=cbe2e-$$
 net=$run-net
 members="a b c"
-# Every member gets a coverage directory; a cbb built without -cover ignores it.
+# Every member gets a coverage directory; a helper built without -cover ignores it.
 if [ -n "${CBB_E2E_COVERDIR:-}" ]; then
 	mkdir -p "$CBB_E2E_COVERDIR"
 	cover=$(cd "$CBB_E2E_COVERDIR" && pwd)

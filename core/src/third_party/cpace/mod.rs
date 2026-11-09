@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Translated to Rust from internal/third_party/cpace/cpace.go; see
+// Translated to Rust from internal/cpace/ of rsc.io/cmd/mote v0.1.3, file cpace.go; see
 // README.md.
 
 //! The CPace balanced password-authenticated key exchange, which lets two
@@ -298,5 +298,9 @@ fn o_cat(mut b: Vec<u8>, v1: &[u8], v2: &[u8]) -> Vec<u8> {
     b
 }
 
+#[cfg(test)]
+mod field_tests;
+#[cfg(test)]
+mod field_vectors;
 #[cfg(test)]
 mod tests;
