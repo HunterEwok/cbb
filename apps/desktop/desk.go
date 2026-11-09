@@ -286,15 +286,16 @@ func (d *Desk) StopHub(id string) {
 }
 
 // SetHub sets how this hub's tunnel hides (plain, obfuscate for
-// AmneziaWG, vless) and, when fwd is given, its forwarder ("default" for
-// the project's), keeping its addresses and port: cbb global hub -keep.
+// AmneziaWG, vless, which a hub with a forwarder offers by default) and,
+// when fwd is given, its forwarder ("default" for the project's), keeping
+// its addresses and port: cbb global hub -keep.
 func (d *Desk) SetHub(tunnel, fwd, key string) {
 	args := []string{"global", "hub", "-keep", "-firewall", "no"}
 	switch tunnel {
+	case "plain":
+		args = append(args, "-no-obfuscate", "-no-vless")
 	case "obfuscate":
-		args = append(args, "-obfuscate")
-	case "vless":
-		args = append(args, "-vless")
+		args = append(args, "-no-vless")
 	}
 	if fwd != "" {
 		args = append(args, "-forwarder", fwd)

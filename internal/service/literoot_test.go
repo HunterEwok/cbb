@@ -1196,7 +1196,7 @@ func TestLiteForwardOnly(t *testing.T) {
 }
 
 // TestLiteHubVLESS has a Rust hub's clients come over VLESS with XHTTP:
-// the admin Rust service is the hub with a forwarder and -vless, registers
+// the admin Rust service is the hub with a forwarder and VLESS, registers
 // the group's VLESS user ID, keeps the forwarder's VLESS settings, and the
 // lite member, whose offer's UDP address then leads nowhere, reaches it
 // through the forwarder's VLESS behind a TLS web server.
@@ -1267,11 +1267,11 @@ func TestLiteHubVLESS(t *testing.T) {
 	rust := startLite(t, bin, rustDir, "-no-mdns", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
 	adminOn(t, cli, desk, "rust")
 	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(),
-		ForwarderKey: forward.Pin(cert.Leaf), VLESS: true, Consent: true}
+		ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
 	waitFor(t, "the Rust member a hub", func() bool {
 		_, err := rust.do(t, req, "")
 		if err != nil && !strings.Contains(err.Error(), "admin") {
-			t.Fatalf("cbb global hub -vless on the Rust member: %v", err)
+			t.Fatalf("cbb global hub at a forwarder with VLESS on the Rust member: %v", err)
 		}
 		return err == nil
 	})

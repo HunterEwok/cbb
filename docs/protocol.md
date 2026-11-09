@@ -2279,8 +2279,8 @@ the hub's key. Implemented in Go (`tunnel.State.Rotate`, `internal/service/tunne
 
 ### Obfuscation
 
-A hub where the user asked for it (`cbb global hub -obfuscate`; `obfuscation` in its
-`tunnel.json`) speaks AmneziaWG instead of plain WireGuard. Its offer carries the settings,
+A hub speaks AmneziaWG instead of plain WireGuard unless the user turned it off (`cbb global
+hub -no-obfuscate -no-vless`; `obfuscation` in its `tunnel.json`). Its offer carries the settings,
 with AmneziaWG's own names; every client sets them on its end before the hub as its peer:
 
 | Field | Type | Meaning |
@@ -2325,7 +2325,8 @@ carries:
 | `path` | string | XHTTP: the path the web server passes, a slash and 8 to 64 of `A-Z a-z 0-9 - _`; absent with REALITY |
 | `id` | string | the group's VLESS user ID, a random UUID (version 4) |
 
-- A hub that sets VLESS speaks AmneziaWG as well ("Obfuscation" above): its offer carries
+- A hub at a forwarder asks for VLESS unless the user turned it off (`cbb global hub
+  -no-vless`). A hub that sets VLESS speaks AmneziaWG as well ("Obfuscation" above): its offer carries
   `obfuscation` beside `vless`. Inside VLESS it hides WireGuard's fixed sizes from what the
   TLS records show, and over UDP it lets a client try the faster way first.
 - Until the hub has the forwarder's answer it MUST NOT send an offer, so a client never
@@ -2621,9 +2622,11 @@ together, and close the connection beyond that; a sender MUST stay below it.
    the hub, are older than the forwarder saw or come from another period key than the one it
    saw first for the tag, no root or admin signed the registration, the records remove or
    freeze the hub, the obfuscation settings are outside their bounds,
-   another group registered that key or that VLESS user ID, the forwarder has no VLESS
-   and the hub asked for it, or the forwarder is full. To a hub that asked for VLESS the
-   answer adds `"vless": {"port": number, "public_key": bytes, "short_id": string,
+   another group registered that key or that VLESS user ID, or the forwarder is full. A
+   forwarder without VLESS registers a hub that asked for it for UDP alone and leaves
+   `vless` out of its answer; the hub then forgets its VLESS user ID and sends its offer
+   without `vless`. To a hub that asked for VLESS a forwarder with it
+   adds to its answer `"vless": {"port": number, "public_key": bytes, "short_id": string,
    "server_name": string}` with REALITY, or `"vless": {"transport": "xhttp", "port":
    number, "server_name": string, "path": string}` with XHTTP, where `port` is the web
    server's, and the forwarder lets that user ID in while the registration lasts. A group has one registration: a new one replaces the old, whose

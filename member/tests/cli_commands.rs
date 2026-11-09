@@ -1797,14 +1797,25 @@ fn global_commands() {
             },
             Case {
                 name: "hub",
-                args: &["global", "hub", "-port", "9000", "-firewall", "no", "-obfuscate", "203.0.113.7:9000"],
+                args: &[
+                    "global",
+                    "hub",
+                    "-port",
+                    "9000",
+                    "-firewall",
+                    "no",
+                    "-no-obfuscate",
+                    "-no-vless",
+                    "203.0.113.7:9000",
+                ],
                 answer: away(json!({"hub": true, "port": 9000, "endpoints": ["203.0.113.7:9000"]})),
                 sent: Some((
                     "away",
                     Some(|s| {
                         s.s("name") == "hub"
                             && s.i("port") == 9000
-                            && s.b("obfuscate")
+                            && s.b("obfuscate_off")
+                            && s.b("vless_off")
                             && s.list("addrs") == ["203.0.113.7:9000"]
                     }),
                 )),
@@ -1822,14 +1833,15 @@ fn global_commands() {
                     "198.51.100.9:8764",
                     "-forwarder-key",
                     "KEY",
-                    "-vless",
+                    "-no-vless",
                 ],
                 sent: Some((
                     "away",
                     Some(|s| {
                         s.s("forwarder") == "198.51.100.9:8764"
                             && s.s("forwarder_key") == "KEY"
-                            && s.b("vless")
+                            && s.b("vless_off")
+                            && !s.b("obfuscate_off")
                             && s.list("addrs").is_empty()
                     }),
                 )),
@@ -1895,20 +1907,20 @@ fn global_commands() {
             },
             Case {
                 name: "hub elsewhere takes none of this hub's settings",
-                args: &["global", "hub", "-on", "desk", "-obfuscate"],
+                args: &["global", "hub", "-on", "desk", "-no-obfuscate"],
                 code: 2,
                 stderr: "-on takes only",
                 ..Case::default()
             },
             Case {
                 name: "hub keeps its settings",
-                args: &["global", "hub", "-firewall", "no", "-keep", "-obfuscate"],
+                args: &["global", "hub", "-firewall", "no", "-keep", "-no-obfuscate"],
                 sent: Some((
                     "away",
                     Some(|s| {
                         s.s("name") == "hub"
                             && s.b("keep")
-                            && s.b("obfuscate")
+                            && s.b("obfuscate_off")
                             && s.s("forwarder").is_empty()
                             && s.list("addrs").is_empty()
                     }),

@@ -1499,7 +1499,14 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
-- The member keeps the user's order of the device tiles and their collections, in
+-- A hub hides its tunnel by default: it speaks AmneziaWG and, at a forwarder, asks for VLESS,
+  so sync away from home works on networks that block WireGuard without a setting.
+  `cbb global hub -no-vless` turns VLESS off and `-no-obfuscate` with it plain WireGuard;
+  `-obfuscate` and `-vless` are gone, and the control socket's `obfuscate` and `vless`
+  became `obfuscate_off` and `vless_off`. A forwarder without VLESS registers such a hub for
+  UDP alone instead of refusing it.
+
+ The member keeps the user's order of the device tiles and their collections, in
   `arrangement.json` in its state folder, and answers `view` with the tiles ready to draw
   and `arrange` with the user's change (docs/apps.md, "What the member shows"). The iPhone,
   Android, Aurora, Mac and tray apps only draw it: none keeps an order in its settings or

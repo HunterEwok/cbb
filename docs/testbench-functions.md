@@ -371,9 +371,9 @@ line here with every new function, and a case for it in the catalogue.
 | W.7 | Fail closed | W3, S9 |
 | W.8 | `cbb global hub` with addresses and `-port` | W4 |
 | W.9 | `-firewall ask/yes/no` and closing the port | W4 |
-| W.10 | `-obfuscate` (AmneziaWG) | W4, W35 |
+| W.10 | AmneziaWG by default, `-no-obfuscate` | W4, W35 |
 | W.11 | `-forwarder`, `-forwarder-key` | W4, W10 |
-| W.12 | `-vless` | W4, W34 |
+| W.12 | VLESS by default at a forwarder, `-no-vless` | W4, W34 |
 | W.13 | The router as the hub | W4 |
 | W.14 | `cbb global` status | W5 |
 | W.15 | The hub's offer | W5, W10 |

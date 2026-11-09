@@ -120,8 +120,8 @@ only its key and a table of hashed tags (see [What the server keeps](#what-the-s
 ### VLESS on the forwarder
 
 For networks that block VPNs ([Networks that block VPNs](../guide/blocked-networks.md)),
-the forwarder also takes VLESS, in one of two ways. The hub asks for VLESS with `-vless`
-and gets the rest from the forwarder, whichever way it runs.
+the forwarder also takes VLESS, in one of two ways. A hub asks for VLESS unless it runs with
+`-no-vless`, and gets the rest from the forwarder, whichever way it runs.
 
 #### Behind your site's web server (XHTTP)
 
