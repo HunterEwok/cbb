@@ -31,7 +31,7 @@ var forwarded = regexp.MustCompile(`^"\$(?:[@*0-9]|\{?[A-Za-z_][A-Za-z0-9_]*\}?)
 
 // installerCallPS finds the texts the PowerShell scripts hand
 // packaging/windows/l10n.ps1: the first argument of T, quoted.
-var installerCallPS = regexp.MustCompile(`(?m)(?:^|[\s;(=])T ('(?:[^']|'')*'|"(?:[^"` + "`" + `]|` + "`" + `.)*")`)
+var installerCallPS = regexp.MustCompile(`(?m)(?:^|[\s;(=])T (?:-Text )?('(?:[^']|'')*'|"(?:[^"` + "`" + `]|` + "`" + `.)*")`)
 
 // installerDirective matches a printf directive in a text.
 var installerDirective = regexp.MustCompile(`%.`)

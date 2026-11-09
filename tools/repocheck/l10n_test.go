@@ -34,8 +34,8 @@ func TestCheckInstallerL10n(t *testing.T) {
 		},
 		{
 			name:    "PowerShell",
-			files:   map[string]string{"packaging/windows/install.ps1": ". (Join-Path $PSScriptRoot 'l10n.ps1')\nWrite-Host (T 'It''s %s' $x)\n"},
-			catalog: "It's %s\tX %s\n",
+			files:   map[string]string{"packaging/windows/install.ps1": ". (Join-Path $PSScriptRoot 'l10n.ps1')\nWrite-Host (T 'It''s %s' $x)\nWrite-Host (T -Text 'At %s %s' $x $y)\n"},
+			catalog: "It's %s\tX %s\nAt %s %s\tY %s %s\n",
 		},
 		{
 			name:  "a script without the library is not checked",

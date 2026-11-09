@@ -30,9 +30,6 @@
 # install.ps1 from the archive.
 
 & {
-	# T takes its text and the values for its %s by position, as printf does.
-	[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPositionalParameters', '', Justification = 'T is a printf')]
-	param()
 	Set-StrictMode -Version 3
 	$ErrorActionPreference = 'Stop'
 	$ProgressPreference = 'SilentlyContinue'
@@ -43,6 +40,8 @@
 	# The messages in the user's language: l10n.ps1 from beside get.ps1 in a
 	# checkout, else English; the release puts l10n.ps1 and the translations
 	# here (packaging/l10n-embed.sh).
+	# A call with two values names -Text, as PSScriptAnalyzer flags three
+	# positional arguments.
 	if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot 'l10n.ps1'))) {
 		. (Join-Path $PSScriptRoot 'l10n.ps1') (Join-Path $PSScriptRoot '..\l10n')
 	} else {
@@ -226,7 +225,7 @@
 				throw (T 'release.json is not the release stable.json names; not installing')
 			}
 		} elseif ("v$($rel.Value.version)" -cne $version) {
-			throw (T 'release.json is for %s, not %s' ($rel.Value.version) $version)
+			throw (T -Text 'release.json is for %s, not %s' ($rel.Value.version) $version)
 		}
 		$entry = $rel.Value.files | Where-Object { $_.name -ceq $archive } | Select-Object -First 1
 		if (-not $entry) { throw (T 'release.json does not list %s' $archive) }
@@ -284,8 +283,8 @@
 				$version = "v$named"
 				if (-not $env:CBB_RELEASE_DIR) { $base = "$repo/releases/download/$version" }
 			}
-			$step = T 'downloading %s (%s)' $archive $version
-			Write-Host (T 'Downloading %s (%s)...' $archive $version)
+			$step = T -Text 'downloading %s (%s)' $archive $version
+			Write-Host (T -Text 'Downloading %s (%s)...' $archive $version)
 			foreach ($f in @($archive, 'SHA256SUMS')) {
 				if ($env:CBB_RELEASE_DIR) {
 					Copy-Item (Join-Path $env:CBB_RELEASE_DIR $f) (Join-Path $tmp $f)
@@ -354,7 +353,7 @@
 			Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 		}
 	} catch {
-		Write-Host (T 'get.ps1: %s failed: %s' $step ($_.Exception.Message)) -ForegroundColor Red
+		Write-Host (T -Text 'get.ps1: %s failed: %s' $step ($_.Exception.Message)) -ForegroundColor Red
 		if ($details) {
 			$_ | Format-List * -Force | Out-String | Write-Host
 			Write-Host $_.ScriptStackTrace
