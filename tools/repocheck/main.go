@@ -114,6 +114,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 		problems = append(problems, check(f.name, f.data, listed)...)
 		problems = append(problems, checkDocs(f.name, f.data, contents)...)
 		problems = append(problems, checkOldName(f.name, f.data)...)
+		problems = append(problems, checkGoneName(f.name, f.data)...)
 	}
 	problems = append(problems, checkCommands(contents)...)
 	problems = append(problems, checkFlags(contents)...)

@@ -2019,6 +2019,10 @@ All notable changes to cbb are documented in this file. The format follows
   program calls any more. `TestProjectAddresses` now compares the copies of the update
   servers' addresses with `member/src/update.rs`.
 
+- `tools/repocheck` refuses the names of what the project removed for good (the core as
+  WebAssembly and its build tags, the phones' tunnel in Go, the Go packages the Rust `cbb`
+  replaced) outside the changelog, the decisions and the list of removed tests.
+
 - The Go command line `cmd/cbb` and the Go service in it: `cbb` is the Rust program on every
   member, with `cbb-helper` beside it on computers. Its tests run on the Rust `cbb`
   (`member/tests/cli_commands.rs`, the service tests in `internal/service`).

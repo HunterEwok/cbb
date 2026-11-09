@@ -1214,7 +1214,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   key, not its address, so a phone that moves from Wi-Fi to a mobile network stays the same
   hub. The hub's WireGuard runs in the app's process, in the Rust core's tunnel
   (`ffi/src/tunnel.rs`), beside the client side: the lite member's tunnel, one for the lite
-  member and every phone, rather than a Go tunnel bound by gomobile, which would keep a
+  member and every phone, rather than a tunnel in Go for the phones, which would keep a
   second WireGuard, AmneziaWG and VLESS to maintain and Go in both apps' builds (D-87). The
   phones then reach a forwarder over VLESS with XHTTP only: REALITY needs a browser's
   ClientHello, which rustls does not give, so it stays on the Go servers.
