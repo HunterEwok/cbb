@@ -19,7 +19,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** Checks the content of images and files against Go's vectors (go test ./internal/node -update) and between two nodes. */
+/** Checks the content of images and files against the vectors in testdata/interop and between two nodes. */
 class ContentTest {
     /** A phone's picture and files reach the other phone, which fetches their sealed blob and opens it, each part checked; one over the limit is not fetched. */
     @Test

@@ -47,6 +47,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_HUB_KEY_AHEAD` | the lite member's `cbb service` | Seconds a hub's offers carry its key for a new period of the server credentials before it serves with it, three days by default; tests set it shorter. |
 | `CBB_TEST_RESOLVE` | the lite member's `cbb service` | For tests only: `host=ip` pairs, separated by commas, that stand in for DNS when it looks up the project's relay by the names `entries.json` gives. |
 | `CBB_TEST_ELSEWHERE` | the lite member's `cbb service` | For tests only: a folder; while it holds a file named by the device's ID, the device neither publishes itself by mDNS nor dials the members it finds, as if on another network. |
+| `CBB_TEST_FALLBACK` | the lite member's `cbb service` | For tests only: milliseconds a member waits for one with a lower device ID to dial it before it dials that one itself (30 s otherwise); set, the member also dials the members with a greater device ID at port 1, as if a firewall there dropped the member port. |
 | `CBB_TEST_APPLETV_NAME` | `cbb-helper` | For tests only: the name an Apple TV announces by mDNS, which the helper then takes instead of browsing for it; empty for none. |
 | `CBB_TEST_BLUEZ` | cbb-helper on Linux | For tests only: the D-Bus address of a test's BlueZ (`bluetest`), which the Bluetooth keyboard registers with instead of the system bus. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-site www.example.com`. |
@@ -88,7 +89,8 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEST_UINPUT` | Go tests of the uinput helper | `1` makes a missing `/dev/uinput` a failure instead of a skip. |
 | `CBB_TEST_CLIPBOARD` | Go tests of the Windows clipboard | `1` allows the tests to overwrite the clipboard. |
 | `CBB_UI_BROWSER` | Go tests of the tray app's window | The Chrome, Chromium or Edge to run the window in; without it the test looks in the usual places, and skips without a browser outside CI. |
-| `CBB_TEST_CLOCK` | the bench's time-scaled build (`-tags benchtime`) | What the build adds to the wall clock, so that certificates expire on the bench in minutes. Never in a release. |
+| `CBB_TEST_ACTIONS` | the Rust service, in the Go service's tests | A folder that stands for the system's quick actions: a preset with a file `refuse-NAME` there is refused with its text, any other is noted in the file `ran` and not run. Never set by hand. |
+| `CBB_TEST_CLOCK` | the bench's time-scaled build (the feature `benchtime`) | What the build adds to the wall clock, so that certificates expire on the bench in minutes. Never in a release. |
 | `CBB_TEST_CLOCK_FILE` | the bench's time-scaled build | A file that holds the value of `CBB_TEST_CLOCK` when that is not set, so the bench moves a member's clock with a restart of the service. |
 | `CBB_TEST_SCALE` | the bench's time-scaled build | How many times faster long times run: 100000 by default, `1` for cases that move only the clock. |
 | `CBB_TEST_XHTTP_CA` | the bench's time-scaled build | A PEM file of a CA that the clients of VLESS over XHTTP trust beside the public ones, for the bench's web server in front of a forwarder (W46). Never in a release. |
@@ -99,6 +101,9 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_E2E_COVERDIR` | `tools/e2e/e2e.sh` | A directory where a `cbb` built with `-cover` writes its coverage, as `GOCOVERDIR` in every container (CI's coverage, [testing](../testing.md#coverage)). |
 | `CBB_FAKE_HELPER` | the lite member's tests | Makes the test program play `cbb-helper` for the helper channel's tests. |
 | `CBB_LITE` | Go tests with the lite member | The lite member's binary (`cargo build` at the top, `target/`). |
+| `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary: the tests of `internal/relay` that check a relay from outside run against it. |
+| `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `group_record_bytes`, `record_bytes`); the Go tests set it. |
+| `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |
 | `CBB_TEST_RUST_SERVICE` | Go tests of the service | The Rust service's binary: the tests that start a Linux member with the default configuration run it in place of the Go service, finding their peers by mDNS. |
 | `CBB_ESP32_ON_LINUX` | `TestEmbassyJoiner` | The `esp32-on-linux` binary of `embassy/`, run over a TAP interface. |
 | `CBB_PHONE_ON_LINUX` | `TestFFIJoiner` | The example `phone-on-linux` of `ffi/` (feature `member`): the Aurora app's joining and syncing with a software key. |
@@ -108,7 +113,15 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_INTEROP_OUT` | the Swift and Kotlin kits' tests, Go's interop tests | A directory where the kits write fresh interop vectors and Go reads them; without it Go reads `testdata/interop`. |
 | `CBB_VERDICTS` | the verdict tests of all four implementations (`TestVerdicts`, `command::verdicts`, `VerdictTest`, `VerdictTests`) | A corpus of `tools/difffuzz gen` to write the verdicts on ([differential fuzzing](../differential.md)); without it each runs on a small corpus of its own. |
 | `CBB_VERDICTS_OUT` | the same tests | The file the verdicts go to, one line per case. |
+| `CBB_TEST_AHEAD_FILE` | the Rust service, in the Go service's tests | A file holding the milliseconds the service's wall clock is moved by, read each time; the tests write it to move the clock while the service runs (as the Go service's settings for tests). Never set by hand. |
+| `CBB_TEST_RENEW_EVERY` | the Rust service, in the Go service's tests | How often, in milliseconds, the root and the admins look for certificates due for renewal, in place of twice a day. Never set by hand. |
+| `CBB_TEST_ATTEST_ROOTS` | `cbb-helper`, in the service's tests | A PEM file of the public keys (or certificates) of the roots an Android key attestation must chain to, in place of Google's; read at each check. Never set by hand. |
+| `CBB_TEST_TPM_ROOTS` | `cbb-helper`, in the service's tests | A PEM file of the TPM makers' roots an EK certificate must chain to, in place of the built-in ones. Never set by hand. |
+| `CBB_TEST_STATUS_URL` | `cbb-helper`, in the service's tests | Where the attestation status list and its keys are fetched from, in place of `https://cbb.tools/attest/`. Never set by hand. |
+| `CBB_TEST_STATUS_EVERY` | the Rust service, in the service's tests | How often, in milliseconds, the root fetches the attestation status list, in place of once a day. Never set by hand. |
+| `CBB_TEST_DEAD_UDP` | the Rust service, in the service's tests | An address (host:port) that never answers, which replaces the hubs' UDP addresses, as on a network that blocks WireGuard, so that the tunnel goes over VLESS. Never set by hand. |
 | `CBB_UPDATE_VECTORS` | the lite core's keyboard tests | `1` writes the keyboard layouts' vectors again (`cargo test -p cbb-core keyboard`). |
+| `CBB_ARCH` | the build of `cbb` in Rust (`member/packaging/build.sh`) | The architecture as the release's archives name it (`amd64`, `arm64`, `armv7`, `armv6`, `mips`, `mipsle`), which `cbb update` downloads for; set by `build.sh`, and without it the one Rust names. |
 | `CBB_SOURCE` | the Rust core's build | The commit the core is built from, which its `version` call names ([the core's entry point](../core-api.md)); empty when unset. |
 | `CBB_WRITE_INTEROP` | the Swift kit's certificate tests | Writes the certificates that Go's `TestSwiftCertificates` checks. |
 | `CBB_SWIFT_INTEROP` | Go's interop tests | The `cbb-interop` tool, which plays the phone in Go tests over plain TCP. |

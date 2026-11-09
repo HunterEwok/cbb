@@ -27,6 +27,9 @@ web = ["tls", "dep:crypto-bigint", "dep:p384"]
 # fuzzing opens the readers of network input to the cargo fuzz targets in
 # fuzz/; nothing else turns it on.
 fuzzing = []
+# benchtime is the bench's time-scaled build (src/benchtime.rs), never a
+# release's.
+benchtime = []
 
 [dependencies]
 aes-gcm = { version = "0.11", default-features = false, features = ["aes"], optional = true }

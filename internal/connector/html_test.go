@@ -36,8 +36,7 @@ func TestHTML(t *testing.T) {
 	run(t, socket, b)
 	plain := newBoard()
 	run(t, socket, plain)
-	plain.copyOn(Item{Text: "the plain board watches"})
-	waitFor(t, "the plain board", func() bool { return paste(t, socket) == "the plain board watches" })
+	watching(t, socket, plain, "the plain board watches")
 
 	html := "<p>Hello, <b>world</b></p>"
 	b.copyOn(Item{Text: "Hello, world", HTML: html})

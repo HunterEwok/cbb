@@ -12,9 +12,9 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 	"time"
 
@@ -49,6 +49,23 @@ func (s *releaseSigner) roots(t *testing.T) [][]byte {
 		t.Fatal(err)
 	}
 	return [][]byte{der}
+}
+
+// rootsEnv is roots for the Rust service: CBB_RELEASE_ROOTS names a PEM
+// file of them.
+func (s *releaseSigner) rootsEnv(t *testing.T) string {
+	t.Helper()
+	var b bytes.Buffer
+	for _, der := range s.roots(t) {
+		if err := pem.Encode(&b, &pem.Block{Type: "PUBLIC KEY", Bytes: der}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "roots.pem")
+	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return "CBB_RELEASE_ROOTS=" + path
 }
 
 // sign returns the signed files of version on the stable channel at seq.
@@ -90,11 +107,9 @@ func (s *releaseSigner) signArchive(t *testing.T, version string, seq uint64, da
 // across a restart, and take no older or forged one.
 func TestReleaseSpreads(t *testing.T) {
 	signer := newReleaseSigner(t)
-	roots := signer.roots(t)
-	withRoots := func(c *Config) { c.ReleaseRoots = roots }
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", withRoots)
-	pc := startWith(t, &h, "pc", "linux", withRoots)
+	pi := startEnv(t, &h, "pi", signer.rootsEnv(t))
+	pc := startEnv(t, &h, "pc", signer.rootsEnv(t))
 	pairWith(t, pi, pc)
 	waitFor(t, "pc is connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -123,7 +138,7 @@ func TestReleaseSpreads(t *testing.T) {
 		t.Errorf("pc holds %q after the refused ones", got)
 	}
 
-	mac := startWith(t, &h, "mac", "linux", withRoots)
+	mac := startEnv(t, &h, "mac", signer.rootsEnv(t))
 	pairWith(t, pi, mac)
 	waitFor(t, "mac, joining later, holds 0.6.1", func() bool { return mac.status(t).Release == "0.6.1" })
 
@@ -140,11 +155,9 @@ func TestReleaseSpreads(t *testing.T) {
 // root signs keys.json again.
 func TestReleaseUnderNewKeys(t *testing.T) {
 	signer := newReleaseSigner(t)
-	roots := signer.roots(t)
-	withRoots := func(c *Config) { c.ReleaseRoots = roots }
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", withRoots)
-	pc := startWith(t, &h, "pc", "linux", withRoots)
+	pi := startEnv(t, &h, "pi", signer.rootsEnv(t))
+	pc := startEnv(t, &h, "pc", signer.rootsEnv(t))
 	pairWith(t, pi, pc)
 	waitFor(t, "pc is connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -169,10 +182,9 @@ func TestReleaseUnderNewKeys(t *testing.T) {
 // release does not list is refused, and a newer release drops it.
 func TestReleaseArchives(t *testing.T) {
 	signer := newReleaseSigner(t)
-	withRoots := func(c *Config) { c.ReleaseRoots = signer.roots(t) }
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", withRoots)
-	pc := startWith(t, &h, "pc", "linux", withRoots)
+	pi := startEnv(t, &h, "pi", signer.rootsEnv(t))
+	pc := startEnv(t, &h, "pc", signer.rootsEnv(t))
 	pairWith(t, pi, pc)
 	waitFor(t, "pc is connected", func() bool { return len(pi.status(t).Peers) == 1 })
 
@@ -268,19 +280,13 @@ func releaseJSON(t *testing.T, r *control.Release) string {
 // A hub asks for the archives its members update from that it lacks, and
 // only the release lists; a member that is no hub asks for none.
 func TestWantedReleaseFiles(t *testing.T) {
-	a := release.Asset{Name: "cbb-linux-arm64.tar.gz", SHA256: hexSum([]byte("a"))}
-	b := release.Asset{Name: "cbb-windows-amd64.zip", SHA256: hexSum([]byte("b"))}
-	c := release.Asset{Name: "cbb-darwin-arm64.tar.gz", SHA256: hexSum([]byte("c"))}
-	held := map[string]bool{b.SHA256: true}
-	holds := func(sum [sha256.Size]byte) bool { return held[hex.EncodeToString(sum[:])] }
-	names := map[string]bool{a.Name: true, b.Name: true, "cbb-plan9-amd64.tar.gz": true}
-	if got := wantedFiles([]release.Asset{a, b, c}, names, holds); !slices.Equal(got, []string{a.Name}) {
-		t.Errorf("wanted %v", got)
-	}
-
 	signer := newReleaseSigner(t)
 	var h hub
-	pi := startWith(t, &h, "pi", "linux", func(c *Config) { c.ReleaseRoots = signer.roots(t) })
+	pi := startEnv(t, &h, "pi", signer.rootsEnv(t))
+	// The Rust service takes releases in a group only.
+	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pi.do(t, control.Header{Op: control.OpRelease}, releaseJSON(t, signer.sign(t, "0.6.1", 2))); err != nil {
 		t.Fatal(err)
 	}

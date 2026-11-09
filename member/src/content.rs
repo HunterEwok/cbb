@@ -45,13 +45,16 @@ pub struct Store {
     away: Mutex<u64>,
 }
 
+/// The blobs' folder in the state directory.
+pub const DIR: &str = "content";
+
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
 /// Empties the blobs' folder in state_dir, as a service does when it starts.
 pub fn empty(state_dir: &Path, log: &dyn Fn(&str)) {
-    match fs::remove_dir_all(state_dir.join("content")) {
+    match fs::remove_dir_all(state_dir.join(DIR)) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
             log(&format!("cbb: emptying the cache of the copies' images and files: {e}"))
         }
@@ -61,7 +64,7 @@ pub fn empty(state_dir: &Path, log: &dyn Fn(&str)) {
 
 impl Store {
     pub fn open(state_dir: &Path) -> Store {
-        Store { dir: state_dir.join("content"), served: Mutex::new(HashMap::new()), away: Mutex::new(u64::MAX) }
+        Store { dir: state_dir.join(DIR), served: Mutex::new(HashMap::new()), away: Mutex::new(u64::MAX) }
     }
 
     /// Sets the largest blob served through the group's tunnel.
@@ -417,7 +420,69 @@ mod tests {
     use cbb_core::copy::new_key;
     use cbb_core::media::Part;
 
-    use super::{Source, Store};
+    use super::{KEEP, Source, Store};
+
+    /// The cache keeps the KEEP newest blobs and drops the rest, and drops
+    /// what fetches and seals left once it is a day old, while a newer
+    /// leftover, which a fetch may still be writing, stays.
+    /// A fetch that continues what an earlier one left becomes the blob
+    /// once the whole file has the size and the hash; one that does not is
+    /// dropped. Only a whole blob is served.
+    #[test]
+    fn a_continued_fetch_is_kept() {
+        use sha2::{Digest, Sha256};
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("cbb-fetch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = Store::open(&dir);
+        std::fs::create_dir_all(&store.dir).unwrap();
+        let sum: [u8; 32] = Sha256::digest(b"abcdef").into();
+        let append = |b: &[u8]| {
+            let mut f = std::fs::OpenOptions::new().create(true).append(true).open(store.partial(&sum)).unwrap();
+            f.write_all(b).unwrap();
+        };
+        append(b"abc");
+        assert_eq!(store.held(&sum), None);
+        assert_eq!(store.read(&sum, 0, 6), None, "a part not yet whole is served");
+        append(b"def");
+        store.finish(&sum, 6).unwrap();
+        assert_eq!(store.held(&sum), Some(6));
+        assert_eq!(store.read(&sum, 2, 3).unwrap(), b"cde");
+        assert_eq!(store.served(&sum), 5);
+
+        let other: [u8; 32] = Sha256::digest(b"other").into();
+        std::fs::write(store.partial(&other), b"not it").unwrap();
+        assert!(store.finish(&other, 6).is_err());
+        assert!(!store.partial(&other).exists() && store.held(&other).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_keeps_the_newest() {
+        use std::time::{Duration, SystemTime};
+        let dir = std::env::temp_dir().join(format!("cbb-prune-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = Store::open(&dir);
+        std::fs::create_dir_all(&store.dir).unwrap();
+        let now = SystemTime::now();
+        let put = |name: &str, age: Duration| {
+            let f = std::fs::File::create(store.dir.join(name)).unwrap();
+            f.set_modified(now - age).unwrap();
+        };
+        for i in 0..KEEP + 4 {
+            put(&format!("{i:064x}"), Duration::from_secs(60 * i as u64));
+        }
+        put("old.part", Duration::from_secs(2 * 86_400));
+        put("new.part", Duration::from_secs(3600));
+        store.prune();
+        let has = |name: &str| store.dir.join(name).exists();
+        for i in 0..KEEP + 4 {
+            assert_eq!(has(&format!("{i:064x}")), i < KEEP, "blob {i}");
+        }
+        assert!(!has("old.part"), "a leftover two days old stays");
+        assert!(has("new.part"), "a leftover an hour old went");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn seals_and_opens_files() {
