@@ -1551,12 +1551,38 @@ func TestPairingAcrossARenewal(t *testing.T) {
 	}
 }
 
+// logTrace logs the service's mDNS trace (CBB_MDNS_TRACE) when the test
+// failed: what browsing saw and mdns-sd's packets and cache, by the time of
+// day in UTC, so that a member that never found another on CI shows why.
+// A restarted service's runs share the file; only its last lines are kept.
+func logTrace(t *testing.T, name, path string) {
+	if !t.Failed() {
+		return
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Logf("%s mdns: no trace: %v", name, err)
+		return
+	}
+	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	const keep = 4000
+	if len(lines) > keep {
+		t.Logf("%s mdns: the trace's first %d lines left out", name, len(lines)-keep)
+		lines = lines[len(lines)-keep:]
+	}
+	for _, l := range lines {
+		t.Logf("%s mdns: %s", name, l)
+	}
+}
+
 // startRust runs s on the Rust service as a computer's, on a port
 // of its own, which addr reads from its log once it is in a group.
 func startRust(t *testing.T, bin string, s *testService) *testService {
 	t.Helper()
-	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir(), fmt.Sprintf("CBB_TEST_RENEW_EVERY=%d", renewEvery.Milliseconds()), fmt.Sprintf("CBB_HUB_KEY_AHEAD=%d", int64(hubKeyAhead.Seconds()))}, s.env...)
+	trace := filepath.Join(s.dir, "mdns-trace.log")
+	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir(), fmt.Sprintf("CBB_TEST_RENEW_EVERY=%d", renewEvery.Milliseconds()), fmt.Sprintf("CBB_HUB_KEY_AHEAD=%d", int64(hubKeyAhead.Seconds())), "CBB_MDNS_TRACE=" + trace}, s.env...)
 	r := startLiteEnv(t, bin, s.dir, env, "-port", strconv.Itoa(s.port), "-name", s.name)
+	t.Cleanup(func() { logTrace(t, s.name, trace) })
 	r.name, r.os, r.rust, r.env, r.port = s.name, s.os, true, s.env, s.port
 	// It ends with an error after cbb leave or an admin's restart, for
 	// systemd to start it again.

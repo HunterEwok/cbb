@@ -48,6 +48,9 @@ if-addrs = "0.15.0"
 # nix 0.31.3 (under GotaTun) still uses on iOS: Cargo.lock keeps 0.2.189 until
 # a nix release follows.
 libc = "0.2.189"
+# mdns-sd's debug log, written to the file CBB_MDNS_TRACE names in tests
+# (src/discovery.rs, trace).
+log = "0.4.34"
 mdns-sd = "0.21.6"
 qrcode = { version = "0.14.1", default-features = false }
 serde = { version = "1", features = ["derive"] }
