@@ -176,7 +176,7 @@ impl Group {
         let period = credential::sign(pb.clone(), &spki(&rk), &mut |b| identity::sign_external(&*rk, b)).unwrap();
         let hashes: Vec<certs::KeyHash> = servers.iter().map(|k| certs::sha256(&spki(k))).collect();
         let pk = period_key.clone();
-        let mut by_period = |b| credential::sign(b, &spki(&pk), &mut |x| identity::sign_external(&*pk, x)).unwrap();
+        let by_period = |b| credential::sign(b, &spki(&pk), &mut |x| identity::sign_external(&*pk, x)).unwrap();
         let hubs = by_period(credential::hubs_body(&pb, &hashes, &[], version).unwrap());
         let members = by_period(credential::members_body(&pb, &hashes, version).unwrap());
         [period, hubs, members]
