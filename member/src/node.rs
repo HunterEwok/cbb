@@ -2234,6 +2234,13 @@ impl Node {
         for c in self.conns.lock().unwrap().values() {
             if let Some(Refusal::Refused(why)) = st.refused_peer(&c.chain) {
                 self.logf(&format!("cbb: closing the connection to {}: {why}", c.id));
+                // The records go first, so that it hears why, as in
+                // add_records.
+                if c.peer.lock().unwrap().is_some() {
+                    for chunk in chunk_records(st.all()) {
+                        self.enqueue(c, Out::Records(chunk));
+                    }
+                }
                 c.close(true);
             }
         }
@@ -2261,11 +2268,6 @@ impl Node {
             fresh
         };
         self.apply_copy_rules();
-        {
-            let (m, cv) = &self.changed;
-            *m.lock().unwrap() += 1;
-            cv.notify_all();
-        }
         // A thaw lets in devices refused until now, and a claim, a resolve,
         // a settings, a checkpoint or a recovery record may, as Go's
         // updateRecords.
@@ -2314,6 +2316,13 @@ impl Node {
                 }
             }
         }
+        drop(st);
+        // Only now are those waiting for a change woken: the service's
+        // loop may settle at once, and a connection it closes must have the
+        // records that refuse it queued first.
+        let (m, cv) = &self.changed;
+        *m.lock().unwrap() += 1;
+        cv.notify_all();
     }
 }
 
