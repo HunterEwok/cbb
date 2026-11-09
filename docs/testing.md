@@ -75,6 +75,14 @@ becomes a vector here.
 - `internal/service` starts whole members in one test: sync, pairing, remote paste, quick
   actions, sync away from home through a hub, a forwarder (`TestAwayThroughForwarder`) and a
   relay (`TestAwayThroughRelay`), with obfuscation (`TestAwayObfuscated`).
+- `member/tests` runs the Rust `cbb service` as programs on the loopback, without mDNS, and
+  talks to them over the control and admin sockets as plain JSON (`common/mod.rs`):
+  `control_contract` checks that every operation answers once and on the right socket and
+  that a broken client never stops the service; `control_admin` admits, renames, removes,
+  freezes, makes admins, hands over and takes over; `remote_commands` carries out remote
+  paste and quick actions through a member's watchers; `helper_faults` runs a fake
+  cbb-helper that crashes, hangs, writes garbage or plays a TPM. `cli_commands` checks the
+  command line against a fake service.
 - `tools/e2e/e2e.sh` runs the built static binary as three members and an avahi browser
   in Docker containers: mDNS, pairing with codes, sync, a wrong code.
 - The installer jobs install, run and remove the service on each system they cover.

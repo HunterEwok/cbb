@@ -98,6 +98,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_SE_TEST` | Go tests on a Mac | `1` lets the tests of `internal/sekey` make keys in the Mac's Secure Enclave; without it no test key goes there. |
 | `CBB_E2E_COVERDIR` | `tools/e2e/e2e.sh` | A directory where a `cbb` built with `-cover` writes its coverage, as `GOCOVERDIR` in every container (CI's coverage, [testing](../testing.md#coverage)). |
 | `CBB_FAKE_HELPER` | the lite member's tests | Makes the test program play `cbb-helper` for the helper channel's tests. |
+| `CBB_FAKE_HELPER_MODE` | the lite member's tests | Makes the test program play a `cbb-helper` that misbehaves as the value says (`crash`, `silent`, `garbage`, `hang`, `die-on-call`) or plays a TPM (`tpm`), for `member/tests/helper_faults.rs`. |
 | `CBB_LITE` | Go tests with the lite member | The lite member's binary (`cargo build` at the top, `target/`). |
 | `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary: the tests of `internal/relay` that check a relay from outside run against it. |
 | `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `group_record_bytes`, `record_bytes`); the Go tests set it. |
