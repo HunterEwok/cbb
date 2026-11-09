@@ -16,6 +16,7 @@
 
 #include <dlfcn.h>
 #include <cstring>
+#include <memory>
 
 using namespace pkcs11;
 
@@ -44,7 +45,7 @@ const QString staleKey = QStringLiteral("keys/admin_stale");
 const QString wrongKey = QStringLiteral("keys/admin_wrong");
 // The tries Aurora's TA gives a user PIN before it locks (measured).
 const int pinTries = 7;
-// How long a held PIN lasts after it was last used.
+// How long the admin token stays logged in after its last use.
 const qint64 pinHoldMs = 2 * 60 * 1000;
 
 QString hex(CK_RV rv) { return QStringLiteral("0x%1").arg(rv, 0, 16); }
@@ -65,31 +66,13 @@ void wipe(QByteArray *b)
     b->clear();
 }
 
-// The held PIN.
-QMutex pinLock;
-QByteArray heldPin;
-QElapsedTimer pinUsed;
-
-// The held PIN while it lasts, which using it renews.
-QByteArray takePin()
-{
-    QMutexLocker l(&pinLock);
-    if (heldPin.isEmpty() || !pinUsed.isValid() || pinUsed.elapsed() > pinHoldMs) {
-        wipe(&heldPin);
-        return QByteArray();
-    }
-    pinUsed.restart();
-    return heldPin;
-}
-
-void holdPin(const QByteArray &pin)
-{
-    QMutexLocker l(&pinLock);
-    wipe(&heldPin);
-    heldPin = pin;
-    heldPin.detach();
-    pinUsed.restart();
-}
+// libckteec, loaded and initialized once for every Token that uses it and
+// finalized when the last one goes: C_Finalize ends every session of the
+// process, the kept login's too.
+QMutex libLock;
+void *libHandle = nullptr;
+CK_FUNCTION_LIST *libList = nullptr;
+int libUsers = 0;
 
 QByteArray randomPin()
 {
@@ -114,10 +97,15 @@ public:
                 m_f->C_Logout(m_session);
             m_f->C_CloseSession(m_session);
         }
-        if (m_f)
-            m_f->C_Finalize(nullptr);
-        if (m_lib)
-            dlclose(m_lib);
+        if (m_f) {
+            QMutexLocker l(&libLock);
+            if (--libUsers == 0) {
+                libList->C_Finalize(nullptr);
+                dlclose(libHandle);
+                libList = nullptr;
+                libHandle = nullptr;
+            }
+        }
     }
 
     // Opens libckteec. NoTee without OP-TEE.
@@ -127,21 +115,31 @@ public:
             *failure = {QCoreApplication::translate("Errors", "This phone has no secure element for keys."), QStringLiteral("tee: no /dev/tee0")};
             return State::NoTee;
         }
-        m_lib = dlopen("libckteec.so.0", RTLD_NOW);
-        if (!m_lib) {
-            *failure = {QCoreApplication::translate("Errors", "This phone has no secure element for keys."),
-                        QStringLiteral("tee: %1").arg(QString::fromLocal8Bit(dlerror()))};
-            return State::NoTee;
+        QMutexLocker l(&libLock);
+        if (!libList) {
+            void *lib = dlopen("libckteec.so.0", RTLD_NOW);
+            if (!lib) {
+                *failure = {QCoreApplication::translate("Errors", "This phone has no secure element for keys."),
+                            QStringLiteral("tee: %1").arg(QString::fromLocal8Bit(dlerror()))};
+                return State::NoTee;
+            }
+            auto getList = reinterpret_cast<CK_RV (*)(CK_FUNCTION_LIST **)>(dlsym(lib, "C_GetFunctionList"));
+            CK_FUNCTION_LIST *f = nullptr;
+            CK_RV rv = getList ? getList(&f) : CK_RV(~0ul);
+            if (rv == CKR_OK && f) {
+                rv = f->C_Initialize(nullptr);
+                if (rv == CKR_CRYPTOKI_ALREADY_INITIALIZED)
+                    rv = CKR_OK;
+            }
+            if (rv != CKR_OK || !f) {
+                dlclose(lib);
+                return fail(failure, QStringLiteral("C_GetFunctionList or C_Initialize: %1").arg(hex(rv)));
+            }
+            libHandle = lib;
+            libList = f;
         }
-        auto getList = reinterpret_cast<CK_RV (*)(CK_FUNCTION_LIST **)>(dlsym(m_lib, "C_GetFunctionList"));
-        CK_FUNCTION_LIST *f = nullptr;
-        CK_RV rv = getList ? getList(&f) : CK_RV(~0ul);
-        if (rv != CKR_OK || !f)
-            return fail(failure, QStringLiteral("C_GetFunctionList: %1").arg(hex(rv)));
-        rv = f->C_Initialize(nullptr);
-        if (rv != CKR_OK && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED)
-            return fail(failure, QStringLiteral("C_Initialize: %1").arg(hex(rv)));
-        m_f = f;
+        ++libUsers;
+        m_f = libList;
         return State::Ready;
     }
 
@@ -158,18 +156,27 @@ public:
         if (!findToken(&slot, &info)) {
             // Never initialized: the first run after the app was installed.
             // QCA's plugin opens libckteec in this process too, so the app
-            // lets go of it until QCA is done.
-            m_f->C_Finalize(nullptr);
-            m_f = nullptr;
+            // lets go of it until QCA is done, which only this Token may do.
+            QMutexLocker l(&libLock);
+            if (libUsers != 1)
+                return fail(failure, QStringLiteral("the TEE is busy while its first token is made"));
+            f->C_Finalize(nullptr);
             const Failure qca = QcaInit::initUserAppKeystore();
+            const CK_RV rv = f->C_Initialize(nullptr);
+            if (rv != CKR_OK && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED) {
+                // Nothing to finalize now: the destructor leaves the library be.
+                --libUsers;
+                libList = nullptr;
+                dlclose(libHandle);
+                libHandle = nullptr;
+                m_f = nullptr;
+                return fail(failure, QStringLiteral("C_Initialize after QCA: %1").arg(hex(rv)));
+            }
             if (!qca.isNull()) {
                 *failure = qca;
                 return State::Failed;
             }
-            const CK_RV rv = f->C_Initialize(nullptr);
-            if (rv != CKR_OK && rv != CKR_CRYPTOKI_ALREADY_INITIALIZED)
-                return fail(failure, QStringLiteral("C_Initialize after QCA: %1").arg(hex(rv)));
-            m_f = f;
+            l.unlock();
             if (!findToken(&slot, &info))
                 return fail(failure, QStringLiteral("no token \"%1\" after QCA initialized USERAPP").arg(QLatin1String(QcaInit::tokenLabel)));
         }
@@ -246,6 +253,14 @@ public:
         if (m_loggedIn)
             m_f->C_Logout(m_session);
         m_loggedIn = false;
+    }
+
+    // Whether the session's user is still logged in.
+    bool userLoggedIn()
+    {
+        CK_SESSION_INFO si;
+        std::memset(&si, 0, sizeof si);
+        return m_session && m_f->C_GetSessionInfo(m_session, &si) == CKR_OK && si.state == CKS_RW_USER_FUNCTIONS;
     }
 
     // Initializes the admin token with pin as its SO PIN for now, then sets
@@ -397,12 +412,46 @@ private:
         return false;
     }
 
-    void *m_lib = nullptr;
     CK_FUNCTION_LIST *m_f = nullptr;
     CK_SLOT_ID m_slot = 0;
     CK_SESSION_HANDLE m_session = 0;
     bool m_loggedIn = false;
 };
+
+// The admin token's session that stays logged in after the right PIN, so
+// that the PIN itself is wiped at once: only the TEE holds it. It is used
+// under its lock and logged out once unused for pinHoldMs.
+QMutex keptLock;
+std::unique_ptr<Token> kept;
+QElapsedTimer keptUsed;
+
+void keep(std::unique_ptr<Token> token)
+{
+    QMutexLocker l(&keptLock);
+    kept = std::move(token);
+    keptUsed.restart();
+}
+
+// Whether the kept login lasts, ending it once it does not; keptLock held.
+bool keptAlive()
+{
+    if (kept && keptUsed.isValid() && keptUsed.elapsed() <= pinHoldMs && kept->userLoggedIn())
+        return true;
+    kept.reset();
+    return false;
+}
+
+// Runs use on the logged-in admin token while the login lasts, which renews
+// it; false, and nothing run, when the PIN is needed again.
+template <typename Use> bool withLogin(Use use)
+{
+    QMutexLocker l(&keptLock);
+    if (!keptAlive())
+        return false;
+    keptUsed.restart();
+    use(*kept);
+    return true;
+}
 
 PinStatus statusOf(const CK_TOKEN_INFO &info)
 {
@@ -487,64 +536,49 @@ Key ensureAdmin()
             return key;
         }
     }
-    const QByteArray pin = takePin();
-    if (pin.isEmpty()) {
+    const bool logged = withLogin([&](Token &in) {
+        // A key the token hid from the session logged out, kept unless the
+        // phone left its group since.
+        const QVector<CK_OBJECT_HANDLE> privs = in.find(CKO_PRIVATE_KEY, keyLabel), pubs2 = in.find(CKO_PUBLIC_KEY, keyLabel);
+        if (!stale && privs.size() == 1 && pubs2.size() == 1) {
+            key.publicKey = in.point(pubs2.first());
+            if (!key.publicKey.isEmpty()) {
+                key.state = State::Ready;
+                return;
+            }
+        }
+        key = makeAdmin(in);
+    });
+    if (!logged) {
         key.pinNeeded = true;
         key.failure = pinMissing();
-        return key;
     }
-    const CK_RV rv = token.login(CKU_USER, pin);
-    if (rv != CKR_OK) {
-        dropAdminPin();
-        key.pinNeeded = rv == CKR_PIN_INCORRECT;
-        key.failure = {QCoreApplication::translate("Errors", "The phone's secure element did not take the PIN."), QStringLiteral("tee: C_Login admin: %1").arg(hex(rv))};
-        return key;
-    }
-    // A key the token hid from the session logged out, kept unless the
-    // phone left its group since.
-    const QVector<CK_OBJECT_HANDLE> privs = token.find(CKO_PRIVATE_KEY, keyLabel), pubs2 = token.find(CKO_PUBLIC_KEY, keyLabel);
-    if (!stale && privs.size() == 1 && pubs2.size() == 1) {
-        key.publicKey = token.point(pubs2.first());
-        if (!key.publicKey.isEmpty()) {
-            key.state = State::Ready;
-            return key;
-        }
-    }
-    return makeAdmin(token);
+    return key;
 }
 
 QByteArray signAdmin(const QByteArray &digest, Failure *failure, bool *pinNeeded)
 {
-    const QByteArray pin = takePin();
-    if (pin.isEmpty()) {
+    QByteArray out;
+    const bool logged = withLogin([&](Token &in) {
+        const QVector<CK_OBJECT_HANDLE> privs = in.find(CKO_PRIVATE_KEY, labelOf(Which::Admin));
+        if (privs.size() != 1) {
+            *failure = {QCoreApplication::translate("Errors", "The phone's key is missing."), QStringLiteral("tee: %1 private admin keys").arg(privs.size())};
+            return;
+        }
+        CK_RV rv = CKR_OK;
+        const QByteArray raw = in.sign(privs.first(), digest, &rv);
+        if (raw.size() != 64) {
+            *failure = {QCoreApplication::translate("Errors", "The phone's secure element did not sign."), QStringLiteral("tee: C_Sign admin: %1, %2 bytes").arg(hex(rv)).arg(raw.size())};
+            return;
+        }
+        out = derSignature(raw);
+    });
+    if (!logged) {
         if (pinNeeded)
             *pinNeeded = true;
         *failure = pinMissing();
-        return QByteArray();
     }
-    Token token;
-    CK_TOKEN_INFO info;
-    if (token.openAdmin(&info, failure) != State::Ready)
-        return QByteArray();
-    CK_RV rv = token.login(CKU_USER, pin);
-    if (rv != CKR_OK) {
-        dropAdminPin();
-        if (pinNeeded)
-            *pinNeeded = rv == CKR_PIN_INCORRECT;
-        *failure = {QCoreApplication::translate("Errors", "The phone's secure element did not take the PIN."), QStringLiteral("tee: C_Login admin: %1").arg(hex(rv))};
-        return QByteArray();
-    }
-    const QVector<CK_OBJECT_HANDLE> privs = token.find(CKO_PRIVATE_KEY, labelOf(Which::Admin));
-    if (privs.size() != 1) {
-        *failure = {QCoreApplication::translate("Errors", "The phone's key is missing."), QStringLiteral("tee: %1 private admin keys").arg(privs.size())};
-        return QByteArray();
-    }
-    const QByteArray raw = token.sign(privs.first(), digest, &rv);
-    if (raw.size() != 64) {
-        *failure = {QCoreApplication::translate("Errors", "The phone's secure element did not sign."), QStringLiteral("tee: C_Sign admin: %1, %2 bytes").arg(hex(rv)).arg(raw.size())};
-        return QByteArray();
-    }
-    return derSignature(raw);
+    return out;
 }
 
 } // namespace
@@ -639,7 +673,10 @@ PinResult enterAdminPin(const QByteArray &pin, PinStatus *after, Failure *failur
     if (pin.size() < 4 || pin.size() > 128)
         return pinFailed(failure, after, QStringLiteral("a PIN of %1 bytes").arg(pin.size()));
     QSettings settings;
-    Token token;
+    // Signing in anew ends the login kept so far.
+    dropAdminPin();
+    auto held = std::unique_ptr<Token>(new Token);
+    Token &token = *held;
     CK_TOKEN_INFO info;
     if (token.openAdmin(&info, failure) != State::Ready) {
         after->state = PinState::Failed;
@@ -672,7 +709,6 @@ PinResult enterAdminPin(const QByteArray &pin, PinStatus *after, Failure *failur
         return PinResult::Locked;
     }
     rv = token.login(CKU_USER, pin);
-    token.logout();
     if (rv == CKR_PIN_INCORRECT || rv == CKR_PIN_LOCKED || rv == CKR_PIN_LEN_RANGE) {
         settings.setValue(wrongKey, settings.value(wrongKey).toInt() + 1);
         token.refresh(&info);
@@ -683,15 +719,20 @@ PinResult enterAdminPin(const QByteArray &pin, PinStatus *after, Failure *failur
         return pinFailed(failure, after, QStringLiteral("C_Login admin: %1").arg(hex(rv)));
     settings.remove(wrongKey);
     if (!settings.value(soRandomKey).toBool()) {
+        // The SO logs in alone: the user logs out for it and back in after.
+        token.logout();
         rv = token.randomizeSo(pin);
         if (rv == CKR_OK)
             settings.setValue(soRandomKey, true);
         else
             return pinFailed(failure, after, QStringLiteral("the SO PIN did not change: %1").arg(hex(rv)));
+        rv = token.login(CKU_USER, pin);
+        if (rv != CKR_OK)
+            return pinFailed(failure, after, QStringLiteral("C_Login admin after the SO: %1").arg(hex(rv)));
     }
-    holdPin(pin);
     token.refresh(&info);
     *after = statusOf(info);
+    keep(std::move(held));
     return PinResult::Right;
 }
 
@@ -700,7 +741,9 @@ PinResult changeAdminPin(const QByteArray &old, const QByteArray &pin, PinStatus
     if (pin.size() < 4 || pin.size() > 128)
         return pinFailed(failure, after, QStringLiteral("a new PIN of %1 bytes").arg(pin.size()));
     QSettings settings;
-    Token token;
+    dropAdminPin();
+    auto held = std::unique_ptr<Token>(new Token);
+    Token &token = *held;
     CK_TOKEN_INFO info;
     if (token.openAdmin(&info, failure) != State::Ready) {
         after->state = PinState::Failed;
@@ -722,25 +765,28 @@ PinResult changeAdminPin(const QByteArray &old, const QByteArray &pin, PinStatus
         return pinFailed(failure, after, QStringLiteral("C_Login admin: %1").arg(hex(rv)));
     settings.remove(wrongKey);
     rv = token.setUserPin(old, pin);
-    token.logout();
     if (rv != CKR_OK)
         return pinFailed(failure, after, QStringLiteral("C_SetPIN admin: %1").arg(hex(rv)));
-    holdPin(pin);
     token.refresh(&info);
     *after = statusOf(info);
+    keep(std::move(held));
     return PinResult::Right;
 }
 
 bool adminPinHeld()
 {
-    QMutexLocker l(&pinLock);
-    return !heldPin.isEmpty() && pinUsed.isValid() && pinUsed.elapsed() <= pinHoldMs;
+    // In use on another thread, which renews it: held.
+    if (!keptLock.tryLock())
+        return true;
+    const bool alive = keptAlive();
+    keptLock.unlock();
+    return alive;
 }
 
 void dropAdminPin()
 {
-    QMutexLocker l(&pinLock);
-    wipe(&heldPin);
+    QMutexLocker l(&keptLock);
+    kept.reset();
 }
 
 bool forget(Failure *failure)
@@ -764,23 +810,17 @@ bool forget(Failure *failure)
             }
         }
     }
-    // The admin key goes while its PIN is held; otherwise the next admin
+    // The admin key goes while its login lasts; otherwise the next admin
     // key replaces it, and until then it signs nothing without the PIN.
     QSettings().setValue(staleKey, true);
-    const QByteArray pin = takePin();
-    if (!pin.isEmpty()) {
-        Token token;
-        CK_TOKEN_INFO info;
-        Failure ignored;
-        if (token.openAdmin(&info, &ignored) == State::Ready && token.login(CKU_USER, pin) == CKR_OK) {
-            bool all = true;
-            for (const CK_ULONG cls : {CKO_PRIVATE_KEY, CKO_PUBLIC_KEY})
-                for (const CK_OBJECT_HANDLE h : token.find(cls, labelOf(Which::Admin)))
-                    all = token.destroy(h) == CKR_OK && all;
-            if (all)
-                QSettings().remove(staleKey);
-        }
-    }
+    withLogin([](Token &in) {
+        bool all = true;
+        for (const CK_ULONG cls : {CKO_PRIVATE_KEY, CKO_PUBLIC_KEY})
+            for (const CK_OBJECT_HANDLE h : in.find(cls, labelOf(Which::Admin)))
+                all = in.destroy(h) == CKR_OK && all;
+        if (all)
+            QSettings().remove(staleKey);
+    });
     return true;
 }
 

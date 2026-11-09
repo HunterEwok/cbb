@@ -1276,8 +1276,8 @@
         <translation>गलत PIN। बचे प्रयास: %1।</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>CBB का अपना PIN, कम से कम चार अंक, फ़ोन के PIN से अलग। फ़ोन का सुरक्षित तत्व हर एडमिन कार्य से पहले इसे जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं, और कोई इसे अनलॉक नहीं कर सकता।</translation>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB का अपना PIN, कम से कम चार अंक। फ़ोन का अनलॉक कोड इस्तेमाल न करें। फ़ोन का सुरक्षित तत्व हर एडमिन कार्य से पहले इसे जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं, और कोई इसे अनलॉक नहीं कर सकता।</translation>
     </message>
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>

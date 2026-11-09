@@ -1276,8 +1276,8 @@
         <translation>PIN si sahihi. Majaribio yaliyobaki: %1.</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>PIN ya CBB yenyewe, angalau tarakimu nne, tofauti na ya simu. Kipengele salama cha simu huikagua kabla ya kila kitendo cha msimamizi; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa, na hakuna anayeweza kuufungua.</translation>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>PIN ya CBB yenyewe, angalau tarakimu nne. Usitumie msimbo wa kufungua simu. Kipengele salama cha simu huikagua kabla ya kila kitendo cha msimamizi; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa, na hakuna anayeweza kuufungua.</translation>
     </message>
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>

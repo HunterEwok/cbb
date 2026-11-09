@@ -1276,8 +1276,8 @@
         <translation>PIN 错误。剩余次数：%1。</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>CBB 自己的 PIN，至少四位数字，与手机的 PIN 无关。每次管理员操作前由手机的安全元件验证；七次输错将永久锁定管理员密钥，任何人都无法解锁。</translation>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB 自己的 PIN，至少四位数字。请勿使用手机的解锁密码。每次管理员操作前由手机的安全元件验证；七次输错将永久锁定管理员密钥，任何人都无法解锁。</translation>
     </message>
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>

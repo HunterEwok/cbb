@@ -1276,8 +1276,8 @@
         <translation>Неверный PIN. Осталось попыток: %1.</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>Собственный PIN CBB, не короче четырёх цифр, отдельный от PIN телефона. Защищённый модуль телефона проверяет его перед каждым действием администратора; семь неверных PIN навсегда блокируют ключ администратора, и разблокировать его нельзя.</translation>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>Собственный PIN CBB, не короче четырёх цифр. Не используйте код разблокировки телефона. Защищённый модуль телефона проверяет его перед каждым действием администратора; семь неверных PIN навсегда блокируют ключ администратора, и разблокировать его нельзя.</translation>
     </message>
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>

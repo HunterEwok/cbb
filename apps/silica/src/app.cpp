@@ -242,7 +242,12 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
     });
     m_claimTimer.setInterval(claimEveryMs);
     connect(&m_claimTimer, &QTimer::timeout, this, &App::finishTakeover);
-    // The admin PIN is held only while the app is on the screen.
+    // The admin token stays logged in only while the app is on the screen,
+    // and is logged out once unused for two minutes, which adminPinHeld
+    // checks.
+    auto *pinCheck = new QTimer(this);
+    connect(pinCheck, &QTimer::timeout, this, [] { KeyStore::adminPinHeld(); });
+    pinCheck->start(30 * 1000);
     connect(qGuiApp, &QGuiApplication::applicationStateChanged, this, [](Qt::ApplicationState state) {
         if (state != Qt::ApplicationActive)
             KeyStore::dropAdminPin();

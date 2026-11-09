@@ -767,15 +767,17 @@ for Face ID (D-94, docs/protocol.md section 3):
   sees neither token.
 - **When it asks.** Before the admin key signs: making a group or joining as an admin, which
   sets the PIN (typed twice, at least four digits), adding a device, an action on a device's
-  page, the root's decision on an alert, the takeover and its finish. The app holds the PIN
-  for two minutes after it was last used, and forgets it when it leaves the screen; renewals
-  of the members' certificates go only while it is held. Settings change it ("Change the
+  page, the root's decision on an alert, the takeover and its finish. The app hands the PIN
+  to the TEE and wipes it at once; the token then stays logged in for two minutes after its
+  last use and is logged out when the app leaves the screen; renewals of the members'
+  certificates go only while it is logged in. The dialog asks not to reuse the phone's unlock
+  code. Settings change it ("Change the
   admin PIN"), after the current one.
 - **Wrong PINs.** The TEE counts them; the dialog says how many of the seven tries are left.
   The seventh locks the token for good: nothing unlocks it, the phone stays in its group as a
   member, Settings say so, and an admin phone again needs CBB installed afresh and joined as a
   new device. A lost root is taken over by an admin phone or with the recovery key.
-- **Leaving the group** deletes the admin key while the PIN is held; otherwise the key stays,
+- **Leaving the group** deletes the admin key while its token is logged in; otherwise the key stays,
   useless without the PIN, and the next admin key replaces it.
 - Sailfish OS and Aurora 4 keep their keys in files (level `file`) and ask for no PIN.
 

@@ -43,13 +43,13 @@ struct Key
 // OP-TEE's: /dev/tee0 is there, the token is the initialized "Aurora TA" one
 // and the key reads back never extractable and always sensitive. On Aurora
 // the admin key lives in a token of its own behind the user's PIN (see
-// below): it is found without the PIN, but made only while the PIN is
-// held, and pinNeeded says so otherwise. Blocks; call it off the GUI thread.
+// below): it is found without the PIN, but made only while the PIN's
+// login lasts, and pinNeeded says so otherwise. Blocks; call it off the GUI thread.
 Key ensure(Which which = Which::Member);
 
 // Signs digest (SHA-256, 32 bytes) with the key: ECDSA P-256 in DER, as the
 // member protocol's signatures are. Empty on failure; the admin key signs
-// only while its PIN is held, and pinNeeded is set when it was not.
+// only while its PIN's login lasts, and pinNeeded is set when it was not.
 QByteArray sign(const QByteArray &digest, Failure *failure, Which which = Which::Member, bool *pinNeeded = nullptr);
 
 // The admin key's PIN. Aurora 5.1.5 lets no regular app ask the system to
@@ -80,24 +80,25 @@ PinStatus adminPin();
 
 enum class PinResult { Right, Wrong, Locked, Failed };
 
-// Checks pin against the token, setting it first when none is set, and
-// holds it on Right: the admin key then signs without asking until the PIN
-// has not been used for a while, or dropAdminPin. A wrong PIN spends one of
+// Checks pin against the token, setting it first when none is set, and on
+// Right keeps the token logged in, the PIN itself not kept: the admin key
+// then signs without asking until it has not been used for two minutes, or
+// dropAdminPin logs it out. A wrong PIN spends one of
 // the seven tries; after says how many are left. Blocks.
 PinResult enterAdminPin(const QByteArray &pin, PinStatus *after, Failure *failure);
 
 // Changes the PIN, which the TEE checks first. Blocks.
 PinResult changeAdminPin(const QByteArray &old, const QByteArray &pin, PinStatus *after, Failure *failure);
 
-// Whether the PIN is held, and forgetting it, as when the app leaves the
-// screen. Both are cheap.
+// Whether the login lasts (ending it once it does not), and logging out, as
+// when the app leaves the screen. Both are cheap.
 bool adminPinHeld();
 void dropAdminPin();
 
 // Deletes both keys, the member key and the admin key, when the phone
 // leaves its group (D-83): the next ensure makes a new member key, so the
-// phone joins again as a new device. An admin key behind a PIN that is not
-// held stays in its token, unusable without the PIN, and the next admin key
+// phone joins again as a new device. An admin key whose PIN's login ended
+// stays in its token, unusable without the PIN, and the next admin key
 // replaces it. Its old key stays in the group's
 // records until an admin removes it, and removing it then revokes only that
 // key. Missing keys are no failure. Blocks; call it off the GUI thread.

@@ -1276,8 +1276,8 @@
         <translation>رمز PIN خاطئ. المحاولات المتبقية: %1.</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>رمز PIN خاص بـ CBB، من أربعة أرقام على الأقل، منفصل عن رمز الهاتف. يتحقق منه العنصر الآمن في الهاتف قبل كل إجراء للمشرف؛ سبعة رموز خاطئة تقفل مفتاح المشرف نهائيًا، ولا يستطيع أحد فتحه.</translation>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>رمز PIN خاص بـ CBB، من أربعة أرقام على الأقل. لا تستخدم رمز فتح قفل الهاتف. يتحقق منه العنصر الآمن في الهاتف قبل كل إجراء للمشرف؛ سبعة رموز خاطئة تقفل مفتاح المشرف نهائيًا، ولا يستطيع أحد فتحه.</translation>
     </message>
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>

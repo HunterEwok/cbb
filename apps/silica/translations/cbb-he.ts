@@ -1276,8 +1276,8 @@
         <translation>PIN שגוי. ניסיונות שנותרו: %1.</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>PIN משלו של CBB, לפחות ארבע ספרות, נפרד מזה של הטלפון. הרכיב המאובטח של הטלפון בודק אותו לפני כל פעולת מנהל; שבעה קודים שגויים נועלים את מפתח המנהל לתמיד, ואיש אינו יכול לשחרר אותו.</translation>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>PIN משלו של CBB, לפחות ארבע ספרות. אל תשתמשו בקוד פתיחת הנעילה של הטלפון. הרכיב המאובטח של הטלפון בודק אותו לפני כל פעולת מנהל; שבעה קודים שגויים נועלים את מפתח המנהל לתמיד, ואיש אינו יכול לשחרר אותו.</translation>
     </message>
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>

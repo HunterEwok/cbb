@@ -64,7 +64,7 @@ Dialog {
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.secondaryHighlightColor
             text: dialog.fresh
-                  ? qsTr("CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.")
+                  ? qsTr("CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.")
                   : qsTr("The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.")
         }
     }

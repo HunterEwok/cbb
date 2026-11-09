@@ -1276,8 +1276,8 @@
         <translation>PIN incorrecto. Intentos restantes: %1.</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits, apart from the phone's. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>El PIN propio de CBB, de al menos cuatro cifras, distinto del del teléfono. El elemento seguro del teléfono lo comprueba antes de cada acción de administrador; siete PIN incorrectos bloquean la clave de administrador para siempre y nadie puede desbloquearla.</translation>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>El PIN propio de CBB, de al menos cuatro cifras. No uses el código de desbloqueo del teléfono. El elemento seguro del teléfono lo comprueba antes de cada acción de administrador; siete PIN incorrectos bloquean la clave de administrador para siempre y nadie puede desbloquearla.</translation>
     </message>
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
