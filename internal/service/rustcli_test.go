@@ -4,8 +4,11 @@
 package service
 
 import (
+	"bufio"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -63,9 +66,58 @@ func TestRustCommandLine(t *testing.T) {
 	want("This network is one where the group is now", "network")
 	want("now waits 48h on each member", "takeover", "-delay", "48h")
 	misuse("takeover", "-delay")
+	misuse("recovery", "now")
+
+	want("Usage: cbb <command> [arguments]", "help")
+	if out, code := run("install"); code != 2 || !strings.Contains(out, "is for Windows") {
+		t.Fatalf("cbb install exited with %d: %s", code, out)
+	}
+	want("Sync away from home: off (cbb global on turns it on).", "global")
+	misuse("global", "sideways")
+	for _, args := range [][]string{{"global", "hub", "-forward-only"}, {"global", "relay", "198.51.100.9:8765", "-key", "default"}} {
+		if out, code := run(args...); code != 2 {
+			t.Fatalf("cbb %s exited with %d: %s; want 2", strings.Join(args, " "), code, out)
+		}
+	}
+	if out, code := run("nope"); code != 2 || !strings.Contains(out, "unknown command") {
+		t.Fatalf("cbb nope exited with %d: %s", code, out)
+	}
+
+	want("This device is the remote of no TV", "remote")
+	misuse("remote", "-tv", "x", "add", "10.0.0.5")
+	misuse("keyboard", "off", "-rate", "20")
 
 	deck := startService(t, &h, "deck")
-	pairWith(t, pi, deck)
+	misuse("pair", "-now")
+	pair := exec.Command(bin, "-state", pi.dir, "-socket", pi.socket, "pair")
+	stdout, err := pair.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pair.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { pair.Process.Kill(); pair.Wait() })
+	lines := bufio.NewScanner(stdout)
+	var code string
+	for code == "" && lines.Scan() {
+		if c, ok := strings.CutPrefix(lines.Text(), "Pairing code: "); ok {
+			code = strings.ReplaceAll(c, " ", "")
+		}
+	}
+	if len(code) != 6 {
+		t.Fatalf("cbb pair showed no code: %v", lines.Err())
+	}
+	if _, err := deck.do(t, control.Header{Op: control.OpJoin, Code: code}, ""); err != nil {
+		t.Fatalf("join on deck: %v", err)
+	}
+	var rest strings.Builder
+	for lines.Scan() {
+		rest.WriteString(lines.Text() + "\n")
+	}
+	if err := pair.Wait(); err != nil || !strings.Contains(rest.String(), "deck joined the group.") {
+		t.Fatalf("cbb pair ended with %v: %s", err, rest.String())
+	}
 	misuse("rename", "deck")
 	want("Renamed deck to desk", "rename", "deck", "desk")
 	waitFor(t, "the root lists desk", func() bool {
@@ -77,6 +129,30 @@ func TestRustCommandLine(t *testing.T) {
 	want("desk is muted", "mute", "-on", "desk", "-for", "1h")
 	want("desk is no longer muted", "unmute", "-on", "desk")
 	misuse("mute", "-on", "desk", "-for", "a while")
+	// Files go to the group with cbb copy and come out with cbb paste -o.
+	files := t.TempDir()
+	report := filepath.Join(files, "report.txt")
+	if err := os.WriteFile(report, []byte("the quarter's numbers"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want("Copied report.txt (21 bytes) to the group.", "copy", report)
+	misuse("copy", "-secret", report)
+	out := t.TempDir()
+	waitFor(t, "desk saves the file", func() bool {
+		got, err := exec.Command(bin, "-state", deck.dir, "-socket", deck.socket, "paste", "-o", out).CombinedOutput()
+		return err == nil && strings.TrimSpace(string(got)) == filepath.Join(out, "report.txt")
+	})
+	if b, err := os.ReadFile(filepath.Join(out, "report.txt")); err != nil || string(b) != "the quarter's numbers" {
+		t.Fatalf("the saved file: %q, %v", b, err)
+	}
+	want("Sync is off on desk now.", "sync", "-on", "desk", "off")
+	waitFor(t, "desk's sync is off", func() bool { return deck.status(t).Mode == "own" })
+	want("Sync is on on desk now.", "sync", "-on", "desk", "on")
+	misuse("sync", "-on", "desk", "off", "-for", "1h")
+	want("Remote paste is off on desk.", "paste-receive", "off", "-on", "desk")
+	want("The quick actions are off on desk.", "action", "off", "-on", "desk")
+	want("Sync is off until cbb sync on", "sync", "off")
+	want("Sync is on: copies here go to the group", "sync", "on")
 	want("Removed desk from the group", "remove", "desk")
 	misuse("remove")
 }

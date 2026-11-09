@@ -39,8 +39,10 @@ func TestLitePeripherals(t *testing.T) {
 	lite := startLiteEnv(t, bin, dir, []string{"CBB_HELPER=" + helper, "CBB_TEST_BLUEZ=" + f.Addr}, "-no-mdns", "-no-listen", "-peer", pi.addr())
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 && len(lite.status(t).Peers) == 1 })
 
-	if k := lite.status(t).Keyboard; k != nil {
-		t.Fatalf("a keyboard before on: %+v", k)
+	// A Linux computer with cbb-helper can be the keyboard, so its status
+	// shows one, off, as Go's KeyboardStatus.
+	if k := lite.status(t).Keyboard; k == nil || k.On || k.Layout != "us" {
+		t.Fatalf("the keyboard before on: %+v, want off", k)
 	}
 	m, err := lite.do(t, control.Header{Op: control.OpKeyboard, Name: "on", Keyboard: &control.Keyboard{Layout: "us", Rate: 60, Pastes: true}}, "")
 	if err != nil {

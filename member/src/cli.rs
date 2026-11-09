@@ -46,7 +46,10 @@ fn one_device<'a>(args: &'a [String], use_: &str) -> Result<&'a str> {
 pub(crate) fn remove(g: &Global, args: &[String]) -> Result<()> {
     let name = one_device(args, "cbb remove <name or device ID>; cbb status lists them")?;
     let m = ask(g, Header { name: name.into(), ..header("revoke") })?;
-    println!("Removed {} from the group. The other members refuse it as soon as they hear of it.", m.header.name);
+    println!(
+        "{}",
+        tr!("Removed {} from the group. The other members refuse it as soon as they hear of it.", m.header.name)
+    );
     Ok(())
 }
 
@@ -57,9 +60,12 @@ pub(crate) fn rename(g: &Global, args: &[String]) -> Result<()> {
     };
     let m = ask(g, Header { name: name.clone(), new_name: new_name.clone(), ..header("rename") })?;
     println!(
-        "Renamed {} to {}. The other devices show the new name as soon as they hear of it.",
-        m.header.name,
-        new_name.trim()
+        "{}",
+        tr!(
+            "Renamed {} to {}. The other devices show the new name as soon as they hear of it.",
+            m.header.name,
+            new_name.trim()
+        )
     );
     Ok(())
 }
@@ -74,23 +80,29 @@ pub(crate) fn takeover(g: &Global, args: &[String]) -> Result<()> {
             return Err(usage("cbb takeover -delay <duration>, from 0s to 168h, as 72h"));
         }
         ask(g, Header { value: d.clone(), ..header("takeover-delay") })?;
-        println!("A claim to take the group over now waits {d} on each member, from when it first holds the claim.");
+        println!(
+            "{}",
+            tr!("A claim to take the group over now waits {} on each member, from when it first holds the claim.", d)
+        );
         return Ok(());
     }
     let name = one_device(args, "cbb takeover <name or device ID of the lost root>; cbb status shows it")?;
     let m = ask(g, Header { name: name.into(), ..header("takeover") })?;
     println!(
-        "Claimed the group from {}. This device becomes its root when the waiting time ends (72 hours unless the root set another), unless the root cancels the claim; cbb status shows the time left.",
-        m.header.name
+        "{}",
+        tr!(
+            "Claimed the group from {}. This device becomes its root when the waiting time ends (72 hours unless the root set another), unless the root cancels the claim; cbb status shows the time left.",
+            m.header.name
+        )
     );
-    println!("Then it removes the old root.");
+    println!("{}", tr!("Then it removes the old root."));
     Ok(())
 }
 
 /// This device's status, or an error in no group.
 fn status_in_group(g: &Global) -> Result<crate::control::Status> {
     let m = ask(g, header("status"))?;
-    m.header.status.filter(|s| !s.group.is_empty()).ok_or_else(|| Error::msg("this device is in no group"))
+    m.header.status.filter(|s| !s.group.is_empty()).ok_or_else(|| Error::msg(tr!("this device is in no group")))
 }
 
 /// cbb incoming: shows or sets how long a copy from another device stays
@@ -121,8 +133,9 @@ fn incoming_line(ms: i64) -> String {
     if s.ends_with("h0m") {
         s.truncate(s.len() - 2);
     }
-    format!(
-        "A copy from another device goes into the clipboard for {s} after it arrives; after that this device keeps its own clipboard, however old."
+    tr!(
+        "A copy from another device goes into the clipboard for {} after it arrives; after that this device keeps its own clipboard, however old.",
+        s
     )
 }
 
@@ -159,8 +172,11 @@ pub(crate) fn keys(g: &Global, args: &[String]) -> Result<()> {
             println!("{}", key_level_line(a));
             if !m.header.below.is_empty() {
                 println!(
-                    "Below it: {}. They stay until you remove them (cbb remove) or take back their admin or hub role.",
-                    m.header.below.join(", ")
+                    "{}",
+                    tr!(
+                        "Below it: {}. They stay until you remove them (cbb remove) or take back their admin or hub role.",
+                        m.header.below.join(", ")
+                    )
                 );
             }
         }
@@ -170,16 +186,16 @@ pub(crate) fn keys(g: &Global, args: &[String]) -> Result<()> {
 }
 
 /// What the group's key level lets in (Go's keyLevelLine).
-fn key_level_line(level: &str) -> &'static str {
+pub(crate) fn key_level_line(level: &str) -> &'static str {
     match level {
-        "proven" => {
+        "proven" => tr!(
             "Key level proven: only keys that attestation proves are in hardware may be the group's root, an admin or a hub."
-        }
-        "hardware" => {
+        ),
+        "hardware" => tr!(
             "Key level hardware: only keys in hardware (a TPM, the Secure Enclave, a phone's keystore) may be the group's root, an admin or a hub."
-        }
+        ),
         "files" => {
-            "Key level files: keys in files may be the group's root, an admin or a hub too, each after a warning."
+            tr!("Key level files: keys in files may be the group's root, an admin or a hub too, each after a warning.")
         }
         _ => "",
     }
@@ -191,7 +207,10 @@ pub(crate) fn hubs(g: &Global, args: &[String]) -> Result<()> {
         return Err(usage("cbb global hubs <name or ID>..., the group's main hubs in the order they serve"));
     }
     ask(g, Header { hubs: args.to_vec(), ..header("hubs") })?;
-    println!("The group's main hubs are now {}, in this order; the other hubs serve after them.", args.join(", "));
+    println!(
+        "{}",
+        tr!("The group's main hubs are now {}, in this order; the other hubs serve after them.", args.join(", "))
+    );
     Ok(())
 }
 
@@ -202,11 +221,14 @@ pub(crate) fn freeze(g: &Global, args: &[String], on: bool) -> Result<()> {
     let m = ask(g, Header { name: name.into(), ..header(op) })?;
     if on {
         println!(
-            "Froze {}: it is no admin and the members refuse it as soon as they hear of it.\nThe group's root or an admin phone unfreezes it (cbb unfreeze) or removes it (cbb remove).",
-            m.header.name
+            "{}",
+            tr!(
+                "Froze {}: it is no admin and the members refuse it as soon as they hear of it.\nThe group's root or an admin phone unfreezes it (cbb unfreeze) or removes it (cbb remove).",
+                m.header.name
+            )
         );
     } else {
-        println!("Unfroze {}: it is an admin again.", m.header.name);
+        println!("{}", tr!("Unfroze {}: it is an admin again.", m.header.name));
     }
     Ok(())
 }
@@ -225,11 +247,14 @@ pub(crate) fn admin(g: &Global, args: &[String]) -> Result<()> {
     }
     let [name] = names.as_slice() else { return Err(usage(USE)) };
     let m = ask(g, Header { name: name.clone(), consent: allow, ..header("admin") })?;
-    println!("{} is an admin now: it can admit and remove devices.", m.header.name);
+    println!("{}", tr!("{} is an admin now: it can admit and remove devices.", m.header.name));
     if allow {
         println!(
-            "If it keeps its keys in a file, guard it: whoever copies that file acts as an admin until another admin removes {}.",
-            m.header.name
+            "{}",
+            tr!(
+                "If it keeps its keys in a file, guard it: whoever copies that file acts as an admin until another admin removes {}.",
+                m.header.name
+            )
         );
     }
     Ok(())
@@ -244,8 +269,11 @@ pub(crate) fn resolve(g: &Global, args: &[String]) -> Result<()> {
     }
     let m = ask(g, header("resolve"))?;
     println!(
-        "Voided both histories of {}: each goes on from the record before them, and signs again what it still needs.\nCheck that the group's devices are the ones you expect (cbb status): records signed with a stolen key are gone too.",
-        m.header.name
+        "{}",
+        tr!(
+            "Voided both histories of {}: each goes on from the record before them, and signs again what it still needs.\nCheck that the group's devices are the ones you expect (cbb status): records signed with a stolen key are gone too.",
+            m.header.name
+        )
     );
     Ok(())
 }
@@ -258,8 +286,11 @@ pub(crate) fn handover(g: &Global, args: &[String]) -> Result<()> {
     )?;
     let m = ask(g, Header { name: name.into(), ..header("handover") })?;
     println!(
-        "Handed the group over to {}: when it claims the group, its claim takes effect at once and it becomes the root.",
-        m.header.name
+        "{}",
+        tr!(
+            "Handed the group over to {}: when it claims the group, its claim takes effect at once and it becomes the root.",
+            m.header.name
+        )
     );
     Ok(())
 }
@@ -288,14 +319,12 @@ pub(crate) fn mute(g: &Global, args: &[String], unmute: bool) -> Result<()> {
     let op = if unmute { "unmute" } else { "mute" };
     ask(g, Header { device: on.clone(), for_ms, ..header(op) })?;
     if unmute {
-        println!("{on} is no longer muted: its copies reach the group again.");
+        println!("{}", tr!("{} is no longer muted: its copies reach the group again.", on));
+    } else if for_ms > 0 {
+        let until = local_minute(crate::uptime::wall_ms() + for_ms);
+        println!("{}", tr!("{} is muted until {}: its copies do not reach the group.", on, until));
     } else {
-        let until = if for_ms > 0 {
-            format!("until {}", local_minute(crate::uptime::wall_ms() + for_ms))
-        } else {
-            "until an admin unmutes it".to_string()
-        };
-        println!("{on} is muted {until}: its copies do not reach the group.");
+        println!("{}", tr!("{} is muted until an admin unmutes it: its copies do not reach the group.", on));
     }
     Ok(())
 }
@@ -317,13 +346,16 @@ pub(crate) fn config(g: &Global, args: &[String]) -> Result<()> {
     };
     let m = ask(g, Header { name, value, ..header("config") })?;
     let media = m.header.status.and_then(|s| s.media).ok_or_else(|| {
-        Error::msg("this device is in no group; run cbb new here to start one, or cbb pair to join one")
+        Error::msg(tr!("this device is in no group; run cbb new here to start one, or cbb pair to join one"))
     })?;
     println!(
-        "max-copy       {}  the largest copy of images and files this device sends or fetches at home",
-        crate::copies::size_text(media.max_copy)
+        "{}",
+        tr!(
+            "max-copy       {}  the largest copy of images and files this device sends or fetches at home",
+            crate::copies::size_text(media.max_copy)
+        )
     );
-    println!("max-copy-away  {}  the same away from home", crate::copies::size_text(media.max_copy_away));
+    println!("{}", tr!("max-copy-away  {}  the same away from home", crate::copies::size_text(media.max_copy_away)));
     Ok(())
 }
 
@@ -333,7 +365,10 @@ pub(crate) fn network(g: &Global, args: &[String]) -> Result<()> {
         return Err(usage("cbb network"));
     }
     ask(g, header("network"))?;
-    println!("This network is one where the group is now: this computer publishes itself and takes connections here.");
+    println!(
+        "{}",
+        tr!("This network is one where the group is now: this computer publishes itself and takes connections here.")
+    );
     Ok(())
 }
 
@@ -344,19 +379,102 @@ pub(crate) fn new(g: &Global, args: &[String]) -> Result<()> {
     }
     let m = ask(g, header("new"))?;
     let s = m.header.status.unwrap_or_default();
-    println!("Created the group {}; this computer is its root.", s.group);
+    println!("{}", tr!("Created the group {}; this computer is its root.", s.group));
     println!(
-        "Its root key is a file here: guard this computer, since whoever copies the file can act as the group's root. A group made on a phone keeps its root key in the phone's hardware."
+        "{}",
+        tr!(
+            "Its root key is a file here: guard this computer, since whoever copies the file can act as the group's root. A group made on a phone keeps its root key in the phone's hardware."
+        )
     );
     if !s.key_problem.is_empty() {
-        println!("This computer's own key is in a file too, although it has a TPM: {}.", s.key_problem);
+        println!("{}", tr!("This computer's own key is in a file too, although it has a TPM: {}.", s.key_problem));
     }
     if s.key_level == "files" {
         println!(
-            "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys)."
+            "{}",
+            tr!(
+                "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys)."
+            )
         );
     }
-    println!("Add a device: on it, join a group, which shows a code; then type that code here with cbb pair -qr.");
+    println!(
+        "{}",
+        tr!("Add a device: on it, join a group, which shows a code; then type that code here with cbb pair -qr.")
+    );
+    Ok(())
+}
+
+/// The most cbb recovery reads: the QR code's text with its admin CA fits
+/// well within it, as the core's own limit.
+const MAX_SHEET_TEXT: usize = 4096;
+
+/// One line of standard input without echo where it is a terminal, at most
+/// limit bytes, trimmed, as Go's readSecretLine.
+fn read_secret_line(limit: usize) -> Result<String> {
+    use std::io::{BufRead, Read};
+    let _quiet = crate::sys::NoEcho::new();
+    let mut line = String::new();
+    std::io::stdin()
+        .lock()
+        .take(limit as u64 + 1)
+        .read_line(&mut line)
+        .map_err(|e| Error::with("cannot read standard input", e))?;
+    if line.trim_end_matches(['\r', '\n']).len() > limit {
+        return Err(Error::msg(format!("that is longer than {limit} characters")));
+    }
+    Ok(line.trim().to_string())
+}
+
+/// cbb recovery: claims the group with its recovery key, typed from the
+/// sheet or its QR code's text, or on a YubiKey with -yubikey, as Go's
+/// cmdRecovery. The key comes from standard input, never the command line.
+pub(crate) fn recovery(g: &Global, args: &[String]) -> Result<()> {
+    use std::io::IsTerminal;
+    let mut h = Header { kind: "secret".into(), ..header("recovery") };
+    match args {
+        [] => {}
+        [a] if flag(a) == Some("yubikey") => h.name = "yubikey".into(),
+        _ => {
+            return Err(usage(
+                "cbb recovery [-yubikey], then type the recovery key from the sheet (or paste its QR code's text), or with -yubikey the YubiKey's PIN; cbb status shows the claim",
+            ));
+        }
+    }
+    let terminal = std::io::stdin().is_terminal();
+    let card = h.name == "yubikey";
+    if terminal {
+        if card {
+            eprint!(
+                "{}",
+                tr!("Plug in the YubiKey with the group's recovery key, then type its PIN and press Enter: ")
+            );
+        } else {
+            eprintln!(
+                "{}",
+                tr!(
+                    "Type the recovery key from the sheet, in groups of four, or paste the text of its QR code, then press Enter (it does not show):"
+                )
+            );
+        }
+    }
+    let text = read_secret_line(if card { 64 } else { MAX_SHEET_TEXT })?;
+    if text.is_empty() {
+        return Err(usage(if card { "no PIN was typed" } else { "no recovery key was typed" }));
+    }
+    if card && terminal {
+        eprintln!("{}", tr!("Touch the YubiKey when it blinks."));
+    }
+    request(g, &Message::new(h, text.into_bytes()))?;
+    println!(
+        "{}",
+        tr!(
+            "Claimed the group with its recovery key. This device becomes the group's root when the waiting time ends (72 hours unless the root set another), unless the root phone cancels the claim; cbb status shows the time left."
+        )
+    );
+    println!(
+        "{}",
+        tr!("Then a new phone joins it (cbb pair -admin), and cbb handover gives that phone the group at once.")
+    );
     Ok(())
 }
 

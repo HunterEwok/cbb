@@ -13,7 +13,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Checks the pairing messages against the vectors that the Go tests write (go test ./internal/pair -update). */
+/** Checks the pairing messages against the vectors in testdata/interop, which Go's pairing wrote and the Rust core reads. */
 class PairingTest {
     @Test
     fun goPairing() {

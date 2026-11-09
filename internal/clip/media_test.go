@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -113,72 +114,8 @@ func TestNames(t *testing.T) {
 	}
 }
 
-func TestMediaEvents(t *testing.T) {
-	w := newWorld()
-	a, b := w.member(idA), w.member(idB)
-	join(t, w, a, idB, nil)
-	join(t, w, b, idA, nil)
-	m := manifest(part(TypePNG, "", "screenshot"))
-	ev, ok, err := a.CopiedMedia(m, "", Copy)
-	if err != nil || !ok || ev.Kind != Media || ev.Media != m || ev.Text != "" {
-		t.Fatalf("CopiedMedia() = %+v, %v, %v", ev, ok, err)
-	}
-	if err := ev.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok, _ := a.CopiedMedia(manifest(part(TypePNG, "", "screenshot")), "", Copy); ok {
-		t.Error("copying the same image again made a new event")
-	}
-	if got, _, _, ok := a.LocalMedia(); !ok || got != m {
-		t.Errorf("LocalMedia() = %v, %v", got, ok)
-	}
-	if _, _, _, ok := a.Local(); ok {
-		t.Error("Local() returned a text for an image without one")
-	}
-	// A text after the image is a new copy, and the image is no longer local.
-	mustCopy(t, a, "then a text")
-	if _, _, _, ok := a.LocalMedia(); ok {
-		t.Error("LocalMedia() after a text")
-	}
-
-	// The other member writes it, and its watcher's report is an echo.
-	res := mustReceive(t, b, ev)
-	if !res.Write {
-		t.Fatalf("a live media event was not written: %+v", res)
-	}
-	if cur, _ := b.Current(); cur.Kind != Media || cur.Media.Parts[0].Type != TypePNG {
-		t.Errorf("current = %+v", cur)
-	}
-	if _, ok, _ := b.CopiedMedia(manifest(part(TypePNG, "", "screenshot")), "", Copy); ok {
-		t.Error("the echo of a written image made a new event")
-	}
-	if _, ok, _ := b.Copied("screenshot", Text, Copy); !ok {
-		t.Error("a text that equals nothing written made no event")
-	}
-
-	// Files with a text alternative: Local gives the text.
-	files := manifest(Part{Path: "docs", Dir: true}, part("", "docs/a.txt", "a"))
-	ev, res, err = b.SendMedia(files, "docs", Copy)
-	if err != nil || !res.Write || ev.Text != "docs" {
-		t.Fatalf("SendMedia() = %+v, %+v, %v", ev, res, err)
-	}
-	if text, kind, _, ok := b.Local(); !ok || text != "docs" || kind != Text {
-		t.Errorf("Local() = %q, %v, %v", text, kind, ok)
-	}
-	if _, res, _ := b.SendMedia(files, "docs", Copy); res.Write {
-		t.Error("SendMedia() asked to write what the clipboard holds")
-	}
-	if _, _, err := b.SendMedia(files, strings.Repeat("x", MaxAltText+1), Copy); err == nil {
-		t.Error("a text alternative over the limit was taken")
-	}
-	if _, _, err := b.CopiedMedia(&Manifest{}, "", Copy); err == nil {
-		t.Error("an empty manifest was taken")
-	}
-}
-
 func TestMediaValidation(t *testing.T) {
-	w := newWorld()
-	good := Event{ID: NewID(), Origin: idB, Time: hlc.Timestamp{Wall: w.wall}, Kind: Media, Media: manifest(part(TypeJPEG, "", "j"))}
+	good := Event{ID: NewID(), Origin: idB, Time: hlc.Timestamp{Wall: testWall}, Kind: Media, Media: manifest(part(TypeJPEG, "", "j"))}
 	if err := good.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +143,7 @@ func TestMediaValidation(t *testing.T) {
 		}
 	}
 	var back Event
-	if err := json.Unmarshal(b, &back); err != nil || back.Validate() != nil || back.Media.key() != good.Media.key() {
+	if err := json.Unmarshal(b, &back); err != nil || back.Validate() != nil || !reflect.DeepEqual(back.Media, good.Media) {
 		t.Errorf("round trip %+v, %v", back, err)
 	}
 }

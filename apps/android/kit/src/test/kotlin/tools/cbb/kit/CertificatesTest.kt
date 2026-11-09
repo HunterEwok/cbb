@@ -96,7 +96,7 @@ class CertificatesTest {
         assertContentEquals(unhex("06082a8648ce3d040302"), DER.oid("1.2.840.10045.4.3.2"))
     }
 
-    // Go's member certificates, and the ones it refuses (internal/node).
+    // Go's member certificates, and the ones a member refuses.
     @Test
     fun goMemberCertificates() {
         val v = Interop.read("member-certs.json").jsonObject

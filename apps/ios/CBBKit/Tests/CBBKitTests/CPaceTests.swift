@@ -18,7 +18,7 @@ func unhex(_ s: String) -> [UInt8] {
 func hex(_ b: [UInt8]) -> String { b.map { String(format: "%02x", $0) }.joined() }
 
 // Test vectors from draft-irtf-cfrg-cpace-21, Appendix B.1, as in
-// internal/third_party/cpace/cpace_test.go.
+// internal/cpace/ of rsc.io/cmd/mote v0.1.3, file cpace_test.go.
 final class CPaceTests: XCTestCase {
     let prs = Array("Password".utf8)
     let ci = Array("\u{0b}A_initiator\u{0b}B_responder".utf8)

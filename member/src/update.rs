@@ -15,7 +15,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use cbb_core::certs::{hex, sha256};
 use cbb_core::release::{self, File, Release, Seen};
@@ -85,16 +85,9 @@ fn is_zero(n: &i64) -> bool {
 }
 
 /// The updater's folder, which only root may change, and where it
-/// downloads: on OpenWrt /etc, which survives a sysupgrade, and RAM.
+/// downloads (update_os::paths).
 pub fn paths() -> (PathBuf, PathBuf) {
-    if crate::rootless::is() {
-        let d = crate::rootless::update_dir();
-        (d.clone(), d)
-    } else if crate::openwrt() {
-        (PathBuf::from("/etc/cbb-update"), PathBuf::from("/tmp/cbb-update"))
-    } else {
-        (PathBuf::from("/var/lib/cbb-update"), PathBuf::from("/var/lib/cbb-update"))
-    }
+    crate::update_os::paths()
 }
 
 pub fn load_state(dir: &Path) -> Result<State> {
@@ -122,22 +115,13 @@ pub fn due(st: &State, now_ms: i64) -> bool {
 }
 
 pub fn now_ms() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+    crate::uptime::wall_ms()
 }
 
-/// The lite member's archive for this device, as the release workflow
-/// names it; None for a system it does not build for.
+/// The release's archive for this device and the installed cbb
+/// (update_os::archive_name); None for a system it does not build for.
 pub fn archive_name() -> Option<String> {
-    let arch = match std::env::consts::ARCH {
-        "x86_64" => "amd64",
-        "aarch64" => "arm64",
-        // The ARMv6 build runs on ARMv7 too.
-        "arm" => "armv6",
-        "mips" if cfg!(target_endian = "little") => "mipsle",
-        "mips" => "mips",
-        _ => return None,
-    };
-    Some(format!("cbb-lite-linux-{arch}.tar.gz"))
+    crate::update_os::installed_program().ok().and_then(|p| crate::update_os::archive_name(&p))
 }
 
 /// Where the release files come from: a server, or a folder for tests.
@@ -398,8 +382,10 @@ pub struct Updater<'a> {
     pub sources: Vec<Source>,
     pub installed: String,
     pub archive: String,
-    /// The installed program, which the archive's replaces.
-    pub program: PathBuf,
+    /// The installed programs, which the archive's replace and which go
+    /// back together when the new release fails: cbb first, then those
+    /// beside it (update_os::programs).
+    pub programs: Vec<PathBuf>,
     pub now_ms: i64,
     pub install: &'a Installer<'a>,
     pub healthy: &'a Health<'a>,
@@ -538,7 +524,7 @@ impl Updater<'_> {
         let prog = asset
             .binaries
             .iter()
-            .find(|b| b.name.rsplit('/').next() == Some("cbb"))
+            .find(|b| matches!(b.name.rsplit('/').next(), Some("cbb" | "cbb.exe")))
             .ok_or_else(|| Error::msg(format!("release.json lists no cbb in {}", asset.name)))?;
         mkdir_private(&self.work)?;
         let new = self.work.join("new");
@@ -557,8 +543,7 @@ impl Updater<'_> {
         drop(data);
         // The archive's hash is the signed one, so its names are the
         // project's; tar unpacks it into a folder of its own.
-        let out = Command::new("tar").arg("-xzf").arg(&file).arg("-C").arg(&new).output();
-        let out = out.context("cannot run tar").inspect_err(|_| {
+        let out = crate::update_os::unpack(&file, &new).inspect_err(|_| {
             let _ = fs::remove_file(&file);
         })?;
         // The archive stays until the install ends, for the service to
@@ -581,11 +566,32 @@ impl Updater<'_> {
         }
         let bin = new.join(&prog.name);
         let root = bin.parent().unwrap_or(&new).to_path_buf();
+        // Each installed program and the archive's that replaces it.
+        let (olds, news): (Vec<PathBuf>, Vec<PathBuf>) = std::iter::once((self.programs[0].clone(), bin.clone()))
+            .chain(self.programs.iter().skip(1).filter_map(|p| {
+                let new = root.join(p.file_name()?);
+                new.is_file().then(|| (p.clone(), new))
+            }))
+            .unzip();
+        crate::update_os::verify_signer(&olds, &news)?;
+        // The installed programs go to a folder of their own, where the
+        // installer finds those beside cbb when it puts them back.
         let prev = self.work.join("previous");
         let _ = fs::remove_dir_all(&prev);
         mkdir_private(&prev)?;
-        let saved = prev.join("cbb");
-        fs::copy(&self.program, &saved).context(format!("cannot keep a copy of {}", self.program.display()))?;
+        let mut saved = PathBuf::new();
+        for (i, p) in self.programs.iter().enumerate() {
+            let name = if i == 0 {
+                format!("cbb{}", std::env::consts::EXE_SUFFIX).into()
+            } else {
+                p.file_name().unwrap_or_default().to_os_string()
+            };
+            let to = prev.join(name);
+            fs::copy(p, &to).context(format!("cannot keep a copy of {}", p.display()))?;
+            if i == 0 {
+                saved = to;
+            }
+        }
 
         (self.log)(&format!("Installing {}...", r.version));
         let mut res = (self.install)(&root, &bin);
@@ -642,30 +648,10 @@ pub fn prefixed(e: Error, p: &str) -> Error {
     e.context(m)
 }
 
-/// Runs the installer of an unpacked archive on bin, as an update: it asks
-/// nothing and keeps the settings.
+/// Runs the installer of this system in an unpacked archive on bin
+/// (update_os::install).
 pub fn install(root: &Path, bin: &Path) -> Result<()> {
-    let script = if crate::openwrt() { "packaging/openwrt/install.sh" } else { "packaging/linux/install.sh" };
-    let mut cmd = Command::new("sh");
-    cmd.arg(root.join(script));
-    if crate::rootless::is() {
-        cmd.arg("--rootless");
-    }
-    let out = cmd.arg(bin).env("CBB_UPDATING", "1").output().context("cannot run install.sh")?;
-    if out.status.success() {
-        return Ok(());
-    }
-    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-    Err(Error::msg(format!("install.sh failed: {}", failure(&text))))
-}
-
-/// The installer's own line about what failed, or its last lines.
-fn failure(out: &str) -> String {
-    let lines: Vec<&str> = out.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
-    if let Some(l) = lines.iter().rev().find(|l| l.starts_with("install.sh: ")) {
-        return l.trim_start_matches("install.sh: ").to_string();
-    }
-    lines[lines.len().saturating_sub(3)..].join(" / ")
+    crate::update_os::install(root, bin)
 }
 
 /// Polls status until it reports version, or the time is up.
@@ -735,8 +721,12 @@ const CRON_OPENWRT: &str = "/etc/crontabs/root";
 const CRON_MARK: &str = "# cbb-update";
 
 /// Adds the daily timer that runs exe update -timer, or removes it: a
-/// systemd timer, or cron on OpenWrt, as the full member's.
+/// systemd timer, or cron on OpenWrt, as the full member's; on the other
+/// systems update_os's.
 pub fn set_timer(on: bool, exe: &Path) -> Result<()> {
+    if let Some(r) = crate::update_os::set_timer(on, exe) {
+        return r;
+    }
     if crate::openwrt() {
         return cron_timer(on, exe);
     }
@@ -941,7 +931,7 @@ mod tests {
             sources: vec![Source::Dir(dir.to_path_buf())],
             installed: installed.into(),
             archive: ARCHIVE.into(),
-            program,
+            programs: vec![program],
             now_ms: NOW,
             install: &install,
             healthy: &healthy,
@@ -1027,7 +1017,7 @@ mod tests {
                 sources: vec![Source::Dir(if servers { dir.clone() } else { empty.clone() })],
                 installed: "0.6.0".into(),
                 archive: ARCHIVE.into(),
-                program,
+                programs: vec![program],
                 now_ms: NOW,
                 install: &install,
                 healthy: &|_, _| Ok(()),
@@ -1137,7 +1127,7 @@ mod tests {
             sources: dirs.iter().map(|d| Source::Dir(d.to_path_buf())).collect(),
             installed: "0.6.0".into(),
             archive: ARCHIVE.into(),
-            program: PathBuf::from("/nonexistent"),
+            programs: vec![PathBuf::from("/nonexistent")],
             now_ms: NOW,
             install: &install,
             healthy: &healthy,
@@ -1236,7 +1226,7 @@ mod tests {
             sources: Vec::new(),
             installed: "0.6.0".into(),
             archive: ARCHIVE.into(),
-            program: PathBuf::from("/nonexistent"),
+            programs: vec![PathBuf::from("/nonexistent")],
             now_ms: NOW,
             install: &install,
             healthy: &healthy,
@@ -1253,7 +1243,6 @@ mod tests {
         assert_eq!(m.url("release.json", "0.6.1"), "https://example.org/cbb/v0.6.1/release.json");
         assert!(Source::mirror("http://example.org").is_err() && Source::mirror("https://x/?a").is_err());
         assert!(archive_name().is_some());
-        assert_eq!(failure("a\ninstall.sh: copying failed: no space\nmore\n"), "copying failed: no space");
     }
 
     #[test]

@@ -124,8 +124,8 @@ func TestShellQuote(t *testing.T) {
 	}
 }
 
-// The patterns read what the full and the lite member print; keep them in step with
-// cmd/cbb/commands.go and member/src/lib.rs.
+// The patterns read what cbb prints; keep them in step with cmd/cbb/commands.go and
+// member/src/status_text.rs.
 func TestPatterns(t *testing.T) {
 	if m := codeRE.FindStringSubmatch("Pairing code: 123 456"); m == nil || m[1]+m[2] != "123456" {
 		t.Fatalf("code: %v", m)
@@ -134,8 +134,7 @@ func TestPatterns(t *testing.T) {
 		t.Fatalf("address: %v", m)
 	}
 	for _, s := range []string{
-		"Device desktop (linux), group 0a1b2c3d4e5f6a7b",
-		"device  abc\ngroup   0a1b2c3d4e5f6a7b\nrole    lite",
+		"Device desktop (Linux, full), group 0a1b2c3d4e5f6a7b",
 	} {
 		if m := groupRE.FindStringSubmatch(s); m == nil || m[1] != "0a1b2c3d4e5f6a7b" {
 			t.Fatalf("group in %q: %v", s, m)
@@ -151,7 +150,7 @@ func TestNoLocale(t *testing.T) {
 }
 
 func TestDeviceRE(t *testing.T) {
-	for _, out := range []string{"Device 3f2a9c01d4 (linux), group 0a1b2c3d4e5f6a7b\n", "device  3f2a9c01d4\ngroup   0a1b2c3d4e5f6a7b\n"} {
+	for _, out := range []string{"Device 3f2a9c01d4 (Linux, full), group 0a1b2c3d4e5f6a7b\n"} {
 		if m := deviceRE.FindStringSubmatch(out); m == nil || m[1] != "3f2a9c01d4" {
 			t.Errorf("deviceRE on %q = %v", out, m)
 		}
