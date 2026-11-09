@@ -73,6 +73,9 @@ func otherCode(code string) string {
 // or another certificate admits nothing.
 func TestSwiftAdmitsComputer(t *testing.T) {
 	tool := interopTool(t)
+	// The test reads the computer's identity with Go, which opens no key
+	// in a Mac's Secure Enclave: the computer keeps its key in a file.
+	t.Setenv("CBB_TPM", "off")
 	for _, tc := range []struct {
 		name          string
 		wrong, softFP bool
@@ -141,6 +144,9 @@ func TestSwiftAdmitsComputer(t *testing.T) {
 // sides.
 func TestSwiftJoinsComputerRoot(t *testing.T) {
 	tool := interopTool(t)
+	// The test reads the computer's identity with Go, which opens no key
+	// in a Mac's Secure Enclave: the computer keeps its key in a file.
+	t.Setenv("CBB_TPM", "off")
 	for _, tc := range []struct {
 		name  string
 		wrong bool
