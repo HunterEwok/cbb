@@ -149,17 +149,6 @@ func (id *Identity) memberTLSCert() tls.Certificate {
 	return cert
 }
 
-// ForwarderCertificate returns the member certificate with its admin CA,
-// if any, and the group's roots: a hub registers with it on its forwarder,
-// which knows no group beforehand and checks the whole chain.
-func (id *Identity) ForwarderCertificate() tls.Certificate {
-	cert := id.memberTLSCert()
-	for _, root := range id.Trusted() {
-		cert.Certificate = append(cert.Certificate, root.Raw)
-	}
-	return cert
-}
-
 func (id *Identity) tlsCert(leaf *x509.Certificate) tls.Certificate {
 	return tls.Certificate{Certificate: [][]byte{leaf.Raw}, PrivateKey: id.Key, Leaf: leaf}
 }

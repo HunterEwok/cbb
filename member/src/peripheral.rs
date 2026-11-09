@@ -111,7 +111,12 @@ impl Peripherals {
     /// or the helper does not answer.
     pub fn status(&self) -> Option<Status> {
         if !self.set_up() {
-            return None;
+            // A Linux computer with the helper can be the keyboard: its
+            // status says the keyboard is off, as Go's KeyboardStatus,
+            // without starting the helper for it.
+            let can = cfg!(target_os = "linux") && crate::helper::shared().is_some();
+            let off = serde_json::json!({ "layout": "us", "rate": 20 });
+            return can.then(|| Status { keyboard: Some(off), ..Default::default() });
         }
         self.call("peripheral-status", Request::default(), STATUS_WAIT).ok()
     }

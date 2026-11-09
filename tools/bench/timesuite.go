@@ -13,7 +13,8 @@ import (
 	"time"
 )
 
-// The time-scaled build (`go build -tags benchtime`, internal/benchtime)
+// The time-scaled build (`cargo build -p cbb-lite --features benchtime`,
+// member/src/benchtime.rs)
 // runs every long time of the product benchScale times faster: a member
 // certificate lasts about ten minutes and is renewed in its last three and
 // a half, a credential period lasts half a minute. The time suite runs that
@@ -35,7 +36,7 @@ func TimeSuite(ctx context.Context, r *Report, cbb string, timeout time.Duration
 		}
 		out, err := exec1(ctx, f.cbb, "version")
 		if err == nil && !strings.Contains(out, "time-scaled") {
-			err = fmt.Errorf("%s is not the time-scaled build (go build -tags benchtime): %s", cbb, firstLine(out))
+			err = fmt.Errorf("%s is not the time-scaled build (cargo build -p cbb-lite --features benchtime): %s", cbb, firstLine(out))
 		}
 		return err
 	}) != nil {

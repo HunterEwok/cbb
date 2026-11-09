@@ -39,11 +39,11 @@ func joinFull(t *testing.T, bin string, root *testService) string {
 // and the quick actions off there, one device or all.
 func TestLiteAdminCommands(t *testing.T) {
 	bin := liteBin(t)
-	cli := goCLI(t)
+	cli := cbbCLI(t)
 	var h hub
-	runner := &fakeRunner{}
+	runner := newFakeRunner(t, nil)
 	desk := startService(t, &h, "desk")
-	deck := startWith(t, &h, "deck", "linux", func(c *Config) { c.runner = runner })
+	deck := startEnv(t, &h, "deck", runner.env())
 	pairWith(t, desk, deck)
 	dir := joinFull(t, bin, desk)
 	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", deck.addr())
