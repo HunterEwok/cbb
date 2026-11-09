@@ -6,8 +6,8 @@
 <context>
     <name>Errors</name>
     <message>
-        <source>This phone's admin key predates the admin PIN. Leave the group and join it again as an admin.</source>
-        <translation>इस फ़ोन की एडमिन कुंजी एडमिन PIN से पुरानी है। समूह छोड़ें और एडमिन के रूप में फिर से जुड़ें।</translation>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>इस फ़ोन की एडमिन कुंजी एडमिन PIN से पुरानी है। समूह छोड़ें और फिर से जुड़ें।</translation>
     </message>
     <message>
         <source>The admin PIN is needed first.</source>
@@ -20,10 +20,6 @@
     <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
         <translation>सात गलत PIN ने एडमिन कुंजी को हमेशा के लिए लॉक कर दिया; फ़ोन समूह में सदस्य के रूप में रहता है।</translation>
-    </message>
-    <message>
-        <source>Joining as an admin needs the admin PIN.</source>
-        <translation>एडमिन के रूप में जुड़ने के लिए एडमिन PIN चाहिए।</translation>
     </message>
     <message>
         <source>Adding a device needs the admin PIN.</source>
@@ -193,16 +189,8 @@
         <translation>फिर से कोशिश करें</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>एडमिन के रूप में जुड़ें</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>एडमिन कुंजी बन रही है…</translation>
-    </message>
-    <message>
-        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
-        <translation>जिस डिवाइस ने समूह बनाया, उस पर + दबाएँ और यह कोड स्कैन करें। यह स्क्रीन खुली रखें।</translation>
     </message>
 </context>
 <context>
@@ -250,10 +238,6 @@
     <message>
         <source>Join a group</source>
         <translation>समूह में शामिल हों</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>एडमिन के रूप में समूह से जुड़ें</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -332,8 +316,8 @@
         <translation>फ़ोन खो गया?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>दूसरे फ़ोन को एडमिन बनाएँ: उस पर “एडमिन के रूप में समूह से जुड़ें” टैप करें, फिर यहाँ “कोड स्कैन करें” से उसका कोड स्कैन करें। बंद करने के लिए टैप करें।</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>दूसरे फ़ोन को एडमिन बनाएँ: उसे समूह में जोड़ें, फिर उसे यहाँ खोलें और “एडमिन बनाएँ” टैप करें। बंद करने के लिए टैप करें।</translation>
     </message>
     <message>
         <source>Devices</source>
@@ -613,6 +597,14 @@
         <source>Device</source>
         <translation>डिवाइस</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>एडमिन बनने की तैयारी करें</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>समूह का रूट इस फ़ोन को एडमिन बना सकता है: रूट पर इस फ़ोन को खोलें और “एडमिन बनाएँ” टैप करें।</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -730,14 +722,6 @@
     <message>
         <source>Try again</source>
         <translation>फिर से कोशिश करें</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>इसे एडमिन बनाएँ</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>उस फ़ोन के लिए जो एडमिन के रूप में जुड़ता है</translation>
     </message>
 </context>
 <context>
@@ -1286,6 +1270,14 @@
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
         <translation>फ़ोन का सुरक्षित तत्व PIN जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं।</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>एडमिन PIN से समूह का रूट बाद में इस फ़ोन को एडमिन बना सकता है। केवल सदस्य के रूप में जुड़ने के लिए रद्द करें।</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>एडमिन PIN से समूह का रूट इस फ़ोन को एडमिन बना सकता है।</translation>
     </message>
 </context>
 <context>

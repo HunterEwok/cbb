@@ -6,8 +6,8 @@
 <context>
     <name>Errors</name>
     <message>
-        <source>This phone's admin key predates the admin PIN. Leave the group and join it again as an admin.</source>
-        <translation>مفتاح المشرف في هذا الهاتف أقدم من رمز PIN للمشرف. غادر المجموعة وانضم إليها مجددًا كمشرف.</translation>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>مفتاح المشرف في هذا الهاتف أقدم من رمز PIN للمشرف. غادر المجموعة وانضم إليها مجددًا.</translation>
     </message>
     <message>
         <source>The admin PIN is needed first.</source>
@@ -20,10 +20,6 @@
     <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
         <translation>قفلت سبعة رموز PIN خاطئة مفتاح المشرف نهائيًا؛ يبقى الهاتف في المجموعة عضوًا.</translation>
-    </message>
-    <message>
-        <source>Joining as an admin needs the admin PIN.</source>
-        <translation>الانضمام كمشرف يتطلب رمز PIN للمشرف.</translation>
     </message>
     <message>
         <source>Adding a device needs the admin PIN.</source>
@@ -193,16 +189,8 @@
         <translation>أعد المحاولة</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>الانضمام كمشرف</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>جارٍ إنشاء مفتاح المشرف…</translation>
-    </message>
-    <message>
-        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
-        <translation>على الجهاز الذي أنشأ المجموعة، اضغط + وامسح هذا الرمز. أبقِ هذه الشاشة مفتوحة.</translation>
     </message>
 </context>
 <context>
@@ -250,10 +238,6 @@
     <message>
         <source>Join a group</source>
         <translation>الانضمام إلى مجموعة</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>الانضمام إلى مجموعة كمشرف</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -332,8 +316,8 @@
         <translation>هل فقدت هاتفك؟</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>اجعل هاتفًا ثانيًا مشرفًا: اضغط عليه «الانضمام إلى مجموعة كمشرف»، ثم امسح رمزه هنا عبر «مسح رمز». اضغط للإغلاق.</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>اجعل هاتفًا ثانيًا مشرفًا: أضفه إلى المجموعة، ثم افتحه هنا واضغط «اجعله مشرفًا». اضغط للإغلاق.</translation>
     </message>
     <message>
         <source>Devices</source>
@@ -613,6 +597,14 @@
         <source>Device</source>
         <translation>الجهاز</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>الاستعداد لتصبح مشرفًا</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>يستطيع جذر المجموعة جعل هذا الهاتف مشرفًا: على الجذر، افتح هذا الهاتف واضغط «اجعله مشرفًا».</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -730,14 +722,6 @@
     <message>
         <source>Try again</source>
         <translation>حاول مرة أخرى</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>اجعله مشرفًا</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>لهاتف ينضم كمشرف</translation>
     </message>
 </context>
 <context>
@@ -1286,6 +1270,14 @@
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
         <translation>يتحقق العنصر الآمن في الهاتف من رمز PIN؛ سبعة رموز خاطئة تقفل مفتاح المشرف نهائيًا.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>برمز PIN للمشرف يستطيع جذر المجموعة لاحقًا جعل هذا الهاتف مشرفًا. ألغِ للانضمام كعضو فقط.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>برمز PIN للمشرف يستطيع جذر المجموعة جعل هذا الهاتف مشرفًا.</translation>
     </message>
 </context>
 <context>

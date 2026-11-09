@@ -35,6 +35,9 @@ class App : public QObject
     Q_PROPERTY(QString device READ device NOTIFY groupChanged)
     Q_PROPERTY(bool admin READ admin NOTIFY groupChanged)
     Q_PROPERTY(bool root READ root NOTIFY groupChanged)
+    // Whether the member's hellos offer the root this phone's admin key,
+    // for the root's "Make an admin".
+    Q_PROPERTY(bool adminOffered READ adminOffered NOTIFY groupChanged)
     // The phone's claim to take the group over: "" without one, else
     // "pending", "competing", "disputed" or "none" (not in the records yet).
     Q_PROPERTY(QString claimState READ claimState NOTIFY claimChanged)
@@ -82,9 +85,10 @@ public:
     // The group's tag and this phone's device ID once it joined, else empty.
     QString group() const { return m_member.groupTag(); }
     QString device() const { return m_member.device; }
-    // Whether the group's root made this phone an admin when it joined.
+    // Whether the group's root made this phone an admin.
     bool admin() const { return m_member.isAdmin(); }
     bool root() const { return m_member.root; }
+    bool adminOffered() const { return !m_member.isAdmin() && !m_member.adminOffer.isEmpty(); }
     QString claimState() const { return m_member.claim.isEmpty() ? QString() : m_claimState; }
     double claimLeftMs() const { return double(m_claimLeftMs); }
     Join *join() { return &m_join; }
@@ -110,10 +114,17 @@ public:
 
     // Finds or makes the phone's key, off the GUI thread.
     Q_INVOKABLE void setUpKey();
-    // Listens for the device that scans this phone's QR code; with admin,
-    // the phone asks to be an admin and offers its admin key, made now the
-    // first time, off the GUI thread.
-    Q_INVOKABLE void startJoin(bool admin = false);
+    // Listens for the device that scans this phone's QR code. The phone
+    // joins as a member; first it finds its admin key, or makes it behind
+    // the admin PIN unless the user cancels, off the GUI thread, for its
+    // member's hellos to offer the root, which may make it an admin later.
+    Q_INVOKABLE void startJoin();
+    // Stops listening, and drops a join that waits for the admin key.
+    Q_INVOKABLE void stopJoin();
+    // For a member phone whose hellos offer no admin key (it joined
+    // without one): makes the key behind the admin PIN and restarts the
+    // member, whose hellos then offer it.
+    Q_INVOKABLE void prepareAdmin();
     // Adds the device whose join code (a cbb://join link) the camera read,
     // with the admin key, found off the GUI thread.
     // makeAdmin: the root makes a phone that asks an admin.
@@ -171,8 +182,9 @@ signals:
     void claimChanged();
     void arrangementChanged();
     void adminPinChanged();
-    // fresh: no PIN yet, so the user chooses one and types it twice.
-    void pinNeeded(bool fresh);
+    // fresh: no PIN yet, so the user chooses one and types it twice;
+    // reason: why it is asked, when the dialog should say.
+    void pinNeeded(bool fresh, const QString &reason);
     // A wrong PIN, with the tries left, or locked for good.
     void pinRefused(bool locked, int triesLeft);
     void pinAccepted();
@@ -180,8 +192,10 @@ signals:
 
 private:
     // Before the admin key signs: true when the PIN is asked first, run
-    // then running once it is right and cancel when the user cancels.
-    bool askPin(std::function<void()> run, std::function<void()> cancel = std::function<void()>());
+    // then running once it is right and cancel when the user cancels;
+    // reason, when given, is shown in the dialog.
+    bool askPin(std::function<void()> run, std::function<void()> cancel = std::function<void()>(),
+                const QString &reason = QString());
     void refreshAdminPin();
     void setAdminPin(const QString &state);
     void show(const QString &error);
@@ -226,4 +240,6 @@ private:
     QStringList m_arrangeIds; // the devices arranged was last given
     QString m_adminPin = QStringLiteral("unknown");
     std::function<void()> m_pinRun, m_pinCancel;
+    QByteArray m_joinOffer; // the admin key the joining phone's hellos will offer
+    int m_joinSerial = 0;   // bumped by each start and stop of a join
 };

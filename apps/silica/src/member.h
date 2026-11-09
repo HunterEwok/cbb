@@ -89,6 +89,11 @@ public:
                const QString &osVersion);
     void stop();
 
+    // Has the member check the admin CA of the root's admin message
+    // (ffi's take_admin_ca): for the offered admin key, naming this phone,
+    // under the group's current root. The hellos then offer the key no more.
+    bool takeAdminCa(const QByteArray &ca, Failure *failure);
+
     // Sends the clipboard's text or image when the core's rule says so:
     // neither the group's copy nor what this phone sent or took last.
     Q_INVOKABLE void sendClipboard();
@@ -120,6 +125,9 @@ signals:
     // and opened (the member's check_command answer, with the event's
     // token): the receiver carries it out and answers.
     void commandArrived(const QJsonObject &checked);
+    // The root made this phone an admin: its admin message brought the
+    // admin CA for the key the hellos offer, not yet checked (takeAdminCa).
+    void adminCaArrived(const QByteArray &ca);
 
 public:
     // Brings the devices up to date now, as after an admin's change.

@@ -768,8 +768,11 @@ for Face ID (D-94, docs/protocol.md section 3):
   (`src/platform/keystore_tee.cpp`): its user PIN is the user's, its SO PIN starts as the same
   PIN and becomes a random one, kept nowhere, once the PIN has been entered right. Another app
   sees neither token.
-- **When it asks.** Before the admin key signs: making a group or joining as an admin, which
-  sets the PIN (typed twice, at least four digits), adding a device, an action on a device's
+- **When it asks.** Before the admin key is made or signs: making a group, or joining a
+  group, which makes the admin key the member's hellos offer the root for its "Make an
+  admin" (docs/protocol.md, section 10, "Admins"); the first time it sets the PIN (typed
+  twice, at least four digits). A user who cancels it joins as a member whose hellos offer
+  no key, and Settings' "Get ready to be an admin" makes it later. Then adding a device, an action on a device's
   page, the root's decision on an alert, the takeover and its finish. The app hands the PIN
   to the TEE and wipes it at once; the token then stays logged in for two minutes after its
   last use and is logged out when the app leaves the screen; renewals of the members'
@@ -784,7 +787,9 @@ for Face ID (D-94, docs/protocol.md section 3):
   useless without the PIN, and the next admin key replaces it.
 - **An admin phone from before the PIN** keeps its admin key in the QCA token, and the group's
   root certified that key; the app makes no new key beside it but asks to leave the group and
-  join again as an admin, which sets the PIN.
+  join again, which sets the PIN, for the root to make the phone an admin again.
+- **The root's admin CA** comes in its `admin` message once the root made the phone an admin;
+  the member checks it (ffi's `take_admin_ca`) before the app keeps it in `member.json`.
 - Sailfish OS and Aurora 4 keep their keys in files (level `file`) and ask for no PIN.
 
 ## Collections and the order of the tiles

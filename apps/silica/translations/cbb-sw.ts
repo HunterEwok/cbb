@@ -6,8 +6,8 @@
 <context>
     <name>Errors</name>
     <message>
-        <source>This phone's admin key predates the admin PIN. Leave the group and join it again as an admin.</source>
-        <translation>Ufunguo wa msimamizi wa simu hii ni wa kabla ya PIN ya msimamizi. Ondoka kwenye kikundi kisha ujiunge tena kama msimamizi.</translation>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>Ufunguo wa msimamizi wa simu hii ni wa kabla ya PIN ya msimamizi. Ondoka kwenye kikundi kisha ujiunge tena.</translation>
     </message>
     <message>
         <source>The admin PIN is needed first.</source>
@@ -20,10 +20,6 @@
     <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
         <translation>PIN saba zisizo sahihi zimefunga ufunguo wa msimamizi kabisa; simu inabaki kwenye kikundi kama mwanachama.</translation>
-    </message>
-    <message>
-        <source>Joining as an admin needs the admin PIN.</source>
-        <translation>Kujiunga kama msimamizi kunahitaji PIN ya msimamizi.</translation>
     </message>
     <message>
         <source>Adding a device needs the admin PIN.</source>
@@ -193,16 +189,8 @@
         <translation>Jaribu tena</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>Jiunge kama msimamizi</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>Inatengeneza ufunguo wa msimamizi…</translation>
-    </message>
-    <message>
-        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
-        <translation>Kwenye kifaa kilichounda kikundi, gusa + kisha uchanganue msimbo huu. Acha skrini hii wazi.</translation>
     </message>
 </context>
 <context>
@@ -250,10 +238,6 @@
     <message>
         <source>Join a group</source>
         <translation>Jiunge na kikundi</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>Jiunge na kikundi kama msimamizi</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -332,8 +316,8 @@
         <translation>Umepoteza simu?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>Fanya simu ya pili kuwa msimamizi: kwenye simu hiyo, gusa Jiunge na kikundi kama msimamizi, kisha changanua msimbo wake hapa kwa Changanua msimbo. Gusa ili kufunga.</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>Fanya simu ya pili kuwa msimamizi: iongeze kwenye kikundi, kisha ifungue hapa na uguse Fanya msimamizi. Gusa ili kufunga.</translation>
     </message>
     <message>
         <source>Devices</source>
@@ -613,6 +597,14 @@
         <source>Device</source>
         <translation>Kifaa</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>Jiandae kuwa msimamizi</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>Mzizi wa kikundi unaweza kuifanya simu hii kuwa msimamizi: kwenye mzizi, fungua simu hii na uguse Fanya msimamizi.</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -730,14 +722,6 @@
     <message>
         <source>Try again</source>
         <translation>Jaribu tena</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>Kifanye msimamizi</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>Kwa simu inayojiunga kama msimamizi</translation>
     </message>
 </context>
 <context>
@@ -1286,6 +1270,14 @@
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
         <translation>Kipengele salama cha simu hukagua PIN; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>Ukiwa na PIN ya msimamizi, mzizi wa kikundi unaweza baadaye kuifanya simu hii kuwa msimamizi. Ghairi ili ujiunge kama mwanachama tu.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>Ukiwa na PIN ya msimamizi, mzizi wa kikundi unaweza kuifanya simu hii kuwa msimamizi.</translation>
     </message>
 </context>
 <context>

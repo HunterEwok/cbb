@@ -61,8 +61,10 @@ Page {
                                            function() { app.manage("remove", page.device.device) })
             }
             MenuItem {
-                // The admin key comes from the computer's hello.
-                visible: page.acts && app.root && Devices.can(page.device, "admin") && !page.device.admin
+                // The admin key comes from the device's hello: a computer's
+                // with the admin capability, or a phone's.
+                visible: page.acts && app.root && !page.device.admin
+                         && (Devices.can(page.device, "admin") || page.device.role === "phone")
                          && page.device.online
                 text: qsTr("Make an admin")
                 onClicked: remorse.execute(qsTr("Making %1 an admin").arg(Devices.name(page.device)),

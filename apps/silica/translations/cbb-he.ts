@@ -6,8 +6,8 @@
 <context>
     <name>Errors</name>
     <message>
-        <source>This phone's admin key predates the admin PIN. Leave the group and join it again as an admin.</source>
-        <translation>מפתח המנהל בטלפון הזה ישן יותר מ-PIN המנהל. צאו מהקבוצה והצטרפו אליה שוב כמנהלים.</translation>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>מפתח המנהל בטלפון הזה ישן יותר מ-PIN המנהל. צאו מהקבוצה והצטרפו אליה שוב.</translation>
     </message>
     <message>
         <source>The admin PIN is needed first.</source>
@@ -20,10 +20,6 @@
     <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
         <translation>שבעה קודי PIN שגויים נעלו את מפתח המנהל לתמיד; הטלפון נשאר בקבוצה כחבר.</translation>
-    </message>
-    <message>
-        <source>Joining as an admin needs the admin PIN.</source>
-        <translation>הצטרפות כמנהל דורשת את ה-PIN של המנהל.</translation>
     </message>
     <message>
         <source>Adding a device needs the admin PIN.</source>
@@ -193,16 +189,8 @@
         <translation>נסה שוב</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>הצטרפות כמנהל</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>יוצר את מפתח המנהל…</translation>
-    </message>
-    <message>
-        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
-        <translation>במכשיר שיצר את הקבוצה, הקישו + וסרקו את הקוד הזה. השאירו את המסך הזה פתוח.</translation>
     </message>
 </context>
 <context>
@@ -250,10 +238,6 @@
     <message>
         <source>Join a group</source>
         <translation>הצטרפות לקבוצה</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>הצטרפות לקבוצה כמנהל</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -332,8 +316,8 @@
         <translation>הטלפון אבד?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>הפכו טלפון שני למנהל: בו הקישו ״הצטרפות לקבוצה כמנהל״, ואז סרקו את הקוד שלו כאן דרך ״סריקת קוד״. הקישו לסגירה.</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>הפכו טלפון שני למנהל: הוסיפו אותו לקבוצה, פתחו אותו כאן והקישו ״הפיכה למנהל״. הקישו לסגירה.</translation>
     </message>
     <message>
         <source>Devices</source>
@@ -613,6 +597,14 @@
         <source>Device</source>
         <translation>מכשיר</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>היערכות להיות מנהל</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>השורש של הקבוצה יכול להפוך את הטלפון הזה למנהל: בשורש, פתחו את הטלפון הזה והקישו ״הפיכה למנהל״.</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -730,14 +722,6 @@
     <message>
         <source>Try again</source>
         <translation>לנסות שוב</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>להפוך למנהל</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>לטלפון שמצטרף כמנהל</translation>
     </message>
 </context>
 <context>
@@ -1286,6 +1270,14 @@
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
         <translation>הרכיב המאובטח של הטלפון בודק את ה-PIN; שבעה קודים שגויים נועלים את מפתח המנהל לתמיד.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>עם PIN של מנהל, השורש של הקבוצה יוכל בהמשך להפוך את הטלפון הזה למנהל. בטלו כדי להצטרף כחבר בלבד.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>עם PIN של מנהל, השורש של הקבוצה יכול להפוך את הטלפון הזה למנהל.</translation>
     </message>
 </context>
 <context>

@@ -6,8 +6,8 @@
 <context>
     <name>Errors</name>
     <message>
-        <source>This phone's admin key predates the admin PIN. Leave the group and join it again as an admin.</source>
-        <translation>Ключ администратора на этом телефоне старше PIN администратора. Покиньте группу и вступите в неё снова администратором.</translation>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>Ключ администратора на этом телефоне старше PIN администратора. Покиньте группу и вступите в неё снова.</translation>
     </message>
     <message>
         <source>The admin PIN is needed first.</source>
@@ -20,10 +20,6 @@
     <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
         <translation>Семь неверных PIN навсегда заблокировали ключ администратора; телефон остаётся в группе участником.</translation>
-    </message>
-    <message>
-        <source>Joining as an admin needs the admin PIN.</source>
-        <translation>Чтобы вступить администратором, нужен PIN администратора.</translation>
     </message>
     <message>
         <source>Adding a device needs the admin PIN.</source>
@@ -193,16 +189,8 @@
         <translation>Попробовать снова</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>Войти как админ</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>Создаётся ключ админа…</translation>
-    </message>
-    <message>
-        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
-        <translation>На устройстве, которое создало группу, нажмите + и отсканируйте этот код. Не закрывайте этот экран.</translation>
     </message>
 </context>
 <context>
@@ -250,10 +238,6 @@
     <message>
         <source>Join a group</source>
         <translation>Войти в группу</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>Войти в группу как админ</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -332,8 +316,8 @@
         <translation>Потеряли телефон?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>Сделайте второй телефон админом: на нём нажмите «Войти в группу как админ», затем отсканируйте его код здесь через «Сканировать код». Нажмите, чтобы закрыть.</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>Сделайте второй телефон админом: добавьте его в группу, затем откройте его здесь и нажмите «Сделать админом». Нажмите, чтобы закрыть.</translation>
     </message>
     <message>
         <source>Devices</source>
@@ -613,6 +597,14 @@
         <source>Device</source>
         <translation>Устройство</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>Подготовиться стать админом</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>Корень группы может сделать этот телефон админом: на корне откройте этот телефон и нажмите «Сделать админом».</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -730,14 +722,6 @@
     <message>
         <source>Try again</source>
         <translation>Попробовать снова</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>Сделать админом</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>Для телефона, который вступает как админ</translation>
     </message>
 </context>
 <context>
@@ -1286,6 +1270,14 @@
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
         <translation>PIN проверяет защищённый модуль телефона; семь неверных PIN навсегда блокируют ключ администратора.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>С PIN администратора корень группы сможет позже сделать этот телефон админом. Отмените, чтобы войти просто участником.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>С PIN администратора корень группы сможет сделать этот телефон админом.</translation>
     </message>
 </context>
 <context>

@@ -6,8 +6,8 @@
 <context>
     <name>Errors</name>
     <message>
-        <source>This phone's admin key predates the admin PIN. Leave the group and join it again as an admin.</source>
-        <translation>此手机的管理员密钥早于管理员 PIN。请退出群组，然后以管理员身份重新加入。</translation>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>此手机的管理员密钥早于管理员 PIN。请退出群组，然后重新加入。</translation>
     </message>
     <message>
         <source>The admin PIN is needed first.</source>
@@ -20,10 +20,6 @@
     <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
         <translation>连续七次输错 PIN，管理员密钥已被永久锁定；手机仍作为成员留在群组中。</translation>
-    </message>
-    <message>
-        <source>Joining as an admin needs the admin PIN.</source>
-        <translation>以管理员身份加入需要管理员 PIN。</translation>
     </message>
     <message>
         <source>Adding a device needs the admin PIN.</source>
@@ -193,16 +189,8 @@
         <translation>重试</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>以管理员身份加入</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>正在生成管理员密钥…</translation>
-    </message>
-    <message>
-        <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
-        <translation>在创建群组的设备上点按 +，然后扫描此代码。请保持此屏幕打开。</translation>
     </message>
 </context>
 <context>
@@ -250,10 +238,6 @@
     <message>
         <source>Join a group</source>
         <translation>加入群组</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>以管理员身份加入群组</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -332,8 +316,8 @@
         <translation>手机丢了？</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>让第二部手机成为管理员：在那部手机上点按“以管理员身份加入群组”，然后在这里用“扫描代码”扫描它的代码。点按即可关闭。</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>让第二部手机成为管理员：先把它加入群组，然后在这里打开它并点按“设为管理员”。点按即可关闭。</translation>
     </message>
     <message>
         <source>Devices</source>
@@ -613,6 +597,14 @@
         <source>Device</source>
         <translation>设备</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>准备成为管理员</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>群组的根可以将此手机设为管理员：在根设备上打开此手机，然后点按“设为管理员”。</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -730,14 +722,6 @@
     <message>
         <source>Try again</source>
         <translation>重试</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>设为管理员</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>适用于以管理员身份加入的手机</translation>
     </message>
 </context>
 <context>
@@ -1286,6 +1270,14 @@
     <message>
         <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
         <translation>PIN 由手机的安全元件验证；七次输错将永久锁定管理员密钥。</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>设置管理员 PIN 后，群组的根以后可以将此手机设为管理员。取消则仅以成员身份加入。</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>设置管理员 PIN 后，群组的根可以将此手机设为管理员。</translation>
     </message>
 </context>
 <context>

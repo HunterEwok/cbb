@@ -254,8 +254,32 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
     });
     connect(&m_join, &Join::joined, this, [this](const Membership &m) {
         m_member = m;
+        if (!m_joinOffer.isEmpty() && !m.isAdmin()) {
+            Membership next = m;
+            next.adminOffer = m_joinOffer;
+            keep(next);
+        }
+        m_joinOffer.clear();
         emit groupChanged();
         startMember();
+    });
+    // The root made this phone an admin: the member checks the admin CA
+    // first, then the phone keeps it and signs with it.
+    connect(&m_node, &Member::adminCaArrived, this, [this](const QByteArray &ca) {
+        if (m_member.isAdmin())
+            return;
+        Failure failure;
+        if (!m_node.takeAdminCa(ca, &failure)) {
+            Errors::log(QStringLiteral("admin: refused an admin CA: %1 (%2)").arg(failure.message, failure.details));
+            return;
+        }
+        Membership next = m_member;
+        next.adminCa = ca;
+        next.adminOffer.clear();
+        if (!keep(next))
+            return;
+        Errors::log(QStringLiteral("admin: the root made this phone an admin"));
+        emit groupChanged();
     });
 }
 
@@ -302,20 +326,58 @@ void App::setUpKey()
     thread->start();
 }
 
-void App::startJoin(bool admin)
+void App::startJoin()
 {
     if (m_publicKey.isEmpty()) {
         show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("join: no key")}));
         return;
     }
-    if (!admin) {
-        m_join.start(phoneName(), phoneOs(), m_publicKey);
-        return;
-    }
     if (m_busy)
         return;
-    if (askPin([this]() { startJoin(true); },
-               [this]() { m_join.fail({QCoreApplication::translate("Errors", "Joining as an admin needs the admin PIN."), QStringLiteral("join: no PIN")}); }))
+    const int serial = ++m_joinSerial;
+    m_joinOffer.clear();
+    const auto listen = [this, serial]() {
+        if (serial == m_joinSerial)
+            m_join.start(phoneName(), phoneOs(), m_publicKey);
+    };
+    // The admin key, which the member's hellos offer the root for its
+    // "Make an admin": found without the PIN, or made behind it.
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new KeyThread(KeyStore::Which::Admin);
+    connect(thread, &QThread::finished, this, [this, thread, serial, listen]() {
+        const KeyStore::Key key = thread->key;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (serial != m_joinSerial)
+            return;
+        if (key.state == KeyStore::State::Ready) {
+            Errors::log(QStringLiteral("key: %1 the admin key").arg(key.created ? QStringLiteral("made") : QStringLiteral("found")));
+            m_joinOffer = key.publicKey;
+            listen();
+            return;
+        }
+        if (key.pinNeeded && m_adminPin != QStringLiteral("locked")
+            && askPin([this]() { startJoin(); }, listen,
+                      QCoreApplication::translate("PinDialog", "With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.")))
+            return;
+        Errors::log(QStringLiteral("key: joining without an admin key: %1 (%2)").arg(key.failure.message, key.failure.details));
+        listen();
+    });
+    thread->start();
+}
+
+void App::stopJoin()
+{
+    ++m_joinSerial;
+    m_joinOffer.clear();
+    m_join.stop();
+}
+
+void App::prepareAdmin()
+{
+    if (m_busy || m_member.isNull() || m_member.isAdmin() || !m_member.adminOffer.isEmpty())
         return;
     m_busy = true;
     emit keyChanged();
@@ -325,14 +387,25 @@ void App::startJoin(bool admin)
         thread->deleteLater();
         m_busy = false;
         emit keyChanged();
+        if (m_member.isNull() || m_member.isAdmin())
+            return;
         if (key.state != KeyStore::State::Ready) {
-            if (key.pinNeeded && askPin([this]() { startJoin(true); }))
+            if (key.pinNeeded
+                && askPin([this]() { prepareAdmin(); }, std::function<void()>(),
+                          QCoreApplication::translate("PinDialog", "With the admin PIN, the group's root can make this phone an admin.")))
                 return;
-            m_join.fail(key.failure);
+            show(Errors::shown(key.failure));
             return;
         }
-        Errors::log(QStringLiteral("key: %1 the admin key").arg(key.created ? QStringLiteral("made") : QStringLiteral("found")));
-        m_join.start(phoneName(), phoneOs(), m_publicKey, key.publicKey);
+        Membership next = m_member;
+        next.adminOffer = key.publicKey;
+        if (!keep(next))
+            return;
+        Errors::log(QStringLiteral("key: %1 the admin key, offered to the root").arg(key.created ? QStringLiteral("made") : QStringLiteral("found")));
+        emit groupChanged();
+        // The hellos of the new connections offer it.
+        m_node.stop();
+        startMember();
     });
     thread->start();
 }
@@ -699,7 +772,7 @@ void App::leave()
     thread->start();
 }
 
-bool App::askPin(std::function<void()> run, std::function<void()> cancel)
+bool App::askPin(std::function<void()> run, std::function<void()> cancel, const QString &reason)
 {
     if (m_adminPin == QStringLiteral("unknown")) {
         // Before the first answer came: asked here, a short call to the TEE.
@@ -720,7 +793,7 @@ bool App::askPin(std::function<void()> run, std::function<void()> cancel)
         m_pinCancel();
     m_pinRun = std::move(run);
     m_pinCancel = std::move(cancel);
-    emit pinNeeded(m_adminPin == QStringLiteral("not_set"));
+    emit pinNeeded(m_adminPin == QStringLiteral("not_set"), reason);
     return true;
 }
 

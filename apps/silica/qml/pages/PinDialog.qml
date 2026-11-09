@@ -12,6 +12,8 @@ Dialog {
     property bool fresh: false
     // After a wrong PIN: the tries left, as the app counted them.
     property int triesLeft: -1
+    // Why the PIN is asked, when the app says.
+    property string reason: ""
     readonly property int minLength: 4
 
     canAccept: pin.text.length >= minLength && (!fresh || again.text === pin.text)
@@ -46,6 +48,14 @@ Dialog {
             inputMethodHints: Qt.ImhDigitsOnly | Qt.ImhNoPredictiveText
             EnterKey.enabled: dialog.canAccept
             EnterKey.onClicked: dialog.accept()
+        }
+        Label {
+            visible: dialog.reason !== ""
+            x: Theme.horizontalPageMargin
+            width: parent.width - 2 * Theme.horizontalPageMargin
+            wrapMode: Text.Wrap
+            color: Theme.highlightColor
+            text: dialog.reason
         }
         Label {
             visible: dialog.triesLeft >= 0

@@ -562,7 +562,7 @@ Key ensureAdmin()
         // Leaving the group deletes it (forget), and joining again as an
         // admin makes the key behind the PIN.
         key.state = State::Failed;
-        key.failure = {QCoreApplication::translate("Errors", "This phone's admin key predates the admin PIN. Leave the group and join it again as an admin."),
+        key.failure = {QCoreApplication::translate("Errors", "This phone's admin key predates the admin PIN. Leave the group and join it again."),
                        QStringLiteral("tee: an admin key is left in the QCA token")};
         return key;
     }

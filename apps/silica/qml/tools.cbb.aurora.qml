@@ -27,6 +27,7 @@ ApplicationWindow {
     property bool pinWaiting: false
     property bool pinFresh: false
     property int pinTries: -1
+    property string pinReason: ""
     function askPin(fresh, triesLeft) {
         pinFresh = fresh
         pinTries = triesLeft
@@ -37,11 +38,14 @@ ApplicationWindow {
         if (!pinWaiting || Qt.application.state !== Qt.ApplicationActive || pageStack.busy)
             return
         pinWaiting = false
-        pageStack.push(Qt.resolvedUrl("pages/PinDialog.qml"), { fresh: pinFresh, triesLeft: pinTries })
+        pageStack.push(Qt.resolvedUrl("pages/PinDialog.qml"), { fresh: pinFresh, triesLeft: pinTries, reason: pinReason })
     }
     Connections {
         target: app
-        onPinNeeded: askPin(fresh, -1)
+        onPinNeeded: {
+            pinReason = reason
+            askPin(fresh, -1)
+        }
         onPinRefused: {
             if (!locked && triesLeft > 0)
                 askPin(false, triesLeft)

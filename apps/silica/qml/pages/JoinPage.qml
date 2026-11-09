@@ -5,23 +5,22 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 // The phone's QR code, which the group's phone or computer scans to admit
-// it (docs/protocol.md, section 6, "The joiner listens"). With admin, the
-// phone asks to be an admin, which only the group's root admits.
+// it (docs/protocol.md, section 6, "The joiner listens"). The phone joins
+// as a member; the group's root may make it an admin later, with the admin
+// key its hellos offer, which joining makes behind the admin PIN.
 Page {
     id: page
-    property bool admin: false
 
-    // Started once the page is in place: as an admin it may ask for the PIN
-    // first, and the page stack takes no dialog while this page is still
-    // being pushed.
+    // Started once the page is in place: it may ask for the PIN first, and
+    // the page stack takes no dialog while this page is still being pushed.
     property bool started: false
     onStatusChanged: {
         if (status === PageStatus.Active && !started) {
             started = true
-            app.startJoin(admin)
+            app.startJoin()
         }
     }
-    Component.onDestruction: if (app.join.state !== "joined") app.join.stop()
+    Component.onDestruction: if (app.join.state !== "joined") app.stopJoin()
 
     SilicaFlickable {
         anchors.fill: parent
@@ -32,7 +31,7 @@ Page {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            PageHeader { title: page.admin ? qsTr("Join as an admin") : qsTr("Join a group") }
+            PageHeader { title: qsTr("Join a group") }
 
             Label {
                 x: Theme.horizontalPageMargin
@@ -47,7 +46,6 @@ Page {
                     // may cover the page at once, and a text that flashes
                     // by can't be read.
                     : app.join.state !== "listening" ? ""
-                    : page.admin ? qsTr("On the device that made the group, tap + and scan this code. Keep this screen open.")
                     : qsTr("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.")
             }
 
@@ -106,7 +104,7 @@ Page {
                 visible: app.join.state === "failed"
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qsTr("Try again")
-                onClicked: app.startJoin(page.admin)
+                onClicked: app.startJoin()
             }
         }
         VerticalScrollDecorator {}

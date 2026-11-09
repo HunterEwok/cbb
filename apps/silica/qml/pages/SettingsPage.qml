@@ -88,6 +88,24 @@ Page {
                 visible: app.group !== ""
                 text: qsTr("Group")
             }
+            // A member phone that joined without an admin key makes it now,
+            // for the root's "Make an admin".
+            Button {
+                visible: app.group !== "" && !app.admin && !app.adminOffered && app.adminPin !== "locked"
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Get ready to be an admin")
+                enabled: !app.busy
+                onClicked: app.prepareAdmin()
+            }
+            Label {
+                visible: app.group !== "" && app.adminOffered
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.secondaryHighlightColor
+                text: qsTr("The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.")
+            }
             // The admin PIN, which the TEE checks before the admin key signs.
             Button {
                 visible: app.adminPin === "set"
