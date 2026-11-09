@@ -6,6 +6,10 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again as an admin.</source>
+        <translation>Ufunguo wa msimamizi wa simu hii ni wa kabla ya PIN ya msimamizi. Ondoka kwenye kikundi kisha ujiunge tena kama msimamizi.</translation>
+    </message>
+    <message>
         <source>The admin PIN is needed first.</source>
         <translation>PIN ya msimamizi inahitajika kwanza.</translation>
     </message>

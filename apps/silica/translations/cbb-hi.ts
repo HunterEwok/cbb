@@ -6,6 +6,10 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again as an admin.</source>
+        <translation>इस फ़ोन की एडमिन कुंजी एडमिन PIN से पुरानी है। समूह छोड़ें और एडमिन के रूप में फिर से जुड़ें।</translation>
+    </message>
+    <message>
         <source>The admin PIN is needed first.</source>
         <translation>पहले एडमिन PIN चाहिए।</translation>
     </message>

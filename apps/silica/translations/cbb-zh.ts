@@ -6,6 +6,10 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again as an admin.</source>
+        <translation>此手机的管理员密钥早于管理员 PIN。请退出群组，然后以管理员身份重新加入。</translation>
+    </message>
+    <message>
         <source>The admin PIN is needed first.</source>
         <translation>需要先输入管理员 PIN。</translation>
     </message>

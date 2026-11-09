@@ -6,6 +6,10 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again as an admin.</source>
+        <translation>La clave de administrador de este teléfono es anterior al PIN de administrador. Sal del grupo y vuelve a unirte como administrador.</translation>
+    </message>
+    <message>
         <source>The admin PIN is needed first.</source>
         <translation>Primero hace falta el PIN de administrador.</translation>
     </message>

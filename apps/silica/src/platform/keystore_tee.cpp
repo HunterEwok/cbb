@@ -511,9 +511,27 @@ Key makeAdmin(Token &token)
     return key;
 }
 
+// Whether an admin key of a version before the PIN is left in the member
+// key's token: the group's root certified that key, so a new one behind the
+// PIN would not match the phone's admin CA.
+bool legacyAdmin()
+{
+    Token token;
+    Failure ignored;
+    return token.openMember(&ignored) == State::Ready && !token.find(CKO_PRIVATE_KEY, labelOf(Which::Admin)).isEmpty();
+}
+
 Key ensureAdmin()
 {
     Key key;
+    if (legacyAdmin()) {
+        // Leaving the group deletes it (forget), and joining again as an
+        // admin makes the key behind the PIN.
+        key.state = State::Failed;
+        key.failure = {QCoreApplication::translate("Errors", "This phone's admin key predates the admin PIN. Leave the group and join it again as an admin."),
+                       QStringLiteral("tee: an admin key is left in the QCA token")};
+        return key;
+    }
     Token token;
     CK_TOKEN_INFO info;
     key.state = token.openAdmin(&info, &key.failure);

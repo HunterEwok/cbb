@@ -779,6 +779,9 @@ for Face ID (D-94, docs/protocol.md section 3):
   new device. A lost root is taken over by an admin phone or with the recovery key.
 - **Leaving the group** deletes the admin key while its token is logged in; otherwise the key stays,
   useless without the PIN, and the next admin key replaces it.
+- **An admin phone from before the PIN** keeps its admin key in the QCA token, and the group's
+  root certified that key; the app makes no new key beside it but asks to leave the group and
+  join again as an admin, which sets the PIN.
 - Sailfish OS and Aurora 4 keep their keys in files (level `file`) and ask for no PIN.
 
 ## Collections and the order of the tiles
