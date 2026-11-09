@@ -1841,6 +1841,16 @@ impl Node {
                 Err(e) => return Err(e),
             };
             if c.closed.load(Ordering::SeqCst) {
+                // The records a peer sends before it ends the connection, as
+                // those that remove or freeze this device, still count when
+                // this side's writer has failed meanwhile (the peer hung up
+                // while this member was still answering its hello): dropped,
+                // this member would never hear it was removed, since its next
+                // connection is refused.
+                if !first && m.kind == "records" && !m.records.is_empty() {
+                    self.add_records(&m.records, &c.id);
+                    continue;
+                }
                 return Ok(());
             }
             if first {
