@@ -515,11 +515,21 @@ impl Node {
         self
     }
 
-    /// Sets the tunnel key and preshared key the hellos offer from now on,
-    /// and connects to the members again, so that the group's hubs get
-    /// them.
+    /// Sets the tunnel key and preshared key the hellos offer from now on
+    /// and tells the members, so that the group's hubs get them. Without a
+    /// key, sync away from home is off: the connections through a tunnel's
+    /// or relay's loopback port, and those that came through this hub's
+    /// tunnel, close, since their way is gone.
     pub fn set_tunnel_key(&self, key: TunnelKeys) {
+        let off = key.is_none();
         *self.tunnel_key.write().unwrap() = key;
+        if off {
+            for c in self.conns.lock().unwrap().values() {
+                if c.tunneled || c.addr.ip().to_canonical().is_loopback() {
+                    c.close(true);
+                }
+            }
+        }
         // The peers take the key from a presence message, without
         // connecting again: a hub answers it with its offer as it answers
         // a hello, and this member sends its own offers if it is a hub now.
