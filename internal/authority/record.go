@@ -60,7 +60,7 @@ const (
 // MinIncoming and MaxIncoming bound how long an incoming copy stays live,
 // the incoming_ms of a copies record, and DefaultIncoming is that time
 // without one (one minute), all in milliseconds (docs/protocol.md, section
-// 4, "Writing the member's own clipboard").
+// 5, "Writing the member's own clipboard").
 const (
 	MinIncoming     = 5 * 1000
 	MaxIncoming     = 3600 * 1000

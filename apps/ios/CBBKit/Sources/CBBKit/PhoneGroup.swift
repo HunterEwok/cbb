@@ -17,7 +17,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// names it for good.
     public var groupCA: Data
     /// The roots that took the group over from groupCA, in order, DER; the
-    /// last is the current root (docs/protocol.md, section 10, "Roots").
+    /// last is the current root (docs/protocol.md, section 10, "Handing the group over").
     public var roots: [Data] = []
     /// This phone's member certificate, DER, from one of the roots or from
     /// memberIssuer.
@@ -36,7 +36,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     public var records = RecordSet()
     /// The admin CAs this phone, as the root, issued to computers, DER, by
     /// device ID: sent again to a computer that offers the same admin key
-    /// (section 10, "A computer as admin").
+    /// (section 10, "Admins").
     public var computerAdmins: [String: Data] = [:]
     /// The new root of this admin's claim to take the group over, DER,
     /// while the claim waits (docs/protocol.md, section 10, "Handing the group
@@ -579,7 +579,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         return try sign(b, caSigner: caSigner)
     }
 
-    /// Makes a computer an admin (section 10, "A computer as admin"): the
+    /// Makes a computer an admin (section 10, "Admins"): the
     /// root issues an admin CA for the admin key the computer's hello
     /// offered (a SubjectPublicKeyInfo) and signs its device record again,
     /// naming that CA. It returns the admin CA, for the admin message, and
