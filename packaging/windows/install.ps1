@@ -214,7 +214,9 @@ Copy-Item -Force (Join-Path $PSScriptRoot 'uninstall.ps1') (Join-Path $programDi
 # uninstall.ps1 speaks the user's language too.
 Copy-Item -Force (Join-Path $PSScriptRoot 'l10n.ps1') (Join-Path $programDir 'l10n.ps1')
 New-Item -ItemType Directory -Force (Join-Path $programDir 'l10n') | Out-Null
-Copy-Item -Force (Join-Path $catalogs '*.tsv') (Join-Path $programDir 'l10n')
+if (Test-Path $catalogs) {
+	Copy-Item -Force (Join-Path $catalogs '*.tsv') (Join-Path $programDir 'l10n')
+}
 $cbb = Join-Path $programDir 'cbb.exe'
 $cbbw = Join-Path $programDir 'cbbw.exe'
 $tray = Join-Path $programDir 'cbb-desktop.exe'

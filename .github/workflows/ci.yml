@@ -1429,6 +1429,7 @@ jobs:
             go build -trimpath -ldflags "$ld -H=windowsgui" -o "$dir\cbbw.exe" ./cmd/cbb
             if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
             Copy-Item -Recurse packaging\windows "$dir\packaging\"
+            Copy-Item -Recurse packaging\l10n "$dir\packaging\"
             return $dir
           }
           $old = build '0.6.0'
