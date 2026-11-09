@@ -101,10 +101,21 @@ pub fn paths() -> (PathBuf, PathBuf) {
     } else if crate::openwrt() {
         // /etc survives a sysupgrade; the downloads go to RAM.
         return (PathBuf::from("/etc/cbb-update"), PathBuf::from("/tmp/cbb-update"));
+    } else if in_opt() {
+        // SteamOS and other systems whose /usr is read-only: the program is
+        // in /opt/cbb, and its updater beside it (/var is small on SteamOS;
+        // /opt lives in /home).
+        return (PathBuf::from("/opt/cbb-update"), PathBuf::from("/opt/cbb-update"));
     } else {
         PathBuf::from("/var/lib/cbb-update")
     };
     (dir.clone(), dir)
+}
+
+/// Whether this program is the one installed in /opt/cbb, as on SteamOS.
+fn in_opt() -> bool {
+    cfg!(target_os = "linux")
+        && std::env::current_exe().and_then(std::fs::canonicalize).is_ok_and(|p| p == Path::new("/opt/cbb/bin/cbb"))
 }
 
 /// The installer of this system in an unpacked archive's top folder.

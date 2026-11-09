@@ -61,7 +61,7 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release: Option<Value>,
     /// In a reach message, the members a computer is connected to (section
-    /// 4, "Reach"), kept as it came: the lite member shows no devices.
+    /// 4, "Reach"), kept as it came.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reach: Option<Value>,
     /// In a hubs message, what a hub shares with the group's other hubs
@@ -602,6 +602,13 @@ pub fn credentials(list: &Value) -> Message {
 /// (section 17, "Evidence").
 pub fn evidence(e: &Value) -> Message {
     Message { kind: "evidence".into(), evidence: Some(e.clone()), ..Default::default() }
+}
+
+/// A reach message: the members a computer is connected to now, other
+/// than the phone it goes to (section 4, "Reach").
+pub fn reach(ids: &[&str]) -> Message {
+    let list = ids.iter().map(|id| Value::String((*id).into())).collect();
+    Message { kind: "reach".into(), reach: Some(Value::Array(list)), ..Default::default() }
 }
 
 /// A message with only its type, such as a ping or a goodbye.

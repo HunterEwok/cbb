@@ -21,6 +21,11 @@ All notable changes to cbb are documented in this file. The format follows
   keeps the invitation and offers its own tunnel key again until the hub answers, after a
   restart too, so a device that starts late or loses its network after the join still gets
   through.
+- The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
+  the Go relay's flags, key file, wire format and an open relay's budget with the same limits
+  and caps, and runs as its own systemd service as before. The Go relay's tests that check it
+  from outside run against it (`CBB_TEST_RUST_RELAY`), and those that look inside it are
+  ported beside it.
 - The bench's time-scaled build of the Rust `cbb` (`cargo build -p cbb-lite --features
   benchtime`, never released), as the Go one's: certificates, renewals, credential periods and
   the hub key's handover run 100000 times faster, and `CBB_TEST_CLOCK` moves the wall clock.

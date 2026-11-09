@@ -126,7 +126,7 @@ pub struct Peer {
     pub chain: Vec<Vec<u8>>,
 }
 
-/// The most device IDs a reach message is read for.
+/// The most device IDs a reach message is read for or sent with.
 const MAX_REACH: usize = 256;
 /// The most commands remembered as passed on, as Go's.
 const MAX_PASSED: usize = 4096;
@@ -390,6 +390,8 @@ struct Conn {
     gets: Mutex<VecDeque<wire::Get>>,
     /// The fetches waiting for the peer's chunks, by blob.
     sinks: Mutex<HashMap<[u8; 32], SyncSender<Piece>>>,
+    /// The reach message last sent to it, a phone (send_reach).
+    reach_sent: Mutex<Option<Vec<DeviceId>>>,
 }
 
 impl Node {
@@ -519,8 +521,11 @@ impl Node {
     pub fn set_tunnel_key(&self, key: TunnelKeys) {
         *self.tunnel_key.write().unwrap() = key;
         self.reconnects.fetch_add(1, Ordering::SeqCst);
+        // Every member and phone connects again, as Go's Reconnect after
+        // SetTunnelKey: a hub is a computer or a phone, and its offer
+        // answers the hello that carries the key.
         for c in self.conns.lock().unwrap().values() {
-            if c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == "member") {
+            if c.peer.lock().unwrap().is_some() {
                 c.close(true);
             }
         }
@@ -1437,6 +1442,44 @@ impl Node {
         }
     }
 
+    /// Tells each connected phone, when this member is a computer, the
+    /// other members it is connected to now, whenever that changes for the
+    /// phone (docs/protocol.md, section 4, "Reach"), as Go's sendReach:
+    /// away from home a phone connects only to a hub, which passes its
+    /// commands on to the members behind it, so that the phone shows them
+    /// as online.
+    fn send_reach(&self) {
+        if self.presence.role != "member" {
+            return;
+        }
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+        let mut all = Vec::new();
+        let mut phones = Vec::new();
+        for c in &conns {
+            let Some(role) = c.peer.lock().unwrap().as_ref().map(|p| p.role.clone()) else { continue };
+            if c.closed.load(Ordering::SeqCst) || c.records_only {
+                continue;
+            }
+            if role == "phone" {
+                phones.push(c);
+            }
+            all.push(c.id.clone());
+        }
+        all.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        for c in phones {
+            let reach: Vec<DeviceId> = all.iter().filter(|id| **id != c.id).take(MAX_REACH).cloned().collect();
+            {
+                let mut sent = c.reach_sent.lock().unwrap();
+                if sent.as_ref() == Some(&reach) {
+                    continue;
+                }
+                *sent = Some(reach.clone());
+            }
+            let ids: Vec<&str> = reach.iter().map(|id| id.as_str()).collect();
+            self.enqueue(c, Out::Message(wire::reach(&ids)));
+        }
+    }
+
     /// Closes every connection with a goodbye and refuses new ones.
     /// Reports whether the group's records revoke this device: it was
     /// removed, and joins again only after cbb leave.
@@ -1692,6 +1735,7 @@ impl Node {
             lower_dialed,
             gets: Mutex::new(VecDeque::new()),
             sinks: Mutex::new(HashMap::new()),
+            reach_sent: Mutex::new(None),
         });
         {
             let mut conns = self.conns.lock().unwrap();
@@ -1762,6 +1806,7 @@ impl Node {
                 conns.remove(&id);
             }
         }
+        self.send_reach();
         if !c.records_only {
             self.engine.disconnected(id.as_str());
         }
@@ -1836,6 +1881,7 @@ impl Node {
                 if let Some(f) = self.on_peer.read().unwrap().as_ref() {
                     f(&peer);
                 }
+                self.send_reach();
                 if !c.records_only && !peer.device.archive.is_empty() {
                     let mut a = self.archives.lock().unwrap();
                     if a.len() < MAX_ARCHIVES || a.contains_key(&c.id) {

@@ -66,8 +66,23 @@ func (r *Relay) state() string {
 // reason, it keeps nothing of the refused device's group, its period or
 // records, and the devices registered before stay as they were.
 func TestRefusedRegistrationLeavesState(t *testing.T) {
-	r, link := startWith(t, Config{Open: true, Limits: Limits{Groups: 3, PerAddress: 4}})
+	r, link := startAny(t, Config{Open: true, Limits: Limits{Groups: 3, PerAddress: 4}})
 	ctx := context.Background()
+	// Only this package's relay shows its state; the Rust one is checked
+	// for the refusals.
+	gr := goRelay(r)
+	state := func() string {
+		if gr == nil {
+			return ""
+		}
+		return gr.state()
+	}
+	settled := func() string {
+		if gr == nil {
+			return ""
+		}
+		return gr.settled(t)
+	}
 	reg := func(d device) error {
 		cfg := MemberConfig{Link: link, Key: d.key, Cert: func() tls.Certificate { return d.cert },
 			Records: func() []group.Record { return d.records }}
@@ -89,19 +104,21 @@ func TestRefusedRegistrationLeavesState(t *testing.T) {
 	revoke := grouptest.Sign(t, group.RecordBody{Type: group.RecordRevoke, Group: group.Tag(gone.Cert), TimeMS: time.Now().UnixMilli(),
 		Keys: []group.KeyHash{group.KeyHashOf(self.cert.Leaf)}}, gone.Key)
 	self.records = append(goneRecs, revoke)
-	before := r.state()
+	before := state()
 	if err := reg(self); err == nil || !strings.Contains(err.Error(), "removed") {
 		t.Errorf("a device its own records remove: %v, want a refusal for %q", err, "removed")
 	}
-	if after := r.settled(t); after != before {
+	if after := settled(); after != before {
 		t.Errorf("a device its own records remove changed the relay\nbefore:\n%s\nafter:\n%s", before, after)
 	}
-	r.mu.Lock()
-	_, keeps := r.records[group.Tag(gone.Cert)]
-	held := r.recordBytes.Held(netip.MustParseAddr("127.0.0.1"), budget.Address)
-	r.mu.Unlock()
-	if keeps || held != 0 {
-		t.Errorf("after a device its own records remove the relay keeps its records %v and %d bytes of its source", keeps, held)
+	if gr != nil {
+		gr.mu.Lock()
+		_, keeps := gr.records[group.Tag(gone.Cert)]
+		held := gr.recordBytes.Held(netip.MustParseAddr("127.0.0.1"), budget.Address)
+		gr.mu.Unlock()
+		if keeps || held != 0 {
+			t.Errorf("after a device its own records remove the relay keeps its records %v and %d bytes of its source", keeps, held)
+		}
 	}
 
 	// A group that sends records, a group with credentials, and one more
@@ -158,12 +175,12 @@ func TestRefusedRegistrationLeavesState(t *testing.T) {
 		{"another device's WireGuard key", thief, "another device"},
 		{"a group of its own with records", d1, "as many groups"},
 	} {
-		before := r.state()
+		before := state()
 		if err := reg(tc.d); err == nil || !strings.Contains(err.Error(), tc.why) {
 			t.Errorf("%s: %v, want a refusal for %q", tc.name, err, tc.why)
 			continue
 		}
-		if after := r.settled(t); after != before {
+		if after := settled(); after != before {
 			t.Errorf("%s: a refused registration changed the relay\nbefore:\n%s\nafter:\n%s", tc.name, before, after)
 		}
 	}
@@ -175,13 +192,17 @@ func TestRefusedRegistrationLeavesState(t *testing.T) {
 	if err := reg(c2); err != nil {
 		t.Fatalf("a device in place of the one its credential leaves out: %v", err)
 	}
-	r.mu.Lock()
-	g := r.groups[credentialTag(c.body.Tag)]
-	_, kept := g[c1.id]
-	_, joined := g[c2.id]
-	r.mu.Unlock()
-	if kept || !joined {
-		t.Errorf("after the newer credential the relay holds the first device %v and the new one %v", kept, joined)
+	if gr != nil {
+		gr.mu.Lock()
+		g := gr.groups[credentialTag(c.body.Tag)]
+		_, kept := g[c1.id]
+		_, joined := g[c2.id]
+		gr.mu.Unlock()
+		if kept || !joined {
+			t.Errorf("after the newer credential the relay holds the first device %v and the new one %v", kept, joined)
+		}
+	} else if _, n := r.Stats(); n != 4 {
+		t.Errorf("after the newer credential the relay holds %d devices, want 4", n)
 	}
 	if err := reg(c3); err == nil || !strings.Contains(err.Error(), "first") {
 		t.Errorf("another period key after the group's devices changed: %v", err)
