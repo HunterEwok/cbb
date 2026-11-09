@@ -381,6 +381,11 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | U11 | The control socket's protocol: framing errors, each operation, the watcher protocol (a paste-only watch as the Mac app's), a second agent in one session exits | fleet | |
 | U12 | Error details in the apps: off in release builds, on in debug builds; seven taps on the version, the launch argument `ShowErrorDetails` and the tray and Mac apps' switch show the cause under each message | ui | |
 | U13 | The lite member's `-state`, `-socket`, `-debug`, `CBB_STATE`, `CBB_SOCKET`; `CBB_SOCKET` for a second instance of a full member | real, fleet | |
+| U14 | Every control of the apps has a name a screen reader reads (VoiceOver, TalkBack, Narrator, Orca), in each of the eight languages, and is at least 48 dp to touch on Android | ui | |
+| U15 | Text keeps WCAG AA contrast: every palette of the design tokens, the tray window's every view in each colour and appearance, Xcode's audit on the iPhone and the Mac | ui | |
+| U16 | Large text: the tray window at twice the size, Android at font scale 2, the iPhone at the largest accessibility size; nothing cut off | ui | |
+| U17 | The keyboard reaches every control of the tray window, and the focus shows | ui | |
+| U18 | Screenshot regressions: the tray window and the Android screens in English (dark, light), Arabic and Chinese against the pictures in the repository; the iPhone's and the Mac's pictures in every language kept with the test results | ui | |
 
 ## 12. Platforms and their desktops (H)
 
@@ -414,7 +419,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | A6 | Notifications of the group's events: one per event, the switches respected, never the clipboard; prompt on the iPhone through the push sender [P28] | ui | |
 | A7 | The Dynamic Island: the timer, the shield, the result, never the text [P30] | ui, person | iPhone |
 | A8 | Collections: make, rename, move devices, the order of tiles, one level, a device in one collection; Arrange mode with drag, the menu, VoiceOver and TalkBack actions, the keyboard; search and filters; the watch shows the phone's arrangement; the paste picker grouped the same; kept per installation, never in a record | ui | |
-| A9 | Languages (English, Russian) and the language menu when the system's language has none; right-to-left layout; accessibility labels | ui | |
+| A9 | Languages: all eight (zh en es ru ar sw he hi) in the tray, Android, iPhone and Mac UI tests, nothing English left over or cut off, Arabic and Hebrew from right to left; every text of every app translated with its placeholders (repocheck); the language menu when the system's language has none | ui | |
 | A10 | The F-Droid flavour without Wear OS: builds reproducibly, works without Play services [P33] | ui | |
 | A11 | The iPhone's background app refresh runs and syncs | person | iPhone |
 | A12 | "Sync clipboard" without opening the app: App Intents and App Shortcuts, Back Tap, the Action button, the home-screen widget on both phones, the Control Center control; one line says what it did | ui | |

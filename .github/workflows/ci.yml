@@ -1527,8 +1527,10 @@ jobs:
     # The libraries and the build take about 15 minutes, and a slow runner
     # can spend 5 minutes booting a simulator for each of the retries
     # below: 45 minutes cut off a run whose tests had passed on the iPhone
-    # while the iPad's first try was being retried.
-    timeout-minutes: 75
+    # while the iPad's first try was being retried. The languages' and
+    # accessibility's UI tests (ReadersUITests) launch the app eighteen
+    # times on each simulator.
+    timeout-minutes: 95
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1602,7 +1604,7 @@ jobs:
                 "${sign[@]}" "${only[@]}" >"$log" 2>&1 &
               pid=$!
               killed=
-              for second in $(seq 600); do
+              for second in $(seq 1200); do
                 kill -0 "$pid" 2>/dev/null || break
                 if [ "$second" -ge 150 ] && ! grep -q "^Test Suite " "$log"; then killed=1; break; fi
                 sleep 1
@@ -1630,7 +1632,7 @@ jobs:
                 # long before the tail: show those lines first.
                 grep -E "error: |^Test Case .* failed" "$log" || true
                 tail -n 100 "$log"
-                [ -n "$killed" ] && echo "::error::the tests on $1 did not finish in 10 minutes"
+                [ -n "$killed" ] && echo "::error::the tests on $1 did not finish in 20 minutes"
                 return "$status"
               fi
               tail -n 30 "$log"
@@ -1758,7 +1760,9 @@ jobs:
           printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-retries >/dev/null
           mkdir -p ~/apt-archives/partial
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" libgtk-4-dev libwebkitgtk-6.0-dev
+          # The Noto fonts the window's screenshots are drawn in (screenshot_test.go).
+          sudo apt-get install -y -q --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" libgtk-4-dev libwebkitgtk-6.0-dev \
+            fonts-noto-core fonts-noto-mono fonts-droid-fallback
       - name: tidy the package cache
         if: always() && runner.os == 'Linux' && steps.gtk.outcome != 'skipped'
         run: |
@@ -1775,9 +1779,19 @@ jobs:
         if: runner.os == 'Linux'
         run: go mod tidy -diff
       - name: vet and test
+        env:
+          CBB_SCREENSHOT_OUT: ${{ runner.temp }}/screenshots
         run: |
           go vet ./...
           go test ./...
+      # The new pictures and their differences when a screenshot does not match.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure() && runner.os == 'Linux'
+        with:
+          name: tray-screenshots
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: ignore
+          retention-days: 7
       - name: build
         shell: bash
         run: |
@@ -1858,9 +1872,19 @@ jobs:
         # The runner image has the Android SDK; Gradle fetches a missing platform. The app
         # has two builds, full and fdroid (docs/apps.md, "F-Droid").
         run: |
+          # verifyRoborazziFullDebug is the full build's unit tests with the
+          # screenshots compared with app/src/test/screenshots (ScreenshotTest).
           ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease \
-            :app:testFullDebugUnitTest :app:testFdroidDebugUnitTest :app:lintFullDebug :app:lintFdroidDebug \
+            :app:verifyRoborazziFullDebug :app:testFdroidDebugUnitTest :app:lintFullDebug :app:lintFdroidDebug \
             :shared:testDebugUnitTest :shared:lintDebug :wear:assembleDebug :wear:assembleRelease :wear:lintDebug
+      # The new pictures and their differences when a screenshot does not match.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: android-screenshots
+          path: apps/android/app/build/outputs/roborazzi
+          if-no-files-found: ignore
+          retention-days: 7
       - name: the Android apps' software bill of materials, as the release makes it (tools/sbom)
         working-directory: apps/android
         run: |

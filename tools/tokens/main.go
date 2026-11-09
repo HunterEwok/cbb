@@ -5,8 +5,8 @@
 // into Swift for the iPhone and Mac apps, Kotlin for the Android app and
 // JavaScript for the tray app: each
 // accent colour on the dark and the light base gives a palette, and every
-// palette must meet WCAG AA contrast: 4.5:1 for text, 3:1 for the accent
-// against the background.
+// palette must meet WCAG AA contrast for text, 4.5:1, on the background and
+// on a surface, the accent included, which the apps write badges and links in.
 //
 //	go run ./tools/tokens          rewrite the generated files
 //	go run ./tools/tokens -check   fail if they are out of date
@@ -335,7 +335,12 @@ func checkContrast(name string, p Palette) error {
 		{"dim text", p.TextDim, p.Background, 4.5},
 		{"text on the accent", p.OnAccent, p.Accent, 4.5},
 		{"danger", p.Danger, p.Background, 4.5},
-		{"the accent", p.Accent, p.Background, 3},
+		{"dim text on a surface", p.TextDim, p.Surface, 4.5},
+		{"danger on a surface", p.Danger, p.Surface, 4.5},
+		// The apps write badges, links and the actions of a card in the
+		// accent: text, so text's contrast.
+		{"accent text", p.Accent, p.Background, 4.5},
+		{"accent text on a surface", p.Accent, p.Surface, 4.5},
 	} {
 		r, err := contrast(c.fg, c.bg)
 		if err != nil {

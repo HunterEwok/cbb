@@ -60,7 +60,11 @@ func TestWindow(t *testing.T) {
 
 	t.Run("themes", w.themes)
 	t.Run("collections", w.collections)
-	t.Run("russian", w.russian)
+	t.Run("languages", w.languages)
+	t.Run("contrast", w.contrast)
+	t.Run("large text", w.largeText)
+	t.Run("keyboard", w.keyboard)
+	t.Run("screenshots", w.screenshots)
 	t.Run("errors", w.errors)
 	t.Run("admin", w.admin)
 	t.Run("switches", w.switches)

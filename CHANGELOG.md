@@ -7,6 +7,13 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The apps are tested in all eight languages and for every reader (docs/testing.md, "The
+  apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
+  Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text
+  of every app translated with its placeholders; screen reader names, contrast, large text and
+  the keyboard; screenshot regressions of the tray window and the Android screens. Go's
+  coverage floor is 80%, with new tests of cbb-helper's keyboard and TV remote and of the
+  automatic updates' timers.
 - The ZX Spectrum Next shows the group's latest image: `.cbb show` asks the lite member on the
   Pi (`cbb next image`), which fits the PNG or JPEG to Layer 2 in 320×256 with 256 colours or
   640×256 with 16, whichever shows it closer, with dithering from the Next's 512 colours; the
@@ -1949,6 +1956,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The tray window in Arabic and Hebrew sets the tiles, rows, menus and a card's values from
+  the right, as it does the rest of the window.
+- The Ruby colour in the dark appearance is a shade lighter (#FF6681), so that its badges
+  keep WCAG AA contrast on the tray window's tiles.
 - The lite member fetches a copy's images or files once when two requests want them at the
   same time (`cbb paste -o` while the copy is fetched in the background); the second waited on
   chunks the first had taken and could fail.

@@ -86,6 +86,8 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEST_UINPUT` | Go tests of the uinput helper | `1` makes a missing `/dev/uinput` a failure instead of a skip. |
 | `CBB_TEST_CLIPBOARD` | Go tests of the Windows clipboard | `1` allows the tests to overwrite the clipboard. |
 | `CBB_UI_BROWSER` | Go tests of the tray app's window | The Chrome, Chromium or Edge to run the window in; without it the test looks in the usual places, and skips without a browser outside CI. |
+| `CBB_UPDATE_SCREENSHOTS` | Go tests of the tray app's window | Set (to anything), `TestWindow/screenshots` writes its pictures to `apps/desktop/testdata/screenshots` instead of comparing with them, after a change to the window. |
+| `CBB_SCREENSHOT_OUT` | Go tests of the tray app's window | The folder a failed screenshot comparison leaves the new picture and the difference in; by default `cbb-screenshots` in the system's temporary folder. |
 | `CBB_TEST_CLOCK` | the bench's time-scaled build (`-tags benchtime`) | What the build adds to the wall clock, so that certificates expire on the bench in minutes. Never in a release. |
 | `CBB_TEST_CLOCK_FILE` | the bench's time-scaled build | A file that holds the value of `CBB_TEST_CLOCK` when that is not set, so the bench moves a member's clock with a restart of the service. |
 | `CBB_TEST_SCALE` | the bench's time-scaled build | How many times faster long times run: 100000 by default, `1` for cases that move only the clock. |

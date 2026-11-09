@@ -125,6 +125,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 	problems = append(problems, checkPlanned(contents)...)
 	problems = append(problems, checkAndroidVersion(contents)...)
 	problems = append(problems, checkSpecVersions(contents)...)
+	problems = append(problems, checkAppTranslations(contents)...)
 	if testsSince != "" {
 		lost, err := checkTestsKept(testsSince, contents)
 		if err != nil {

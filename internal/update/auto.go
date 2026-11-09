@@ -24,14 +24,18 @@ import (
 // own on each device, so that the update servers learn little from when a
 // device asks.
 const (
+	launchdLabel = "tools.cbb.update"
+	cronMark     = "# cbb-update"
+	windowsTask  = "cbb update"
+)
+
+// Where the timers are written; tests move them into a folder of their own.
+var (
 	systemdService = "/etc/systemd/system/cbb-update.service"
 	systemdTimer   = "/etc/systemd/system/cbb-update.timer"
-	launchdLabel   = "tools.cbb.update"
 	launchdPlist   = "/Library/LaunchDaemons/" + launchdLabel + ".plist"
 	cronFreeBSD    = "/usr/local/etc/cron.d/cbb-update"
 	cronOpenWrt    = "/etc/crontabs/root"
-	cronMark       = "# cbb-update"
-	windowsTask    = "cbb update"
 )
 
 // SetTimer adds the timer that runs exe update -timer, or removes it.
@@ -51,7 +55,9 @@ func SetTimer(on bool, exe string) error {
 	return fmt.Errorf("automatic updates are not built for %s", runtime.GOOS)
 }
 
-func run(name string, args ...string) error {
+// run runs a command of the system's timers, saying what it printed when
+// it fails; tests replace it.
+var run = func(name string, args ...string) error {
 	out, err := exec.Command(name, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
@@ -132,7 +138,7 @@ WantedBy=timers.target
 func at() (hour, minute int) { return 1 + rand.IntN(6), rand.IntN(60) }
 
 func launchdTimer(on bool, exe string) error {
-	exec.Command("launchctl", "bootout", "system/"+launchdLabel).Run()
+	run("launchctl", "bootout", "system/"+launchdLabel) // not loaded is fine
 	if !on {
 		return removeAll(launchdPlist)
 	}
@@ -210,7 +216,7 @@ func openwrtTimer(on bool, exe string) error {
 		return err
 	}
 	if on {
-		exec.Command("/etc/init.d/cron", "enable").Run()
+		run("/etc/init.d/cron", "enable") // enabled already is fine
 	}
 	return run("/etc/init.d/cron", "restart")
 }
