@@ -69,8 +69,8 @@ type keys struct {
 	loaded map[string]crypto.Signer
 }
 
-// HandleKeys serves the key operations on s. A YubiKey cbb reads itself
-// (member/src/piv.rs).
+// HandleKeys serves the key operations on s, and the attestations, which
+// take the keys it loaded. A YubiKey cbb reads itself (member/src/piv.rs).
 func (s *Server) HandleKeys() {
 	k := &keys{loaded: map[string]crypto.Signer{}}
 	s.Handle(OpKeyNew, k.new)
@@ -78,6 +78,12 @@ func (s *Server) HandleKeys() {
 	s.Handle(OpKeySign, k.sign)
 	s.Handle(OpSeal, seal)
 	s.Handle(OpUnseal, unseal)
+	a := &attestation{keys: k}
+	s.Handle(OpAttestAndroid, a.android)
+	s.Handle(OpAttestTPM, a.tpm)
+	s.Handle(OpTPMEvidence, a.evidence)
+	s.Handle(OpTPMActivate, a.activate)
+	s.Handle(OpAttestStatus, fetchStatus)
 }
 
 func seal(req *control.Message) (*control.Message, error) {

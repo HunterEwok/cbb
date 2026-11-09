@@ -50,7 +50,7 @@ if [ -f "$share/firewall.sh" ]; then
 	sh "$share/firewall.sh" close
 	sh "$share/firewall.sh" hub-close
 fi
-rm -f /usr/local/etc/rc.d/cbb /usr/local/etc/rc.d/cbb.sh /usr/local/bin/cbb /usr/local/bin/cbb-helper \
+rm -f /usr/local/etc/rc.d/cbb /usr/local/etc/rc.d/cbb.sh /usr/local/bin/cbb /usr/local/bin/cbb-helper /usr/local/bin/cbb-forward /usr/local/bin/cbb-relay \
 	/usr/local/etc/xdg/autostart/cbb-desktop.desktop /usr/local/etc/cron.d/cbb-update
 rm -rf /var/db/cbb-update
 # OPNsense: without the hook, the next filter reload drops the anchor.

@@ -400,7 +400,7 @@ impl Awg {
     fn take_cookie(&mut self, msg: &[u8]) {
         let Some(mac1) = self.last_mac1 else { return };
         let aead = XChaCha20Poly1305::new((&self.cookie_key).into());
-        let nonce = XNonce::from_slice(&msg[8..32]);
+        let Ok(nonce) = <&XNonce>::try_from(&msg[8..32]) else { return };
         if let Ok(c) = aead.decrypt(nonce, Payload { msg: &msg[32..64], aad: &mac1 })
             && let Ok(c) = <[u8; 16]>::try_from(c.as_slice())
         {

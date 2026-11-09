@@ -250,6 +250,9 @@ pub enum Failure {
 /// of grant lets the service's user do exactly the presets that are on.
 /// Restart and the keyboard's layout are the service's own.
 pub fn run(name: &str) -> std::result::Result<(), Failure> {
+    if let Some(dir) = std::env::var_os("CBB_TEST_ACTIONS") {
+        return run_in_test(Path::new(&dir), name);
+    }
     let (tool, args): (&str, &[&str]) = match name {
         LOCK => ("loginctl", &["lock-sessions"]),
         SLEEP => ("systemctl", &["suspend"]),
@@ -282,6 +285,21 @@ pub fn run(name: &str) -> std::result::Result<(), Failure> {
         )));
     }
     Err(Failure::Failed(Error::msg(format!("{bin} {}: {} {said}", args.join(" "), out.status))))
+}
+
+/// The Go service's tests' runner, as their fakeRunner: a preset with a
+/// file refuse-NAME in dir is refused with its text, any other is noted as
+/// a line of the file ran and not run.
+fn run_in_test(dir: &Path, name: &str) -> std::result::Result<(), Failure> {
+    if let Ok(reason) = std::fs::read_to_string(dir.join(format!("refuse-{name}"))) {
+        return Err(Failure::Refused(reason));
+    }
+    let noted = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("ran"))
+        .and_then(|mut f| std::io::Write::write_all(&mut f, format!("{name}\n").as_bytes()));
+    noted.map_err(|e| Failure::Failed(Error::with("cannot note the action", e)))
 }
 
 /// Whether systemctl's words say that polkit said no.

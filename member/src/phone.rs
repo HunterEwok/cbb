@@ -123,7 +123,7 @@ pub struct Member {
     tunnels: Arc<RwLock<Option<OnTunnel>>>,
     away: Arc<Away>,
     /// The admins given a new admin CA, by device, with the root it is from.
-    admin_cas: Mutex<std::collections::BTreeMap<String, [u8; 32]>>,
+    admin_cas: Mutex<std::collections::BTreeMap<String, crate::takeover::AdminCaSent>>,
 }
 
 /// What a member port a phone opens is for.
@@ -745,32 +745,13 @@ impl Member {
     /// current root also each connected admin's CA from an earlier root,
     /// as after a takeover. It returns how many it renewed.
     pub fn renew(&self, s: &Signer) -> Result<usize> {
-        let now = uptime::wall_ms() / 1000;
-        let ident = self.node.identity();
+        let mut n = self.node.renew_due(s)?;
         let mut roots = self.node.records().lock().unwrap().roots();
         if roots.is_empty() {
-            roots.push(ident.root().clone());
-        }
-        let issuer = (!roots.iter().any(|r| r == s.ca)).then(|| s.ca.der.clone());
-        let mut n = 0;
-        for (to, chain) in self.node.peer_chains() {
-            match manage::renewal(&chain, &roots, s, now) {
-                Ok(Some(cert)) => {
-                    if self.node.send_to(&to, wire::cert(&cert, issuer.as_deref())) {
-                        n += 1;
-                    }
-                }
-                Ok(None) => {}
-                Err(e) => self.node.logf(&format!("cbb: renewing the certificate of {to}: {}", e.for_log())),
-            }
+            roots.push(self.node.identity().root().clone());
         }
         if roots.last() == Some(s.ca) {
             n += crate::takeover::renew_admin_cas(&self.node, s, &self.admin_cas);
-        }
-        let own: Vec<_> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
-        if let Some(cert) = manage::renewal(&own, &roots, s, now)? {
-            self.node.renewed(&cert, issuer.as_deref())?;
-            n += 1;
         }
         Ok(n)
     }

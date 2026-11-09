@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Translated to Rust from internal/third_party/cpace/cpace_test.go; see
+// Translated to Rust from internal/cpace/ of rsc.io/cmd/mote v0.1.3, file cpace_test.go; see
 // README.md.
 
 use super::*;
@@ -309,4 +309,80 @@ fn confirm() {
     let (a, _) = start(&cfg).unwrap();
     assert!(a.tag().is_none());
     assert!(a.verify(&[0; 64]).is_err());
+}
+
+/// Runs a complete exchange between two parties with the roles given, the
+/// second with its configuration changed by change, and returns the keys
+/// the two derived.
+fn exchange(roles: [Role; 2], change: impl Fn(&mut Config)) -> (Vec<u8>, Vec<u8>) {
+    let ca = Config {
+        role: roles[0],
+        password: b"password",
+        channel_id: b"client\x00server",
+        session_id: b"session",
+        ad: b"",
+    };
+    let mut cb = Config { role: roles[1], ..ca };
+    change(&mut cb);
+    let (mut a, ma) = start(&ca).unwrap();
+    let (mut b, mb) = start(&cb).unwrap();
+    (a.finish(&mb, cb.ad).unwrap(), b.finish(&ma, ca.ad).unwrap())
+}
+
+/// A change to the second party's configuration.
+type Change = fn(&mut Config);
+
+/// Complete exchanges with random scalars: the two parties agree if and
+/// only if they started from the same inputs.
+#[test]
+fn exchange_agrees() {
+    for roles in [[Role::Initiator, Role::Responder], [Role::Symmetric, Role::Symmetric]] {
+        let (a, b) = exchange(roles, |_| {});
+        assert_eq!(a.len(), 64);
+        assert_eq!(a, b, "{roles:?}");
+        // Any disagreement about the secret inputs changes the derived keys.
+        let changes: [(&str, Change); 3] = [
+            ("password", |c| c.password = b"Password"),
+            ("channel_id", |c| c.channel_id = b"client\x00Server"),
+            ("session_id", |c| c.session_id = b"Session"),
+        ];
+        for (name, change) in changes {
+            let (a, b) = exchange(roles, change);
+            assert_ne!(a, b, "{roles:?}: differing {name} produced the same key");
+        }
+    }
+    // Both parties must agree on the pair of roles being used.
+    let (a, b) = exchange([Role::Initiator, Role::Initiator], |_| {});
+    assert_ne!(a, b, "two initiators produced the same key");
+}
+
+/// The messages and associated data are authenticated: a party that does
+/// not see what the other sent derives a different key.
+#[test]
+fn tamper() {
+    for what in ["message", "ad"] {
+        let ca = Config { role: Role::Initiator, password: b"password", channel_id: b"", session_id: b"", ad: b"a" };
+        let cb = Config { role: Role::Responder, ad: b"b", ..ca };
+        let (mut a, ma) = start(&ca).unwrap();
+        let (mut b, mut mb) = start(&cb).unwrap();
+        let mut ad: &[u8] = cb.ad;
+        if what == "ad" {
+            ad = b"B";
+        } else {
+            mb[0] ^= 1;
+        }
+        let isk_a = a.finish(&mb, ad).unwrap();
+        let isk_b = b.finish(&ma, ca.ad).unwrap();
+        assert_ne!(isk_a, isk_b, "tampered {what} produced the same key");
+    }
+}
+
+/// A message that is not a group element's 32 bytes is refused.
+#[test]
+fn errors() {
+    let cfg = Config { role: Role::Initiator, password: b"password", channel_id: b"", session_id: b"", ad: b"" };
+    let (mut s, _) = start(&cfg).unwrap();
+    assert!(s.finish(&[0; 31], b"").is_err());
+    let (mut s, _) = start(&cfg).unwrap();
+    assert!(s.finish(&[0; 33], b"").is_err());
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -17,9 +18,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/actions"
 	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/node"
-	"github.com/HunterEwok/cbb/internal/service"
 )
 
 // fakeBoard is a clipboard that the test changes by hand.
@@ -76,28 +74,38 @@ func (b *fakeBoard) ClearIfUnchanged() error {
 // copyOn is the user copying on the desktop.
 func (b *fakeBoard) copyOn(it Item) { b.changes <- it }
 
-// noDiscovery finds no one: the test has one member.
-type noDiscovery struct{}
-
-func (noDiscovery) Run(ctx context.Context) error { <-ctx.Done(); return nil }
-func (noDiscovery) SetTXT([]string)               {}
-
+// startService runs the service, the Rust cbb that CBB_TEST_RUST_SERVICE
+// names, alone: without mDNS or the member port. Without it the test is
+// skipped; CI's service job sets it.
 func startService(t *testing.T) string {
 	t.Helper()
+	bin := os.Getenv("CBB_TEST_RUST_SERVICE")
+	if bin == "" {
+		t.Skip("CBB_TEST_RUST_SERVICE is not set")
+	}
 	dir, err := os.MkdirTemp("", "cb")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "c.sock")
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() {
-		done <- service.Run(ctx, service.Config{StateDir: dir, Socket: socket, Role: node.Member, OS: group.OSLinux, Name: "pi",
-			Discover: func(service.DiscoveryConfig) (service.Discovery, error) { return noDiscovery{}, nil }})
-	}()
-	t.Cleanup(func() { cancel(); <-done })
-	deadline := time.Now().Add(5 * time.Second)
+	cmd := exec.Command(bin, "-state", dir, "-socket", socket, "service", "-name", "pi", "-no-mdns", "-no-listen")
+	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cmd.Process.Signal(os.Interrupt)
+		done := make(chan struct{})
+		go func() { cmd.Wait(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			cmd.Process.Kill()
+			<-done
+		}
+	})
+	deadline := time.Now().Add(10 * time.Second)
 	// The admin socket, which OpNew goes to, opens a moment after the
 	// user's one: wait for both.
 	var c *control.Client
@@ -117,7 +125,21 @@ func startService(t *testing.T) string {
 		t.Fatal(err)
 	}
 	c.Close()
-	return socket
+	// The service starts in its new group a moment later; the tests' waits
+	// start once it runs there.
+	for {
+		if c, err := control.Dial(socket); err == nil {
+			m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpStatus}})
+			c.Close()
+			if err == nil && m.Status != nil && m.Status.Group != "" {
+				return socket
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the service did not start in its group")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func do(t *testing.T, socket string, h control.Header, payload string) *control.Message {
@@ -143,6 +165,25 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+// watching copies text on b until the service has it. Each watcher tells
+// the service what its clipboard holds as it connects, so the other
+// board's watcher, connecting a moment later, can replace a first copy
+// with its empty clipboard; once both watch, a copy stays.
+func watching(t *testing.T, socket string, b *fakeBoard, text string) {
+	t.Helper()
+	next := time.Now()
+	waitFor(t, "the board's copy", func() bool {
+		if paste(t, socket) == text {
+			return true
+		}
+		if time.Now().After(next) {
+			b.copyOn(Item{Text: text})
+			next = time.Now().Add(500 * time.Millisecond)
+		}
+		return false
+	})
 }
 
 func paste(t *testing.T, socket string) string {
