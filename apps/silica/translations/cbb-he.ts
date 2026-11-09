@@ -86,6 +86,10 @@
         <translation>גרסת ה-CBB הזו פגומה.</translation>
     </message>
     <message>
+        <source>Something in CBB broke. It starts again.</source>
+        <translation>משהו ב-CBB נשבר. הוא מופעל מחדש.</translation>
+    </message>
+    <message>
         <source>This phone has no secure element for keys.</source>
         <translation>בטלפון הזה אין רכיב מאובטח למפתחות.</translation>
     </message>

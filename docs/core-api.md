@@ -296,6 +296,10 @@ over `internal/core/cbb_core.wasm`, so no build output lands in the source tree.
 | `seal_public` | `secret` (base64, 32 random bytes the device keeps) | `{"key"}`: its public key for sealed messages (base64, 1216 bytes), the `seal` its pairing and device record carry |
 | `seal_command` | `body` (base64, a command in the open), `key` (base64, the receiver's `seal` key) | `{"body"}`: the same command with its orders sealed to the key (`v` `2`, `sealed`), canonical, for the sender to sign; see "Signed bodies" |
 | `group_body` | the set's arguments, `body` (a record body as `canonical_body` takes it, with `signer` set) | `{"body"}`: the canonical bytes of the signer's next record, to sign: the group, seq and prev set from the set, and for a removal, a freeze or a claim `seen` from the set, the signer's own previous seq among them |
+| `bug_report` | `input` (`{kind, code, name, message, details, app, version, build, os, os_version, model, arch, log, names, now_ms}`: `kind` `panic` or `error`, `app` `ios`, `android`, `aurora`, `mac`, `tray` or `cbb`, `log` CBB's own log, oldest first, `names` the words that must not leave the device), `state` (as the last bug call gave it, optional) | `{"report", "fingerprint", "post", "url", "action", "offer_always", "fixed_in"}`: the report, filtered, as "Technical details" shows it, the break's fingerprint, the body to post to `url` (empty when this build has no key to seal to), what the app does (`ask`, `send` or `skip`), whether the dialog offers "Always allow", and the version the server said fixes this break; see "Bug reports" |
+| `bug_allow` | `state`, `always` | `{"state"}`: the user allowed a report, and maybe always |
+| `bug_sent` | `state`, `fingerprint`, `version`, `post`, `ok`, `fixed_in` (what the server answered, optional), `now_ms` | `{"state"}`: the report went (`ok`), or it waits to be sent again |
+| `bug_pending` | `state`, `now_ms` | `{"queue", "state"}`: the reports waiting (`[{fingerprint, version, post, at_ms}]`), without those older than seven days |
 
 The arguments of `evaluate` are a case of `testdata/interop/v2-records.json` as it is.
 
@@ -313,6 +317,7 @@ The numbers and names never change meaning; new codes are added at the end of th
 | 2 | `abi` | the request's `abi` is not the core's |
 | 3 | `op` | the core has no such operation |
 | 4 | `too_large` | the request is larger than 8 MiB |
+| 5 | `panic` | something in CBB broke while it answered, and the request did nothing; `details` says what broke and where (see "Panics") |
 | 10 | `body` | a record body is refused: its size, form or a field |
 | 11 | `cert` | a certificate is refused |
 | 12 | `strict` | a signed body is not in the strict canonical form |
@@ -321,6 +326,54 @@ The numbers and names never change meaning; new codes are added at the end of th
 | 15 | `command` | a command is refused: its signer, its target, its time or its limits |
 | 16 | `signed` | a signed body that is not a record (a command, a server credential, a release file or a manifest) is refused: its size, form or a field |
 | 17 | `copy` | a copy is refused or cannot be sealed: its origin, its signature or a field, or it does not open with the device's key |
+
+## Panics
+
+The core does not panic on any input, and its tests and fuzzers keep it so; but a bug in CBB
+may still break a call. `ffi/` stops every panic at its C functions: the apps' library is
+built with unwinding (`ffi/bind.sh` and the Android kit set `CARGO_PROFILE_RELEASE_PANIC=unwind`),
+so a call that panics answers code 5 `panic`, whose `details` read `panic: <message> at
+<file>:<line>:<column> in thread <name>`, and a function that can only answer null leaves the
+same answer for `cbb_last_panic`. A panic in one of the member's own threads becomes the event
+`{"type": "panic", "details"}`: the app shows it as an error and starts the member again.
+`cbb_test_panic` panics inside the guard, for each wrapper's test that the answer is code 5 and
+that the app goes on. The computers' `cbb` is built with `panic = "abort"`: the process ends,
+and the system's service manager starts it again.
+
+## Bug reports
+
+When something breaks (code 5, or an error the app did not expect), the app may send a short
+report to `https://bug.cbb.tools/` (`cbb_core::bug`). In debug mode the app shows the whole
+error and logs it, and asks nothing. In release mode it asks: "Oops, something broke. Sorry!
+Allow us to send a short report", with Allow and Cancel and a small link, "Technical details",
+which shows the report as it would go. After the user allowed twice, the dialog also offers
+"Always allow" (off until ticked); then reports go without asking.
+
+`bug_report` builds the report from what the app gives: what broke, the versions of CBB and the
+system, the device's model and architecture, the day, and CBB's own log, at most 300 lines of
+400 bytes, the oldest going first until the report fits in 160 KiB. Every field and line is
+filtered: addresses (IPv4, IPv6, MAC), e-mail addresses, long numbers (codes), long hex
+(device ids, fingerprints), base64 that looks random (keys, secrets, invitations), the user's
+name in home folders and every word of `names` are replaced. Clipboard texts never reach the
+log. The report is sealed to the robot's public key (`crate::seal`, HPKE with X-Wing,
+HKDF-SHA256 and ChaCha20-Poly1305, associated data `cbb bug report v1`), so the server stores
+what it cannot read; the robot opens it elsewhere. Until the robot's key is in the build,
+nothing is posted and `action` is `skip`.
+
+The body posted is `{"v": 1, "fingerprint", "version", "sealed"}`, at most `MAX_POST` bytes; the
+server takes up to twice that. It answers `{"fixed_in"}` when a version fixes the break. The
+fingerprint hashes the kind, the error's name, where it broke and the first line of its details
+without numbers, so the same break counts once in every version and on every device: the app
+sends one report for each fingerprint and version, and `fixed_in` lets the dialog say that an
+update fixes it. A report that could not be sent waits, at most five for seven days
+(`bug_pending`). The app keeps the `state` the calls give back in its own settings.
+
+On cbb.tools, nginx (`packaging/linux/nginx-bug.conf`, a server block of its own that logs no
+client address) passes each POST to `cbb-bug` (`member/src/bugd.rs`, `cbb-bug.service`) on a
+loopback port. It checks that the body is a sealed report, keeps it in a folder of the day and
+the break, and answers `fixed_in` from the robot's `fixed.json`. At most 20 reports of one break
+and version and 5000 in all are kept each day; the rest are answered as taken and dropped, so
+that no app sends them again. The robot opens the reports elsewhere with its secret.
 
 ## Member chains
 

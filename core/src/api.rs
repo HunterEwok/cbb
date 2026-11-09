@@ -63,6 +63,9 @@ pub enum Code {
     Op = 3,
     /// The request is larger than MAX_REQUEST.
     TooLarge = 4,
+    /// The code that answers it broke (a panic, which the library around
+    /// the core caught): the request did nothing.
+    Panic = 5,
     /// A record body is refused: its size, form or a field.
     Body = 10,
     /// A certificate is refused.
@@ -95,6 +98,7 @@ impl Code {
             Code::Abi => "abi",
             Code::Op => "op",
             Code::TooLarge => "too_large",
+            Code::Panic => "panic",
             Code::Body => "body",
             Code::Cert => "cert",
             Code::Strict => "strict",
@@ -151,6 +155,20 @@ pub fn call(request: &[u8]) -> Vec<u8> {
                 dispatch(&r.op, r.args)
             })
     };
+    answer(result)
+}
+
+/// The answer of a request whose code broke: what the library around the
+/// core gives when it catches a panic, `details` saying what broke and
+/// where, as the apps show it in debug mode and log it.
+pub fn panic_answer(details: &str) -> Vec<u8> {
+    const MESSAGE: &str = "Something in CBB broke, and the request did nothing.";
+    let err = if details.is_empty() { Error::msg(MESSAGE) } else { Error::msg(details.to_string()).context(MESSAGE) };
+    answer(Err(refuse(Code::Panic, err)))
+}
+
+/// The answer in the shape above, for a result or a refusal.
+fn answer(result: Result<Vec<u8>, Refusal>) -> Vec<u8> {
     let mut out = alloc::format!("{{\"abi\":{ABI},");
     match result {
         Ok(ok) => {
@@ -197,6 +215,10 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
         "arrange" => arrange(serde_json::from_value(args).map_err(bad_args)?),
         "keyboard" => keyboard(serde_json::from_value(args).map_err(bad_args)?),
         "why" => why(serde_json::from_value(args).map_err(bad_args)?),
+        "bug_report" => bug_report(serde_json::from_value(args).map_err(bad_args)?),
+        "bug_allow" => bug_allow(serde_json::from_value(args).map_err(bad_args)?),
+        "bug_sent" => bug_sent(serde_json::from_value(args).map_err(bad_args)?),
+        "bug_pending" => bug_pending(serde_json::from_value(args).map_err(bad_args)?),
         _ => group::dispatch(op, &args)
             .or_else(|| signed::dispatch(op, &args))
             .unwrap_or_else(|| Err(refuse(Code::Op, Error::msg(alloc::format!("The core has no call named {op:?}."))))),
@@ -288,6 +310,114 @@ fn keyboard(a: KeyboardArgs) -> Result<Vec<u8>, Refusal> {
     m.insert("reports".into(), Value::Array(reports));
     m.insert("untypeable".into(), Value::String(untypeable));
     m.insert("map".into(), b64_value(&DESCRIPTOR));
+    Ok(json(Value::Object(m)))
+}
+
+/// The arguments of `bug_report`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BugReportArgs {
+    input: crate::bug::Input,
+    #[serde(default)]
+    state: crate::bug::State,
+}
+
+/// The bug report's state as an answer's value.
+fn bug_state(st: &crate::bug::State) -> Result<Value, Refusal> {
+    serde_json::to_value(st).map_err(|e| refuse(Code::Request, Error::with("The state does not encode.", e)))
+}
+
+/// `bug_report` (docs/core-api.md, "Bug reports"): the report of a break,
+/// filtered, its fingerprint, the body to post when this build can seal
+/// it, and what the app does: `ask`, `send` or `skip`.
+fn bug_report(a: BugReportArgs) -> Result<Vec<u8>, Refusal> {
+    use crate::bug;
+    let report = bug::report(&a.input).map_err(|e| refuse(Code::Request, e))?;
+    let fingerprint = bug::fingerprint(&report.kind, &report.name, &report.at, &report.details);
+    let post = match bug::build(&a.input) {
+        Ok(b) => b.post,
+        Err(_) => String::new(),
+    };
+    let action = a.state.action(&fingerprint, &report.version, !post.is_empty());
+    let mut m = serde_json::Map::new();
+    m.insert(
+        "report".into(),
+        serde_json::to_value(&report)
+            .map_err(|e| refuse(Code::Request, Error::with("The report does not encode.", e)))?,
+    );
+    m.insert("fixed_in".into(), Value::String(a.state.fixed_in(&fingerprint)));
+    m.insert("fingerprint".into(), Value::String(fingerprint));
+    m.insert("post".into(), Value::String(post));
+    m.insert("action".into(), serde_json::to_value(action).unwrap_or(Value::Null));
+    m.insert("offer_always".into(), Value::Bool(a.state.offer_always()));
+    m.insert("url".into(), Value::String(bug::URL.into()));
+    Ok(json(Value::Object(m)))
+}
+
+/// The arguments of `bug_allow`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BugAllowArgs {
+    #[serde(default)]
+    state: crate::bug::State,
+    #[serde(default)]
+    always: bool,
+}
+
+/// `bug_allow`: the user allowed a report, and maybe always; the new state.
+fn bug_allow(mut a: BugAllowArgs) -> Result<Vec<u8>, Refusal> {
+    a.state.allow(a.always);
+    let mut m = serde_json::Map::new();
+    m.insert("state".into(), bug_state(&a.state)?);
+    Ok(json(Value::Object(m)))
+}
+
+/// The arguments of `bug_sent`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BugSentArgs {
+    #[serde(default)]
+    state: crate::bug::State,
+    fingerprint: String,
+    version: String,
+    #[serde(default)]
+    post: String,
+    ok: bool,
+    #[serde(default)]
+    fixed_in: String,
+    now_ms: i64,
+}
+
+/// `bug_sent`: a report went (`ok`, with the version the server says
+/// fixes it), or it did not and waits; the new state.
+fn bug_sent(mut a: BugSentArgs) -> Result<Vec<u8>, Refusal> {
+    let q = crate::bug::Queued { fingerprint: a.fingerprint, version: a.version, post: a.post, at_ms: a.now_ms };
+    a.state.sent(q, a.ok, &a.fixed_in, a.now_ms);
+    let mut m = serde_json::Map::new();
+    m.insert("state".into(), bug_state(&a.state)?);
+    Ok(json(Value::Object(m)))
+}
+
+/// The arguments of `bug_pending`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BugPendingArgs {
+    #[serde(default)]
+    state: crate::bug::State,
+    now_ms: i64,
+}
+
+/// `bug_pending`: the reports waiting to be sent, without those too old,
+/// and the new state.
+fn bug_pending(mut a: BugPendingArgs) -> Result<Vec<u8>, Refusal> {
+    a.state.prune(a.now_ms);
+    let mut m = serde_json::Map::new();
+    m.insert(
+        "queue".into(),
+        serde_json::to_value(&a.state.queue)
+            .map_err(|e| refuse(Code::Request, Error::with("The queue does not encode.", e)))?,
+    );
+    m.insert("state".into(), bug_state(&a.state)?);
     Ok(json(Value::Object(m)))
 }
 
@@ -737,6 +867,54 @@ mod tests {
         let req = serde_json::json!({"abi": ABI, "op": op, "args": args});
         let out = call(&serde_json::to_vec(&req).unwrap());
         serde_json::from_slice(&out).unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&out)))
+    }
+
+    /// The bug report's calls carry the app's state through a report:
+    /// asked, allowed, sent once, and not made again for the version.
+    #[test]
+    fn bug_report_calls() {
+        let input = serde_json::json!({"kind": "panic", "code": 5, "name": "panic",
+            "details": "panic: boom at member/src/x.rs:3:9", "app": "android", "version": "0.6.0",
+            "log": ["dialed 192.168.0.2:8764"], "now_ms": 1_762_646_400_000_i64});
+        let a = ask("bug_report", serde_json::json!({"input": input}));
+        let ok = &a["ok"];
+        assert_eq!(ok["report"]["where"], "member/src/x.rs:3:9", "{a}");
+        assert_eq!(ok["report"]["log"][0], "dialed <address>");
+        // No robot key in this build yet: nothing to post, nothing to ask.
+        assert_eq!(ok["action"], if crate::bug::ROBOT_KEY_B64.is_empty() { "skip" } else { "ask" });
+        assert_eq!(ok["url"], crate::bug::URL);
+        let fp = ok["fingerprint"].as_str().unwrap().to_string();
+        let st = ask("bug_allow", serde_json::json!({"always": false}))["ok"]["state"].clone();
+        assert_eq!(st["allowed"], 1);
+        let st = ask(
+            "bug_sent",
+            serde_json::json!({"state": st, "fingerprint": fp, "version": "0.6.0", "post": "{}",
+            "ok": false, "now_ms": 1}),
+        )["ok"]["state"]
+            .clone();
+        let p = ask("bug_pending", serde_json::json!({"state": st, "now_ms": 2}));
+        assert_eq!(p["ok"]["queue"][0]["fingerprint"], fp.as_str(), "{p}");
+        let st = ask(
+            "bug_sent",
+            serde_json::json!({"state": p["ok"]["state"], "fingerprint": fp, "version": "0.6.0",
+            "ok": true, "fixed_in": "0.6.1", "now_ms": 3}),
+        )["ok"]["state"]
+            .clone();
+        let a = ask("bug_report", serde_json::json!({"input": input, "state": st}));
+        assert_eq!(a["ok"]["action"], "skip", "{a}");
+        assert_eq!(a["ok"]["fixed_in"], "0.6.1");
+        let bad = ask("bug_report", serde_json::json!({"input": {"kind": "joke", "app": "ios", "version": "1"}}));
+        assert_eq!(code(&bad), Code::Request as u64);
+    }
+
+    #[test]
+    fn panic_answers_with_its_details() {
+        let a: Value = serde_json::from_slice(&panic_answer("index out of bounds at member/src/x.rs:3:9")).unwrap();
+        assert_eq!(code(&a), Code::Panic as u64);
+        assert_eq!(a["error"]["name"], "panic");
+        assert_eq!(a["error"]["details"], "index out of bounds at member/src/x.rs:3:9");
+        let a: Value = serde_json::from_slice(&panic_answer("")).unwrap();
+        assert_eq!(a["error"]["details"], "");
     }
 
     fn code(answer: &Value) -> u64 {

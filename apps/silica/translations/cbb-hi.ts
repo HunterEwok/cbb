@@ -86,6 +86,10 @@
         <translation>CBB का यह बिल्ड खराब है।</translation>
     </message>
     <message>
+        <source>Something in CBB broke. It starts again.</source>
+        <translation>CBB में कुछ टूट गया। यह फिर से शुरू हो रहा है।</translation>
+    </message>
+    <message>
         <source>This phone has no secure element for keys.</source>
         <translation>इस फ़ोन में कुंजियों के लिए सुरक्षित तत्व नहीं है।</translation>
     </message>

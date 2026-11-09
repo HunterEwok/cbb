@@ -402,6 +402,10 @@ void Member::event(const QByteArray &json)
             roots.append(QByteArray::fromBase64(r.toString().toLatin1()));
         emit identityChanged(QByteArray::fromBase64(e.value(QStringLiteral("cert")).toString().toLatin1()),
                              QByteArray::fromBase64(e.value(QStringLiteral("issuer")).toString().toLatin1()), roots);
+    } else if (type == QStringLiteral("panic")) {
+        const QString details = e.value(QStringLiteral("details")).toString();
+        Errors::log(QStringLiteral("member: %1").arg(details));
+        emit panicked(details);
     } else if (type == QStringLiteral("mute")) {
         pollMuted();
     } else if (type == QStringLiteral("command")) {

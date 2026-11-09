@@ -225,6 +225,12 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
 
         /** An admin muted this phone for [forMS] milliseconds (0: until an admin lifts it), or ended its mute; the node carried it out and keeps it. */
         class Mute(val muted: Boolean, val forMS: Long, val by: String) : Event()
+
+        /**
+         * Something in the member broke (docs/core-api.md, "Panics"): details say what and
+         * where. The app logs it, shows it and starts the member again.
+         */
+        class Panic(val details: String) : Event()
     }
 
     /** What a member port is for. */
@@ -650,6 +656,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
                     Event.Command(o.optLong("token") ?: return null, o.optString("from") ?: "", Member.Record.fromJson(c))
                 }
                 "mute" -> Event.Mute(o.optBool("muted") ?: return null, o.optLong("for_ms") ?: 0, o.optString("by") ?: "")
+                "panic" -> Event.Panic(o.optString("details") ?: "")
                 "caller" -> Event.Caller(o.optLong("token") ?: return null, o.optLong("port")?.toInt() ?: return null, o.optString("device") ?: "")
                 else -> null
             }

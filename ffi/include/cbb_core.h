@@ -33,6 +33,16 @@ uint8_t *cbb_call(const uint8_t *request, size_t len, size_t *answer_len);
 void cbb_free(uint8_t *answer, size_t len);
 
 /*
+ * A panic in any of these functions is caught and answered, code 5 "panic"
+ * with what broke and where in details (docs/core-api.md, "Panics"). A
+ * function that can answer only NULL leaves the answer to cbb_last_panic,
+ * NULL when nothing panicked. cbb_test_panic panics on purpose and answers
+ * it, for the wrappers' tests. Both answers go back with cbb_free.
+ */
+uint8_t *cbb_last_panic(size_t *answer_len);
+uint8_t *cbb_test_panic(size_t *answer_len);
+
+/*
  * Joining a group by the phone's QR code with a key the core does not hold
  * (src/join.rs), only in a library built with the feature join (the Aurora
  * app). The answers are JSON as cbb_call's, given back with cbb_free; the

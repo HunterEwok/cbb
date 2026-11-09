@@ -26,6 +26,8 @@ mod awaynet;
 #[cfg(feature = "tunnel")]
 mod awg;
 mod benchtime;
+#[cfg(feature = "tunnel")]
+pub mod bugd;
 pub mod button;
 mod cli;
 pub mod content;
@@ -83,6 +85,7 @@ mod third_party {
 }
 mod servers;
 mod service;
+mod settings;
 mod signed;
 pub mod sync;
 mod sys;
@@ -416,9 +419,9 @@ fn parse_caps(list: &str) -> Result<Vec<String>> {
     Ok(out)
 }
 
-/// The member port: 8764, or CBB_PORT.
+/// The member port: 8764, or CBB_PORT from the environment or cbb.env.
 fn member_port() -> u16 {
-    std::env::var("CBB_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8764)
+    settings::get("CBB_PORT").and_then(|p| p.trim().parse().ok()).unwrap_or(8764)
 }
 
 /// Joins a group. For the Next (for_next), the QR code and the outcome come

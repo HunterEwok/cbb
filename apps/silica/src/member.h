@@ -125,6 +125,9 @@ signals:
     // and opened (the member's check_command answer, with the event's
     // token): the receiver carries it out and answers.
     void commandArrived(const QJsonObject &checked);
+    // Something in the member broke (docs/core-api.md, "Panics"): details
+    // say what and where. The app shows it and starts the member again.
+    void panicked(const QString &details);
 
 public:
     // Brings the devices up to date now, as after an admin's change.

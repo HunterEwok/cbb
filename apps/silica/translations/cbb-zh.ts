@@ -86,6 +86,10 @@
         <translation>此 CBB 版本已损坏。</translation>
     </message>
     <message>
+        <source>Something in CBB broke. It starts again.</source>
+        <translation>CBB 出了点问题，正在重新启动。</translation>
+    </message>
+    <message>
         <source>This phone has no secure element for keys.</source>
         <translation>此手机没有用于存放密钥的安全元件。</translation>
     </message>

@@ -245,6 +245,12 @@ enum Event<'a> {
     Log {
         line: &'a str,
     },
+    /// Something in the member broke (a panic in one of its threads,
+    /// docs/core-api.md "Panics"): what and where. The app shows it and
+    /// starts the member again.
+    Panic {
+        details: &'a str,
+    },
     /// A copy that became the group's current one from another member.
     Copy {
         copy: Value,
@@ -423,6 +429,8 @@ pub struct Member {
     events: Events,
     /// Set by stop: the member stays allocated, and answers no more.
     stopped: std::sync::atomic::AtomicBool,
+    /// The guard's number for the member's panic events.
+    panics: u64,
 }
 
 impl Member {
@@ -523,7 +531,14 @@ impl Member {
                 res.id = id;
                 res
             }));
-            Ok(Member { node: Arc::new(node), answers, events: ev, stopped: std::sync::atomic::AtomicBool::new(false) })
+            let panics = crate::guard::watch(Box::new(move |details: &str| ev.send(&Event::Panic { details })));
+            Ok(Member {
+                node: Arc::new(node),
+                answers,
+                events: ev,
+                stopped: std::sync::atomic::AtomicBool::new(false),
+                panics,
+            })
         })();
         match made {
             Ok(m) => (Some(m), answer(Ok(serde_json::json!({})))),
@@ -827,6 +842,7 @@ impl Member {
     /// Stops the member once; calls answer that it stopped from then on.
     pub fn stop(&self) {
         if !self.stopped.swap(true, Ordering::SeqCst) {
+            crate::guard::unwatch(self.panics);
             self.node.stop();
         }
     }

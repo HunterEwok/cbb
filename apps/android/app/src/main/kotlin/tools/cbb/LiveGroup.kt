@@ -2385,6 +2385,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }
             // The device the relay said calls from that loopback port, once.
             is CoreMember.Event.Caller -> runCatching { n.caller(e.token, synchronized(lock) { relayLink }?.caller(e.port)) }
+            // A member that broke stops and starts again, off its own events' thread.
+            is CoreMember.Event.Panic -> {
+                Log.e(TAG, "the node broke, starting it again: ${e.details}")
+                Thread({ restartSync() }, "restart").start()
+            }
             is CoreMember.Event.Identity -> Log.i(TAG, "the node holds a renewed certificate or new roots; the group's file keeps its own")
             is CoreMember.Event.Message -> when (val m = e.message) {
                 is Member.Message.Credentials -> {

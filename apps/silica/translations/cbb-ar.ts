@@ -86,6 +86,10 @@
         <translation>هذا الإصدار من CBB معطوب.</translation>
     </message>
     <message>
+        <source>Something in CBB broke. It starts again.</source>
+        <translation>حدث عطل في CBB. يُعاد تشغيله الآن.</translation>
+    </message>
+    <message>
         <source>This phone has no secure element for keys.</source>
         <translation>لا يحتوي هذا الهاتف على عنصر آمن للمفاتيح.</translation>
     </message>

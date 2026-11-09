@@ -45,6 +45,7 @@ pub mod api;
 pub mod arrange;
 pub mod authority;
 pub mod benchtime;
+pub mod bug;
 pub mod certs;
 pub mod clip;
 pub mod command;

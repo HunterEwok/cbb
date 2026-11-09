@@ -255,6 +255,8 @@ final class CoreMemberTests: XCTestCase {
         }
         XCTAssertEqual(c.event.id, "i")
         XCTAssertEqual(c.event.ageMS, 3)
+        guard case let .panic(details)? = e(#"{"type":"panic","details":"panic: boom at member/src/x.rs:1:2"}"#) else { return XCTFail() }
+        XCTAssertEqual(details, "panic: boom at member/src/x.rs:1:2")
         XCTAssertNil(e(#"{"type":"from the future"}"#))
         guard case .log? = e("not json") else { return XCTFail() }
     }

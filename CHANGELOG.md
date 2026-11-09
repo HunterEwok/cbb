@@ -12,6 +12,18 @@ All notable changes to cbb are documented in this file. The format follows
   The Rust core decides them (`cbb_core::why`, the core's call `why`, the phone member's `why`,
   `why` in a computer's status), the apps say them in eight languages, and `cbb status` prints
   the first that stops sync.
+- A panic stops at the core's C functions: a call that breaks answers code 5 `panic` with
+  what broke and where, and a panic in one of the phone's member threads becomes a `panic`
+  event, on which the iPhone, Android and Aurora apps start the member again
+  (docs/core-api.md, "Panics"). `cbb_test_panic` lets each wrapper's tests check it.
+- Bug reports (docs/core-api.md, "Bug reports"): the core builds a short anonymous report of
+  a break, filters out addresses, codes, keys, invitations, names and home folders, seals it
+  to the robot's key and keeps the app's state: one report for each break and version, at
+  most five waiting for seven days, "Always allow" offered after the second time, and the
+  version that fixes a break (`bug_report`, `bug_allow`, `bug_sent`, `bug_pending`). Nothing
+  is sent until the robot's key is in the build. `cbb-bug` takes the reports at
+  bug.cbb.tools behind nginx (`packaging/linux/nginx-bug.conf`, `cbb-bug.service`), with a
+  body limit of twice the largest report, checked by a test, and daily caps per break.
 - The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
   the Go relay's flags, key file, wire format and an open relay's budget with the same limits
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it
