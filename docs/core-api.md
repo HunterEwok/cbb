@@ -380,7 +380,10 @@ client address) passes each POST to `cbb-bug` (`member/src/bugd.rs`, `cbb-bug.se
 loopback port. It checks that the body is a sealed report, keeps it in a folder of the day and
 the break, and answers `fixed_in` from the robot's `fixed.json`. At most 20 reports of one break
 and version and 5000 in all are kept each day; the rest are answered as taken and dropped, so
-that no app sends them again. The robot opens the reports elsewhere with its secret.
+that no app sends them again. The robot opens the reports elsewhere with its secret:
+`cbb-bug keygen SECRET` makes the key once (the secret stays on the robot's computer, the public
+key goes into `cbb_core::bug::ROBOT_KEY_B64`), and `cbb-bug read SECRET FOLDER...` opens the
+reports copied from the server.
 
 ## Member chains
 

@@ -18,7 +18,8 @@ All notable changes to cbb are documented in this file. The format follows
   version that fixes a break (`bug_report`, `bug_allow`, `bug_sent`, `bug_pending`). Nothing
   is sent until the robot's key is in the build. `cbb-bug` takes the reports at
   bug.cbb.tools behind nginx (`packaging/linux/nginx-bug.conf`, `cbb-bug.service`), with a
-  body limit of twice the largest report, checked by a test, and daily caps per break.
+  body limit of twice the largest report, checked by a test, and daily caps per break;
+  `cbb-bug keygen` makes the robot's key and `cbb-bug read` opens the reports.
   The phones' apps ask after a member's panic; on a computer a panic of `cbb` leaves
   `panic.json` in the state folder, its status says `bug`, and the Mac and tray apps ask
   (`bug`, `bug_allow`, `bug_cancel`). In debug mode the apps show what broke and ask nothing.

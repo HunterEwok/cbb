@@ -239,8 +239,93 @@ pub fn serve(listen: SocketAddr, dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// cbb-bug's command line: `cbb-bug [-listen ADDRESS:PORT] [-dir FOLDER]`.
+/// Makes the robot's key: writes the secret to `secret` (readable by its
+/// owner only, never on the server) and returns the public key in base64,
+/// for `cbb_core::bug::ROBOT_KEY_B64`.
+pub fn keygen(secret: &Path) -> Result<String> {
+    use base64::Engine as _;
+    if secret.exists() {
+        return Err(Error::msg(format!("{} is there already: the robot keeps one key", secret.display())));
+    }
+    let s = cbb_core::seal::generate_secret().map_err(|e| e.context("cannot make a secret"))?;
+    let public = cbb_core::seal::public_key(&s).map_err(|e| e.context("cannot make the public key"))?;
+    crate::files::write_atomic(secret, base64::engine::general_purpose::STANDARD.encode(s).as_bytes(), 0o600)
+        .map_err(|e| e.context(format!("cannot write {}", secret.display())))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(public))
+}
+
+/// Opens the reports under each folder or file with the robot's secret
+/// and writes each as readable JSON, with the file it came from; a report
+/// that does not open is named on err.
+pub fn read(secret: &Path, paths: &[PathBuf], out: &mut impl Write, err: &mut impl Write) -> Result<usize> {
+    use base64::Engine as _;
+    let text = std::fs::read_to_string(secret).context(format!("cannot read {}", secret.display()))?;
+    let s = base64::engine::general_purpose::STANDARD
+        .decode(text.trim())
+        .map_err(|_| Error::msg("the secret does not decode"))?;
+    let mut files = Vec::new();
+    let mut todo: Vec<PathBuf> = paths.to_vec();
+    while let Some(p) = todo.pop() {
+        if p.is_dir() {
+            for e in std::fs::read_dir(&p).context(format!("cannot read {}", p.display()))? {
+                todo.push(e.context("cannot read a folder")?.path());
+            }
+        } else if p.extension().is_some_and(|e| e == "json") {
+            files.push(p);
+        }
+    }
+    files.sort();
+    let mut opened = 0;
+    for f in files {
+        let body = std::fs::read(&f).context(format!("cannot read {}", f.display()))?;
+        match bug::open(&s, &body) {
+            Ok((_, r)) => {
+                let pretty = serde_json::to_string_pretty(&r).context("cannot encode a report")?;
+                writeln!(out, "# {}\n{pretty}", f.display()).context("cannot write")?;
+                opened += 1;
+            }
+            Err(e) => {
+                let _ = writeln!(err, "cbb-bug: {}: {e}", f.display());
+            }
+        }
+    }
+    Ok(opened)
+}
+
+/// cbb-bug's command line: `cbb-bug [-listen ADDRESS:PORT] [-dir FOLDER]`
+/// serves; `cbb-bug keygen SECRET` makes the robot's key and
+/// `cbb-bug read SECRET FOLDER...` opens the reports, both on the robot's
+/// own computer.
 pub fn command(args: &[String], err: &mut impl Write) -> i32 {
+    match args.first().map(String::as_str) {
+        Some("keygen") if args.len() == 2 => {
+            return match keygen(Path::new(&args[1])) {
+                Ok(public) => {
+                    println!("{public}");
+                    0
+                }
+                Err(e) => {
+                    let _ = writeln!(err, "cbb-bug: {e:#}");
+                    1
+                }
+            };
+        }
+        Some("read") if args.len() >= 3 => {
+            let paths: Vec<PathBuf> = args[2..].iter().map(PathBuf::from).collect();
+            return match read(Path::new(&args[1]), &paths, &mut std::io::stdout(), err) {
+                Ok(_) => 0,
+                Err(e) => {
+                    let _ = writeln!(err, "cbb-bug: {e:#}");
+                    1
+                }
+            };
+        }
+        Some("keygen" | "read") => {
+            let _ = writeln!(err, "usage: cbb-bug keygen SECRET | cbb-bug read SECRET FOLDER...");
+            return 2;
+        }
+        _ => {}
+    }
     let mut listen: SocketAddr = ([127, 0, 0, 1], 8791).into();
     let mut dir = PathBuf::from("/var/lib/cbb-bug");
     let mut it = args.iter();
@@ -319,6 +404,47 @@ mod tests {
             assert_eq!(rx.take(&bad, day).status, 400, "{}", String::from_utf8_lossy(&bad));
         }
         assert_eq!(rx.take(&vec![b' '; MAX_BODY + 1], day).status, 413);
+    }
+
+    #[test]
+    fn the_robot_opens_what_an_app_sealed() {
+        let tmp = std::env::temp_dir().join(format!("cbb-bugd-robot-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("2025-11-09/f-0.6.0")).unwrap();
+        struct Gone(PathBuf);
+        impl Drop for Gone {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _gone = Gone(tmp.clone());
+        let secret = tmp.join("robot.key");
+        let public = keygen(&secret).unwrap();
+        assert!(keygen(&secret).is_err(), "a second key must not replace the first");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            assert_eq!(std::fs::metadata(&secret).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        use base64::Engine as _;
+        let key = base64::engine::general_purpose::STANDARD.decode(&public).unwrap();
+        let input = bug::Input {
+            kind: "panic".into(),
+            name: "panic".into(),
+            message: "Something in CBB broke.".into(),
+            details: "panic: boom at member/src/x.rs:1:2".into(),
+            app: "cbb".into(),
+            version: "0.6.0".into(),
+            ..Default::default()
+        };
+        let built = bug::build_for(&input, &key).unwrap();
+        std::fs::write(tmp.join("2025-11-09/f-0.6.0/01-1.json"), &built.post).unwrap();
+        std::fs::write(tmp.join("2025-11-09/f-0.6.0/02-2.json"), post("f", "0.6.0")).unwrap();
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        assert_eq!(read(&secret, &[tmp.join("2025-11-09")], &mut out, &mut err).unwrap(), 1);
+        let out = String::from_utf8(out).unwrap();
+        assert!(out.contains("member/src/x.rs:1:2"), "{out}");
+        assert!(String::from_utf8(err).unwrap().contains("02-2.json"));
     }
 
     #[test]
