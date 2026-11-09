@@ -533,7 +533,9 @@ func (w *window) admin(t *testing.T) {
 	if !strings.Contains(page, "This is the group's hub") {
 		t.Errorf("the hub's page does not say it is the hub:\n%s", page)
 	}
+	// Making a device the hub is in the advanced settings, off by default.
 	w.eval(`$click('.tile[data-id="mac"]')`, nil)
+	w.eval(`(() => { const a = $q("#advanced"); a.checked = true; a.dispatchEvent(new Event("change")); })()`, nil)
 	w.wait(`$q('[data-action="hub"]')`)
 	w.eval(`$click('[data-action="hub"]')`, nil)
 	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("must be on there already")`)
