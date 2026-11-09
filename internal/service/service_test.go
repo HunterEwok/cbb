@@ -1445,9 +1445,13 @@ func TestMacsListen(t *testing.T) {
 	pairWith(t, pi, a)
 	pairWith(t, pi, b)
 	for _, s := range []*testService{pi, a, b} {
-		if txt := h.txtOf(s.status(t).Device); len(txt) != 2 {
-			t.Errorf("%s publishes %q, want only v and g", s.name, txt)
-		}
+		// The pi publishes p=1 until it sees its pairing window closed,
+		// which its mDNS loop checks once a second.
+		var txt []string
+		waitUpTo(t, 10*time.Second, s.name+" publishes only v and g", func() bool {
+			txt = h.txtOf(s.status(t).Device)
+			return len(txt) == 2
+		}, func() string { return fmt.Sprintf("it publishes %q", txt) })
 		waitFor(t, s.name+" meets the pi and the other Mac", func() bool { return len(s.status(t).Peers) == 2 })
 	}
 

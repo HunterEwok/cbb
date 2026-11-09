@@ -81,8 +81,11 @@ struct Listed {
     ifs: Vec<Interface>,
     at: Option<Instant>,
     listing: bool,
-    /// The first list was waited for once already.
-    waited: bool,
+    /// Until when a caller waits for the first list: every caller waits,
+    /// as one that did not would see no interfaces, and learn_all at the
+    /// start would learn none (a member connection on the home network was
+    /// then refused until another one came up).
+    first_until: Option<Instant>,
 }
 
 impl Networks {
@@ -190,13 +193,13 @@ impl Networks {
                 (l.ifs, l.at, l.listing) = (ifs, Some(Instant::now()), false);
             });
         }
-        if l.at.is_some() || l.waited {
+        if l.at.is_some() {
             return l.ifs.clone();
         }
-        // The first list, waited for a moment, once.
-        l.waited = true;
+        // The first list, waited for a moment, by every caller until the
+        // same deadline, so that a hanging list holds each up once at most.
+        let until = *l.first_until.get_or_insert_with(|| Instant::now() + FIRST_LIST);
         drop(l);
-        let until = Instant::now() + FIRST_LIST;
         loop {
             let l = self.listed.lock().unwrap();
             if l.at.is_some() || Instant::now() > until {
@@ -547,5 +550,37 @@ mod tests {
             assert_eq!(dir.join(FILE).exists(), in_group, "the list saved, in a group: {in_group}");
             let _ = std::fs::remove_dir_all(&dir);
         }
+    }
+
+    /// A slow first list holds up every caller, not only the first: the
+    /// learning at the start, which runs beside mDNS's first look, learnt
+    /// nothing when mDNS was first, and the member port refused the home
+    /// network's connections until a member connection came up.
+    #[test]
+    fn every_caller_waits_for_the_first_list() {
+        let ifc = Interface { index: 2, name: "eth0".into(), prefixes: vec![p("10.0.1.5/24")] };
+        let dir = std::env::temp_dir().join(format!("cbb-networks-slow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let i = ifc.clone();
+        let n = Networks::load_with(
+            &dir,
+            false,
+            Arc::new(|_: &str| {}),
+            Arc::new(move || {
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                vec![i.clone()]
+            }),
+            Box::new(HashMap::new),
+        );
+        let first = {
+            let n = n.clone();
+            std::thread::spawn(move || n.ifs().len())
+        };
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(n.learn_all(), "the second caller learnt no network");
+        assert_eq!(first.join().unwrap(), 1);
+        assert!(n.knows("10.0.1.5".parse().unwrap()));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

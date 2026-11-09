@@ -5,6 +5,7 @@ package service
 
 import (
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"os"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/tpmkey"
 	"github.com/HunterEwok/cbb/internal/tpmkey/tpmtest"
 )
 
@@ -23,19 +23,8 @@ import (
 func TestTPMEvidence(t *testing.T) {
 	tpmtest.Start(t)
 	roots := tpmtest.ProvisionEK(t)
-	group.ReopenTPM()
-	t.Cleanup(group.ReopenTPM)
 	var h hub
-	pi := startEnv(t, &h, "pi", "CBB_TEST_TPM_ROOTS="+rootsFile(t, roots))
-	deck := startService(t, &h, "deck")
-	pairWith(t, pi, deck)
-	id, err := group.Load(deck.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := id.Key.(*tpmkey.Key); !ok {
-		t.Fatal("the deck's member key is not in the TPM")
-	}
+	pi, _ := tpmPair(t, &h, roots)
 	store := func(s *testService, name string) string {
 		for _, d := range s.devices(t) {
 			if d.Name == name {
@@ -52,17 +41,8 @@ func TestTPMEvidence(t *testing.T) {
 func TestTPMEvidenceUnknownMaker(t *testing.T) {
 	tpmtest.Start(t)
 	tpmtest.ProvisionEK(t)
-	group.ReopenTPM()
-	t.Cleanup(group.ReopenTPM)
 	var h hub
-	pi := startEnv(t, &h, "pi", "CBB_TEST_TPM_ROOTS="+rootsFile(t, tpmtest.OtherRoots(t)))
-	deck := startService(t, &h, "deck")
-	pairWith(t, pi, deck)
-	if id, err := group.Load(deck.dir); err != nil {
-		t.Fatal(err)
-	} else if _, ok := id.Key.(*tpmkey.Key); !ok {
-		t.Fatal("the deck's member key is not in the TPM")
-	}
+	pi, _ := tpmPair(t, &h, tpmtest.OtherRoots(t))
 	waitFor(t, "deck is listed as hardware", func() bool {
 		for _, d := range pi.devices(t) {
 			if d.Name == "deck" {
@@ -79,22 +59,14 @@ func TestTPMEvidenceUnknownMaker(t *testing.T) {
 // says files, and the level hardware is refused.
 func TestRootInTPMCountsAsFiles(t *testing.T) {
 	tpmtest.Start(t)
-	group.ReopenTPM()
-	t.Cleanup(group.ReopenTPM)
-
+	sim := tpmOnlyFor(t)
 	var h hub
-	pi := startService(t, &h, "pi")
+	pi := startEnv(t, &h, "pi", sim)
 	m, err := pi.do(t, control.Header{Op: control.OpNew}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := group.Load(pi.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := id.Key.(*tpmkey.Key); !ok {
-		t.Fatal("the root's member key is not in the TPM")
-	}
+	keyInTPM(t, pi)
 	if m.Status == nil || m.Status.KeyLevel != "files" {
 		t.Fatalf("the new group's key level: %+v", m.Status)
 	}
@@ -105,6 +77,48 @@ func TestRootInTPMCountsAsFiles(t *testing.T) {
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpKeyLevel, Value: "hardware"}, ""); err == nil {
 		t.Error("a root with its CA key in a file set the level hardware")
+	}
+}
+
+// tpmOnlyFor keeps swtpm, which takes one client at a time, for the one
+// service whose cbb-helper is given the setting it returns: this test's
+// process and the other services find no TPM, as the helper keeps its
+// connection open.
+func tpmOnlyFor(t *testing.T) string {
+	t.Helper()
+	sim := "CBB_TPM_SIMULATOR=" + os.Getenv("CBB_TPM_SIMULATOR")
+	t.Setenv("CBB_TPM_SIMULATOR", "")
+	group.ReopenTPM()
+	t.Cleanup(group.ReopenTPM)
+	return sim
+}
+
+// tpmPair starts the root pi, which trusts the TPM makers roots and keeps
+// its keys in files, and joins deck to it with its member key in swtpm.
+func tpmPair(t *testing.T, h *hub, roots []*x509.Certificate) (pi, deck *testService) {
+	t.Helper()
+	sim := tpmOnlyFor(t)
+	pi = startEnv(t, h, "pi", "CBB_TPM=off", "CBB_TEST_TPM_ROOTS="+rootsFile(t, roots))
+	deck = startEnv(t, h, "deck", sim)
+	pairWith(t, pi, deck)
+	keyInTPM(t, deck)
+	return pi, deck
+}
+
+// keyInTPM checks that identity.json keeps s's member key as the TPM's
+// blob, and no key.
+func keyInTPM(t *testing.T, s *testService) {
+	t.Helper()
+	var f struct {
+		Key    []byte          `json:"key"`
+		KeyTPM json.RawMessage `json:"key_tpm"`
+	}
+	raw, err := os.ReadFile(filepath.Join(s.dir, "identity.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &f); err != nil || len(f.Key) != 0 || len(f.KeyTPM) == 0 {
+		t.Fatalf("%s's member key is not in the TPM: identity.json keeps the key %d bytes, the TPM blob %q (%v)", s.name, len(f.Key), f.KeyTPM, err)
 	}
 }
 

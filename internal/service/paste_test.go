@@ -77,10 +77,22 @@ func TestRemotePaste(t *testing.T) {
 	time.Sleep(time.Second) // one paste a second from one sender
 	wantRefused("enter", "ls", control.Header{Enter: true}, "without Enter only")
 	time.Sleep(time.Second)
-	wantRefused("locked", "locked", control.Header{}, "the session is locked")
+	// The next paste goes as soon as the desktop has this one, not when
+	// its refusal is back, which may take longer than the second it must
+	// come within on a busy machine.
+	locked := make(chan error, 1)
+	c := pi.dial(t)
+	defer c.Close()
+	go func() {
+		_, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPasteOn, Device: "deck"}, Payload: []byte("locked")})
+		locked <- err
+	}()
 	<-got
 	if wantRefused("too fast", "ls", control.Header{}, "too many pastes"); len(got) != 0 {
 		t.Error("a paste too fast reached the desktop")
+	}
+	if err := <-locked; err == nil || !strings.Contains(err.Error(), "the session is locked") {
+		t.Errorf("locked: %v, want %q", err, "the session is locked")
 	}
 	time.Sleep(time.Second)
 	if err := paste("hunter2", control.Header{Kind: control.KindSecret}); err != nil {

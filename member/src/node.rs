@@ -383,7 +383,13 @@ struct Conn {
     sinks: Mutex<HashMap<[u8; 32], SyncSender<Piece>>>,
     /// The reach message last sent to it, a phone (send_reach).
     reach_sent: Mutex<Option<Vec<DeviceId>>>,
+    /// Tells this connection from the peer's earlier and later ones.
+    serial: u64,
 }
+
+/// The serial of the last connection; a lock, since 32-bit MIPS has no
+/// 64-bit atomics.
+static CONN_SERIAL: Mutex<u64> = Mutex::new(0);
 
 impl Node {
     pub fn new(
@@ -623,6 +629,11 @@ impl Node {
     #[cfg_attr(not(feature = "tunnel"), allow(dead_code))] // used by sync away from home
     pub fn at_home(&self, id: &DeviceId) -> bool {
         near(self.home.lock().unwrap().get(id).copied(), uptime::now())
+    }
+
+    /// The state directory.
+    pub fn state_dir(&self) -> &std::path::Path {
+        &self.state_dir
     }
 
     pub fn identity(&self) -> Arc<Identity> {
@@ -867,6 +878,12 @@ impl Node {
 
     /// Queues a message for the member id; reports whether it is
     /// connected as a member.
+    /// The serial of the member connection to id, which a connection after
+    /// it does not share; None when it is not connected.
+    pub fn connection(&self, id: &DeviceId) -> Option<u64> {
+        self.conns.lock().unwrap().get(id).filter(|c| !c.records_only).map(|c| c.serial)
+    }
+
     pub fn send_to(&self, id: &DeviceId, m: Message) -> bool {
         let c = self.conns.lock().unwrap().get(id).cloned();
         match c {
@@ -1719,6 +1736,11 @@ impl Node {
             gets: Mutex::new(VecDeque::new()),
             sinks: Mutex::new(HashMap::new()),
             reach_sent: Mutex::new(None),
+            serial: {
+                let mut n = CONN_SERIAL.lock().unwrap();
+                *n += 1;
+                *n
+            },
         });
         {
             let mut conns = self.conns.lock().unwrap();

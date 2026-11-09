@@ -2176,7 +2176,13 @@ jobs:
           DISPLAY=:5 CBB_TEST_X11=1 \
             CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_LITE="$PWD/target/release/cbb" \
             CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" \
-            go test -timeout 50m ./internal/service ./internal/connector -v
+            go test -timeout 45m ./internal/service -v
+          # One package at a time, so that -v streams each test's lines as
+          # it runs and a test that hangs is named by the timeout's
+          # goroutine dump before the job's own limit.
+          DISPLAY=:5 CBB_TEST_X11=1 \
+            CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_LITE="$PWD/target/release/cbb" \
+            go test -timeout 5m ./internal/connector -v
 
   lite:
     name: lite member (Rust)
