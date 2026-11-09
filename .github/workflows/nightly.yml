@@ -86,7 +86,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [record_body, command, credential, release, wire, api]
+        target: [record_body, command, credential, release, wire, vless, api]
     defaults:
       run:
         working-directory: core/
@@ -115,6 +115,37 @@ jobs:
         with:
           name: cargo-fuzz-${{ matrix.target }}
           path: core/fuzz/artifacts/
+          if-no-files-found: ignore
+
+  cargo-fuzz-service:
+    name: cargo fuzz, the service (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [control, next_frames]
+    defaults:
+      run:
+        working-directory: member/
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the nightly toolchain and cargo-fuzz
+        run: |
+          rustup toolchain install nightly --profile minimal
+          cargo +nightly install cargo-fuzz --locked
+      - name: fuzz for ten minutes
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo +nightly fuzz run "$TARGET" -- -max_total_time=600 -rss_limit_mb=2048
+      - name: the input that failed
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cargo-fuzz-service-${{ matrix.target }}
+          path: member/fuzz/artifacts/
           if-no-files-found: ignore
 
   # Mutation testing: change the records' code (drop a check, turn < into <=)

@@ -65,11 +65,15 @@ kits), so a reader that fails in another way also shows as a difference.
   (`internal/group`), `FuzzRelayWire` (`internal/relay`), `FuzzForwardWire`
   (`internal/forward`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the lite core's
   `cargo fuzz` targets in `core/fuzz` (`record_body`, `command`, `credential`,
-  `release`, `wire`, and `api`, the core's entry point of [core-api.md](core-api.md)),
+  `release`, `wire`, `vless`, and `api`, the core's entry point of [core-api.md](core-api.md)),
   seeded by `go run ./tools/difffuzz seeds`. `api` starts from requests for every operation,
   each case of `v2-records.json` among them, and checks that any bytes get one answer of the
   ABI, with `ok` or a listed error code, and that a request answered twice gets the same
-  answer.
+  answer. `vless` reads the forwarder's VLESS and XHTTP answers in pieces of every size and
+  checks that the packets do not depend on how the bytes came. The service's targets in
+  `member/fuzz` read the control socket's messages, which cbb-helper's channel uses too
+  (`control`: each read message written again reads back the same), and the ZX Spectrum
+  Next's frames on the Pi's UART with its character set (`next_frames`).
 
 Manifests are read by the rules of signed bodies in their canonical form ([roadmap](roadmap.md),
 item 42), so they fail the run as the other kinds do; `compare -report-only KIND` still prints
