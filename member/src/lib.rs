@@ -95,6 +95,7 @@ mod update_os;
 pub mod uptime;
 #[cfg(feature = "tunnel")]
 pub mod vless;
+pub mod why;
 mod window;
 pub mod wire;
 

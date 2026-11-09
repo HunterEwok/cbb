@@ -329,6 +329,11 @@ pub struct Status {
     /// The member port, as Go's Port; 0 when this device does not listen.
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub port: i64,
+    /// Why this device does not sync, the reason that stops the most first
+    /// (cbb_core::why; docs/apps.md, "Why it does not sync"); empty when
+    /// everything syncs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub why: Vec<cbb_core::why::Reason>,
 }
 
 /// A claim to take the group over, as Go's control.Claim: who claims it

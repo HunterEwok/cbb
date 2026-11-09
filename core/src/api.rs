@@ -196,6 +196,7 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
         "sign_digest" => sign_digest(serde_json::from_value(args).map_err(bad_args)?),
         "arrange" => arrange(serde_json::from_value(args).map_err(bad_args)?),
         "keyboard" => keyboard(serde_json::from_value(args).map_err(bad_args)?),
+        "why" => why(serde_json::from_value(args).map_err(bad_args)?),
         _ => group::dispatch(op, &args)
             .or_else(|| signed::dispatch(op, &args))
             .unwrap_or_else(|| Err(refuse(Code::Op, Error::msg(alloc::format!("The core has no call named {op:?}."))))),
@@ -241,6 +242,23 @@ fn arrange(a: ArrangeArgs) -> Result<Vec<u8>, Refusal> {
     let mut m = serde_json::Map::new();
     m.insert("view".into(), serde_json::to_value(arr.view(&a.devices, a.me.as_deref())).unwrap_or_default());
     m.insert("stored".into(), serde_json::to_value(&arr).unwrap_or_default());
+    Ok(json(Value::Object(m)))
+}
+
+/// The arguments of `why`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WhyArgs {
+    facts: crate::why::Facts,
+    now_ms: i64,
+}
+
+/// `why`: why a device does not sync (crate::why), from the facts a member
+/// gathered, the reason that stops the most first.
+fn why(a: WhyArgs) -> Result<Vec<u8>, Refusal> {
+    let reasons = crate::why::diagnose(&a.facts, a.now_ms);
+    let mut m = serde_json::Map::new();
+    m.insert("why".into(), serde_json::to_value(reasons).unwrap_or_default());
     Ok(json(Value::Object(m)))
 }
 
@@ -727,6 +745,21 @@ mod tests {
         let e = &answer["error"];
         assert!(!e["message"].as_str().unwrap().is_empty(), "{answer}");
         e["code"].as_u64().unwrap()
+    }
+
+    /// why answers the vectors' reasons and refuses facts it cannot read.
+    #[test]
+    fn why_answers_the_vectors() {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/why/vectors.json");
+        let vs: Vec<Value> = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        for v in vs {
+            let a = ask("why", serde_json::json!({"facts": v["facts"], "now_ms": v["now_ms"]}));
+            assert_eq!(a["ok"]["why"], v["want"], "{}", v["name"]);
+        }
+        assert_eq!(
+            code(&ask("why", serde_json::json!({"facts": {"connected": "two"}, "now_ms": 1}))),
+            Code::Request as u64
+        );
     }
 
     /// A key from new_device_key signs a digest that its public key

@@ -658,6 +658,50 @@ impl Member {
         Ok(())
     }
 
+    /// Why the phone does not sync (cbb_core::why), from the same status
+    /// a computer's control socket gives: its sync and mute, the group's
+    /// records, the members connected and sync away from home.
+    pub fn why(&self) -> Vec<cbb_core::why::Reason> {
+        let n = &self.node;
+        let standing = self.muted();
+        let now = uptime::wall_ms();
+        let st = crate::control::Status {
+            device: n.identity().id.to_string(),
+            group: n.identity().tag(),
+            mode: if standing.sync_off { "own" } else { "shared" }.into(),
+            sync_until_ms: if standing.sync_off && standing.sync_off_ms > 0 { now + standing.sync_off_ms } else { 0 },
+            muted: standing.muted,
+            muted_until_ms: if standing.muted && standing.muted_ms > 0 { now + standing.muted_ms } else { 0 },
+            peers: n
+                .peers()
+                .into_iter()
+                .map(|p| crate::control::Device { id: p.id.to_string(), ..Default::default() })
+                .collect(),
+            away: self.away.status(n),
+            stop: n.stop(),
+            cert_ends_ms: n.identity().cert.not_after.saturating_mul(1000),
+            ..crate::why::group_status(n)
+        };
+        let removed = n.removed() && !st.frozen && st.taken_over_by.is_empty();
+        let st = crate::control::Status { removed, ..st };
+        let devs: Vec<crate::control::Device> = self
+            .device_views()
+            .into_iter()
+            .map(|d| crate::control::Device {
+                mode: match d.sync.as_str() {
+                    "off" => "own".into(),
+                    _ => String::new(),
+                },
+                id: d.id,
+                name: d.name,
+                online: d.online,
+                this: d.this,
+                ..Default::default()
+            })
+            .collect();
+        crate::why::reasons(&st, &devs, now)
+    }
+
     /// What the group's records stop and what ends it, for the app's card.
     pub fn alerts(&self) -> Vec<manage::Alert> {
         manage::alerts(&self.node.records().lock().unwrap())

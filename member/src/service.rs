@@ -2341,6 +2341,7 @@ impl Service {
                             port: self.port.lock().unwrap().map_or(0, i64::from),
                             ..Default::default()
                         };
+                        let status = Status { why: crate::why::reasons(&status, &[], uptime::wall_ms()), ..status };
                         return Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()));
                     }
                     Err(e) => return Err(e),
@@ -2366,7 +2367,7 @@ impl Service {
                     let st = records.lock().unwrap().state();
                     (st.key_level, st.incoming_ms)
                 };
-                let group = group_status(&node);
+                let group = crate::why::group_status(&node);
                 let status = Status {
                     device: id.id.to_string(),
                     group: id.tag(),
@@ -2402,6 +2403,9 @@ impl Service {
                     cert_ends_ms: id.cert.not_after * 1000,
                     ..group
                 };
+                let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
+                let status =
+                    Status { why: crate::why::reasons(&status, &devices(&node, &hubs), uptime::wall_ms()), ..status };
                 Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
             }
             "devices" => {
@@ -3152,50 +3156,6 @@ impl Drop for PairingSlot<'_> {
             w.close();
             self.node.set_window_open(false);
         }
-    }
-}
-
-/// The claims, conflicts and newer records of the group's state for
-/// status, as Go's groupStatus.
-fn group_status(node: &Node) -> Status {
-    let ident = node.identity();
-    let own: Vec<cbb_core::certs::Cert> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
-    let records = node.records();
-    let rs = records.lock().unwrap();
-    let st = rs.state();
-    // An old root that an admin took the group over from, or a frozen
-    // admin, is refused but not removed, as Go's statusWithRemoved says.
-    let taken = rs.taken_over(&own);
-    let refused = matches!(rs.refused(&own), Some(cbb_core::group::Refusal::Refused(_)));
-    let frozen = taken.is_none() && refused && own.iter().any(|c| rs.frozen(&c.key_hash()));
-    // A signer's device for the user, as Go's SignerName.
-    let name = |k: &cbb_core::authority::Hash| -> String {
-        st.devices
-            .iter()
-            .find(|d| d.admin.as_ref() == Some(k))
-            .or_else(
-                || if st.roots.contains(k) { st.devices.iter().find(|d| d.device == st.root_device) } else { None },
-            )
-            .map_or_else(|| k.text(), |d| d.name.clone())
-    };
-    Status {
-        claims: st
-            .claims
-            .iter()
-            .filter(|c| matches!(c.state, "pending" | "competing" | "disputed"))
-            .map(|c| control::Claim { by: name(&c.claimant), state: c.state.into(), left_ms: c.left_ms })
-            .collect(),
-        conflicts: st
-            .conflicts
-            .iter()
-            .map(|c| control::Conflict { kind: c.kind.into(), devices: c.signers.iter().map(name).collect() })
-            .collect(),
-        newer: st.newer.len(),
-        frozen,
-        taken_over_by: taken
-            .map(|(dev, _)| st.devices.iter().find(|d| d.device == dev).map_or(dev, |d| d.name.clone()))
-            .unwrap_or_default(),
-        ..Default::default()
     }
 }
 

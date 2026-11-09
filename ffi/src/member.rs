@@ -710,6 +710,9 @@ impl Member {
             }
             // What the group's records stop, for the alerts card.
             "alerts" => Ok(json!({ "alerts": n.alerts() })),
+            // Why the phone does not sync, for the screen in the advanced
+            // settings (docs/apps.md, "Why it does not sync").
+            "why" => Ok(json!({ "why": n.why() })),
             // Sync away from home: on with new tunnel keys, or off; and its
             // state, null while it is off.
             "away" => {
