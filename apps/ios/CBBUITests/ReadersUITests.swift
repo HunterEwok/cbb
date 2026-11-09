@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import UIKit
 import XCTest
 
 /// The app in each of the project's eight languages and for every reader
@@ -58,24 +57,12 @@ final class ReadersUITests: XCTestCase {
     /// element of the system's own may fail it: the status bar, and the
     /// navigation bar's buttons, whose text iOS keeps from the largest
     /// sizes. Contrast is measured on the screen's picture (`contrast`).
-    ///
-    /// At the default size the audit's clipped text check only predicts
-    /// clipping at larger sizes, and it predicts it for Hindi text that
-    /// the largest size shows whole; `checkedLarger` skips that prediction
-    /// in a language testLargestText checks at the largest size itself.
-    private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String, checkedLarger: Bool = false) {
+    private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String) {
         do {
             try app.performAccessibilityAudit(for: types) { issue in
-                if checkedLarger && issue.auditType == .textClipped { return true }
-                let pad = UIDevice.current.userInterfaceIdiom == .pad
                 guard let e = issue.element else {
-                    // The iPad shows Settings as a sheet in the middle of the
-                    // screen, which cuts its list's last row at its lower edge;
-                    // the audit reports that row's text on no element.
-                    let known = pad && screen.hasPrefix("Settings") && (issue.auditType == .textClipped || issue.auditType == .elementDetection)
-                        ? "the iPad's sheet cuts its list's last row" : nil
                     self.fail("\(screen): \(issue.compactDescription) on no element: \(issue.detailedDescription)",
-                              known: known, picture: XCUIScreen.main.screenshot(), screen)
+                              picture: XCUIScreen.main.screenshot(), screen)
                     return true
                 }
                 // What a person cannot reach (the screen under a sheet, a
@@ -85,13 +72,8 @@ final class ReadersUITests: XCTestCase {
                 // The system's status bar is not the app's to fix.
                 if e.elementType == .statusBar || app.statusBars.firstMatch.exists && app.statusBars.firstMatch.frame.contains(e.frame) { return true }
                 if issue.auditType == .dynamicType && app.navigationBars.firstMatch.exists && app.navigationBars.firstMatch.frame.contains(e.frame) { return true }
-                // Devanagari's marks reach above the line SwiftUI lays out,
-                // and the iPad's audit takes that for clipping; the element's
-                // picture, printed in the log, shows the text whole.
-                let known = pad && issue.auditType == .textClipped && screen.contains(" in hi")
-                    ? "Devanagari's marks above the line" : nil
                 self.fail("\(screen): \(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' at \(e.frame): \(issue.detailedDescription)",
-                          known: known, picture: e.screenshot(), screen)
+                          picture: e.screenshot(), screen)
                 return true
             }
         } catch {
@@ -101,15 +83,9 @@ final class ReadersUITests: XCTestCase {
     }
 
     /// Fails with an issue, each on a line of its own, and attaches the
-    /// picture CI prints into the log. A known false finding of the
-    /// audit's is an expected failure, not strict, so the result still
-    /// shows it, and any other issue fails the test.
-    private func fail(_ message: String, known: String?, picture: XCUIScreenshot, _ screen: String) {
-        if let known {
-            XCTExpectFailure(known, strict: false) { XCTFail(message) }
-        } else {
-            XCTFail(message)
-        }
+    /// picture CI prints into the log.
+    private func fail(_ message: String, picture: XCUIScreenshot, _ screen: String) {
+        XCTFail(message)
         let a = XCTAttachment(screenshot: picture)
         a.name = "failed-\(screen)"
         a.lifetime = .keepAlways
@@ -198,13 +174,13 @@ final class ReadersUITests: XCTestCase {
                 XCTAssertEqual(languageFirst, Self.rightToLeft.contains(language) ? !en : en, "\(language): the top row does not run \(Self.rightToLeft.contains(language) ? "right to left" : "left to right")")
             }
             picture("start-\(language)")
-            audit(app, checks, "the Start screen in \(language)", checkedLarger: Self.largestText.contains(language))
+            audit(app, checks, "the Start screen in \(language)"
 
             settings.tap()
             XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10), "\(language): Settings did not open")
             XCTAssertTrue(app.buttons[tr("Ocean", language)].exists, "\(language): the colours are not translated")
             picture("settings-\(language)")
-            audit(app, checks, "Settings in \(language)", checkedLarger: Self.largestText.contains(language))
+            audit(app, checks, "Settings in \(language)"
             app.terminate()
         }
     }

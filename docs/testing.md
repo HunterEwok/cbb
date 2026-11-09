@@ -116,9 +116,7 @@ A9 and U14 to U18).
   fails text its own picture shows at 6.9:1 and more, so each text's (and on the iPhone each
   button's) contrast is measured on the screen's picture instead: its darkest and lightest
   pixels at least 4.5:1. The iPhone's Start screen scrolls rather than squeeze its texts. The
-  audit looks only at what a person can reach, and two of its findings on the iPad, whose
-  pictures show nothing wrong, are expected failures (shown in the result, never strict): the
-  last row its Settings sheet cuts at its lower edge, and Hindi's marks above the line.
+  audit looks only at what a person can reach.
 
 Screenshots are compared where a picture is the same on every machine that draws it: the
 tray window on Linux in the Noto fonts (`fonts-noto-core`, `fonts-noto-mono`,

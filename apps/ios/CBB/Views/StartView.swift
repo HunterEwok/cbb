@@ -12,6 +12,7 @@ struct StartView: View {
     @State private var adding = false
     @State private var restoring = false
     @State private var settings = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @AppStorage(LanguageChoice.key) private var language = LanguageChoice.system
 
     var body: some View {
@@ -29,13 +30,19 @@ struct StartView: View {
         .task { model.prepare() }
         .sheet(isPresented: $adding) { AddDeviceView() }
         .sheet(isPresented: $restoring) { AddDeviceView(restore: true) }
-        .sheet(isPresented: $settings) {
-            NavigationStack {
-                SettingsView()
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) { Button("Done") { settings = false } }
-                    }
-            }
+        // Settings cover the whole screen on an iPad, as a sheet does on a
+        // phone: a sheet in the middle of an iPad's screen cut its list's
+        // last row at its lower edge, in view.
+        .sheet(isPresented: Binding(get: { settings && sizeClass != .regular }, set: { settings = $0 })) { settingsPage }
+        .fullScreenCover(isPresented: Binding(get: { settings && sizeClass == .regular }, set: { settings = $0 })) { settingsPage }
+    }
+
+    private var settingsPage: some View {
+        NavigationStack {
+            SettingsView()
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { settings = false } }
+                }
         }
     }
 
@@ -89,6 +96,9 @@ struct StartView: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(Rectangle())
             }
+            // Plain, as the other buttons have styles of their own, so that
+            // its label is laid out as plain text in every script.
+            .buttonStyle(.plain)
             .font(.footnote)
             .foregroundStyle(palette.textDim)
         }
