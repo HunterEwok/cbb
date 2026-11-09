@@ -156,6 +156,6 @@ failed ([test bench](testbench.md#11-automation)).
 
 | Test | Where | Fails | Seen | State |
 |---|---|---|---|---|
-| `TestSeveralHubs` | `internal/service`, against the Rust service | about 1 in 6 | 2026-11-08 | cause not found |
-| `TestLiteHubs` | `internal/service` | about 2 in 5 | 2026-11-08 | cause not found |
+| `TestSeveralHubs` | `internal/service`, against the Rust service | about 1 in 6 in CI, 0 in 4 in Docker | 2026-11-08 | cause not found; passes 6 of 6 against the Go service |
+| `TestLiteHubs` | `internal/service`, against the Rust service | about 2 in 5 in CI, 1 in 4 in Docker | 2026-11-08 | after the first hub stops, the client's tunnel connection to the second hub ends right after it comes up, and the copy made then is lost; passes 6 of 6 against the Go service |
 | `TestWindow` | `apps/desktop`, Windows | rarely: Chrome gives no DevTools port in 30 s | 2026-11-06 | its failure shows Chrome's stderr; read it when it fails again |
