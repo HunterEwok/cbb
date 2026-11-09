@@ -43,7 +43,7 @@ const siteURL = "https://cbb.tools"
 var faq = []struct{ Q, A string }{
 	{"Is it free?", "Yes. Copy Beyond Borders is free software: no price, no subscription, no ads."},
 	{"Can anyone else read what I copy?", "No. Every copy is encrypted end to end on the device that makes it, for your own devices alone. Whatever passes it on, a base or a server, cannot read it."},
-	{"Do I need a computer?", "No. A group of phones only works too. A computer that is often on keeps sync away from home going at any time."},
+	{"Do I need a computer?", "No. A group of phones only works too. A computer that is often on just makes sync away from home work at any time."},
 	{"Does it work away from home?", "Yes. Turn on Everywhere, and your devices reach each other through the group's base, a computer of yours or a phone while its app is open, or through a backup server that cannot read your copies. It works on hotel, office and campus Wi-Fi too."},
 	{"Why does the iPhone need a gesture?", "iOS does not let apps read the clipboard in the background. You send a copy with the Action button or a double tap on the back of the phone."},
 	{"Are my passwords synced?", "What password managers mark as secret is not synced automatically."},
