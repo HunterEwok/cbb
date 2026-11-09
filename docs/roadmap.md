@@ -341,19 +341,21 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     WiFi's through Arduino's own tool, NINA through the SerialNINAPassthrough sketch), and
     whether a classic ESP32 (520 KB of RAM, no PSRAM) holds `core/` with TLS 1.3, which
     builds today for the C6 and the S3 only. The Uno R4 WiFi first.
-- **52.** **Planned for 0.7 (confirmed by the owner, 2026-11-09).** A clipboard history in the phone apps, where the system keeps
-    none (the iPhone has none, even in iOS 27; Android only on some phones). The computers
-    keep using the system's history (Klipper, Win+V, Spotlight), where received copies
-    already land. The history:
+- **52.** **Planned for 0.7, on every device (the owner, 2026-11-09).** A clipboard history of
+    CBB's own, the same on the phones (iPhone, Android, Aurora), in the Mac app, in the tray
+    app on Linux and Windows and in `cbb` on the command line, so that it works alike
+    everywhere, also where the system keeps none (the iPhone has none, even in iOS 27; Android
+    only on some phones). The history:
     - stays on the device; it is never synced between the group's devices;
     - is off by default, one switch turns it on;
     - keeps entries for a time the user picks (1 hour, 1 day, 7 days), with a "Clear" button;
-    - is encrypted with the device's key (Secure Enclave, Android Keystore);
+    - is encrypted with the device's key (Secure Enclave, Android Keystore, the TPM, or the
+      key file where a computer has no chip);
     - never holds copies marked as secret (password managers' marks);
     - can be searched, and an entry is sent again with one tap.
     docs/apps.md's principle "no history" changes to say this. Why: users of the other
-    clipboard tools ask for a history more than for almost anything else, and phones lack
-    one.
+    clipboard tools ask for a history more than for almost anything else, and every device
+    should have the same one.
 - **53.** **Planned for 0.6, before the launch.** What a sceptical reader checks first,
     found by reading the project as one would (2026-11-02):
     - Done in 0.6: Android's automatic sending skips a copy that carries
