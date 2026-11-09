@@ -1969,7 +1969,9 @@ All notable changes to cbb are documented in this file. The format follows
   the theme's text colour, for contrast on every theme, and VoiceOver reads a notice by its title.
 - The iPhone app's Start screen scrolls at the largest text sizes and in the longer languages
   instead of cutting off its name, tagline and buttons, and "Restore with the recovery key" is
-  44 points tall and the screen's width to touch. The colour swatches in Settings wrap a long colour name onto two lines instead of cutting it off.
+  44 points tall and the screen's width to touch. Settings put as many colour swatches in a
+  row as their names fit at the text size, so a long colour name breaks between words instead
+  of being cut off.
 - The lite member fetches a copy's images or files once when two requests want them at the
   same time (`cbb paste -o` while the copy is fetched in the background); the second waited on
   chunks the first had taken and could fail.

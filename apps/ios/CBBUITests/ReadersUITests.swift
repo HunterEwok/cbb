@@ -52,7 +52,8 @@ final class ReadersUITests: XCTestCase {
         add(a)
     }
 
-    /// Runs Xcode's accessibility audit on the screen as it is. Only an
+    /// Runs Xcode's accessibility audit on the screen as it is, on what a
+    /// person can reach. Only an
     /// element of the system's own may fail it: the status bar, and the
     /// navigation bar's buttons, whose text iOS keeps from the largest
     /// sizes. Contrast is measured on the screen's picture (`contrast`).
@@ -67,8 +68,16 @@ final class ReadersUITests: XCTestCase {
                 if checkedLarger && issue.auditType == .textClipped { return true }
                 guard let e = issue.element else {
                     XCTFail("\(screen): \(issue.compactDescription) on no element: \(issue.detailedDescription)")
+                    let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+                    a.name = "failed-\(screen)"
+                    a.lifetime = .keepAlways
+                    self.add(a)
                     return true
                 }
+                // What a person cannot reach (the screen under a sheet, a
+                // row scrolled half out of its list) is not looked at, as
+                // in `contrast`; it is audited where it is in view.
+                if !e.isHittable { return true }
                 // The system's status bar is not the app's to fix.
                 if e.elementType == .statusBar || app.statusBars.firstMatch.exists && app.statusBars.firstMatch.frame.contains(e.frame) { return true }
                 if issue.auditType == .dynamicType && app.navigationBars.firstMatch.exists && app.navigationBars.firstMatch.frame.contains(e.frame) { return true }

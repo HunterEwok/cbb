@@ -85,7 +85,6 @@ struct StartView: View {
             Button { restoring = true } label: {
                 Text("Restore with the recovery key")
                     .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.vertical, Tokens.spacingSmall)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(Rectangle())
