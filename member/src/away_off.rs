@@ -96,6 +96,8 @@ impl Away {
         false
     }
 
+    pub fn guest_message(self: &Arc<Self>, _node: &Node, _from: &DeviceId, _chain: &[Cert], _g: crate::wire::Guest) {}
+
     pub fn known_hubs(&self, _order: &[String]) -> Vec<String> {
         Vec::new()
     }

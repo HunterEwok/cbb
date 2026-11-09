@@ -279,8 +279,15 @@ impl Invitation {
     }
 }
 
+/// The WireGuard public key of a guest's private key (X25519), which the
+/// hub admits as the guest's peer.
+pub fn guest_public(private: &[u8; 32]) -> [u8; 32] {
+    x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(*private)).to_bytes()
+}
+
 impl Obfuscation {
-    fn to_json(&self) -> Value {
+    /// The settings as a hub's offer carries them.
+    pub fn to_json(&self) -> Value {
         let r = |r: Range| Value::from(alloc::format!("{}-{}", r.min, r.max));
         let mut m = Map::new();
         for (k, v) in [("jc", self.jc), ("jmin", self.jmin), ("jmax", self.jmax)] {

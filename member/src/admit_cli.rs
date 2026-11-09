@@ -166,11 +166,13 @@ fn admin_hint(g: &Global) {
     println!("so that it can take the group over if this one is lost (cbb takeover).");
 }
 
-/// cbb invite: a remote invitation in a file, valid for a while, and the
-/// confirmation here of the device that uses it, as Go's cmdInvite.
+/// cbb invite: a remote invitation as a QR code and in a file, valid for a
+/// while, and the confirmation here of the device that uses it. On an
+/// admin that is not the hub it goes through a hub, the first connected
+/// one or -hub's.
 pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
-    const USE: &str = "cbb invite [-for 1h] [-o file]   (valid for up to 24h)";
-    let (mut valid, mut out) = (INVITE_LIFETIME_MS, INVITE_FILE.to_string());
+    const USE: &str = "cbb invite [-for 1h] [-o file] [-hub DEVICE]   (valid for up to 24h)";
+    let (mut valid, mut out, mut hub) = (INVITE_LIFETIME_MS, INVITE_FILE.to_string(), String::new());
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match flag(a) {
@@ -178,13 +180,15 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
                 valid = it.next().and_then(|d| crate::go_duration_ms(d)).ok_or_else(|| usage(USE))?;
             }
             Some("o") => out = it.next().cloned().ok_or_else(|| usage(USE))?,
+            Some("hub") => hub = it.next().cloned().ok_or_else(|| usage(USE))?,
             _ => return Err(usage(USE)),
         }
     }
     if valid <= 0 || valid > INVITE_MAX_MS {
         return Err(usage(USE));
     }
-    let (mut w, mut r, m) = stream(g, Header { op: "invite".into(), expires: valid / 1000, ..Default::default() })?;
+    let h = Header { op: "invite".into(), expires: valid / 1000, device: hub, ..Default::default() };
+    let (mut w, mut r, m) = stream(g, h)?;
     // The file is a secret until it is used: only its owner reads it, and
     // it never replaces another file.
     write_new(&out, &format!("{}\n", m.header.invite)).context("writing the invitation")?;
@@ -192,15 +196,18 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
     on_interrupt(&out);
     let until = crate::sys::local_time_at(crate::uptime::wall_ms() + m.header.expires * 1000);
     println!(
-        "The invitation is in {out}, valid until {:02}:{:02} on {} {}.\n",
+        "The invitation is valid until {:02}:{:02} on {} {}.\n",
         until.hour,
         until.minute,
         MONTHS[(until.month as usize).clamp(1, 12) - 1],
         until.day
     );
-    println!("Copy it to the new device only through a channel you trust: until it is used,");
-    println!("whoever has it can ask to join. On the new device run:");
+    println!("On a new phone, open the CBB app, tap Join with an invitation and scan this:\n");
+    print!("{}", crate::qr(&m.header.invite));
+    println!("\nOr send it in the file {out}. On a new computer run:");
     println!("\n  cbb pair -invite {out}\n");
+    println!("Pass the code or the file only through a channel you trust: until it is used,");
+    println!("whoever has it can ask to join.");
     println!("You confirm the device here before it is admitted. Keep this running; Ctrl+C");
     println!("cancels the invitation, and the file is deleted when it ends.");
     loop {

@@ -80,6 +80,85 @@ pub struct Message {
     /// ("Content" in section 4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub get: Option<Get>,
+    /// In a guest message, a remote invitation that an admin makes through
+    /// the group's hub (section 12, "Through the hub"): decoded on its own
+    /// with [`Guest`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guest: Option<Value>,
+}
+
+/// A guest message (section 12, "Through the hub"): an admin that is not
+/// the hub asks the hub for a guest tunnel (`open`), the hub answers
+/// (`opened` or `refused`), the two pass the bytes of the guest's pairing
+/// connections (`data`, `end`), and the admin says how its window ended
+/// (`admitted` or `close`).
+#[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq)]
+pub struct Guest {
+    /// `open`, `opened`, `refused`, `data`, `end`, `admitted` or `close`.
+    pub op: String,
+    /// The guest's WireGuard public key, which names the invitation.
+    #[serde(with = "b64")]
+    pub key: Vec<u8>,
+    /// In open: the guest's preshared key.
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    pub psk: Option<Vec<u8>>,
+    /// In open: when the invitation ends, milliseconds since the Unix epoch.
+    #[serde(default, skip_serializing_if = "is_zero_i64")]
+    pub expires_ms: i64,
+    /// In opened: the hub's WireGuard public key.
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    pub hub_key: Option<Vec<u8>>,
+    /// In opened: the hub's addresses away from home, ip:port.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub endpoints: Vec<String>,
+    /// In opened: the group's AmneziaWG settings, as in the hub's offer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obfuscation: Option<Value>,
+    /// In opened: the way to the hub's forwarder over VLESS, as in the
+    /// hub's offer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vless: Option<Value>,
+    /// In refused: why.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub reason: String,
+    /// In data and end: the guest's connection, numbered by the hub from 1.
+    #[serde(default, skip_serializing_if = "is_zero_i64")]
+    pub conn: i64,
+    /// In data: the connection's bytes, at most [`MAX_GUEST_DATA`].
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<Vec<u8>>,
+    /// In admitted: the device the admin's window admitted.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub device: String,
+}
+
+/// The most bytes one guest data message carries.
+pub const MAX_GUEST_DATA: usize = 16 << 10;
+
+/// A guest message.
+pub fn guest(g: &Guest) -> Message {
+    Message { kind: "guest".into(), guest: serde_json::to_value(g).ok(), ..Default::default() }
+}
+
+impl Guest {
+    /// Reads a guest message's object: a known op, a key of 32 bytes, and
+    /// what the op needs.
+    pub fn decode(v: &Value) -> Option<Guest> {
+        let g: Guest = serde_json::from_value(v.clone()).ok()?;
+        if g.key.len() != 32 {
+            return None;
+        }
+        let ok = match g.op.as_str() {
+            "open" => g.psk.as_ref().is_some_and(|p| p.len() == 32) && g.expires_ms > 0,
+            "opened" => g.hub_key.as_ref().is_some_and(|k| k.len() == 32) && !g.endpoints.is_empty(),
+            "refused" | "close" => true,
+            "data" => g.conn > 0 && g.data.as_ref().is_some_and(|d| !d.is_empty() && d.len() <= MAX_GUEST_DATA),
+            "end" => g.conn > 0,
+            "admitted" => !g.device.is_empty(),
+            _ => false,
+        };
+        ok.then_some(g)
+    }
 }
 
 /// A range of a copy's sealed blob, by its SHA-256 ("Content" in section

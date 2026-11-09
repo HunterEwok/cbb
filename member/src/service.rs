@@ -522,6 +522,11 @@ pub fn run(cfg: Config) -> Result<()> {
             }
         }));
     }
+    {
+        // On the hub, the invitations other admins make through it.
+        let away = away.clone();
+        node.on_guest(Box::new(move |node, from, chain, g| away.guest_message(node, from, chain, g)));
+    }
     // The member port takes connections, and mDNS publishes this device,
     // only on the networks where it met its group (networks.rs).
     node.set_networks(crate::networks::Networks::load(&cfg.state_dir, true, log.clone()));
@@ -2048,9 +2053,28 @@ impl Service {
             return;
         }
         if m.header.op == "invite" {
-            let res = self
-                .admin(|a| a.admitter(false))
-                .and_then(|admitter| self.away()?.invite(admitter, m.header.expires, r, &mut out));
+            // On the hub, the invitation's guest tunnel is its own; on
+            // another admin, it goes through a hub (docs/protocol.md,
+            // section 12, "Through the hub").
+            let res = self.admin(|a| a.admitter(false)).and_then(|admitter| {
+                let away = self.away()?;
+                if away.is_hub() {
+                    return away.invite(admitter, m.header.expires, r, &mut out);
+                }
+                let node = self.node()?;
+                let hubs = match m.header.device.as_str() {
+                    "" => crate::inviter::hubs_to_try(&node),
+                    d => vec![
+                        crate::certs::DeviceId::parse(d)
+                            .map_err(|_| Error::msg(format!("{d:?} is not a device ID")))?,
+                    ],
+                };
+                let group = node.identity().tag();
+                let open = |keys: &crate::inviter::GuestKeys, w: &Arc<crate::window::Window>, life: Duration| {
+                    crate::inviter::open_through_any(&node, &hubs, keys, w, life)
+                };
+                crate::inviter::run_invite(admitter, &group, m.header.expires, r, &mut out, &*self.log, &open)
+            });
             if let Err(e) = res {
                 (self.log)(&format!("cbb: invite: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));

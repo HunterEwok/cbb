@@ -48,6 +48,7 @@ pub mod hub;
 mod hubport;
 pub mod identity;
 mod interfaces;
+mod inviter;
 mod keys;
 mod leave;
 mod logfile;
@@ -194,9 +195,12 @@ Commands:
   pair -qr [-admin]       In a group: admit the new device that shows a code and waits;
                           type its code, or paste its QR code's text.
   pair -code [address]    Join with the code from cbb pair on the root or an admin.
-  pair -invite file       Join from afar with an invitation from cbb invite.
-  invite [-for 1h] [-o file]
-                          Invite a device from afar: run on the group's hub.
+  pair -invite file       Join from afar with an invitation from cbb invite
+                          (its file, or its text cbb://invite#...).
+  invite [-for 1h] [-o file] [-hub DEVICE]
+                          Invite a device from afar, on the root or an admin: shows a QR
+                          code for the app and writes a file for a computer. Through the
+                          group's hub, the first connected one or -hub's.
   update [-check]         Install the newest signed release, as root or administrator;
                           -check only says whether there is one. The previous version
                           goes back when the new one does not start.
@@ -507,7 +511,9 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
             let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
             let id = away::join_invite(&g.state, &joiner, save, &text, &shown, log)?;
             // It is used up, and was a secret; nothing needs it any more.
-            let _ = std::fs::remove_file(&path);
+            if !path.is_empty() {
+                let _ = std::fs::remove_file(&path);
+            }
             id
         }
         None if code_addr.is_some() => {
@@ -677,11 +683,16 @@ fn watch_app_file(path: String) {
     });
 }
 
-/// Reads a remote invitation's file for cbb pair -invite and asks the user
-/// to agree that sync away from home goes on with the join; returns the
-/// path and the invitation's text.
+/// Reads a remote invitation for cbb pair -invite, its file or its text
+/// (cbb://invite#..., as a scanned code gives it), and asks the user to
+/// agree that sync away from home goes on with the join; returns the path,
+/// empty for a text, and the invitation's text.
 fn invite_consent(path: &str) -> Result<(String, String)> {
-    let text = std::fs::read_to_string(path).context(format!("cannot read {path}"))?;
+    let (path, text) = if path.trim_start().starts_with(cbb_core::invite::PREFIX) {
+        (String::new(), path.to_string())
+    } else {
+        (path.to_string(), std::fs::read_to_string(path).context(format!("cannot read {path}"))?)
+    };
     let inv = cbb_core::invite::parse(&text).map_err(|r| Error::msg(r.message()))?;
     if inv.expired(uptime::wall_ms() / 1000) {
         return Err(Error::msg("the invitation has expired; ask for a new one"));
@@ -695,7 +706,7 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
     if !line.trim().eq_ignore_ascii_case("yes") {
         return Err(Error::msg("nothing changed"));
     }
-    Ok((path.to_string(), text))
+    Ok((path, text))
 }
 
 /// The joiner of a device in no group yet, and how it saves the group it
@@ -1188,6 +1199,18 @@ pub(crate) fn tunnel_addr(id: &str) -> Option<std::net::Ipv6Addr> {
         *b = u8::from_str_radix(&id[2 * i..2 * i + 2], 16).ok()?;
     }
     Some(std::net::Ipv6Addr::from(a))
+}
+
+/// The tunnel address of a remote invitation's guest (docs/protocol.md,
+/// section 12): fd00:cbc::/32 followed by the first 96 bits of SHA-256 of
+/// the guest's public key, as hub::guest_addr; here also without the
+/// tunnel, for an admin that makes invitations through a hub.
+pub(crate) fn tunnel_guest_addr(key: &[u8]) -> std::net::Ipv6Addr {
+    let sum = certs::sha256(key);
+    let mut a = [0u8; 16];
+    a[0..4].copy_from_slice(&[0xfd, 0x00, 0x0c, 0xbc]);
+    a[4..].copy_from_slice(&sum[..12]);
+    std::net::Ipv6Addr::from(a)
 }
 
 /// Reads a duration as Go writes one, such as 0s, 90s, 15m, 72h or 1h30m,
