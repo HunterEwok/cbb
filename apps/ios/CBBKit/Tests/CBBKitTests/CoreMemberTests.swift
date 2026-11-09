@@ -173,6 +173,24 @@ final class CoreMemberTests: XCTestCase {
         }
     }
 
+    /// why says what the phone sees: sync off first, and the app's own
+    /// tunnel when it hands it in; a connected group with sync on has no
+    /// reason that stops.
+    func testSaysWhyItDoesNotSync() async throws {
+        let t = try CoreGroup(test: self)
+        let b = t.phones[1]
+        try await t.connect(1, to: 0)
+        try await b.until("b connected") { !(try b.member.peers().isEmpty) }
+        XCTAssertFalse(try b.member.why().contains { $0.level == "stop" })
+        try b.member.setSync(on: false)
+        XCTAssertEqual(try b.member.why().first?.code, "sync_off")
+        try b.member.setSync(on: true)
+        var away = WhyAway()
+        (away.hub, away.forwarder, away.error) = (true, true, "no answer")
+        let r = try b.member.why(away: away)
+        XCTAssertEqual(r.first { $0.code == "forwarder_down" }?.detail, "no answer", "\(r)")
+    }
+
     /// Calls from other threads while the member stops answer or fail, and
     /// never reach freed memory: an event's handler that called the member
     /// as the app restarted it crashed the Android app.

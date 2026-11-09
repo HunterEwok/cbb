@@ -442,6 +442,10 @@
 <context>
     <name>SettingsPage</name>
     <message>
+        <source>Advanced settings</source>
+        <translation>高级设置</translation>
+    </message>
+    <message>
         <source>Bluetooth keyboard</source>
         <translation>蓝牙键盘</translation>
     </message>
@@ -1199,6 +1203,225 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>手机不在家庭网络中时，它通过你自己的中枢的 WireGuard 隧道同步；中枢是群组中用 cbb global hub 设置的一台电脑，它的端口可从互联网访问，但只能通过带有群组密钥的 WireGuard。中枢会在这部手机下次在家连接时回应它。数据不会去往别处，没有隧道就没有连接。关闭它会让这部手机忘记它的隧道密钥。</translation>
+    </message>
+</context>
+<context>
+    <name>WhySection</name>
+    <message>
+        <source>Why it does not sync</source>
+        <translation>为什么不同步</translation>
+    </message>
+    <message>
+        <source>Everything syncs.</source>
+        <translation>一切都在同步。</translation>
+    </message>
+    <message>
+        <source>Also</source>
+        <translation>另外</translation>
+    </message>
+    <message>
+        <source>This device is in no group.</source>
+        <translation>此设备不在任何群组中。</translation>
+    </message>
+    <message>
+        <source>Start a group or join one.</source>
+        <translation>创建一个群组或加入一个群组。</translation>
+    </message>
+    <message>
+        <source>This device was removed from the group.</source>
+        <translation>此设备已被移出群组。</translation>
+    </message>
+    <message>
+        <source>Leave the group on this device, then join again.</source>
+        <translation>在此设备上退出群组，然后重新加入。</translation>
+    </message>
+    <message>
+        <source>%1 took the group over from this device.</source>
+        <translation>%1 已从此设备接管群组。</translation>
+    </message>
+    <message>
+        <source>If this device was not lost, remove %1 from the group.</source>
+        <translation>如果此设备并未丢失，请将 %1 移出群组。</translation>
+    </message>
+    <message>
+        <source>Another admin froze this device's admin key.</source>
+        <translation>另一位管理员冻结了此设备的管理员密钥。</translation>
+    </message>
+    <message>
+        <source>Ask the group's root to unfreeze it.</source>
+        <translation>请群组的根设备解冻它。</translation>
+    </message>
+    <message>
+        <source>This device's certificate ended on %1.</source>
+        <translation>此设备的证书已于 %1 到期。</translation>
+    </message>
+    <message>
+        <source>Bring it home to an admin of the group: the admin renews the certificate.</source>
+        <translation>在家中将它连接到群组的管理员设备：管理员会续订证书。</translation>
+    </message>
+    <message>
+        <source>This device's certificate ends on %1.</source>
+        <translation>此设备的证书将于 %1 到期。</translation>
+    </message>
+    <message>
+        <source>Connect it at home to an admin of the group before then.</source>
+        <translation>在此之前，请在家中将它连接到群组的管理员设备。</translation>
+    </message>
+    <message>
+        <source>The group's records stop the exchange.</source>
+        <translation>群组的记录已停止交换。</translation>
+    </message>
+    <message>
+        <source>The group's root decides on its alerts.</source>
+        <translation>由群组的根设备在其提醒中决定。</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>在根设备做出决定之前，群组不发送机密内容。</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device.</source>
+        <translation>此设备上的同步已关闭。</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device until %1.</source>
+        <translation>此设备上的同步已关闭，直到 %1。</translation>
+    </message>
+    <message>
+        <source>Turn sync on.</source>
+        <translation>打开同步。</translation>
+    </message>
+    <message>
+        <source>This is the group's only device.</source>
+        <translation>这是群组中唯一的设备。</translation>
+    </message>
+    <message>
+        <source>Add a phone or a computer.</source>
+        <translation>添加一部手机或一台电脑。</translation>
+    </message>
+    <message>
+        <source>No device of the group is on this network.</source>
+        <translation>此网络中没有群组的设备。</translation>
+    </message>
+    <message>
+        <source>Turn on Everywhere to sync away from home.</source>
+        <translation>打开“随处”，以便在家以外同步。</translation>
+    </message>
+    <message>
+        <source>This computer has not met its group on this network.</source>
+        <translation>这台电脑尚未在此网络中遇到它的群组。</translation>
+    </message>
+    <message>
+        <source>If this is your home network, run sudo cbb network.</source>
+        <translation>如果这是你的家庭网络，请运行 sudo cbb network。</translation>
+    </message>
+    <message>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>“随处”已打开，但群组没有中心节点。</translation>
+    </message>
+    <message>
+        <source>Make a computer at home the hub, in its advanced settings.</source>
+        <translation>在家中某台电脑的高级设置中，将它设为中心节点。</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>通往中心节点 %1 的隧道无法连通。</translation>
+    </message>
+    <message>
+        <source>This network may block tunnels: turn on the tunnel's disguise on the hub.</source>
+        <translation>此网络可能会阻止隧道：请在中心节点上打开隧道伪装。</translation>
+    </message>
+    <message>
+        <source>The hub %1 does not answer.</source>
+        <translation>中心节点 %1 没有响应。</translation>
+    </message>
+    <message>
+        <source>Check that the hub is on and online.</source>
+        <translation>请确认中心节点已开机并联网。</translation>
+    </message>
+    <message>
+        <source>Connected, but no other device of the group is online.</source>
+        <translation>已连接，但群组中没有其他设备在线。</translation>
+    </message>
+    <message>
+        <source>Turn on another device of the group.</source>
+        <translation>打开群组中的另一台设备。</translation>
+    </message>
+    <message>
+        <source>The relay does not answer.</source>
+        <translation>中继服务器没有响应。</translation>
+    </message>
+    <message>
+        <source>Check the internet connection; CBB tries again by itself.</source>
+        <translation>请检查网络连接；CBB 会自动重试。</translation>
+    </message>
+    <message>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>此设备是中心节点，但尚无设备连接。</translation>
+    </message>
+    <message>
+        <source>Check that the other devices have Everywhere on.</source>
+        <translation>请确认其他设备已打开“随处”。</translation>
+    </message>
+    <message>
+        <source>An admin muted this device: its copies do not reach the group.</source>
+        <translation>管理员已将此设备静音：它的复制内容不会到达群组。</translation>
+    </message>
+    <message>
+        <source>An admin muted this device until %1: its copies do not reach the group.</source>
+        <translation>管理员已将此设备静音至 %1：它的复制内容不会到达群组。</translation>
+    </message>
+    <message>
+        <source>Ask an admin to unmute it.</source>
+        <translation>请管理员取消静音。</translation>
+    </message>
+    <message>
+        <source>The forwarder does not take this hub.</source>
+        <translation>转发器未接受此中心节点。</translation>
+    </message>
+    <message>
+        <source>Devices away from home may not reach it; CBB tries again by itself.</source>
+        <translation>在家以外的设备可能无法连接到它；CBB 会自动重试。</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>转发器入口列表已过期。</translation>
+    </message>
+    <message>
+        <source>Update CBB on a computer of the group.</source>
+        <translation>在群组的一台电脑上更新 CBB。</translation>
+    </message>
+    <message>
+        <source>The group has records of a newer version.</source>
+        <translation>群组中有较新版本的记录。</translation>
+    </message>
+    <message>
+        <source>Update CBB on this device.</source>
+        <translation>在此设备上更新 CBB。</translation>
+    </message>
+    <message>
+        <source>Devices at home cannot connect to this one: %1.</source>
+        <translation>家中的设备无法连接到此设备：%1。</translation>
+    </message>
+    <message>
+        <source>Let CBB through this computer's firewall.</source>
+        <translation>在这台电脑的防火墙中允许 CBB。</translation>
+    </message>
+    <message>
+        <source>Offline: %1.</source>
+        <translation>离线：%1。</translation>
+    </message>
+    <message>
+        <source>Sync is off on: %1.</source>
+        <translation>以下设备已关闭同步：%1。</translation>
+    </message>
+    <message>
+        <source>Muted by an admin: %1.</source>
+        <translation>已被管理员静音：%1。</translation>
+    </message>
+    <message>
+        <source>CBB %1 is available.</source>
+        <translation>CBB %1 已可用。</translation>
     </message>
 </context>
 </TS>

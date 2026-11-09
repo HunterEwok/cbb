@@ -442,6 +442,10 @@
 <context>
     <name>SettingsPage</name>
     <message>
+        <source>Advanced settings</source>
+        <translation>إعدادات متقدمة</translation>
+    </message>
+    <message>
         <source>Bluetooth keyboard</source>
         <translation>لوحة مفاتيح بلوتوث</translation>
     </message>
@@ -1199,6 +1203,225 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>عندما لا يكون الهاتف على الشبكة المنزلية، يُزامن عبر نفق WireGuard الخاص بالمحور الخاص بك، وهو حاسوب من المجموعة مُعدّ باستخدام cbb global hub؛ منفذه متاح من الإنترنت، ولكن فقط عبر WireGuard بمفاتيح المجموعة. يردّ المحور على هذا الهاتف في المرة التالية التي يتصل فيها في المنزل. لا يذهب شيء إلى أي مكان آخر، ومن دون النفق لا يوجد اتصال. إيقافه يجعل هذا الهاتف ينسى مفتاح النفق الخاص به.</translation>
+    </message>
+</context>
+<context>
+    <name>WhySection</name>
+    <message>
+        <source>Why it does not sync</source>
+        <translation>لماذا لا تتم المزامنة</translation>
+    </message>
+    <message>
+        <source>Everything syncs.</source>
+        <translation>كل شيء تتم مزامنته.</translation>
+    </message>
+    <message>
+        <source>Also</source>
+        <translation>أيضًا</translation>
+    </message>
+    <message>
+        <source>This device is in no group.</source>
+        <translation>هذا الجهاز ليس في أي مجموعة.</translation>
+    </message>
+    <message>
+        <source>Start a group or join one.</source>
+        <translation>أنشئ مجموعة أو انضم إلى واحدة.</translation>
+    </message>
+    <message>
+        <source>This device was removed from the group.</source>
+        <translation>أُزيل هذا الجهاز من المجموعة.</translation>
+    </message>
+    <message>
+        <source>Leave the group on this device, then join again.</source>
+        <translation>غادر المجموعة على هذا الجهاز ثم انضم مجددًا.</translation>
+    </message>
+    <message>
+        <source>%1 took the group over from this device.</source>
+        <translation>استولى %1 على المجموعة من هذا الجهاز.</translation>
+    </message>
+    <message>
+        <source>If this device was not lost, remove %1 from the group.</source>
+        <translation>إن لم يكن هذا الجهاز مفقودًا، فأزل %1 من المجموعة.</translation>
+    </message>
+    <message>
+        <source>Another admin froze this device's admin key.</source>
+        <translation>جمّد مسؤول آخر مفتاح المسؤول لهذا الجهاز.</translation>
+    </message>
+    <message>
+        <source>Ask the group's root to unfreeze it.</source>
+        <translation>اطلب من جذر المجموعة إلغاء تجميده.</translation>
+    </message>
+    <message>
+        <source>This device's certificate ended on %1.</source>
+        <translation>انتهت شهادة هذا الجهاز في %1.</translation>
+    </message>
+    <message>
+        <source>Bring it home to an admin of the group: the admin renews the certificate.</source>
+        <translation>صِله في المنزل بمسؤول المجموعة: يجدّد المسؤول الشهادة.</translation>
+    </message>
+    <message>
+        <source>This device's certificate ends on %1.</source>
+        <translation>تنتهي شهادة هذا الجهاز في %1.</translation>
+    </message>
+    <message>
+        <source>Connect it at home to an admin of the group before then.</source>
+        <translation>قبل ذلك، صِله في المنزل بمسؤول المجموعة.</translation>
+    </message>
+    <message>
+        <source>The group's records stop the exchange.</source>
+        <translation>سجلات المجموعة أوقفت التبادل.</translation>
+    </message>
+    <message>
+        <source>The group's root decides on its alerts.</source>
+        <translation>يقرر جذر المجموعة ذلك في تنبيهاته.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>لا ترسل المجموعة أسرارًا حتى يقرر جذرها.</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device.</source>
+        <translation>المزامنة متوقفة على هذا الجهاز.</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device until %1.</source>
+        <translation>المزامنة متوقفة على هذا الجهاز حتى %1.</translation>
+    </message>
+    <message>
+        <source>Turn sync on.</source>
+        <translation>شغّل المزامنة.</translation>
+    </message>
+    <message>
+        <source>This is the group's only device.</source>
+        <translation>هذا هو الجهاز الوحيد في المجموعة.</translation>
+    </message>
+    <message>
+        <source>Add a phone or a computer.</source>
+        <translation>أضف هاتفًا أو حاسوبًا.</translation>
+    </message>
+    <message>
+        <source>No device of the group is on this network.</source>
+        <translation>لا يوجد أي جهاز من المجموعة على هذه الشبكة.</translation>
+    </message>
+    <message>
+        <source>Turn on Everywhere to sync away from home.</source>
+        <translation>شغّل «في كل مكان» للمزامنة خارج المنزل.</translation>
+    </message>
+    <message>
+        <source>This computer has not met its group on this network.</source>
+        <translation>لم يلتقِ هذا الحاسوب بمجموعته على هذه الشبكة بعد.</translation>
+    </message>
+    <message>
+        <source>If this is your home network, run sudo cbb network.</source>
+        <translation>إن كانت هذه شبكة منزلك، فشغّل sudo cbb network.</translation>
+    </message>
+    <message>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>«في كل مكان» مفعّل، لكن ليس للمجموعة محور.</translation>
+    </message>
+    <message>
+        <source>Make a computer at home the hub, in its advanced settings.</source>
+        <translation>اجعل حاسوبًا في المنزل محورًا من إعداداته المتقدمة.</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>النفق إلى المحور %1 لا يمر.</translation>
+    </message>
+    <message>
+        <source>This network may block tunnels: turn on the tunnel's disguise on the hub.</source>
+        <translation>قد تحجب هذه الشبكة الأنفاق: فعّل تمويه النفق على المحور.</translation>
+    </message>
+    <message>
+        <source>The hub %1 does not answer.</source>
+        <translation>المحور %1 لا يستجيب.</translation>
+    </message>
+    <message>
+        <source>Check that the hub is on and online.</source>
+        <translation>تأكد من أن المحور يعمل ومتصل بالشبكة.</translation>
+    </message>
+    <message>
+        <source>Connected, but no other device of the group is online.</source>
+        <translation>متصل، لكن لا يوجد جهاز آخر من المجموعة متصل.</translation>
+    </message>
+    <message>
+        <source>Turn on another device of the group.</source>
+        <translation>شغّل جهازًا آخر من المجموعة.</translation>
+    </message>
+    <message>
+        <source>The relay does not answer.</source>
+        <translation>المرحّل لا يستجيب.</translation>
+    </message>
+    <message>
+        <source>Check the internet connection; CBB tries again by itself.</source>
+        <translation>تحقق من الاتصال بالإنترنت؛ يعيد CBB المحاولة تلقائيًا.</translation>
+    </message>
+    <message>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>هذا الجهاز هو المحور، ولم يتصل به أي جهاز بعد.</translation>
+    </message>
+    <message>
+        <source>Check that the other devices have Everywhere on.</source>
+        <translation>تأكد من تفعيل «في كل مكان» على الأجهزة الأخرى.</translation>
+    </message>
+    <message>
+        <source>An admin muted this device: its copies do not reach the group.</source>
+        <translation>كتم مسؤولٌ هذا الجهاز: لا تصل نُسخه إلى المجموعة.</translation>
+    </message>
+    <message>
+        <source>An admin muted this device until %1: its copies do not reach the group.</source>
+        <translation>كتم مسؤولٌ هذا الجهاز حتى %1: لا تصل نُسخه إلى المجموعة.</translation>
+    </message>
+    <message>
+        <source>Ask an admin to unmute it.</source>
+        <translation>اطلب من مسؤول إلغاء الكتم.</translation>
+    </message>
+    <message>
+        <source>The forwarder does not take this hub.</source>
+        <translation>مُعيد التوجيه لا يقبل هذا المحور.</translation>
+    </message>
+    <message>
+        <source>Devices away from home may not reach it; CBB tries again by itself.</source>
+        <translation>قد لا تصل إليه الأجهزة خارج المنزل؛ يعيد CBB المحاولة تلقائيًا.</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>قائمة نقاط الدخول لمُعيدي التوجيه قديمة.</translation>
+    </message>
+    <message>
+        <source>Update CBB on a computer of the group.</source>
+        <translation>حدّث CBB على حاسوب من المجموعة.</translation>
+    </message>
+    <message>
+        <source>The group has records of a newer version.</source>
+        <translation>لدى المجموعة سجلات من إصدار أحدث.</translation>
+    </message>
+    <message>
+        <source>Update CBB on this device.</source>
+        <translation>حدّث CBB على هذا الجهاز.</translation>
+    </message>
+    <message>
+        <source>Devices at home cannot connect to this one: %1.</source>
+        <translation>لا تستطيع الأجهزة في المنزل الاتصال بهذا الجهاز: %1.</translation>
+    </message>
+    <message>
+        <source>Let CBB through this computer's firewall.</source>
+        <translation>اسمح لـ CBB في جدار حماية هذا الحاسوب.</translation>
+    </message>
+    <message>
+        <source>Offline: %1.</source>
+        <translation>غير متصل: %1.</translation>
+    </message>
+    <message>
+        <source>Sync is off on: %1.</source>
+        <translation>المزامنة متوقفة على: %1.</translation>
+    </message>
+    <message>
+        <source>Muted by an admin: %1.</source>
+        <translation>مكتومة من مسؤول: %1.</translation>
+    </message>
+    <message>
+        <source>CBB %1 is available.</source>
+        <translation>يتوفر CBB %1.</translation>
     </message>
 </context>
 </TS>

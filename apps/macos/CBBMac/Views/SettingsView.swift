@@ -19,6 +19,7 @@ struct SettingsView: View {
     @State private var language = AppLanguage.chosen
     @State private var versionClicks = 0
     @State private var recovering = false
+    @State private var why = false
 
     var body: some View {
         Form {
@@ -67,6 +68,8 @@ struct SettingsView: View {
             }
             if advanced {
                 Section {
+                    Button { why = true } label: { Text("Why it does not sync") }
+                        .accessibilityIdentifier("why")
                     LabeledContent {
                         if model.pasteAllowed {
                             Text("Allowed")
@@ -108,6 +111,7 @@ struct SettingsView: View {
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
         .sheet(isPresented: $recovering) { RecoverySheet().environmentObject(model).modifier(Themed()) }
+        .sheet(isPresented: $why) { WhySheet().environmentObject(model).modifier(Themed()) }
     }
 }
 
@@ -223,5 +227,29 @@ struct MenuContent: View {
     private func open() {
         openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+/// "Why it does not sync" (docs/apps.md): the reasons the service's status
+/// carries, as the model refreshes it.
+struct WhySheet: View {
+    @EnvironmentObject private var model: MacModel
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("ShowErrorDetails") private var errorDetails = MacModel.showsErrorDetails
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Form {
+                WhyList(reasons: model.status.map { $0.why ?? [] }, details: errorDetails)
+            }
+            .formStyle(.grouped)
+            HStack {
+                Spacer()
+                Button { dismiss() } label: { Text("Done") }.keyboardShortcut(.defaultAction)
+            }
+            .padding()
+        }
+        .frame(width: 460, height: 420)
+        .navigationTitle(Text("Why it does not sync"))
     }
 }

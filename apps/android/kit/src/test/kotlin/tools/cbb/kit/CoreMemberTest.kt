@@ -62,6 +62,23 @@ class CoreMemberTest {
         assertFailsWith<IllegalStateException> { m.current() }
     }
 
+    /** A lone phone says why it does not sync: sync off first, then no other device; the app's own tunnel adds its reasons. */
+    @Test
+    fun saysWhyItDoesNotSync() {
+        val root = SoftwareSigner()
+        val key = SoftwareSigner()
+        val g = PhoneGroup.create(root, key.publicKeyDER, now, seal = Core.sealPublic(seal))
+        val m = start(g.device, key, g.memberCert, g.groupCA)
+        m.addRecords(g.records.records)
+        assertEquals(listOf("only_device"), m.why().map { it.code })
+        m.setSync(false)
+        assertEquals(listOf("sync_off", "only_device"), m.why().map { it.code })
+        m.setSync(true)
+        val r = m.why(WhyAway(hub = true, forwarder = true, error = "no answer"))
+        assertEquals("no answer", r.first { it.code == "forwarder_down" }.detail)
+        m.close()
+    }
+
     @Test
     fun refusesAnIdentityThatDoesNotCheck() {
         val root = SoftwareSigner()

@@ -442,6 +442,10 @@
 <context>
     <name>SettingsPage</name>
     <message>
+        <source>Advanced settings</source>
+        <translation>Дополнительные настройки</translation>
+    </message>
+    <message>
         <source>Bluetooth keyboard</source>
         <translation>Bluetooth-клавиатура</translation>
     </message>
@@ -1199,6 +1203,225 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Когда телефон не в домашней сети, он синхронизируется через туннель WireGuard вашего собственного хаба: компьютера группы, настроенного командой cbb global hub. Его порт доступен из интернета, но только через WireGuard с ключами группы. Хаб ответит этому телефону, когда тот в следующий раз подключится дома. Больше никуда ничего не уходит, а без туннеля нет и соединения. При выключении телефон забывает свой ключ туннеля.</translation>
+    </message>
+</context>
+<context>
+    <name>WhySection</name>
+    <message>
+        <source>Why it does not sync</source>
+        <translation>Почему не синхронизируется</translation>
+    </message>
+    <message>
+        <source>Everything syncs.</source>
+        <translation>Всё синхронизируется.</translation>
+    </message>
+    <message>
+        <source>Also</source>
+        <translation>Ещё</translation>
+    </message>
+    <message>
+        <source>This device is in no group.</source>
+        <translation>Это устройство не в группе.</translation>
+    </message>
+    <message>
+        <source>Start a group or join one.</source>
+        <translation>Создайте группу или вступите в неё.</translation>
+    </message>
+    <message>
+        <source>This device was removed from the group.</source>
+        <translation>Это устройство удалено из группы.</translation>
+    </message>
+    <message>
+        <source>Leave the group on this device, then join again.</source>
+        <translation>Выйдите из группы на этом устройстве и вступите снова.</translation>
+    </message>
+    <message>
+        <source>%1 took the group over from this device.</source>
+        <translation>%1 забрал группу у этого устройства.</translation>
+    </message>
+    <message>
+        <source>If this device was not lost, remove %1 from the group.</source>
+        <translation>Если устройство не терялось, удалите %1 из группы.</translation>
+    </message>
+    <message>
+        <source>Another admin froze this device's admin key.</source>
+        <translation>Другой админ заморозил админский ключ этого устройства.</translation>
+    </message>
+    <message>
+        <source>Ask the group's root to unfreeze it.</source>
+        <translation>Попросите корень группы разморозить его.</translation>
+    </message>
+    <message>
+        <source>This device's certificate ended on %1.</source>
+        <translation>Сертификат этого устройства истёк %1.</translation>
+    </message>
+    <message>
+        <source>Bring it home to an admin of the group: the admin renews the certificate.</source>
+        <translation>Подключите его дома к админу группы: админ продлит сертификат.</translation>
+    </message>
+    <message>
+        <source>This device's certificate ends on %1.</source>
+        <translation>Сертификат этого устройства истекает %1.</translation>
+    </message>
+    <message>
+        <source>Connect it at home to an admin of the group before then.</source>
+        <translation>До этого подключите его дома к админу группы.</translation>
+    </message>
+    <message>
+        <source>The group's records stop the exchange.</source>
+        <translation>Записи группы остановили обмен.</translation>
+    </message>
+    <message>
+        <source>The group's root decides on its alerts.</source>
+        <translation>Корень группы решает это в своих предупреждениях.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>Группа не передаёт секреты, пока корень не решит.</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device.</source>
+        <translation>На этом устройстве синхронизация выключена.</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device until %1.</source>
+        <translation>На этом устройстве синхронизация выключена до %1.</translation>
+    </message>
+    <message>
+        <source>Turn sync on.</source>
+        <translation>Включите синхронизацию.</translation>
+    </message>
+    <message>
+        <source>This is the group's only device.</source>
+        <translation>Это единственное устройство группы.</translation>
+    </message>
+    <message>
+        <source>Add a phone or a computer.</source>
+        <translation>Добавьте телефон или компьютер.</translation>
+    </message>
+    <message>
+        <source>No device of the group is on this network.</source>
+        <translation>В этой сети нет устройств группы.</translation>
+    </message>
+    <message>
+        <source>Turn on Everywhere to sync away from home.</source>
+        <translation>Включите «Везде», чтобы синхронизироваться вне дома.</translation>
+    </message>
+    <message>
+        <source>This computer has not met its group on this network.</source>
+        <translation>Этот компьютер ещё не встречал свою группу в этой сети.</translation>
+    </message>
+    <message>
+        <source>If this is your home network, run sudo cbb network.</source>
+        <translation>Если это ваша домашняя сеть, выполните sudo cbb network.</translation>
+    </message>
+    <message>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>«Везде» включено, но в группе нет хаба.</translation>
+    </message>
+    <message>
+        <source>Make a computer at home the hub, in its advanced settings.</source>
+        <translation>Сделайте домашний компьютер хабом в его расширенных настройках.</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>Туннель к хабу %1 не проходит.</translation>
+    </message>
+    <message>
+        <source>This network may block tunnels: turn on the tunnel's disguise on the hub.</source>
+        <translation>Эта сеть может резать туннели: включите маскировку туннеля на хабе.</translation>
+    </message>
+    <message>
+        <source>The hub %1 does not answer.</source>
+        <translation>Хаб %1 не отвечает.</translation>
+    </message>
+    <message>
+        <source>Check that the hub is on and online.</source>
+        <translation>Проверьте, что хаб включён и в сети.</translation>
+    </message>
+    <message>
+        <source>Connected, but no other device of the group is online.</source>
+        <translation>Связь есть, но других устройств группы нет в сети.</translation>
+    </message>
+    <message>
+        <source>Turn on another device of the group.</source>
+        <translation>Включите другое устройство группы.</translation>
+    </message>
+    <message>
+        <source>The relay does not answer.</source>
+        <translation>Ретранслятор не отвечает.</translation>
+    </message>
+    <message>
+        <source>Check the internet connection; CBB tries again by itself.</source>
+        <translation>Проверьте подключение к интернету; CBB попробует снова сам.</translation>
+    </message>
+    <message>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>Это устройство — хаб, и к нему ещё никто не подключился.</translation>
+    </message>
+    <message>
+        <source>Check that the other devices have Everywhere on.</source>
+        <translation>Проверьте, что на других устройствах включено «Везде».</translation>
+    </message>
+    <message>
+        <source>An admin muted this device: its copies do not reach the group.</source>
+        <translation>Админ заглушил это устройство: его копии не доходят до группы.</translation>
+    </message>
+    <message>
+        <source>An admin muted this device until %1: its copies do not reach the group.</source>
+        <translation>Админ заглушил это устройство до %1: его копии не доходят до группы.</translation>
+    </message>
+    <message>
+        <source>Ask an admin to unmute it.</source>
+        <translation>Попросите админа снять заглушение.</translation>
+    </message>
+    <message>
+        <source>The forwarder does not take this hub.</source>
+        <translation>Форвардер не принимает этот хаб.</translation>
+    </message>
+    <message>
+        <source>Devices away from home may not reach it; CBB tries again by itself.</source>
+        <translation>Устройства вне дома могут до него не дойти; CBB попробует снова сам.</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>Список точек входа форвардеров устарел.</translation>
+    </message>
+    <message>
+        <source>Update CBB on a computer of the group.</source>
+        <translation>Обновите CBB на компьютере группы.</translation>
+    </message>
+    <message>
+        <source>The group has records of a newer version.</source>
+        <translation>В группе есть записи новой версии.</translation>
+    </message>
+    <message>
+        <source>Update CBB on this device.</source>
+        <translation>Обновите CBB на этом устройстве.</translation>
+    </message>
+    <message>
+        <source>Devices at home cannot connect to this one: %1.</source>
+        <translation>Устройства дома не могут подключиться к этому: %1.</translation>
+    </message>
+    <message>
+        <source>Let CBB through this computer's firewall.</source>
+        <translation>Разрешите CBB в файрволе этого компьютера.</translation>
+    </message>
+    <message>
+        <source>Offline: %1.</source>
+        <translation>Не в сети: %1.</translation>
+    </message>
+    <message>
+        <source>Sync is off on: %1.</source>
+        <translation>Синхронизация выключена на: %1.</translation>
+    </message>
+    <message>
+        <source>Muted by an admin: %1.</source>
+        <translation>Заглушены админом: %1.</translation>
+    </message>
+    <message>
+        <source>CBB %1 is available.</source>
+        <translation>Доступна CBB %1.</translation>
     </message>
 </context>
 </TS>

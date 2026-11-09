@@ -38,6 +38,10 @@ class Member : public QObject
     // What the group's records stop and what ends it (docs/core-api.md, the
     // member's alerts): maps with kind, names, devices, records, left_ms, count.
     Q_PROPERTY(QVariantList alerts READ alerts NOTIFY devicesChanged)
+    // Why the phone does not sync (cbb_core::why, docs/apps.md "Why it does
+    // not sync"): maps with code, level, until_ms, device, devices, value and
+    // detail, the reason that stops the most first.
+    Q_PROPERTY(QVariantList why READ why NOTIFY devicesChanged)
     Q_PROPERTY(QString last READ last NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
     // Sync turned off (design.md, "Sync on and off"): the clipboard is the
@@ -71,6 +75,7 @@ public:
     QStringList peers() const { return m_peers; }
     QVariantList devices() const { return m_devices; }
     QVariantList alerts() const { return m_alerts; }
+    QVariantList why() const { return m_why; }
     // What the clipboard got or sent last, shortened, for the main page.
     QString last() const { return m_last; }
     QString error() const { return m_error; }
@@ -156,6 +161,7 @@ private:
     QStringList m_peers;
     QVariantList m_devices;
     QVariantList m_alerts;
+    QVariantList m_why;
     QString m_last;
     QString m_error;
     // The clipboard's text as the group last set it or the phone last sent it.

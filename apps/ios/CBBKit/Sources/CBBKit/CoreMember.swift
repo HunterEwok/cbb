@@ -548,6 +548,15 @@ public final class CoreMember: @unchecked Sendable {
         try run("set_mute", A(until_ms: untilMS))
     }
 
+    /// Why the phone does not sync, the reason that stops the most first
+    /// (docs/apps.md, "Why it does not sync"); empty when everything syncs.
+    /// away is where the app's own tunnel stands, nil while it is off.
+    public func why(away: WhyAway? = nil) throws -> [WhyReason] {
+        struct A: Encodable { var away: WhyAway? }
+        struct R: Decodable { var why: [WhyReason] }
+        return try run("why", A(away: away), as: R.self).why
+    }
+
     /// The members connected now; all adds those that carry records only.
     public func peers(all: Bool = false) throws -> [Peer] {
         struct A: Encodable { var all: Bool }

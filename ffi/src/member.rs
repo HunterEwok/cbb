@@ -711,8 +711,12 @@ impl Member {
             // What the group's records stop, for the alerts card.
             "alerts" => Ok(json!({ "alerts": n.alerts() })),
             // Why the phone does not sync, for the screen in the advanced
-            // settings (docs/apps.md, "Why it does not sync").
-            "why" => Ok(json!({ "why": n.why() })),
+            // settings (docs/apps.md, "Why it does not sync"); `away`, the
+            // facts of a tunnel the app runs itself, or none.
+            "why" => {
+                let away: Option<cbb_core::why::AwayFacts> = args(arg(&a, "away").clone())?;
+                Ok(json!({ "why": n.why(away) }))
+            }
             // Sync away from home: on with new tunnel keys, or off; and its
             // state, null while it is off.
             "away" => {

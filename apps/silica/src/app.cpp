@@ -644,6 +644,19 @@ void App::setErrorDetails(bool on)
     emit settingsChanged();
 }
 
+bool App::advanced() const
+{
+    return QSettings().value(QStringLiteral("ui/advanced")).toBool();
+}
+
+void App::setAdvanced(bool on)
+{
+    if (on == advanced())
+        return;
+    QSettings().setValue(QStringLiteral("ui/advanced"), on);
+    emit settingsChanged();
+}
+
 QString App::language() const
 {
     return QSettings().value(QStringLiteral("ui/language")).toString();

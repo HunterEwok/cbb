@@ -48,6 +48,8 @@ class App : public QObject
     // showDetails), the language the next start uses ("" for the
     // system's), and whether the main page shows the devices as a list.
     Q_PROPERTY(bool errorDetails READ errorDetails WRITE setErrorDetails NOTIFY settingsChanged)
+    // The switch for the advanced settings, as on the other phones.
+    Q_PROPERTY(bool advanced READ advanced WRITE setAdvanced NOTIFY settingsChanged)
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY settingsChanged)
     Q_PROPERTY(bool deviceList READ deviceList WRITE setDeviceList NOTIFY settingsChanged)
     // The language chosen differs from the one the app started with.
@@ -90,6 +92,8 @@ public:
 
     bool errorDetails() const;
     void setErrorDetails(bool on);
+    bool advanced() const;
+    void setAdvanced(bool on);
     QString language() const;
     void setLanguage(const QString &code);
     bool languagePending() const { return language() != m_startLanguage; }

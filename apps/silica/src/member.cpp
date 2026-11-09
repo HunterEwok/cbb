@@ -673,9 +673,12 @@ void Member::pollDevices()
     const QJsonObject al = call(m_member, QStringLiteral("alerts"), QJsonObject(), &failure);
     const QVariantList alerts =
         failure.isNull() ? al.value(QStringLiteral("alerts")).toArray().toVariantList() : m_alerts;
-    if (devices != m_devices || alerts != m_alerts) {
+    const QJsonObject w = call(m_member, QStringLiteral("why"), QJsonObject(), &failure);
+    const QVariantList why = failure.isNull() ? w.value(QStringLiteral("why")).toArray().toVariantList() : m_why;
+    if (devices != m_devices || alerts != m_alerts || why != m_why) {
         m_devices = devices;
         m_alerts = alerts;
+        m_why = why;
         emit devicesChanged();
     }
 }

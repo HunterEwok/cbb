@@ -25,6 +25,9 @@ targets:
       - ../ios/CBB/Theme
       # The arrangement of the tiles, the same model as the phone's.
       - ../ios/CBBKit/Sources/CBBKit/Arrangement.swift
+      # Why the device does not sync: the core's reasons and their screen.
+      - ../ios/CBBKit/Sources/CBBKit/Why.swift
+      - ../ios/CBB/Views/WhyView.swift
     info:
       path: CBBMac/Info.plist
       properties:

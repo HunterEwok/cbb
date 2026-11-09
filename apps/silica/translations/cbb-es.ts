@@ -442,6 +442,10 @@
 <context>
     <name>SettingsPage</name>
     <message>
+        <source>Advanced settings</source>
+        <translation>Ajustes avanzados</translation>
+    </message>
+    <message>
         <source>Bluetooth keyboard</source>
         <translation>Teclado Bluetooth</translation>
     </message>
@@ -1199,6 +1203,225 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Cuando el teléfono no está en la red de casa, se sincroniza por el túnel WireGuard de tu propio hub, un ordenador del grupo configurado con cbb global hub; su puerto es accesible desde internet, pero solo por WireGuard con las claves del grupo. El hub responde a este teléfono la próxima vez que se conecte en casa. Nada va a ningún otro sitio y, sin el túnel, no hay conexión. Al desactivarlo, este teléfono olvida su clave del túnel.</translation>
+    </message>
+</context>
+<context>
+    <name>WhySection</name>
+    <message>
+        <source>Why it does not sync</source>
+        <translation>Por qué no se sincroniza</translation>
+    </message>
+    <message>
+        <source>Everything syncs.</source>
+        <translation>Todo se sincroniza.</translation>
+    </message>
+    <message>
+        <source>Also</source>
+        <translation>Además</translation>
+    </message>
+    <message>
+        <source>This device is in no group.</source>
+        <translation>Este dispositivo no está en ningún grupo.</translation>
+    </message>
+    <message>
+        <source>Start a group or join one.</source>
+        <translation>Crea un grupo o únete a uno.</translation>
+    </message>
+    <message>
+        <source>This device was removed from the group.</source>
+        <translation>Este dispositivo se quitó del grupo.</translation>
+    </message>
+    <message>
+        <source>Leave the group on this device, then join again.</source>
+        <translation>Sal del grupo en este dispositivo y vuelve a unirte.</translation>
+    </message>
+    <message>
+        <source>%1 took the group over from this device.</source>
+        <translation>%1 tomó el grupo de este dispositivo.</translation>
+    </message>
+    <message>
+        <source>If this device was not lost, remove %1 from the group.</source>
+        <translation>Si este dispositivo no se perdió, quita %1 del grupo.</translation>
+    </message>
+    <message>
+        <source>Another admin froze this device's admin key.</source>
+        <translation>Otro administrador congeló la clave de administrador de este dispositivo.</translation>
+    </message>
+    <message>
+        <source>Ask the group's root to unfreeze it.</source>
+        <translation>Pide a la raíz del grupo que la descongele.</translation>
+    </message>
+    <message>
+        <source>This device's certificate ended on %1.</source>
+        <translation>El certificado de este dispositivo venció el %1.</translation>
+    </message>
+    <message>
+        <source>Bring it home to an admin of the group: the admin renews the certificate.</source>
+        <translation>Conéctalo en casa a un administrador del grupo: el administrador renueva el certificado.</translation>
+    </message>
+    <message>
+        <source>This device's certificate ends on %1.</source>
+        <translation>El certificado de este dispositivo vence el %1.</translation>
+    </message>
+    <message>
+        <source>Connect it at home to an admin of the group before then.</source>
+        <translation>Antes de esa fecha, conéctalo en casa a un administrador del grupo.</translation>
+    </message>
+    <message>
+        <source>The group's records stop the exchange.</source>
+        <translation>Los registros del grupo detienen el intercambio.</translation>
+    </message>
+    <message>
+        <source>The group's root decides on its alerts.</source>
+        <translation>La raíz del grupo decide en sus avisos.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>El grupo no envía secretos hasta que su raíz decida.</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device.</source>
+        <translation>La sincronización está desactivada en este dispositivo.</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device until %1.</source>
+        <translation>La sincronización está desactivada en este dispositivo hasta %1.</translation>
+    </message>
+    <message>
+        <source>Turn sync on.</source>
+        <translation>Activa la sincronización.</translation>
+    </message>
+    <message>
+        <source>This is the group's only device.</source>
+        <translation>Este es el único dispositivo del grupo.</translation>
+    </message>
+    <message>
+        <source>Add a phone or a computer.</source>
+        <translation>Añade un teléfono o un ordenador.</translation>
+    </message>
+    <message>
+        <source>No device of the group is on this network.</source>
+        <translation>No hay ningún dispositivo del grupo en esta red.</translation>
+    </message>
+    <message>
+        <source>Turn on Everywhere to sync away from home.</source>
+        <translation>Activa En todas partes para sincronizar fuera de casa.</translation>
+    </message>
+    <message>
+        <source>This computer has not met its group on this network.</source>
+        <translation>Este ordenador aún no ha encontrado su grupo en esta red.</translation>
+    </message>
+    <message>
+        <source>If this is your home network, run sudo cbb network.</source>
+        <translation>Si es tu red de casa, ejecuta sudo cbb network.</translation>
+    </message>
+    <message>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>En todas partes está activado, pero el grupo no tiene hub.</translation>
+    </message>
+    <message>
+        <source>Make a computer at home the hub, in its advanced settings.</source>
+        <translation>Haz que un ordenador de casa sea el hub, en su configuración avanzada.</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>El túnel al hub %1 no pasa.</translation>
+    </message>
+    <message>
+        <source>This network may block tunnels: turn on the tunnel's disguise on the hub.</source>
+        <translation>Esta red puede bloquear túneles: activa el camuflaje del túnel en el hub.</translation>
+    </message>
+    <message>
+        <source>The hub %1 does not answer.</source>
+        <translation>El hub %1 no responde.</translation>
+    </message>
+    <message>
+        <source>Check that the hub is on and online.</source>
+        <translation>Comprueba que el hub está encendido y conectado.</translation>
+    </message>
+    <message>
+        <source>Connected, but no other device of the group is online.</source>
+        <translation>Conectado, pero ningún otro dispositivo del grupo está en línea.</translation>
+    </message>
+    <message>
+        <source>Turn on another device of the group.</source>
+        <translation>Enciende otro dispositivo del grupo.</translation>
+    </message>
+    <message>
+        <source>The relay does not answer.</source>
+        <translation>El relé no responde.</translation>
+    </message>
+    <message>
+        <source>Check the internet connection; CBB tries again by itself.</source>
+        <translation>Comprueba la conexión a internet; CBB lo intenta de nuevo solo.</translation>
+    </message>
+    <message>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>Este dispositivo es el hub y aún no se ha conectado ningún dispositivo.</translation>
+    </message>
+    <message>
+        <source>Check that the other devices have Everywhere on.</source>
+        <translation>Comprueba que los otros dispositivos tienen activado En todas partes.</translation>
+    </message>
+    <message>
+        <source>An admin muted this device: its copies do not reach the group.</source>
+        <translation>Un administrador silenció este dispositivo: sus copias no llegan al grupo.</translation>
+    </message>
+    <message>
+        <source>An admin muted this device until %1: its copies do not reach the group.</source>
+        <translation>Un administrador silenció este dispositivo hasta %1: sus copias no llegan al grupo.</translation>
+    </message>
+    <message>
+        <source>Ask an admin to unmute it.</source>
+        <translation>Pide a un administrador que lo vuelva a activar.</translation>
+    </message>
+    <message>
+        <source>The forwarder does not take this hub.</source>
+        <translation>El reenviador no acepta este hub.</translation>
+    </message>
+    <message>
+        <source>Devices away from home may not reach it; CBB tries again by itself.</source>
+        <translation>Los dispositivos fuera de casa podrían no alcanzarlo; CBB lo intenta de nuevo solo.</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>La lista de puntos de entrada de los reenviadores está desactualizada.</translation>
+    </message>
+    <message>
+        <source>Update CBB on a computer of the group.</source>
+        <translation>Actualiza CBB en un ordenador del grupo.</translation>
+    </message>
+    <message>
+        <source>The group has records of a newer version.</source>
+        <translation>El grupo tiene registros de una versión más nueva.</translation>
+    </message>
+    <message>
+        <source>Update CBB on this device.</source>
+        <translation>Actualiza CBB en este dispositivo.</translation>
+    </message>
+    <message>
+        <source>Devices at home cannot connect to this one: %1.</source>
+        <translation>Los dispositivos de casa no pueden conectarse a este: %1.</translation>
+    </message>
+    <message>
+        <source>Let CBB through this computer's firewall.</source>
+        <translation>Permite CBB en el cortafuegos de este ordenador.</translation>
+    </message>
+    <message>
+        <source>Offline: %1.</source>
+        <translation>Sin conexión: %1.</translation>
+    </message>
+    <message>
+        <source>Sync is off on: %1.</source>
+        <translation>La sincronización está desactivada en: %1.</translation>
+    </message>
+    <message>
+        <source>Muted by an admin: %1.</source>
+        <translation>Silenciados por un administrador: %1.</translation>
+    </message>
+    <message>
+        <source>CBB %1 is available.</source>
+        <translation>CBB %1 está disponible.</translation>
     </message>
 </context>
 </TS>

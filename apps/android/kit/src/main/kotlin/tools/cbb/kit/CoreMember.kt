@@ -341,6 +341,14 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     fun peers(all: Boolean = false): List<Peer> =
         call("peers", Wire.obj("all" to JsonPrimitive(all))).optArray("peers").orEmpty().mapNotNull { (it as? JsonObject)?.let(Peer::fromJson) }
 
+    /**
+     * Why the phone does not sync, the reason that stops the most first
+     * (docs/apps.md, "Why it does not sync"); empty when everything syncs.
+     * away is where the app's own tunnel stands, null while it is off.
+     */
+    fun why(away: WhyAway? = null): List<WhyReason> =
+        call("why", Wire.obj("away" to (away?.toJson() ?: JsonNull))).optArray("why").orEmpty().mapNotNull { (it as? JsonObject)?.let(WhyReason::fromJson) }
+
     /** The group's records the node keeps. */
     fun records(): List<Member.Record> =
         call("records").optArray("records").orEmpty().mapNotNull { e -> (e as? JsonObject)?.let { runCatching { Member.Record.fromJson(it) }.getOrNull() } }

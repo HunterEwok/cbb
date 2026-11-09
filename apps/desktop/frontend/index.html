@@ -49,6 +49,14 @@
     </form>
   </dialog>
 
+  <dialog id="why-dialog">
+    <form method="dialog">
+      <h2 data-t>Why it does not sync</h2>
+      <div id="why-list"></div>
+      <menu><button value="ok" class="accent" data-t>Done</button></menu>
+    </form>
+  </dialog>
+
   <dialog id="mute-dialog">
     <form method="dialog">
       <h2 id="mute-title"></h2>
@@ -126,6 +134,7 @@
       <div id="advanced-box" hidden>
         <h3 data-t>Advanced</h3>
         <div class="menu-items">
+          <button type="button" class="glass" id="advanced-why" data-t>Why it does not sync</button>
           <button type="button" class="glass" id="advanced-away" data-t>Away from home: hub and tunnel</button>
           <button type="button" class="glass" id="advanced-recovery" data-t>Claim the group with its recovery key</button>
         </div>

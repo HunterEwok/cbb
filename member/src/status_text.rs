@@ -656,7 +656,9 @@ mod tests {
         let st = Status { why: crate::why::reasons(&st, &devs, 1), ..st };
         let w = write_status(&st, &devs, 1, "");
         assert!(
-            w.contains("Why it does not sync: The tunnel to the hub mac does not get through. This network may block tunnels"),
+            w.contains(
+                "Why it does not sync: The tunnel to the hub mac does not get through. This network may block tunnels"
+            ),
             "{w}"
         );
         let off = Status { mode: "own".into(), ..st.clone() };

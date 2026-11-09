@@ -74,6 +74,11 @@ struct SettingsView: View {
             }
             .listRowBackground(palette.surface)
             if advanced {
+                Section {
+                    NavigationLink { WhyScreen() } label: { Text("Why it does not sync") }
+                        .accessibilityIdentifier("why")
+                }
+                .listRowBackground(palette.surface)
                 if let hub = model.hub {
                     hubSection(hub)
                     if !hub.computers.isEmpty {
@@ -580,4 +585,29 @@ struct SettingTip: Tip {
         message: Text("Which devices may be admins and hubs. Keys in hardware never leave the device; a key in a file can be copied."))
     static let watch = SettingTip(id: "watch", title: Text("The watch as an admin"),
         message: Text("It can freeze an admin computer and turn remote paste and quick actions off. Open CBB on the watch first."))
+}
+
+/// "Why it does not sync" (docs/apps.md): the core's reasons for this
+/// phone, asked again every two seconds while the screen is open.
+struct WhyScreen: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @AppStorage("ShowErrorDetails") private var errorDetails = AppModel.showsErrorDetails
+    @State private var reasons: [WhyReason]?
+
+    var body: some View {
+        Form {
+            WhyList(reasons: reasons, details: errorDetails)
+                .listRowBackground(palette.surface)
+        }
+        .scrollContentBackground(.hidden)
+        .background(AppBackground())
+        .navigationTitle(Text("Why it does not sync"))
+        .task {
+            while !Task.isCancelled {
+                reasons = await model.why()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
 }

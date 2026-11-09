@@ -223,6 +223,13 @@ public actor AwayFromHome {
         return using ?? Self.hubsToTry(order(), s).first?.device ?? s.hubs.first?.device
     }
 
+    /// Whether the hub (`hub`) hides its tunnel, with AmneziaWG or VLESS,
+    /// for the screen that says why the phone does not sync.
+    public var hubHidesTunnel: Bool {
+        guard let h = hub, let o = state?.offer(h) else { return false }
+        return o.obfuscation != nil || o.vless != nil
+    }
+
     /// The hub the phone reaches now, through the tunnel or at home; nil
     /// while it reaches none.
     public var inUse: String? { using }

@@ -471,6 +471,7 @@ internal fun SettingsScreen(model: AppModel, back: () -> Unit) {
             }
         }
         if (home && advanced) {
+            WhySection(model, model.settings.showsErrorDetails)
             model.hub?.let { HubSection(model, it) }
             model.blindRelay?.let { BlindRelaySection(model, it) }
             if (!model.isTv) ShareAsk(model)

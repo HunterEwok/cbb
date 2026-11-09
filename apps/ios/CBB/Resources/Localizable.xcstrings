@@ -24889,6 +24889,2444 @@
           }
         }
       }
+    },
+    "Why it does not sync": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Почему не синхронизируется"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为什么不同步"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por qué no se sincroniza"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لماذا لا تتم المزامنة"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwa nini haisawazishi"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "למה אין סנכרון"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सिंक क्यों नहीं हो रहा"
+          }
+        }
+      }
+    },
+    "Everything syncs.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Всё синхронизируется."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一切都在同步。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo se sincroniza."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل شيء تتم مزامنته."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kila kitu kinasawazishwa."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הכול מסתנכרן."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सब कुछ सिंक हो रहा है।"
+          }
+        }
+      }
+    },
+    "Also": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ещё"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另外"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Además"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أيضًا"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pia"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "עוד"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "और"
+          }
+        }
+      }
+    },
+    "This device is in no group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это устройство не в группе."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备不在任何群组中。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este dispositivo no está en ningún grupo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الجهاز ليس في أي مجموعة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa hiki hakimo kwenye kikundi chochote."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המכשיר הזה לא בשום קבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह डिवाइस किसी समूह में नहीं है।"
+          }
+        }
+      }
+    },
+    "Start a group or join one.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создайте группу или вступите в неё."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建一个群组或加入一个群组。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un grupo o únete a uno."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنشئ مجموعة أو انضم إلى واحدة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anzisha kikundi au ujiunge na kimoja."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "צרו קבוצה או הצטרפו לאחת."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह बनाएँ या किसी में शामिल हों।"
+          }
+        }
+      }
+    },
+    "This device was removed from the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это устройство удалено из группы."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备已被移出群组。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este dispositivo se quitó del grupo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُزيل هذا الجهاز من المجموعة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa hiki kiliondolewa kwenye kikundi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המכשיר הזה הוסר מהקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह डिवाइस समूह से हटा दिया गया।"
+          }
+        }
+      }
+    },
+    "Leave the group on this device, then join again.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выйдите из группы на этом устройстве и вступите снова."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此设备上退出群组，然后重新加入。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sal del grupo en este dispositivo y vuelve a unirte."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غادر المجموعة على هذا الجهاز ثم انضم مجددًا."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ondoka kwenye kikundi kwenye kifaa hiki, kisha ujiunge tena."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "צאו מהקבוצה במכשיר הזה והצטרפו שוב."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस डिवाइस पर समूह छोड़ें, फिर दोबारा शामिल हों।"
+          }
+        }
+      }
+    },
+    "%@ took the group over from this device.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ забрал группу у этого устройства."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 已从此设备接管群组。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ tomó el grupo de este dispositivo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استولى %@ على المجموعة من هذا الجهاز."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ kilichukua kikundi kutoka kifaa hiki."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ לקח את הקבוצה מהמכשיר הזה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ने इस डिवाइस से समूह ले लिया।"
+          }
+        }
+      }
+    },
+    "If this device was not lost, remove %@ from the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Если устройство не терялось, удалите %@ из группы."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果此设备并未丢失，请将 %@ 移出群组。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si este dispositivo no se perdió, quita %@ del grupo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إن لم يكن هذا الجهاز مفقودًا، فأزل %@ من المجموعة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikiwa kifaa hiki hakikupotea, ondoa %@ kwenye kikundi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אם המכשיר לא אבד, הסירו את %@ מהקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अगर यह डिवाइस खोया नहीं था, तो %@ को समूह से हटाएँ।"
+          }
+        }
+      }
+    },
+    "Another admin froze this device's admin key.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Другой админ заморозил админский ключ этого устройства."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另一位管理员冻结了此设备的管理员密钥。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otro administrador congeló la clave de administrador de este dispositivo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جمّد مسؤول آخر مفتاح المسؤول لهذا الجهاز."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Msimamizi mwingine aligandisha ufunguo wa usimamizi wa kifaa hiki."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מנהל אחר הקפיא את מפתח הניהול של המכשיר הזה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी दूसरे एडमिन ने इस डिवाइस की एडमिन कुंजी फ़्रीज़ कर दी।"
+          }
+        }
+      }
+    },
+    "Ask the group's root to unfreeze it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Попросите корень группы разморозить его."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请群组的根设备解冻它。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pide a la raíz del grupo que la descongele."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اطلب من جذر المجموعة إلغاء تجميده."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omba mzizi wa kikundi auyeyushe."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בקשו מהשורש של הקבוצה לבטל את ההקפאה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के रूट से इसे अनफ़्रीज़ करने को कहें।"
+          }
+        }
+      }
+    },
+    "This device's certificate ended on %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сертификат этого устройства истёк %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备的证书已于 %@ 到期。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El certificado de este dispositivo venció el %@."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انتهت شهادة هذا الجهاز في %@."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cheti cha kifaa hiki kiliisha %@."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "התעודה של המכשיר הזה פגה ב־%@."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस डिवाइस का प्रमाणपत्र %@ को समाप्त हो गया।"
+          }
+        }
+      }
+    },
+    "Bring it home to an admin of the group: the admin renews the certificate.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключите его дома к админу группы: админ продлит сертификат."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在家中将它连接到群组的管理员设备：管理员会续订证书。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conéctalo en casa a un administrador del grupo: el administrador renueva el certificado."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صِله في المنزل بمسؤول المجموعة: يجدّد المسؤول الشهادة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kiunganishe nyumbani na msimamizi wa kikundi: msimamizi atafanya upya cheti."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "חברו אותו בבית למנהל של הקבוצה: המנהל יחדש את התעודה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इसे घर पर समूह के एडमिन से जोड़ें: एडमिन प्रमाणपत्र नवीनीकृत करेगा।"
+          }
+        }
+      }
+    },
+    "This device's certificate ends on %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сертификат этого устройства истекает %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备的证书将于 %@ 到期。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El certificado de este dispositivo vence el %@."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تنتهي شهادة هذا الجهاز في %@."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cheti cha kifaa hiki kinaisha %@."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "התעודה של המכשיר הזה תפוג ב־%@."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस डिवाइस का प्रमाणपत्र %@ को समाप्त होगा।"
+          }
+        }
+      }
+    },
+    "Connect it at home to an admin of the group before then.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "До этого подключите его дома к админу группы."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此之前，请在家中将它连接到群组的管理员设备。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antes de esa fecha, conéctalo en casa a un administrador del grupo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قبل ذلك، صِله في المنزل بمسؤول المجموعة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kabla ya hapo, kiunganishe nyumbani na msimamizi wa kikundi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לפני כן, חברו אותו בבית למנהל של הקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उससे पहले इसे घर पर समूह के एडमिन से जोड़ें।"
+          }
+        }
+      }
+    },
+    "The group's records stop the exchange.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записи группы остановили обмен."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组的记录已停止交换。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los registros del grupo detienen el intercambio."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سجلات المجموعة أوقفت التبادل."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rekodi za kikundi zimesimamisha ubadilishanaji."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הרשומות של הקבוצה עצרו את ההחלפה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के रिकॉर्ड ने आदान-प्रदान रोक दिया है।"
+          }
+        }
+      }
+    },
+    "The group's root decides on its alerts.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Корень группы решает это в своих предупреждениях."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由群组的根设备在其提醒中决定。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La raíz del grupo decide en sus avisos."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يقرر جذر المجموعة ذلك في تنبيهاته."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mzizi wa kikundi huamua kwenye arifa zake."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "השורש של הקבוצה מחליט בהתראות שלו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह का रूट अपनी चेतावनियों में फ़ैसला करता है।"
+          }
+        }
+      }
+    },
+    "Sync is off on this device.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На этом устройстве синхронизация выключена."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备上的同步已关闭。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sincronización está desactivada en este dispositivo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المزامنة متوقفة على هذا الجهاز."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usawazishaji umezimwa kwenye kifaa hiki."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הסנכרון כבוי במכשיר הזה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस डिवाइस पर सिंक बंद है।"
+          }
+        }
+      }
+    },
+    "Sync is off on this device until %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На этом устройстве синхронизация выключена до %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备上的同步已关闭，直到 %@。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sincronización está desactivada en este dispositivo hasta %@."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المزامنة متوقفة على هذا الجهاز حتى %@."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usawazishaji umezimwa kwenye kifaa hiki hadi %@."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הסנכרון כבוי במכשיר הזה עד %@."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस डिवाइस पर सिंक %@ तक बंद है।"
+          }
+        }
+      }
+    },
+    "Turn sync on.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включите синхронизацию."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开同步。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa la sincronización."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شغّل المزامنة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Washa usawazishaji."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפעילו את הסנכרון."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सिंक चालू करें।"
+          }
+        }
+      }
+    },
+    "This is the group's only device.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это единственное устройство группы."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是群组中唯一的设备。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este es el único dispositivo del grupo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا هو الجهاز الوحيد في المجموعة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hiki ndicho kifaa pekee cha kikundi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "זה המכשיר היחיד בקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह समूह का अकेला डिवाइस है।"
+          }
+        }
+      }
+    },
+    "Add a phone or a computer.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавьте телефон или компьютер."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加一部手机或一台电脑。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade un teléfono o un ordenador."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أضف هاتفًا أو حاسوبًا."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ongeza simu au kompyuta."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הוסיפו טלפון או מחשב."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कोई फ़ोन या कंप्यूटर जोड़ें।"
+          }
+        }
+      }
+    },
+    "No device of the group is on this network.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В этой сети нет устройств группы."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此网络中没有群组的设备。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay ningún dispositivo del grupo en esta red."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يوجد أي جهاز من المجموعة على هذه الشبكة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hakuna kifaa cha kikundi kwenye mtandao huu."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אף מכשיר של הקבוצה לא נמצא ברשת הזו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस नेटवर्क पर समूह का कोई डिवाइस नहीं है।"
+          }
+        }
+      }
+    },
+    "Turn on Everywhere to sync away from home.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включите «Везде», чтобы синхронизироваться вне дома."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开“随处”，以便在家以外同步。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa En todas partes para sincronizar fuera de casa."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شغّل «في كل مكان» للمزامنة خارج المنزل."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Washa Kila mahali ili kusawazisha ukiwa mbali na nyumbani."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפעילו את ״בכל מקום״ כדי לסנכרן מחוץ לבית."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "घर से बाहर सिंक करने के लिए हर जगह चालू करें।"
+          }
+        }
+      }
+    },
+    "This computer has not met its group on this network.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот компьютер ещё не встречал свою группу в этой сети."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑尚未在此网络中遇到它的群组。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este ordenador aún no ha encontrado su grupo en esta red."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يلتقِ هذا الحاسوب بمجموعته على هذه الشبكة بعد."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kompyuta hii bado haijakutana na kikundi chake kwenye mtandao huu."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המחשב הזה עוד לא פגש את הקבוצה שלו ברשת הזו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह कंप्यूटर इस नेटवर्क पर अभी अपने समूह से नहीं मिला है।"
+          }
+        }
+      }
+    },
+    "If this is your home network, run sudo cbb network.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Если это ваша домашняя сеть, выполните sudo cbb network."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果这是你的家庭网络，请运行 sudo cbb network。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si es tu red de casa, ejecuta sudo cbb network."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إن كانت هذه شبكة منزلك، فشغّل sudo cbb network."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikiwa huu ni mtandao wa nyumbani kwako, endesha sudo cbb network."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אם זו הרשת הביתית שלכם, הריצו sudo cbb network."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अगर यह आपका घरेलू नेटवर्क है, तो sudo cbb network चलाएँ।"
+          }
+        }
+      }
+    },
+    "Everywhere is on, but the group has no hub.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Везде» включено, но в группе нет хаба."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“随处”已打开，但群组没有中心节点。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En todas partes está activado, pero el grupo no tiene hub."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«في كل مكان» مفعّل، لكن ليس للمجموعة محور."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kila mahali kimewashwa, lakini kikundi hakina kitovu."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "״בכל מקום״ מופעל, אבל לקבוצה אין רכזת."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हर जगह चालू है, पर समूह में कोई हब नहीं है।"
+          }
+        }
+      }
+    },
+    "Make a computer at home the hub, in its advanced settings.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделайте домашний компьютер хабом в его расширенных настройках."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在家中某台电脑的高级设置中，将它设为中心节点。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz que un ordenador de casa sea el hub, en su configuración avanzada."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اجعل حاسوبًا في المنزل محورًا من إعداداته المتقدمة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fanya kompyuta ya nyumbani kuwa kitovu, kwenye mipangilio yake ya hali ya juu."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפכו מחשב בבית לרכזת, בהגדרות המתקדמות שלו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "घर के किसी कंप्यूटर को उसकी उन्नत सेटिंग्स में हब बनाएँ।"
+          }
+        }
+      }
+    },
+    "The tunnel to the hub %@ does not get through.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Туннель к хабу %@ не проходит."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通往中心节点 %@ 的隧道无法连通。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El túnel al hub %@ no pasa."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النفق إلى المحور %@ لا يمر."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handaki kwenda kitovu %@ halipiti."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המנהרה לרכזת %@ לא עוברת."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हब %@ तक सुरंग नहीं पहुँच रही।"
+          }
+        }
+      }
+    },
+    "This network may block tunnels: turn on the tunnel's disguise on the hub.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Эта сеть может резать туннели: включите маскировку туннеля на хабе."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此网络可能会阻止隧道：请在中心节点上打开隧道伪装。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta red puede bloquear túneles: activa el camuflaje del túnel en el hub."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قد تحجب هذه الشبكة الأنفاق: فعّل تمويه النفق على المحور."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mtandao huu unaweza kuzuia mahandaki: washa ufichaji wa handaki kwenye kitovu."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ייתכן שהרשת הזו חוסמת מנהרות: הפעילו הסוואת מנהרה ברכזת."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह नेटवर्क सुरंगें रोक सकता है: हब पर सुरंग का छद्मावरण चालू करें।"
+          }
+        }
+      }
+    },
+    "The hub %@ does not answer.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб %@ не отвечает."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中心节点 %@ 没有响应。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El hub %@ no responde."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المحور %@ لا يستجيب."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kitovu %@ hakijibu."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הרכזת %@ לא עונה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हब %@ जवाब नहीं दे रहा।"
+          }
+        }
+      }
+    },
+    "Check that the hub is on and online.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверьте, что хаб включён и в сети."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请确认中心节点已开机并联网。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprueba que el hub está encendido y conectado."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تأكد من أن المحور يعمل ومتصل بالشبكة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hakikisha kitovu kimewashwa na kiko mtandaoni."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ודאו שהרכזת דולקת ומחוברת לרשת."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जाँचें कि हब चालू है और ऑनलाइन है।"
+          }
+        }
+      }
+    },
+    "Connected, but no other device of the group is online.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Связь есть, но других устройств группы нет в сети."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已连接，但群组中没有其他设备在线。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectado, pero ningún otro dispositivo del grupo está en línea."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متصل، لكن لا يوجد جهاز آخر من المجموعة متصل."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imeunganishwa, lakini hakuna kifaa kingine cha kikundi kilicho mtandaoni."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יש חיבור, אבל אף מכשיר אחר בקבוצה לא מחובר."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जुड़ा है, पर समूह का कोई दूसरा डिवाइस ऑनलाइन नहीं है।"
+          }
+        }
+      }
+    },
+    "Turn on another device of the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включите другое устройство группы."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开群组中的另一台设备。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enciende otro dispositivo del grupo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شغّل جهازًا آخر من المجموعة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Washa kifaa kingine cha kikundi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפעילו מכשיר אחר של הקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह का कोई दूसरा डिवाइस चालू करें।"
+          }
+        }
+      }
+    },
+    "The relay does not answer.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ретранслятор не отвечает."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中继服务器没有响应。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El relé no responde."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المرحّل لا يستجيب."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relei haijibu."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הממסר לא עונה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रिले जवाब नहीं दे रहा।"
+          }
+        }
+      }
+    },
+    "Check the internet connection; CBB tries again by itself.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверьте подключение к интернету; CBB попробует снова сам."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请检查网络连接；CBB 会自动重试。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprueba la conexión a internet; CBB lo intenta de nuevo solo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحقق من الاتصال بالإنترنت؛ يعيد CBB المحاولة تلقائيًا."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angalia muunganisho wa intaneti; CBB hujaribu tena yenyewe."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בדקו את החיבור לאינטרנט; CBB ינסה שוב בעצמו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इंटरनेट कनेक्शन जाँचें; CBB खुद फिर कोशिश करता है।"
+          }
+        }
+      }
+    },
+    "This device is the hub, and no device has connected yet.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это устройство — хаб, и к нему ещё никто не подключился."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备是中心节点，但尚无设备连接。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este dispositivo es el hub y aún no se ha conectado ningún dispositivo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الجهاز هو المحور، ولم يتصل به أي جهاز بعد."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa hiki ndicho kitovu, na bado hakuna kifaa kilichounganishwa."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המכשיר הזה הוא הרכזת, ועוד אף מכשיר לא התחבר."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह डिवाइस हब है, और अभी तक कोई डिवाइस नहीं जुड़ा।"
+          }
+        }
+      }
+    },
+    "Check that the other devices have Everywhere on.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверьте, что на других устройствах включено «Везде»."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请确认其他设备已打开“随处”。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprueba que los otros dispositivos tienen activado En todas partes."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تأكد من تفعيل «في كل مكان» على الأجهزة الأخرى."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hakikisha vifaa vingine vimewasha Kila mahali."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ודאו שבמכשירים האחרים ״בכל מקום״ מופעל."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जाँचें कि दूसरे डिवाइसों पर हर जगह चालू है।"
+          }
+        }
+      }
+    },
+    "An admin muted this device: its copies do not reach the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Админ заглушил это устройство: его копии не доходят до группы."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "管理员已将此设备静音：它的复制内容不会到达群组。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un administrador silenció este dispositivo: sus copias no llegan al grupo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كتم مسؤولٌ هذا الجهاز: لا تصل نُسخه إلى المجموعة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Msimamizi amenyamazisha kifaa hiki: nakala zake hazifiki kwa kikundi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מנהל השתיק את המכשיר הזה: ההעתקות שלו לא מגיעות לקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक एडमिन ने इस डिवाइस को म्यूट किया है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।"
+          }
+        }
+      }
+    },
+    "An admin muted this device until %@: its copies do not reach the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Админ заглушил это устройство до %@: его копии не доходят до группы."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "管理员已将此设备静音至 %@：它的复制内容不会到达群组。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un administrador silenció este dispositivo hasta %@: sus copias no llegan al grupo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كتم مسؤولٌ هذا الجهاز حتى %@: لا تصل نُسخه إلى المجموعة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Msimamizi amenyamazisha kifaa hiki hadi %@: nakala zake hazifiki kwa kikundi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מנהל השתיק את המכשיר הזה עד %@: ההעתקות שלו לא מגיעות לקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक एडमिन ने इस डिवाइस को %@ तक म्यूट किया है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।"
+          }
+        }
+      }
+    },
+    "Ask an admin to unmute it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Попросите админа снять заглушение."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请管理员取消静音。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pide a un administrador que lo vuelva a activar."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اطلب من مسؤول إلغاء الكتم."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omba msimamizi aondoe unyamazishaji."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בקשו ממנהל לבטל את ההשתקה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी एडमिन से इसे अनम्यूट करने को कहें।"
+          }
+        }
+      }
+    },
+    "The forwarder does not take this hub.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Форвардер не принимает этот хаб."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转发器未接受此中心节点。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El reenviador no acepta este hub."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مُعيد التوجيه لا يقبل هذا المحور."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kisambazaji hakikubali kitovu hiki."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המעביר לא מקבל את הרכזת הזו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फ़ॉरवर्डर इस हब को स्वीकार नहीं कर रहा।"
+          }
+        }
+      }
+    },
+    "Devices away from home may not reach it; CBB tries again by itself.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройства вне дома могут до него не дойти; CBB попробует снова сам."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在家以外的设备可能无法连接到它；CBB 会自动重试。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los dispositivos fuera de casa podrían no alcanzarlo; CBB lo intenta de nuevo solo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قد لا تصل إليه الأجهزة خارج المنزل؛ يعيد CBB المحاولة تلقائيًا."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vifaa vilivyo mbali na nyumbani huenda visikifikie; CBB hujaribu tena yenyewe."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ייתכן שמכשירים מחוץ לבית לא יגיעו אליה; CBB ינסה שוב בעצמו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "घर से बाहर के डिवाइस शायद इस तक न पहुँचें; CBB खुद फिर कोशिश करता है।"
+          }
+        }
+      }
+    },
+    "The list of the forwarders' entry points is out of date.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Список точек входа форвардеров устарел."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转发器入口列表已过期。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La lista de puntos de entrada de los reenviadores está desactualizada."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قائمة نقاط الدخول لمُعيدي التوجيه قديمة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Orodha ya vituo vya kuingia vya visambazaji imepitwa na wakati."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "רשימת נקודות הכניסה של המעבירים לא עדכנית."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फ़ॉरवर्डरों के प्रवेश बिंदुओं की सूची पुरानी है।"
+          }
+        }
+      }
+    },
+    "Update CBB on a computer of the group.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновите CBB на компьютере группы."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在群组的一台电脑上更新 CBB。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualiza CBB en un ordenador del grupo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حدّث CBB على حاسوب من المجموعة."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sasisha CBB kwenye kompyuta ya kikundi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "עדכנו את CBB במחשב של הקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के किसी कंप्यूटर पर CBB अपडेट करें।"
+          }
+        }
+      }
+    },
+    "The group has records of a newer version.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В группе есть записи новой версии."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组中有较新版本的记录。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El grupo tiene registros de una versión más nueva."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لدى المجموعة سجلات من إصدار أحدث."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kikundi kina rekodi za toleo jipya zaidi."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בקבוצה יש רשומות של גרסה חדשה יותר."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह में नए संस्करण के रिकॉर्ड हैं।"
+          }
+        }
+      }
+    },
+    "Update CBB on this device.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновите CBB на этом устройстве."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此设备上更新 CBB。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualiza CBB en este dispositivo."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حدّث CBB على هذا الجهاز."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sasisha CBB kwenye kifaa hiki."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "עדכנו את CBB במכשיר הזה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस डिवाइस पर CBB अपडेट करें।"
+          }
+        }
+      }
+    },
+    "Devices at home cannot connect to this one: %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройства дома не могут подключиться к этому: %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "家中的设备无法连接到此设备：%@。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los dispositivos de casa no pueden conectarse a este: %@."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا تستطيع الأجهزة في المنزل الاتصال بهذا الجهاز: %@."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vifaa vya nyumbani haviwezi kuunganishwa na hiki: %@."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מכשירים בבית לא מצליחים להתחבר למכשיר הזה: %@."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "घर के डिवाइस इससे नहीं जुड़ पा रहे: %@।"
+          }
+        }
+      }
+    },
+    "Let CBB through this computer's firewall.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разрешите CBB в файрволе этого компьютера."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在这台电脑的防火墙中允许 CBB。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permite CBB en el cortafuegos de este ordenador."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسمح لـ CBB في جدار حماية هذا الحاسوب."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruhusu CBB kupitia ngome ya kompyuta hii."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אפשרו את CBB בחומת האש של המחשב הזה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस कंप्यूटर के फ़ायरवॉल में CBB को अनुमति दें।"
+          }
+        }
+      }
+    },
+    "Offline: %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не в сети: %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "离线：%@。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conexión: %@."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متصل: %@."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nje ya mtandao: %@."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא מחוברים: %@."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ऑफ़लाइन: %@।"
+          }
+        }
+      }
+    },
+    "Sync is off on: %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация выключена на: %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以下设备已关闭同步：%@。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sincronización está desactivada en: %@."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المزامنة متوقفة على: %@."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usawazishaji umezimwa kwenye: %@."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הסנכרון כבוי ב: %@."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इन पर सिंक बंद है: %@।"
+          }
+        }
+      }
+    },
+    "Muted by an admin: %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заглушены админом: %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已被管理员静音：%@。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Silenciados por un administrador: %@."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مكتومة من مسؤول: %@."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vimenyamazishwa na msimamizi: %@."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הושתקו על ידי מנהל: %@."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एडमिन द्वारा म्यूट: %@।"
+          }
+        }
+      }
+    },
+    "CBB %@ is available.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доступна CBB %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB %@ 已可用。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB %@ está disponible."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتوفر CBB %@."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB %@ inapatikana."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB %@ זמין."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB %@ उपलब्ध है।"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

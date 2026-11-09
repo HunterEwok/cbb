@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- "Why it does not sync" in the advanced settings of the iPhone, Android, Aurora, Mac and tray
+  apps: one sentence on why this device does not sync and what to do, then the other reasons.
+  The Rust core decides them (`cbb_core::why`, the core's call `why`, the phone member's `why`,
+  `why` in a computer's status), the apps say them in eight languages, and `cbb status` prints
+  the first that stops sync.
 - The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
   the Go relay's flags, key file, wire format and an open relay's budget with the same limits
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it

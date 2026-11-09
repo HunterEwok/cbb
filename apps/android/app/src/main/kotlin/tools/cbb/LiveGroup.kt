@@ -44,6 +44,8 @@ import tools.cbb.kit.Restore
 import tools.cbb.kit.ServerCredentials
 import tools.cbb.kit.SyncEngine
 import tools.cbb.kit.TLSTransport
+import tools.cbb.kit.WhyAway
+import tools.cbb.kit.WhyReason
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -534,6 +536,43 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     private fun refreshHub() = hubWork.execute {
         updateHub()
         updateRelay()
+    }
+
+    /**
+     * Why the phone does not sync (docs/apps.md, "Why it does not sync"):
+     * the member's reasons, with where the app's own tunnel stands, since
+     * the phone's hub, its sync away from home and its relay run here. Blocks.
+     */
+    fun why(): List<WhyReason> {
+        val n = synchronized(lock) { node } ?: return listOf(WhyReason("not_in_group", "stop"))
+        val paused = !foreground
+        val h = phoneHub?.takeIf { it.isOn }
+        val r = blindRelay?.takeIf { it.status(paused).first != RelayOnPhone.Status.OFF }
+        val a = awayFromHome?.takeIf { it.isOn }
+        val away = when {
+            h != null -> {
+                val (status, error) = h.status(paused)
+                WhyAway(
+                    hub = true,
+                    forwarder = status != HubOnPhone.Status.HOME_ONLY && status != HubOnPhone.Status.OFF,
+                    forwarderRegistered = status == HubOnPhone.Status.REGISTERED,
+                    entriesStale = status == HubOnPhone.Status.FAILED && h.forwarder?.isProject == true && entriesStale,
+                    error = error ?: "",
+                )
+            }
+            r != null -> {
+                val (status, _, error) = r.status(paused)
+                WhyAway(relay = true, relayConnected = status == RelayOnPhone.Status.CONNECTED, error = error ?: "")
+            }
+            a != null -> WhyAway(
+                hubDevice = a.hub ?: "",
+                through = a.status == AwayFromHome.Status.CONNECTED,
+                hidden = a.hubHidesTunnel,
+                error = a.lastError?.message ?: "",
+            )
+            else -> null
+        }
+        return runCatching { n.why(away) }.getOrDefault(emptyList())
     }
 
     /** The phone at a blind relay: null without a group. */

@@ -262,6 +262,19 @@ type Conflict struct {
 }
 
 // Status describes the service for cbb status.
+// WhyReason is one reason why a device does not sync, as the core gives
+// it: a stable code the apps say in their words, its level (stop, warn or
+// info) and its parameters.
+type WhyReason struct {
+	Code    string   `json:"code"`
+	Level   string   `json:"level"`
+	UntilMS int64    `json:"until_ms,omitempty"`
+	Device  string   `json:"device,omitempty"`
+	Devices []string `json:"devices,omitempty"`
+	Value   string   `json:"value,omitempty"`
+	Detail  string   `json:"detail,omitempty"`
+}
+
 type Status struct {
 	Device string `json:"device"`
 	Group  string `json:"group,omitempty"` // the group tag; empty when in no group
@@ -329,7 +342,11 @@ type Status struct {
 	// Quiet lists the interfaces on networks this device has not met its
 	// group on: it does not publish itself or take connections there.
 	Quiet []string `json:"quiet,omitempty"`
-	Away  *Away    `json:"away,omitempty"` // sync away from home; nil while it is off
+	// Why says why this device does not sync, the reason that stops the
+	// most first (cbb_core::why, docs/apps.md "Why it does not sync");
+	// empty when everything syncs.
+	Why  []WhyReason `json:"why,omitempty"`
+	Away *Away       `json:"away,omitempty"` // sync away from home; nil while it is off
 	// Paste is remote paste on this device; nil when in no group.
 	Paste *Paste `json:"paste,omitempty"`
 	// Keyboard is this computer as a Bluetooth keyboard; nil where there

@@ -153,6 +153,8 @@ protocol GroupController: AnyObject {
     func relayStatus() async -> AppModel.BlindRelay?
     /// Meets the group at a blind relay; both empty leave it.
     func setRelay(address: String, pin: String) async throws
+    /// Why the phone does not sync, the reason that stops the most first.
+    func why() async -> [WhyReason]
 }
 
 extension GroupController {
@@ -208,6 +210,7 @@ extension GroupController {
     func makeHub(_ id: String, forwardOnly: Bool) async throws { throw HubOnPhone.Failure.notRunning }
     func relayStatus() async -> AppModel.BlindRelay? { nil }
     func setRelay(address: String, pin: String) async throws {}
+    func why() async -> [WhyReason] { hasGroup ? [] : [WhyReason(code: "not_in_group", level: "stop")] }
 }
 
 /// What the app shows and does; the views only read it and call it.
@@ -798,6 +801,9 @@ final class AppModel: ObservableObject {
     }
 
     /// Updates which computers are online.
+    /// Why the phone does not sync (docs/apps.md, "Why it does not sync").
+    func why() async -> [WhyReason] { await group.why() }
+
     func refresh() async {
         await group.refresh()
         computers = group.computers

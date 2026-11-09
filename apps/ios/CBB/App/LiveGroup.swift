@@ -2144,6 +2144,34 @@ final class LiveGroup: GroupController {
     }
 
     /// The blind relay as Settings shows it; nil without a group.
+    /// Why the phone does not sync (docs/apps.md, "Why it does not sync"):
+    /// the member's reasons, with where the app's own tunnel stands, since
+    /// the phone's hub, its sync away from home and its relay run here.
+    func why() async -> [WhyReason] {
+        guard let node else { return [WhyReason(code: "not_in_group", level: "stop")] }
+        var a: WhyAway?
+        if let hub, state?.isAdmin == true, hub.isOn {
+            let (status, error) = hub.status(paused: !foreground)
+            var w = WhyAway()
+            (w.hub, w.forwarder, w.forwarderRegistered) = (true, status != .homeOnly && status != .off, status == .registered)
+            w.entriesStale = status == .failed && hub.forwarder?.isProject == true && entries.current == nil
+            w.error = error ?? ""
+            a = w
+        } else if let r = blindRelay, case let (status, _, error) = r.status(paused: !foreground), status != .off {
+            var w = WhyAway()
+            (w.relay, w.relayConnected, w.error) = (true, status == .connected, error ?? "")
+            a = w
+        } else if let away, await away.isOn {
+            var w = WhyAway()
+            w.hubDevice = await away.hub ?? ""
+            w.through = await away.status == .connected
+            w.hidden = await away.hubHidesTunnel
+            w.error = await away.lastError.map { "\($0)" } ?? ""
+            a = w
+        }
+        return (try? node.why(away: a)) ?? []
+    }
+
     func relayStatus() async -> AppModel.BlindRelay? {
         guard let r = blindRelay else { return nil }
         let (status, report, error) = r.status(paused: !foreground)

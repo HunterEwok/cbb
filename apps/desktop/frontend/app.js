@@ -239,6 +239,7 @@ function render() {
   $("tag").textContent = inGroup ? s.status.group : "";
   renderSwitches(inGroup);
   renderAlerts(inGroup ? s.status : undefined);
+  if ($("why-dialog").open) renderWhy();
   for (const b of document.querySelectorAll("[data-layout]")) b.setAttribute("aria-checked", String(b.dataset.layout === s.settings.layout));
   $("layouts").hidden = $("add").hidden = !inGroup;
   $("message").textContent = s.message ?? "";
@@ -944,6 +945,86 @@ function openSettings() {
   $("settings-dialog").showModal();
 }
 
+// Why this computer does not sync (docs/apps.md, "Why it does not sync"):
+// the service's status carries the core's reasons, the one that stops the
+// most first; the tray only says each code in its words.
+function whyTitle(r) {
+  const names = (r.devices ?? []).join(", ");
+  const date = r.until_ms ? new Date(r.until_ms).toLocaleString(lang, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  switch (r.code) {
+    case "not_in_group": return t("This device is in no group.");
+    case "removed": return t("This device was removed from the group.");
+    case "taken_over": return t("%s took the group over from this device.", r.device);
+    case "frozen": return t("Another admin froze this device's admin key.");
+    case "cert_expired": return t("This device's certificate ended on %s.", date);
+    case "cert_ending": return t("This device's certificate ends on %s.", date);
+    case "stopped": return t("The group's records stop the exchange.");
+    case "secrets_stopped": return t("The group sends no secrets until its root decides.");
+    case "sync_off": return r.until_ms ? t("Sync is off on this device until %s.", date) : t("Sync is off on this device.");
+    case "only_device": return t("This is the group's only device.");
+    case "away_off": return t("No device of the group is on this network.");
+    case "new_network": return t("This computer has not met its group on this network.");
+    case "no_hub": return t("Everywhere is on, but the group has no hub.");
+    case "tunnel_blocked": return t("The tunnel to the hub %s does not get through.", r.device);
+    case "hub_unreachable": return t("The hub %s does not answer.", r.device);
+    case "alone": return t("Connected, but no other device of the group is online.");
+    case "relay_down": return t("The relay does not answer.");
+    case "hub_waiting": return t("This device is the hub, and no device has connected yet.");
+    case "muted": return r.until_ms ? t("An admin muted this device until %s: its copies do not reach the group.", date) : t("An admin muted this device: its copies do not reach the group.");
+    case "forwarder_down": return t("The forwarder does not take this hub.");
+    case "entries_stale": return t("The list of the forwarders' entry points is out of date.");
+    case "newer": return t("The group has records of a newer version.");
+    case "unreached": return t("Devices at home cannot connect to this one: %s.", names);
+    case "devices_offline": return t("Offline: %s.", names);
+    case "devices_sync_off": return t("Sync is off on: %s.", names);
+    case "devices_muted": return t("Muted by an admin: %s.", names);
+    case "update": return t("CBB %s is available.", r.value);
+    default: return r.code;
+  }
+}
+
+function whyAction(r) {
+  switch (r.code) {
+    case "not_in_group": return t("Start a group or join one.");
+    case "removed": return t("Leave the group on this device, then join again.");
+    case "taken_over": return t("If this device was not lost, remove %s from the group.", r.device);
+    case "frozen": return t("Ask the group's root to unfreeze it.");
+    case "cert_expired": return t("Bring it home to an admin of the group: the admin renews the certificate.");
+    case "cert_ending": return t("Connect it at home to an admin of the group before then.");
+    case "stopped": return t("The group's root decides on its alerts.");
+    case "sync_off": return t("Turn sync on.");
+    case "only_device": return t("Add a phone or a computer.");
+    case "away_off": return t("Turn on Everywhere to sync away from home.");
+    case "new_network": return t("If this is your home network, run sudo cbb network.");
+    case "no_hub": return t("Make a computer at home the hub, in its advanced settings.");
+    case "tunnel_blocked": return t("This network may block tunnels: turn on the tunnel's disguise on the hub.");
+    case "hub_unreachable": return t("Check that the hub is on and online.");
+    case "alone": return t("Turn on another device of the group.");
+    case "relay_down": return t("Check the internet connection; CBB tries again by itself.");
+    case "hub_waiting": return t("Check that the other devices have Everywhere on.");
+    case "muted": return t("Ask an admin to unmute it.");
+    case "forwarder_down": return t("Devices away from home may not reach it; CBB tries again by itself.");
+    case "entries_stale": return t("Update CBB on a computer of the group.");
+    case "newer": return t("Update CBB on this device.");
+    case "unreached": return t("Let CBB through this computer's firewall.");
+    default: return "";
+  }
+}
+
+function renderWhy() {
+  const why = state.status?.why ?? [];
+  const row = (r, main) => {
+    const action = whyAction(r);
+    const detail = (state.settings?.details ?? state.show_details) ? [r.code, r.detail].filter(Boolean).join(": ") : "";
+    return `<div class="why ${esc(r.level)}${main ? " main" : ""}" data-code="${esc(r.code)}"><div>${esc(whyTitle(r))}</div>` +
+      (action ? `<div class="dim small">${esc(action)}</div>` : "") +
+      (detail ? `<div class="dim small mono">${esc(detail)}</div>` : "") + `</div>`;
+  };
+  $("why-list").innerHTML = !state.status ? "" : why.length === 0
+    ? `<p>${esc(t("Everything syncs."))}</p>`
+    : row(why[0], true) + (why.length > 1 ? `<h3>${esc(t("Also"))}</h3>` + why.slice(1).map((r) => row(r, false)).join("") : "");
+}
+
 // The add dialog: on the root or an admin it admits the new device that
 // shows a code and waits (cbb pair -qr), by its six digits typed here, its
 // QR code's text or a picture of it.
@@ -1123,6 +1204,10 @@ document.addEventListener("click", async (e) => {
     case "create": return act("CreateGroup");
     case "join": return joinGroup();
     case "recovery": case "advanced-recovery": $("settings-dialog").close(); return recovery();
+    case "advanced-why":
+      $("settings-dialog").close();
+      renderWhy();
+      return $("why-dialog").showModal();
     case "advanced-away": {
       // The hub and its tunnel are on this computer's card.
       $("settings-dialog").close();

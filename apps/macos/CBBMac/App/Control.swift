@@ -95,9 +95,13 @@ enum Control {
         /// The newest signed release the group passed around, when this Mac
         /// runs an older one.
         var update: String?
+        /// Why this Mac does not sync, the reason that stops the most first
+        /// (docs/apps.md, "Why it does not sync"); nil when everything
+        /// syncs.
+        var why: [WhyReason]?
 
         enum CodingKeys: String, CodingKey {
-            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted, update
+            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted, update, why
             case syncUntilMS = "sync_until_ms"
             case mutedUntilMS = "muted_until_ms"
         }

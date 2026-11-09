@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import Carbon.HIToolbox
+import SwiftUI
 import XCTest
 @testable import CBB
 
@@ -34,6 +35,26 @@ final class CBBMacTests: XCTestCase {
         XCTAssertFalse(devices[1].admin || devices[1].online)
         XCTAssertEqual(devices[1].kind, .desktop)
         XCTAssertEqual(devices[0].systemWithVersion, "Ubuntu 24.04")
+    }
+
+    /// The status's reasons why the Mac does not sync read back with their
+    /// parameters, and each code the core gives has words of its own.
+    func testWhy() throws {
+        let json = #"{"device":"me","group":"g","role":"member","version":"dev","why":[{"code":"tunnel_blocked","level":"stop","device":"pi","detail":"no answer"},{"code":"muted","level":"warn","until_ms":1700000000000}]}"#
+        let st = try JSONDecoder().decode(Control.Status.self, from: Data(json.utf8))
+        let why = try XCTUnwrap(st.why)
+        XCTAssertEqual(why.map(\.code), ["tunnel_blocked", "muted"])
+        XCTAssertEqual(why[0].device, "pi")
+        XCTAssertNotNil(why[1].until)
+        var url = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { url.deleteLastPathComponent() }
+        let data = try Data(contentsOf: url.appendingPathComponent("testdata/why/vectors.json"))
+        struct Case: Decodable { var want: [WhyReason] }
+        for c in try JSONDecoder().decode([Case].self, from: data) {
+            for r in c.want {
+                XCTAssertNotEqual(WhyList.title(r), Text(verbatim: r.code), r.code)
+            }
+        }
     }
 
     /// A mute goes out with its time as the service reads it, and a muted

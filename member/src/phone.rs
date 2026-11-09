@@ -660,8 +660,10 @@ impl Member {
 
     /// Why the phone does not sync (cbb_core::why), from the same status
     /// a computer's control socket gives: its sync and mute, the group's
-    /// records, the members connected and sync away from home.
-    pub fn why(&self) -> Vec<cbb_core::why::Reason> {
+    /// records, the members connected and sync away from home. An app
+    /// whose tunnel runs outside the member (the iPhone's and Android's)
+    /// hands in away, where its tunnel stands; None takes the member's own.
+    pub fn why(&self, away: Option<cbb_core::why::AwayFacts>) -> Vec<cbb_core::why::Reason> {
         let n = &self.node;
         let standing = self.muted();
         let now = uptime::wall_ms();
@@ -699,7 +701,15 @@ impl Member {
                 ..Default::default()
             })
             .collect();
-        crate::why::reasons(&st, &devs, now)
+        let mut facts = crate::why::facts(&st, &devs);
+        if let Some(mut a) = away {
+            // The app names the hub by its device ID.
+            if let Some(d) = devs.iter().find(|d| d.id == a.hub_device && !d.name.is_empty()) {
+                a.hub_device.clone_from(&d.name);
+            }
+            facts.away = Some(a);
+        }
+        cbb_core::why::diagnose(&facts, now)
     }
 
     /// What the group's records stop and what ends it, for the app's card.

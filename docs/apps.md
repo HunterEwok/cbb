@@ -157,8 +157,8 @@ they look, so both apps are built to the same plan.
    "Advanced settings", leaving the group, and about (seven taps on the version show the
    switch "Show error details", which puts the error itself under each error message; it is
    on in debug builds, and the launch argument or extra `ShowErrorDetails` sets it too).
-   The advanced ones: away from home (the hub, moving it to a computer, the tunnel disguise,
-   the blind relay) and, for admins, the group ("Copy lifetime", "Security level": root,
+   The advanced ones: why it does not sync (below), away from home (the hub, moving it to a
+   computer, the tunnel disguise, the blind relay) and, for admins, the group ("Copy lifetime", "Security level": root,
    admins, hubs). No long text sits under an item: a hard one has a tip of a sentence or
    two, shown from the first launch until the user closes it (TipKit on the iPhone). Sync
    away from home is turned on by the globe on Home (docs/design.md, "Sync away from
@@ -219,6 +219,46 @@ suggests making a second phone an admin.
 
 Errors are one line in plain words with the next step ("Turn on the computer that holds
 the group", not a status code), never a dialog that must be dismissed.
+
+## Why it does not sync
+
+A screen in the advanced settings of every app (the iPhone, Android, Aurora, the Mac and the
+tray app) says in one sentence why this device does not sync and what to do, the reason that
+stops the most first and large, the others under it. The Rust core decides the reasons
+(`cbb_core::why`): from what the member knows about itself, its group and its link away from
+home it gives each a stable code, a level (stop: nothing syncs here; warn: some copies or
+devices do not; info) and its parameters, and the apps only say each code in their words;
+`testdata/why/vectors.json` holds the cases. A computer's status carries them, a phone's member
+answers `why` (docs/core-api.md), with where the phone's own hub, tunnel and relay stand, and
+`cbb status` prints the first that stops sync. With "Show error details" on, each reason also
+shows its code and the member's own words.
+
+| Code | Level | What it says |
+|---|---|---|
+| `not_in_group` | stop | the device is in no group |
+| `removed` | stop | the group removed it: leave, then join again |
+| `taken_over` | stop | an admin took the group over from this root |
+| `frozen` | stop | another admin froze this computer's admin key |
+| `cert_expired` | stop | its certificate ended: an admin at home renews it |
+| `stopped` | stop | the group's records stop the exchange until the root decides |
+| `sync_off` | stop | sync is off here, until a time or until turned on |
+| `away_off` | stop | no device of the group is on this network: turn on Everywhere |
+| `new_network` | stop | a computer has not met its group on this network (`sudo cbb network`) |
+| `no_hub` | stop | Everywhere is on, but the group has no hub |
+| `tunnel_blocked` | stop | the plain WireGuard tunnel to the hub does not get through: the network may block it |
+| `hub_unreachable` | stop | the hub does not answer, though its tunnel is disguised |
+| `relay_down` | stop | the blind relay does not answer |
+| `hub_waiting` | stop | this device is the hub and nobody connected yet |
+| `alone` | stop | connected, but no other device of the group is online |
+| `secrets_stopped` | warn | the group sends no secrets until the root decides |
+| `muted` | warn | an admin muted this device: its copies do not reach the group |
+| `forwarder_down`, `entries_stale` | warn | the hub's forwarder does not take it, or the list of entry points is out of date |
+| `newer` | warn | the group has records of a newer version: update |
+| `unreached` | warn | members at home cannot connect to this computer: its firewall |
+| `cert_ending` | warn | its certificate ends within 30 days |
+| `only_device` | info | the group's only device: add a phone or a computer |
+| `devices_offline`, `devices_sync_off`, `devices_muted` | info | which other devices are offline, have sync off or are muted |
+| `update` | info | a newer CBB is available |
 
 ## Big screens
 

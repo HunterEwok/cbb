@@ -442,6 +442,10 @@
 <context>
     <name>SettingsPage</name>
     <message>
+        <source>Advanced settings</source>
+        <translation>Mipangilio ya kina</translation>
+    </message>
+    <message>
         <source>Bluetooth keyboard</source>
         <translation>Kibodi ya Bluetooth</translation>
     </message>
@@ -1199,6 +1203,225 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Simu isipokuwa kwenye mtandao wa nyumbani, husawazisha kupitia handaki la WireGuard la kitovu chako mwenyewe, kompyuta ya kikundi iliyowekwa kwa cbb global hub; mlango wake unafikika kutoka intaneti, lakini kupitia WireGuard yenye funguo za kikundi pekee. Kitovu hujibu simu hii itakapounganika nyumbani wakati ujao. Hakuna kinachoenda kwingine, na bila handaki hakuna muunganisho. Kuzima husahaulisha simu hii ufunguo wake wa handaki.</translation>
+    </message>
+</context>
+<context>
+    <name>WhySection</name>
+    <message>
+        <source>Why it does not sync</source>
+        <translation>Kwa nini haisawazishi</translation>
+    </message>
+    <message>
+        <source>Everything syncs.</source>
+        <translation>Kila kitu kinasawazishwa.</translation>
+    </message>
+    <message>
+        <source>Also</source>
+        <translation>Pia</translation>
+    </message>
+    <message>
+        <source>This device is in no group.</source>
+        <translation>Kifaa hiki hakimo kwenye kikundi chochote.</translation>
+    </message>
+    <message>
+        <source>Start a group or join one.</source>
+        <translation>Anzisha kikundi au ujiunge na kimoja.</translation>
+    </message>
+    <message>
+        <source>This device was removed from the group.</source>
+        <translation>Kifaa hiki kiliondolewa kwenye kikundi.</translation>
+    </message>
+    <message>
+        <source>Leave the group on this device, then join again.</source>
+        <translation>Ondoka kwenye kikundi kwenye kifaa hiki, kisha ujiunge tena.</translation>
+    </message>
+    <message>
+        <source>%1 took the group over from this device.</source>
+        <translation>%1 kilichukua kikundi kutoka kifaa hiki.</translation>
+    </message>
+    <message>
+        <source>If this device was not lost, remove %1 from the group.</source>
+        <translation>Ikiwa kifaa hiki hakikupotea, ondoa %1 kwenye kikundi.</translation>
+    </message>
+    <message>
+        <source>Another admin froze this device's admin key.</source>
+        <translation>Msimamizi mwingine aligandisha ufunguo wa usimamizi wa kifaa hiki.</translation>
+    </message>
+    <message>
+        <source>Ask the group's root to unfreeze it.</source>
+        <translation>Omba mzizi wa kikundi auyeyushe.</translation>
+    </message>
+    <message>
+        <source>This device's certificate ended on %1.</source>
+        <translation>Cheti cha kifaa hiki kiliisha %1.</translation>
+    </message>
+    <message>
+        <source>Bring it home to an admin of the group: the admin renews the certificate.</source>
+        <translation>Kiunganishe nyumbani na msimamizi wa kikundi: msimamizi atafanya upya cheti.</translation>
+    </message>
+    <message>
+        <source>This device's certificate ends on %1.</source>
+        <translation>Cheti cha kifaa hiki kinaisha %1.</translation>
+    </message>
+    <message>
+        <source>Connect it at home to an admin of the group before then.</source>
+        <translation>Kabla ya hapo, kiunganishe nyumbani na msimamizi wa kikundi.</translation>
+    </message>
+    <message>
+        <source>The group's records stop the exchange.</source>
+        <translation>Rekodi za kikundi zimesimamisha ubadilishanaji.</translation>
+    </message>
+    <message>
+        <source>The group's root decides on its alerts.</source>
+        <translation>Mzizi wa kikundi huamua kwenye arifa zake.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>Kikundi hakitumi siri hadi mzizi wake uamue.</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device.</source>
+        <translation>Usawazishaji umezimwa kwenye kifaa hiki.</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device until %1.</source>
+        <translation>Usawazishaji umezimwa kwenye kifaa hiki hadi %1.</translation>
+    </message>
+    <message>
+        <source>Turn sync on.</source>
+        <translation>Washa usawazishaji.</translation>
+    </message>
+    <message>
+        <source>This is the group's only device.</source>
+        <translation>Hiki ndicho kifaa pekee cha kikundi.</translation>
+    </message>
+    <message>
+        <source>Add a phone or a computer.</source>
+        <translation>Ongeza simu au kompyuta.</translation>
+    </message>
+    <message>
+        <source>No device of the group is on this network.</source>
+        <translation>Hakuna kifaa cha kikundi kwenye mtandao huu.</translation>
+    </message>
+    <message>
+        <source>Turn on Everywhere to sync away from home.</source>
+        <translation>Washa Kila mahali ili kusawazisha ukiwa mbali na nyumbani.</translation>
+    </message>
+    <message>
+        <source>This computer has not met its group on this network.</source>
+        <translation>Kompyuta hii bado haijakutana na kikundi chake kwenye mtandao huu.</translation>
+    </message>
+    <message>
+        <source>If this is your home network, run sudo cbb network.</source>
+        <translation>Ikiwa huu ni mtandao wa nyumbani kwako, endesha sudo cbb network.</translation>
+    </message>
+    <message>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>Kila mahali kimewashwa, lakini kikundi hakina kitovu.</translation>
+    </message>
+    <message>
+        <source>Make a computer at home the hub, in its advanced settings.</source>
+        <translation>Fanya kompyuta ya nyumbani kuwa kitovu, kwenye mipangilio yake ya hali ya juu.</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>Handaki kwenda kitovu %1 halipiti.</translation>
+    </message>
+    <message>
+        <source>This network may block tunnels: turn on the tunnel's disguise on the hub.</source>
+        <translation>Mtandao huu unaweza kuzuia mahandaki: washa ufichaji wa handaki kwenye kitovu.</translation>
+    </message>
+    <message>
+        <source>The hub %1 does not answer.</source>
+        <translation>Kitovu %1 hakijibu.</translation>
+    </message>
+    <message>
+        <source>Check that the hub is on and online.</source>
+        <translation>Hakikisha kitovu kimewashwa na kiko mtandaoni.</translation>
+    </message>
+    <message>
+        <source>Connected, but no other device of the group is online.</source>
+        <translation>Imeunganishwa, lakini hakuna kifaa kingine cha kikundi kilicho mtandaoni.</translation>
+    </message>
+    <message>
+        <source>Turn on another device of the group.</source>
+        <translation>Washa kifaa kingine cha kikundi.</translation>
+    </message>
+    <message>
+        <source>The relay does not answer.</source>
+        <translation>Relei haijibu.</translation>
+    </message>
+    <message>
+        <source>Check the internet connection; CBB tries again by itself.</source>
+        <translation>Angalia muunganisho wa intaneti; CBB hujaribu tena yenyewe.</translation>
+    </message>
+    <message>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>Kifaa hiki ndicho kitovu, na bado hakuna kifaa kilichounganishwa.</translation>
+    </message>
+    <message>
+        <source>Check that the other devices have Everywhere on.</source>
+        <translation>Hakikisha vifaa vingine vimewasha Kila mahali.</translation>
+    </message>
+    <message>
+        <source>An admin muted this device: its copies do not reach the group.</source>
+        <translation>Msimamizi amenyamazisha kifaa hiki: nakala zake hazifiki kwa kikundi.</translation>
+    </message>
+    <message>
+        <source>An admin muted this device until %1: its copies do not reach the group.</source>
+        <translation>Msimamizi amenyamazisha kifaa hiki hadi %1: nakala zake hazifiki kwa kikundi.</translation>
+    </message>
+    <message>
+        <source>Ask an admin to unmute it.</source>
+        <translation>Omba msimamizi aondoe unyamazishaji.</translation>
+    </message>
+    <message>
+        <source>The forwarder does not take this hub.</source>
+        <translation>Kisambazaji hakikubali kitovu hiki.</translation>
+    </message>
+    <message>
+        <source>Devices away from home may not reach it; CBB tries again by itself.</source>
+        <translation>Vifaa vilivyo mbali na nyumbani huenda visikifikie; CBB hujaribu tena yenyewe.</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>Orodha ya vituo vya kuingia vya visambazaji imepitwa na wakati.</translation>
+    </message>
+    <message>
+        <source>Update CBB on a computer of the group.</source>
+        <translation>Sasisha CBB kwenye kompyuta ya kikundi.</translation>
+    </message>
+    <message>
+        <source>The group has records of a newer version.</source>
+        <translation>Kikundi kina rekodi za toleo jipya zaidi.</translation>
+    </message>
+    <message>
+        <source>Update CBB on this device.</source>
+        <translation>Sasisha CBB kwenye kifaa hiki.</translation>
+    </message>
+    <message>
+        <source>Devices at home cannot connect to this one: %1.</source>
+        <translation>Vifaa vya nyumbani haviwezi kuunganishwa na hiki: %1.</translation>
+    </message>
+    <message>
+        <source>Let CBB through this computer's firewall.</source>
+        <translation>Ruhusu CBB kupitia ngome ya kompyuta hii.</translation>
+    </message>
+    <message>
+        <source>Offline: %1.</source>
+        <translation>Nje ya mtandao: %1.</translation>
+    </message>
+    <message>
+        <source>Sync is off on: %1.</source>
+        <translation>Usawazishaji umezimwa kwenye: %1.</translation>
+    </message>
+    <message>
+        <source>Muted by an admin: %1.</source>
+        <translation>Vimenyamazishwa na msimamizi: %1.</translation>
+    </message>
+    <message>
+        <source>CBB %1 is available.</source>
+        <translation>CBB %1 inapatikana.</translation>
     </message>
 </context>
 </TS>

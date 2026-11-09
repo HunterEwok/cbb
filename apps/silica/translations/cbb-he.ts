@@ -442,6 +442,10 @@
 <context>
     <name>SettingsPage</name>
     <message>
+        <source>Advanced settings</source>
+        <translation>הגדרות מתקדמות</translation>
+    </message>
+    <message>
         <source>Bluetooth keyboard</source>
         <translation>מקלדת בלוטות'</translation>
     </message>
@@ -1199,6 +1203,225 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>כשהטלפון אינו ברשת הביתית, הוא מסתנכרן דרך מנהרת ה-WireGuard של הרכזת שלך, מחשב בקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם מפתחות הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. כיבוי גורם לטלפון לשכוח את מפתח המנהרה שלו.</translation>
+    </message>
+</context>
+<context>
+    <name>WhySection</name>
+    <message>
+        <source>Why it does not sync</source>
+        <translation>למה אין סנכרון</translation>
+    </message>
+    <message>
+        <source>Everything syncs.</source>
+        <translation>הכול מסתנכרן.</translation>
+    </message>
+    <message>
+        <source>Also</source>
+        <translation>עוד</translation>
+    </message>
+    <message>
+        <source>This device is in no group.</source>
+        <translation>המכשיר הזה לא בשום קבוצה.</translation>
+    </message>
+    <message>
+        <source>Start a group or join one.</source>
+        <translation>צרו קבוצה או הצטרפו לאחת.</translation>
+    </message>
+    <message>
+        <source>This device was removed from the group.</source>
+        <translation>המכשיר הזה הוסר מהקבוצה.</translation>
+    </message>
+    <message>
+        <source>Leave the group on this device, then join again.</source>
+        <translation>צאו מהקבוצה במכשיר הזה והצטרפו שוב.</translation>
+    </message>
+    <message>
+        <source>%1 took the group over from this device.</source>
+        <translation>%1 לקח את הקבוצה מהמכשיר הזה.</translation>
+    </message>
+    <message>
+        <source>If this device was not lost, remove %1 from the group.</source>
+        <translation>אם המכשיר לא אבד, הסירו את %1 מהקבוצה.</translation>
+    </message>
+    <message>
+        <source>Another admin froze this device's admin key.</source>
+        <translation>מנהל אחר הקפיא את מפתח הניהול של המכשיר הזה.</translation>
+    </message>
+    <message>
+        <source>Ask the group's root to unfreeze it.</source>
+        <translation>בקשו מהשורש של הקבוצה לבטל את ההקפאה.</translation>
+    </message>
+    <message>
+        <source>This device's certificate ended on %1.</source>
+        <translation>התעודה של המכשיר הזה פגה ב־%1.</translation>
+    </message>
+    <message>
+        <source>Bring it home to an admin of the group: the admin renews the certificate.</source>
+        <translation>חברו אותו בבית למנהל של הקבוצה: המנהל יחדש את התעודה.</translation>
+    </message>
+    <message>
+        <source>This device's certificate ends on %1.</source>
+        <translation>התעודה של המכשיר הזה תפוג ב־%1.</translation>
+    </message>
+    <message>
+        <source>Connect it at home to an admin of the group before then.</source>
+        <translation>לפני כן, חברו אותו בבית למנהל של הקבוצה.</translation>
+    </message>
+    <message>
+        <source>The group's records stop the exchange.</source>
+        <translation>הרשומות של הקבוצה עצרו את ההחלפה.</translation>
+    </message>
+    <message>
+        <source>The group's root decides on its alerts.</source>
+        <translation>השורש של הקבוצה מחליט בהתראות שלו.</translation>
+    </message>
+    <message>
+        <source>The group sends no secrets until its root decides.</source>
+        <translation>הקבוצה לא שולחת סודות עד שהשורש שלה יחליט.</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device.</source>
+        <translation>הסנכרון כבוי במכשיר הזה.</translation>
+    </message>
+    <message>
+        <source>Sync is off on this device until %1.</source>
+        <translation>הסנכרון כבוי במכשיר הזה עד %1.</translation>
+    </message>
+    <message>
+        <source>Turn sync on.</source>
+        <translation>הפעילו את הסנכרון.</translation>
+    </message>
+    <message>
+        <source>This is the group's only device.</source>
+        <translation>זה המכשיר היחיד בקבוצה.</translation>
+    </message>
+    <message>
+        <source>Add a phone or a computer.</source>
+        <translation>הוסיפו טלפון או מחשב.</translation>
+    </message>
+    <message>
+        <source>No device of the group is on this network.</source>
+        <translation>אף מכשיר של הקבוצה לא נמצא ברשת הזו.</translation>
+    </message>
+    <message>
+        <source>Turn on Everywhere to sync away from home.</source>
+        <translation>הפעילו את ״בכל מקום״ כדי לסנכרן מחוץ לבית.</translation>
+    </message>
+    <message>
+        <source>This computer has not met its group on this network.</source>
+        <translation>המחשב הזה עוד לא פגש את הקבוצה שלו ברשת הזו.</translation>
+    </message>
+    <message>
+        <source>If this is your home network, run sudo cbb network.</source>
+        <translation>אם זו הרשת הביתית שלכם, הריצו sudo cbb network.</translation>
+    </message>
+    <message>
+        <source>Everywhere is on, but the group has no hub.</source>
+        <translation>״בכל מקום״ מופעל, אבל לקבוצה אין רכזת.</translation>
+    </message>
+    <message>
+        <source>Make a computer at home the hub, in its advanced settings.</source>
+        <translation>הפכו מחשב בבית לרכזת, בהגדרות המתקדמות שלו.</translation>
+    </message>
+    <message>
+        <source>The tunnel to the hub %1 does not get through.</source>
+        <translation>המנהרה לרכזת %1 לא עוברת.</translation>
+    </message>
+    <message>
+        <source>This network may block tunnels: turn on the tunnel's disguise on the hub.</source>
+        <translation>ייתכן שהרשת הזו חוסמת מנהרות: הפעילו הסוואת מנהרה ברכזת.</translation>
+    </message>
+    <message>
+        <source>The hub %1 does not answer.</source>
+        <translation>הרכזת %1 לא עונה.</translation>
+    </message>
+    <message>
+        <source>Check that the hub is on and online.</source>
+        <translation>ודאו שהרכזת דולקת ומחוברת לרשת.</translation>
+    </message>
+    <message>
+        <source>Connected, but no other device of the group is online.</source>
+        <translation>יש חיבור, אבל אף מכשיר אחר בקבוצה לא מחובר.</translation>
+    </message>
+    <message>
+        <source>Turn on another device of the group.</source>
+        <translation>הפעילו מכשיר אחר של הקבוצה.</translation>
+    </message>
+    <message>
+        <source>The relay does not answer.</source>
+        <translation>הממסר לא עונה.</translation>
+    </message>
+    <message>
+        <source>Check the internet connection; CBB tries again by itself.</source>
+        <translation>בדקו את החיבור לאינטרנט; CBB ינסה שוב בעצמו.</translation>
+    </message>
+    <message>
+        <source>This device is the hub, and no device has connected yet.</source>
+        <translation>המכשיר הזה הוא הרכזת, ועוד אף מכשיר לא התחבר.</translation>
+    </message>
+    <message>
+        <source>Check that the other devices have Everywhere on.</source>
+        <translation>ודאו שבמכשירים האחרים ״בכל מקום״ מופעל.</translation>
+    </message>
+    <message>
+        <source>An admin muted this device: its copies do not reach the group.</source>
+        <translation>מנהל השתיק את המכשיר הזה: ההעתקות שלו לא מגיעות לקבוצה.</translation>
+    </message>
+    <message>
+        <source>An admin muted this device until %1: its copies do not reach the group.</source>
+        <translation>מנהל השתיק את המכשיר הזה עד %1: ההעתקות שלו לא מגיעות לקבוצה.</translation>
+    </message>
+    <message>
+        <source>Ask an admin to unmute it.</source>
+        <translation>בקשו ממנהל לבטל את ההשתקה.</translation>
+    </message>
+    <message>
+        <source>The forwarder does not take this hub.</source>
+        <translation>המעביר לא מקבל את הרכזת הזו.</translation>
+    </message>
+    <message>
+        <source>Devices away from home may not reach it; CBB tries again by itself.</source>
+        <translation>ייתכן שמכשירים מחוץ לבית לא יגיעו אליה; CBB ינסה שוב בעצמו.</translation>
+    </message>
+    <message>
+        <source>The list of the forwarders' entry points is out of date.</source>
+        <translation>רשימת נקודות הכניסה של המעבירים לא עדכנית.</translation>
+    </message>
+    <message>
+        <source>Update CBB on a computer of the group.</source>
+        <translation>עדכנו את CBB במחשב של הקבוצה.</translation>
+    </message>
+    <message>
+        <source>The group has records of a newer version.</source>
+        <translation>בקבוצה יש רשומות של גרסה חדשה יותר.</translation>
+    </message>
+    <message>
+        <source>Update CBB on this device.</source>
+        <translation>עדכנו את CBB במכשיר הזה.</translation>
+    </message>
+    <message>
+        <source>Devices at home cannot connect to this one: %1.</source>
+        <translation>מכשירים בבית לא מצליחים להתחבר למכשיר הזה: %1.</translation>
+    </message>
+    <message>
+        <source>Let CBB through this computer's firewall.</source>
+        <translation>אפשרו את CBB בחומת האש של המחשב הזה.</translation>
+    </message>
+    <message>
+        <source>Offline: %1.</source>
+        <translation>לא מחוברים: %1.</translation>
+    </message>
+    <message>
+        <source>Sync is off on: %1.</source>
+        <translation>הסנכרון כבוי ב: %1.</translation>
+    </message>
+    <message>
+        <source>Muted by an admin: %1.</source>
+        <translation>הושתקו על ידי מנהל: %1.</translation>
+    </message>
+    <message>
+        <source>CBB %1 is available.</source>
+        <translation>CBB %1 זמין.</translation>
     </message>
 </context>
 </TS>
