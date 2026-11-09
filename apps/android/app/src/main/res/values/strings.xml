@@ -17,9 +17,6 @@
     <string name="theme_material">Material You</string>
     <string name="theme_light">Light</string>
     <string name="join_title">Join a group</string>
-    <string name="join_admin">Join as an admin</string>
-    <string name="join_admin_title">Join as an admin</string>
-    <string name="join_admin_hint">On the group\'s root phone, tap + and scan this code: only the root adds a phone as an admin. Keep this screen open.</string>
     <string name="join_hint">On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</string>
     <string name="join_qr_label">QR code to join the group</string>
     <string name="join_tv">Join a phone\'s group</string>
@@ -39,6 +36,7 @@
     <string name="make_admin_title">Make %1$s an admin?</string>
     <string name="make_admin_body">It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.</string>
     <string name="make_admin_hardware_body">It can then add and remove devices with cbb pair and cbb remove. Its keys are in its hardware, which never lets them out.</string>
+    <string name="make_admin_phone_body">It can then add and remove devices, and take the group over if this phone is lost.</string>
     <string name="made_admin">It is an admin now: it adds and removes devices with cbb pair and cbb remove.</string>
     <string name="frozen">frozen</string>
     <string name="unfreeze">Unfreeze</string>
@@ -62,7 +60,7 @@
     <string name="reason_join">Join the group as an admin</string>
     <string name="reason_add">Add a computer to your group</string>
     <string name="reason_remove">Remove a device from your group</string>
-    <string name="reason_make_admin">Make a computer an admin</string>
+    <string name="reason_make_admin">Make a device an admin</string>
     <string name="reason_unfreeze">Unfreeze an admin computer</string>
     <string name="reason_take_over">Take the group over from the lost phone</string>
     <string name="reason_take_handed">Take the group the computer handed to this phone</string>

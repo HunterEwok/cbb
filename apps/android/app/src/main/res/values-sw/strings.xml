@@ -33,6 +33,7 @@
     <string name="make_admin_title">Ufanye %1$s kuwa msimamizi?</string>
     <string name="make_admin_body">Kisha kitaweza kuongeza na kuondoa vifaa kwa cbb pair na cbb remove. Funguo zake ziko kwenye faili kwenye kompyuta: yeyote anayenakili faili hilo anaweza kutenda kama msimamizi hadi msimamizi mwingine akiondoe. Fanya hivi tu kwa kompyuta unayoilinda.</string>
     <string name="make_admin_hardware_body">Kisha kitaweza kuongeza na kuondoa vifaa kwa cbb pair na cbb remove. Funguo zake ziko kwenye maunzi yake, ambayo hayaziachi zitoke kamwe.</string>
+    <string name="make_admin_phone_body">Kisha itaweza kuongeza na kuondoa vifaa, na kuchukua kikundi simu hii ikipotea.</string>
     <string name="made_admin">Sasa ni msimamizi: huongeza na kuondoa vifaa kwa cbb pair na cbb remove.</string>
     <string name="frozen">imegandishwa</string>
     <string name="unfreeze">Fungua ugandishaji</string>
@@ -56,7 +57,7 @@
     <string name="reason_join">Jiunge na kikundi kama msimamizi</string>
     <string name="reason_add">Ongeza kompyuta kwenye kikundi chako</string>
     <string name="reason_remove">Ondoa kifaa kwenye kikundi chako</string>
-    <string name="reason_make_admin">Fanya kompyuta kuwa msimamizi</string>
+    <string name="reason_make_admin">Fanya kifaa kuwa msimamizi</string>
     <string name="reason_unfreeze">Fungua ugandishaji wa kompyuta ya msimamizi</string>
     <string name="reason_take_over">Chukua kikundi kutoka kwa simu iliyopotea</string>
     <string name="reason_take_handed">Chukua kikundi ambacho kompyuta iliikabidhi simu hii</string>
@@ -535,9 +536,6 @@
     <string name="mute_ever">Hadi msimamizi akiondolee unyamazishaji</string>
     <string name="create_group">Unda kikundi</string>
     <string name="join_group">Jiunge na kikundi</string>
-    <string name="join_admin">Jiunge kama msimamizi</string>
-    <string name="join_admin_title">Jiunge kama msimamizi</string>
-    <string name="join_admin_hint">Kwenye simu ya mzizi ya kikundi, gusa + na uchanganue msimbo huu: mzizi pekee ndio huongeza simu kama msimamizi. Acha skrini hii wazi.</string>
     <string name="restore_link">Rejesha kwa ufunguo wa urejeshaji</string>
     <string name="sync_on">Usawazishaji umewashwa</string>
     <string name="sync_off">Usawazishaji umezimwa</string>

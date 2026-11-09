@@ -33,6 +33,7 @@
     <string name="make_admin_title">让 %1$s 成为管理员？</string>
     <string name="make_admin_body">之后它就可以用 cbb pair 和 cbb remove 添加和移除设备。它的密钥存放在电脑上的一个文件中：任何复制该文件的人都能以管理员身份行事，直到另一位管理员将其移除。只对你妥善保管的电脑这样做。</string>
     <string name="make_admin_hardware_body">之后它就可以用 cbb pair 和 cbb remove 添加和移除设备。它的密钥存放在硬件中，永远不会离开硬件。</string>
+    <string name="make_admin_phone_body">之后它可以添加和移除设备，如果这部手机丢了，还能接管群组。</string>
     <string name="made_admin">它现在是管理员：可用 cbb pair 和 cbb remove 添加和移除设备。</string>
     <string name="frozen">已冻结</string>
     <string name="unfreeze">解冻</string>
@@ -56,7 +57,7 @@
     <string name="reason_join">以管理员身份加入群组</string>
     <string name="reason_add">把电脑添加到你的群组</string>
     <string name="reason_remove">从群组中移除设备</string>
-    <string name="reason_make_admin">让电脑成为管理员</string>
+    <string name="reason_make_admin">让设备成为管理员</string>
     <string name="reason_unfreeze">解冻管理员电脑</string>
     <string name="reason_take_over">从丢失的手机接管群组</string>
     <string name="reason_take_handed">接管电脑交给这部手机的群组</string>
@@ -535,9 +536,6 @@
     <string name="mute_ever">直到管理员取消静音</string>
     <string name="create_group">创建群组</string>
     <string name="join_group">加入群组</string>
-    <string name="join_admin">以管理员身份加入</string>
-    <string name="join_admin_title">以管理员身份加入</string>
-    <string name="join_admin_hint">在群组的根手机上轻点 + 并扫描此代码：只有根能将手机添加为管理员。请保持此屏幕打开。</string>
     <string name="restore_link">用恢复密钥恢复</string>
     <string name="sync_on">同步已开启</string>
     <string name="sync_off">同步已关闭</string>

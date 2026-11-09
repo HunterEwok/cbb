@@ -33,6 +33,7 @@
     <string name="make_admin_title">%1$s को एडमिन बनाएँ?</string>
     <string name="make_admin_body">फिर वह cbb pair और cbb remove से डिवाइस जोड़ और हटा सकता है। उसकी कुंजियाँ कंप्यूटर पर एक फ़ाइल में हैं: जो भी उस फ़ाइल को कॉपी करे, वह तब तक एडमिन की तरह काम कर सकता है जब तक कोई दूसरा एडमिन उसे हटा न दे। यह केवल उसी कंप्यूटर के लिए करें जिसे आप सुरक्षित रखते हैं।</string>
     <string name="make_admin_hardware_body">फिर वह cbb pair और cbb remove से डिवाइस जोड़ और हटा सकता है। उसकी कुंजियाँ उसके हार्डवेयर में हैं, जो उन्हें कभी बाहर नहीं जाने देता।</string>
+    <string name="make_admin_phone_body">फिर वह डिवाइस जोड़ और हटा सकेगा, और यह फ़ोन खो जाए तो ग्रुप अपने हाथ में ले सकेगा।</string>
     <string name="made_admin">अब यह एडमिन है: यह cbb pair और cbb remove से डिवाइस जोड़ता और हटाता है।</string>
     <string name="frozen">फ़्रीज़</string>
     <string name="unfreeze">अनफ़्रीज़ करें</string>
@@ -56,7 +57,7 @@
     <string name="reason_join">एडमिन के रूप में समूह से जुड़ें</string>
     <string name="reason_add">अपने समूह में कंप्यूटर जोड़ें</string>
     <string name="reason_remove">अपने समूह से कोई डिवाइस हटाएँ</string>
-    <string name="reason_make_admin">किसी कंप्यूटर को एडमिन बनाएँ</string>
+    <string name="reason_make_admin">किसी डिवाइस को एडमिन बनाएँ</string>
     <string name="reason_unfreeze">किसी एडमिन कंप्यूटर को अनफ़्रीज़ करें</string>
     <string name="reason_take_over">खोए फ़ोन से समूह अपने हाथ में लें</string>
     <string name="reason_take_handed">वह समूह लें जो कंप्यूटर ने इस फ़ोन को सौंपा</string>
@@ -535,9 +536,6 @@
     <string name="mute_ever">जब तक कोई एडमिन अनम्यूट न करे</string>
     <string name="create_group">समूह बनाएँ</string>
     <string name="join_group">समूह से जुड़ें</string>
-    <string name="join_admin">एडमिन के रूप में जुड़ें</string>
-    <string name="join_admin_title">एडमिन के रूप में जुड़ें</string>
-    <string name="join_admin_hint">समूह के रूट फ़ोन पर + दबाएँ और यह कोड स्कैन करें: केवल रूट ही किसी फ़ोन को एडमिन के रूप में जोड़ता है। यह स्क्रीन खुली रखें।</string>
     <string name="restore_link">रिकवरी कुंजी से बहाल करें</string>
     <string name="sync_on">सिंक चालू है</string>
     <string name="sync_off">सिंक बंद है</string>
