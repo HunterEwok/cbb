@@ -446,6 +446,12 @@ mod tests {
         SCRIPT.get_or_init(|| {
             let dir = std::env::temp_dir().join(format!("cbb-helper-test-{}-{}", std::process::id(), next()));
             std::fs::create_dir_all(&dir).unwrap();
+            // cbb refuses a helper in a folder its group may write, which a
+            // umask of 0002 would make it.
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
             let script = dir.join(PROGRAM);
             let exe = std::env::current_exe().unwrap();
             std::fs::write(

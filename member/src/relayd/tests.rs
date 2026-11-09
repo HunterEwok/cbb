@@ -57,15 +57,36 @@ fn ip(s: &str) -> Option<IpAddr> {
     Some(s.parse().unwrap())
 }
 
-/// A connection for a member registered without a device behind it.
+/// A connection for a member registered without a device behind it. The
+/// tests that fill the relay hold thousands of them, more than a soft limit
+/// of 1024 open files allows, so the first call raises it to the hard limit.
+/// A test that fails while holding the listener does not fail the others.
 fn conn() -> TcpStream {
     static LISTENER: std::sync::OnceLock<std::sync::Mutex<TcpListener>> = std::sync::OnceLock::new();
-    let ln = LISTENER.get_or_init(|| std::sync::Mutex::new(TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap()));
-    let ln = ln.lock().unwrap();
+    let ln = LISTENER.get_or_init(|| {
+        raise_open_files();
+        std::sync::Mutex::new(TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap())
+    });
+    let ln = ln.lock().unwrap_or_else(|e| e.into_inner());
     let c = TcpStream::connect(ln.local_addr().unwrap()).unwrap();
     drop(ln.accept().unwrap());
     c
 }
+
+#[cfg(unix)]
+fn raise_open_files() {
+    let mut l = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    // SAFETY: getrlimit and setrlimit only read and write the struct passed.
+    unsafe {
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut l) == 0 && l.rlim_cur < l.rlim_max {
+            l.rlim_cur = l.rlim_max;
+            libc::setrlimit(libc::RLIMIT_NOFILE, &l);
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn raise_open_files() {}
 
 fn share() -> Arc<GroupShare> {
     Arc::new(GroupShare { pairs: AtomicUsize::new(0), reads: AtomicUsize::new(0), bytes: None })
