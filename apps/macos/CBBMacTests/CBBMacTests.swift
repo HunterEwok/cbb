@@ -58,6 +58,13 @@ final class CBBMacTests: XCTestCase {
         XCTAssertEqual(alerts.count, 1)
         XCTAssertTrue(alerts[0].unmute)
         XCTAssertTrue(GroupAlerts.lines(Control.Status(device: "me", group: "g", role: "member", version: "dev")).isEmpty)
+        // This Mac itself is unmuted on the plain socket, without the
+        // password; another device takes the administrator.
+        let own = try XCTUnwrap(MacModel.ownMute("me", on: false, me: "me"))
+        XCTAssertEqual(String(decoding: try Control.encode(own), as: UTF8.self), "{\"device\":\"me\",\"len\":0,\"op\":\"unmute\"}\n")
+        XCTAssertEqual(MacModel.ownMute("me", on: true, forMS: 60000, me: "me")?.forMS, 60000)
+        XCTAssertNil(MacModel.ownMute("ab12", on: false, me: "me"))
+        XCTAssertNil(MacModel.ownMute("me", on: false, me: nil))
     }
 
     /// What cbb pair -app writes reads as the join's code, and its QR code

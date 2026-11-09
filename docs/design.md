@@ -923,6 +923,11 @@ Its own user turns sync off ("Sync on and off"); for the whole group an admin mu
   root. The device says in its hello that it is muted and until when, so every devices list
   shows it.
 
+An admin computer mutes or unmutes itself on the control socket too, not only on the admin
+socket: it changes nothing for the rest of the group, so the Mac app and the tray app do it
+without asking for the administrator's password. Any other device still takes the admin
+socket (D-62).
+
 The mute lasts across restarts (`mute.json` in the state directory) and ends by itself when
 its time has passed. A device that does not take the command, an older or a broken one, is
 removed instead. The member protocol is unchanged: a muted device's copies are not made, so

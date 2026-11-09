@@ -333,14 +333,41 @@ final class MacModel: ObservableObject {
     /// On an admin: mutes a device for the whole group, for forMS
     /// milliseconds, 0 for until an admin unmutes it; its copies then stay
     /// its own.
+    /// This Mac itself goes over the plain socket, which the service takes
+    /// for muting or unmuting its own device, so no password is asked.
     func mute(_ id: String, forMS: Int64 = 0) async {
+        let done = String(localized: "Muted: its copies do not reach the group.")
+        if let h = Self.ownMute(id, on: true, forMS: forMS, me: status?.device) {
+            return await plain(h, done: done)
+        }
         var arguments = ["mute", "-on", id]
         if forMS > 0 { arguments += ["-for", "\(forMS)ms"] }
-        await admin(arguments, done: String(localized: "Muted: its copies do not reach the group."))
+        await admin(arguments, done: done)
     }
 
     func unmute(_ id: String) async {
-        await admin(["unmute", "-on", id], done: String(localized: "Unmuted: its copies reach the group again."))
+        let done = String(localized: "Unmuted: its copies reach the group again.")
+        if let h = Self.ownMute(id, on: false, me: status?.device) {
+            return await plain(h, done: done)
+        }
+        await admin(["unmute", "-on", id], done: done)
+    }
+
+    /// The request that mutes or unmutes this Mac itself on the plain
+    /// socket; nil for another device, which takes the administrator.
+    nonisolated static func ownMute(_ id: String, on: Bool, forMS: Int64 = 0, me: String?) -> Control.Header? {
+        guard let me, !me.isEmpty, id == me else { return nil }
+        var h = Control.Header(op: on ? "mute" : "unmute")
+        h.device = id
+        if on, forMS > 0 { h.forMS = forMS }
+        return h
+    }
+
+    private func plain(_ h: Control.Header, done: String) async {
+        await act {
+            _ = try await self.client.request(h)
+            return done
+        }
     }
 
     /// What cbb pair -app writes (cmd/cbb/joinapp.go), with when the wait

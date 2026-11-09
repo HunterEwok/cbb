@@ -1486,6 +1486,10 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The Mac app and the tray app mute and unmute their own computer without the administrator's
+  password: the service takes muting or unmuting the device itself on the control socket,
+  where it is an admin, and `cbb unmute -on` this device works without `sudo`. Any other
+  device still takes the administrator.
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program

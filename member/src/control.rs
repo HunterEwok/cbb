@@ -661,6 +661,13 @@ pub fn needs_admin(h: &Header) -> bool {
     !(h.op == "sync" && h.device.is_empty()) && is_admin(&h.op)
 }
 
+/// Whether op, done on this device itself, is one the service also takes
+/// on its control socket (Service::own_device_op): muting it or ending its
+/// mute.
+pub fn is_own_device_op(op: &str) -> bool {
+    matches!(op, "mute" | "unmute")
+}
+
 /// The admin socket next to the control socket at `socket`.
 pub fn admin_socket(socket: &std::path::Path) -> std::path::PathBuf {
     // On Windows it sits in a folder of its own, whose access list lets

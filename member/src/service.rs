@@ -944,6 +944,20 @@ impl Service {
         Ok(())
     }
 
+    /// Whether the request h only mutes or unmutes this device itself,
+    /// which the service also takes on its control socket: it changes
+    /// nothing for the rest of the group, and only an admin device may do it
+    /// (mute_op asks for the admin key), so the app turns its own device back
+    /// on without the administrator's password (docs/design.md, "Muting a
+    /// device").
+    fn own_device_op(&self, h: &Header) -> bool {
+        if !control::is_own_device_op(&h.op) || h.device.is_empty() {
+            return false;
+        }
+        let Ok(node) = self.node() else { return false };
+        crate::admin::find_device(&node, &h.device).is_ok_and(|d| d.id == node.identity().id.to_string())
+    }
+
     /// Turns sync on, or off for ms milliseconds (0 for until it is
     /// turned on), and saves it.
     fn set_sync(&self, on: bool, ms: i64) -> Result<()> {
@@ -1996,7 +2010,7 @@ impl Service {
         if let Ok(c) = idle {
             let _ = c.set_read_timeout(None);
         }
-        if control::needs_admin(&m.header) && !admin {
+        if control::needs_admin(&m.header) && !admin && !self.own_device_op(&m.header) {
             let e = Error::msg(format!(
                 "{:?} changes the group, so the service takes it only on its admin socket, which only the administrator reaches",
                 m.header.op

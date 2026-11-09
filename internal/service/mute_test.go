@@ -108,6 +108,38 @@ func TestMute(t *testing.T) {
 	waitUpTo(t, 10*time.Second, "gamma has beta's text again", func() bool { return c.paste(t) == "beta heard" },
 		func() string { return links(t, a, b, c) })
 
+	// On the control socket, which the app reaches without the
+	// administrator, an admin mutes and unmutes only itself; beta, no
+	// admin, mutes not even itself there.
+	plain := func(s *testService, h control.Header) error {
+		t.Helper()
+		c, err := control.Dial(s.socket)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		_, err = c.Do(&control.Message{Header: h})
+		return err
+	}
+	if err := plain(a, control.Header{Op: control.OpMute, Device: "beta"}); err == nil || !strings.Contains(err.Error(), "admin socket") {
+		t.Fatalf("the control socket muted another device: %v", err)
+	}
+	if err := plain(b, control.Header{Op: control.OpMute, Device: "beta"}); err == nil || !strings.Contains(err.Error(), "only an admin") {
+		t.Fatalf("a member that is no admin muted itself: %v", err)
+	}
+	if err := plain(a, control.Header{Op: control.OpMute, Device: "alpha", ForMS: time.Hour.Milliseconds()}); err != nil {
+		t.Fatal(err)
+	}
+	if !a.status(t).Muted {
+		t.Fatal("alpha is not muted after muting itself on the control socket")
+	}
+	if err := plain(a, control.Header{Op: control.OpUnmute, Device: "alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	if a.status(t).Muted {
+		t.Fatal("alpha is still muted after unmuting itself on the control socket")
+	}
+
 	// cbb mute names a device; this device's own sync is cbb sync.
 	if _, err := a.do(t, control.Header{Op: control.OpMute, ForMS: time.Hour.Milliseconds()}, ""); err == nil || !strings.Contains(err.Error(), "cbb sync off") {
 		t.Errorf("a mute without a device: %v", err)

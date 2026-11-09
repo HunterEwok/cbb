@@ -398,16 +398,56 @@ func (d *Desk) SetSync(id string, on bool, forMS int64) {
 
 // Mute, on an admin, keeps a device's copies from the group for forMS, 0
 // for until an admin unmutes it, with a signed command; Unmute ends it.
+// This computer itself goes over the control socket, which the service
+// takes for muting or unmuting its own device, so no password is asked.
 func (d *Desk) Mute(id string, forMS int64) {
+	const done = "It is muted: its copies do not reach the group."
+	if h, ok := d.ownMute(id, true, forMS); ok {
+		d.plain(h, done)
+		return
+	}
 	args := []string{"mute", "-on", id}
 	if forMS > 0 {
 		args = append(args, "-for", fmt.Sprintf("%dms", forMS))
 	}
-	d.admin(args, false, "It is muted: its copies do not reach the group.")
+	d.admin(args, false, done)
 }
 
 func (d *Desk) Unmute(id string) {
-	d.admin([]string{"unmute", "-on", id}, false, "It is no longer muted.")
+	const done = "It is no longer muted."
+	if h, ok := d.ownMute(id, false, 0); ok {
+		d.plain(h, done)
+		return
+	}
+	d.admin([]string{"unmute", "-on", id}, false, done)
+}
+
+// ownMute is the request that mutes or unmutes this computer itself on the
+// control socket; false for another device, which takes the administrator.
+func (d *Desk) ownMute(id string, on bool, forMS int64) (control.Header, bool) {
+	d.mu.Lock()
+	me := ""
+	if d.status != nil {
+		me = d.status.Device
+	}
+	d.mu.Unlock()
+	if me == "" || id != me {
+		return control.Header{}, false
+	}
+	if !on {
+		return control.Header{Op: control.OpUnmute, Device: id}, true
+	}
+	return control.Header{Op: control.OpMute, Device: id, ForMS: forMS}, true
+}
+
+// plain sends h on the control socket as an action.
+func (d *Desk) plain(h control.Header, done string) {
+	d.act(func() (string, error) {
+		if _, _, err := d.requestHeader(h, nil); err != nil {
+			return "", err
+		}
+		return d.T(done), nil
+	})
 }
 
 func (d *Desk) admin(args []string, yes bool, done string) {

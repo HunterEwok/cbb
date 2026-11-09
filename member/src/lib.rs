@@ -906,6 +906,11 @@ pub(crate) fn open(g: &Global, h: &control::Header) -> Result<UnixStream> {
     Ok(if control::needs_admin(h) {
         let path = control::admin_socket(&g.socket);
         match UnixStream::connect(&path) {
+            // Muting or unmuting this device itself the service also takes
+            // on the control socket, and says no there for another device.
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && control::is_own_device_op(&h.op) => {
+                connect(g)?
+            }
             Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
                 return Err(Error::msg(tr!(
                     "this command changes the group, so only the administrator may run it; run it with sudo"
