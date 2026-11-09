@@ -313,7 +313,7 @@
   "checking a download": "التحقق من التنزيل",
   "conventions, building and testing every part": "الأعراف، والبناء، واختبار كل جزء",
   "every `cbb` command, on a full and on the lite member, with every flag": "كل أمر من أوامر `cbb`، في العضو الكامل والعضو الخفيف، مع كل خيار",
-  "every architecture decision, D-1 to D-78, with its status": "كل قرار معماري، من D-1 إلى D-78، مع حالته",
+  "the architecture decisions in force, and the replaced ones as their history": "القرارات المعمارية السارية، والقرارات المستبدلة بوصفها تاريخها",
   "every bench case of 0.6 in one line, with how it runs and what it still needs": "كل حالة اختبار في الإصدار 0.6 في سطر واحد، مع كيفية تشغيلها وما تحتاجه بعد",
   "every function of the product with the cases that check it, for the coverage report": "كل وظيفة في المنتج مع الحالات التي تفحصها، لتقرير التغطية",
   "every primitive, library, key, its size, lifetime and where it is kept": "كل خوارزمية ومكتبة ومفتاح، وحجمه ومدته ومكان حفظه",

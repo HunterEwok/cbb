@@ -312,7 +312,7 @@
   "checking a download": "comprobar una descarga",
   "conventions, building and testing every part": "convenciones, compilación y pruebas de cada parte",
   "every `cbb` command, on a full and on the lite member, with every flag": "cada comando de `cbb`, en el miembro completo y en el ligero, con todos sus parámetros",
-  "every architecture decision, D-1 to D-78, with its status": "cada decisión de arquitectura, de D-1 a D-78, con su estado",
+  "the architecture decisions in force, and the replaced ones as their history": "las decisiones de arquitectura vigentes, y las reemplazadas como su historia",
   "every bench case of 0.6 in one line, with how it runs and what it still needs": "cada caso del banco de pruebas de la 0.6 en una línea, con cómo se ejecuta y qué le falta aún",
   "every function of the product with the cases that check it, for the coverage report": "cada función del producto con los casos que la comprueban, para el informe de cobertura",
   "every primitive, library, key, its size, lifetime and where it is kept": "cada primitiva, biblioteca y clave, su tamaño, su duración y dónde se guarda",

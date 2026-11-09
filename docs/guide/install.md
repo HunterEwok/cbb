@@ -203,6 +203,11 @@ All installer options are in the [command reference](../reference/cli.md#install
 Releases are signed from 0.6 on. To move to 0.6 from an earlier version, run the install
 command again; from then on `cbb update` does it.
 
+From 0.6 on, updates never break your group: a device works in one group with devices of
+the release before it, so you can update them one at a time, in any order. A device that
+meets something only a newer release understands says so and asks you to update. A group
+made with 0.5 is set up again once on 0.6.
+
 `sudo cbb update` (on Windows `cbb update` in a terminal opened as administrator) installs
 the newest release on a computer or a lite member installed with `get.sh`, `get.ps1` or a
 release archive; `cbb update -check` only says whether there is one. Your settings stay.

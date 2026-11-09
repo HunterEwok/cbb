@@ -35,6 +35,7 @@ for arch in $archs; do
 	sudo cp -a "$here" "$home/silica"
 	sudo rm -rf "$home/silica/build"
 	sudo chroot "$psdk/root" chown -R builder /home/builder/silica
+	# shellcheck disable=SC2088 # ~ is builder's home, expanded in the SDK's shell
 	sudo SYSTEM="$system" "$here/psdk.sh" "$psdk" run "~/silica/build.sh rpm $sdk-$arch.default $system"
 	# builder's home is not the caller's to read.
 	rpm=$(sudo sh -c "ls $home/silica/build/*/RPMS/$name-*.$arch.rpm")
