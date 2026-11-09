@@ -47,7 +47,13 @@ final class ReadersUITests: XCTestCase {
             a.lifetime = .keepAlways
             add(a)
             do {
-                try app.performAccessibilityAudit(for: [.contrast, .sufficientElementDescription])
+                try app.performAccessibilityAudit(for: [.contrast, .sufficientElementDescription]) { issue in
+                    guard let e = issue.element else { return false }
+                    // The Touch Bar is the system's, not the app's to fix.
+                    if e.elementType == .touchBar { return true }
+                    XCTFail("the window in \(language): \(issue.compactDescription) on \(e.debugDescription)")
+                    return true
+                }
             } catch {
                 XCTFail("the window in \(language): \(error)")
             }
