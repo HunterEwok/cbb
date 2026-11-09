@@ -387,8 +387,9 @@ struct Conn {
     serial: u64,
 }
 
-/// The serial of the next connection.
-static CONN_SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+/// The serial of the last connection; a lock, since 32-bit MIPS has no
+/// 64-bit atomics.
+static CONN_SERIAL: Mutex<u64> = Mutex::new(0);
 
 impl Node {
     pub fn new(
@@ -1735,7 +1736,11 @@ impl Node {
             gets: Mutex::new(VecDeque::new()),
             sinks: Mutex::new(HashMap::new()),
             reach_sent: Mutex::new(None),
-            serial: CONN_SERIAL.fetch_add(1, Ordering::SeqCst),
+            serial: {
+                let mut n = CONN_SERIAL.lock().unwrap();
+                *n += 1;
+                *n
+            },
         });
         {
             let mut conns = self.conns.lock().unwrap();
