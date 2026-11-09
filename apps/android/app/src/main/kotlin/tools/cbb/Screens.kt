@@ -1162,7 +1162,8 @@ private fun ColorSwatches(selection: String, choose: (String) -> Unit) {
                         ) {
                             if (chosen) Text("✓", color = swatch.onAccent, fontWeight = FontWeight.Bold)
                         }
-                        Text(stringResource(ColorChoice.title(name)), style = MaterialTheme.typography.labelSmall, maxLines = 1, color = palette.textDim)
+                        // Two lines: "Material You" and the longer names in Spanish and Swahili do not fit one.
+                        Text(stringResource(ColorChoice.title(name)), style = MaterialTheme.typography.labelSmall, maxLines = 2, textAlign = TextAlign.Center, color = palette.textDim)
                     }
                 }
                 repeat(5 - row.size) { Spacer(Modifier.weight(1f)) }

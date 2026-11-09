@@ -57,6 +57,8 @@ class ScreenshotTest(private val lang: String, private val look: String) {
     fun setUp() {
         RuntimeEnvironment.setQualifiers("+$lang-${if (look == "dark") "night" else "notnight"}")
         context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().clear().commit()
+        // The key store's first key is Robolectric's to lack: the screens as on a phone that has one.
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putBoolean("prepared", true).commit()
     }
 
     @Test

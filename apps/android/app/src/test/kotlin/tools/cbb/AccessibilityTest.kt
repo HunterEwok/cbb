@@ -38,6 +38,8 @@ class AccessibilityTest {
     @Before
     fun clean() {
         context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().clear().commit()
+        // The key store's first key is Robolectric's to lack: the screens as on a phone that has one.
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putBoolean("prepared", true).commit()
     }
 
     private fun screens(see: (String) -> Unit) {

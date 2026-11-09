@@ -52,6 +52,8 @@ class LanguagesTest(private val lang: String) {
     fun setUp() {
         RuntimeEnvironment.setQualifiers("+$lang")
         context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().clear().commit()
+        // The key store's first key is Robolectric's to lack: the screens as on a phone that has one.
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putBoolean("prepared", true).commit()
     }
 
     private fun str(id: Int) = context.getString(id)
