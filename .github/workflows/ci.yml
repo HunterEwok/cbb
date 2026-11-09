@@ -100,6 +100,14 @@ jobs:
         run: go run ./tools/icon -check
       - name: website pages and translations
         run: go run ./tools/site check
+      - name: shellcheck, every shell script
+        run: sh .github/shellcheck.sh
+      - name: typos, the spelling of the English text (_typos.toml)
+        run: pipx run typos==1.51.1
+      - name: Biome, the tray app's HTML, CSS and JavaScript (biome.json)
+        run: npx --yes @biomejs/biome@2.6.2 ci
+      - name: REUSE, every file's copyright and license (REUSE.toml, LICENSES/)
+        run: pipx run reuse==6.2.0 lint
 
   test:
     name: test (${{ matrix.os }})
@@ -752,8 +760,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/l10n.sh packaging/l10n-embed.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh member/packaging/build.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh ffi/bind.sh wasm/build.sh .github/ci-changes.sh .github/build-targets.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
       - name: the software bills of materials, as the release makes them (tools/sbom)

@@ -49,7 +49,7 @@ pub const MAX_DELAY: i64 = 7 * 24 * 3600 * 1000;
 pub const DEFAULT_DELAY: i64 = 72 * 3600 * 1000;
 /// The bounds of how long an incoming copy stays live, the incoming_ms of a
 /// copies record, and that time without one (one minute), in milliseconds
-/// (docs/protocol.md, section 4, "Writing the member's own clipboard").
+/// (docs/protocol.md, section 5, "Writing the member's own clipboard").
 pub const MIN_INCOMING: i64 = 5 * 1000;
 pub const MAX_INCOMING: i64 = 3600 * 1000;
 pub const DEFAULT_INCOMING: i64 = 60 * 1000;

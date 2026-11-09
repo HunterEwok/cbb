@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The rule of incoming copies (docs/protocol.md, section 5, "Writing to
-//! the clipboard"): whether the group's current copy goes into a member's
+//! The rule of incoming copies (docs/protocol.md, section 5, "Writing the
+//! member's own clipboard"): whether the group's current copy goes into a member's
 //! clipboard, and whether a mute or sync turned off holds. The lite member's engine
 //! (crate::clip) asks it, and the Go service asks it through the core's
 //! `copy_verdict`, so that every member keeps one rule; the cases of

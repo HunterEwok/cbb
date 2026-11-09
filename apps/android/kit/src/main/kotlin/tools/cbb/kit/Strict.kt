@@ -9,7 +9,7 @@ import java.nio.charset.CodingErrorAction
 import java.util.Base64
 
 /**
- * The strict form of signed bodies (docs/protocol.md, section 1, "Signed
+ * The strict form of signed bodies (docs/protocol.md, Conventions, "Signed
  * bodies"), which every member reads alike, as Go's checkStrict.
  */
 internal object Strict {
