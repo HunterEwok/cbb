@@ -125,7 +125,10 @@ All notable changes to cbb are documented in this file. The format follows
   members dial each other at once, both keep the connection the lower device ID dialed; a
   hub that moves to another device offers itself to no member meanwhile; a member whose
   mDNS name got a conflict suffix is still found; `cbb global hub` serves at once on a hub
-  with no hub above it.
+  with no hub above it; a client keeps its link to a hub whose new offer only adds the
+  hub's next key; an admin CA goes again on a member's next connection; a device spaces the
+  changes of its mDNS registration, so a pairing window closed and opened again for the
+  next device does not rename it.
 - The Docker e2e (tools/e2e/e2e.sh) runs the Rust service too, with cbb-helper beside it
   and the Go cbb's commands against its socket, in CI's e2e job: the Rust service
   answers status in no group, and joins with a code (`join`: the member whose pairing

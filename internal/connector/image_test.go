@@ -59,8 +59,7 @@ func TestImages(t *testing.T) {
 	run(t, socket, b)
 	plain := newBoard()
 	run(t, socket, plain)
-	plain.copyOn(Item{Text: "the plain board watches"})
-	waitFor(t, "the plain board", func() bool { return paste(t, socket) == "the plain board watches" })
+	watching(t, socket, plain, "the plain board watches")
 
 	png := Image{Type: clip.TypePNG, Data: make([]byte, 3<<20+7)}
 	rand.Read(png.Data)

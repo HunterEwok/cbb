@@ -434,7 +434,7 @@ pub fn run(cfg: Config) -> Result<()> {
     let tag = ident.tag();
     let away =
         Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()).via(cfg.tunnel_via));
-    let presence = presence_of(&ident, &records, &cfg.name, &cfg.caps);
+    let presence = presence_of(&cfg.state_dir, &ident, &records, &cfg.name, &cfg.caps);
     // The blobs of the copies are a cache that a service starts empty, as
     // Go's: the group's current copy is fetched again when it is pasted.
     crate::content::empty(&cfg.state_dir, &|s| log(s));
@@ -694,22 +694,21 @@ fn claim_states(node: &Node) -> String {
 /// How this member presents itself in its hellos: as a member with the
 /// caps its own device record names, or those it was started with while
 /// no record names it. Its keys are in the hardware when cbb-helper holds
-/// the device key.
-fn presence_of(ident: &Identity, records: &Records, name: &str, caps: &[String]) -> crate::node::Presence {
+/// the device key, unless it holds the group's root key too.
+fn presence_of(
+    dir: &std::path::Path,
+    ident: &Identity,
+    records: &Records,
+    name: &str,
+    caps: &[String],
+) -> crate::node::Presence {
     let own = records.devices().into_iter().find(|d| d.id == ident.id.as_str());
     crate::node::Presence {
         role: "member".into(),
         caps: own.map(|d| d.caps).unwrap_or_else(|| caps.to_vec()),
         name: name.to_string(),
         os: crate::admin::os_name().into(),
-        key_store: if ident.external.is_some() {
-            "hardware"
-        } else if crate::rootless::is() {
-            "rootless"
-        } else {
-            "file"
-        }
-        .into(),
+        key_store: crate::admin::own_store(dir, ident).into(),
         device: crate::device::own().clone(),
         admin_key: Default::default(),
     }
@@ -2889,7 +2888,9 @@ impl Service {
             role: "member".into(),
             os: crate::admin::os_name().into(),
             version: VERSION.into(),
-            key_level: if ident.external.is_some() { "hardware" } else { "files" }.into(),
+            // A group made on a computer starts at the level files
+            // (admin::new_group), whatever its member key.
+            key_level: "files".into(),
             key_problem: why,
             ..Default::default()
         };
@@ -3318,7 +3319,7 @@ fn devices(node: &Node, hubs: &[String]) -> Vec<Device> {
             role: node.role().into(),
             caps: node.caps().to_vec(),
             os: node.os().into(),
-            store: crate::admin::own_store(&ident).into(),
+            store: crate::admin::own_store(node.state_dir(), &ident).into(),
             ..Default::default()
         }));
     }
