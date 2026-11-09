@@ -277,6 +277,16 @@ extern "C" fn on_signal(_: libc::c_int) {
     STOP.store(true, Ordering::SeqCst);
 }
 
+/// Sleeps for d, or less once the service is stopping, so that SIGTERM
+/// stops it at once: launchctl bootout returns before the process has
+/// exited, and uninstall.sh checks right after.
+fn wait_unless_stopping(d: Duration) {
+    let until = std::time::Instant::now() + d;
+    while !STOP.load(Ordering::SeqCst) && std::time::Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 /// Has the service stop, as SIGTERM does; Windows' service manager asks
 /// with it.
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -396,7 +406,7 @@ pub fn run(cfg: Config) -> Result<()> {
                     *broken = Some(e.for_log());
                 }
                 drop(broken);
-                std::thread::sleep(Duration::from_secs(2));
+                wait_unless_stopping(Duration::from_secs(2));
             }
             Ok(None) => {
                 *svc.broken.lock().unwrap() = None;
@@ -404,7 +414,7 @@ pub fn run(cfg: Config) -> Result<()> {
                     log("cbb: this device is in no group yet; run cbb pair");
                     said = true;
                 }
-                std::thread::sleep(Duration::from_secs(2));
+                wait_unless_stopping(Duration::from_secs(2));
             }
         }
     };
