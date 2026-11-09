@@ -82,6 +82,9 @@ var automated = map[string][]string{
 	"I23": {"ci"}, "H9": {"ci"}, "H10": {"ci"}, "A10": {"ci"},
 	// The Go tests and the interop vectors that refuse the records cbb upgrade gave.
 	"G29": {"ci"},
+	// CI's upgrade job moves members of the latest release to the build under
+	// test (tools/e2e/upgrade.sh), and a Go test admits a device by the code it shows.
+	"I26": {"ci"}, "G44": {"ci"},
 	// The phone kits' tests and the Go tests that read what they sign: the
 	// Swift and Kotlin phones admit a Go joiner by its QR code (G10, the fleet's
 	// G17 the refusals), a takeover (G28), a computer made an admin (G36), the

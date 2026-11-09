@@ -60,6 +60,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&disruptive, "disruptive", false, "desktop: also lock, put to sleep and restart the computers (Q3, I18, H7, H8); only on the owner's word")
 	fs.DurationVar(&soakFor, "soak-for", 0, "fleet: how long the soak (E10) runs, 24h for a release; 0 leaves it out")
 	android := fs.String("android", "apps/android", "phone: the Android project, whose instrumented tests run on the emulator adb sees")
+	repeat := fs.Int("repeat", 1, "fleet, time, phone: run the suite this many times and list the cases that both passed and failed (flaky.txt beside the report)")
+	baseline := fs.String("baseline", "", "fleet, time, all: an earlier run's metrics.json; a metric worse than it by more than -baseline-slack fails the run")
+	baselineSlack := fs.Float64("baseline-slack", 0.25, "how much worse than -baseline a metric may be, as a fraction (0.25 is a quarter), beyond its unit's noise")
 	coverDir := fs.String("coverdir", "", "fleet, time, all: with a cbb built with -cover, the directory where every container writes its coverage (docs/testbench.md, \"Code coverage\")")
 	if fs.Parse(args) != nil {
 		return 2
@@ -85,23 +88,46 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		scenarios[n] = true
 	}
-	if fs.Arg(0) == "phone" {
-		// The emulator and the fleet run on this computer alone.
-		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-		defer stop()
-		r := NewReport("phone", stdout, debugMode())
-		Phone(ctx, r, *cbb, *android, *timeout)
-		return finish(r, *reportDir, stderr)
+	if *repeat < 1 {
+		fmt.Fprintln(stderr, "bench: -repeat must be 1 or more")
+		return 2
 	}
-	if fs.Arg(0) == "fleet" || fs.Arg(0) == "time" {
-		// The fleet runs on this computer alone and needs no inventory.
+	var base []Metric
+	if *baseline != "" {
+		var err error
+		if base, err = readMetrics(*baseline); err != nil {
+			fmt.Fprintf(stderr, "bench: -baseline: %v\n", err)
+			return 2
+		}
+	}
+	if s := fs.Arg(0); s == "phone" || s == "fleet" || s == "time" {
+		// The emulator and the fleet run on this computer alone and need
+		// no inventory.
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
-		r := NewReport(fs.Arg(0), stdout, debugMode())
-		if fs.Arg(0) == "time" {
-			TimeSuite(ctx, r, *cbbTime, *timeout)
-		} else {
-			FleetSuite(ctx, r, *cbb, *fleetSize, *timeout)
+		r := NewReport(s, stdout, debugMode())
+		for i := 1; i <= *repeat && ctx.Err() == nil; i++ {
+			if *repeat > 1 {
+				r.within(fmt.Sprintf("run%d/", i))
+			}
+			switch s {
+			case "phone":
+				Phone(ctx, r, *cbb, *android, *timeout)
+			case "time":
+				TimeSuite(ctx, r, *cbbTime, *timeout)
+			default:
+				FleetSuite(ctx, r, *cbb, *fleetSize, *timeout)
+			}
+		}
+		r.within("")
+		if base != nil {
+			compareBaseline(r, base, *baselineSlack)
+		}
+		if *repeat > 1 {
+			if err := writeFlaky(stdout, *reportDir, r.Flaky(), *repeat); err != nil {
+				fmt.Fprintf(stderr, "bench: %v\n", err)
+				return 1
+			}
 		}
 		return finish(r, *reportDir, stderr)
 	}
@@ -155,6 +181,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	default:
 		fmt.Fprintf(stderr, "bench: unknown suite %q\n", fs.Arg(0))
 		return 2
+	}
+	if base != nil {
+		compareBaseline(r, base, *baselineSlack)
 	}
 	code := finish(r, *reportDir, stderr)
 	if fs.Arg(0) == "all" {

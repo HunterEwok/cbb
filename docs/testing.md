@@ -144,3 +144,18 @@ these before the bench has run them.
 
 A failing test is a finding, never noise: find the cause before running it again. A test is
 never skipped, disabled or retried until green to make CI pass.
+
+### Flaky tests
+
+A test that fails now and then on the same code is a finding too, and the hardest one to see:
+each failure looks like bad luck. It is listed here when it is seen, with how often it fails,
+until its cause is found and fixed; then it leaves the list, and the fix names it. To measure
+the rate, run it many times: `go test -run NAME -count 20 ./PACKAGE`, or `go run ./tools/bench
+-repeat 5 -scenario NAME fleet`, which lists in `flaky.txt` the cases that both passed and
+failed ([test bench](testbench.md#11-automation)).
+
+| Test | Where | Fails | Seen | State |
+|---|---|---|---|---|
+| `TestSeveralHubs` | `internal/service`, against the Rust service | about 1 in 6 | 2026-11-08 | cause not found |
+| `TestLiteHubs` | `internal/service` | about 2 in 5 | 2026-11-08 | cause not found |
+| `TestWindow` | `apps/desktop`, Windows | rarely: Chrome gives no DevTools port in 30 s | 2026-11-06 | its failure shows Chrome's stderr; read it when it fails again |

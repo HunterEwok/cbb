@@ -300,6 +300,17 @@ All notable changes to cbb are documented in this file. The format follows
   fleet checks the project's relay followed from the signed lists, through a new key and a
   move (W48), and the phone suite a computer the phone made an admin admitting a computer,
   the hub marked in the phone's list and a computer behind it online.
+- The bench repeats a suite and keeps a run's numbers: `-repeat N` runs the fleet, time or
+  phone suite N times and lists in `flaky.txt` the cases that both passed and failed, each
+  still a failure of the run; the load cases (E1, E2, E4, E10) record their times and memory
+  in `metrics.json`, and `-baseline FILE` fails a run whose number is worse than an earlier
+  run's by more than `-baseline-slack` (a quarter) and its unit's noise. docs/testing.md
+  keeps the tests known to fail now and then, with their rate and state. The catalogue has
+  cases for capabilities (D18), a code shown by the joining device (G44), GIF images (O16),
+  the phones' gallery (O17), remote paste of images and files (T21), the ZX Next's image
+  (H16), the two buttons (A18), the Aurora app's later pages (A19), the eight languages, and
+  the upgrade from 0.5, whose group is set up again (I26), apart from the upgrades from 0.6
+  on, which keep it (I6, I7).
 - `testbench coverage` counts apart the cases the harness runs in full, where its suites
   cover every kind of place the case names, and lists the others with what they lack.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
