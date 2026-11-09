@@ -334,10 +334,12 @@ home and away, E2's memory and descriptors after the load, E4's time for three 5
 E10's most memory, E12's numbers of the small devices), which `-report DIR` writes to
 `metrics.json`. Keep each release's file beside its report; `-baseline FILE` compares a run
 with it, and a number worse by more than `-baseline-slack` (0.25 by default) beyond its unit's
-noise (100 ms, 4 MiB, 4 descriptors, 2 s, 1% of a core) fails as `baseline/NAME`. `-repeat N` runs the fleet, time or phone suite N times, each
-run's cases named `runK/...`, and lists in `flaky.txt` the cases that both passed and failed;
-every failure still fails the run, and each flaky case goes into
-[testing](testing.md#flaky-tests)' list until its cause is fixed.
+noise (100 ms, 4 MiB, 4 descriptors, 2 s, 1% of a core) fails as `baseline/NAME`. The bench's
+Raspberry Pi 4 runs the fleet and time suites every week with `tools/bench/weekly.sh` from
+cron, on the newest main, each against the previous week's `metrics.json`. `-repeat N` runs
+the fleet, time or phone suite N times, each run's cases named `runK/...`, and lists in
+`flaky.txt` the cases that both passed and failed; every failure still fails the run, and each
+flaky case goes into [testing](testing.md#flaky-tests)' list until its cause is fixed.
 
 **Reports**: a JUnit XML file for GitHub's test summary, an HTML report with the matrix
 (green and red cells), every failure's logs from all devices (`journalctl`, `log show`,

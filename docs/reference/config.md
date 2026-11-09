@@ -99,6 +99,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_LITE` | Go tests with the lite member | The lite member's binary (`cargo build` at the top, `target/`). |
 | `CBB_PREVIOUS` | Go tests of the service | The previous release's `cbb` for TestPreviousRelease (a device of version N in one group with N-1), as `tools/e2e/previous.sh` prints it. |
 | `CBB_REPO` | `tools/e2e/previous.sh` | The repository on GitHub whose releases it reads, `HunterEwok/cbb` by default. |
+| `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Limits the weekly fleet run to these scenarios (`-scenario`); all of them when unset. |
 | `CBB_TEST_RUST_SERVICE` | Go tests of the service | The Rust service's binary: the tests that start a Linux member with the default configuration run it in place of the Go service, finding their peers by mDNS. |
 | `CBB_ESP32_ON_LINUX` | `TestEmbassyJoiner` | The `esp32-on-linux` binary of `embassy/`, run over a TAP interface. |
 | `CBB_PHONE_ON_LINUX` | `TestFFIJoiner` | The example `phone-on-linux` of `ffi/` (feature `member`): the Aurora app's joining and syncing with a software key. |
