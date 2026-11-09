@@ -245,6 +245,8 @@ struct Service {
     pairing: Mutex<Option<Pairing>>,
     /// The member port, for the address a pairing window shows.
     port: Mutex<Option<u16>>,
+    /// The bug report of a panic before the last restart (src/bugs.rs).
+    bugs: crate::bugs::Bugs,
 }
 
 /// A pairing that runs on this device.
@@ -297,6 +299,7 @@ pub(crate) fn request_stop() {
 /// Logs to the service's log file where it has one (crate::logfile), else
 /// to standard error, which systemd or procd keeps.
 pub fn log_line(s: &str) {
+    crate::bugs::remember(s);
     if !crate::logfile::line(s) {
         eprintln!("{s}");
     }
@@ -317,6 +320,9 @@ pub fn run(cfg: Config) -> Result<()> {
     }
     std::fs::create_dir_all(&cfg.state_dir).context(format!("cannot create {}", cfg.state_dir.display()))?;
     let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(log_line);
+    // A panic ends the service (panic = "abort"); the hook keeps what broke
+    // for the bug report after the restart (src/bugs.rs).
+    crate::bugs::install(&cfg.state_dir);
     let left_old = crate::records::leave_version1_group(&cfg.state_dir)?;
     if left_old {
         log(&format!(
@@ -354,6 +360,7 @@ pub fn run(cfg: Config) -> Result<()> {
         joined_at: Mutex::new(None),
         pairing: Mutex::new(None),
         port: Mutex::new(None),
+        bugs: crate::bugs::Bugs::new(&cfg.state_dir),
     });
     {
         // The helper puts a keyboard that is on back on BlueZ.
@@ -561,6 +568,12 @@ pub fn run(cfg: Config) -> Result<()> {
         }));
     }
     *svc.node.write().unwrap() = Some(node.clone());
+    {
+        // A panic before this start: sent by itself when the user allowed
+        // always, else asked about by the apps (status `bug`).
+        let (svc, names) = (svc.clone(), device_names(&node));
+        std::thread::spawn(move || svc.bugs.start(&names, &*svc.log));
+    }
     {
         // The claims to take the group over: one takes effect when its
         // delay ends, without a new record, and this admin's own makes it
@@ -2400,6 +2413,7 @@ impl Service {
                     port: self.port.lock().unwrap().map_or(0, i64::from),
                     quiet: node.networks().map(|n| n.unknown()).unwrap_or_default(),
                     cert_ends_ms: id.cert.not_after * 1000,
+                    bug: self.bugs.waiting(),
                     ..group
                 };
                 Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
@@ -2524,6 +2538,30 @@ impl Service {
                 self.standing()
             }
             "muted" => self.standing(),
+            // The bug report of the panic before the last restart
+            // (docs/core-api.md, "Bug reports"): what the core made of it,
+            // the user's Allow (payload `{"always"}`) or Cancel.
+            "bug" => {
+                let names = self.node().map(|n| device_names(&n)).unwrap_or_default();
+                let data = match self.bugs.offer(&names)? {
+                    Some(o) => serde_json::to_vec(&o).context("cannot encode the report")?,
+                    None => Vec::new(),
+                };
+                Ok(control::reply(Header { done: true, ..Default::default() }, data))
+            }
+            "bug_allow" => {
+                let always = serde_json::from_slice::<serde_json::Value>(&m.payload)
+                    .ok()
+                    .and_then(|v| v.get("always").and_then(serde_json::Value::as_bool))
+                    .unwrap_or(false);
+                let names = self.node().map(|n| device_names(&n)).unwrap_or_default();
+                self.bugs.allow(always, &names)?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
+            "bug_cancel" => {
+                self.bugs.cancel();
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
             "new" => self.new_group(),
             "remove" => {
                 let name = self.admin(|a| a.revoke(&h.device))?;
@@ -3153,6 +3191,11 @@ impl Drop for PairingSlot<'_> {
             self.node.set_window_open(false);
         }
     }
+}
+
+/// The names of the group's devices, which a bug report replaces.
+fn device_names(node: &Node) -> Vec<String> {
+    node.devices().into_iter().map(|d| d.name).filter(|n| !n.is_empty()).collect()
 }
 
 /// The claims, conflicts and newer records of the group's state for

@@ -264,5 +264,12 @@
   "Turn sync off": "إيقاف المزامنة",
   "Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does.": "اكتب المفتاح من الورقة، أو الصق نص رمز QR الخاص بها. تنتظر المطالبة كما ينتظر التولّي.",
   "Type the six digits the new device shows.": "اكتب الأرقام الستة التي يعرضها الجهاز الجديد.",
-  "Without a camera": "دون كاميرا"
+  "Without a camera": "دون كاميرا",
+  "Oops, something broke": "عذرًا، حدث عطل ما",
+  "Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.": "نعتذر! هل تسمح لنا بإرسال تقرير قصير لنصلح المشكلة؟ يحتوي فقط على ما تعطّل، وإصدارَي CBB والنظام، وطراز الجهاز، وسجلات CBB الخاصة. لا يحتوي على نصوصك أو ملفاتك أو مفاتيحك أو أسماء أجهزتك أو عناوينك. التقرير مجهول الهوية.",
+  "Allow": "السماح",
+  "Always allow": "السماح دائمًا",
+  "Technical details": "التفاصيل التقنية",
+  "Version %s fixes this: update CBB.": "الإصدار %s يصلح هذا: حدّث CBB.",
+  "Something in CBB broke. It started again.": "حدث عطل في CBB، وأُعيد تشغيله."
 }

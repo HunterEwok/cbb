@@ -73,6 +73,22 @@ final class CBBMacTests: XCTestCase {
         XCTAssertGreaterThan(image.size.width, 20)
     }
 
+    /// The status says a bug report waits, and the service's answer to bug
+    /// reads as the sheet shows it.
+    func testBugOffer() throws {
+        let line = #"{"ok":{"status":{"device":"me","role":"member","version":"dev","bug":true}}}"#
+        let (header, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
+        XCTAssertEqual(header.status?.bug, true)
+        let body = #"{"report":{"v":1,"details":"panic: boom at member/src/x.rs:1:2","where":"member/src/x.rs:1:2"},"fingerprint":"f","post":"","url":"https://bug.cbb.tools/","action":"ask","offer_always":true,"fixed_in":"0.6.1"}"#
+        let o = try XCTUnwrap(MacModel.bugOffer(Data(body.utf8)))
+        XCTAssertEqual(o.action, "ask")
+        XCTAssertTrue(o.offerAlways)
+        XCTAssertEqual(o.fixedIn, "0.6.1")
+        XCTAssertEqual(o.details, "panic: boom at member/src/x.rs:1:2")
+        XCTAssertTrue(o.report.contains("\"where\" : \"member/src/x.rs:1:2\""), o.report)
+        XCTAssertNil(MacModel.bugOffer(Data("{}".utf8)))
+    }
+
     func testBadHeader() {
         XCTAssertThrowsError(try Control.decode(Data("not json\n".utf8)))
         XCTAssertThrowsError(try Control.decode(Data(repeating: 0x41, count: Control.maxHeader + 1)))

@@ -32,6 +32,9 @@ final class MacModel: ObservableObject {
     @Published var askingAway = false
     private var joinFile: URL?
     private var joinCancelled = false
+    /// The bug report the window asks about (BugSheet), in release mode.
+    @Published private(set) var bug: BugOffer?
+    private var askingBug = false
     /// Whether macOS lets the app press keys for remote paste.
     @Published private(set) var pasteAllowed = Injector.allowed
 
@@ -82,8 +85,70 @@ final class MacModel: ObservableObject {
             }
             show(status: answer.status, devices: list)
             problem = nil
+            if answer.status?.bug == true, bug == nil, !askingBug { await askBug() }
         } catch {
             problem = Self.describe(error)
+        }
+    }
+
+    /// The service's bug report as the window shows it: the report as
+    /// "Technical details" shows it, whether to offer "Always allow", and
+    /// the version that fixes this break.
+    struct BugOffer: Identifiable, Equatable {
+        var report: String
+        var offerAlways: Bool
+        var fixedIn: String
+        var id: String { report }
+    }
+
+    /// Reads the bug report of the service's panic before its last start
+    /// (docs/core-api.md, "Bug reports"): in debug mode the message shows
+    /// what broke and nothing is asked; in release mode the window asks,
+    /// unless the core says to send or skip it.
+    func askBug() async {
+        askingBug = true
+        defer { askingBug = false }
+        guard let answer = try? await client.request(.init(op: "bug")), !answer.1.isEmpty,
+              let offer = Self.bugOffer(answer.1) else { return }
+        log.error("the service broke and started again: \(offer.details, privacy: .public)")
+        if Self.showsErrorDetails || offer.action != "ask" {
+            if Self.showsErrorDetails {
+                message = String(localized: "Something in CBB broke. It started again.") + "\n\n" + offer.details
+            }
+            await cancelBug()
+            return
+        }
+        bug = BugOffer(report: offer.report, offerAlways: offer.offerAlways, fixedIn: offer.fixedIn)
+    }
+
+    /// What the service's bug answer holds: what the app does, the report
+    /// as readable text, its details, "Always allow" and fixed_in.
+    nonisolated static func bugOffer(_ data: Data) -> (action: String, report: String, details: String, offerAlways: Bool, fixedIn: String)? {
+        guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let report = o["report"] as? [String: Any] else { return nil }
+        let text = (try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]))
+            .map { String(decoding: $0, as: UTF8.self) } ?? ""
+        return (o["action"] as? String ?? "", text, report["details"] as? String ?? "", o["offer_always"] as? Bool ?? false, o["fixed_in"] as? String ?? "")
+    }
+
+    /// The user allowed the report, and maybe always: the service sends it.
+    func allowBug(always: Bool) async {
+        bug = nil
+        let payload = (try? JSONSerialization.data(withJSONObject: ["always": always])) ?? Data()
+        do {
+            _ = try await client.request(.init(op: "bug_allow"), payload: payload)
+        } catch {
+            message = Self.describe(error)
+        }
+    }
+
+    /// The user did not allow the report: the service forgets it.
+    func cancelBug() async {
+        bug = nil
+        do {
+            _ = try await client.request(.init(op: "bug_cancel"))
+        } catch {
+            message = Self.describe(error)
         }
     }
 

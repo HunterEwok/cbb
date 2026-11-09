@@ -63,6 +63,23 @@
     </form>
   </dialog>
 
+  <dialog id="bug-dialog">
+    <form method="dialog">
+      <h2 data-t>Oops, something broke</h2>
+      <p class="dim" data-t>Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</p>
+      <p id="bug-fixed" hidden></p>
+      <label id="bug-always-row" hidden><input type="checkbox" id="bug-always"> <span data-t>Always allow</span></label>
+      <details>
+        <summary class="small" data-t>Technical details</summary>
+        <pre id="bug-report" class="small"></pre>
+      </details>
+      <menu>
+        <button value="cancel" class="glass" data-t>Cancel</button>
+        <button value="allow" class="accent" data-t>Allow</button>
+      </menu>
+    </form>
+  </dialog>
+
   <dialog id="tile-menu">
     <form method="dialog">
       <div id="tile-menu-items" class="menu-items"></div>

@@ -264,5 +264,12 @@
   "Turn sync off": "Выключить синхронизацию",
   "Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does.": "Введите ключ с листа или вставьте текст его QR-кода. Заявка ждёт, как при переходе группы.",
   "Type the six digits the new device shows.": "Введите шесть цифр, которые показывает новое устройство.",
-  "Without a camera": "Без камеры"
+  "Without a camera": "Без камеры",
+  "Oops, something broke": "Ой, что-то сломалось",
+  "Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.": "Простите! Разрешите отправить нам короткий отчёт, чтобы мы это исправили? В нём только что сломалось, версия CBB и системы, модель устройства и служебные записи CBB. Ваших текстов, файлов, ключей, имён устройств и адресов там нет. Отчёт анонимный.",
+  "Allow": "Разрешить",
+  "Always allow": "Разрешать всегда",
+  "Technical details": "Технические подробности",
+  "Version %s fixes this: update CBB.": "Это исправлено в версии %s: обновите CBB.",
+  "Something in CBB broke. It started again.": "В CBB что-то сломалось. Он запустился заново."
 }

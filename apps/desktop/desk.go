@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -691,4 +692,73 @@ func (d *Desk) headline(s State) string {
 		}
 	}
 	return fmt.Sprintf(d.T("%d of %d online"), online, len(s.Devices))
+}
+
+// BugOffer is the bug report the window asks about in release mode
+// (docs/core-api.md, "Bug reports"): the report as "Technical details"
+// shows it, whether to offer "Always allow", and the version that fixes
+// the break, as the server said.
+type BugOffer struct {
+	Report      string `json:"report"`
+	OfferAlways bool   `json:"offer_always"`
+	FixedIn     string `json:"fixed_in"`
+}
+
+// Bug reads the bug report of the service's panic before its last
+// restart, when the status says one waits. In debug mode the message
+// shows the break whole and nothing is asked; a report the core would not
+// make again stops waiting. It returns nil when there is nothing to ask.
+func (d *Desk) Bug() *BugOffer {
+	_, data, err := d.requestHeader(control.Header{Op: control.OpBug}, nil)
+	if err != nil || len(data) == 0 {
+		if err != nil {
+			log.Printf("bug: %v", err)
+		}
+		return nil
+	}
+	var o struct {
+		Action      string          `json:"action"`
+		OfferAlways bool            `json:"offer_always"`
+		FixedIn     string          `json:"fixed_in"`
+		Report      json.RawMessage `json:"report"`
+	}
+	if err := json.Unmarshal(data, &o); err != nil {
+		log.Printf("bug: the report does not read: %v", err)
+		return nil
+	}
+	var details struct {
+		Details string `json:"details"`
+	}
+	_ = json.Unmarshal(o.Report, &details)
+	log.Printf("bug: the service broke and started again: %s", details.Details)
+	if d.showDetails() || o.Action != "ask" {
+		if d.showDetails() {
+			d.mu.Lock()
+			d.message = d.T("Something in CBB broke. It started again.") + "\n\n" + details.Details
+			d.mu.Unlock()
+		}
+		d.BugCancel()
+		return nil
+	}
+	var pretty bytes.Buffer
+	if json.Indent(&pretty, o.Report, "", "  ") != nil {
+		pretty.Reset()
+		pretty.Write(o.Report)
+	}
+	return &BugOffer{Report: pretty.String(), OfferAlways: o.OfferAlways, FixedIn: o.FixedIn}
+}
+
+// BugAllow sends the report the user allowed, and maybe always.
+func (d *Desk) BugAllow(always bool) {
+	body, _ := json.Marshal(map[string]bool{"always": always})
+	if _, _, err := d.requestHeader(control.Header{Op: control.OpBugAllow}, body); err != nil {
+		log.Printf("bug: %v", err)
+	}
+}
+
+// BugCancel drops the report: nothing goes.
+func (d *Desk) BugCancel() {
+	if _, _, err := d.requestHeader(control.Header{Op: control.OpBugCancel}, nil); err != nil {
+		log.Printf("bug: %v", err)
+	}
 }

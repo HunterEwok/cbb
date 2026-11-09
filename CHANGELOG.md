@@ -19,6 +19,9 @@ All notable changes to cbb are documented in this file. The format follows
   is sent until the robot's key is in the build. `cbb-bug` takes the reports at
   bug.cbb.tools behind nginx (`packaging/linux/nginx-bug.conf`, `cbb-bug.service`), with a
   body limit of twice the largest report, checked by a test, and daily caps per break.
+  The phones' apps ask after a member's panic; on a computer a panic of `cbb` leaves
+  `panic.json` in the state folder, its status says `bug`, and the Mac and tray apps ask
+  (`bug`, `bug_allow`, `bug_cancel`). In debug mode the apps show what broke and ask nothing.
 - The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
   the Go relay's flags, key file, wire format and an open relay's budget with the same limits
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it

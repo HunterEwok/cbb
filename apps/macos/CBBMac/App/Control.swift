@@ -95,9 +95,12 @@ enum Control {
         /// The newest signed release the group passed around, when this Mac
         /// runs an older one.
         var update: String?
+        /// The service broke and started again, and its bug report waits
+        /// for the user's answer (docs/core-api.md, "Bug reports").
+        var bug: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted, update
+            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted, update, bug
             case syncUntilMS = "sync_until_ms"
             case mutedUntilMS = "muted_until_ms"
         }

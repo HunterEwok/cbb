@@ -1072,6 +1072,36 @@ async function refresh() {
   }
   if (asked === "settings" && !document.querySelector("dialog[open]")) openSettings();
   if (asked === "away") await turnAway();
+  if (state.status && state.status.bug && !askingBug && !document.querySelector("dialog[open]")) await askBug();
+}
+
+// askBug asks about the bug report of the service's panic before its last
+// restart (docs/core-api.md, "Bug reports"): Allow or Cancel, "Always
+// allow" after the second time, and "Technical details".
+let askingBug = false;
+async function askBug() {
+  askingBug = true;
+  try {
+    const o = await call("Bug");
+    if (!o) return;
+    const dlg = $("bug-dialog");
+    $("bug-report").textContent = o.report;
+    $("bug-fixed").hidden = !o.fixed_in;
+    $("bug-fixed").textContent = o.fixed_in ? t("Version %s fixes this: update CBB.", o.fixed_in) : "";
+    $("bug-always-row").hidden = !o.offer_always;
+    $("bug-always").checked = false;
+    const answer = await new Promise((resolve) => {
+      dlg.onclose = () => { if (!dlg.open) resolve(dlg.returnValue); };
+      dlg.returnValue = "";
+      dlg.showModal();
+    });
+    if (answer === "allow") await call("BugAllow", $("bug-always").checked);
+    else await call("BugCancel");
+  } catch (e) {
+    console.error("bug", e);
+  } finally {
+    askingBug = false;
+  }
 }
 
 document.addEventListener("click", async (e) => {

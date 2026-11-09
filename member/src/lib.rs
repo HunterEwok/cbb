@@ -28,6 +28,7 @@ mod awg;
 mod benchtime;
 #[cfg(feature = "tunnel")]
 pub mod bugd;
+mod bugs;
 pub mod button;
 mod cli;
 pub mod content;
