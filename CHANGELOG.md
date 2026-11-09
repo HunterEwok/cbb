@@ -11,6 +11,9 @@ All notable changes to cbb are documented in this file. The format follows
   channel uses too, and the ZX Spectrum Next's frames (`member/fuzz`), and the forwarder's
   VLESS and XHTTP answers in the core (`vless`); Miri checks the phones' C functions and
   AddressSanitizer the service's tests.
+- Nightly mutation testing of the control socket's messages, the pairing window, the server
+  credentials and the seals of the copies fails on a mutant the tests let live that
+  `tools/mutants/missed.txt` does not name; new tests catch the ones that mattered.
 - CI tests the promise that from 0.6 on a device of version N works in one group with N-1:
   `tools/e2e/previous.sh` downloads the previous release's `cbb` (0.6.0 or later, checked
   against its SHA256SUMS), and TestPreviousRelease joins it and this build to one group, syncs

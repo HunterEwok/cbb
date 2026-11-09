@@ -187,6 +187,58 @@ jobs:
           path: mutants.out/
           if-no-files-found: ignore
 
+  # The service's readers of the control socket and the pairing window, the
+  # server credentials and the seals of the copies: a mutant the tests let
+  # live that tools/mutants/missed.txt does not name fails the job.
+  mutants-service:
+    name: cargo mutants (${{ matrix.crate }}, shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [cbb-core, cbb-lite]
+        shard: [0, 1, 2, 3]
+        include:
+          - crate: cbb-core
+            files: -f core/src/credential.rs -f core/src/seal.rs
+          - crate: cbb-lite
+            files: -f member/src/control.rs -f member/src/window.rs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the Rust toolchain and cargo-mutants
+        run: |
+          rustup toolchain install stable --profile minimal && rustup default stable
+          cargo install --locked cargo-mutants@27.1.0
+      - name: mutate
+        env:
+          CRATE: ${{ matrix.crate }}
+          FILES: ${{ matrix.files }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          # 2 is missed mutants and 3 timeouts, which the next step judges;
+          # anything else (4: the tests fail unmutated) is a failure here.
+          status=0
+          # shellcheck disable=SC2086 # FILES is several arguments
+          cargo mutants --in-place --no-shuffle --shard "$SHARD/4" --timeout 300 -p "$CRATE" $FILES || status=$?
+          {
+            echo "### cargo mutants, $CRATE, shard $SHARD/4"
+            echo '```'
+            cat mutants.out/missed.txt 2>/dev/null || echo "(none missed)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          case $status in 0 | 2 | 3) ;; *) echo "cargo mutants failed: $status"; exit 1 ;; esac
+      - name: no new survivors
+        run: tools/mutants/check.sh mutants.out/missed.txt tools/mutants/missed.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: mutants-service-${{ matrix.crate }}-${{ matrix.shard }}
+          path: mutants.out/
+          if-no-files-found: ignore
+
   mutants-go:
     name: gremlins (internal/authority)
     runs-on: ubuntu-latest

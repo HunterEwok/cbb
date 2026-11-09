@@ -148,10 +148,22 @@ into `<=`, returns early) and runs the tests against each change: `cargo mutants
 summary and its artifacts. The jobs report and do not fail yet; each missed change gets a
 test, or a note why it cannot matter, and then the jobs fail on a new one.
 
+The service's readers of outside input already fail on a new one: `cargo mutants` on the
+control socket's messages (`member/src/control.rs`), the pairing window
+(`member/src/window.rs`), the server credentials (`core/src/credential.rs`) and the seals of
+the copies (`core/src/seal.rs`), in four shards each, with `tools/mutants/check.sh`, which
+compares what lived with the known list, `tools/mutants/missed.txt`, line and column aside. A
+mutant on that list either changes nothing a caller can see (an equivalent mutant, with why
+in a comment) or lives in code that only Go's end-to-end tests reach, which `cargo mutants`
+does not run (the window's exchange with a joiner). A new survivor gets a test; a mutant that
+the tests now catch can leave the list.
+
 To run them locally:
 
 ```sh
 cargo mutants --in-place -p cbb-core -f core/src/authority.rs -f core/src/strict.rs
+cargo mutants --in-place -p cbb-lite -f member/src/control.rs -f member/src/window.rs
+tools/mutants/check.sh mutants.out/missed.txt tools/mutants/missed.txt
 go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./internal/authority
 ```
 
