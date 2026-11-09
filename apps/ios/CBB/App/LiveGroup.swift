@@ -246,6 +246,7 @@ final class LiveGroup: GroupController {
     /// Has the phone's member in the core build, check and sign one of the
     /// root's own records with the root key (cbb_core::root), which it adds
     /// and sends, then takes the member's records into the group.
+    @discardableResult
     private func rootRecord<T>(_ root: SecKeySigner, _ act: (CoreMember, Data, @escaping (Data) throws -> Data) throws -> T) throws -> T {
         guard let node else { throw CoreMember.Failure.notConnected }
         let out = try act(node, root.publicKeyDER, { try root.signature(digest: $0) })
