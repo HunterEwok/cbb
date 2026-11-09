@@ -1499,6 +1499,11 @@ All notable changes to cbb are documented in this file. The format follows
   once it names its key, its device and the current root. The root refuses an admin key that
   the records already name for another device or a root (D-95; docs/protocol.md, section 10,
   "Admins").
+- The Aurora app has one "Join a group" button too. Joining makes the admin key behind the
+  admin PIN (cancelling joins without it, and Settings' "Get ready to be an admin" makes it
+  later), the member's hellos offer it, and the root's device page has "Make an admin" for
+  phones; the member checks the admin CA of the root's admin message (`take_admin_ca`) before
+  the app keeps it.
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program
