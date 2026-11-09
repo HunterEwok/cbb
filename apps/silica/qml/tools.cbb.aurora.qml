@@ -21,22 +21,27 @@ ApplicationWindow {
     Loader { source: "system/ShareTarget.qml" }
 
     // The admin PIN, asked before the admin key signs, again after a wrong
-    // one; a request while the app is off the screen waits for it.
+    // one. A request waits while the app is off the screen or a page is on
+    // its way in or out (as the join page is when it asks), since the page
+    // stack takes no push then.
     property bool pinWaiting: false
     property bool pinFresh: false
+    property int pinTries: -1
     function askPin(fresh, triesLeft) {
-        pageStack.push(Qt.resolvedUrl("pages/PinDialog.qml"), { fresh: fresh, triesLeft: triesLeft })
+        pinFresh = fresh
+        pinTries = triesLeft
+        pinWaiting = true
+        showPin()
+    }
+    function showPin() {
+        if (!pinWaiting || Qt.application.state !== Qt.ApplicationActive || pageStack.busy)
+            return
+        pinWaiting = false
+        pageStack.push(Qt.resolvedUrl("pages/PinDialog.qml"), { fresh: pinFresh, triesLeft: pinTries })
     }
     Connections {
         target: app
-        onPinNeeded: {
-            if (Qt.application.state === Qt.ApplicationActive && !pageStack.busy) {
-                askPin(fresh, -1)
-            } else {
-                pinFresh = fresh
-                pinWaiting = true
-            }
-        }
+        onPinNeeded: askPin(fresh, -1)
         onPinRefused: {
             if (!locked && triesLeft > 0)
                 askPin(false, triesLeft)
@@ -44,11 +49,10 @@ ApplicationWindow {
     }
     Connections {
         target: Qt.application
-        onStateChanged: {
-            if (pinWaiting && Qt.application.state === Qt.ApplicationActive) {
-                pinWaiting = false
-                askPin(pinFresh, -1)
-            }
-        }
+        onStateChanged: showPin()
+    }
+    Connections {
+        target: pageStack
+        onBusyChanged: showPin()
     }
 }
