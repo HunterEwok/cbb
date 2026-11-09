@@ -41,6 +41,9 @@ func peripheralStatus(t *testing.T, what string, m *control.Message) PeripheralS
 // quick action keyboard-layout, a Roku added and taking a paste, and
 // requests that do not read.
 func TestPeripherals(t *testing.T) {
+	check := peripheral.TypingCheck
+	peripheral.TypingCheck = 20 * time.Millisecond
+	t.Cleanup(func() { peripheral.TypingCheck = check })
 	f := bluetest.Start(t)
 	t.Setenv("CBB_TEST_BLUEZ", f.Addr)
 	dir := t.TempDir()
@@ -114,15 +117,26 @@ func TestPeripherals(t *testing.T) {
 	got = exchange(t, s, req(OpPeripheralStop, 8, PeripheralRequest{}))
 	peripheralStatus(t, "stop", got[8])
 
-	// With remote paste off a paste is not typed.
+	// A paste typed after its answer stops once remote paste is off: the
+	// service checks the switch before it sends one, the helper while it
+	// types.
 	if err := remotepaste.Save(dir, remotepaste.Settings{}); err != nil {
 		t.Fatal(err)
 	}
-	exchange(t, s, req(OpPeripheralPaste, 9, PeripheralRequest{Text: "secret"}))
-	select {
-	case v := <-reports:
-		t.Errorf("a paste with remote paste off typed %x", v)
-	case <-time.After(300 * time.Millisecond):
+	long := strings.Repeat("secret ", 40)
+	all, _ := keyboard.US.Reports(long)
+	exchange(t, s, req(OpPeripheralPaste, 9, PeripheralRequest{Text: long}))
+	typed := 0
+	for quiet := false; !quiet; {
+		select {
+		case <-reports:
+			typed++
+		case <-time.After(time.Second):
+			quiet = true
+		}
+	}
+	if typed >= len(all) {
+		t.Errorf("a paste went on with remote paste off: %d of %d reports", typed, len(all))
 	}
 
 	// The quick action keyboard-layout moves to the next layout.
