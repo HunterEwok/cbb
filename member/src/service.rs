@@ -2057,21 +2057,17 @@ impl Service {
             // another admin, it goes through a hub (docs/protocol.md,
             // section 12, "Through the hub").
             let res = self.admin(|a| a.admitter(false)).and_then(|admitter| {
-                let away = self.away()?;
-                if away.is_hub() {
-                    return away.invite(admitter, m.header.expires, r, &mut out);
-                }
-                let node = self.node()?;
-                let hubs = match m.header.device.as_str() {
-                    "" => crate::inviter::hubs_to_try(&node),
-                    d => vec![
+                let (away, node) = (self.away()?, self.node()?);
+                let hub = match m.header.device.as_str() {
+                    "" => None,
+                    d => Some(
                         crate::certs::DeviceId::parse(d)
                             .map_err(|_| Error::msg(format!("{d:?} is not a device ID")))?,
-                    ],
+                    ),
                 };
                 let group = node.identity().tag();
                 let open = |keys: &crate::inviter::GuestKeys, w: &Arc<crate::window::Window>, life: Duration| {
-                    crate::inviter::open_through_any(&node, &hubs, keys, w, life)
+                    crate::inviter::open_where(&node, &away, hub.as_ref(), keys, w, life)
                 };
                 crate::inviter::run_invite(admitter, &group, m.header.expires, r, &mut out, &*self.log, &open)
             });

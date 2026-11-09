@@ -519,3 +519,63 @@ fn an_invitation_asks_the_admin() {
         .is_err()
     );
 }
+
+/// A phone that dials a remote invitation's hub through pair_session's
+/// dialing attempt, with its key outside the core: the admin is asked, a
+/// yes admits it, and a no ends both sides.
+#[test]
+fn a_dialing_attempt_joins_by_an_invitation() {
+    let (admitter, rs) = root_group();
+    let secret = random_secret();
+    let run_one = |phone: &Joiner, answer: bool| {
+        let (cfg, exporter) =
+            tls::member_or_pair_server(&admitter.identity, Arc::new(|_: &[Cert]| None), &clock()).unwrap();
+        let session = Session::server(Arc::new(cfg)).unwrap();
+        let mut adm = Admission::accept_secret(admitter.clone(), GroupView::of(&rs), &secret, session, exporter).unwrap();
+        let mut joining = Attempt::dialing_secret(phone, &secret, &clock()).unwrap();
+        let (mut asked, mut admitted, mut joined, mut joiner_err, mut member_err) = (None, None, None, None, None);
+        let mut to_member = joining.feed(&[], now_ms()).send;
+        assert!(!to_member.is_empty(), "the first step sends the client hello");
+        for _ in 0..32 {
+            let mut step = adm.feed(&to_member, now_ms());
+            let mut to_joiner = core::mem::take(&mut step.send);
+            if let Outcome::Confirm(r) = &step.outcome {
+                asked = Some(r.clone());
+                step = adm.answer(answer, now_ms());
+                to_joiner.extend(core::mem::take(&mut step.send));
+            }
+            match step.outcome {
+                Outcome::Admitted(a) => admitted = Some(*a),
+                Outcome::Failed { error, .. } => member_err = Some(error),
+                _ => {}
+            }
+            let step = joining.feed(&to_joiner, now_ms());
+            to_member = step.send;
+            match step.outcome {
+                JoinOutcome::Joined(j) => {
+                    to_member.extend(joining.finish(true));
+                    joined = Some(*j);
+                }
+                JoinOutcome::Failed { error, .. } => joiner_err = Some(error),
+                JoinOutcome::Pending => {}
+            }
+            if joiner_err.is_some() || (joined.is_some() && admitted.is_some()) {
+                break;
+            }
+        }
+        (asked, admitted, joined, joiner_err, member_err)
+    };
+
+    let phone = Joiner::with_key("phone", "ios", soft()).unwrap();
+    let (asked, admitted, joined, joiner_err, member_err) = run_one(&phone, true);
+    assert!(joiner_err.is_none() && member_err.is_none(), "{joiner_err:?} {member_err:?}");
+    assert_eq!(asked.unwrap().fingerprint, phone.fingerprint());
+    assert_eq!(admitted.unwrap().device, joined.unwrap().identity.id);
+
+    let other = Joiner::with_key("other", "android", soft()).unwrap();
+    let (asked, admitted, joined, joiner_err, _) = run_one(&other, false);
+    assert!(asked.is_some() && admitted.is_none() && joined.is_none());
+    assert!(text(joiner_err).contains(Refusal::Declined.message()));
+
+    assert!(Attempt::dialing_secret(&phone, &secret[..8], &clock()).is_err());
+}

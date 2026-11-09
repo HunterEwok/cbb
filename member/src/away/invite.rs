@@ -22,12 +22,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use cbb_core::admit::Admitter;
 use cbb_core::invite::Invitation;
 
 use super::Away;
 use crate::certs::{Cert, DeviceId};
-use crate::control;
 use crate::error::{Context, Error, Result};
 use crate::hub::{self, Hub};
 use crate::inviter::{GuestKeys, Opened};
@@ -88,31 +86,21 @@ type GuestWay =
 pub(super) type Guests = Arc<Mutex<HashMap<Ipv6Addr, Guest>>>;
 
 impl Away {
-    /// Makes a remote invitation on the hub for cbb invite and answers with
-    /// its text, then asks the client to confirm each device that uses it,
-    /// and answers how it ended. A client that hangs up cancels it.
-    pub fn invite(
-        self: &Arc<Self>,
-        admitter: Admitter,
-        expires: i64,
-        r: control::Reader<crate::sys::UnixStream>,
-        out: &mut crate::sys::UnixStream,
-    ) -> Result<()> {
-        let open = |keys: &GuestKeys, w: &Arc<Window>, _: Duration| -> Result<Opened> {
-            let addr = hub::guest_addr(&keys.public);
-            let peer = hub::Peer { key: keys.public, psk: keys.psk, addr, until: None };
-            let (hub_key, endpoints, obfuscation, vless) = self.open_guest(peer, Some(w.clone()), None)?;
-            let me = self.clone();
-            Ok(Opened {
-                hub: self.me.as_str().to_string(),
-                hub_key,
-                endpoints,
-                obfuscation,
-                vless,
-                ended: Box::new(move |admitted| me.guest_ended(addr, admitted)),
-            })
-        };
-        crate::inviter::run_invite(admitter, &self.group, expires, r, out, &*self.log, &open)
+    /// Opens the guest tunnel of an invitation this hub makes, whose
+    /// pairing connections the window serves.
+    pub fn open_own(self: &Arc<Self>, keys: &GuestKeys, w: &Arc<Window>) -> Result<Opened> {
+        let addr = hub::guest_addr(&keys.public);
+        let peer = hub::Peer { key: keys.public, psk: keys.psk, addr, until: None };
+        let (hub_key, endpoints, obfuscation, vless) = self.open_guest(peer, Some(w.clone()), None)?;
+        let me = self.clone();
+        Ok(Opened {
+            hub: self.me.as_str().to_string(),
+            hub_key,
+            endpoints,
+            obfuscation,
+            vless,
+            ended: Box::new(move |admitted| me.guest_ended(addr, admitted)),
+        })
     }
 
     /// The window of the guest at addr ended: with a device, whose first
@@ -490,6 +478,36 @@ pub fn join_invite(
             e.context("the hub did not answer; check that the invitation is still valid, that the hub is on, and that its UDP port or its forwarder can be reached")
         }
     })
+}
+
+/// Keeps the invitation a device joined with in the state directory, once
+/// sync away from home is on there: the member then offers its own tunnel
+/// key to the hub through the invitation's guest tunnel, as after cbb pair
+/// -invite. A phone's app calls it after it stored its identity.
+pub fn keep_guest(dir: &std::path::Path, text: &str) -> Result<()> {
+    crate::files::write_atomic(&dir.join(GUEST_FILE), text.trim().as_bytes(), 0o600)
+}
+
+/// The guest tunnel of an invitation that a phone's app joins with: the
+/// app dials its loopback port, which leads to the hub's pairing port, and
+/// runs the join there with the invitation's secret.
+pub struct GuestTunnel(crate::tunnel::Link);
+
+impl GuestTunnel {
+    /// Starts the invitation's guest tunnel.
+    pub fn start(inv: &Invitation, log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<GuestTunnel> {
+        guest_link(inv, log).map(GuestTunnel)
+    }
+
+    /// The loopback port that leads to the hub's pairing port.
+    pub fn port(&self) -> u16 {
+        self.0.local().port()
+    }
+
+    /// Whether the hub has answered through the tunnel.
+    pub fn answered(&self) -> bool {
+        self.0.answered()
+    }
 }
 
 /// The guest tunnel of an invitation to its hub.

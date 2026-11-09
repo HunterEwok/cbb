@@ -307,11 +307,90 @@ pub type Ended = Box<dyn FnOnce(Option<&DeviceId>) + Send>;
 /// serves, valid for the lifetime.
 pub type Open<'a> = dyn Fn(&GuestKeys, &Arc<Window>, Duration) -> Result<Opened> + 'a;
 
-/// Runs the control operation invite (cbb invite): makes the invitation's
-/// keys, secret and window, opens its guest tunnel with open (on this hub,
-/// or through a hub), answers with the invitation's text, asks the client
-/// to confirm each device that uses it, and answers how it ended. A client
-/// that hangs up cancels it.
+/// An open invitation: its text, its pairing window and its guest tunnel.
+pub struct Invite {
+    /// The invitation's text, cbb://invite#...
+    pub text: String,
+    /// How long it is valid from now.
+    pub lifetime: Duration,
+    window: Arc<Window>,
+    ended: Mutex<Option<Ended>>,
+}
+
+impl Invite {
+    /// Makes an invitation for lifetime (DEFAULT_LIFETIME when zero, at
+    /// most MAX_LIFETIME): its keys, secret and window, whose devices
+    /// confirm is asked about, and its guest tunnel, which open opens (on
+    /// this hub, or through a hub).
+    pub fn start(
+        admitter: cbb_core::admit::Admitter,
+        group: &str,
+        lifetime: Duration,
+        confirm: crate::window::Confirm,
+        open: &Open<'_>,
+    ) -> Result<Invite> {
+        let lifetime = if lifetime.is_zero() { DEFAULT_LIFETIME } else { lifetime };
+        if lifetime > MAX_LIFETIME {
+            return Err(Error::msg("an invitation is valid for 24h0m0s at most"));
+        }
+        let secret = new_secret()?;
+        let keys = GuestKeys::new()?;
+        let w = Window::open_secret(admitter, &secret, lifetime, confirm)?;
+        let opened = match open(&keys, &w, lifetime) {
+            Ok(o) => o,
+            Err(e) => {
+                w.close();
+                return Err(e);
+            }
+        };
+        let now = crate::uptime::wall_ms() / 1000;
+        let inv = cbb_core::invite::Invitation {
+            group: group.to_string(),
+            hub: opened.hub.clone(),
+            hub_key: opened.hub_key,
+            endpoints: opened.endpoints.clone(),
+            guest_key: keys.key,
+            guest_psk: keys.psk,
+            secret,
+            expires: now.saturating_add(lifetime.as_secs() as i64),
+            obfuscation: opened.obfuscation.clone(),
+            vless: opened.vless.clone(),
+        };
+        Ok(Invite { text: inv.to_text(), lifetime, window: w, ended: Mutex::new(Some(opened.ended)) })
+    }
+
+    /// Waits until the invitation admitted a device or ended, and closes
+    /// its guest tunnel then; stop is asked every second, and ends it when
+    /// true.
+    pub fn wait(&self, stop: &dyn Fn() -> bool) -> std::result::Result<crate::window::Joined, cbb_core::pair::Refusal> {
+        let end = self.window.wait(stop);
+        self.window.close();
+        if let Some(ended) = self.ended.lock().unwrap().take() {
+            let admitted = end.as_ref().ok().and_then(|j| DeviceId::parse(&j.device).ok());
+            ended(admitted.as_ref());
+        }
+        end
+    }
+
+    /// Ends the invitation: wait returns.
+    pub fn close(&self) {
+        self.window.close();
+    }
+}
+
+impl Drop for Invite {
+    fn drop(&mut self) {
+        self.window.close();
+        if let Some(ended) = self.ended.get_mut().unwrap().take() {
+            ended(None);
+        }
+    }
+}
+
+/// Runs the control operation invite (cbb invite): makes the invitation
+/// with open, answers with its text, asks the client to confirm each
+/// device that uses it, and answers how it ended. A client that hangs up
+/// cancels it.
 pub fn run_invite(
     admitter: cbb_core::admit::Admitter,
     group: &str,
@@ -327,20 +406,13 @@ pub fn run_invite(
     use crate::control::{self, Header, Joining};
     use crate::error::Context;
 
-    let lifetime = if expires > 0 { Duration::from_secs(expires as u64) } else { DEFAULT_LIFETIME };
-    if lifetime > MAX_LIFETIME {
-        return Err(Error::msg("an invitation is valid for 24h0m0s at most"));
-    }
-    let secret = new_secret()?;
-    let keys = GuestKeys::new()?;
-
     // The client's answers, and its hang-up.
     let (answers, asked) = mpsc::sync_channel::<bool>(1);
     let hung = Arc::new(AtomicBool::new(false));
     let writer = Arc::new(Mutex::new(out.try_clone().context("the control connection broke")?));
-    let window_cell: Arc<Mutex<Option<Arc<Window>>>> = Arc::new(Mutex::new(None));
+    let cell: Arc<Mutex<Option<Arc<Invite>>>> = Arc::new(Mutex::new(None));
     {
-        let (hung, cell) = (hung.clone(), window_cell.clone());
+        let (hung, cell) = (hung.clone(), cell.clone());
         std::thread::spawn(move || {
             while let Ok(Some(m)) = r.read() {
                 if m.header.op == "answer" {
@@ -348,8 +420,8 @@ pub fn run_invite(
                 }
             }
             hung.store(true, Ordering::SeqCst);
-            if let Some(w) = cell.lock().unwrap().as_ref() {
-                w.close();
+            if let Some(i) = cell.lock().unwrap().as_ref() {
+                i.close();
             }
         });
     }
@@ -383,49 +455,31 @@ pub fn run_invite(
             }
         })
     };
-    let w = Window::open_secret(admitter, &secret, lifetime, confirm)?;
-    *window_cell.lock().unwrap() = Some(w.clone());
+    let lifetime = Duration::from_secs(expires.max(0) as u64);
+    let inv = Arc::new(Invite::start(admitter, group, lifetime, confirm, open)?);
+    *cell.lock().unwrap() = Some(inv.clone());
     if hung.load(Ordering::SeqCst) {
-        w.close();
+        inv.close();
     }
-    let opened = match open(&keys, &w, lifetime) {
-        Ok(o) => o,
-        Err(e) => {
-            w.close();
-            return Err(e);
-        }
-    };
-    let now = crate::uptime::wall_ms() / 1000;
-    let inv = cbb_core::invite::Invitation {
-        group: group.to_string(),
-        hub: opened.hub.clone(),
-        hub_key: opened.hub_key,
-        endpoints: opened.endpoints.clone(),
-        guest_key: keys.key,
-        guest_psk: keys.psk,
-        secret,
-        expires: now.saturating_add(lifetime.as_secs() as i64),
-        obfuscation: opened.obfuscation.clone(),
-        vless: opened.vless.clone(),
-    };
-    log(&format!("cbb: an invitation is open for {} minutes", lifetime.as_secs() / 60));
-    let text =
-        control::partial(Header { invite: inv.to_text(), expires: lifetime.as_secs() as i64, ..Default::default() });
+    log(&format!("cbb: an invitation is open for {} minutes", inv.lifetime.as_secs() / 60));
+    let text = control::partial(Header {
+        invite: inv.text.clone(),
+        expires: inv.lifetime.as_secs() as i64,
+        ..Default::default()
+    });
     let wrote = control::write(&mut *writer.lock().unwrap(), &text);
     let end = if wrote.is_ok() {
-        w.wait(&|| crate::service::stopping() || hung.load(Ordering::SeqCst))
+        inv.wait(&|| crate::service::stopping() || hung.load(Ordering::SeqCst))
     } else {
-        Err(cbb_core::pair::Refusal::Closed)
+        inv.close();
+        inv.wait(&|| true)
     };
-    w.close();
     match end {
         Ok(j) => {
-            (opened.ended)(DeviceId::parse(&j.device).ok().as_ref());
             let m = control::reply(Header { name: j.name, done: true, ..Default::default() }, Vec::new());
             control::write(&mut *writer.lock().unwrap(), &m)
         }
         Err(why) => {
-            (opened.ended)(None);
             let e = Error::with("the invitation ended", why);
             log(&format!("cbb: {}", e.for_log()));
             if hung.load(Ordering::SeqCst) {
@@ -485,6 +539,29 @@ pub fn open_through(
             }
         }),
     })
+}
+
+/// Opens an invitation's guest tunnel where it goes: on this device when
+/// it is a hub and no other hub is asked for, else through hub, or through
+/// the first connected hub of the group that takes it.
+pub fn open_where(
+    node: &Arc<Node>,
+    away: &Arc<crate::away::Away>,
+    hub: Option<&DeviceId>,
+    keys: &GuestKeys,
+    w: &Arc<Window>,
+    lifetime: Duration,
+) -> Result<Opened> {
+    let me = node.identity().id.clone();
+    if away.is_hub() && hub.is_none_or(|h| *h == me) {
+        return away.open_own(keys, w);
+    }
+    let hubs = match hub {
+        Some(h) if *h == me => return Err(Error::msg(NOT_A_HUB)),
+        Some(h) => vec![h.clone()],
+        None => hubs_to_try(node),
+    };
+    open_through_any(node, &hubs, keys, w, lifetime)
 }
 
 /// The hubs to make an invitation through, in the order to try them: the

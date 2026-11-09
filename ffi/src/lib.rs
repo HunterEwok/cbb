@@ -88,6 +88,8 @@ pub unsafe extern "C" fn cbb_free(answer: *mut u8, len: usize) {
 
 #[cfg(feature = "member")]
 pub mod admit;
+#[cfg(feature = "member")]
+pub mod invite;
 #[cfg(feature = "join")]
 pub mod join;
 #[cfg(feature = "member")]
@@ -297,6 +299,22 @@ pub unsafe extern "C" fn cbb_join_announce(j: *mut join::Join, port: u16) -> i32
     i32::from(j.announce(port))
 }
 
+/// Whether the hub of the invitation the joiner joins by has answered
+/// through its guest tunnel: 1 when it has, 0 when not (or with no
+/// invitation). A failed attempt whose hub never answered says the hub is
+/// off or cannot be reached.
+///
+/// # Safety
+///
+/// `j` must be a joiner of `cbb_join_new`, not freed.
+#[cfg(feature = "join")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_join_answered(j: *const join::Join) -> i32 {
+    // SAFETY: as the function's contract says.
+    let Some(j) = (unsafe { j.as_ref() }) else { return 0 };
+    i32::from(j.answered())
+}
+
 /// Frees a joiner; null does nothing.
 ///
 /// # Safety
@@ -497,6 +515,96 @@ pub unsafe extern "C" fn cbb_admit_free(a: *mut admit::Admit) {
     if !a.is_null() {
         // SAFETY: a is a box cbb_admit_new let go of.
         drop(unsafe { Box::from_raw(a) });
+    }
+}
+
+/// Makes a remote invitation as an admin of the group (src/invite.rs):
+/// `request` is `{"public", "admin_ca", "expires", "hub"}` and `sign` with
+/// `ctx` signs with the key `public` names until `cbb_invite_free`. Writes
+/// the answer, `{"invite", "expires", "modules"}`, to `answer` and
+/// `answer_len` and returns the invitation, or null when the answer is an
+/// error. It waits for the hub's answer, so the app calls it off its main
+/// thread.
+///
+/// # Safety
+///
+/// As `cbb_admit_new`, until `cbb_invite_free`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_invite_new(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer: *mut *mut u8,
+    answer_len: *mut usize,
+) -> *mut invite::Invite {
+    if request.is_null() || answer.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    let (i, ans) = m.invite(req, sign, ctx as usize);
+    // SAFETY: the caller gives a writable pointer at answer.
+    unsafe { answer.write(to_c(ans, answer_len)) };
+    i.map_or(core::ptr::null_mut(), |i| Box::into_raw(Box::new(i)))
+}
+
+/// Waits up to `timeout_ms` for the invitation's state to pass `version`
+/// and answers it: `{"version", "state", "joining", "name", "device",
+/// "error"}`, state open, joining (ask the user about `joining`: device,
+/// name, os, fingerprint), done or failed. It blocks, so the app calls it
+/// off its main thread.
+///
+/// # Safety
+///
+/// `i` must be an invitation of `cbb_invite_new`, not freed; `answer_len`
+/// writable.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_invite_next(
+    i: *const invite::Invite,
+    version: u64,
+    timeout_ms: u64,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(i) = (unsafe { i.as_ref() }) else { return core::ptr::null_mut() };
+    to_c(i.next(version, timeout_ms), answer_len)
+}
+
+/// Answers whether to admit the device the state's `joining` names: `yes`
+/// non-zero admits it.
+///
+/// # Safety
+///
+/// As `cbb_invite_next`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_invite_answer(i: *const invite::Invite, yes: i32) {
+    // SAFETY: as the function's contract says.
+    if let Some(i) = unsafe { i.as_ref() } {
+        i.answer(yes != 0);
+    }
+}
+
+/// Ends an invitation and frees it, once its window ended (a second at
+/// most, or until an admission that has started finishes); null does
+/// nothing.
+///
+/// # Safety
+///
+/// `i` must be null or an invitation of `cbb_invite_new`, not freed before,
+/// with no other call on it running.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_invite_free(i: *mut invite::Invite) {
+    if !i.is_null() {
+        // SAFETY: i is a box cbb_invite_new let go of.
+        drop(unsafe { Box::from_raw(i) });
     }
 }
 
