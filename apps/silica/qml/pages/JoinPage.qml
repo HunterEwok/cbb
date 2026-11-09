@@ -43,6 +43,10 @@ Page {
                     : app.join.state === "joining" ? qsTr("Joining…")
                     : app.join.state === "failed" ? ""
                     : app.busy ? qsTr("Making the admin key…")
+                    // Shown with the code only: before it, the PIN dialog
+                    // may cover the page at once, and a text that flashes
+                    // by can't be read.
+                    : app.join.state !== "listening" ? ""
                     : page.admin ? qsTr("On the device that made the group, tap + and scan this code. Keep this screen open.")
                     : qsTr("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.")
             }
