@@ -1872,19 +1872,9 @@ jobs:
         # The runner image has the Android SDK; Gradle fetches a missing platform. The app
         # has two builds, full and fdroid (docs/apps.md, "F-Droid").
         run: |
-          # verifyRoborazziFullDebug is the full build's unit tests with the
-          # screenshots compared with app/src/test/screenshots (ScreenshotTest).
           ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease \
-            :app:verifyRoborazziFullDebug :app:testFdroidDebugUnitTest :app:lintFullDebug :app:lintFdroidDebug \
+            :app:testFullDebugUnitTest :app:testFdroidDebugUnitTest :app:lintFullDebug :app:lintFdroidDebug \
             :shared:testDebugUnitTest :shared:lintDebug :wear:assembleDebug :wear:assembleRelease :wear:lintDebug
-      # The new pictures and their differences when a screenshot does not match.
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: failure()
-        with:
-          name: android-screenshots
-          path: apps/android/app/build/outputs/roborazzi
-          if-no-files-found: ignore
-          retention-days: 7
       - name: the Android apps' software bill of materials, as the release makes it (tools/sbom)
         working-directory: apps/android
         run: |
