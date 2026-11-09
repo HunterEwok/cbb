@@ -212,7 +212,6 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
         "copy_verdict" => copy_verdict(serde_json::from_value(args).map_err(bad_args)?),
         "new_device_key" => new_device_key(),
         "sign_digest" => sign_digest(serde_json::from_value(args).map_err(bad_args)?),
-        "arrange" => arrange(serde_json::from_value(args).map_err(bad_args)?),
         "keyboard" => keyboard(serde_json::from_value(args).map_err(bad_args)?),
         "why" => why(serde_json::from_value(args).map_err(bad_args)?),
         "bug_report" => bug_report(serde_json::from_value(args).map_err(bad_args)?),
@@ -231,39 +230,6 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
 fn copy_verdict(i: crate::rule::Incoming) -> Result<Vec<u8>, Refusal> {
     let mut m = serde_json::Map::new();
     m.insert("verdict".into(), serde_json::to_value(crate::rule::incoming(&i)).unwrap_or_default());
-    Ok(json(Value::Object(m)))
-}
-
-/// The arguments of `arrange`.
-#[derive(Deserialize)]
-struct ArrangeArgs {
-    group: String,
-    #[serde(rename = "self", default)]
-    me: Option<String>,
-    devices: Vec<String>,
-    #[serde(default)]
-    stored: Option<Value>,
-    #[serde(default)]
-    prune: bool,
-    #[serde(default)]
-    op: Option<crate::arrange::Op>,
-}
-
-/// `arrange`: the arrangement of the device tiles (crate::arrange) for an
-/// app that keeps it in its settings: stored as it keeps it (null when
-/// none), pruned when the devices list is whole, with op applied, as
-/// `{"stored", "view"}`: what to keep and what to show after this device.
-fn arrange(a: ArrangeArgs) -> Result<Vec<u8>, Refusal> {
-    let mut arr = crate::arrange::Arrangement::decode(a.stored.as_ref(), &a.group);
-    if a.prune {
-        arr.prune(&a.devices);
-    }
-    if let Some(op) = &a.op {
-        arr.apply(op, &a.devices, a.me.as_deref()).map_err(|e| refuse(Code::Request, e))?;
-    }
-    let mut m = serde_json::Map::new();
-    m.insert("view".into(), serde_json::to_value(arr.view(&a.devices, a.me.as_deref())).unwrap_or_default());
-    m.insert("stored".into(), serde_json::to_value(&arr).unwrap_or_default());
     Ok(json(Value::Object(m)))
 }
 

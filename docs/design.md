@@ -199,8 +199,7 @@ ends, the Go service described below is still the computers' member.
   TPM, `cbb` does all of this with the Secure Enclave itself (`member/src/sekey.rs`, through
   Security.framework, the same blobs and the same sealed format as Go's `internal/sekey`,
   checked against `testdata/interop/go-sekey-seal.json`), so there the helper holds no key.
-  A YubiKey `cbb` reads itself on every system (`member/src/piv.rs`, Go's `internal/piv`
-  translated, through pcscd's socket on Linux, PCSC.framework on a Mac and winscard on
+  A YubiKey `cbb` reads itself on every system (`member/src/piv.rs`, through pcscd's socket on Linux, PCSC.framework on a Mac and winscard on
   Windows): it finds the slot by its certificate's key hash, takes the PIN and signs.
 - **The keyboard and the TVs.** `keyboard`, `remote`, `peripheral-status`,
   `peripheral-paste`, `peripheral-stop` and `keyboard-layout` run Go's `internal/peripheral`,
@@ -1215,7 +1214,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   key, not its address, so a phone that moves from Wi-Fi to a mobile network stays the same
   hub. The hub's WireGuard runs in the app's process, in the Rust core's tunnel
   (`ffi/src/tunnel.rs`), beside the client side: the lite member's tunnel, one for the lite
-  member and every phone, rather than a Go tunnel bound by gomobile, which would keep a
+  member and every phone, rather than a tunnel in Go for the phones, which would keep a
   second WireGuard, AmneziaWG and VLESS to maintain and Go in both apps' builds (D-87). The
   phones then reach a forwarder over VLESS with XHTTP only: REALITY needs a browser's
   ClientHello, which rustls does not give, so it stays on the Go servers.
@@ -2339,7 +2338,7 @@ docs/protocol.md, section 16.
 2. **Built but for the keys:** the release flow: the draft, `tools/release-sign`, the
    publishing workflow, the mirror, and `get.sh` and `get.ps1` checking the manifest.
 3. **Built:** `cbb update` and `-check` on Linux, OpenWrt, FreeBSD, macOS and Windows
-   (`internal/update`): download, check the archive and the programs in it, install with
+   (`member/src/update.rs`, `update_os.rs`): download, check the archive and the programs in it, install with
    the new release's own installer (which replaces files by rename or after stopping them,
    never over a running program, and keeps the user's answers; on Windows `cbb update`
    runs from a copy in its own folder, since `install.ps1` stops every program in
@@ -2577,7 +2576,7 @@ says `ID=steamos`:
 - adds `/opt/cbb/bin` to the login shells' path (`sudo` keeps its own, so its
   messages name the whole path).
 
-The program knows this layout by its own path (`internal/steamos`): run from
+The program knows this layout by its own path (`member/src/update_os.rs`): run from
 `/opt/cbb/bin/cbb`, it keeps cbb update's folder in `/opt/cbb-update`,
 since `/var` is small there, and finds `firewall.sh` in `/opt`. Game Mode runs gamescope,
 which has no clipboard that a client can read or write, so the Steam Deck syncs only in

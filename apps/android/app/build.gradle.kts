@@ -129,7 +129,7 @@ fun Exec.withPinnedNdk() {
 // entry point (ffi/, docs/core-api.md), which the kit calls through JNA, as libcbb_ffi.so
 // for each ABI. It needs the Rust of cbb.rust in
 // ../gradle.properties with the Android targets, cargo-ndk and the pinned NDK (ffi/bind.sh).
-val coreLibs = layout.buildDirectory.dir("cbbcore")
+val coreLibs = layout.buildDirectory.dir("corelibs")
 val bindCore = tasks.register<Exec>("bindCore") {
     val repo = rootDir.resolve("../..")
     inputs.files(repo.resolve("Cargo.lock"), repo.resolve("Cargo.toml"))

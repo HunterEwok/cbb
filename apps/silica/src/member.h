@@ -134,6 +134,11 @@ signals:
 public:
     // Brings the devices up to date now, as after an admin's change.
     void pollDevices();
+    // The device tiles as the member keeps them (docs/apps.md, "What the
+    // member shows"), with the user's change op applied and kept first
+    // (null for none): {tiles, online, others, custom}; empty with failure
+    // set when there is no member or the change does not fit.
+    QJsonObject view(const QJsonValue &op, Failure *failure) const;
     // Answers the command of the token: done, refused or failed, and why
     // (in English: the sender's log shows it).
     void answer(double token, const QString &status, const QString &reason);

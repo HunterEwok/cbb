@@ -28,7 +28,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/cbb/internal/core"
 	"github.com/HunterEwok/cbb/internal/strict"
 )
 
@@ -413,15 +412,6 @@ var (
 // decode reads data as a body of type typ into v; the body must have v,
 // type and each field of required.
 func decode(data []byte, typ string, v any, required ...string) error {
-	if checked, err := core.CheckBody(typ, data); checked {
-		if err != nil {
-			return fmt.Errorf("release: %w", err)
-		}
-		if err := json.Unmarshal(data, v); err != nil {
-			return fmt.Errorf("release: %w", err)
-		}
-		return nil
-	}
 	// The strict form of signed bodies first, so that every program reads a
 	// file alike (docs/protocol.md, section 16).
 	if err := strict.Check(data, append([]string{"v", "type"}, required...)...); err != nil {

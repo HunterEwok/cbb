@@ -278,3 +278,26 @@ func TestCheckOpsHeader(t *testing.T) {
 		t.Fatalf("checkOps() = %q, want one problem naming len", got)
 	}
 }
+
+// TestCheckGoneName finds the names of what the project removed, outside
+// the files that tell its history, and leaves today's names alone.
+func TestCheckGoneName(t *testing.T) {
+	tag, tunnel, dir := "cbb"+"wasm", "go"+"mobile", "internal/"+"core"
+	for _, c := range []struct {
+		file, content string
+		want          int
+	}{
+		{"a.go", "//go:build " + tag + "\n", 1},
+		{"docs/a.md", "The phones bind Go with " + tunnel + ".\n", 1},
+		{"a.go", "import \"github.com/HunterEwok/cbb/" + dir + "\"\n", 1},
+		{"CHANGELOG.md", dir + " is gone.\n", 0},
+		{"docs/decisions.md", "| D-1 | " + tunnel + " |\n", 0},
+		{"a.swift", "import CCbbCore\n", 0},
+		{"a.go", "the Rust core in " + dir + "s and internal/coreapi\n", 0},
+	} {
+		got := checkGoneName(c.file, []byte(c.content))
+		if len(got) != c.want {
+			t.Errorf("checkGoneName(%q, %q) = %q, want %d problems", c.file, c.content, got, c.want)
+		}
+	}
+}

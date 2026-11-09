@@ -71,4 +71,12 @@ final class ArrangementTests: XCTestCase {
         XCTAssertEqual([id, name], ["c1", "Desk"])
         XCTAssertEqual(ds.count, 2)
     }
+
+    /// A view without its fields reads as no tiles rather than failing: the
+    /// member starts a bad arrangement fresh too.
+    func testBadJSONStartsFresh() throws {
+        let v = try JSONDecoder().decode(Arrangement.View<Dev>.self, from: Data("{}".utf8))
+        XCTAssertTrue(v.tiles.isEmpty)
+        XCTAssertFalse(v.custom)
+    }
 }

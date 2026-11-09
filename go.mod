@@ -13,11 +13,9 @@ tool (
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/amnezia-vpn/amneziawg-go v0.2.20-0.20260724121833-457d920a1a7d
-	github.com/gballet/go-libpcsclite v0.0.0-20250918194357-1ec6f2e601c6
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/google/go-tpm v0.9.8
 	github.com/jezek/xgb v1.3.1
-	github.com/tetratelabs/wazero v1.12.0
 	github.com/xtls/reality v0.0.0-20261014101318-83f621788ca8
 	github.com/xtls/xray-core v1.260327.1-0.20261021115930-1b1647cd9ddf
 	github.com/yuin/goldmark v1.8.7

@@ -1509,6 +1509,14 @@ All notable changes to cbb are documented in this file. The format follows
   "Lab" section of the advanced settings on Android and Aurora, beside the other things that
   work but are no promise of 1.0. Aurora gets the advanced settings switch, and the tray app
   keeps it on between launches.
+- The member keeps the user's order of the device tiles and their collections, in
+  `arrangement.json` in its state folder, and answers `view` with the tiles ready to draw
+  and `arrange` with the user's change (docs/apps.md, "What the member shows"). The iPhone,
+  Android, Aurora, Mac and tray apps only draw it: none keeps an order in its settings or
+  applies the rules itself, and the core's stateless `arrange` call is gone. The order kept
+  by an earlier version is not carried over. The kits' and the tray app's copies of the
+  rules and their vector tests go with them; the core's tests, and the tray window's
+  stand-in service, keep checking `testdata/arrangement/vectors.json`.
 - One list of operations for the phones' member and the computers' control socket
   (docs/core-api.md, "The member's operations"): the same names and bodies on both. Every control
   message is the core's envelope, a request `{"op", "args"}` and an answer `{"ok"}` or
@@ -2008,6 +2016,22 @@ All notable changes to cbb are documented in this file. The format follows
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+
+- The Rust core as WebAssembly in the Go programs (`internal/core`, `wasm/`, wazero and the
+  build tags `cbbwasm` and `cbbcore`): `cbb-helper` and `cbb-forward` run Go's own rules,
+  which the interop vectors and the differential run keep the same as the core's. The Mac's
+  `cbb` and `cbb-helper` are signed with no entitlement at all, since nothing compiles code
+  at run time any more.
+
+- The Go packages that only the Go service used: `internal/update`, `internal/piv`,
+  `internal/tmuxpaste`, `internal/consolepaste`, `internal/sysinfo`, `internal/uptime` and
+  `internal/steamos`, whose work the Rust `cbb` does and tests, and the functions no Go
+  program calls any more. `TestProjectAddresses` now compares the copies of the update
+  servers' addresses with `member/src/update.rs`.
+
+- `tools/repocheck` refuses the names of what the project removed for good (the core as
+  WebAssembly and its build tags, the phones' tunnel in Go, the Go packages the Rust `cbb`
+  replaced) outside the changelog, the decisions and the list of removed tests.
 
 - The Go command line `cmd/cbb` and the Go service in it: `cbb` is the Rust program on every
   member, with `cbb-helper` beside it on computers. Its tests run on the Rust `cbb`

@@ -157,48 +157,6 @@ jobs:
           path: cover-go-${{ matrix.os }}.out
           retention-days: 7
 
-  # Every release build of cbb runs the group's rules, the signed bodies and
-  # the sealed copies through the Rust core (-tags cbbwasm), while a plain go
-  # test runs Go's own (internal/authority, internal/clip), which the
-  # differential run keeps the same. This job runs the whole Go suite as the
-  # release builds are made, so that what ships is what is tested.
-  gowithcore:
-    name: go test with the Rust core
-    needs: changes
-    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lite == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: the Rust toolchain for WebAssembly, and swtpm
-        run: |
-          rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
-          rustup default stable
-          sudo apt-get update -q
-          sudo apt-get install -y -q swtpm
-          echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
-      - name: the core as WebAssembly, as the release builds embed it
-        run: sh wasm/build.sh
-      - name: go test, every package, with the core
-        run: go test -race -timeout 25m -overlay target/cbb-core-overlay.json -tags cbbwasm -coverprofile=cover-go-withcore.out ./...
-      # The code that calls the core runs only here; the coverage job adds
-      # this profile to the others.
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: coverage-go-withcore
-          path: cover-go-withcore.out
-          retention-days: 7
-      - name: cbb-helper is built with the core, as the release builds it
-        run: |
-          go build -overlay target/cbb-core-overlay.json -tags cbbwasm -o "$RUNNER_TEMP/cbb-helper" ./cmd/cbb-helper
-          go version -m "$RUNNER_TEMP/cbb-helper" | grep -q -- '-tags=cbbwasm'
-
   # Go's test coverage across packages (a test of internal/service counts for
   # internal/group too), with the TPM, the desktop clipboards and the e2e's
   # programs built with -cover; the coverage job sums it up.
@@ -286,7 +244,7 @@ jobs:
   # and fails when one falls below its floor in tools/coverage/floor.json.
   coverage:
     name: coverage
-    needs: [changes, test, gocover, gowithcore, kit, android, lite]
+    needs: [changes, test, gocover, kit, android, lite]
     if: always() && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -338,10 +296,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
-      - name: the Rust core as WebAssembly, which the Go programs run for the group's rules (internal/core)
-        run: |
-          sh wasm/build.sh
-          sh member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
       - name: zig, which links cbb for FreeBSD and Windows, and the nightly Rust of FreeBSD's ARM64 build
         run: |
           python3 -m venv "$RUNNER_TEMP/zig"
@@ -358,7 +312,7 @@ jobs:
           TARGETS: ${{ matrix.targets }}
         run: |
           # shellcheck disable=SC2086 # the targets are words
-          sh .github/build-targets.sh "$RUNNER_TEMP/core-notices" "$RUNNER_TEMP" $TARGETS
+          sh .github/build-targets.sh "$RUNNER_TEMP" $TARGETS
       - name: keep the Windows archive for the installer test
         if: contains(matrix.targets, 'windows/amd64')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -382,14 +336,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
-      - name: the Rust core as WebAssembly, which cbb runs for the group's rules (internal/core)
-        run: |
-          sh wasm/build.sh
-          sh member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm >"$RUNNER_TEMP/core-notices"
-      - name: cbb, the Go programs beside it and the release archives, with the core as at a release
+      - name: cbb, the Go programs beside it and the release archives, as at a release
         env:
           CGO_ENABLED: "1"
-        run: sh .github/build-targets.sh "$RUNNER_TEMP/core-notices" "$RUNNER_TEMP" darwin/arm64/vet darwin/amd64
+        run: sh .github/build-targets.sh "$RUNNER_TEMP" darwin/arm64/vet darwin/amd64
       - name: the agent's helper has the pasteboard
         # Without cgo the agent would start and fail; the helper must link AppKit.
         run: |
@@ -432,7 +382,7 @@ jobs:
         run: >-
           go test -timeout 20m -exec "$(command -v qemu-mips-static || command -v qemu-mips)" ./internal/clip ./internal/control ./internal/group
           ./internal/hlc ./internal/mdns ./internal/netguard ./internal/openwrt
-          ./internal/sysinfo ./internal/tunnel ./internal/uptime
+          ./internal/tunnel
           ./internal/vless </dev/null
 
   freebsd:
@@ -752,7 +702,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: shellcheck
-        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh member/packaging/build.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh ffi/bind.sh wasm/build.sh .github/ci-changes.sh .github/build-targets.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
+        run: shellcheck packaging/archive.sh packaging/release-notes.sh packaging/get.sh packaging/update.sh packaging/pair.sh packaging/linux/install.sh packaging/linux/install-rootless.sh packaging/linux/firewall.sh packaging/linux/uninstall.sh packaging/freebsd/install.sh packaging/freebsd/firewall.sh packaging/freebsd/uninstall.sh packaging/freebsd/cbb packaging/openwrt/install.sh packaging/openwrt/uninstall.sh packaging/openwrt/firewall.sh packaging/openwrt/cbb.init packaging/openwrt/cbb.ntp packaging/openwrt/feed.sh packaging/openwrt/apk-post-install packaging/openwrt/apk-pre-deinstall tools/e2e/openwrt.sh packaging/macos/install.sh packaging/macos/uninstall.sh packaging/macos/sign.sh packaging/macos/keychain.sh packaging/macos/notarize.sh packaging/macos/pkg.sh apps/ios/testflight.sh packaging/homebrew/formula.sh packaging/winget/manifest.sh packaging/tmux/cbb-console.sh member/packaging/archive.sh member/packaging/notices.sh member/packaging/mips.sh member/packaging/build.sh tools/e2e/e2e.sh tools/e2e/upgrade.sh tools/e2e/docker.sh tools/bench/setup-docker.sh packaging/docker/context.sh packaging/fdroid/reproduce.sh ffi/bind.sh .github/ci-changes.sh .github/build-targets.sh .github/differential.sh .github/nginx-check.sh packaging/zxnext/site.sh apps/zxnext/pins.sh apps/zxnext/ovl.sh
       - name: the OPNsense plugin hook
         run: php tools/e2e/opnsense-hook.php
       - name: the software bills of materials, as the release makes them (tools/sbom)
@@ -2290,20 +2240,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Go calls the Rust core through cgo and gets each vector's state
-        run: |
-          cargo build --locked --release -p cbb-ffi
-          go test -race -tags cbbcore ./internal/core -v
-      - name: Go reads commands, server credentials and release files through the Rust core, and takes the same bodies
-        run: go test -race -tags cbbcore ./internal/release ./internal/group -run 'Strict|Command|Credential|Watch|Release'
-      - name: Go runs the Rust core as WebAssembly under wazero, as on Windows, macOS and FreeBSD, and gets each vector's state
-        run: |
-          rustup target add wasm32-unknown-unknown
-          # cargo reads .cargo/config.toml, which picks
-          # getrandom's custom backend for this target.
-          cargo clippy --locked -p cbb-wasm --target wasm32-unknown-unknown -- -D warnings
-          sh wasm/build.sh
-          go test -race -overlay target/cbb-core-overlay.json -tags cbbwasm ./internal/core -v
       - name: get.sh --lite installs the lite member, and uninstall.sh removes it
         run: |
           rel="$RUNNER_TEMP/release"
@@ -2873,7 +2809,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gowithcore, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service, lite, litemips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service, lite, litemips, esp32, zxnext, silica, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

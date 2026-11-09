@@ -253,15 +253,10 @@ through another callback. `TestRustPhoneTunnel`, `TestRustPhoneHub`, `TestRustPh
 `TestRustPhoneRelayCredentials` run them
 against Go's hub, clients, forwarder and relay through the example `tunnel-on-linux`.
 
-Go reaches them in `internal/core`: through cgo under the build tag `cbbcore`, linking
-`libcbb_ffi`, or through the same core built as WebAssembly (`wasm/`, `cbb_call` and its
-memory functions), run by wazero under the tag `cbbwasm`. Every release build of `cbb`, on
-every system and architecture, takes `cbbwasm`, so it stays one static binary without cgo
-(the release workflow checks the tag with `go version -m`), and `cbb version` names the
-rules it runs; a build without either tag, as `go build` and `go test` are, evaluates with
-Go's own `internal/authority`, which only the tests use as a reference.
-`wasm/build.sh` builds the module and writes the `go build -overlay` file that lays it
-over `internal/core/cbb_core.wasm`, so no build output lands in the source tree.
+The Go programs (`cbb-helper`, `cbb-forward` and the tests) do not link the core: they run
+Go's own `internal/authority`, `internal/clip` and `internal/group`, which the interop
+vectors and the differential run (`.github/differential.sh`) keep byte for byte the same as
+the core's.
 
 ## Operations
 
@@ -296,7 +291,6 @@ over `internal/core/cbb_core.wasm`, so no build output lands in the source tree.
 | `new_device_key` | none | `{"pkcs8", "public"}`: a new P-256 device key (base64 PKCS #8 and SEC1 uncompressed) for a phone that keeps its key in a file (level 3) |
 | `sign_digest` | `pkcs8`, `digest` (base64, 32 bytes) | `{"sig"}`: ECDSA P-256 over the SHA-256 digest with that key, DER, base64: what the phone's signing callback gives for a key in a file |
 | `why` | `facts` (what a member knows: `in_group`, `removed`, `frozen`, `taken_over_by`, `cert_ends_ms`, `stop`, `sync_off`, `sync_until_ms`, `muted`, `muted_until_ms`, `newer`, `update`, `connected`, `devices: [{name, online, sync_off, muted}]`, `quiet`, `unreached`, `away`, each optional), `now_ms` | `{"why"}`: the reasons, as the member's `why` gives them (`cbb_core::why`, checked against `testdata/why/vectors.json`) |
-| `arrange` | `group`, `self`, `devices` (the app's order), `stored` (as kept, or null), `prune`, `op` (optional: `{"op":"move","item","before"}`, `into`, `out`, `new`, `rename`, `ungroup` or `reset`, as `testdata/arrangement/vectors.json` names them) | `{"stored","view"}`: the arrangement of the device tiles (`cbb_core::arrange`, docs/apps.md "Collections and the order of the tiles") to keep in the app's settings, and the items to show after this device; a change that does not fit is refused whole |
 | `keyboard` | `layout` (`us` or `ru`, the host's), `text` | `{"reports", "untypeable", "map"}`: the HID boot keyboard's reports that type `text` (each 8 bytes, base64; a key down, then all keys up), the characters the layout has no key for (no reports then), and the report map (base64), for a phone that is a Bluetooth LE keyboard (`cbb_core::keyboard`); an unknown layout is code 1 |
 | `seal_public` | `secret` (base64, 32 random bytes the device keeps) | `{"key"}`: its public key for sealed messages (base64, 1216 bytes), the `seal` its pairing and device record carry |
 | `seal_command` | `body` (base64, a command in the open), `key` (base64, the receiver's `seal` key) | `{"body"}`: the same command with its orders sealed to the key (`v` `2`, `sealed`), canonical, for the sender to sign; see "Signed bodies" |

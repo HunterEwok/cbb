@@ -44,6 +44,12 @@ var (
 	// oldName matches the project's old names in every spelling, written
 	// in pieces so that this file does not hold them either.
 	oldName = regexp.MustCompile(`(?i)clip(?:` + `board)?[ _.-]?` + `bridge`)
+	// goneName matches the names of what the project removed for good: the
+	// Rust core as WebAssembly in the Go programs and its build tags (D-93)
+	// and the phones' tunnel in Go (D-87), written in pieces too, and the Go
+	// packages whose work the Rust cbb took over (D-88).
+	goneName = regexp.MustCompile(`\b(?:cbb` + `wasm|cbb` + `core|wa` + `zero|go` + `mobile|cbb` + `tun)\b|` +
+		`\binternal/(?:` + `core|update|piv|tmuxpaste|consolepaste|sysinfo|uptime|steamos)\b`)
 	// rsArm is an arm of cbb's commands in member/src/lib.rs: the names it
 	// takes and, when it calls one, the function that runs the command.
 	rsArm  = regexp.MustCompile(`(?m)^\s*((?:"[a-z][a-z-]*"(?: \| )?)+)(?: if [^=]+)? => (?:std::process::exit\()?([\w:]+\()?`)
@@ -81,6 +87,29 @@ const configRef = "docs/reference/config.md"
 
 // checkDocs checks the rules above in one file; files maps every checked
 // path to its content.
+
+// historyFiles tell what the project once had, and may name what is gone.
+var historyFiles = map[string]bool{
+	"CHANGELOG.md":                      true,
+	"docs/decisions.md":                 true,
+	"tools/repocheck/removed-tests.txt": true,
+}
+
+// checkGoneName reports each line of a file outside the history that names
+// something the project removed for good: no legacy, aliases or "formerly".
+func checkGoneName(name string, data []byte) []string {
+	if historyFiles[name] {
+		return nil
+	}
+	var problems []string
+	for i, line := range strings.Split(string(data), "\n") {
+		if m := goneName.FindString(line); m != "" {
+			problems = append(problems, fmt.Sprintf("%s:%d: %s is gone from the project; name what replaced it", name, i+1, m))
+		}
+	}
+	return problems
+}
+
 // checkOldName reports each line of a file that holds one of the
 // project's old names: the project is Copy Beyond Borders (CBB), and its
 // command and every technical name are cbb, in code, docs and the

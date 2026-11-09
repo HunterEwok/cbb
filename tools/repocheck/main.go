@@ -114,6 +114,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 		problems = append(problems, check(f.name, f.data, listed)...)
 		problems = append(problems, checkDocs(f.name, f.data, contents)...)
 		problems = append(problems, checkOldName(f.name, f.data)...)
+		problems = append(problems, checkGoneName(f.name, f.data)...)
 	}
 	problems = append(problems, checkCommands(contents)...)
 	problems = append(problems, checkFlags(contents)...)
@@ -267,8 +268,7 @@ func programKind(data []byte) string {
 	case bytes.HasPrefix(data, []byte("MZ")) && len(data) >= 0x40 && isPE(data):
 		return "PE"
 	case bytes.HasPrefix(data, []byte("\x00asm\x01\x00\x00\x00")):
-		// A WebAssembly module, such as the core's for wazero
-		// (internal/core/cbb_core.wasm, built by wasm/build.sh).
+		// A WebAssembly module.
 		return "WebAssembly"
 	}
 	return ""

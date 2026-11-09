@@ -691,6 +691,18 @@ void Member::pollDevices()
     }
 }
 
+QJsonObject Member::view(const QJsonValue &op, Failure *failure) const
+{
+    if (!m_member) {
+        failure->message = QStringLiteral("no member runs");
+        return QJsonObject();
+    }
+    const QJsonObject a = op.isNull()
+        ? call(m_member, QStringLiteral("view"), QJsonObject(), failure)
+        : call(m_member, QStringLiteral("arrange"), QJsonObject{{QStringLiteral("arrange"), op}}, failure);
+    return failure->isNull() ? a.value(QStringLiteral("view")).toObject() : QJsonObject();
+}
+
 void Member::setLast(const QString &text, bool secret)
 {
     if (secret) {

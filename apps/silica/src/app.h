@@ -130,17 +130,14 @@ public:
     Q_INVOKABLE void manage(const QString &action, const QString &device, const QString &name = QString(),
                             int forMinutes = 0);
     // The member's devices (Member::devices) in the user's order and
-    // collections (docs/apps.md, "Collections and the order of the tiles";
-    // cbb_core::arrange through the core's arrange call): each item is
-    // {kind: "device", device} or {kind: "collection", id, name, devices};
-    // this phone is first until the user moves it.
-    // The arrangement forgets devices that left the group once the list is
-    // whole (it holds this phone). stamp is the arrangement property.
+    // collections as the member keeps them (docs/apps.md, "What the member
+    // shows"): each item is {kind: "device", device} or {kind: "collection",
+    // id, name, devices}; this phone is first until the user moves it.
+    // stamp is the arrangement property.
     Q_INVOKABLE QVariantList arranged(const QVariantList &devices, int stamp);
-    // Applies a change of the arrangement, an operation of the core's
-    // arrange call ({op: "move", item: {device: id}, before: …}, "into",
-    // "out", "new", "rename", "ungroup", "reset") on the devices arranged
-    // was last given, keeps it in the settings and tells arrangementChanged.
+    // Sends a change of the arrangement to the member, which keeps it
+    // ({op: "move", item: {device: id}, before: …}, "into", "out", "new",
+    // "rename", "ungroup", "reset"), and tells arrangementChanged.
     Q_INVOKABLE bool arrange(const QVariantMap &op);
     // Takes the group over from its lost root, the device with the ID
     // device, as an admin (cbb_core::takeover): a new root CA for the admin
@@ -178,9 +175,6 @@ private:
     void finishTakeover();
     int arrangement() const { return m_arrangement; }
     bool hasArrangement() const;
-    // The core's arrange call on ids with op (null for none): {view, stored},
-    // the stored arrangement kept in the settings; null on a refusal, shown.
-    QJsonObject callArrange(const QStringList &ids, bool prune, const QJsonValue &op);
     // Keeps next as the membership, or shows why it could not.
     bool keep(const Membership &next);
 
@@ -205,5 +199,4 @@ private:
     QString m_error;
     QString m_startLanguage;
     int m_arrangement = 0;
-    QStringList m_arrangeIds; // the devices arranged was last given
 };

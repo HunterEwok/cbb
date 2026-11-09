@@ -63,4 +63,11 @@ class ArrangementTest {
         assertEquals(listOf(Arrangement.Item.Device("s"), Arrangement.Item.Collection("c1", "Desk", listOf("a", "b"))), v.tiles)
         assertEquals(Arrangement.View(v.tiles, 1, 2, true), v)
     }
+
+    /** A view that does not read as tiles shows nothing rather than failing: the member starts a bad arrangement fresh too. */
+    @Test
+    fun badJSONStartsFresh() {
+        assertEquals(Arrangement.View(), Arrangement.view(JsonObject(emptyMap())))
+        assertEquals(Arrangement.View(), Arrangement.view(Json.parseToJsonElement("""{"tiles":[],"custom":"no"}""").jsonObject))
+    }
 }

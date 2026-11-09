@@ -54,8 +54,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 - Remote paste targets, each a `connector.Target`: `internal/desktop/x11paste.go` (XTEST),
   `waylandpaste.go` (the virtual keyboard), `portal.go` (the RemoteDesktop portal on GNOME and KDE,
   keys through `internal/ei`, the ei protocol, with `ei/eitest` an EIS server for tests), `internal/uinput`
-  (`cbb paste-helper uinput`, the opt-in keys helper the desktop connector asks for Shift+Insert), `internal/tmuxpaste` (`cbb paste-helper tmux`),
-  `internal/consolepaste` (`cbb paste-helper console`, TIOCSTI); `internal/lockcheck` tells
+  (`cbb paste-helper uinput`, the opt-in keys helper the desktop connector asks for Shift+Insert), `member/src/pastehelper.rs` (`cbb paste-helper tmux` and
+  `console`, TIOCSTI); `internal/lockcheck` tells
   them a locked session.
 - `internal/keyboard`: the Bluetooth keyboards' layouts (the same as `cbb_core::keyboard` and the
   Android kit's `Keyboard`, all checked against `testdata/interop/keyboard.json`);

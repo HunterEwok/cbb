@@ -8,8 +8,7 @@
 #
 #   sh member/packaging/notices.sh TARGET [PACKAGE] >THIRD_PARTY_NOTICES
 #
-# PACKAGE is cbb-lite by default; the Go release archives take
-# cbb-wasm, the Rust core the service runs.
+# PACKAGE is cbb-lite by default.
 #
 # Each crate of the normal dependency graph (not build or dev dependencies)
 # appears with its name, version and license expression, followed by its

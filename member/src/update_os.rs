@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! What cbb update does differently on each system, as Go's
-//! internal/update/platform.go and auto.go: the release's archive for this
+//! What cbb update does differently on each system: the release's archive for this
 //! device, the updater's folders, the programs an update replaces, the
 //! archive's installer, unpacking, the Windows programs' signer, and the
 //! daily timer on macOS (launchd), FreeBSD (cron) and Windows (a scheduled
