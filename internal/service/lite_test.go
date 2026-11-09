@@ -1473,7 +1473,13 @@ func TestLiteKeysGrant(t *testing.T) {
 	if err := keys(m.Keys, "enter"); err == nil {
 		t.Error("Enter before the paste keys")
 	}
-	if err := keys("00"+m.Keys[2:], "paste"); err == nil {
+	// Another grant differs in its first byte; one grant in 256 starts
+	// with 00 itself.
+	other := "00" + m.Keys[2:]
+	if other == m.Keys {
+		other = "ff" + m.Keys[2:]
+	}
+	if err := keys(other, "paste"); err == nil {
 		t.Error("the paste keys under another grant")
 	}
 	if err := keys(m.Keys, "paste"); err != nil {
