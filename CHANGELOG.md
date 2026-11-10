@@ -2079,6 +2079,15 @@ All notable changes to cbb are documented in this file. The format follows
 - A tunnel's loopback port on Linux takes a client on a dual-stack socket, as Java's on a system
   with IPv6: its user is looked up in the kernel's IPv6 table too, by its IPv4-mapped address,
   where before it was refused at once.
+- The tunnel to the hub of a lite member or a phone stays on the way over VLESS when
+  WireGuard renews its keys. Once a session was two minutes old the link took the hub for
+  silent and moved on to the next endpoint at once, a blocked UDP port when only VLESS gets
+  through, and the tunnel went quiet for 15 to 20 seconds every two minutes; a copy sent then
+  was lost. The wait at an endpoint now counts from the rekey or from when the hub was last
+  heard.
+- A joining device's connection through the tunnel no longer drops after 30 quiet seconds,
+  as while an invitation waits for the admin's answer: the tunnel's TCP sends a keep-alive
+  every 10 seconds.
 - A device removed from the group while it was not connected hears that it was removed: on its
   next connection with any member it gets the records that remove it, and its status says so.
   Until now every member refused it before it could hear, so it kept saying it was in the group.
