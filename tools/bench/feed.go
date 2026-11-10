@@ -96,20 +96,46 @@ func (fd *feed) sign(ctx context.Context, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-// build builds cbb at version for goarch and packs it as the release does
-// (packaging/archive.sh) into a new folder, which it returns, under the
-// archive name of the CPU name: another CPU's program under this one's name
-// makes a build that never starts.
+// build builds the Rust cbb at version for goarch, with cbb-helper of
+// the same version beside it (the service refuses a helper of another),
+// and packs them as the release does (packaging/archive.sh) into a new
+// folder, which it returns, under the archive name of the CPU name. Only
+// this computer's CPU is built: for another, the program is this one's
+// marked for that CPU, which no kernel here runs, as another CPU's program
+// under this one's name makes a build that never starts. Each version
+// rebuilds only the crate that carries it, in target/benchfeed.
 func (fd *feed) build(ctx context.Context, version, goarch, name string) (string, error) {
 	out := filepath.Join(fd.dir, "v"+version+"-"+goarch+"-"+name)
-	if err := os.MkdirAll(out, 0o755); err != nil {
-		return "", err
+	bins := filepath.Join(fd.dir, "bin-"+version+"-"+goarch)
+	for _, d := range []string{out, bins} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return "", err
+		}
 	}
-	bin := filepath.Join(fd.dir, "cbb-"+version+"-"+goarch)
-	c := exec.CommandContext(ctx, "go", "build", "-trimpath", "-ldflags", "-X github.com/HunterEwok/cbb/internal/version.Version=v"+version, "-o", bin, "./cmd/cbb")
+	c := exec.CommandContext(ctx, "go", "build", "-trimpath", "-ldflags", "-X github.com/HunterEwok/cbb/internal/version.Version=v"+version, "-o", filepath.Join(bins, "cbb-helper"), "./cmd/cbb-helper")
 	c.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+goarch)
 	if b, err := c.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("building cbb-helper %s: %v: %s", version, err, b)
+	}
+	c = exec.CommandContext(ctx, "cargo", "build", "-q", "--locked", "--release", "--bin", "cbb", "--target-dir", "target/benchfeed")
+	c.Env = append(os.Environ(), "CBB_VERSION="+version)
+	if b, err := c.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("building cbb %s: %v: %s", version, err, b)
+	}
+	prog, err := os.ReadFile("target/benchfeed/release/cbb")
+	if err != nil {
+		return "", err
+	}
+	if goarch != goarchOf() {
+		// The ELF header's e_machine: AArch64 or x86-64.
+		if len(prog) < 20 {
+			return "", fmt.Errorf("cbb is %d bytes", len(prog))
+		}
+		prog[18], prog[19] = map[string]byte{"arm64": 0xb7, "amd64": 0x3e}[goarch], 0
+	}
+	bin := filepath.Join(bins, "cbb")
+	if err := os.WriteFile(bin, prog, 0o755); err != nil {
+		return "", err
 	}
 	if b, err := exec.CommandContext(ctx, "sh", "packaging/archive.sh", bin, "linux", name, out).CombinedOutput(); err != nil {
 		return "", fmt.Errorf("packing cbb %s: %v: %s", version, err, b)
