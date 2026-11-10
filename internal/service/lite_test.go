@@ -2048,3 +2048,66 @@ func udpRelay(t *testing.T, to int) *udpRelayPort {
 	}()
 	return r
 }
+
+// TestFFIPhoneRemoves has the root phone remove a computer it is connected
+// to, as the Android app's GroupTest.a8_renameAndRemove does: the removed
+// computer must hear it was removed, though the phone ends the connection
+// right after the records that remove it, and the other computer stays.
+func TestFFIPhoneRemoves(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
+	if made := strings.Fields(next("Group ")); len(made) != 2 {
+		t.Fatalf("the phone's group: %q", made)
+	}
+	var h hub
+	admit := func(name string) (*testService, string) {
+		s, qr := listeningJoin(t, &h, name)
+		fmt.Fprintln(in, "ADMIT "+qr)
+		admitted := next("ADMITTED ")
+		if got := next("ADMIT DONE "); got != "true" {
+			t.Fatalf("%s did not confirm its join: %q", name, got)
+		}
+		joinedIdentity(t, s, admitted)
+		return s, admitted
+	}
+	pc, _ := admit("pc")
+	second, id := admit("second")
+	call := func(req string) string {
+		fmt.Fprintln(in, "CALL "+req)
+		return next("ANSWER ")
+	}
+	call(`{"op":"found","args":{"key":"pc","addrs":["` + pc.addr() + `"]}}`)
+	call(`{"op":"found","args":{"key":"second","addrs":["` + second.addr() + `"]}}`)
+	waitFor(t, "the phone connected to both", func() bool {
+		return len(pc.status(t).Peers) == 1 && len(second.status(t).Peers) == 1
+	})
+	manage := func(req string) string {
+		fmt.Fprintln(in, "MANAGE "+req)
+		return next("MANAGED ")
+	}
+	if got := manage(`{"action":"rename","device":"` + id + `","name":"bench-second"}`); got != `{"ok":{}}` {
+		t.Fatalf("renaming the computer: %s", got)
+	}
+	waitFor(t, "the second computer has its new name", func() bool {
+		m, err := second.do(t, control.Header{Op: control.OpDevices}, "")
+		if err != nil {
+			return false
+		}
+		for _, d := range m.Devices {
+			if d.ID == id && d.Name == "bench-second" {
+				return true
+			}
+		}
+		return false
+	})
+	if got := manage(`{"action":"remove","device":"` + id + `"}`); got != `{"ok":{}}` {
+		t.Fatalf("removing the computer: %s", got)
+	}
+	waitUpTo(t, 60*time.Second, "the second computer says it was removed", func() bool { return second.status(t).Removed })
+	if pc.status(t).Removed {
+		t.Fatal("the other computer says it was removed")
+	}
+}
