@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+
+# The cargo fuzz targets of the Rust service: its readers of what reaches it
+# from outside its own code (the control socket and cbb-helper's channel, the
+# ZX Spectrum Next's frames). Nightly CI runs them
+# (.github/workflows/nightly.yml):
+#   cargo +nightly fuzz run control -- -max_total_time=60
+[package]
+name = "cbb-lite-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+cbb-lite = { path = "..", default-features = false, features = ["fuzzing"] }
+
+# Not a member of the top workspace.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "control"
+path = "fuzz_targets/control.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "next_frames"
+path = "fuzz_targets/next_frames.rs"
+test = false
+doc = false
+bench = false

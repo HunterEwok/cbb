@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"math"
 	"net/netip"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -117,10 +119,15 @@ func TestMemoryKeepIsLinear(t *testing.T) {
 		if got := len(m.records("g")); got != n {
 			t.Fatalf("kept %d records of %d", got, n)
 		}
+		// The garbage collector runs before each timed run and not during
+		// it: on a small virtual machine (CI's FreeBSD under qemu) a cycle
+		// in a run of the larger group's few calls read as a square.
 		return func() time.Duration {
+			runtime.GC()
+			defer debug.SetGCPercent(debug.SetGCPercent(-1))
 			calls := 0
 			start := time.Now()
-			for calls == 0 || time.Since(start) < 10*time.Millisecond {
+			for calls == 0 || time.Since(start) < 50*time.Millisecond {
 				m.keep("g", noSource, rs)
 				calls++
 			}

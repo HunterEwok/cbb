@@ -66,7 +66,7 @@ pub struct Esp {
     /// A baud change after the OK goes out.
     pending_baud: Option<(u64, u32)>,
     /// The members on the Wi-Fi network that answer mDNS: address, port,
-    /// and their TXT's own strings, split by commas ("r=lite", "p=1").
+    /// and their TXT's own strings, split by commas ("r=listen", "p=1").
     pub members: Vec<(String, u16, String)>,
     cipdinfo: bool,
     /// Connection 4, UDP, in CIPMUX=1.

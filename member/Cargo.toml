@@ -37,6 +37,9 @@ default = ["tunnel"]
 windowless = []
 # The bench's time-scaled build (src/benchtime.rs), never a release's.
 benchtime = ["cbb-core/benchtime"]
+# fuzzing opens the service's readers of outside input to the cargo fuzz
+# targets in fuzz/ (src/fuzzing.rs).
+fuzzing = []
 # Sync away from home. GotaTun needs 64-bit atomics, which 32-bit MIPS lacks,
 # so the MIPS builds leave it out (docs/roadmap.md, item 37).
 tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp", "dep:blake2", "dep:chacha20", "dep:chacha20poly1305"]

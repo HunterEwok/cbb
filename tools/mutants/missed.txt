@@ -1,0 +1,47 @@
+# The mutants that the nightly mutants-service job lets live (docs/testing.md,
+# "Mutation testing"), without their line and column; tools/mutants/check.sh
+# fails on any other. Each group says why its mutants stay.
+
+# Equivalent: with old empty, newer is true, so && and || agree.
+core/src/credential.rs: replace && with || in Store::add
+# Equivalent: an empty set or one of more than three fails on its hubs' slot
+# either way.
+core/src/credential.rs: replace || with && in check_presented
+# Equivalent: the two words never share a bit, so | and ^ agree.
+core/src/credential.rs: replace | with ^ in random32
+core/src/credential.rs: replace | with ^ in random32
+# Not yet caught: the group of v2-credentials.json has no ordinary device,
+# nor more than MAX_ADMINS admins or MAX_MEMBERS devices.
+core/src/credential.rs: replace && with || in lists
+core/src/credential.rs: replace < with <= in lists
+core/src/credential.rs: replace < with <= in lists
+
+# The idle count of a window that ended, or past its cap, is never read.
+member/src/window.rs: replace && with || in Window::release
+member/src/window.rs: replace < with <= in Window::release
+# The exchange with a joiner and the refusal of one need a TLS session from a
+# real handshake: Go's end-to-end tests of pairing run them
+# (internal/service), cargo mutants does not.
+member/src/window.rs: replace Window::serve -> Result<()> with Ok(())
+member/src/window.rs: replace && with || in Window::serve
+member/src/window.rs: delete ! in Window::serve
+member/src/window.rs: replace Window::attempt -> Result<bool> with Ok(true)
+member/src/window.rs: replace Window::attempt -> Result<bool> with Ok(false)
+member/src/window.rs: replace + with - in Window::attempt
+member/src/window.rs: replace + with - in Window::attempt
+member/src/window.rs: replace + with - in Window::attempt
+member/src/window.rs: delete ! in Window::attempt
+member/src/window.rs: delete ! in Window::attempt
+member/src/window.rs: delete ! in Window::attempt
+member/src/window.rs: delete ! in Window::attempt
+member/src/window.rs: replace == with != in Window::attempt
+member/src/window.rs: replace refuse with ()
+member/src/window.rs: replace == with != in refuse
+member/src/window.rs: replace + with - in refuse
+member/src/window.rs: replace + with * in refuse
+member/src/window.rs: replace >= with < in refuse
+member/src/window.rs: replace match guard n > 0 with true in refuse
+member/src/window.rs: replace match guard n > 0 with false in refuse
+member/src/window.rs: replace > with == in refuse
+member/src/window.rs: replace > with < in refuse
+member/src/window.rs: replace > with >= in refuse
