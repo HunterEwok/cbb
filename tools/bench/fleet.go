@@ -32,8 +32,9 @@ const fleetDockerfile = `FROM debian:stable-slim
 RUN apt-get update && apt-get install -y --no-install-recommends iproute2 iptables procps tmux curl ca-certificates && rm -rf /var/lib/apt/lists/*
 `
 
-// fleetCoverDir, when set (-coverdir), is where a cbb built with -cover
-// writes its coverage from every container of the fleet.
+// fleetCoverDir, when set (-coverdir), is where the programs built for
+// coverage write it from every container of the fleet: a cbb-helper built
+// with -cover, and a cbb built with instrument-coverage (cargo llvm-cov).
 var fleetCoverDir string
 
 // Fleet is one run's containers and their network.
@@ -163,7 +164,7 @@ func (f *Fleet) containerOf(ctx context.Context, bin, net string, run, env []str
 		}
 	}
 	if fleetCoverDir != "" {
-		args = append(args, "-v", fleetCoverDir+":/cover", "-e", "GOCOVERDIR=/cover")
+		args = append(args, "-v", fleetCoverDir+":/cover", "-e", "GOCOVERDIR=/cover", "-e", "LLVM_PROFILE_FILE=/cover/cbb-%p-%m.profraw")
 	}
 	args = append(args, run...)
 	for _, e := range env {
@@ -203,7 +204,7 @@ func (f *Fleet) Close(ctx context.Context) {
 	ms := f.members
 	f.mu.Unlock()
 	if len(ms) > 0 && fleetCoverDir != "" {
-		// A program built with -cover writes its counters when it exits:
+		// A program built for coverage writes its counters when it exits:
 		// let the services end before their containers go.
 		var wg sync.WaitGroup
 		for _, d := range ms {

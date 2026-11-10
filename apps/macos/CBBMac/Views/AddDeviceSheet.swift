@@ -17,7 +17,6 @@ struct AddDeviceSheet: View {
     @State private var qrText = ""
     @State private var qrError: String?
     @State private var asAdmin = false
-    @State private var inviting = false
 
     private var typed: Bool {
         let text = qrText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -37,9 +36,14 @@ struct AddDeviceSheet: View {
                     .foregroundStyle(palette.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Button { inviting = true } label: { Text("Device far away? Send an invitation") }
-                .buttonStyle(.link)
-                .font(.callout)
+            if model.isAdmin {
+                Button {
+                    dismiss()
+                    Task { await model.invite() }
+                } label: { Text("Device far away? Send an invitation") }
+                    .buttonStyle(.link)
+                    .font(.callout)
+            }
             HStack {
                 Spacer()
                 Button(role: .cancel) { dismiss() } label: { Text("Cancel") }.keyboardShortcut(.cancelAction)
@@ -57,11 +61,6 @@ struct AddDeviceSheet: View {
         .padding(Tokens.spacingLarge)
         .frame(width: 460)
         .background(AppBackground())
-        .alert(Text("Send an invitation"), isPresented: $inviting) {
-            Button {} label: { Text("OK") }
-        } message: {
-            Text("On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.")
-        }
     }
 
     private var admit: some View {

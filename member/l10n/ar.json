@@ -78,5 +78,9 @@
  "{} is removed.": "أُزيل {}.",
  "{} ran {}.": "شغّل {} الإجراء {}.",
  "Confirm a change to your CBB group.": "أكّد تغييرًا في مجموعة CBB الخاصة بك.",
- "Confirm an important change to your CBB group: it cannot be undone.": "أكّد تغييرًا مهمًا في مجموعة CBB الخاصة بك: لا يمكن التراجع عنه."
+ "Confirm an important change to your CBB group: it cannot be undone.": "أكّد تغييرًا مهمًا في مجموعة CBB الخاصة بك: لا يمكن التراجع عنه.",
+ "Handing this device's tunnel key to the hub...": "جارٍ تسليم مفتاح نفق هذا الجهاز إلى المحور...",
+ "The hub took it: this device syncs from afar now.": "قبله المحور: يتزامن هذا الجهاز الآن عن بُعد.",
+ "The hub has not answered yet; the service keeps trying for a day.": "لم يستجب المحور بعد؛ تواصل الخدمة المحاولة لمدة يوم.",
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "شغّل الخدمة (cbb service) خلال يوم: فهي تسلّم مفتاح هذا الجهاز إلى المحور."
 }

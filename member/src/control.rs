@@ -681,3 +681,101 @@ pub fn admin_socket(socket: &std::path::Path) -> std::path::PathBuf {
     // only the service and the administrators in (Go's adminSocketName).
     if cfg!(windows) { socket.with_file_name("admin").join("admin.sock") } else { socket.with_file_name("admin.sock") }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn json(h: &Header) -> serde_json::Value {
+        serde_json::to_value(h).unwrap()
+    }
+
+    #[test]
+    fn zeros_are_left_out() {
+        let v = json(&Header::default());
+        for k in ["seq", "ttl_ms", "len", "status"] {
+            assert!(v.get(k).is_none(), "{k} in {v}");
+        }
+        let v = json(&Header { seq: 3, ttl_ms: -1, len: 2, ..Default::default() });
+        assert_eq!((v["seq"].as_u64(), v["ttl_ms"].as_i64(), v["len"].as_u64()), (Some(3), Some(-1), Some(2)));
+        let s = serde_json::to_value(Status::default()).unwrap();
+        assert!(s.get("newer").is_none(), "{s}");
+        let s = serde_json::to_value(Status { newer: 4, ..Default::default() }).unwrap();
+        assert_eq!(s["newer"].as_u64(), Some(4));
+    }
+
+    fn round_trip(m: &Message) -> Result<Option<Message>> {
+        let mut buf = Vec::new();
+        write(&mut buf, m)?;
+        Reader::new(&buf[..]).read()
+    }
+
+    #[test]
+    fn the_limits_are_inclusive() {
+        // A text of 1 MiB with room for its frame.
+        let big = Message::new(Header { op: "copy".into(), ..Default::default() }, vec![b'x'; (1 << 20) + 64]);
+        let got = round_trip(&big).unwrap().unwrap();
+        assert_eq!((got.header.len, got.payload.len()), (MAX_PAYLOAD, MAX_PAYLOAD));
+        let over = Message::new(Header::default(), vec![b'x'; MAX_PAYLOAD + 1]);
+        assert!(write(&mut Vec::new(), &over).is_err());
+
+        // A header of MAX_HEADER bytes, its newline aside, is taken; one
+        // byte more is not.
+        let at = |n: usize| {
+            let empty = serde_json::to_vec(&Header { name: String::new(), op: "x".into(), ..Default::default() });
+            let fill = n - empty.unwrap().len() - r#","name":"""#.len();
+            Message::new(Header { op: "x".into(), name: "n".repeat(fill), ..Default::default() }, Vec::new())
+        };
+        let m = at(MAX_HEADER);
+        assert_eq!(serde_json::to_vec(&m.header).unwrap().len(), MAX_HEADER);
+        assert_eq!(round_trip(&m).unwrap().unwrap().header.name, m.header.name);
+        assert!(write(&mut Vec::new(), &at(MAX_HEADER + 1)).is_err());
+        let mut line = serde_json::to_vec(&at(MAX_HEADER + 1).header).unwrap();
+        line.push(b'\n');
+        assert!(Reader::new(&line[..]).read().is_err(), "a header longer than MAX_HEADER");
+
+        // A header that promises more than MAX_PAYLOAD is refused before
+        // its payload.
+        let promise = |n: usize| {
+            let mut b = serde_json::to_vec(&Header { len: n, ..Default::default() }).unwrap();
+            b.push(b'\n');
+            b.extend(std::iter::repeat_n(b'x', n.min(MAX_PAYLOAD)));
+            b
+        };
+        assert!(Reader::new(&promise(MAX_PAYLOAD)[..]).read().unwrap().is_some());
+        let e = Reader::new(&promise(MAX_PAYLOAD + 1)[..]).read().unwrap_err();
+        assert!(e.message().contains("payload length"), "{}", e.message());
+    }
+
+    #[test]
+    fn answers_say_whether_more_follow() {
+        let base = Header { op: "status".into(), seq: 9, ..Default::default() };
+        let r = reply(base.clone(), b"p".to_vec());
+        assert_eq!(
+            (r.header.op.as_str(), r.header.done, r.header.seq, r.payload.as_slice()),
+            ("reply", true, 9, &b"p"[..])
+        );
+        let p = partial(Header { done: true, ..base });
+        assert_eq!((p.header.op.as_str(), p.header.done, p.header.seq), ("reply", false, 9));
+        let e = Error::msg("outer").context("why");
+        let f = failure(&e);
+        assert_eq!((f.header.op.as_str(), f.header.done), ("reply", true));
+        assert_eq!((f.header.error.clone(), f.header.details.clone()), (e.message().to_string(), e.details()));
+        assert!(!f.header.error.is_empty() && !f.header.details.is_empty());
+    }
+
+    #[test]
+    fn which_requests_need_the_admin_socket() {
+        let h = |op: &str, device: &str| Header { op: op.into(), device: device.into(), ..Default::default() };
+        for op in ["copy", "paste", "status", "watch", "reply", "keys"] {
+            assert!(!is_admin(op) && !needs_admin(&h(op, "")), "{op}");
+        }
+        for op in ["pair", "remove", "leave", "mode"] {
+            assert!(is_admin(op) && needs_admin(&h(op, "")), "{op}");
+        }
+        // This device's own sync, but not another's.
+        assert!(!needs_admin(&h("sync", "")));
+        assert!(needs_admin(&h("sync", "desk")));
+        assert!(needs_admin(&h("mode", "desk")));
+    }
+}

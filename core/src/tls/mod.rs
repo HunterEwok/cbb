@@ -669,6 +669,28 @@ pub fn pair_client_external(
     Ok((cfg, exporter))
 }
 
+/// The client configuration of a new phone that restores a group with its
+/// recovery key (docs/protocol.md, section 10, "The recovery key"): ALPN
+/// cbb/3, chain (its member certificate, then the recovery key's admin CA)
+/// with key signing the handshake, and any server certificate, which the
+/// program checks against the records the member sends once they came.
+pub fn restore_client(
+    chain: &[Vec<u8>],
+    key: Arc<dyn crate::identity::ExternalKey>,
+    clock: &Clock,
+) -> Result<rustls::ClientConfig> {
+    let signer: Arc<dyn rustls::sign::SigningKey> = Arc::new(provider::ExternalSigningKey(key));
+    let chain = chain.iter().map(|c| CertificateDer::from(c.clone())).collect();
+    let certified = Arc::new(rustls::sign::CertifiedKey::new(chain, signer));
+    let mut cfg = client_builder(clock)?
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(AnyPeer))
+        .with_client_cert_resolver(Arc::new(OneClientCert(certified)));
+    cfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec()];
+    cfg.resumption = rustls::client::Resumption::disabled();
+    Ok(cfg)
+}
+
 /// The client configuration of a member that dials a joiner which listens
 /// and showed its QR code, to admit it: this member's certificate with its
 /// issuer, wherever its key is, and any server certificate, which the

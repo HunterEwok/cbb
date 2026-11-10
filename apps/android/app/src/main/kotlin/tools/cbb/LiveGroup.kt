@@ -41,6 +41,7 @@ import tools.cbb.kit.PhoneHub
 import tools.cbb.kit.Records as KitRecords
 import tools.cbb.kit.Piv
 import tools.cbb.kit.Restore
+import tools.cbb.kit.RustTunnel
 import tools.cbb.kit.ServerCredentials
 import tools.cbb.kit.SyncEngine
 import tools.cbb.kit.TLSTransport
@@ -107,7 +108,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     class Muted : Exception("an admin muted this phone: its copies do not reach the group")
 
     class Failure(val kind: Kind) : Exception(kind.name) {
-        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN, NO_WINDOW, TWO_WINDOWS, NEEDS_ROOT, NO_GROUP_COMPUTER, NO_GROUP, ROOT_LEAVES }
+        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN, NO_WINDOW, TWO_WINDOWS, NEEDS_ROOT, NO_GROUP_COMPUTER, NO_GROUP, ROOT_LEAVES, HUB_UNREACHABLE }
     }
 
     /** A device of the group, as the screens show it: a computer, or this phone. */
@@ -236,6 +237,17 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     private var foundAt: Map<String, Long> = emptyMap()
     private var away: AwayFromHome? = null
     private val awayFile = AwayFile(File(file.parentFile, "away.bin"))
+
+    /**
+     * The remote invitation this phone joined by, until the hub's offer
+     * came (docs/protocol.md, section 12): its text, its hub and when the
+     * phone joined, a line each. Through its guest tunnel the phone offers
+     * its own tunnel key.
+     */
+    private val inviteFile = File(file.parentFile, "invite-guest")
+
+    /** Stops the loop that offers the tunnel key through the guest tunnel. */
+    private var guestStop: AtomicBoolean? = null
 
     /** The phone as the group's hub: its state, and while it runs its mDNS service on a home network. */
     private var hub: HubOnPhone? = null
@@ -871,7 +883,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     fun invite(lifetimeS: Int, ask: suspend (PairingMember.Request) -> Boolean, ended: (Result<String>) -> Unit): Invitation {
         val g = synchronized(lock) { state }?.takeIf { it.isAdmin } ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val h = phoneHub ?: throw HubOnPhone.NotRunning()
+        // A phone that is not the hub makes it through a hub of the group.
+        val h = phoneHub?.takeIf { it.isOn } ?: return inviteThroughHub(g, lifetimeS, ask, ended)
         val member = memberSigner()
         val guest = AtomicReference<HubGuest?>()
         val window = InvitationWindow(
@@ -891,6 +904,47 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         guest.set(gt)
         return Invitation(gt.text, Instant.ofEpochSecond(gt.expires)) { window.close() }
+    }
+
+    /**
+     * Opens a remote invitation through a hub of the group, for a phone
+     * that is not the hub (docs/protocol.md, section 12, "Through the
+     * hub"): the core opens the guest tunnel on a connected hub and runs the
+     * pairing window here, the hub passing the pairing's bytes. The key's
+     * signature asks the user, after they confirmed the device in ask.
+     */
+    private fun inviteThroughHub(g: PhoneGroup, lifetimeS: Int, ask: suspend (PairingMember.Request) -> Boolean, ended: (Result<String>) -> Unit): Invitation {
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        // Each signature asks the user, after they confirmed the device in ask.
+        val ca = authorized(signingAlias(g), R.string.reason_add)
+        val inviting = CorePairing.Inviting(n, ca.publicKeyDER, g.adminCA, lifetimeS, sign = ca::signDigest)
+        Thread({
+            var version = 0L
+            while (true) {
+                val st = runCatching { inviting.next(version) }.getOrNull() ?: break
+                if (st.version == version) continue
+                version = st.version
+                when (st.state) {
+                    "joining" -> {
+                        val r = st.request ?: continue
+                        val req = PairingMember.Request(r.device, Pairing.Info(r.name, r.os), r.fingerprint)
+                        // The window waits for the user, up to the 5 minutes the device waits.
+                        inviting.answer(runBlocking { ask(req) && activity != null })
+                    }
+                    "done" -> {
+                        inviting.close()
+                        ended(Result.success(st.name))
+                        return@Thread
+                    }
+                    "failed" -> {
+                        inviting.close()
+                        ended(Result.failure(st.failure ?: CorePairing.Failure("the invitation ended")))
+                        return@Thread
+                    }
+                }
+            }
+        }, "invitation").apply { isDaemon = true }.start()
+        return Invitation(inviting.text, Instant.now().plusSeconds(inviting.expires.toLong())) { Thread { inviting.close() }.start() }
     }
 
     /** One attempt with an invitation: the device that proves the secret and that the user confirms is admitted. */
@@ -1037,6 +1091,107 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 socket.close()
             }
         }
+    }
+
+    /**
+     * Joins a group from afar by a remote invitation's text
+     * (docs/protocol.md, section 12), which the user scanned, opened or
+     * pasted and accepted: the core starts the invitation's guest tunnel,
+     * the phone dials it and proves the invitation's secret, and the hub's
+     * admin admits it by the fingerprint shown hands it. Sync away from
+     * home goes on, and the phone offers its tunnel key to the hub through
+     * the guest tunnel until the hub answers.
+     */
+    suspend fun joinByInvite(text: String, shown: (String) -> Unit) {
+        if (hasGroup) return
+        val inv = (Core.readInvite(text) as? Core.InviteReading.Read)?.invitation ?: throw Failure(Failure.Kind.NO_GROUP)
+        val joining = withContext(Dispatchers.IO) {
+            val member = memberSigner()
+            CorePairing.Joining(
+                PhoneGroup.validName(deviceName), "android", member.publicKeyDER, sealKey(), emptyList(), member::signDigest,
+                invite = text,
+            )
+        }
+        val joined = try {
+            shown(joining.fingerprint)
+            withContext(Dispatchers.IO) { dialInvite(joining) }
+        } finally {
+            joining.close()
+        }
+        withContext(Dispatchers.IO) {
+            inviteFile.writeText(listOf(text.trim(), inv.hub, System.currentTimeMillis().toString()).joinToString("\n"))
+            synchronized(lock) {
+                newDeviceMode()
+                state = joined
+            }
+            startSync()
+            setAwayFromHome(true)
+        }
+    }
+
+    /** Dials the invitation's guest tunnel a few times until the hub's admin admits this phone; blocks. */
+    private fun dialInvite(joining: CorePairing.Joining): PhoneGroup {
+        var failure: Exception? = null
+        repeat(INVITE_ATTEMPTS) { attempt ->
+            if (attempt > 0) Thread.sleep(DIAL_PAUSE_MS)
+            try {
+                java.net.Socket("127.0.0.1", joining.port).use { socket ->
+                    // The admin has up to 5 minutes to confirm the device.
+                    socket.soTimeout = INVITE_DEADLINE_MS.toInt()
+                    var group: PhoneGroup? = null
+                    joining.attempt(socket) { joined ->
+                        PhoneGroup.of(joined, root = false).also { it.save(file); group = it }
+                        true
+                    }
+                    group?.let { return it }
+                }
+            } catch (e: CorePairing.Failure) {
+                // The admin declined, or the secret was refused: no retry.
+                throw e
+            } catch (e: Exception) {
+                failure = e
+            }
+        }
+        if (!joining.answered) throw Failure(Failure.Kind.HUB_UNREACHABLE)
+        throw failure ?: Failure(Failure.Kind.UNREACHABLE)
+    }
+
+    /**
+     * Offers this phone's tunnel key to the hub of the invitation it joined
+     * by, through the invitation's guest tunnel, until the hub's offer comes
+     * or a day passed: the hello offers the key, and the hub answers with
+     * its offer on that connection.
+     */
+    private fun offerThroughGuest() {
+        if (!inviteFile.exists()) return
+        val stop = AtomicBoolean(false)
+        synchronized(lock) { guestStop.also { guestStop = stop } }?.set(true)
+        Thread({
+            while (!stop.get()) {
+                val lines = runCatching { inviteFile.readLines() }.getOrNull()
+                val (text, hub, at) = lines?.takeIf { it.size >= 3 } ?: return@Thread
+                val a = awayFromHome
+                if (System.currentTimeMillis() - (at.toLongOrNull() ?: 0) > GUEST_GRACE_MS || a?.hub != null) {
+                    inviteFile.delete()
+                    return@Thread
+                }
+                runCatching {
+                    val t = RustTunnel.guest(text)
+                    try {
+                        val l = link("invite", t.port, hub)
+                        try {
+                            val until = System.currentTimeMillis() + 60_000
+                            while (awayFromHome?.hub == null && System.currentTimeMillis() < until && !stop.get()) Thread.sleep(500)
+                        } finally {
+                            l.close()
+                        }
+                    } finally {
+                        t.close()
+                    }
+                }.onFailure { Log.w(TAG, "offering this phone's key through the invitation's guest tunnel", it) }
+                if (!stop.get()) Thread.sleep(15_000)
+            }
+        }, "invite guest").apply { isDaemon = true }.start()
     }
 
     /**
@@ -1258,6 +1413,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         File(file.parentFile, "entries.json").delete()
         nodeDir.deleteRecursively()
         awayFile.delete()
+        inviteFile.delete()
         hubFile.delete()
         relayFile.delete()
         synchronized(sealFile) { sealFile.delete() }
@@ -1791,21 +1947,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         if (KitRecords.storeOf(store, "member") == KitRecords.ROOTLESS) throw PhoneGroup.Rootless()
         if (KitRecords.storeOf(store, "member") == KitRecords.FILE && !allowFileKey) throw PhoneGroup.FileKey()
         val root = caSigner(R.string.reason_make_admin)
-        val g = copyOfState() ?: return
-        val rs = withContext(Dispatchers.IO) {
-            // The user's consent to a key in a file, after the dialog's
-            // warning, lets the group take keys in files too.
-            val level = if (KitRecords.storeOf(store, "member") == KitRecords.FILE && allowFileKey && g.keyLevel != KitRecords.LEVEL_FILES) {
-                listOf(g.setKeyLevel(KitRecords.LEVEL_FILES, root, Instant.now()))
-            } else {
-                emptyList()
-            }
-            val (ca, r) = g.makeAdmin(id, key, root, Instant.now(), store, allowFileKey)
-            ca to level + r
+        // The user's consent to a key in a file, after the dialog's
+        // warning, lets the group take keys in files too.
+        if (KitRecords.storeOf(store, "member") == KitRecords.FILE && allowFileKey && keyLevel != KitRecords.LEVEL_FILES) {
+            rootRecord(root) { m, public, sign -> m.setKeyLevel(KitRecords.LEVEL_FILES, public, sign) }
         }
-        val ca = rs.first
+        val g = copyOfState() ?: return
+        val (ca, r) = withContext(Dispatchers.IO) { g.makeAdmin(id, key, root, Instant.now(), store, allowFileKey) }
         withContext(Dispatchers.IO) { adopt(g) }
-        published(rs.second)
+        published(listOf(r))
         currentNode?.let { m -> runCatching { m.sendAdminCA(id, ca) } }
     }
 
@@ -1846,11 +1996,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     suspend fun makeRecovery(): Core.RecoverySheet {
         if (!isRoot) throw PhoneGroup.Failure("only the root makes the recovery key")
         val root = caSigner(R.string.reason_make_recovery, prompts = Prompts(2))
-        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val made = withContext(Dispatchers.IO) { g.makeRecovery(root, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(made.record))
-        return made.sheet
+        return rootRecord(root) { m, public, sign -> m.makeRecovery(public, sign) }
     }
 
     /** The group's key level (KitRecords.KEY_LEVELS) on the root phone; null elsewhere. */
@@ -1881,11 +2027,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     suspend fun setKeyLevel(level: String) {
         if (!isRoot) throw PhoneGroup.Failure("only the root sets the key level")
+        // The core refuses it too; asked here first, the screen says why before the fingerprint.
+        val own = synchronized(lock) { state?.let { g -> g.devices.firstOrNull { it.id == g.device }?.store } } ?: KitRecords.HARDWARE
+        if (!KitRecords.levelAllows(level, own, true)) throw PhoneGroup.BelowKeyLevel()
         val root = caSigner(R.string.reason_key_level)
-        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val r = withContext(Dispatchers.IO) { g.setKeyLevel(level, root, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
+        rootRecord(root) { m, public, sign -> m.setKeyLevel(level, public, sign) }
     }
 
     /**
@@ -1899,19 +2045,18 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     suspend fun makeRecoveryOnCard(pin: String): Int {
         if (!isRoot) throw PhoneGroup.Failure("only the root makes the recovery key")
         val root = caSigner(R.string.reason_make_recovery)
-        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
         val ui = activity as? android.app.Activity ?: throw Failure(Failure.Kind.NO_SCREEN)
-        val (slot, record) = YubiKeyNfc.withCard(ui) { card ->
+        val slot = YubiKeyNfc.withCard(ui) { card ->
             Piv.select(card)
             Piv.verify(card, pin)
             Piv.authenticate(card)
             val slot = Piv.freeSlot(card)
-            val (ca, r) = g.makeRecoveryOnCard(Piv.generate(card, slot), root, Instant.now())
+            val ca = n.recoveryFor(Piv.generate(card, slot), root.publicKeyDER, root::signDigest)
             Piv.putCertificate(card, slot, ca)
-            slot to r
+            slot
         }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(record))
+        withContext(Dispatchers.IO) { takeRecords(n) }
         return slot
     }
 
@@ -1992,10 +2137,17 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     suspend fun removeRecovery() {
         if (!isRoot) throw PhoneGroup.Failure("only the root removes the recovery key")
         val root = caSigner(R.string.reason_remove_recovery)
-        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val r = withContext(Dispatchers.IO) { g.removeRecovery(root, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
+        rootRecord(root) { m, public, sign -> m.removeRecovery(public, sign) }
+    }
+
+    /**
+     * Has the core's member build and sign one of the root's own records
+     * (cbb_core::root) with root, which adds it and sends it to every
+     * member, and takes it into the group's file.
+     */
+    private suspend fun <T> rootRecord(root: KeystoreSigner, act: (CoreMember, ByteArray, (ByteArray) -> ByteArray) -> T): T {
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        return withContext(Dispatchers.IO) { act(n, root.publicKeyDER, root::signDigest).also { takeRecords(n) } }
     }
 
     /** What the group's watch may do to a device (PhoneGroup.WatchAction keys). */
@@ -2140,6 +2292,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         b.start()
         refreshCredentials()
         awayFromHome?.start()
+        offerThroughGuest()
         relay()
         refreshHub()
     }
@@ -2473,6 +2626,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** Stops syncing and starts again, with a new certificate or new roots. */
     private fun restartSync() {
         Log.i(TAG, "connecting to the group again")
+        synchronized(lock) { guestStop.also { guestStop = null } }?.set(true)
         val a = synchronized(lock) { away.also { away = null } }
         a?.stop()
         // After any change of the hub's that is still running.
@@ -2968,6 +3122,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         /** How long the join QR code is good for, and how many wrong codes it takes, as for cbb pair (docs/protocol.md, section 6). */
         const val JOIN_WINDOW_MS = 300_000L
         const val JOIN_ATTEMPTS = 3
+
+        /** How many times joinByInvite dials the guest tunnel, and how long one attempt may take with the admin's confirmation. */
+        const val INVITE_ATTEMPTS = 5
+        const val INVITE_DEADLINE_MS = 360_000L
+
+        /** How long the hub keeps the guest of the invitation this phone joined by, as the core's guest grace. */
+        const val GUEST_GRACE_MS = 24 * 3600 * 1000L
 
         /** How long joinComputer browses for a pairing window, and then for a second one. */
         const val BROWSE_MS = 10_000L

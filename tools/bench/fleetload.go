@@ -117,10 +117,23 @@ func latency(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	}) != nil {
 		return
 	}
+	// The worst receiver's times at home and the away client's, for the
+	// run's trend (trend.go).
+	worst := map[string][2]time.Duration{}
+	defer func() {
+		for _, where := range []string{"home", "away"} {
+			if w, ok := worst[where]; ok {
+				r.Metric("E1/"+where+"-p50", "ms", float64(w[0].Milliseconds()))
+				r.Metric("E1/"+where+"-p95", "ms", float64(w[1].Milliseconds()))
+			}
+		}
+	}()
 	for _, d := range a.members {
 		limit := 2 * time.Second
+		where := "home"
 		if d == c {
 			limit = 5 * time.Second
+			where = "away"
 		}
 		r.Do(fmt.Sprintf("fleet/E1-%s", d.Name), func() error {
 			at, err := seenAt(ctx, d, file)
@@ -141,6 +154,8 @@ func latency(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 				ds = append(ds, time.Duration(got-t))
 			}
 			p50, p95 := percentile(ds, 50), percentile(ds, 95)
+			w := worst[where]
+			worst[where] = [2]time.Duration{max(w[0], p50), max(w[1], p95)}
 			fmt.Fprintf(r.out, "     E1: %s got %d copies, p50 %v, p95 %v, %d not seen\n", d.Name, len(ds), p50.Round(time.Millisecond), p95.Round(time.Millisecond), missed)
 			switch {
 			case missed > len(sent)/20:
@@ -233,12 +248,19 @@ func throughput(ctx context.Context, r *Report, f *Fleet, timeout time.Duration)
 		// The runtime gives memory back a few minutes after the load.
 		time.Sleep(time.Minute)
 		var errs []error
+		mostRSS, mostFDs, grew := 0, 0, 0
+		defer func() {
+			r.Metric("E2/rss-after", "KiB", float64(mostRSS))
+			r.Metric("E2/rss-growth", "KiB", float64(grew))
+			r.Metric("E2/fds-after", "fds", float64(mostFDs))
+		}()
 		for _, d := range g.members {
 			pid, rss, fds, err := serviceUse(ctx, d)
 			if err != nil {
 				return err
 			}
 			b := before[d]
+			mostRSS, mostFDs, grew = max(mostRSS, rss), max(mostFDs, fds), max(grew, rss-b.rss)
 			fmt.Fprintf(r.out, "     E2: %s memory %d to %d KiB, descriptors %d to %d\n", d.Name, b.rss, rss, b.fds, fds)
 			switch {
 			case pid != b.pid:
@@ -318,6 +340,7 @@ func bigTransfers(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 		return errors.Join(all...)
 	}
 	r.Do("fleet/E4-whole", func() error {
+		start := time.Now()
 		if err := sendAll(); err != nil {
 			return err
 		}
@@ -341,6 +364,7 @@ func bigTransfers(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 				return fmt.Errorf("%s ended with another file than the others", d.Name)
 			}
 		}
+		r.Metric("E4/three-50MiB", "s", time.Since(start).Seconds())
 		return nil
 	})
 	r.Do("fleet/E4-text-on-time", func() error {

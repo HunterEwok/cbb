@@ -252,9 +252,9 @@
     <string name="event_unfrozen">%1$s was unfrozen.</string>
     <string name="event_taken_over">%1$s took the group over: it holds the group\'s root now.</string>
     <string name="invite_title">Invite a device from afar</string>
-    <string name="invite_body">For a device that is not on your network, such as a parent\'s computer: share the invitation file with its owner, who joins with cbb pair -invite. It works once, for an hour, while this app is open.</string>
+    <string name="invite_body">On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with the file. It works once, for an hour, while this app is open; the group needs a hub.</string>
     <string name="invite_open">Make an invitation</string>
-    <string name="invite_open_until">The invitation is open until %1$s. Share its file only with the person who joins: anyone who has it can ask to join.</string>
+    <string name="invite_open_until">The invitation is open until %1$s. Show or send its QR code only to the person who joins; its file is the fallback.</string>
     <string name="invite_share">Share the invitation</string>
     <string name="invite_cancel">Cancel the invitation</string>
     <string name="invite_ask_title">Admit %1$s?</string>
@@ -564,7 +564,7 @@
     <string name="turn_on">Turn on</string>
     <string name="scan_code">Scan a code</string>
     <string name="invite_send">Send an invitation</string>
-    <string name="invite_on_hub">An invitation is made on the group\'s hub. On a computer that is the hub, run cbb invite and send the file it makes through a channel you trust; on the new device, run cbb pair -invite with that file.</string>
+    <string name="invite_on_hub">Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</string>
     <string name="more">More</string>
     <string name="view_next">Show as %1$s</string>
     <string name="lost_phone_title">Lost phone?</string>
@@ -575,4 +575,24 @@
     <string name="sync">Sync</string>
     <string name="badge_hub">hub</string>
     <string name="device_id">Device ID</string>
+    <string name="invitation_join">Join with an invitation</string>
+    <string name="invitation_has_group">This phone is in a group already. Leave it first to join another.</string>
+    <string name="invitation_not_one">This is not a CBB invitation.</string>
+    <string name="invitation_expired">The invitation has expired. Ask for a new one.</string>
+    <string name="invitation_joined">This phone is in the group. It syncs through the group\'s hub away from home.</string>
+    <string name="invitation_fingerprint_hint">Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</string>
+    <string name="invitation_connecting">Connecting to the group\'s hub…</string>
+    <string name="invitation_scan_hint">Point the camera at the invitation\'s QR code.</string>
+    <string name="invitation_text">Invitation text</string>
+    <string name="invitation_read">Read</string>
+    <string name="invitation_open_file">Open a file</string>
+    <string name="invitation_title">You are invited to a group</string>
+    <string name="invitation_group">Group: %1$s</string>
+    <string name="invitation_hub">Hub: %1$s</string>
+    <string name="invitation_until">Valid until %1$s</string>
+    <string name="invitation_answer_hint">Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</string>
+    <string name="invitation_accept">Join</string>
+    <string name="invitation_decline">Decline</string>
+    <string name="error_hub_unreachable">The group\'s hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</string>
+    <string name="invite_qr_label">The invitation\'s QR code</string>
 </resources>

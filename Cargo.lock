@@ -253,6 +253,7 @@ dependencies = [
  "hmac 0.13.0",
  "if-addrs",
  "libc",
+ "log",
  "mdns-sd",
  "p256",
  "png",

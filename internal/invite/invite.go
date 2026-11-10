@@ -50,6 +50,29 @@ type Invitation struct {
 	// Obfuscation is the hub's AmneziaWG settings; nil for plain
 	// WireGuard.
 	Obfuscation *tunnel.Obfuscation
+	// VLESS is the way to the hub's forwarder over VLESS with XHTTP, as
+	// the hub's offer gives it, for a guest whose network lets no UDP
+	// through; nil without it.
+	VLESS *VLESS
+}
+
+// VLESS is an invitation's VLESS settings: those of the hub's offer
+// (docs/protocol.md, section 11, "VLESS"), with XHTTP only.
+type VLESS struct {
+	Endpoint   string // the web server's address, ip:port
+	ServerName string // the site's name, which its certificate carries
+	Path       string // the path the web server passes to the forwarder
+	ID         string // the group's VLESS user ID
+}
+
+// wireVLESS is the JSON of an invitation's VLESS settings, in the order
+// the Rust core writes them.
+type wireVLESS struct {
+	Transport  string `json:"transport"`
+	Endpoint   string `json:"endpoint"`
+	ServerName string `json:"server_name"`
+	Path       string `json:"path"`
+	ID         string `json:"id"`
 }
 
 // wire is the JSON of an invitation, with short names for a small QR code.
@@ -65,12 +88,16 @@ type wire struct {
 	Expires   int64    `json:"exp"` // Unix seconds
 
 	Obfuscation *tunnel.Obfuscation `json:"o,omitempty"`
+	VLESS       *wireVLESS          `json:"x,omitempty"`
 }
 
 // String returns the invitation's text.
 func (in *Invitation) String() string {
 	w := wire{V: 1, Group: in.Group, Hub: in.Hub, HubKey: in.HubKey[:], GuestKey: in.GuestKey[:],
 		GuestPSK: in.GuestPSK[:], Secret: in.Secret, Expires: in.Expires.Unix(), Obfuscation: in.Obfuscation}
+	if x := in.VLESS; x != nil {
+		w.VLESS = &wireVLESS{Transport: "xhttp", Endpoint: x.Endpoint, ServerName: x.ServerName, Path: x.Path, ID: x.ID}
+	}
 	for _, ep := range in.Endpoints {
 		w.Endpoints = append(w.Endpoints, ep.String())
 	}
@@ -97,6 +124,7 @@ const (
 	BadSecret      Reason = "secret"         // s is shorter than 16 bytes or longer than 64
 	BadExpiry      Reason = "expiry"         // exp is not after 0
 	BadObfuscation Reason = "obfuscation"    // o is damaged
+	BadVLESS       Reason = "vless"          // x is damaged
 )
 
 // Error is Parse's error.
@@ -129,6 +157,41 @@ type strictWire struct {
 	Secret    string     `json:"s"`
 	Expires   int64      `json:"exp"`
 	Obf       *strictObf `json:"o"`
+	X         *strictX   `json:"x"`
+}
+
+type strictX struct {
+	Transport  *string `json:"transport"`
+	Endpoint   *string `json:"endpoint"`
+	ServerName *string `json:"server_name"`
+	Path       *string `json:"path"`
+	ID         *string `json:"id"`
+}
+
+// read checks the VLESS settings as the Rust core's vless_fields does:
+// every field there, XHTTP, and each value as an offer's.
+func (x *strictX) read() (*VLESS, error) {
+	for _, p := range []*string{x.Transport, x.Endpoint, x.ServerName, x.Path, x.ID} {
+		if p == nil {
+			return nil, errors.New("a field is missing")
+		}
+	}
+	if *x.Transport != "xhttp" {
+		return nil, errors.New("not XHTTP")
+	}
+	if _, err := ParseEndpoint(*x.Endpoint); err != nil {
+		return nil, err
+	}
+	if err := tunnel.CheckServerName(*x.ServerName); err != nil {
+		return nil, err
+	}
+	if err := tunnel.CheckVLESSPath(*x.Path); err != nil {
+		return nil, err
+	}
+	if err := tunnel.CheckVLESSID(*x.ID); err != nil {
+		return nil, err
+	}
+	return &VLESS{Endpoint: *x.Endpoint, ServerName: *x.ServerName, Path: *x.Path, ID: *x.ID}, nil
 }
 
 type strictObf struct {
@@ -224,6 +287,11 @@ func Parse(text string) (*Invitation, error) {
 	if w.Obf != nil {
 		if in.Obfuscation, err = w.Obf.read(); err != nil {
 			return nil, refuse(BadObfuscation, "the invitation's obfuscation settings are damaged")
+		}
+	}
+	if w.X != nil {
+		if in.VLESS, err = w.X.read(); err != nil {
+			return nil, refuse(BadVLESS, "the invitation's VLESS settings are damaged")
 		}
 	}
 	return in, nil

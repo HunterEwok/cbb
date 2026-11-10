@@ -145,6 +145,62 @@
         <source>The phone could not delete its key.</source>
         <translation>تعذّر على الهاتف حذف مفتاحه.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>لم يستجب محور المجموعة. تحقّق من أن الدعوة ما زالت صالحة وأن المحور يعمل، ثم حاول مجددًا.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>تعذّر الانضمام إلى المجموعة. حاول مجددًا.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>لا ينشئ الدعوة إلا مشرف: هاتف مشرف هنا، أو cbb invite على حاسوب مشرف.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>هذا الهاتف في مجموعة بالفعل. غادرها أولًا للانضمام إلى أخرى.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>هذه ليست دعوة CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>انتهت صلاحية الدعوة. اطلب دعوة جديدة.</translation>
+    </message>
+    <message>
+        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
+        <translation>امسح رمز QR في ورقة الاسترداد: على هاتف جديد لا يكفي المفتاح المكتوب.</translation>
+    </message>
+    <message>
+        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
+        <translation>لم يعد هذا مفتاح استرداد المجموعة الآن: أزاله الجذر أو أنشأ واحدًا جديدًا.</translation>
+    </message>
+    <message>
+        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
+        <translation>لم يُعثر على أي جهاز من المجموعة على هذه الشبكة. شغّل هاتفًا أو حاسوبًا من المجموعة وحاول مرة أخرى.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB recovery sheet.</source>
+        <translation>هذه ليست ورقة استرداد CBB.</translation>
+    </message>
+    <message>
+        <source>The phone could not restore the group.</source>
+        <translation>تعذّر على الهاتف استعادة المجموعة.</translation>
+    </message>
+    <message>
+        <source>This is not the QR code of a CBB recovery sheet.</source>
+        <translation>هذا ليس رمز QR لورقة استرداد CBB.</translation>
+    </message>
+    <message>
+        <source>The group's root cancelled the claim to restore the group.</source>
+        <translation>ألغى جذر المجموعة طلب استعادة المجموعة.</translation>
+    </message>
+    <message>
+        <source>The claim to restore the group became void.</source>
+        <translation>أصبح طلب استعادة المجموعة باطلًا.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -179,6 +235,18 @@
     <message>
         <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
         <translation>على حاسوب جذر المجموعة، اقبل هذا الهاتف كمشرف بهذا الرمز: في تطبيق CBB أضف جهازًا واختر قبوله كمشرف، أو شغّل cbb pair -qr -admin. أبقِ هذه الشاشة مفتوحة.</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>الانضمام بدعوة</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>يرى من دعاك هذه الكلمات على جهازه ويقبل هذا الهاتف إن تطابقت. أبقِ هذه الشاشة مفتوحة.</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>جارٍ الاتصال بمحور المجموعة…</translation>
     </message>
 </context>
 <context>
@@ -331,6 +399,18 @@
         <source>Off until I turn it on</source>
         <translation>إيقاف حتى أشغّلها</translation>
     </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>الانضمام بدعوة</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>إرسال دعوة</translation>
+    </message>
+    <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>الاستعادة بورقة الاسترداد</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -437,6 +517,22 @@
     <message>
         <source>Device ID</source>
         <translation>معرّف الجهاز</translation>
+    </message>
+    <message>
+        <source>Hand the group over</source>
+        <translation>تسليم المجموعة</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>جارٍ تسليم المجموعة إلى %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>تم تسليم المجموعة</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>طلبه يستولي على المجموعة فورًا</translation>
     </message>
 </context>
 <context>
@@ -568,6 +664,62 @@
     <message>
         <source>Device</source>
         <translation>الجهاز</translation>
+    </message>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>ينتظر طلب الاستيلاء على المجموعة</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>لا وقت</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>ساعة واحدة</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>يوم واحد</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 أيام</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 أيام</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>المفاتيح التي يجوز للمشرف حفظها</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>بعض المشرفين يحفظون مفاتيح أضعف؛ ويبقون حتى تتم إزالتهم</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>عتاد مُثبَت فقط</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>عتاد</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>عتاد أو ملف</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>تم إنشاؤه</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>لا يوجد</translation>
     </message>
 </context>
 <context>
@@ -1199,6 +1351,186 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>عندما لا يكون الهاتف على الشبكة المنزلية، يُزامن عبر نفق WireGuard الخاص بالمحور الخاص بك، وهو حاسوب من المجموعة مُعدّ باستخدام cbb global hub؛ منفذه متاح من الإنترنت، ولكن فقط عبر WireGuard بمفاتيح المجموعة. يردّ المحور على هذا الهاتف في المرة التالية التي يتصل فيها في المنزل. لا يذهب شيء إلى أي مكان آخر، ومن دون النفق لا يوجد اتصال. إيقافه يجعل هذا الهاتف ينسى مفتاح النفق الخاص به.</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>الانضمام بدعوة</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>أنت مدعو إلى مجموعة</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>وجّه الكاميرا إلى رمز QR الخاص بالدعوة.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>لا تبدأ الكاميرا: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>أو الصق نص الدعوة، cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>المجموعة</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>المحور</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>صالحة حتى</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>انضم فقط إن كنت طلبت هذه الدعوة. من أنشأها يقبل هذا الهاتف حين يرى الكلمات التي يعرضها.</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>انضمام</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>رفض</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>إرسال دعوة</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>جارٍ فتح الدعوة على محور المجموعة…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>على هاتف جديد، افتح CBB واضغط «الانضمام بدعوة» وامسح الرمز. على حاسوب، شغّل cbb pair -invite مع نصها. تعمل مرة واحدة، حتى %1.</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>انضم %1 إلى المجموعة؛ يظهر في القائمة حين يتصل.</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>اعرض الرمز أو أرسله فقط لمن سينضم: يستطيع أي شخص يملكه أن يطلب الانضمام.</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>نسخ نص الدعوة</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>قبول %1 (%2)؟ اقبله فقط إن عرض الجهاز الكلمات نفسها:</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>قبول</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>ليس هذا</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>حاول مجددًا</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>دعوة جهاز آخر</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>إزالة مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>جارٍ إزالة مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>إنشاء مفتاح استرداد جديد</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>إنشاء مفتاح استرداد</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>جارٍ استبدال مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>اكتب المفتاح أو اطبع هذه الصفحة واحفظه في مكان آمن. يُعرض مرة واحدة فقط.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>لدى المجموعة مفتاح استرداد. به يستولي حاسوب من المجموعة أو هاتف جديد على المجموعة إذا فُقد هذا الهاتف.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>يتيح مفتاح الاسترداد لحاسوب من المجموعة أو هاتف جديد الاستيلاء على المجموعة إذا فُقد هذا الهاتف. اسحب للأسفل لإنشائه.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>لقد كتبته</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>استعادة المجموعة</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>هذا الهاتف هو جذر المجموعة الآن.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>جارٍ البحث عن هاتف أو حاسوب من المجموعة على هذه الشبكة…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>جارٍ طلب المجموعة…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>استُعيدت المجموعة على هذا الهاتف. يصبح جذر المجموعة عند انتهاء مدة الانتظار، بعد %1 ساعة، ما لم يلغِ الجذر الطلب.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>استُعيدت المجموعة على هذا الهاتف. يصبح جذر المجموعة عند انتهاء مدة انتظار المجموعة، ما لم يلغِ الجذر الطلب.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>وجّه الكاميرا إلى رمز QR في ورقة استرداد المجموعة. أبقِ هاتفًا أو حاسوبًا من المجموعة قيد التشغيل على هذه الشبكة.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>الكاميرا لا تعمل: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>أو الصق نص الرمز، cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>حاول مرة أخرى</translation>
     </message>
 </context>
 </TS>
