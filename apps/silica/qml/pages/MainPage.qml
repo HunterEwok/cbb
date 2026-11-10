@@ -118,6 +118,14 @@ Page {
                     text: qsTr("Join a group as an admin")
                     onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"), { admin: true })
                 }
+                Button {
+                    visible: app.keyLevel !== "none"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    preferredWidth: Theme.buttonWidthLarge
+                    text: qsTr("Restore with a recovery sheet")
+                    enabled: !app.busy
+                    onClicked: pageStack.push(Qt.resolvedUrl("RestorePage.qml"))
+                }
                 Label {
                     visible: app.keyLevel === "none" && !app.busy
                     x: Theme.horizontalPageMargin

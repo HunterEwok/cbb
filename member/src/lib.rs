@@ -76,6 +76,7 @@ pub mod relay;
 pub mod relayd;
 pub mod releases;
 mod remotepaste;
+pub mod restore;
 mod rootless;
 pub mod sealkey;
 mod sekey;

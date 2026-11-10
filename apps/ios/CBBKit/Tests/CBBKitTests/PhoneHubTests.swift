@@ -60,7 +60,7 @@ final class PhoneHubTests: XCTestCase {
         XCTAssertEqual(o.endpoints, ["203.0.113.1:8764"])
         hub.vlessOnly = true
         XCTAssertNil(hub.offer(for: c))
-        hub.vless = Member.VLESS(endpoint: "203.0.113.1:443", publicKey: key(3), shortID: "ab", serverName: "example.com", id: UUID().uuidString)
+        hub.vless = Member.VLESS(endpoint: "203.0.113.1:443", serverName: "example.com", path: "/banMEJvnYJJap8S/AbCdEfGhIjKlMnOpQr", id: UUID().uuidString)
         XCTAssertEqual(hub.offer(for: c)?.vless, hub.vless)
     }
 
