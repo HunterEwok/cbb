@@ -244,9 +244,9 @@
     <string name="event_unfrozen">%1$s fue descongelado.</string>
     <string name="event_taken_over">%1$s tomó el grupo: ahora tiene la raíz del grupo.</string>
     <string name="invite_title">Invitar a un dispositivo lejano</string>
-    <string name="invite_body">Para un dispositivo que no está en tu red, como el ordenador de tus padres: comparte el archivo de invitación con su dueño, que se une con cbb pair -invite. Funciona una vez, durante una hora, mientras esta app está abierta.</string>
+    <string name="invite_body">En un teléfono nuevo, abre CBB, toca Unirse con una invitación y escanea el código. En un ordenador, ejecuta cbb pair -invite con el archivo. Sirve una vez, durante una hora, mientras esta app está abierta; el grupo necesita un hub.</string>
     <string name="invite_open">Crear una invitación</string>
-    <string name="invite_open_until">La invitación está abierta hasta %1$s. Comparte su archivo solo con la persona que se une: cualquiera que lo tenga puede pedir unirse.</string>
+    <string name="invite_open_until">La invitación está abierta hasta las %1$s. Muestra o envía su código QR solo a quien se une; su archivo es la alternativa.</string>
     <string name="invite_share">Compartir la invitación</string>
     <string name="invite_cancel">Cancelar la invitación</string>
     <string name="invite_ask_title">¿Admitir %1$s?</string>
@@ -555,7 +555,7 @@
     <string name="turn_on">Activar</string>
     <string name="scan_code">Escanear un código</string>
     <string name="invite_send">Enviar una invitación</string>
-    <string name="invite_on_hub">Una invitación se crea en el hub del grupo. En un ordenador que sea el hub, ejecuta cbb invite y envía el archivo que crea por un canal de confianza; en el dispositivo nuevo, ejecuta cbb pair -invite con ese archivo.</string>
+    <string name="invite_on_hub">Solo un administrador crea invitaciones: un teléfono administrador aquí, o cbb invite en un ordenador administrador.</string>
     <string name="more">Más</string>
     <string name="view_next">Mostrar como %1$s</string>
     <string name="lost_phone_title">¿Teléfono perdido?</string>
@@ -569,4 +569,24 @@
     <string name="saved_to_gallery">Guardado en la galería, en el álbum CBB.</string>
     <string name="paste_pick">Pegar una imagen o archivos…</string>
     <string name="paste_pick_note">Una imagen o archivos van al grupo como una copia, y el ordenador los pega donde tiene el foco, como lo haría Ctrl+V: en un chat, un documento o una carpeta. Intro, si está activado, los envía en un chat.</string>
+    <string name="invitation_join">Unirse con una invitación</string>
+    <string name="invitation_has_group">Este teléfono ya está en un grupo. Sal de él primero para unirte a otro.</string>
+    <string name="invitation_not_one">Esto no es una invitación de CBB.</string>
+    <string name="invitation_expired">La invitación ha caducado. Pide una nueva.</string>
+    <string name="invitation_joined">Este teléfono está en el grupo. Fuera de casa se sincroniza a través del hub del grupo.</string>
+    <string name="invitation_fingerprint_hint">Quien te invitó ve estas palabras en su dispositivo y admite este teléfono si coinciden. Mantén esta pantalla abierta.</string>
+    <string name="invitation_connecting">Conectando con el hub del grupo…</string>
+    <string name="invitation_scan_hint">Apunta la cámara al código QR de la invitación.</string>
+    <string name="invitation_text">Texto de la invitación</string>
+    <string name="invitation_read">Leer</string>
+    <string name="invitation_open_file">Abrir un archivo</string>
+    <string name="invitation_title">Te invitan a un grupo</string>
+    <string name="invitation_group">Grupo: %1$s</string>
+    <string name="invitation_hub">Hub: %1$s</string>
+    <string name="invitation_until">Válida hasta %1$s</string>
+    <string name="invitation_answer_hint">Únete solo si pediste esta invitación. Quien la creó admite este teléfono cuando ve las palabras que muestra.</string>
+    <string name="invitation_accept">Unirse</string>
+    <string name="invitation_decline">Rechazar</string>
+    <string name="error_hub_unreachable">El hub del grupo no respondió. Comprueba que la invitación sigue siendo válida y que el hub está encendido, y vuelve a intentarlo.</string>
+    <string name="invite_qr_label">El código QR de la invitación</string>
 </resources>

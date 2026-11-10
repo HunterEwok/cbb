@@ -201,6 +201,30 @@
         <source>The claim to restore the group became void.</source>
         <translation>समूह बहाल करने का अनुरोध अमान्य हो गया।</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>समूह के हब ने जवाब नहीं दिया। जाँचें कि निमंत्रण अभी मान्य है और हब चालू है, फिर दोबारा कोशिश करें।</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>समूह में नहीं जुड़ सका। फिर से कोशिश करें।</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>निमंत्रण केवल एडमिन बनाता है: यहाँ एक एडमिन फ़ोन, या एडमिन कंप्यूटर पर cbb invite।</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>यह फ़ोन पहले से एक समूह में है। दूसरे में जुड़ने के लिए पहले इसे छोड़ें।</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>यह CBB निमंत्रण नहीं है।</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>निमंत्रण की अवधि समाप्त हो गई है। नया माँगें।</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -235,6 +259,18 @@
     <message>
         <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
         <translation>जिस डिवाइस ने समूह बनाया, उस पर + दबाएँ और यह कोड स्कैन करें। यह स्क्रीन खुली रखें।</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>निमंत्रण से जुड़ें</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>जिसने आपको आमंत्रित किया वह अपने डिवाइस पर ये शब्द देखता है और मेल खाने पर इस फ़ोन को शामिल करता है। यह स्क्रीन खुली रखें।</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>समूह के हब से जुड़ रहा है…</translation>
     </message>
 </context>
 <context>
@@ -390,6 +426,14 @@
     <message>
         <source>Restore with a recovery sheet</source>
         <translation>रिकवरी शीट से बहाल करें</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>निमंत्रण से जुड़ें</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>निमंत्रण भेजें</translation>
     </message>
 </context>
 <context>
@@ -1503,6 +1547,100 @@
     <message>
         <source>Try again</source>
         <translation>फिर से कोशिश करें</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>निमंत्रण से जुड़ें</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>आपको एक समूह में आमंत्रित किया गया है</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>कैमरे को निमंत्रण के QR कोड की ओर करें।</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>कैमरा शुरू नहीं हो रहा: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>या निमंत्रण का पाठ चिपकाएँ, cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>समूह</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>हब</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>तक मान्य</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>तभी जुड़ें जब आपने यह निमंत्रण माँगा हो। इसे बनाने वाला इस फ़ोन के दिखाए शब्द देखकर इसे शामिल करता है।</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>जुड़ें</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>अस्वीकार करें</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>निमंत्रण भेजें</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>समूह के हब पर निमंत्रण खुल रहा है…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर इसके पाठ के साथ cbb pair -invite चलाएँ। यह एक बार, %1 तक काम करता है।</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>%1 समूह में जुड़ गया; जुड़ने पर यह सूची में दिखेगा।</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>कोड केवल जुड़ने वाले व्यक्ति को दिखाएँ या भेजें: जिसके पास भी यह है वह जुड़ने का अनुरोध कर सकता है।</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>निमंत्रण का पाठ कॉपी करें</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>%1 (%2) को शामिल करें? केवल तभी शामिल करें जब डिवाइस वही शब्द दिखाए:</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>शामिल करें</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>यह नहीं</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>फिर से कोशिश करें</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>एक और डिवाइस आमंत्रित करें</translation>
     </message>
 </context>
 </TS>

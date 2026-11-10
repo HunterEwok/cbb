@@ -201,6 +201,30 @@
         <source>The claim to restore the group became void.</source>
         <translation>أصبح طلب استعادة المجموعة باطلًا.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>لم يستجب محور المجموعة. تحقّق من أن الدعوة ما زالت صالحة وأن المحور يعمل، ثم حاول مجددًا.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>تعذّر الانضمام إلى المجموعة. حاول مجددًا.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>لا ينشئ الدعوة إلا مشرف: هاتف مشرف هنا، أو cbb invite على حاسوب مشرف.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>هذا الهاتف في مجموعة بالفعل. غادرها أولًا للانضمام إلى أخرى.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>هذه ليست دعوة CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>انتهت صلاحية الدعوة. اطلب دعوة جديدة.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -235,6 +259,18 @@
     <message>
         <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
         <translation>على الجهاز الذي أنشأ المجموعة، اضغط + وامسح هذا الرمز. أبقِ هذه الشاشة مفتوحة.</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>الانضمام بدعوة</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>يرى من دعاك هذه الكلمات على جهازه ويقبل هذا الهاتف إن تطابقت. أبقِ هذه الشاشة مفتوحة.</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>جارٍ الاتصال بمحور المجموعة…</translation>
     </message>
 </context>
 <context>
@@ -390,6 +426,14 @@
     <message>
         <source>Restore with a recovery sheet</source>
         <translation>الاستعادة بورقة الاسترداد</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>الانضمام بدعوة</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>إرسال دعوة</translation>
     </message>
 </context>
 <context>
@@ -1503,6 +1547,100 @@
     <message>
         <source>Try again</source>
         <translation>حاول مرة أخرى</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>الانضمام بدعوة</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>أنت مدعو إلى مجموعة</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>وجّه الكاميرا إلى رمز QR الخاص بالدعوة.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>لا تبدأ الكاميرا: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>أو الصق نص الدعوة، cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>المجموعة</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>المحور</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>صالحة حتى</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>انضم فقط إن كنت طلبت هذه الدعوة. من أنشأها يقبل هذا الهاتف حين يرى الكلمات التي يعرضها.</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>انضمام</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>رفض</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>إرسال دعوة</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>جارٍ فتح الدعوة على محور المجموعة…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>على هاتف جديد، افتح CBB واضغط «الانضمام بدعوة» وامسح الرمز. على حاسوب، شغّل cbb pair -invite مع نصها. تعمل مرة واحدة، حتى %1.</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>انضم %1 إلى المجموعة؛ يظهر في القائمة حين يتصل.</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>اعرض الرمز أو أرسله فقط لمن سينضم: يستطيع أي شخص يملكه أن يطلب الانضمام.</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>نسخ نص الدعوة</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>قبول %1 (%2)؟ اقبله فقط إن عرض الجهاز الكلمات نفسها:</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>قبول</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>ليس هذا</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>حاول مجددًا</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>دعوة جهاز آخر</translation>
     </message>
 </context>
 </TS>

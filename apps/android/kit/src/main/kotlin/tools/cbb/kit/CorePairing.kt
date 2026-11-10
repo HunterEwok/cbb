@@ -114,7 +114,11 @@ object CorePairing {
      * addresses the app listens on, and takes each connection the app
      * accepts with [attempt] until an admin admits this phone. With
      * adminPublic and signAdmin the phone offers an admin key, whose
-     * proof the core signs on the connection.
+     * proof the core signs on the connection. With invite, a remote
+     * invitation's text (docs/protocol.md, section 12), the phone joins by
+     * it in place of showing a QR code: the core starts the invitation's
+     * guest tunnel, the app dials 127.0.0.1:[port] and runs [attempt]
+     * there, and the hub's admin admits the phone by its fingerprint.
      */
     class Joining(
         name: String,
@@ -126,6 +130,7 @@ object CorePairing {
         adminPublic: ByteArray? = null,
         signAdmin: ((ByteArray) -> ByteArray)? = null,
         code: String = "",
+        invite: String? = null,
     ) : Closeable {
         private val signFn = CoreMember.signFn(sign)
         private val adminFn = signAdmin?.let { CoreMember.signFn(it) }
@@ -138,6 +143,12 @@ object CorePairing {
         val fingerprint: String
         val qr: String
 
+        /** With an invitation: the loopback port of its guest tunnel. */
+        val port: Int
+
+        /** Whether the invitation's hub has answered through the guest tunnel: an attempt that failed before it did says the hub is off or cannot be reached. */
+        val answered: Boolean get() = !closed.get() && lib.cbb_join_answered(handle) == 1
+
         init {
             require((adminPublic == null) == (signAdmin == null)) { "the admin key needs both its public key and its signer" }
             val request = Wire.encode(
@@ -149,6 +160,7 @@ object CorePairing {
                     "seal" to Wire.bytes(seal),
                     "addrs" to JsonArray(addrs.map { JsonPrimitive(it) }),
                     "code" to Wire.str(code),
+                    "invite" to invite?.let { Wire.str(it) },
                 ),
             )
             val answer = PointerByReference()
@@ -166,6 +178,7 @@ object CorePairing {
             this.code = o.optString("code") ?: ""
             fingerprint = o.optString("fingerprint") ?: ""
             qr = o.optString("qr") ?: ""
+            port = (o.optLong("port") ?: 0).toInt()
         }
 
         /**
@@ -177,10 +190,11 @@ object CorePairing {
          */
         fun attempt(socket: Socket, save: (Group) -> Boolean): Group {
             check(!closed.get()) { "the joiner is closed" }
-            ok("join", call { c -> lib.cbb_join_accept(handle, c) })
+            // With an invitation, the phone speaks first: the TLS client hello.
+            val started = ok("join", call { c -> lib.cbb_join_accept(handle, c) })
             var joined: Group? = null
             var failed: Failure? = null
-            exchange(socket, ByteArray(0)) { data ->
+            exchange(socket, started.optBytes("send") ?: ByteArray(0)) { data ->
                 val step = ok("join", call { c -> lib.cbb_join_feed(handle, data, Core.SizeT(data.size.toLong()), 0, c) })
                 val send = step.optBytes("send") ?: ByteArray(0)
                 when (step.optString("state")) {
@@ -299,6 +313,101 @@ object CorePairing {
         }
     }
 
+    /**
+     * A remote invitation an admin phone makes (docs/protocol.md, section
+     * 12) through member: its guest tunnel opens on this phone when it is
+     * the group's hub, else through a connected hub of the group (hub
+     * names one, "" for any). public is the key sign holds, as for
+     * [Admitting]; sign is called when a device the user confirmed is
+     * admitted. expiresS is in seconds: an hour when 0, a day at most. It
+     * waits for the hub, so the app makes it off its main thread.
+     */
+    class Inviting(member: CoreMember, public: ByteArray, adminCA: ByteArray?, expiresS: Int, hub: String = "", sign: (ByteArray) -> ByteArray) : Closeable {
+        private val signFn = CoreMember.signFn(sign)
+        private val handle: Pointer
+        private val closed = AtomicBoolean(false)
+        private val lock = Object()
+        private var calls = 0
+
+        /** A device that proved the invitation's secret: the app asks the user whether its fingerprint matches what the device shows. */
+        data class Request(val device: String, val name: String, val os: String, val fingerprint: String)
+
+        /** Where the invitation is: open, joining (answer about request), done (name joined) or failed. */
+        data class State(val version: Long, val state: String, val request: Request?, val name: String, val failure: Failure?)
+
+        /** The invitation's text, cbb://invite#..., for its QR code, and how long it is valid, in seconds. */
+        val text: String
+        val expires: Int
+
+        init {
+            val request = Wire.encode(
+                Wire.obj(
+                    "public" to Wire.bytes(CoreMember.point(public)),
+                    "admin_ca" to Wire.bytes(adminCA),
+                    "expires" to JsonPrimitive(expiresS),
+                    "hub" to Wire.str(hub),
+                ),
+            )
+            val answer = PointerByReference()
+            val count = count()
+            val h = lib.cbb_invite_new(member.handle, request, Core.SizeT(request.size.toLong()), signFn, null, answer, count)
+            val got = answer.value?.let { CoreMember.take(it, count) } ?: throw Core.Mismatch("the core gave no answer to the invitation")
+            val o = try {
+                ok("invite", got)
+            } catch (e: Exception) {
+                h?.let { lib.cbb_invite_free(it) }
+                throw e
+            }
+            handle = h ?: throw Core.Mismatch("the core made no invitation")
+            text = o.optString("invite") ?: ""
+            expires = (o.optLong("expires") ?: 0).toInt()
+        }
+
+        /** Waits up to timeoutMS for a state past version; it blocks, so the app calls it off its main thread. */
+        fun next(version: Long, timeoutMS: Long = 1000): State {
+            enter()
+            try {
+                val o = ok("invite", call { c -> lib.cbb_invite_next(handle, version, timeoutMS, c) })
+                val r = o.optObject("joining")?.let {
+                    Request(it.optString("device") ?: "", it.optString("name") ?: "", it.optString("os") ?: "", it.optString("fingerprint") ?: "")
+                }
+                val f = o.optObject("error")?.let { Failure(it.optString("message") ?: "the invitation ended", it.optString("details")) }
+                return State(o.optLong("version") ?: version, o.optString("state") ?: "open", r, o.optString("name") ?: "", f)
+            } finally {
+                leave()
+            }
+        }
+
+        /** The user's answer about the device that asks to join. */
+        fun answer(yes: Boolean) {
+            if (runCatching { enter() }.isFailure) return
+            try {
+                lib.cbb_invite_answer(handle, if (yes) 1 else 0)
+            } finally {
+                leave()
+            }
+        }
+
+        private fun enter() = synchronized(lock) {
+            check(!closed.get()) { "the invitation is closed" }
+            calls++
+        }
+
+        private fun leave() = synchronized(lock) {
+            calls--
+            lock.notifyAll()
+        }
+
+        /** Ends the invitation; it waits a moment for its window to close. */
+        override fun close() {
+            synchronized(lock) {
+                if (closed.getAndSet(true)) return
+                while (calls > 0) lock.wait()
+            }
+            lib.cbb_invite_free(handle)
+        }
+    }
+
     private fun count() = Memory(Native.SIZE_T_SIZE.toLong()).apply { clear() }
 
     /** Calls f with the answer's length and takes the answer it returns. */
@@ -345,6 +454,8 @@ object CorePairing {
 
         fun cbb_join_finish(j: Pointer, saved: Int, answerLen: Pointer): Pointer?
 
+        fun cbb_join_answered(j: Pointer): Int
+
         fun cbb_join_free(j: Pointer)
 
         fun cbb_admit_new(m: Pointer, request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answer: PointerByReference, answerLen: Pointer): Pointer?
@@ -354,6 +465,14 @@ object CorePairing {
         fun cbb_admit_feed(a: Pointer, data: ByteArray, len: Core.SizeT, nowMS: Long, answerLen: Pointer): Pointer?
 
         fun cbb_admit_free(a: Pointer)
+
+        fun cbb_invite_new(m: Pointer, request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answer: PointerByReference, answerLen: Pointer): Pointer?
+
+        fun cbb_invite_next(i: Pointer, version: Long, timeoutMS: Long, answerLen: Pointer): Pointer?
+
+        fun cbb_invite_answer(i: Pointer, yes: Int)
+
+        fun cbb_invite_free(i: Pointer)
     }
 
     private val lib: Lib by lazy { Native.load("cbb_ffi", Lib::class.java) }

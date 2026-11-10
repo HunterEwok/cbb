@@ -246,7 +246,6 @@
   "More": "עוד",
   "OK": "אישור",
   "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.": "בטלפון של הקבוצה, הקישו על + וסרקו את הקוד הזה. במחשב של הקבוצה, הקישו על + והקלידו את המספרים. השאירו את החלון הזה פתוח.",
-  "On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.": "ברכזת של הקבוצה, הריצו cbb invite ושלחו את הקובץ שהיא יוצרת בערוץ שאתם סומכים עליו. במכשיר החדש, הריצו cbb pair -invite עם הקובץ הזה.",
   "On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.": "במכשיר החדש, בחרו ״הצטרפות לקבוצה״: הוא מציג קוד QR ושש ספרות. טלפון של הקבוצה סורק את הקוד; כאן, הקלידו את הספרות.",
   "Open a picture of its QR code": "פתיחת תמונה של קוד ה-QR שלו",
   "Open at sign-in": "פתיחה בהתחברות",
@@ -264,5 +263,13 @@
   "Turn sync off": "כיבוי הסנכרון",
   "Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does.": "הקלידו את המפתח מהדף, או הדביקו את הטקסט של קוד ה-QR שלו. התביעה ממתינה כמו השתלטות.",
   "Type the six digits the new device shows.": "הקלידו את שש הספרות שהמכשיר החדש מציג.",
-  "Without a camera": "בלי מצלמה"
+  "Without a camera": "בלי מצלמה",
+  "Allow cbb to run as the administrator; the invitation opens on the group's hub next.": "אפשרו ל-cbb לרוץ כמנהל המערכת; לאחר מכן ההזמנה נפתחת ברכזת של הקבוצה.",
+  "The invitation's QR code": "קוד ה-QR של ההזמנה",
+  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.": "בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite עם הטקסט שלה. הציגו או שלחו אותה רק למי שמצטרף.",
+  "The invitation's text": "טקסט ההזמנה",
+  "Not this one": "לא זה",
+  "The invitation is valid until %s.": "ההזמנה בתוקף עד %s.",
+  "%s (%s) used the invitation. Admit it only if the device shows the same fingerprint:": "%s (%s) השתמש בהזמנה. אשרו רק אם המכשיר מציג את אותה טביעת אצבע:",
+  "The device joined the group; it appears in the list once it connects.": "המכשיר הצטרף לקבוצה; הוא יופיע ברשימה כשיתחבר."
 }

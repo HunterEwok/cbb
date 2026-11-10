@@ -201,6 +201,30 @@
         <source>The claim to restore the group became void.</source>
         <translation>Заявка на восстановление группы стала недействительной.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>Хаб группы не ответил. Проверьте, что приглашение ещё действует и хаб включён, и попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>Не удалось вступить в группу. Попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>Приглашение делает только админ: телефон-админ здесь или cbb invite на компьютере-админе.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>Этот телефон уже в группе. Сначала выйдите из неё, чтобы вступить в другую.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>Это не приглашение CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>Срок приглашения истёк. Попросите новое.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -235,6 +259,18 @@
     <message>
         <source>On the device that made the group, tap + and scan this code. Keep this screen open.</source>
         <translation>На устройстве, которое создало группу, нажмите + и отсканируйте этот код. Не закрывайте этот экран.</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Вступить по приглашению</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>Тот, кто вас пригласил, видит эти слова на своём устройстве и впустит телефон, если они совпадают. Не закрывайте этот экран.</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>Подключение к хабу группы…</translation>
     </message>
 </context>
 <context>
@@ -390,6 +426,14 @@
     <message>
         <source>Restore with a recovery sheet</source>
         <translation>Восстановить по листу восстановления</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Вступить по приглашению</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Отправить приглашение</translation>
     </message>
 </context>
 <context>
@@ -1503,6 +1547,100 @@
     <message>
         <source>Try again</source>
         <translation>Попробовать снова</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Вступить по приглашению</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>Вас приглашают в группу</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>Наведите камеру на QR-код приглашения.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Камера не запускается: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>Или вставьте текст приглашения, cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Группа</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>Хаб</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>Действует до</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>Вступайте, только если вы сами просили это приглашение. Тот, кто его сделал, впустит телефон, когда увидит показанные им слова.</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Вступить</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>Отклонить</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Отправить приглашение</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>Приглашение открывается на хабе группы…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite с его текстом. Приглашение работает один раз, до %1.</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>%1 вступил в группу; он появится в списке, когда подключится.</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>Показывайте или отправляйте код только тому, кто вступает: любой, у кого он есть, может попросить доступ.</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>Скопировать текст приглашения</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>Впустить %1 (%2)? Впускайте, только если устройство показывает те же слова:</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>Впустить</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>Не этот</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Попробовать снова</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>Пригласить ещё устройство</translation>
     </message>
 </context>
 </TS>
