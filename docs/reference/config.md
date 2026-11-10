@@ -101,6 +101,9 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_E2E_COVERDIR` | `tools/e2e/e2e.sh` | A directory where a `cbb` built with `-cover` writes its coverage, as `GOCOVERDIR` in every container (CI's coverage, [testing](../testing.md#coverage)). |
 | `CBB_FAKE_HELPER` | the lite member's tests | Makes the test program play `cbb-helper` for the helper channel's tests. |
 | `CBB_LITE` | Go tests with the lite member | The lite member's binary (`cargo build` at the top, `target/`). |
+| `CBB_PREVIOUS` | Go tests of the service | The previous release's `cbb` for TestPreviousRelease (a device of version N in one group with N-1), as `tools/e2e/previous.sh` prints it. |
+| `CBB_REPO` | `tools/e2e/previous.sh` | The repository on GitHub whose releases it reads, `HunterEwok/cbb` by default. |
+| `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Limits the weekly fleet run to these scenarios (`-scenario`); all of them when unset. |
 | `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary: the tests of `internal/relay` that check a relay from outside run against it. |
 | `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `group_record_bytes`, `record_bytes`); the Go tests set it. |
 | `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |
