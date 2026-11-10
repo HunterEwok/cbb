@@ -7,6 +7,21 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The Aurora app's root sets how long a claim to take the group over waits and which keys an
+  admin may keep, hands the group to an admin (its claim then takes effect at once), and makes
+  or removes the group's recovery key, whose sheet it shows once. The core builds and signs
+  these records (`cbb_core::root`, `cbb_member_manage`'s `takeover_delay`, `key_level`,
+  `hand_over`, `make_recovery` and `remove_recovery`, and the member's `root_view`).
+- The Android app's root asks the core for these records too: the key level, the recovery key
+  as a sheet and on a YubiKey (`recovery_for`) and its removal go through the kit's
+  `CoreMember`, and the Kotlin kit no longer builds them itself. The iPhone app does the same through
+  the Swift kit's `CoreMember`.
+- A new Aurora phone restores the group from its recovery sheet: Start's "Restore with a recovery
+  sheet" reads the sheet's QR code, finds a phone or a computer of the group on the network,
+  checks the records it sends, and claims the group with the sheet's key for a new root key in
+  the TEE; the phone becomes the root once the group's delay passes, unless the root cancels.
+  The core does the restoring for any app whose keys it does not hold (`cbb_restore`,
+  `cbb_member_manage`'s `recover_with_sheet`, `cbb_lite::restore`).
 - Nightly fuzzing reaches the Rust service: the control socket's messages, which cbb-helper's
   channel uses too, and the ZX Spectrum Next's frames (`member/fuzz`), and the forwarder's
   VLESS and XHTTP answers in the core (`vless`); Miri checks the phones' C functions and
@@ -2047,6 +2062,11 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A device removed from the group while it was not connected hears that it was removed: on its
+  next connection with any member it gets the records that remove it, and its status says so.
+  Until now every member refused it before it could hear, so it kept saying it was in the group.
+- On Android, pressing the button while the app was still sending as it opened no longer loses
+  what the button did: the sync as the app opened, ending later, cleared its message.
 - A member started with `-no-listen` dials the members it finds at once, also those with a
   lower device ID: it waited 30 s for them to dial it, which they cannot.
 - The Rust member cleans the reason of a command's result before it shows or passes it on,

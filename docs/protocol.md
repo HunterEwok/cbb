@@ -2136,7 +2136,13 @@ beyond) and check the same bytes.
 - After adding records that refuse a certificate a member first queues the new records for
   its peers, then closes every connection whose peer certificate is now refused
   ("Certificates"), after what is queued for it and a `bye`, and the TLS check refuses it from
-  then on. So a revoked member that is connected gets the record that revokes it. A member
+  then on. So a revoked member that is connected gets the record that revokes it. One that
+  was not connected gets it on its next connection with any member: a peer whose own key
+  (its certificate's) the records revoke or freeze passes the TLS check, and its connection
+  carries records only; the member sends its records when the digests in the hellos differ,
+  takes nothing from the peer, and closes the connection after them and a `bye`. Either side
+  dials such a peer again as after a failure (1 s, doubling to 30 s), so that a removed
+  device costs one handshake now and then. A member
   that learns that its own key is revoked logs that it was removed from the group, and its
   status says so (`removed`); an admin computer whose admin key is frozen says that instead
   (`frozen`); the others refuse it. A member MUST close a connection, and refuse new ones,

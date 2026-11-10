@@ -27,7 +27,11 @@
 //! input. With -new-group it joins nothing:
 //! it makes a group of its own, the admin key standing for the root key,
 //! prints "Group <device> <group tag>", and runs the member as the group's
-//! root, which takes "ADMIT" too.
+//! root, which takes "ADMIT" too. With -restore <the recovery sheet's QR
+//! code> it restores the group as a new phone (cbb_restore), asking each
+//! -peer, prints "Restored <device> <group tag>" or "RESTORE FAILED
+//! <message>", and runs the member, the admin key standing for the new root
+//! key, which "MANAGE" signs root_ca with.
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
@@ -40,7 +44,7 @@ use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
     cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_join_accept,
     cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call,
-    cbb_member_manage, cbb_member_start,
+    cbb_member_manage, cbb_member_start, cbb_restore,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -120,6 +124,27 @@ fn main() -> ExitCode {
         println!("Group {} {tag}", group["device"].as_str().unwrap_or_default());
         let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
         return run_member(&key, &public_b64, &name, &dir, peers, &group, Some((&admin_key, admin_public.as_str())));
+    }
+    if let Some(sheet) = arg("-restore") {
+        let req = serde_json::json!({
+            "sheet": sheet, "public": public_b64, "name": name, "os": "aurora", "addrs": peers,
+        })
+        .to_string();
+        let mut n = 0usize;
+        let ctx = &key as *const SigningKey as *mut _;
+        // SAFETY: req and n live for the call, the key too.
+        let got = take(unsafe { cbb_restore(req.as_ptr(), req.len(), sign, ctx, &mut n) }, n);
+        let restored = got["ok"].clone();
+        if restored.is_null() {
+            println!("RESTORE FAILED {}", got["error"]["message"].as_str().unwrap_or_default());
+            return ExitCode::FAILURE;
+        }
+        let tag = cbb_core::certs::Cert::parse(&b64(&restored["group_ca"]))
+            .map(|ca| cbb_core::certs::tag(&ca))
+            .unwrap_or_default();
+        println!("Restored {} {tag}", restored["device"].as_str().unwrap_or_default());
+        let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
+        return run_member(&key, &public_b64, &name, &dir, peers, &restored, Some((&admin_key, admin_public.as_str())));
     }
     let ln = TcpListener::bind(&addr).expect("listen");
     let mut req =
