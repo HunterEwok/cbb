@@ -1390,6 +1390,16 @@ func TestFreezeAnAdmin(t *testing.T) {
 	if _, err := a.do(t, control.Header{Op: control.OpFreeze, Name: "pi"}, ""); err == nil {
 		t.Error("an admin froze the root")
 	}
+	// b's admin record comes to a from the root, maybe after b holds its
+	// admin CA; until then a takes b for an ordinary device.
+	waitFor(t, "a knows b is an admin", func() bool {
+		for _, d := range a.devices(t) {
+			if d.Name == "b" {
+				return d.Admin
+			}
+		}
+		return false
+	})
 	if _, err := a.do(t, control.Header{Op: control.OpFreeze, Name: "b"}, ""); err != nil {
 		t.Fatal(err)
 	}

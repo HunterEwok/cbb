@@ -2028,6 +2028,14 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A device removed from the group while it was not connected hears that it was removed: on its
+  next connection with any member it gets the records that remove it, and its status says so.
+  Until now every member refused it before it could hear, so it kept saying it was in the group.
+- A computer that joined by a code connects to the member that admitted it at once, at the
+  address it joined at: when it did not find that member by mDNS, it waited, as that member
+  waited for it to dial.
+- On Android, pressing the button while the app was still sending as it opened no longer loses
+  what the button did: the sync as the app opened, ending later, cleared its message.
 - A member removed from the group while it was still answering the hello of the connection that
   removed it hears that it was removed: when its own writing failed first, as the other end hung
   up, it dropped the records it had already read, and every later connection was refused.

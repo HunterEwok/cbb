@@ -2111,3 +2111,33 @@ func TestFFIPhoneRemoves(t *testing.T) {
 		t.Fatal("the other computer says it was removed")
 	}
 }
+
+// TestFFIPhoneRemovesAway: the root phone removes a computer it never
+// connected to after admitting it; the phone's next connection with the
+// computer carries the records that remove it, and the computer says so.
+func TestFFIPhoneRemovesAway(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
+	if made := strings.Fields(next("Group ")); len(made) != 2 {
+		t.Fatalf("the phone's group: %q", made)
+	}
+	var h hub
+	second, qr := listeningJoin(t, &h, "second")
+	fmt.Fprintln(in, "ADMIT "+qr)
+	id := next("ADMITTED ")
+	if got := next("ADMIT DONE "); got != "true" {
+		t.Fatalf("the computer did not confirm its join: %q", got)
+	}
+	joinedIdentity(t, second, id)
+	fmt.Fprintln(in, "MANAGE "+`{"action":"remove","device":"`+id+`"}`)
+	if got := next("MANAGED "); got != `{"ok":{}}` {
+		t.Fatalf("removing the computer: %s", got)
+	}
+	fmt.Fprintln(in, `CALL {"op":"found","args":{"key":"second","addrs":["`+second.addr()+`"]}}`)
+	next("ANSWER ")
+	waitUpTo(t, 30*time.Second, "the computer says it was removed", func() bool { return second.status(t).Removed })
+	waitFor(t, "the removed computer keeps no connection", func() bool { return len(second.status(t).Peers) == 0 })
+}
