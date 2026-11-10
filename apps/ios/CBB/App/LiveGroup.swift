@@ -875,7 +875,8 @@ final class LiveGroup: GroupController {
     private func offerThroughGuest(node: CoreMember, away: AwayFromHome) async {
         while !Task.isCancelled {
             guard let saved = InviteKeychain.load() else { return }
-            if Date().timeIntervalSince(saved.joined) > Self.guestGrace || (await away.hub) != nil {
+            let hub = await away.hub
+            if Date().timeIntervalSince(saved.joined) > Self.guestGrace || hub != nil {
                 try? InviteKeychain.save(nil)
                 return
             }
