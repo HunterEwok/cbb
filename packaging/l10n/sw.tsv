@@ -1,0 +1,261 @@
+  1. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  1. Ruhusu TCP %s inayoingia kutoka %s. Lengo: miunganisho kutoka kwa vifaa vya kikundi.
+  2. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  2. Ruhusu UDP 5353 inayoingia kutoka %s. Lengo: kupata vifaa vya kikundi (mDNS).
+%s: removed the CBB rules.	%s: kanuni za CBB zimeondolewa.
+Firewall: closed the hub's UDP port %s.	Firewall: mlango wa UDP %s wa kitovu umefungwa.
+  In Firewall > Rules, on each interface of the home network (LAN and the others):	  Katika Firewall > Rules, kwenye kila kiolesura cha mtandao wa nyumbani (LAN na vingine):
+    Pass, protocol TCP, source %s, destination This Firewall, port %s	    Pass, itifaki TCP, chanzo %s, lengwa This Firewall, mlango %s
+    Pass, protocol UDP, the same sources, destination This Firewall, port 5353	    Pass, itifaki UDP, vyanzo vilevile, lengwa This Firewall, mlango 5353
+  Add to /etc/pf.conf, before the rules that block, and run pfctl -f /etc/pf.conf:	  Ongeza kwenye /etc/pf.conf, kabla ya kanuni zinazozuia, kisha endesha pfctl -f /etc/pf.conf:
+  and the same lines in the script that firewall_script in rc.conf names, to keep them.	  na mistari hiyohiyo kwenye skripti ambayo firewall_script katika rc.conf inaitaja, ili ibaki.
+  In Firewall > Rules on WAN: Pass, protocol UDP, source any, destination WAN address, port %s	  Katika Firewall > Rules kwenye WAN: Pass, itifaki UDP, chanzo any, lengwa WAN address, mlango %s
+%s [y/N]	%s [y/N]
+No terminal to answer on; taken as No.	Hakuna terminal ya kujibu; imechukuliwa kama Hapana.
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand:	Hakuna kanuni za firewall zilizoongezwa. CBB hufanya kazi tu wakati firewall inaruhusu kanuni zilizo hapo juu. Kuziongeza kwa mkono:
+Firewall: no active firewall was found; no firewall rules are needed. If pf or ipfw is turned on later, run the installer again.	Firewall: hakuna firewall inayotumika iliyopatikana; hakuna kanuni zinazohitajika. Ikiwa pf au ipfw itawashwa baadaye, endesha kisakinishi tena.
+Firewall: %s (active). CBB requires these rules:	Firewall: %s (inatumika). CBB inahitaji kanuni hizi:
+CBB does not change pfSense's rules, and runs there unsupported. Add them by hand:	CBB haibadilishi kanuni za pfSense, na huendeshwa huko bila usaidizi. Ziongeze kwa mkono:
+ (express installation)	 (usakinishaji wa haraka)
+ (as answered before)	 (kama ilivyojibiwa awali)
+With Yes, CBB keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both.	Ukijibu Ndiyo, CBB huweka kanuni hizi katika nanga yake ya pf, ambayo hook ya programu-jalizi yake huiongeza kwenye kanuni za OPNsense; kuondoa usakinishaji huondoa vyote viwili.
+With Yes, CBB keeps these rules in its own pf anchor and adds the lines that load it at the end of %s; uninstalling removes both.	Ukijibu Ndiyo, CBB huweka kanuni hizi katika nanga yake ya pf na kuongeza mistari inayoipakia mwishoni mwa %s; kuondoa usakinishaji huondoa vyote viwili.
+With Yes, CBB adds these rules to ipfw's set %s at every start, and removes them on uninstall.	Ukijibu Ndiyo, CBB huongeza kanuni hizi kwenye seti %s ya ipfw kila inapoanza, na kuziondoa wakati wa kuondoa usakinishaji.
+Add these rules now?	Ongeza kanuni hizi sasa?
+To let CBB add and manage them, run the installer again with --express.	Ili CBB iziongeze na kuzisimamia, endesha kisakinishi tena kwa --express.
+Added the rules above%s. CBB manages them from now on.	Kanuni zilizo hapo juu zimeongezwa%s. Kuanzia sasa CBB inazisimamia.
+run it as root	iendeshe kama root
+neither pf nor ipfw is active; nothing was added.	si pf wala ipfw inayotumika; hakuna kilichoongezwa.
+failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again.	imeshindwa (hali ya kutoka %s). Kwa kila amri iliyoendesha: CBB_ERROR_DETAILS=1, kisha iendeshe tena.
+CBB_HOME_CGNAT is 1 or 0, not %s	CBB_HOME_CGNAT ni 1 au 0, si %s
+--port takes a port from 1024 to 65535	--port inachukua mlango kutoka 1024 hadi 65535
+CBB_FIREWALL is ask, express or no, not %s	CBB_FIREWALL ni ask, express au no, si %s
+run it as root (sudo or doas)	iendeshe kama root (sudo au doas)
+this installer is for FreeBSD	kisakinishi hiki ni cha FreeBSD
+%s does not run on this machine; is it built for %s?	%s haiendeshi kwenye mashine hii; je, imejengwa kwa ajili ya %s?
+an account named cbb exists here and is not this service's (its comment is not "CBB"); it would get the group's keys. Rename or remove it, then run install.sh again.	akaunti iitwayo cbb ipo hapa na si ya huduma hii (maelezo yake si "CBB"); ingepata funguo za kikundi. Ibadilishe jina au iondoe, kisha endesha install.sh tena.
+a group named cbb exists here with members, and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	kikundi kiitwacho cbb kipo hapa chenye wanachama, na hakuna akaunti ya huduma; wangefikia huduma. Badilisha jina la kikundi au kiondoe, kisha endesha install.sh tena.
+Added %s to the cbb group; log in again to use cbb copy and paste.	%s ameongezwa kwenye kikundi cbb; ingia tena ili kutumia cbb copy na paste.
+CBB uses TCP port %s instead of 8764.	CBB inatumia mlango wa TCP %s badala ya 8764.
+the service did not answer within 10 s: %s	huduma haikujibu ndani ya sekunde 10: %s
+CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	CBB inaendeshwa kwenye mlango wa TCP %s. Kuiondoa: sh /usr/local/share/cbb/uninstall.sh
+OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense: inaonekana chini ya System > Diagnostics > Services, na kanuni zake hufuata kila upakiaji upya wa kichujio.
+pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	pfSense haitumiki: sasisho la pfSense linaweza kuondoa CBB; endesha kisakinishi hiki tena baada ya sasisho.
+Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	Kinachofuata: endesha cbb pair kama root na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako; bila programu, angalia docs/guide/without-app.md.
+CBB is removed, with this device's keys; it left its group.	CBB imeondolewa, pamoja na funguo za kifaa hiki; kimeondoka kwenye kikundi chake.
+CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika /var/db/cbb kwa usakinishaji upya; --purge huziondoa.
+--port needs a port number	--port inahitaji namba ya mlango
+--home-cgnat needs on or off	--home-cgnat inahitaji on au off
+--auto-update needs on or off	--auto-update inahitaji on au off
+unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	chaguo lisilojulikana %s (yanayojulikana: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
+--rootless installs for your own user: run it without sudo: %s	--rootless husakinisha kwa mtumiaji wako mwenyewe: iendeshe bila sudo: %s
+--rootless is for Linux computers	--rootless ni kwa kompyuta za Linux
+run it with sudo: %s	iendeshe kwa sudo: %s
+no release for this MIPS system: it is not OpenWrt, which names its byte order	hakuna toleo la mfumo huu wa MIPS: si OpenWrt, ambayo hutaja mpangilio wake wa baiti
+no release for the architecture %s	hakuna toleo la usanifu %s
+the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	mwanachama mwepesi wa MIPS bado hana usawazishaji ukiwa mbali na nyumbani (kipengele 37 cha ramani); mwanachama kamili anao.
+--console is not for a router	--console si kwa ruta
+--uinput is not for a router	--uinput si kwa ruta
+--home-cgnat is not for a router	--home-cgnat si kwa ruta
+--lite is for Linux; a Mac runs the full member	--lite ni kwa Linux; Mac huendesha mwanachama kamili
+--console is for Linux	--console ni kwa Linux
+--uinput is for Linux	--uinput ni kwa Linux
+--lite is for Linux; FreeBSD runs the full member	--lite ni kwa Linux; FreeBSD huendesha mwanachama kamili
+this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	kisakinishi hiki ni cha Linux, macOS na FreeBSD; kwenye Windows tumia get.ps1
+tar is required	tar inahitajika
+sha256sum or shasum is required	sha256sum au shasum inahitajika
+curl or wget is required	curl au wget inahitajika
+CBB_VERSION must look like v1.2.3	CBB_VERSION lazima ionekane kama v1.2.3
+the signed %s file is not in the strict form of signed bodies; not installing	faili iliyosainiwa %s haiko katika umbo kali la maudhui yaliyosainiwa; haisakinishwi
+Not checked: the release's signature (CBB_VERIFY=skip).	Haijakaguliwa: sahihi ya toleo (CBB_VERIFY=skip).
+openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)	openssl inahitajika ili kukagua sahihi ya toleo (au CBB_VERIFY=skip ili kulisakinisha bila kukaguliwa)
+%s has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)	%s haina faili za toleo zilizosainiwa; halisakinishwi (CBB_VERIFY=skip hulisakinisha bila kukaguliwa)
+keys.json is not signed by the project's root key; not installing	keys.json haijasainiwa kwa ufunguo mkuu wa mradi; haisakinishwi
+keys.json has expired; check the clock, or try again later	muda wa keys.json umekwisha; kagua saa, au jaribu tena baadaye
+keys.json is not valid; not installing	keys.json si sahihi; haisakinishwi
+keys.json holds a key that is not valid	keys.json ina ufunguo usio sahihi
+keys.json holds no release key	keys.json haina ufunguo wa toleo
+release.json is not signed by a release key; not installing	release.json haijasainiwa kwa ufunguo wa toleo; haisakinishwi
+stable.json is not signed by a release or channel key; not installing	stable.json haijasainiwa kwa ufunguo wa toleo au wa chaneli; haisakinishwi
+stable.json is not the stable channel's	stable.json si ya chaneli thabiti
+stable.json has expired; check the clock, or try again later	muda wa stable.json umekwisha; kagua saa, au jaribu tena baadaye
+release.json is not the release stable.json names; not installing	release.json si toleo ambalo stable.json inalitaja; haisakinishwi
+release.json is for %s, not %s	release.json ni ya %s, si %s
+release.json does not list %s	release.json haiorodheshi %s
+%s does not match the signed release.json; not installing it	%s hailingani na release.json iliyosainiwa; haisakinishwi
+The release's signature checks out (%s).	Sahihi ya toleo ni sahihi (%s).
+could not download %s	imeshindwa kupakua %s
+stable.json names no release	stable.json haitaji toleo lolote
+Downloading %s (%s)...	Inapakua %s (%s)...
+SHA256SUMS does not list %s	SHA256SUMS haiorodheshi %s
+%s does not match SHA256SUMS; not installing it	%s hailingani na SHA256SUMS; haisakinishwi
+%s does not have this repository's build attestation; not installing it	%s haina uthibitisho wa ujenzi wa hazina hii; haisakinishwi
+The archive's build attestation checks out.	Uthibitisho wa ujenzi wa kumbukumbu ni sahihi.
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the archive's build attestation	CBB_ATTESTATION=require inahitaji gh, ukiwa umeingia (gh auth login), ili kukagua uthibitisho wa ujenzi wa kumbukumbu
+Not checked: the archive's build attestation (it needs gh, signed in). SHA256SUMS matched.	Haijakaguliwa: uthibitisho wa ujenzi wa kumbukumbu (unahitaji gh, ukiwa umeingia). SHA256SUMS ililingana.
+  %s. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  %s. Ruhusu TCP %s inayoingia kutoka %s. Lengo: miunganisho kutoka kwa vifaa vya kikundi.
+  %s. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  %s. Ruhusu UDP 5353 inayoingia kutoka %s. Lengo: kupata vifaa vya kikundi (mDNS).
+ufw: removed the CBB rules.	ufw: kanuni za CBB zimeondolewa.
+firewalld: removed the CBB rules and service.	firewalld: kanuni za CBB na huduma yake zimeondolewa.
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run:	Hakuna kanuni za firewall zilizoongezwa. CBB hufanya kazi tu wakati firewall inaruhusu kanuni zilizo hapo juu. Kuziongeza kwa mkono, endesha:
+Then make them permanent the way this system keeps its %s rules.	Kisha zifanye za kudumu kwa njia ambayo mfumo huu huhifadhi kanuni zake za %s.
+Firewall: no active firewall was found; no firewall rules are needed. If a firewall is turned on later, run the installer again.	Firewall: hakuna firewall inayotumika iliyopatikana; hakuna kanuni zinazohitajika. Ikiwa firewall itawashwa baadaye, endesha kisakinishi tena.
+cbb does not manage %s rules: rules added at run time do not survive a restart.	cbb haisimamii kanuni za %s: kanuni zinazoongezwa wakati wa kuendesha hazidumu baada ya kuwasha upya.
+ (kept from an earlier installation)	 (imebaki kutoka usakinishaji wa awali)
+With Yes, CBB adds these rules, keeps them current on every update and removes them on uninstall.	Ukijibu Ndiyo, CBB huongeza kanuni hizi, huzisasisha kila sasisho na kuziondoa wakati wa kuondoa usakinishaji.
+run it with sudo	iendeshe kwa sudo
+no ufw or firewalld is active; nothing was added.	si ufw wala firewalld inayotumika; hakuna kilichoongezwa.
+%s needs root; a rootless install has no console or uinput helper	%s inahitaji root; usakinishaji bila root hauna msaidizi wa console au uinput
+--rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless husakinisha kwa mtumiaji wako mwenyewe: iendeshe bila sudo. Kwa sudo, install.sh bila --rootless husakinisha huduma ya mfumo, ambayo ni salama zaidi.
+a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	usakinishaji bila root huendeshwa kama kitengo cha mtumiaji cha systemd, na kipindi hiki hakina msimamizi wa mtumiaji wa systemd; ingia kwenye eneo-kazi au kupitia ssh kisha uiendeshe tena
+--home-cgnat is for the full member	--home-cgnat ni kwa mwanachama kamili
+CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	CBB imesakinishwa kwa mfumo wote hapa (%s), na kifaa kimoja huendesha huduma moja; iondoe kwanza au uibakize
+the desktop agent did not start; it starts at your next login	wakala wa eneo-kazi haukuanza; utaanza utakapoingia tena
+CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB huendeshwa ukiwa umeingia. Ili iendelee kuendeshwa baada ya kutoka, msimamizi anaendesha: sudo loginctl enable-linger %s
+CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	CBB inaendeshwa kwa ajili ya %s kwenye mlango wa TCP %s, imesakinishwa bila root: haiwezi kamwe kuwa mzizi wa kikundi, msimamizi au kitovu. Ikiwa firewall inazuia miunganisho inayoingia hapa, msimamizi anaruhusu TCP %s na UDP 5353 kutoka mtandao wa nyumbani. Kuiondoa: %s
+For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	Kwa kunakili na kubandika katika tmux, ongeza mstari huu kwenye ~/.tmux.conf: source-file -q %s/tmux.conf
+Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	Kinachofuata: angalia member/README.md; kwa ufupi, %s pair hapa, na uchanganue msimbo wake wa QR kwa programu ya simu.
+Next: run %s pair and scan its QR code with the CBB app on your phone.	Kinachofuata: endesha %s pair na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako.
+this archive has no install-rootless.sh, so it cannot install without root	kumbukumbu hii haina install-rootless.sh, kwa hiyo haiwezi kusakinisha bila root
+systemd is required	systemd inahitajika
+the full member is installed here, and the lite member cannot use its keys; remove it first: %s	mwanachama kamili amesakinishwa hapa, na mwanachama mwepesi hawezi kutumia funguo zake; mwondoe kwanza: %s
+the lite member is installed here, and the full member cannot use its keys; remove it first: %s	mwanachama mwepesi amesakinishwa hapa, na mwanachama kamili hawezi kutumia funguo zake; mwondoe kwanza: %s
+an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	akaunti iitwayo cbb ipo hapa na si ya huduma hii (maelezo yake si "cbb service"); ingepata funguo za kikundi. Ibadilishe jina au iondoe, kisha endesha install.sh tena.
+a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	kikundi kiitwacho cbb kipo hapa chenye wanachama (%s), na hakuna akaunti ya huduma; wangefikia huduma. Badilisha jina la kikundi au kiondoe, kisha endesha install.sh tena.
+Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	Haijasakinishwa: programu ya trei, inayohitaji GTK 4 na WebKitGTK 6.0 (Debian na Ubuntu: %s; Fedora: %s). Zisakinishe kisha endesha hii tena ili kuiongeza.
+--uinput is for the full member, which runs the desktop connector	--uinput ni kwa mwanachama kamili, anayeendesha kiunganishi cha eneo-kazi
+could not load the uinput module now; it loads at the next boot	imeshindwa kupakia moduli ya uinput sasa; itapakiwa wakati wa kuwasha unaofuata
+100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	100.64.0.0/10 inahesabiwa kama mtandao wa nyumbani kwenye kifaa hiki (--home-cgnat on).
+New member and admin keys of this device go into its TPM.	Funguo mpya za mwanachama na msimamizi za kifaa hiki huwekwa katika TPM yake.
+CBB uses TCP port %s instead of 8764. If a firewall on the network limits incoming connections, allow TCP %s from the home network.	CBB inatumia mlango wa TCP %s badala ya 8764. Ikiwa firewall kwenye mtandao inazuia miunganisho inayoingia, ruhusu TCP %s kutoka mtandao wa nyumbani.
+the uinput helper did not start; see journalctl -u cbb-uinput	msaidizi wa uinput haukuanza; angalia journalctl -u cbb-uinput
+the desktop agent of %s did not start again; it starts at their next login	wakala wa eneo-kazi wa %s haukuanza tena; utaanza watakapoingia tena
+cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow imeshindwa; endesha sudo cbb global allow huduma ikishaanza.
+CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB inaendeshwa kwenye mlango wa TCP %s. Kuiondoa: sudo sh %s/uninstall.sh
+Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	Kinachofuata: angalia member/README.md; kwa ufupi, sudo -u cbb %s pair hapa, na uchanganue msimbo wake wa QR kwa programu ya simu.
+Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	Kinachofuata: endesha sudo %s pair na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako; bila programu, angalia docs/guide/without-app.md.
+CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika %s/cbb kwa usakinishaji upya; --purge huziondoa.
+CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika /var/lib/cbb kwa usakinishaji upya; --purge huziondoa.
+%s does not run on this Mac	%s haiendeshi kwenye Mac hii
+%s was built without cgo, so it cannot link this Mac's clipboard; use a release build, or build it with CGO_ENABLED=1	%s ilijengwa bila cgo, kwa hiyo haiwezi kuunganishwa na ubao wa kunakili wa Mac hii; tumia toleo rasmi, au uijenge kwa CGO_ENABLED=1
+--in-place needs a path of letters, digits and / . _ + -, not %s	--in-place inahitaji njia ya herufi, tarakimu na / . _ + -, si %s
+%s is a link, likely Homebrew's; run this with --in-place %s	%s ni kiungo, huenda cha Homebrew; endesha hii kwa --in-place %s
+100.64.0.0/10 counts as the home network on this Mac (--home-cgnat on).	100.64.0.0/10 inahesabiwa kama mtandao wa nyumbani kwenye Mac hii (--home-cgnat on).
+Firewall: the macOS application firewall (on). CBB requires this rule:	Firewall: firewall ya programu ya macOS (imewashwa). CBB inahitaji kanuni hii:
+Firewall: the macOS application firewall (off). CBB requires this rule:	Firewall: firewall ya programu ya macOS (imezimwa). CBB inahitaji kanuni hii:
+  1. Allow incoming connections to %s. Purpose: connections from the group's devices on TCP %s and finding them on UDP 5353 (mDNS). The application firewall allows a program on every port and from every address; CBB itself accepts only the home network.	  1. Ruhusu miunganisho inayoingia kwa %s. Lengo: miunganisho kutoka kwa vifaa vya kikundi kwenye TCP %s na kuvipata kwenye UDP 5353 (mDNS). Firewall ya programu huruhusu programu kwenye kila mlango na kutoka kila anwani; CBB yenyewe hukubali mtandao wa nyumbani pekee.
+With Yes, CBB adds this rule, keeps it current on every update and removes it on uninstall.	Ukijibu Ndiyo, CBB huongeza kanuni hii, huisasisha kila sasisho na kuiondoa wakati wa kuondoa usakinishaji.
+Add this rule now? [y/N]	Ongeza kanuni hii sasa? [y/N]
+Added the rule above%s. CBB manages it from now on.	Kanuni iliyo hapo juu imeongezwa%s. Kuanzia sasa CBB inaisimamia.
+No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	Hakuna kanuni ya firewall iliyoongezwa. CBB hufanya kazi tu wakati firewall inaruhusu kanuni iliyo hapo juu. Kuiongeza kwa mkono, endesha:
+To let CBB add and manage it, run the installer again with --express.	Ili CBB iiongeze na kuisimamia, endesha kisakinishi tena kwa --express.
+CBB is running on TCP port %s, in its group.	CBB inaendeshwa kwenye mlango wa TCP %s, katika kikundi chake.
+CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	CBB inaendeshwa kwenye mlango wa TCP %s. Jiunge na kikundi: sudo cbb pair, na uchanganue msimbo wake wa QR kwa simu au andika msimbo kutoka cbb pair kwenye mzizi wa kikundi au kwa msimamizi; au anzisha kikundi: sudo cbb new.
+CBB is removed, with this Mac's keys; it left its group.	CBB imeondolewa, pamoja na funguo za Mac hii; imeondoka kwenye kikundi chake.
+CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika %s/state kwa usakinishaji upya; --purge huziondoa.
+this installer is for OpenWrt	kisakinishi hiki ni cha OpenWrt
+OpenWrt 25.12 or later is required (it installs packages with apk)	OpenWrt 25.12 au jipya zaidi inahitajika (husakinisha vifurushi kwa apk)
+%s does not run on this router; is it built for %s?	%s haiendeshi kwenye ruta hii; je, imejengwa kwa ajili ya %s?
+CBB is installed; procd is not running here, so it starts at the next boot.	CBB imesakinishwa; procd haiendeshwi hapa, kwa hiyo itaanza wakati wa kuwasha unaofuata.
+the service did not answer within 40 s: %s	huduma haikujibu ndani ya sekunde 40: %s
+see logread -e cbb	angalia logread -e cbb
+CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB inaendeshwa kwenye mlango wa TCP %s, katika eneo la lan. Kuiondoa: sh /usr/share/cbb/uninstall.sh
+Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	Vifurushi vilivyo nje ya vyanzo vya OpenWrt huachwa na attended sysupgrade (ASU, owut): isakinishe tena baada ya uboreshaji huo.
+Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	Kinachofuata: endesha su -s /bin/sh cbb -c 'cbb pair -name router' na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako.
+Next: run cbb pair and scan its QR code with the CBB app on your phone.	Kinachofuata: endesha cbb pair na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako.
+CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika /etc/cbb kwa usakinishaji upya; --purge huziondoa.
+This device is in no group yet, so it starts pairing now (--no-pair skips this).	Kifaa hiki bado hakimo katika kikundi chochote, kwa hiyo kinaanza kuoanisha sasa (--no-pair huruka hili).
+could not record how CBB was installed; cbb update takes it as get.sh	imeshindwa kurekodi jinsi CBB ilivyosakinishwa; cbb update itaichukulia kama get.sh
+automatic updates are on or off, not %s	masasisho ya kiotomatiki ni on au off, si %s
+CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB inaweza kukagua mara moja kwa siku toleo lililosainiwa na mradi na kulisakinisha; ukaguzi huo huiambia GitHub anwani ya kifaa hiki, kama upakuaji wowote.
+Update automatically? [y/N]	Sasisha kiotomatiki? [y/N]
+No terminal to answer on; not now. Later: %scbb update -auto on	Hakuna terminal ya kujibu; si sasa. Baadaye: %scbb update -auto on
+could not turn automatic updates %s; run %scbb update -auto %s	imeshindwa kuweka masasisho ya kiotomatiki %s; endesha %scbb update -auto %s
+starting	inaanza
+a key is not P-256	ufunguo si P-256
+%s is not a valid release file; not installing	%s si faili sahihi ya toleo; haisakinishwi
+%s is not signed by the project's key; not installing	%s haijasainiwa kwa ufunguo wa mradi; haisakinishwi
+keys.json holds a key whose use is empty; not installing	keys.json ina ufunguo ambao matumizi yake ni tupu; haisakinishwi
+checking for administrator rights	inakagua haki za msimamizi
+run it in a PowerShell opened with "Run as administrator"	iendeshe katika PowerShell iliyofunguliwa kwa "Run as administrator"
+finding the architecture	inatambua usanifu
+finding the latest release	inatafuta toleo la hivi karibuni
+downloading %s (%s)	inapakua %s (%s)
+checking %s against SHA256SUMS	inakagua %s dhidi ya SHA256SUMS
+checking the release's signature	inakagua sahihi ya toleo
+checking the build attestation of %s	inakagua uthibitisho wa ujenzi wa %s
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the build attestation	CBB_ATTESTATION=require inahitaji gh, ukiwa umeingia (gh auth login), ili kukagua uthibitisho wa ujenzi
+Not checked: the build attestation of the archive (it needs gh, signed in). SHA256SUMS matched.	Haijakaguliwa: uthibitisho wa ujenzi wa kumbukumbu (unahitaji gh, ukiwa umeingia). SHA256SUMS ililingana.
+unpacking %s	inafungua %s
+running install.ps1	inaendesha install.ps1
+install.ps1 exited with %s	install.ps1 imetoka na %s
+get.ps1: %s failed: %s	get.ps1: %s imeshindwa: %s
+For the full error: $env:CBB_ERROR_DETAILS = "1", and run it again.	Kwa hitilafu kamili: $env:CBB_ERROR_DETAILS = "1", kisha iendeshe tena.
+install.ps1: %s failed: %s	install.ps1: %s imeshindwa: %s
+Run it again with -Details for the full error.	Iendeshe tena kwa -Details kwa hitilafu kamili.
+%s %s exited with %s: %s	%s %s imetoka na %s: %s
+install.ps1: run it in a PowerShell opened with "Run as administrator".	install.ps1: iendeshe katika PowerShell iliyofunguliwa kwa "Run as administrator".
+install.ps1: -Port takes a port from 1024 to 65535.	install.ps1: -Port inachukua mlango kutoka 1024 hadi 65535.
+checking the binaries	inakagua faili za binary
+cbbw.exe is missing beside %s	cbbw.exe haipo kando ya %s
+%s is not built for Windows: %s	%s haijajengwa kwa Windows: %s
+finding the signed-in user	inatambua mtumiaji aliyeingia
+stopping cbb	inasimamisha cbb
+copying the files to %s	inanakili faili kwenda %s
+adding cbb to PATH	inaongeza cbb kwenye PATH
+making the %s group	inaunda kikundi %s
+adding %s to the %s group	inaongeza %s kwenye kikundi %s
+net localgroup %s %s /add exited with %s: %s	net localgroup %s %s /add imetoka na %s: %s
+creating the service	inaunda huduma
+setting the service's path failed with %s	kuweka njia ya huduma kumeshindwa na %s
+setting the port	inaweka mlango
+100.64.0.0/10 counts as the home network on this PC (-HomeCgnat on).	100.64.0.0/10 inahesabiwa kama mtandao wa nyumbani kwenye PC hii (-HomeCgnat on).
+narrowing %s	inabana %s
+%s was not the administrators' own; it is now %s	%s haikuwa mali ya wasimamizi; sasa ni %s
+allowing cbb in Windows Firewall	inaruhusu cbb katika Windows Firewall
+the local subnet	subnet ya ndani
+the local subnet and 100.64.0.0/10	subnet ya ndani na 100.64.0.0/10
+Firewall: Windows Firewall (on for %s). CBB requires these rules:	Firewall: Windows Firewall (imewashwa kwa %s). CBB inahitaji kanuni hizi:
+Firewall: Windows Firewall (off). CBB requires these rules:	Firewall: Windows Firewall (imezimwa). CBB inahitaji kanuni hizi:
+  1. Allow incoming TCP %s from %s to %s. Purpose: connections from the group's devices.	  1. Ruhusu TCP %s inayoingia kutoka %s kwenda %s. Lengo: miunganisho kutoka kwa vifaa vya kikundi.
+  2. Allow incoming UDP 5353 from %s to %s. Purpose: finding the group's devices (mDNS).	  2. Ruhusu UDP 5353 inayoingia kutoka %s kwenda %s. Lengo: kupata vifaa vya kikundi (mDNS).
+Add these rules now? [y/N]	Ongeza kanuni hizi sasa? [y/N]
+Add these rules now? [y/N] No console to answer on; taken as No.	Ongeza kanuni hizi sasa? [y/N] Hakuna console ya kujibu; imechukuliwa kama Hapana.
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run in an administrator PowerShell:	Hakuna kanuni za firewall zilizoongezwa. CBB hufanya kazi tu wakati firewall inaruhusu kanuni zilizo hapo juu. Kuziongeza kwa mkono, endesha katika PowerShell ya msimamizi:
+To let CBB add and manage them, run the installer again with -Express ($env:CBB_FIREWALL = "express" for get.ps1).	Ili CBB iziongeze na kuzisimamia, endesha kisakinishi tena kwa -Express ($env:CBB_FIREWALL = "express" kwa get.ps1).
+CBB also adds an outbound rule that keeps its service on the home network and, with cbb global on, its group's servers.	CBB pia huongeza kanuni ya kutoka inayoweka huduma yake kwenye mtandao wa nyumbani na, cbb global ikiwa imewashwa, kwenye seva za kikundi chake.
+keeping the service on the home network	inaweka huduma kwenye mtandao wa nyumbani
+starting the service	inaanzisha huduma
+starting the agent with every sign-in	inaweka wakala kuanza kila unapoingia
+starting the agent for %s	inaanzisha wakala kwa ajili ya %s
+starting the tray app for %s	inaanzisha programu ya trei kwa ajili ya %s
+The agent did not start now (%s); it starts when %s signs in again.	Wakala haukuanza sasa (%s); utaanza %s atakapoingia tena.
+The tray app did not start now (%s); it starts when %s signs in again.	Programu ya trei haikuanza sasa (%s); itaanza %s atakapoingia tena.
+starting the tray app with every sign-in	inaweka programu ya trei kuanza kila unapoingia
+adding CBB to the Start menu	inaongeza CBB kwenye menyu ya Start
+registering the uninstaller	inasajili kiondoa-usakinishaji
+waiting for the service	inasubiri huduma
+the service does not answer; its log is %s	huduma haijibu; kumbukumbu yake ni %s
+writing the outbound rule for what the service reaches now	inaandika kanuni ya kutoka kwa kile huduma inachofikia sasa
+cbb global allow exited with %s	cbb global allow imetoka na %s
+recording how CBB was installed	inarekodi jinsi CBB ilivyosakinishwa
+Could not record how CBB was installed; cbb update takes it as get.ps1.	Imeshindwa kurekodi jinsi CBB ilivyosakinishwa; cbb update itaichukulia kama get.ps1.
+setting automatic updates	inaweka masasisho ya kiotomatiki
+Update automatically? [y/N] No console to answer on; not now. Later: cbb update -auto on	Sasisha kiotomatiki? [y/N] Hakuna console ya kujibu; si sasa. Baadaye: cbb update -auto on
+Could not turn automatic updates %s; run cbb update -auto %s as administrator.	Imeshindwa kuweka masasisho ya kiotomatiki %s; endesha cbb update -auto %s kama msimamizi.
+CBB %s is running on TCP port %s; %s may use it.	CBB %s inaendeshwa kwenye mlango wa TCP %s; %s wanaweza kuitumia.
+It stays in its group.	Inabaki katika kikundi chake.
+Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	Kinachofuata, katika terminal iliyofunguliwa kama msimamizi: cbb pair, na uchanganue msimbo wake wa QR kwa simu au andika msimbo kutoka cbb pair kwenye mzizi wa kikundi au kwa msimamizi; au anzisha kikundi: cbb new.
+To remove it: Settings, Apps, CBB, Uninstall.	Kuiondoa: Settings, Apps, CBB, Uninstall.
+Y	Y
+Yes	Ndiyo
+y	y
+yes	ndiyo
+uninstall.ps1: %s failed: %s	uninstall.ps1: %s imeshindwa: %s
+deleting the service	inafuta huduma
+stopping the agents and the tray app	inasimamisha mawakala na programu ya trei
+removing the update task and cbb update's folder	inaondoa kazi ya sasisho na folda ya cbb update
+removing the firewall rules	inaondoa kanuni za firewall
+removing the sign-in entries, the Start menu shortcut and the uninstaller entry	inaondoa maingizo ya kuingia, njia ya mkato ya menyu ya Start na ingizo la kiondoa-usakinishaji
+removing cbb from PATH	inaondoa cbb kwenye PATH
+removing %s	inaondoa %s
+removing %s and the %s group	inaondoa %s na kikundi %s
+CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika %s kwa usakinishaji upya; -Purge huziondoa.

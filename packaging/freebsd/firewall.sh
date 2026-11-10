@@ -31,6 +31,12 @@
 # OPNsense's ruleset, and the rules go into the anchor as above. pfSense
 # gets the rules printed, to add in Firewall > Rules: it is unsupported.
 set -eu
+# The messages in the user's language (packaging/l10n.sh, beside this file
+# where install.sh put it, or in the archive), read before LC_ALL=C below.
+cbb_l10n=$(cd "$(dirname "$0")" && pwd)/l10n
+[ -f "$cbb_l10n.sh" ] || cbb_l10n=${cbb_l10n%/l10n}/../l10n
+# shellcheck source=packaging/l10n.sh
+. "$cbb_l10n.sh"
 export LC_ALL=C
 
 etc=/usr/local/etc/cbb
@@ -88,8 +94,8 @@ nets() {
 
 rules() {
 	from=$(nets | paste -sd, - | sed 's/,/, /g')
-	echo "  1. Allow incoming TCP $1 from $from. Purpose: connections from the group's devices."
-	echo "  2. Allow incoming UDP 5353 from $from. Purpose: finding the group's devices (mDNS)."
+	say "  1. Allow incoming TCP %s from %s. Purpose: connections from the group's devices." "$1" "$from"
+	say "  2. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS)." "$from"
 }
 
 # anchor writes the pf anchor: the home rules for PORT (none if empty) and
@@ -193,7 +199,7 @@ close() {
 	case $k in
 	pf | ipfw | opnsense)
 		apply_closed "$k"
-		echo "$k: removed the CBB rules."
+		say "%s: removed the CBB rules." "$k"
 		;;
 	esac
 }
@@ -249,18 +255,18 @@ hub_close() {
 	else
 		apply_closed "$k"
 	fi
-	echo "Firewall: closed the hub's UDP port $p."
+	say "Firewall: closed the hub's UDP port %s." "$p"
 }
 
 commands() {
 	case $(kind) in
 	opnsense | pfsense)
-		echo "  In Firewall > Rules, on each interface of the home network (LAN and the others):"
-		echo "    Pass, protocol TCP, source $(nets | paste -sd, - | sed 's/,/, /g'), destination This Firewall, port $1"
-		echo "    Pass, protocol UDP, the same sources, destination This Firewall, port 5353"
+		say "  In Firewall > Rules, on each interface of the home network (LAN and the others):"
+		say "    Pass, protocol TCP, source %s, destination This Firewall, port %s" "$(nets | paste -sd, - | sed 's/,/, /g')" "$1"
+		say "    Pass, protocol UDP, the same sources, destination This Firewall, port 5353"
 		;;
 	pf)
-		echo "  Add to /etc/pf.conf, before the rules that block, and run pfctl -f /etc/pf.conf:"
+		say "  Add to /etc/pf.conf, before the rules that block, and run pfctl -f /etc/pf.conf:"
 		echo "    table <cbb_home> { $(nets | paste -sd' ' -) }"
 		echo "    pass in quick proto tcp from <cbb_home> to port $1"
 		echo "    pass in quick proto udp from <cbb_home> to port 5353"
@@ -272,14 +278,14 @@ commands() {
 			echo "  ipfw add allow tcp from $net to me $1 in $v"
 			echo "  ipfw add allow udp from $net to me 5353 in $v"
 		done
-		echo "  and the same lines in the script that firewall_script in rc.conf names, to keep them."
+		say "  and the same lines in the script that firewall_script in rc.conf names, to keep them."
 		;;
 	esac
 }
 
 hub_commands() {
 	case $(kind) in
-	opnsense | pfsense) echo "  In Firewall > Rules on WAN: Pass, protocol UDP, source any, destination WAN address, port $1" ;;
+	opnsense | pfsense) say "  In Firewall > Rules on WAN: Pass, protocol UDP, source any, destination WAN address, port %s" "$1" ;;
 	pf) echo "  pass in quick proto udp to port $1   (in /etc/pf.conf, then pfctl -f /etc/pf.conf)" ;;
 	ipfw) echo "  ipfw add allow udp from any to me $1 in" ;;
 	esac
@@ -287,24 +293,21 @@ hub_commands() {
 
 # ask reads yes or no from the terminal, no by default and without one.
 ask() {
-	printf '%s [y/N] ' "$1"
+	t "%s [y/N]" "$1"
+	printf ' '
 	reply=
 	if (: </dev/tty) 2>/dev/null; then
 		read -r reply </dev/tty || reply=
 	else
 		echo
-		echo "No terminal to answer on; taken as No."
+		say "No terminal to answer on; taken as No."
 		return 2
 	fi
-	case $reply in
-	y | Y | yes | Yes | YES) return 0 ;;
-	*) return 1 ;;
-	esac
+	is_yes "$reply"
 }
 
 manual() {
-	echo "No firewall rules were added. CBB works only while the firewall allows the rules above."
-	echo "To add them by hand:"
+	say "No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand:"
 	commands "$1"
 }
 
@@ -313,15 +316,14 @@ setup() {
 	k=$(kind)
 	if [ "$k" = none ]; then
 		close
-		echo "Firewall: no active firewall was found; no firewall rules are needed."
-		echo "If pf or ipfw is turned on later, run the installer again."
+		say "Firewall: no active firewall was found; no firewall rules are needed. If pf or ipfw is turned on later, run the installer again."
 		return
 	fi
-	echo "Firewall: $k (active). CBB requires these rules:"
+	say "Firewall: %s (active). CBB requires these rules:" "$k"
 	rules "$port"
 	if [ "$k" = pfsense ]; then
 		close
-		echo "CBB does not change pfSense's rules, and runs there unsupported. Add them by hand:"
+		say "CBB does not change pfSense's rules, and runs there unsupported. Add them by hand:"
 		commands "$port"
 		return
 	fi
@@ -329,24 +331,24 @@ setup() {
 	kept=$(cat "$answer" 2>/dev/null || true)
 	how=
 	case $mode in
-	express) yes=yes how=" (express installation)" ;;
+	express) yes=yes how=$(t " (express installation)") ;;
 	no) yes=no ;;
 	*)
 		case $kept in
-		yes | no) yes=$kept how=" (as answered before)" ;;
+		yes | no) yes=$kept how=$(t " (as answered before)") ;;
 		*)
 			if [ "$k" = opnsense ]; then
-				echo "With Yes, CBB keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both."
+				say "With Yes, CBB keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both."
 			elif [ "$k" = pf ]; then
-				echo "With Yes, CBB keeps these rules in its own pf anchor and adds the lines that load it at the end of $pfconf; uninstalling removes both."
+				say "With Yes, CBB keeps these rules in its own pf anchor and adds the lines that load it at the end of %s; uninstalling removes both." "$pfconf"
 			else
-				echo "With Yes, CBB adds these rules to ipfw's set $set17 at every start, and removes them on uninstall."
+				say "With Yes, CBB adds these rules to ipfw's set %s at every start, and removes them on uninstall." "$set17"
 			fi
-			if ask "Add these rules now?"; then
+			if ask "$(t "Add these rules now?")"; then
 				yes=yes
 			elif [ $? -eq 2 ]; then
 				manual "$k" "$port"
-				echo "To let CBB add and manage them, run the installer again with --express."
+				say "To let CBB add and manage them, run the installer again with --express."
 				return
 			else
 				yes=no
@@ -359,11 +361,11 @@ setup() {
 	chmod 0644 "$answer"
 	if [ "$yes" = yes ]; then
 		open "$port"
-		echo "Added the rules above$how. CBB manages them from now on."
+		say "Added the rules above%s. CBB manages them from now on." "$how"
 	else
 		close
 		manual "$k" "$port"
-		echo "To let CBB add and manage them, run the installer again with --express."
+		say "To let CBB add and manage them, run the installer again with --express."
 	fi
 }
 
@@ -393,7 +395,7 @@ hub-commands)
 	;;
 esac
 if [ "$(id -u)" -ne 0 ]; then
-	echo "firewall.sh: run it as root" >&2
+	note firewall.sh "run it as root"
 	exit 1
 fi
 case $cmd in
@@ -404,7 +406,7 @@ setup)
 	;;
 open)
 	[ $# -eq 1 ] || usage
-	open "$1" || echo "firewall.sh: neither pf nor ipfw is active; nothing was added." >&2
+	open "$1" || note firewall.sh "neither pf nor ipfw is active; nothing was added."
 	;;
 close)
 	[ $# -eq 0 ] || usage
