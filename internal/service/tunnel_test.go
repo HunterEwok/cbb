@@ -5,7 +5,6 @@ package service
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -443,7 +442,7 @@ func TestAwayThroughForwarder(t *testing.T) {
 	})
 	// VLESS comes with AmneziaWG, which goes first over UDP.
 	t.Run("vless", func(t *testing.T) {
-		testAwayThroughForwarder(t, awayWay{vless: "reality", obfuscated: true, overVLESS: true})
+		testAwayThroughForwarder(t, awayWay{vless: "xhttp", obfuscated: true, overVLESS: true})
 	})
 	// A forwarder without VLESS registers a hub that asked for it, which
 	// then offers AmneziaWG over UDP alone.
@@ -453,7 +452,7 @@ func TestAwayThroughForwarder(t *testing.T) {
 	// Where no UDP passes, the deck, whose hub hides its tunnel with
 	// AmneziaWG and tries UDP first, falls back to VLESS.
 	t.Run("vless without UDP", func(t *testing.T) {
-		testAwayThroughForwarder(t, awayWay{vless: "reality", obfuscated: true, overVLESS: true}, "CBB_TEST_DEAD_UDP="+deadUDP(t))
+		testAwayThroughForwarder(t, awayWay{vless: "xhttp", obfuscated: true, overVLESS: true}, "CBB_TEST_DEAD_UDP="+deadUDP(t))
 	})
 	// A hub set with no switch at all, at a forwarder behind a web server,
 	// is reached over XHTTP where no UDP passes.
@@ -473,7 +472,7 @@ func deadUDP(t *testing.T) string {
 }
 
 // awayWay is how testAwayThroughForwarder's hub hides its tunnel: its
-// off-switches, the forwarder's VLESS ("", "reality" or "xhttp"), and what
+// off-switches, the forwarder's VLESS ("" or "xhttp"), and what
 // the deck's offer then says.
 type awayWay struct {
 	obfuscateOff, vlessOff bool
@@ -491,13 +490,9 @@ func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 	}
 	state := filepath.Join(t.TempDir(), "state.json")
 	cfg := forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: state}
-	switch way.vless {
-	case "reality":
-		cfg.VLESS = &forward.VLESSConfig{Listen: "127.0.0.1:0", Site: vlesstest.Site, Dest: vlesstest.Decoy(t)}
-		rand.Read(cfg.VLESS.Key[:])
-	case "xhttp":
-		// The web server in front, whose CA the deck trusts through
-		// SSL_CERT_FILE, passes the path to the forwarder's VLESS.
+	if way.vless != "" {
+		// VLESS over XHTTP behind a TLS web server whose CA the deck
+		// trusts through SSL_CERT_FILE.
 		path, err := tunnel.NewVLESSPath()
 		if err != nil {
 			t.Fatal(err)
@@ -518,13 +513,6 @@ func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 	}
 	f, err := forward.Listen(cfg)
 	if err != nil {
-		t.Fatal(err)
-	}
-	// A client that comes before the forwarder has learned the site
-	// waits for it, and its handshakes with it.
-	rctx, rcancel := context.WithTimeout(context.Background(), time.Minute)
-	defer rcancel()
-	if err := f.Ready(rctx); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())

@@ -269,7 +269,7 @@ class HubOnPhoneTest {
         val v = tunnels.started.last()
         assertEquals(OBFUSCATION, v.obfuscation)
         assertEquals(VLESS_ID, v.vlessID)
-        v.report = """{"registered":true,"vless":{"endpoint":"203.0.113.9:443","public_key":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk=","short_id":"ab","server_name":"www.example.com","id":"$VLESS_ID"}}"""
+        v.report = """{"registered":true,"vless":{"transport":"xhttp","endpoint":"203.0.113.9:443","server_name":"cbb.tools","path":"/banMEJvnYJJap8S/AbCdEfGhIjKlMnOpQr","id":"$VLESS_ID"}}"""
         assertEquals(HubOnPhone.Status.REGISTERED, h.status(paused = false).first)
         assertTrue(h.offer(pc, ByteArray(32) { 2 })?.vless?.contains("203.0.113.9:443") == true)
 

@@ -317,10 +317,6 @@ struct VlessAnswer {
     #[serde(default)]
     transport: String,
     port: u16,
-    #[serde(with = "certs::b64::opt", default)]
-    public_key: Option<Vec<u8>>,
-    #[serde(default)]
-    short_id: String,
     server_name: String,
     #[serde(default)]
     path: String,
@@ -484,23 +480,12 @@ fn vless_offer(endpoint: SocketAddr, id: &str, v: VlessAnswer) -> Value {
         m.insert("transport".into(), Value::from(v.transport));
     }
     m.insert("endpoint".into(), Value::from(SocketAddr::new(endpoint.ip(), v.port).to_string()));
-    if let Some(k) = v.public_key {
-        m.insert("public_key".into(), Value::from(base64_std(&k)));
-    }
-    if !v.short_id.is_empty() {
-        m.insert("short_id".into(), Value::from(v.short_id));
-    }
     m.insert("server_name".into(), Value::from(v.server_name));
     if !v.path.is_empty() {
         m.insert("path".into(), Value::from(v.path));
     }
     m.insert("id".into(), Value::from(id));
     Value::Object(m)
-}
-
-fn base64_std(b: &[u8]) -> String {
-    use base64::Engine;
-    base64::engine::general_purpose::STANDARD.encode(b)
 }
 
 /// The TLS connection of a registration with a server known by the pin

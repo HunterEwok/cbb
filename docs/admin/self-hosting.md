@@ -120,13 +120,10 @@ only its key and a table of hashed tags (see [What the server keeps](#what-the-s
 ### VLESS on the forwarder
 
 For networks that block VPNs ([Networks that block VPNs](../guide/blocked-networks.md)),
-the forwarder also takes VLESS, in one of two ways. A hub asks for VLESS unless it runs with
-`-no-vless`, and gets the rest from the forwarder, whichever way it runs.
+the forwarder also takes VLESS over XHTTP, behind the web server of a site of yours. A hub
+asks for VLESS unless it runs with `-no-vless`, and gets the rest from the forwarder.
 
-#### Behind your site's web server (XHTTP)
-
-If the server already has a website with its certificate on TCP 443, as `cbb.tools` does,
-the web server passes one path to the forwarder, which listens only on the loopback
+The server needs a website with its certificate on TCP 443, as `cbb.tools` has: the web server passes one path to the forwarder, which listens only on the loopback
 address; to the network it is HTTPS to your site. The site's name must point at the
 forwarder's own address.
 
@@ -177,34 +174,6 @@ location /PATH-FROM-THE-LOG {
   server's port if it is not 443.
 - The web server sees the group's VLESS user ID and WireGuard's encrypted packets, nothing
   more; `access_log off` keeps even that out of its log.
-
-#### Without a web server (REALITY)
-
-On a server without a site of its own, the forwarder takes VLESS with REALITY on TCP 443
-itself, borrowing the TLS of a well-known site:
-
-```sh
-echo 'CBB_FORWARD_FLAGS=-vless-site www.example.com' | sudo tee /etc/cbb/forward.env
-sudo systemctl edit cbb-forward      # add the three lines below under [Service]
-sudo systemctl restart cbb-forward
-```
-
-```ini
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-PrivateUsers=no
-```
-
-The first two lines let it take port 443; the third is needed because a capability inside
-the unit's own user namespace does not cover the host's network, so the bind would be
-refused. The unit gives it no privileges otherwise.
-
-(In Docker, add `"-vless-site", "www.example.com"` to `command:` and publish `443:443/tcp`.)
-
-- The site must support TLS 1.3 and must not be blocked where your devices travel. Big
-  sites people use every day are the best choice.
-- The REALITY key is kept in the forwarder's key file; nothing else to configure.
-- `-vless-listen ADDRESS:PORT` picks another port; 443 looks the most ordinary.
 
 ## A blind relay
 
@@ -305,7 +274,7 @@ release's digest in `image:` and run `up -d` again.
 the forwarder's `forward-state.json`) in `/var/lib/private/cbb-forward` or
 `/var/lib/private/cbb-relay`, or the Docker volume; and your `/etc/cbb/*.env`
 and drop-ins. To restore, put the files back in the same directory before the unit starts;
-systemd gives them to the unit's user. The forwarder's file also holds its REALITY key.
+systemd gives them to the unit's user. The forwarder's file also holds its XHTTP path.
 
 **Removing it**: `sudo systemctl disable --now cbb-forward` (or `cbb-relay`), delete the unit
 and its drop-ins in `/etc/systemd/system`, and `/var/lib/private/cbb-forward` if the key

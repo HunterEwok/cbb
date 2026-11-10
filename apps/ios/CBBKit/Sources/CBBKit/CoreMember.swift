@@ -755,6 +755,60 @@ public final class CoreMember: @unchecked Sendable {
                           sign: sign, as: Takeover.self)
     }
 
+    // The root's own records (cbb_core::root): the member builds and checks
+    // each, signs it with the root key public (DER) through sign, adds it to
+    // its records and sends it; the app then takes the member's records.
+
+    /// Sets how long a claim waits before it takes effect (0 to 7 days),
+    /// keeping the key level.
+    public func setTakeoverDelay(ms: Int64, public: Data, sign: @escaping (Data) throws -> Data) throws {
+        struct A: Encodable { var action = "takeover_delay", delay_ms: Int64, `public`: Data }
+        _ = try manage(A(delay_ms: ms, public: try Self.point(`public`)), sign: sign, as: Empty.self)
+    }
+
+    /// Sets the group's key level (proven, hardware or files), keeping the
+    /// takeover delay; never a level this phone's own keys do not pass. It
+    /// returns the admins and hubs whose keys the level would not let in, by
+    /// device ID: they stay until the user removes them.
+    @discardableResult
+    public func setKeyLevel(_ level: String, public: Data, sign: @escaping (Data) throws -> Data) throws -> [String] {
+        struct A: Encodable { var action = "key_level", level: String, `public`: Data }
+        struct R: Decodable { var below: [String]? }
+        return try manage(A(level: level, public: try Self.point(`public`)), sign: sign, as: R.self).below ?? []
+    }
+
+    /// Hands the group to the admin device, whose claim then takes effect at once.
+    public func handOver(to device: String, public: Data, sign: @escaping (Data) throws -> Data) throws {
+        struct A: Encodable { var action = "hand_over", device: String, `public`: Data }
+        _ = try manage(A(device: device, public: try Self.point(`public`)), sign: sign, as: Empty.self)
+    }
+
+    /// Makes the group's recovery key, which replaces the one before it, and
+    /// returns its sheet; nothing of the key stays in the core.
+    public func makeRecovery(public: Data, sign: @escaping (Data) throws -> Data) throws -> Core.RecoverySheet {
+        struct A: Encodable { var action = "make_recovery", `public`: Data }
+        return try manage(A(public: try Self.point(`public`)), sign: sign, as: Core.RecoverySheet.self)
+    }
+
+    /// Makes the group's recovery key from a key a YubiKey made (spki, a
+    /// SubjectPublicKeyInfo; Piv.generate): it returns the key's admin CA,
+    /// which goes into the YubiKey's slot.
+    public func recoveryFor(_ spki: Data, public: Data, sign: @escaping (Data) throws -> Data) throws -> Data {
+        struct A: Encodable { var action = "recovery_for", key: Data, `public`: Data }
+        struct R: Decodable { var admin_ca: Data? }
+        guard let ca = try manage(A(key: spki, public: try Self.point(`public`)), sign: sign, as: R.self).admin_ca else {
+            throw Core.Mismatch(reason: "the member's recovery key has no admin CA")
+        }
+        return ca
+    }
+
+    /// Removes the group's recovery key: the root revokes it, and a sheet
+    /// printed for it no longer works.
+    public func removeRecovery(public: Data, sign: @escaping (Data) throws -> Data) throws {
+        struct A: Encodable { var action = "remove_recovery", `public`: Data }
+        _ = try manage(A(public: try Self.point(`public`)), sign: sign, as: Empty.self)
+    }
+
     /// The signer of one manage call, which the core calls during it only.
     fileprivate final class Signing {
         let sign: (Data) throws -> Data

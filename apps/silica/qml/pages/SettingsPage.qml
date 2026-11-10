@@ -5,10 +5,10 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 // Settings (docs/apps.md, "Screens", Settings): the language, the
-// notifications, leaving the group, and about the app; seven taps on the
-// version show the switch for the error details; the advanced settings
-// switch shows why the phone does not sync. Everywhere, sync away from home,
-// is the globe on Home.
+// notifications, the root's settings, leaving the group, and about the app;
+// seven taps on the version show the switch for the error details; the
+// advanced settings switch shows why the phone does not sync. Everywhere,
+// sync away from home, is the globe on Home.
 // The colours follow the phone's ambience, as every Silica app's do.
 Page {
     id: page
@@ -102,6 +102,51 @@ Page {
             SectionHeader {
                 visible: app.group !== ""
                 text: qsTr("Group")
+            }
+            // The root's settings (cbb_core::root), each signed with the root
+            // key: how long a claim from a lost root waits, which keys may be
+            // admins, and the recovery key.
+            ComboBox {
+                id: delay
+                visible: app.root && app.member.running
+                label: qsTr("A claim to take the group over waits")
+                property var hours: [0, 1, 24, 72, 168]
+                currentIndex: Math.max(hours.indexOf(Math.round((app.member.rootView.delay_ms || 0) / 3600000)), 0)
+                menu: ContextMenu {
+                    Repeater {
+                        model: [qsTr("No time"), qsTr("1 hour"), qsTr("1 day"), qsTr("3 days"), qsTr("7 days")]
+                        MenuItem {
+                            text: modelData
+                            onClicked: if (delay.hours[index] * 3600000 !== app.member.rootView.delay_ms)
+                                           app.setTakeoverDelay(delay.hours[index])
+                        }
+                    }
+                }
+            }
+            ComboBox {
+                id: level
+                visible: app.root && app.member.running
+                label: qsTr("Keys an admin may keep")
+                description: app.belowLevel.length > 0
+                             ? qsTr("Some admins keep weaker keys; they stay until removed") : ""
+                property var levels: ["proven", "hardware", "files"]
+                currentIndex: Math.max(levels.indexOf(app.member.rootView.key_level || "hardware"), 0)
+                menu: ContextMenu {
+                    Repeater {
+                        model: [qsTr("Proven hardware only"), qsTr("Hardware"), qsTr("Hardware or a file")]
+                        MenuItem {
+                            text: modelData
+                            onClicked: if (level.levels[index] !== app.member.rootView.key_level)
+                                           app.setGroupKeyLevel(level.levels[index])
+                        }
+                    }
+                }
+            }
+            ValueButton {
+                visible: app.root && app.member.running
+                label: qsTr("Recovery key")
+                value: app.member.rootView.recovery ? qsTr("Made") : qsTr("None")
+                onClicked: pageStack.push(Qt.resolvedUrl("RecoveryPage.qml"))
             }
             // The root's key goes with it: the group then has no root until
             // an admin phone takes it over.

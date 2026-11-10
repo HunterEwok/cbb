@@ -137,15 +137,10 @@ func newAwayGroup(ctx context.Context, r *Report, f *Fleet, suite string, n int)
 	return newAwayGroupWith(ctx, r, f, suite, n, noVLESS)
 }
 
-// siteName is the well-known site whose TLS the fleet's forwarder borrows
-// for VLESS; the forge plays it on the servers' network.
-const siteName = "www.example.com"
-
-// The ways a fleet's forwarder takes VLESS: none, with REALITY borrowing
-// the site's TLS, or over XHTTP behind a web server of its own.
+// The ways a fleet's forwarder takes VLESS: none, or over XHTTP behind a
+// web server of its own.
 const (
 	noVLESS = iota
-	realityVLESS
 	xhttpVLESS
 )
 
@@ -178,23 +173,11 @@ func newAwayGroupWith(ctx context.Context, r *Report, f *Fleet, suite string, n 
 		if a.in, err = newInternet(ctx, f, f.net, a.away, servers); err != nil {
 			return err
 		}
-		var run []string
 		flags := ""
-		switch vless {
-		case xhttpVLESS:
+		if vless == xhttpVLESS {
 			flags = "-vless-xhttp " + xhttpName + " -vless-path " + xhttpPath + " -vless-mirror " + mirrorAddr
-		case realityVLESS:
-			site, err := forgeServer(ctx, f, servers, "-addr :443 site:"+siteName)
-			if err != nil {
-				return err
-			}
-			ip, err := fleetIPOn(ctx, site, servers)
-			if err != nil {
-				return err
-			}
-			run, flags = []string{"--add-host", siteName + ":" + ip}, "-vless-site "+siteName
 		}
-		if a.fwd, a.fwdKey, err = startForwarder(ctx, f, servers, run, flags); err != nil {
+		if a.fwd, a.fwdKey, err = startForwarder(ctx, f, servers, nil, flags); err != nil {
 			return err
 		}
 		if vless == xhttpVLESS {

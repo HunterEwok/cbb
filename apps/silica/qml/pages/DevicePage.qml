@@ -69,6 +69,14 @@ Page {
                                            function() { app.manage("make_admin", page.device.id) })
             }
             MenuItem {
+                // The root lets an admin's claim take effect at once (cbb_core::root).
+                visible: page.acts && app.root && page.device.admin && !page.device.frozen
+                         && app.member.rootView.handed_to !== page.device.device
+                text: qsTr("Hand the group over")
+                onClicked: remorse.execute(qsTr("Handing the group over to %1").arg(Devices.name(page.device)),
+                                           function() { app.handOver(page.device.device) })
+            }
+            MenuItem {
                 visible: page.acts && page.device.frozen
                 text: qsTr("Unfreeze")
                 onClicked: remorse.execute(qsTr("Unfreezing %1").arg(Devices.name(page.device)),
@@ -131,6 +139,12 @@ Page {
                     else
                         app.manage(checked ? "sync_off" : "sync_on", page.device.id)
                 }
+            }
+
+            DetailItem {
+                visible: app.root && app.member.rootView.handed_to === page.device.device
+                label: qsTr("The group is handed over")
+                value: qsTr("Its claim takes the group at once")
             }
 
             DetailItem {

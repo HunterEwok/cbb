@@ -557,7 +557,7 @@ mod tests {
         i.details = "panic: at 10.0.0.2 failed at member/src/net.rs:7:3".into();
         let r = report(&i).unwrap();
         let all = serde_json::to_string(&r).unwrap();
-        for secret in [
+        for private_part in [
             "Den's MacBook",
             "steamdeck",
             "192.168.0.175",
@@ -573,7 +573,7 @@ mod tests {
             "den@example.org",
             "10.0.0.2",
         ] {
-            assert!(!all.contains(secret), "{secret} left in {all}");
+            assert!(!all.contains(private_part), "{private_part} left in {all}");
         }
         assert!(all.contains("<name>") && all.contains("<address>") && all.contains("<data>"), "{all}");
         assert_eq!(r.at, "member/src/net.rs:7:3");

@@ -436,6 +436,13 @@ func TestLiteTakeover(t *testing.T) {
 
 	adminOn(t, cli, desk, "rust")
 	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
+	// The records say so as soon as they reach it; its admin CA comes in
+	// a message after them, which a slow member, as under qemu, may still
+	// be reading when the desk below is lost. Without it, it is no admin.
+	waitFor(t, "the Rust member's admin CA", func() bool {
+		id, err := group.Load(dir)
+		return err == nil && id.AdminCA != nil
+	})
 	// The laptop gets its admin CA over its connection to the desk, which
 	// the desk's new admin may have just made it open again.
 	laptopID := laptop.status(t).Device

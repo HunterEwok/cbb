@@ -8,6 +8,9 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -179,5 +182,93 @@ func TestRecovery(t *testing.T) {
 	waitFor(t, "a is the root at once", func() bool {
 		id, err := group.Load(a.dir)
 		return err == nil && id.IsRoot() && len(id.Roots) == 2
+	})
+}
+
+// TestFFIPhoneRestore: a new Aurora phone restores a computer's group with
+// the recovery sheet once the root is lost (cbb_restore): it takes and
+// checks the records from a member on a connection that carries records
+// only, starts its member with the certificate the recovery key issued it,
+// claims the group with the sheet (recover_with_sheet), and becomes the root
+// once the claim takes effect.
+func TestFFIPhoneRestore(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	var h hub
+	pi := startService(t, &h, "pi")
+	a := startService(t, &h, "a")
+	pairWith(t, pi, a)
+	noClaimWait(t, pi, a)
+	pi.stop()
+	sheet := addRecovery(t, pi)
+	pi = restartService(t, &h, pi)
+	waitFor(t, "a holds the recovery key's record", func() bool {
+		id, err := group.Load(a.dir)
+		if err != nil {
+			return false
+		}
+		recs, err := group.LoadRecords(a.dir, id.GroupCA.Cert)
+		return err == nil && recs.State().Recovery != nil
+	})
+	pi.stop()
+	id, err := group.Load(a.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The typed key is not enough, and a sheet of another group finds none.
+	next, _ := phoneOnLinux(t, bin, "-name", "typo", "-restore", "a typo", "-peer", a.addr())
+	if got := next("RESTORE FAILED "); !strings.Contains(got, "not a cbb recovery sheet") {
+		t.Errorf("a typed text: %s", got)
+	}
+	other := *sheet
+	other.Group = "0123456789abcdef"
+	next, _ = phoneOnLinux(t, bin, "-name", "other", "-restore", other.qr(t), "-peer", a.addr())
+	if got := next("RESTORE FAILED "); !strings.Contains(got, "another group") {
+		t.Errorf("a sheet of another group: %s", got)
+	}
+
+	next, in := phoneOnLinux(t, bin, "-name", "new phone", "-restore", sheet.qr(t), "-dir", t.TempDir(), "-peer", a.addr())
+	restored := strings.Fields(next("Restored "))
+	if len(restored) != 2 || restored[1] != group.Tag(id.GroupCA.Cert) {
+		t.Fatalf("the restored group: %q, not %s", restored, group.Tag(id.GroupCA.Cert))
+	}
+	manage := func(req string) map[string]any {
+		fmt.Fprintln(in, "MANAGE "+req)
+		var m map[string]any
+		got := next("MANAGED ")
+		if err := json.Unmarshal([]byte(got), &m); err != nil {
+			t.Fatalf("the answer %q: %v", got, err)
+		}
+		return m
+	}
+	ok := func(m map[string]any) map[string]any {
+		t.Helper()
+		o, ok := m["ok"].(map[string]any)
+		if !ok {
+			t.Fatalf("refused: %v", m)
+		}
+		return o
+	}
+	root, _ := ok(manage(`{"action":"root_ca"}`))["root_ca"].(string)
+	if root == "" {
+		t.Fatal("no root CA")
+	}
+	if m := manage(`{"action":"recover_with_sheet","sheet":"a typo","root_ca":"` + root + `"}`); m["error"] == nil {
+		t.Fatalf("claimed with a typed text: %v", m)
+	}
+	ok(manage(`{"action":"recover_with_sheet","sheet":"` + sheet.qr(t) + `","root_ca":"` + root + `"}`))
+	waitFor(t, "the claim takes effect", func() bool {
+		return ok(manage(`{"action":"finish_takeover","root_ca":"` + root + `","name":"new phone","os":"aurora"}`))["state"] == "effective"
+	})
+	waitFor(t, "the computer lists the new phone as the root", func() bool {
+		for _, d := range a.devices(t) {
+			if d.Name == "new phone" {
+				return d.Root && d.Role == group.RolePhone
+			}
+		}
+		return false
 	})
 }

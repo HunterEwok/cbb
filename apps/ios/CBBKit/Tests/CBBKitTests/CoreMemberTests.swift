@@ -218,6 +218,46 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertThrowsError(try m.current()) { XCTAssertTrue($0 is CoreMember.Stopped) }
     }
 
+    /// The root's own records, which the core builds, checks and signs with
+    /// the root key outside it (cbb_core::root).
+    func testTheRootSignsItsOwnRecordsInTheCore() throws {
+        var t = try CoreGroup(test: self)
+        let m = t.root.member
+        let key = t.root.key
+        let rootKey = t.ca
+        let pub = rootKey.publicKeyDER
+        let root = { (d: Data) throws -> Data in try rootKey.signature(digest: d) }
+        func refused(_ f: () throws -> Void, _ line: UInt = #line) {
+            XCTAssertThrowsError(try f(), line: line) { XCTAssertTrue($0 is Core.Refusal, "\($0)", line: line) }
+        }
+        refused { try m.setTakeoverDelay(ms: 3_600_000, public: key.publicKeyDER) { try key.signature(digest: $0) } }
+        refused { try m.setTakeoverDelay(ms: -1, public: pub, sign: root) }
+        refused { try m.setKeyLevel("any", public: pub, sign: root) }
+        try m.setTakeoverDelay(ms: 3_600_000, public: pub, sign: root)
+        XCTAssertEqual(try m.setKeyLevel(Records.levelFiles, public: pub, sign: root), [])
+        _ = t.g.add(try m.records())
+        XCTAssertEqual(t.g.keyLevel, Records.levelFiles)
+        XCTAssertEqual(t.g.settings(of: Records.keyHash(spki: pub)).delay, 3_600_000, "the level keeps the delay")
+        refused { try m.handOver(to: t.g.device, public: pub, sign: root) }
+        refused { try m.handOver(to: Member.newID(), public: pub, sign: root) }
+        refused { try m.removeRecovery(public: pub, sign: root) }
+
+        let sheet = try m.makeRecovery(public: pub, sign: root)
+        XCTAssertTrue(sheet.qr.hasPrefix("cbb://recover?g=\(t.g.tag)&"), sheet.qr)
+        XCTAssertEqual(sheet.text.count, 69)
+        _ = t.g.add(try m.records())
+        XCTAssertEqual(t.g.records.recovery, sheet.admin, "the records name the sheet's key")
+        // A YubiKey's key replaces it; its admin CA goes into the card.
+        let card = SoftwareSigner()
+        let ca = try m.recoveryFor(card.publicKeyDER, public: pub, sign: root)
+        XCTAssertEqual(try CertificateInfo(der: ca).publicKey, card.publicKeyDER)
+        _ = t.g.add(try m.records())
+        XCTAssertEqual(t.g.records.recovery, try Records.keyHash(cert: ca))
+        try m.removeRecovery(public: pub, sign: root)
+        _ = t.g.add(try m.records())
+        XCTAssertNil(t.g.records.recovery)
+    }
+
     func testRefusesWhatItDoesNotKnowAndStops() throws {
         let t = try CoreGroup(test: self)
         let a = t.phones[0]

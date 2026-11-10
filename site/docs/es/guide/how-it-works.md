@@ -84,7 +84,7 @@ Los dispositivos prueban primero la dirección propia del hub y el reenviador en
 Algunas redes (hoteles, oficinas, algunos países) bloquean el tráfico de VPN. El hub puede disfrazar el túnel del grupo:
 
 - **Ofuscación** (`-obfuscate`): el túnel habla AmneziaWG, que en la red no se parece a WireGuard. Los ordenadores y las dos apps de teléfono lo admiten.
-- **VLESS con REALITY** (`-vless`, a través de un reenviador): los dispositivos llegan al reenviador dentro de lo que parece una conexión HTTPS corriente a un sitio web conocido. Para redes que bloquean las dos opciones anteriores. Los ordenadores y las dos apps de teléfono lo admiten.
+- **VLESS** (`-vless`, a través de un reenviador): los dispositivos llegan al reenviador dentro de lo que parece una conexión HTTPS corriente al sitio web del reenviador. Para redes que bloquean las dos opciones anteriores. Los ordenadores y las dos apps de teléfono lo admiten.
 
 El miembro ligero solo habla WireGuard normal, así que con cualquiera de estas dos opciones solo sincroniza en casa.
 

@@ -43,6 +43,9 @@ default = ["tunnel"]
 windowless = []
 # The bench's time-scaled build (src/benchtime.rs), never a release's.
 benchtime = ["cbb-core/benchtime"]
+# fuzzing opens the service's readers of outside input to the cargo fuzz
+# targets in fuzz/ (src/fuzzing.rs).
+fuzzing = []
 # Sync away from home. GotaTun needs 64-bit atomics, which 32-bit MIPS lacks,
 # so the MIPS builds leave it out (docs/roadmap.md, item 37).
 tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp", "dep:blake2", "dep:chacha20", "dep:chacha20poly1305"]
@@ -54,6 +57,9 @@ if-addrs = "0.15.0"
 # nix 0.31.3 (under GotaTun) still uses on iOS: Cargo.lock keeps 0.2.189 until
 # a nix release follows.
 libc = "0.2.189"
+# mdns-sd's debug log, written to the file CBB_MDNS_TRACE names in tests
+# (src/discovery.rs, trace).
+log = "0.4.34"
 mdns-sd = "0.21.6"
 qrcode = { version = "0.14.1", default-features = false }
 serde = { version = "1", features = ["derive"] }

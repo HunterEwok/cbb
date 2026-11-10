@@ -169,3 +169,28 @@ func TestLiteLeave(t *testing.T) {
 		t.Errorf("leave in no group: %v; %s", err, out)
 	}
 }
+
+// TestRemovedWhileAway: a computer removed while its service was stopped
+// hears it was removed when it comes back: the root's connection with it
+// carries the records that remove it, then closes, and the other computer
+// stays in the group.
+func TestRemovedWhileAway(t *testing.T) {
+	var h hub
+	pi := startService(t, &h, "pi")
+	deck := startService(t, &h, "deck")
+	laptop := startService(t, &h, "laptop")
+	pairWith(t, pi, deck)
+	pairWith(t, pi, laptop)
+	waitFor(t, "the deck connected to both others", func() bool { return len(deck.status(t).Peers) == 2 })
+	deck.stop()
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Device: "deck"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the laptop has the removal", func() bool { return listed(laptop.devices(t)) == "laptop pi" })
+	deck = restartService(t, &h, deck)
+	waitUpTo(t, 30*time.Second, "the deck says it was removed", func() bool { return deck.status(t).Removed })
+	waitFor(t, "the removed deck keeps no connection", func() bool { return len(deck.status(t).Peers) == 0 })
+	if laptop.status(t).Removed || pi.status(t).Removed {
+		t.Error("a member the root did not remove says it was removed")
+	}
+}

@@ -7,7 +7,7 @@
 # (esp32/) and the fuzz targets (core/fuzz/) are workspaces of their own.
 [workspace]
 members = ["core", "embassy", "ffi", "member", "ring-shim"]
-exclude = ["esp32", "core/fuzz"]
+exclude = ["esp32", "core/fuzz", "member/fuzz"]
 # A cargo build or run without -p or --workspace means the program cbb.
 default-members = ["member"]
 resolver = "3"

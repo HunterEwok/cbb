@@ -121,8 +121,8 @@ group's tunnel unless you turn it off:
 - **Obfuscation**: the tunnel speaks AmneziaWG, which does not look like WireGuard on the
   wire. Computers and both phone apps support it.
 - **VLESS** (through a forwarder): the devices reach the forwarder inside what looks like an
-  ordinary HTTPS connection to a website, where even AmneziaWG is blocked. Computers and
-  both phone apps support it.
+  ordinary HTTPS connection to the forwarder's website. For networks that block both of the
+  above. Computers and both phone apps support it.
 
 `cbb global hub -no-vless` turns VLESS off, and `-no-obfuscate` with it plain WireGuard. The
 lite member speaks only plain WireGuard, so with either of these on it syncs at home only.

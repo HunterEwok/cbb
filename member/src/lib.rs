@@ -44,6 +44,9 @@ mod evidence;
 pub mod files;
 #[cfg(feature = "tunnel")]
 pub mod forward;
+#[cfg(feature = "fuzzing")]
+#[allow(clippy::expect_used, clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
+pub mod fuzzing;
 mod global_cli;
 pub mod helper;
 #[cfg(feature = "tunnel")]
@@ -76,6 +79,7 @@ pub mod relay;
 pub mod relayd;
 pub mod releases;
 mod remotepaste;
+pub mod restore;
 mod rootless;
 pub mod sealkey;
 mod sekey;

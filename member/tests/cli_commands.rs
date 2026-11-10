@@ -1122,6 +1122,7 @@ fn paste_write_error() {
         .arg("paste")
         .env("CBB_SOCKET", &sock)
         .env("LC_ALL", "C")
+        .env("CBB_DEBUG", "1") // the cause shows in a release build too
         .stdout(std::fs::OpenOptions::new().write(true).open("/dev/full").unwrap())
         .output()
         .unwrap();
