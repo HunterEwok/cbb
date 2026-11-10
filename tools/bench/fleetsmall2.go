@@ -11,45 +11,45 @@ import (
 	"time"
 )
 
-// liteOptions (H5): the lite member's options (cbb pair -name, which
+// smallOptions (H5): the small device's options (cbb pair -name, which
 // names the device in the group, every join runs): cbb service -port moves the
 // member port, -no-listen opens none,
 // -no-mdns publishes nothing on UDP 5353 and -peer dials a computer at its
-// address, so that the lite member syncs with mDNS off; cbb pair -addr puts
+// address, so that the small device syncs with mDNS off; cbb pair -addr puts
 // the address given in the phone's QR code.
-func liteOptions(ctx context.Context, r *Report, f *Fleet, g *benchGroup, hub, lite *Device, timeout time.Duration) {
-	const p = "fleet/H5-lite-options/"
-	// with restarts the lite member's service with opts and waits until
+func smallOptions(ctx context.Context, r *Report, f *Fleet, g *benchGroup, hub, small *Device, timeout time.Duration) {
+	const p = "fleet/H5-small-options/"
+	// with restarts the small device's service with opts and waits until
 	// it answers.
-	with := func(opts string) error { return liteRestart(ctx, lite, opts) }
+	with := func(opts string) error { return smallRestart(ctx, small, opts) }
 	defer with("")
 	listening := func(proto string) (string, error) {
-		return Run(ctx, lite, "ss -"+proto+"lnpH | grep cbb || true", "")
+		return Run(ctx, small, "ss -"+proto+"lnpH | grep cbb || true", "")
 	}
 	r.Do(p+"port", func() error {
-		if err := with("-name lite-hello -port 8800"); err != nil {
+		if err := with("-name small-hello -port 8800"); err != nil {
 			return err
 		}
 		// The service answers cbb status before it binds the member port.
 		if err := eventually(ctx, 20*time.Second, func() error {
 			if out, err := listening("t"); err != nil || !strings.Contains(out, ":8800 ") || strings.Contains(out, ":8764 ") {
-				return fmt.Errorf("with -port 8800 the lite member listens on %q (%v)", out, err)
+				return fmt.Errorf("with -port 8800 the small device listens on %q (%v)", out, err)
 			}
 			return nil
 		}); err != nil {
 			return err
 		}
-		return syncs(ctx, g, hub, lite, "with -port 8800", timeout)
+		return syncs(ctx, g, hub, small, "with -port 8800", timeout)
 	})
 	r.Do(p+"no-listen", func() error {
 		if err := with("-no-listen"); err != nil {
 			return err
 		}
 		if out, err := listening("t"); err != nil || strings.TrimSpace(out) != "" {
-			return fmt.Errorf("with -no-listen the lite member listens on %q (%v)", out, err)
+			return fmt.Errorf("with -no-listen the small device listens on %q (%v)", out, err)
 		}
 		// It still dials the computers.
-		return syncs(ctx, g, hub, lite, "with -no-listen", timeout)
+		return syncs(ctx, g, hub, small, "with -no-listen", timeout)
 	})
 	r.Do(p+"no-mdns-peer", func() error {
 		ip, err := fleetIP(ctx, hub)
@@ -60,12 +60,12 @@ func liteOptions(ctx context.Context, r *Report, f *Fleet, g *benchGroup, hub, l
 			return err
 		}
 		if out, err := listening("u"); err != nil || strings.Contains(out, ":5353 ") {
-			return fmt.Errorf("with -no-mdns the lite member holds UDP 5353: %q (%v)", out, err)
+			return fmt.Errorf("with -no-mdns the small device holds UDP 5353: %q (%v)", out, err)
 		}
-		return syncs(ctx, g, hub, lite, "with -no-mdns and -peer", timeout)
+		return syncs(ctx, g, hub, small, "with -no-mdns and -peer", timeout)
 	})
 	r.Do(p+"join-addr", func() error {
-		fresh, err := f.AddLite(ctx)
+		fresh, err := f.AddSmall(ctx)
 		if err != nil {
 			return err
 		}
@@ -77,16 +77,16 @@ func liteOptions(ctx context.Context, r *Report, f *Fleet, g *benchGroup, hub, l
 	})
 }
 
-// liteRestart restarts the lite member's service in a fleet container with
+// smallRestart restarts the small device's service in a fleet container with
 // the options opts of cbb service and waits until it answers.
-func liteRestart(ctx context.Context, lite *Device, opts string) error {
-	if _, err := Run(ctx, lite, "echo '"+opts+"' >/tmp/cbb-run-opts && pkill -f '^cbb service' ; true", ""); err != nil {
+func smallRestart(ctx context.Context, small *Device, opts string) error {
+	if _, err := Run(ctx, small, "echo '"+opts+"' >/tmp/cbb-run-opts && pkill -f '^cbb service' ; true", ""); err != nil {
 		return err
 	}
 	return eventually(ctx, 20*time.Second, func() error {
-		out, err := Run(ctx, lite, "pgrep -af '^cbb service'; cbb status", "")
+		out, err := Run(ctx, small, "pgrep -af '^cbb service'; cbb status", "")
 		if err == nil && !strings.Contains(out, strings.TrimSpace("cbb service "+opts)) {
-			err = fmt.Errorf("the lite member runs %q, not with %s", firstLine(out), opts)
+			err = fmt.Errorf("the small device runs %q, not with %s", firstLine(out), opts)
 		}
 		return err
 	})

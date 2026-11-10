@@ -26,7 +26,7 @@ page that explains it.
 | **blind relay** | A server where the devices of a group without a hub meet away from home. It sees who is online and how much they send, never the content. |
 | **server credentials** | The short credentials, made for a period, that a forwarder or a relay checks instead of the group's records, so it learns no device's name or role. |
 | **invitation** | A file from `cbb invite` that lets a device away from home join through the hub's tunnel. |
-| **AmneziaWG**, **VLESS with REALITY** | Two ways to hide the tunnel from networks that block VPNs. See [networks that block VPNs](../guide/blocked-networks.md). |
+| **AmneziaWG**, **VLESS** | Two ways to hide the tunnel from networks that block VPNs. See [networks that block VPNs](../guide/blocked-networks.md). |
 | **key level** | Which keys may be the root, an admin or a hub: proven hardware keys only, hardware keys (the default), or file keys too. See [keys and attestation](../guide/keys.md). |
 | **attestation** | A proof from a phone's security chip or a computer's TPM that a key was made there and cannot leave it. |
 | **remote paste** | An admin puts text into the focused app on another device, where that device's user turned it on (`cbb paste -on`, `cbb paste-receive`). |

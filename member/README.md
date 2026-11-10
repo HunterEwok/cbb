@@ -214,8 +214,7 @@ end to end. At home it sends nothing to the hub's outside addresses. A hub that 
 tunnel (`-obfuscate` or `-vless`, for networks that block WireGuard) is reached too: the lite
 member speaks AmneziaWG, and VLESS over XHTTP through the forwarder's web site, whose
 certificate it checks against the system's CA certificates (`ca-certificates`, or the file
-`SSL_CERT_FILE` names). Over REALITY, which only the full member speaks, the device syncs at
-home only. The keys are in
+`SSL_CERT_FILE` names). The keys are in
 `/var/lib/cbb/tunnel.json`, a file, so the warning asks you to protect the disk
 or memory card.
 

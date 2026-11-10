@@ -19,7 +19,7 @@ func TestVLESSUsersScanApart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, err := Listen(Config{Listen: "127.0.0.1:0", Cert: cert, VLESS: &VLESSConfig{Listen: "127.0.0.1:0", Site: "example.com", Dest: "127.0.0.1:1"}})
+	f, err := Listen(Config{Listen: "127.0.0.1:0", Cert: cert, VLESS: &VLESSConfig{Listen: "127.0.0.1:0", XHTTP: testXHTTP()}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestVLESSUsersLeaveTheScanBudget(t *testing.T) {
 	limits := DefaultLimits
 	limits.ScanRate = 4000 // with 200 groups, the burst of 40 handshakes to an unknown group
 	f, err := Listen(Config{Listen: "127.0.0.1:0", Cert: cert, Limits: limits,
-		VLESS: &VLESSConfig{Listen: "127.0.0.1:0", Site: "example.com", Dest: "127.0.0.1:1"}})
+		VLESS: &VLESSConfig{Listen: "127.0.0.1:0", XHTTP: testXHTTP()}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   analyze:
-    name: analyze (${{ matrix.language }})
+    name: analyze (${{ matrix.language }}${{ matrix.os && format(', {0}', matrix.os) || '' }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -44,6 +44,17 @@ jobs:
           - language: go
             build-mode: autobuild
             runner: ubuntu-latest
+          # Go checks only the files of the system it builds for, so the files for Windows
+          # and macOS alone (remote paste, the control socket's access list, the keychain)
+          # are analyzed on their own runners, each with a category of its own.
+          - language: go
+            build-mode: autobuild
+            runner: windows-latest
+            os: windows
+          - language: go
+            build-mode: autobuild
+            runner: macos-latest
+            os: macos
           - language: rust
             build-mode: none
             runner: ubuntu-latest
@@ -82,4 +93,4 @@ jobs:
             -p kit testClasses
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
-          category: /language:${{ matrix.language }}
+          category: /language:${{ matrix.language }}${{ matrix.os && format('/{0}', matrix.os) || '' }}

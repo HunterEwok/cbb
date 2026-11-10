@@ -7,6 +7,22 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Nightly fuzzing reaches the Rust service: the control socket's messages, which cbb-helper's
+  channel uses too, and the ZX Spectrum Next's frames (`member/fuzz`), and the forwarder's
+  VLESS and XHTTP answers in the core (`vless`); Miri checks the phones' C functions and
+  AddressSanitizer the service's tests.
+- Nightly mutation testing of the control socket's messages, the pairing window, the server
+  credentials and the seals of the copies fails on a mutant the tests let live that
+  `tools/mutants/missed.txt` does not name; new tests catch the ones that mattered.
+- CI tests the promise that from 0.6 on a device of version N works in one group with N-1:
+  `tools/e2e/previous.sh` downloads the previous release's `cbb` (0.6.0 or later, checked
+  against its SHA256SUMS), and TestPreviousRelease joins it and this build to one group, syncs
+  both ways, has it take a later device's record and its own removal. It skips until 0.6.0
+  is out.
+- The bench's fleet holds `cbb` to budgets on the small devices (E12): capped as a
+  Raspberry Pi Zero and as a router, its memory at rest and after 200 copies, its CPU at rest,
+  the time a copy takes to arrive and its peak stay under fixed limits, each also a metric for
+  `-baseline`.
 - A release carries its build provenance as `provenance.intoto.jsonl`, the same signed
   attestation GitHub keeps, for checking a release without GitHub's API; `release-sign`
   leaves it out of `release.json`, as it describes the files and no attestation covers it.
@@ -17,8 +33,8 @@ All notable changes to cbb are documented in this file. The format follows
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it
   from outside run against it (`CBB_TEST_RUST_RELAY`), and those that look inside it are
   ported beside it.
-- The bench's time-scaled build of the Rust `cbb` (`cargo build -p cbb-lite --features
-  benchtime`, never released), as the Go one's: certificates, renewals, credential periods and
+- The bench's time-scaled build of the Rust `cbb` (`cargo build --release --bin cbb
+  --features benchtime`, never released), as the Go one's: certificates, renewals, credential periods and
   the hub key's handover run 100000 times faster, and `CBB_TEST_CLOCK` moves the wall clock.
 - The ZX Spectrum Next shows the group's latest image: `.cbb show` asks the lite member on the
   Pi (`cbb next image`), which fits the PNG or JPEG to Layer 2 in 320×256 with 256 colours or
@@ -106,8 +122,7 @@ All notable changes to cbb are documented in this file. The format follows
   undoes the takeover by removing the admin; a hub fetches the group's current copy for
   the devices away from home even with sync off, serves through its tunnel only what is
   within its limit away from home, and a fetch that no peer gives is tried again; the
-  copies' cache starts empty, as Go's. The way over VLESS inside REALITY goes through
-  cbb-helper (`vless-dial`, `vless-close`), since rustls makes no browser's ClientHello; a
+  copies' cache starts empty, as Go's. A
   client tries a hub's current and next key at once; a restarted tunnel link starts at a
   random port, not one the hub still holds; `cbb devices` marks the hubs; a device that
   joined by address dials it again until it finds a hub; after a thaw, or a record that
@@ -271,8 +286,7 @@ All notable changes to cbb are documented in this file. The format follows
   HTTPS to the forwarder's site, its certificate checked against the system's CA certificates
   or `SSL_CERT_FILE` (RSA and P-384 added to the core's TLS provider for that), HTTP/1.1
   packet-up requests, its UDP addresses tried first only with AmneziaWG
-  (`TestLiteMemberAwayXHTTP` against the Go forwarder behind a web server). REALITY stays
-  with the full member.
+  (`TestLiteMemberAwayXHTTP` against the Go forwarder behind a web server).
 - The phones' tunnel in Rust (ffi/, `cbb_tunnel`, feature `tunnel`): the lite member's
   WireGuard with AmneziaWG and VLESS with XHTTP behind a loopback port, for the iPhone and
   Android apps (`TestRustPhoneTunnel` against the Go hub); the phone
@@ -336,6 +350,17 @@ All notable changes to cbb are documented in this file. The format follows
   fleet checks the project's relay followed from the signed lists, through a new key and a
   move (W48), and the phone suite a computer the phone made an admin admitting a computer,
   the hub marked in the phone's list and a computer behind it online.
+- The bench repeats a suite and keeps a run's numbers: `-repeat N` runs the fleet, time or
+  phone suite N times and lists in `flaky.txt` the cases that both passed and failed, each
+  still a failure of the run; the load cases (E1, E2, E4, E10) record their times and memory
+  in `metrics.json`, and `-baseline FILE` fails a run whose number is worse than an earlier
+  run's by more than `-baseline-slack` (a quarter) and its unit's noise. docs/testing.md
+  keeps the tests known to fail now and then, with their rate and state. The catalogue has
+  cases for capabilities (D18), a code shown by the joining device (G44), GIF images (O16),
+  the phones' gallery (O17), remote paste of images and files (T21), the ZX Next's image
+  (H16), the two buttons (A18), the Aurora app's later pages (A19), the eight languages, and
+  the upgrade from 0.5, whose group is set up again (I26), apart from the upgrades from 0.6
+  on, which keep it (I6, I7).
 - `testbench coverage` counts apart the cases the harness runs in full, where its suites
   cover every kind of place the case names, and lists the others with what they lack.
 - Muting a device (design.md, "Muting a device"): `cbb mute [-for DURATION]` keeps the
@@ -556,7 +581,7 @@ All notable changes to cbb are documented in this file. The format follows
   command gives none. A phone hub makes its AmneziaWG settings and VLESS user ID with the new
   `new_obfuscation` and `new_vless_id` of the phones' tunnel, keeps them in its state, starts its
   tunnel with them and registers with its forwarder over VLESS when asked.
-- **VLESS over XHTTP behind a web server**, beside REALITY: `cbb forward -vless-xhttp
+- **VLESS over XHTTP behind a web server**, in place of REALITY (see Removed): `cbb forward -vless-xhttp
   cbb.tools` listens on the loopback address (`-vless-listen`, default `127.0.0.1:3276`) and
   the site's web server, which ends the TLS with the site's own certificate, passes it one
   path (`-vless-path`, or one made at random and kept in the key file; the forwarder prints
@@ -564,8 +589,7 @@ All notable changes to cbb are documented in this file. The format follows
   carries `transport`, the site's name, the web server's port and `path`; `cbb` and the
   phones' tunnel speak it with Chrome's TLS fingerprint and XHTTP's `packet-up` mode, and
   check the site's certificate against the public CAs. A client that does not know a
-  transport stays at home. REALITY stays for forwarders without a site of their own;
-  docs/admin/self-hosting.md has the nginx location.
+  transport stays at home; docs/admin/self-hosting.md has the nginx location.
 - **VLESS comes with AmneziaWG, and UDP goes first.** A hub that sets VLESS (`cbb global hub
   -vless`, or VLESS in the apps) speaks AmneziaWG too, and its clients, `cbb` and both
   phones, try the hub's endpoints in AmneziaWG over UDP first and VLESS after them, keeping
@@ -1491,6 +1515,12 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The bench's fleet runs its small devices with the same `cbb` as its computers, as the
+  service alone (`-cbb-lite` is gone, `-coverdir` takes the Rust `cbb`'s coverage too), and its
+  D3 case checks whom the members dial by D-89: one with a higher device ID at once, one with
+  a lower ID that publishes `r=listen` at once and one with a lower ID that dials only after
+  the fallback, in place of the old check that no one dials a member with `r=lite`.
+- CI counts the Rust service's coverage with Go's tests of it as well (`rust-service`).
 - docs/decisions.md lists the decisions in force apart from the replaced ones, which stay
   below as history, and `tools/repocheck` checks the register: each number once, a known
   status, a replaced row among the replaced decisions, naming a decision that exists. D-90
@@ -1525,7 +1555,8 @@ All notable changes to cbb are documented in this file. The format follows
   takes `-caps` (all three by default, `admin,dials` for the ZX Next's Pi), and an ESP32 has
   none. The apps show "Member" and decide what a device can do from its capabilities. Groups
   set up during development whose records name `full` or `lite` are set up again: no release
-  carried those records.
+  carried those records. The ZX Next's `.cbb net on` looks for a computer past the members
+  with `r=listen`, as it did past `r=lite`.
 - The Android and iPhone apps put one received image or video, and an image the button
   fetches, where the gallery shows it, as the Aurora app does: the album "CBB" (Pictures/CBB or
   Movies/CBB) on Android, Photos on the iPhone (Recents, as it asks only to add photos).
@@ -1989,6 +2020,13 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Removed
 
+- VLESS with REALITY (D-91): `cbb forward -vless-site` is gone, with the REALITY key, the Go
+  client and `cbb-helper`'s way for it. VLESS runs over XHTTP behind the web server of the
+  forwarder's own site, on every member and phone. A forwarder started with `-vless-site`
+  stops with an error, and a client refuses an older forwarder's REALITY offer and stays at
+  home; move such a forwarder behind a web server (docs/admin/self-hosting.md). The
+  forwarder's key file may keep its old `CBB REALITY KEY` block, which nothing reads.
+
 - The Go command line `cmd/cbb` and the Go service in it: `cbb` is the Rust program on every
   member, with `cbb-helper` beside it on computers. Its tests run on the Rust `cbb`
   (`member/tests/cli_commands.rs`, the service tests in `internal/service`).
@@ -2014,6 +2052,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A member started with `-no-listen` dials the members it finds at once, also those with a
+  lower device ID: it waited 30 s for them to dial it, which they cannot.
+- The Rust member cleans the reason of a command's result before it shows or passes it on,
+  as the Go service did: control characters become spaces and it is cut to 256 bytes.
 - A release's `winget-manifest.zip` has its line in `SHA256SUMS`, which `release-sign verify`
   and `mirror` ask of every file in `release.json`; it was written after the sums.
 - The copy of amneziawg-go requires only what its packages import, at the versions the root
