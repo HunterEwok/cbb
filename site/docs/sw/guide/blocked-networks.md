@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 50a2bc3652f5 -->
+<!-- source: 6e12f051d6a2 -->
 # Mitandao inayozuia VPN
 
 Ukiwa mbali na nyumbani, vifaa vyako hufikia kitovu kupitia handaki la WireGuard la kikundi chenyewe. Baadhi ya mitandao huzuia WireGuard: Wi-Fi ya hoteli na ofisi, baadhi ya waendeshaji wa simu, na nchi nzima zinazochuja VPN. Copy Beyond Borders ina njia mbili za kukwepa hilo. Zote mbili huwashwa kwenye kitovu, na vifaa huzipokea wakati ujao vitakapokutana na kitovu nyumbani.
@@ -40,14 +40,13 @@ Kitovu hutengeneza mipangilio ya kikundi mara moja, kwa nasibu, na kuihifadhi ma
 
 VLESS hufanya kazi kati ya vifaa vyako na kisambazaji, ndani ya kile ambacho kwa mtandao kinaonekana kama muunganisho wa kawaida wa HTTPS kwenye tovuti.
 
-1. **Kisambazaji.** Kisambazaji cha mradi kwenye cbb.tools kina VLESS imewashwa: kwa mtandao, vifaa vyako vinatembelea `cbb.tools`. Kisambazaji chako mwenyewe huiendesha kwa mojawapo ya njia mbili:
+1. **Kisambazaji.** Kisambazaji cha mradi kwenye cbb.tools kina VLESS imewashwa: kwa mtandao, vifaa vyako vinatembelea `cbb.tools`. Kisambazaji chako mwenyewe huiendesha nyuma ya seva ya wavuti ya tovuti yako:
 
    ```sh
-   cbb forward -vless-xhttp vpn.example.org   # behind your site's web server
-   cbb forward -vless-site www.example.com    # REALITY, on a server without a site
+   cbb forward -vless-xhttp vpn.example.org
    ```
 
-   Nyuma ya seva ya wavuti iliyo na cheti cha tovuti yako, seva ya wavuti hukipitishia njia ambayo kisambazaji huchapisha. REALITY huazima TLS ya tovuti kubwa, na yeyote anayeunganisha bila funguo za kikundi, mdhibiti anayekichunguza kwa mfano, hupata kurasa za tovuti hiyo yenyewe: chagua tovuti isiyozuiwa unakosafiri na inayotumia TLS 1.3, na ufungue TCP 443 kwenye ngome ya moto ya seva, kando ya UDP na TCP 8764. Kuandaa seva kumeelezwa katika [kuendesha seva zako mwenyewe](../admin/self-hosting.md#vless-on-the-forwarder).
+   Seva ya wavuti, iliyo na cheti cha tovuti yako, hukipitishia njia ambayo kisambazaji huchapisha; mwingine yeyote hupata kurasa za tovuti yako yenyewe. Fungua TCP 443 kwenye ngome ya moto ya seva, kando ya UDP na TCP 8764. Kuandaa seva kumeelezwa katika [kuendesha seva zako mwenyewe](../admin/self-hosting.md#vless-on-the-forwarder).
 
 2. **Kwenye kitovu**: washa VLESS kwenye programu (handaki la kitovu: VLESS), au:
 
@@ -55,7 +54,7 @@ VLESS hufanya kazi kati ya vifaa vyako na kisambazaji, ndani ya kile ambacho kwa
    sudo cbb global hub -forwarder default -vless
    ```
 
-   (`-forwarder 198.51.100.9:8764 -forwarder-key <key>` kwa chako mwenyewe.) Kisambazaji huambia kitovu kinafanya kazi kwa njia ipi. Ongeza pia `-obfuscate` ukipenda; kisha zote mbili hutumika.
+   (`-forwarder 198.51.100.9:8764 -forwarder-key <key>` kwa chako mwenyewe.) Kisambazaji huambia kitovu tovuti yake na njia yake. Ongeza pia `-obfuscate` ukipenda; kisha zote mbili hutumika.
 
 3. **Kwenye vifaa**: kutana na kitovu nyumbani mara moja, kama baada ya mabadiliko yoyote. Kuanzia hapo hufikia kisambazaji kupitia VLESS tu, kamwe si kwa WireGuard ya kawaida kwanza, kwa hiyo mtandao unaotaka kuficha handaki kutoka kwake haulioni kamwe.
 
@@ -63,6 +62,5 @@ VLESS hufanya kazi kati ya vifaa vyako na kisambazaji, ndani ya kile ambacho kwa
 
 - **Weka kila kitu nyumbani, kabla ya kusafiri.** Vifaa huchukua mipangilio ya kitovu kwenye mtandao wa nyumbani tu.
 - Chagua kisambazaji nje ya nchi inayochuja, kwa mtoa huduma wa upangishaji asiyezuiwa huko.
-- Kwa VLESS na REALITY, chagua tovuti ambayo watu wa nchi hiyo huitumia kila siku, ili kuizuia kuwaumize; na inayohudumiwa na mtoa huduma tofauti na wa kisambazaji chako.
 - VPN ya simu yenyewe inaendelea kufanya kazi: handaki la programu ni trafiki ya kawaida ya programu na halichukui nafasi ya VPN ya simu.
 - Handaki likiacha kufanya kazi safarini, `cbb global` kwenye laptopu husema kinachoshindwa, na `CBB_DEBUG=1` huonyesha maelezo ([utatuzi wa matatizo](troubleshooting.md#sync-away-from-home)).

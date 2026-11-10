@@ -120,8 +120,8 @@ group's tunnel:
 
 - **Obfuscation** (`-obfuscate`): the tunnel speaks AmneziaWG, which does not look like
   WireGuard on the wire. Computers and both phone apps support it.
-- **VLESS with REALITY** (`-vless`, through a forwarder): the devices reach the forwarder
-  inside what looks like an ordinary HTTPS connection to a well-known website. For networks
+- **VLESS** (`-vless`, through a forwarder): the devices reach the forwarder inside what
+  looks like an ordinary HTTPS connection to the forwarder's website. For networks
   that block both of the above. Computers and both phone apps support it.
 
 The lite member speaks only plain WireGuard, so with either of these it syncs at home only.

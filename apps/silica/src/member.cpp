@@ -673,9 +673,13 @@ void Member::pollDevices()
     const QJsonObject al = call(m_member, QStringLiteral("alerts"), QJsonObject(), &failure);
     const QVariantList alerts =
         failure.isNull() ? al.value(QStringLiteral("alerts")).toArray().toVariantList() : m_alerts;
-    if (devices != m_devices || alerts != m_alerts) {
+    Failure viewFailure;
+    const QJsonObject rv = call(m_member, QStringLiteral("root_view"), QJsonObject(), &viewFailure);
+    const QVariantMap rootView = viewFailure.isNull() ? rv.toVariantMap() : m_rootView;
+    if (devices != m_devices || alerts != m_alerts || rootView != m_rootView) {
         m_devices = devices;
         m_alerts = alerts;
+        m_rootView = rootView;
         emit devicesChanged();
     }
 }

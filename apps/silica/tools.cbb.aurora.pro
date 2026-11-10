@@ -103,6 +103,8 @@ DISTFILES += \
     qml/pages/RenameDevicePage.qml \
     qml/pages/PinDialog.qml \
     qml/pages/ChangePinDialog.qml \
+    qml/pages/RecoveryPage.qml \
+    qml/pages/RestorePage.qml \
     qml/pages/DeviceTile.qml \
     qml/pages/DeviceRow.qml \
     qml/pages/DeviceItems.qml \

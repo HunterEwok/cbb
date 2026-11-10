@@ -16,31 +16,25 @@ import (
 
 // VLESS is what a client needs to reach the hub's forwarder inside VLESS,
 // for networks that block WireGuard (docs/design.md, "Blocked networks"),
-// in one of two transports. With REALITY (Transport "") the forwarder
-// borrows a well-known site's TLS: the link has the forwarder's VLESS
-// address, its REALITY key and the site whose name the handshake carries.
-// With XHTTP (Transport "xhttp") the forwarder sits behind a web server
-// that has the site's own certificate and passes it one path: the link has
+// over XHTTP (Transport "xhttp"): the forwarder sits behind a web server
+// that has the site's own certificate and passes it one path. The link has
 // the web server's address, the site's name, which the certificate must
-// carry, and the path. Either way it has the group's VLESS user ID. The hub
+// carry, the path and the group's VLESS user ID. The hub
 // learns all but the ID when it registers with the forwarder and gives it
 // to its clients with its offer (docs/protocol.md, section 11). Package
 // vless runs it.
 type VLESS struct {
-	Transport  string         `json:"transport,omitempty"`  // "" for REALITY, or "xhttp"
-	Endpoint   netip.AddrPort `json:"endpoint"`             // the forwarder's VLESS port, or the web server's, TCP
-	PublicKey  []byte         `json:"public_key,omitempty"` // REALITY: the forwarder's key, X25519
-	ShortID    string         `json:"short_id,omitempty"`   // REALITY: the short ID, hex
-	ServerName string         `json:"server_name"`          // the site the handshake names
-	Path       string         `json:"path,omitempty"`       // XHTTP: the path the web server passes
-	ID         string         `json:"id"`                   // the group's VLESS user ID, a UUID
+	Transport  string         `json:"transport"`   // "xhttp", the only one
+	Endpoint   netip.AddrPort `json:"endpoint"`    // the web server's address, TCP
+	ServerName string         `json:"server_name"` // the site the handshake names
+	Path       string         `json:"path"`        // the path the web server passes
+	ID         string         `json:"id"`          // the group's VLESS user ID, a UUID
 }
 
-// The transports of VLESS.
-const (
-	TransportReality = ""
-	TransportXHTTP   = "xhttp"
-)
+// TransportXHTTP is the transport of VLESS, the only one; an older
+// version's forwarder may offer REALITY, an empty transport, which this
+// version refuses.
+const TransportXHTTP = "xhttp"
 
 // Check refuses a link that cannot work, or of a transport this version
 // does not know.
@@ -49,22 +43,12 @@ func (v *VLESS) Check() error {
 		return errors.New("tunnel: vless: the forwarder's VLESS address is missing")
 	}
 	switch v.Transport {
-	case TransportReality:
-		switch {
-		case len(v.PublicKey) != 32:
-			return errors.New("tunnel: vless: the forwarder's REALITY key is not 32 bytes")
-		case !shortIDPattern.MatchString(v.ShortID):
-			return fmt.Errorf("tunnel: vless: %q is not a REALITY short ID", v.ShortID)
-		case v.Path != "":
-			return errors.New("tunnel: vless: REALITY has no path")
-		}
 	case TransportXHTTP:
-		if len(v.PublicKey) != 0 || v.ShortID != "" {
-			return errors.New("tunnel: vless: XHTTP has no REALITY key")
-		}
 		if err := CheckVLESSPath(v.Path); err != nil {
 			return err
 		}
+	case "":
+		return errors.New("tunnel: vless: the forwarder offers VLESS inside REALITY, which this version no longer speaks; it needs XHTTP")
 	default:
 		return fmt.Errorf("tunnel: vless: the transport %q needs a newer version", v.Transport)
 	}
@@ -118,12 +102,10 @@ func (v *VLESS) Equal(w *VLESS) bool {
 	if v == nil || w == nil {
 		return v == w
 	}
-	return v.Transport == w.Transport && v.Endpoint == w.Endpoint && string(v.PublicKey) == string(w.PublicKey) &&
-		v.ShortID == w.ShortID && v.ServerName == w.ServerName && v.Path == w.Path && v.ID == w.ID
+	return v.Transport == w.Transport && v.Endpoint == w.Endpoint && v.ServerName == w.ServerName && v.Path == w.Path && v.ID == w.ID
 }
 
 var (
-	shortIDPattern    = regexp.MustCompile(`^([0-9a-f]{2}){1,8}$`)
 	serverNamePattern = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
 	vlessPathPattern  = regexp.MustCompile(`^/[A-Za-z0-9_-]{8,64}(/[A-Za-z0-9_-]{16,64})?$`)
 	groupPathPattern  = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$`)
