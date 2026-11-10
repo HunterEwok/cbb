@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! One pairing attempt of a joiner that listens and showed its QR code,
-//! without I/O: the program accepts the member's connection, passes what
+//! One pairing attempt of a joiner that listens and showed its QR code, or
+//! that dialed a remote invitation's hub, without I/O: the program accepts the member's connection, passes what
 //! arrives to [`Attempt::feed`] and sends what each step returns, for a
 //! program whose own TLS cannot export the pairing's sid or whose key the
 //! core does not hold (the Aurora app, through ffi/). The exchange is
@@ -64,6 +64,8 @@ pub struct Attempt {
     exporter: Arc<Exporter>,
     joiner: Joiner,
     code: String,
+    /// A remote invitation's secret, in place of the code.
+    secret: Option<Vec<u8>>,
     plain: Vec<u8>,
     state: State,
 }
@@ -82,6 +84,31 @@ impl Attempt {
             exporter,
             joiner: joiner.clone(),
             code,
+            secret: None,
+            plain: Vec::new(),
+            state: State::Handshake,
+        })
+    }
+
+    /// An attempt on a connection the program dialed to the hub of a remote
+    /// invitation, through its guest tunnel, with the invitation's secret in
+    /// place of a code (docs/protocol.md, section 12): the first step's
+    /// send is the TLS client hello, and the hub's admin confirms the
+    /// device before the Welcome comes.
+    pub fn dialing_secret(joiner: &Joiner, secret: &[u8], clock: &Clock) -> Result<Attempt> {
+        if secret.len() < pair::MIN_SECRET {
+            return Err(Error::msg("the invitation's secret is too short"));
+        }
+        let (cfg, exporter) = match joiner.external_key() {
+            Some(key) => tls::pair_client_external(&joiner.cert, key.clone(), clock)?,
+            None => tls::pair_client(&joiner.cert, &joiner.key, clock)?,
+        };
+        Ok(Attempt {
+            session: Session::client(Arc::new(cfg), tls::server_name(None))?,
+            exporter,
+            joiner: joiner.clone(),
+            code: String::new(),
+            secret: Some(secret.to_vec()),
             plain: Vec::new(),
             state: State::Handshake,
         })
@@ -138,7 +165,10 @@ impl Attempt {
             self.exporter
                 .export(pair::EXPORTER_LABEL, &[], &mut sid)
                 .map_err(|e| Error::msg(alloc::format!("cannot bind the pairing to TLS: {e}")))?;
-            let (ex, first) = self.joiner.start(&self.code, &member_der, &sid, true)?;
+            let (ex, first) = match &self.secret {
+                Some(secret) => self.joiner.start_secret(secret, &member_der, &sid)?,
+                None => self.joiner.start(&self.code, &member_der, &sid, true)?,
+            };
             self.session.write(&first)?;
             self.state = State::Reply(ex);
         }

@@ -246,7 +246,6 @@
   "More": "Подробнее",
   "OK": "OK",
   "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.": "На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте это окно.",
-  "On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.": "На хабе группы выполните cbb invite и передайте созданный файл по надёжному каналу. На новом устройстве выполните cbb pair -invite с этим файлом.",
   "On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.": "На новом устройстве выберите «Войти в группу»: оно покажет QR-код и шесть цифр. Телефон группы сканирует код, а здесь введите цифры.",
   "Open a picture of its QR code": "Открыть картинку с его QR-кодом",
   "Open at sign-in": "Открывать при входе",
@@ -264,5 +263,13 @@
   "Turn sync off": "Выключить синхронизацию",
   "Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does.": "Введите ключ с листа или вставьте текст его QR-кода. Заявка ждёт, как при переходе группы.",
   "Type the six digits the new device shows.": "Введите шесть цифр, которые показывает новое устройство.",
-  "Without a camera": "Без камеры"
+  "Without a camera": "Без камеры",
+  "Allow cbb to run as the administrator; the invitation opens on the group's hub next.": "Разрешите cbb работать от имени администратора; затем приглашение откроется на хабе группы.",
+  "The invitation's QR code": "QR-код приглашения",
+  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.": "На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite с его текстом. Показывайте или отправляйте его только тому, кто вступает.",
+  "The invitation's text": "Текст приглашения",
+  "Not this one": "Не этот",
+  "The invitation is valid until %s.": "Приглашение действует до %s.",
+  "%s (%s) used the invitation. Admit it only if the device shows the same fingerprint:": "%s (%s) воспользовался приглашением. Впускайте, только если устройство показывает тот же отпечаток:",
+  "The device joined the group; it appears in the list once it connects.": "Устройство вступило в группу; оно появится в списке, когда подключится."
 }

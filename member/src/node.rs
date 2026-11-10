@@ -159,6 +159,11 @@ pub type OnTunnel = Box<dyn Fn(&DeviceId, &serde_json::Value, &dyn Fn(&str) -> b
 /// for its target.
 pub type OnCommand = Arc<dyn Fn(&DeviceId, &Record) -> wire::CommandResult + Send + Sync>;
 
+/// Takes, on a hub, a guest message from an admin that makes a remote
+/// invitation through it (docs/protocol.md, section 12, "Through the hub"),
+/// with the chain the admin proved.
+pub type OnGuest = Box<dyn Fn(&Node, &DeviceId, &[Cert], wire::Guest) + Send + Sync>;
+
 /// The tunnel key and preshared key a hello offers; None while sync away
 /// from home is off.
 type TunnelKeys = Option<(Vec<u8>, Vec<u8>)>;
@@ -240,6 +245,10 @@ pub struct Node {
     passed: Mutex<HashMap<String, Passed>>,
     on_message: RwLock<Option<OnMessage>>,
     on_peer: RwLock<Option<OnPeer>>,
+    /// The hub's side of the remote invitations admins make through it.
+    on_guest: RwLock<Option<OnGuest>>,
+    /// The remote invitations this admin makes through a hub.
+    pub inviter: crate::inviter::Inviter,
     /// Counts the times this member closed its connections to connect again
     /// (reconnect, a new tunnel key): the dial loops dial those at once.
     reconnects: AtomicUsize,
@@ -452,6 +461,8 @@ impl Node {
             passed: Mutex::new(HashMap::new()),
             on_message: RwLock::new(None),
             on_peer: RwLock::new(None),
+            on_guest: RwLock::new(None),
+            inviter: crate::inviter::Inviter::default(),
             reconnects: AtomicUsize::new(0),
             evidence: RwLock::new(Vec::new()),
             content: None,
@@ -800,6 +811,12 @@ impl Node {
     }
 
     /// Sets what gets each peer once its hello is taken.
+    /// Sets what takes, on a hub, the guest messages of the admins that
+    /// make remote invitations through it.
+    pub fn on_guest(&self, f: OnGuest) {
+        *self.on_guest.write().unwrap() = Some(f);
+    }
+
     pub fn on_peer(&self, f: OnPeer) {
         *self.on_peer.write().unwrap() = Some(f);
     }
@@ -2065,6 +2082,17 @@ impl Node {
                 "admin" | "hubs" | "credentials" | "evidence" => {
                     if let Some(f) = self.on_message.read().unwrap().as_ref() {
                         f(&c.id, &m);
+                    }
+                }
+                // A remote invitation through the hub (docs/protocol.md,
+                // section 12, "Through the hub"): the admin's side takes
+                // what comes for its invitations, the hub's side the rest.
+                "guest" => {
+                    let Some(g) = m.guest.as_ref().and_then(wire::Guest::decode) else { continue };
+                    if self.inviter.handles(&g) {
+                        self.inviter.take(&c.id, g);
+                    } else if let Some(f) = self.on_guest.read().unwrap().as_ref() {
+                        f(self, &c.id, &c.chain, g);
                     }
                 }
                 "bye" => return Ok(()),

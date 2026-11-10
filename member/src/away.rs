@@ -29,7 +29,7 @@ mod meet;
 mod movehub;
 mod serve;
 
-pub use invite::join_invite;
+pub use invite::{GuestTunnel, join_invite, keep_guest};
 pub use movehub::is_stop;
 
 const MAX_WAIT: Duration = Duration::from_secs(30);

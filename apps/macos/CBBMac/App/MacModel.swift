@@ -34,6 +34,12 @@ final class MacModel: ObservableObject {
     @Published var settingsShown = false
     private var joinFile: URL?
     private var joinCancelled = false
+    /// Whether a remote invitation is open (InviteSheet), and its state
+    /// once cbb wrote it.
+    @Published private(set) var inviting = false
+    @Published private(set) var invitation: Invitation?
+    private var inviteFiles: (state: URL, answers: URL)?
+    private var inviteCancelled = false
     /// Whether macOS lets the app press keys for remote paste.
     @Published private(set) var pasteAllowed = Injector.allowed
 
@@ -410,6 +416,94 @@ final class MacModel: ObservableObject {
         guard let file = joinFile else { return }
         joinCancelled = true
         try? FileManager.default.removeItem(at: file)
+    }
+
+    /// What cbb invite -app writes (member/src/admit_cli.rs): the
+    /// invitation's text, how long it is valid, the device that asks to
+    /// join, and the name of the one that joined; with when it ends.
+    struct Invitation: Decodable, Equatable {
+        struct Joining: Decodable, Equatable {
+            let name: String
+            let os: String
+            let fingerprint: String
+        }
+
+        let invite: String
+        let expires: Int
+        let joining: Joining?
+        let done: Bool?
+        let name: String?
+        var ends = Date()
+
+        private enum CodingKeys: String, CodingKey { case invite, expires, joining, done, name }
+    }
+
+    /// Opens a remote invitation for a device far away (docs/protocol.md,
+    /// section 12) on the group's hub: cbb invite -app runs as the
+    /// administrator, writes the invitation's state into a file the app
+    /// made, and reads the user's answer about the device that uses it from
+    /// another; cancelInvite removes the first, and cbb hangs up.
+    func invite() async {
+        guard !inviting, !busy else { return }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-invite-\(UUID().uuidString)")
+        let state = dir.appendingPathComponent("invite.json"), answers = dir.appendingPathComponent("answers")
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        } catch {
+            message = Self.describe(error)
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: dir) }
+        guard FileManager.default.createFile(atPath: state.path, contents: nil, attributes: [.posixPermissions: 0o600]),
+              FileManager.default.createFile(atPath: answers.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
+            message = Self.describe(Admin.Failure.failed(String(localized: "The app could not make the file for the QR code."), detail: dir.path))
+            return
+        }
+        inviting = true
+        inviteFiles = (state, answers)
+        inviteCancelled = false
+        let poll = Task { [weak self] in
+            var ends: Date?
+            while !Task.isCancelled {
+                if let data = try? Data(contentsOf: state), var inv = try? JSONDecoder().decode(Invitation.self, from: data) {
+                    let end = ends ?? Date().addingTimeInterval(TimeInterval(inv.expires))
+                    ends = end
+                    inv.ends = end
+                    if self?.invitation != inv { self?.invitation = inv }
+                }
+                try? await Task.sleep(for: .milliseconds(400))
+            }
+        }
+        let details = Self.showsErrorDetails
+        await act { [weak self] in
+            do {
+                _ = try await Admin.run(["invite", "-for", "1h", "-app", state.path, "-answers", answers.path], details: details)
+            } catch {
+                if self?.inviteCancelled == true { throw Admin.Failure.cancelled }
+                throw error
+            }
+            return String(localized: "The device joined the group; it appears in the list once it connects.")
+        }
+        poll.cancel()
+        inviteFiles = nil
+        invitation = nil
+        inviting = false
+    }
+
+    /// The user's answer about the device that used the invitation: yes
+    /// admits it.
+    func answerInvite(_ yes: Bool) {
+        guard let answers = inviteFiles?.answers, let h = try? FileHandle(forWritingTo: answers) else { return }
+        defer { try? h.close() }
+        _ = try? h.seekToEnd()
+        try? h.write(contentsOf: Data((yes ? "yes\n" : "no\n").utf8))
+    }
+
+    /// Ends the invitation: cbb sees its file gone and hangs up.
+    func cancelInvite() {
+        guard let state = inviteFiles?.state else { return }
+        inviteCancelled = true
+        try? FileManager.default.removeItem(at: state)
     }
 
     /// Admits the new device that shows a code and waits: the six digits it

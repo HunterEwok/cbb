@@ -753,6 +753,14 @@ impl Member {
                 Ok(json!({ "away": n.away_status() }))
             }
             "away_status" => Ok(json!({ "away": n.away_status() })),
+            // The phone joined by a remote invitation and stored its
+            // identity: sync away from home goes on, and the member offers
+            // its tunnel key to the hub through the invitation's guest
+            // tunnel.
+            "joined_by_invite" => {
+                n.joined_by_invite(arg(&a, "invite").as_str().unwrap_or_default())?;
+                Ok(json!({ "away": n.away_status() }))
+            }
             // Every device of the group as the app shows it.
             "devices" => {
                 let ds: Vec<DeviceAnswer> = n
@@ -1007,5 +1015,10 @@ impl Member {
     /// (src/admit.rs), with the issuing key's callback.
     pub fn admit(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::admit::Admit>, Vec<u8>) {
         crate::admit::Admit::new(self.node.clone(), request, sign, ctx)
+    }
+
+    /// Makes a remote invitation as an admin (src/invite.rs).
+    pub fn invite(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::invite::Invite>, Vec<u8>) {
+        crate::invite::Invite::new(self.node.clone(), request, sign, ctx)
     }
 }

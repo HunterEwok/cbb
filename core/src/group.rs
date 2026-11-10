@@ -663,6 +663,21 @@ impl Records {
         self.is_root_member(dev, &key) || self.devices().iter().any(|d| d.id == dev && d.key == key && d.admin)
     }
 
+    /// Whether the device `dev` with the verified chain may admit devices:
+    /// an admin peer (admin_peer) that is the root's own device, or whose
+    /// device record gives it the power admit. A hub carries remote
+    /// invitations only for such a device (docs/protocol.md, section 12,
+    /// "Through the hub").
+    pub fn admit_peer(&self, dev: &str, chain: &[Cert]) -> bool {
+        if !self.admin_peer(dev, chain) {
+            return false;
+        }
+        if self.root_member().is_some_and(|(id, k)| id == dev && !self.revoked(&k)) {
+            return true;
+        }
+        self.devices().iter().any(|d| d.id == dev && d.may(authority::POWER_ADMIT))
+    }
+
     /// Whether the device `dev` may be the group's hub by the records
     /// alone, as Go's MayHost: the root's own device, whose key is not
     /// revoked, an admin with the power hub, or a device that only passes
