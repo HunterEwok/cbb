@@ -1847,8 +1847,8 @@ impl Service {
             bug: self.bugs.waiting(),
             ..group
         };
-        let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
-        let status = Status { why: crate::why::reasons(&status, &devices(&node, &hubs), uptime::wall_ms()), ..status };
+        let status =
+            Status { why: crate::why::reasons(&status, &crate::why::devices(&node), uptime::wall_ms()), ..status };
         Ok(status)
     }
 

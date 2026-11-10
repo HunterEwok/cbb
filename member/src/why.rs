@@ -122,6 +122,34 @@ pub fn group_status(node: &Node) -> Status {
     }
 }
 
+/// The group's devices as `facts` reads them (the name, whether a device
+/// is online, its sync and mute), lighter than the devices op: one look at
+/// the records and the peers, since status answers it on every call.
+pub fn devices(node: &Node) -> Vec<Device> {
+    let me = node.identity().id.to_string();
+    let peers = node.peers();
+    let named: Vec<(String, String)> = {
+        let records = node.records();
+        let rs = records.lock().unwrap();
+        rs.state().devices.iter().map(|d| (d.device.clone(), d.name.clone())).collect()
+    };
+    named
+        .into_iter()
+        .map(|(id, name)| {
+            let peer = peers.iter().find(|p| p.id.as_str() == id);
+            Device {
+                this: id == me,
+                online: peer.is_some() || id == me,
+                mode: peer.map(|p| p.mode.clone()).unwrap_or_default(),
+                muted: peer.is_some_and(|p| p.muted),
+                id,
+                name,
+                ..Default::default()
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
