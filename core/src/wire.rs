@@ -274,6 +274,23 @@ pub struct CommandResult {
     pub tunnel: Option<Value>,
 }
 
+/// The most bytes of a result's reason a member keeps.
+pub const MAX_REASON: usize = 256;
+
+/// Makes a result's reason fit to show to a person, a terminal's user among
+/// them: a control character (escape included) becomes a space, and it is
+/// cut to MAX_REASON bytes at a character boundary. The member that answers
+/// is a peer, so the member that takes its result cleans it, as Go's
+/// CleanReason did.
+pub fn clean_reason(s: &str) -> String {
+    let mut out: String = s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
+    if out.len() > MAX_REASON {
+        let end = (0..=MAX_REASON).rev().find(|&i| out.is_char_boundary(i)).unwrap_or(0);
+        out.truncate(end);
+    }
+    out
+}
+
 /// The content of a hello.
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct HelloBody {
@@ -674,7 +691,27 @@ pub fn frame_len(head: [u8; 4], max: usize) -> Result<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CommandResult, DeviceInfo, archive_name_valid, decode};
+    use super::{CommandResult, DeviceInfo, MAX_REASON, archive_name_valid, clean_reason, decode};
+
+    /// A result's reason keeps its text, loses its control characters and
+    /// is cut whole characters at a time, as Go's TestCleanReason.
+    #[test]
+    fn reasons_are_cleaned() {
+        for (input, want) in [
+            ("the screen is locked", "the screen is locked"),
+            ("", ""),
+            ("a\x1b[2Jb\x1b]52;c;ZXZpbA==\x07c", "a [2Jb ]52;c;ZXZpbA== c"),
+            ("a\nb\tc\r", "a b c "),
+            ("a\u{9b}b", "a b"),
+            ("écran verrouillé", "écran verrouillé"),
+        ] {
+            assert_eq!(clean_reason(input), want, "{input:?}");
+        }
+        assert_eq!(clean_reason(&"a".repeat(1000)).len(), MAX_REASON);
+        let cut = clean_reason(&format!("{}é", "a".repeat(MAX_REASON - 1)));
+        assert_eq!(cut, "a".repeat(MAX_REASON - 1));
+        assert!(clean_reason(&"é".repeat(MAX_REASON)).len() <= MAX_REASON);
+    }
 
     /// A records-only hello carries the group's first root in base64, which
     /// a hello decodes back; every other hello leaves it out.

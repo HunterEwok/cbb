@@ -772,6 +772,63 @@ mod tests {
         }
     }
 
+    /// The C functions of a joiner and the QR reader read no byte past
+    /// what they are given, refuse null pointers, and hand back answers
+    /// that free cleanly; Miri runs this (docs/testing.md, "Unsafe code").
+    #[cfg(feature = "join")]
+    #[test]
+    fn joiner_and_qr_through_c() {
+        unsafe extern "C" fn no_sign(_: *mut core::ffi::c_void, _: *const u8, _: *mut u8, _: *mut usize) -> i32 {
+            -1
+        }
+        let error = |p: *mut u8, n: usize| -> serde_json::Value {
+            assert!(!p.is_null());
+            // SAFETY: p is an answer of n bytes, freed once here.
+            unsafe {
+                let v = serde_json::from_slice(core::slice::from_raw_parts(p, n)).unwrap();
+                cbb_free(p, n);
+                v
+            }
+        };
+        let mut n = 0usize;
+        // A frame of exactly stride * (height - 1) + width bytes, in a box
+        // of that size, so that a read past it is an error under Miri.
+        let (w, h, stride) = (4usize, 3usize, 6usize);
+        let frame = vec![255u8; stride * (h - 1) + w].into_boxed_slice();
+        // SAFETY: frame holds the bytes the size names; n is writable.
+        unsafe {
+            let got = error(cbb_qr_read(frame.as_ptr(), w, h, stride, &mut n), n);
+            assert!(got.get("ok").is_some() || got.get("error").is_some(), "{got}");
+            assert!(cbb_qr_read(core::ptr::null(), w, h, stride, &mut n).is_null());
+            assert!(cbb_qr_read(frame.as_ptr(), w, h, stride, core::ptr::null_mut()).is_null());
+            // A stride narrower than the width is refused, not read.
+            let got = error(cbb_qr_read(frame.as_ptr(), w, 1, w - 1, &mut n), n);
+            assert!(got.get("error").is_some(), "{got}");
+        }
+        let req = b"{not json";
+        let mut ans: *mut u8 = core::ptr::null_mut();
+        // SAFETY: req, ans and n live for each call; null joiners do nothing.
+        unsafe {
+            let j = cbb_join_new(req.as_ptr(), req.len(), no_sign, core::ptr::null_mut(), &mut ans, &mut n);
+            assert!(j.is_null());
+            assert!(error(ans, n).get("error").is_some());
+            assert!(cbb_join_new(core::ptr::null(), 0, no_sign, core::ptr::null_mut(), &mut ans, &mut n).is_null());
+            assert!(
+                cbb_join_new(req.as_ptr(), req.len(), no_sign, core::ptr::null_mut(), core::ptr::null_mut(), &mut n)
+                    .is_null()
+            );
+            let none = core::ptr::null_mut();
+            assert!(cbb_join_accept(none, &mut n).is_null());
+            assert!(cbb_join_feed(none, req.as_ptr(), req.len(), 0, &mut n).is_null());
+            assert!(cbb_join_finish(none, 1, &mut n).is_null());
+            cbb_join_free(none);
+            assert!(to_c(Vec::new(), core::ptr::null_mut()).is_null());
+            let p = to_c(b"{}".to_vec(), &mut n);
+            assert_eq!((core::slice::from_raw_parts(p, n), n), (&b"{}"[..], 2));
+            cbb_free(p, n);
+        }
+    }
+
     /// include/cbb_core.h declares the C functions this library exports.
     #[test]
     fn the_header_declares_them() {

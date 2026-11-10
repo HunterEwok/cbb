@@ -25,10 +25,10 @@ func statusIDs(ctx context.Context, d *Device) (id, tag string, err error) {
 
 // mdnsRecords (D17, D3): what each member publishes and how the members
 // take a record they browse. The forge browses beside them and publishes
-// a member of its own: the members dial one of their group with the
-// highest device ID, one with the lowest that publishes r=listen at once
-// but one with the lowest that dials only after the fallback (D2), and
-// neither a phone, which dials them, nor one of another group.
+// a member of its own: the members dial one of their group with a higher
+// device ID at once, wait for one with a lower ID to dial them unless it
+// publishes r=listen (it never dials), and dial neither a phone, which
+// dials them, nor one of another group.
 func mdnsRecords(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/D17-mdns/"
 	g := fleetGroup(ctx, r, f, "fleet/D17-mdns", 2)
@@ -123,9 +123,12 @@ func mdnsRecords(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 	publish := func(txt string, secs int) (string, error) {
 		return RunFor(ctx, browser, fmt.Sprintf("cbbbench-forge mdns:%d:%s", secs, txt), "", time.Duration(secs+20)*time.Second)
 	}
-	// publishLow publishes it with the lowest device ID instead.
-	publishLow := func(txt string, secs int) (string, error) {
-		return RunFor(ctx, browser, fmt.Sprintf("cbbbench-forge mdns-low:%d:%s", secs, txt), "", time.Duration(secs+20)*time.Second)
+	// publishLow publishes it with a low device ID, its own for each case,
+	// since a member keeps what it learned of an ID. A member dials one
+	// with a lower ID only after its fallback (30 s), so 15 s tell the two
+	// apart.
+	publishLow := func(id, txt string, secs int) (string, error) {
+		return RunFor(ctx, browser, fmt.Sprintf("cbbbench-forge mdns@%s:%d:%s", id, secs, txt), "", time.Duration(secs+20)*time.Second)
 	}
 	dialedBy := func(out string, d *Device) (bool, error) {
 		ip, err := fleetIP(ctx, d)
@@ -138,46 +141,39 @@ func mdnsRecords(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 		}
 		for _, d := range []*Device{a, b} {
 			if ok, err := dialedBy(out, d); err != nil || !ok {
-				return fmt.Errorf("%s did not dial a full member of its group that it should dial (%v): %q", d.Name, err, out)
+				return fmt.Errorf("%s did not dial a member of its group with a higher device ID (%v): %q", d.Name, err, out)
 			}
 		}
 		return nil
 	})
-	// The forge's member has the lowest device ID here, so a member that
-	// dials waits 30 s for it to dial (D2) unless it publishes r=listen:
-	// within 15 s the members dial the listening one and not the other.
 	r.Do("fleet/D3-listen-dialed", func() error {
-		txt := "v=1,g=" + tag + ",r=listen"
-		out, err := publishLow(txt, 15)
+		out, err := publishLow("00000000000000000000000000000002", "v=1,g="+tag+",r=listen", 15)
 		if err != nil {
 			return err
 		}
 		for _, d := range []*Device{a, b} {
 			if ok, err := dialedBy(out, d); err != nil || !ok {
-				return fmt.Errorf("%s did not dial a member of its group that publishes %s (%v): %q", d.Name, txt, err, out)
+				return fmt.Errorf("%s did not dial a member of its group that publishes r=listen, with a lower device ID (%v): %q", d.Name, err, out)
 			}
 		}
 		return nil
 	})
-	r.Do("fleet/D3-low-dialing-waits", func() error {
-		txt := "v=1,g=" + tag
-		out, err := publishLow(txt, 15)
-		if err != nil {
-			return err
-		}
-		for _, d := range []*Device{a, b} {
-			if ok, err := dialedBy(out, d); err != nil || ok {
-				return fmt.Errorf("%s dialed a member with a lower device ID that publishes %s before the fallback (%v)", d.Name, txt, err)
-			}
-		}
-		return nil
-	})
-	for _, c := range []struct{ name, txt string }{
-		{"D3-phone-not-dialed", "v=1,g=" + tag + ",r=phone"},
-		{"D17-other-group", "v=1,g=0123456789abcdef"},
+	for _, c := range []struct {
+		name, txt string
+		low       bool
+	}{
+		{"D3-lower-waits", "v=1,g=" + tag, true},
+		{"D3-phone-not-dialed", "v=1,g=" + tag + ",r=phone", false},
+		{"D17-other-group", "v=1,g=0123456789abcdef", false},
 	} {
 		r.Do("fleet/"+c.name, func() error {
-			out, err := publish(c.txt, 15)
+			pub := publish
+			if c.low {
+				pub = func(txt string, secs int) (string, error) {
+					return publishLow("00000000000000000000000000000001", txt, secs)
+				}
+			}
+			out, err := pub(c.txt, 15)
 			if err != nil {
 				return err
 			}

@@ -25,24 +25,20 @@ import (
 // a member with the highest device ID, whom every member that dials dials
 // at once when they share a group, with those TXT strings on port mdnsPort
 // for SECONDS, and prints a line "dialed from ADDR" for each connection to
-// the port; forge mdns-low:SECONDS:TXT,... does the same with the lowest
-// device ID, whom a member that dials dials at once only when it publishes
-// r=listen, and otherwise only after the fallback of 30 s (D2).
+// the port; mdns@ID:SECONDS:TXT,... does the same with the device ID ID,
+// such as a low one, whom a member dials at once only when it publishes
+// r=listen. A member keeps what it learned of an ID while it runs, so each
+// case takes an ID of its own.
 
 // mdnsPort is the port the forge's member publishes.
 const mdnsPort = 8790
 
-// mdnsID is the forge's device ID: higher than any other, so that a full
-// member of its group dials it at once.
+// mdnsID is the forge's device ID: higher than any other, so that a
+// member of its group that dials dials it at once.
 const mdnsID = "ffffffffffffffffffffffffffffffff"
 
-// mdnsLowID is the forge's device ID for mdns-low: lower than any other,
-// so that a member of its group that dials waits for it to dial unless it
-// publishes r=listen.
-const mdnsLowID = "00000000000000000000000000000001"
-
 func mdnsCase(arg string) bool {
-	return arg == "mdns-browse" || strings.HasPrefix(arg, "mdns:") || strings.HasPrefix(arg, "mdns-low:")
+	return arg == "mdns-browse" || strings.HasPrefix(arg, "mdns:") || strings.HasPrefix(arg, "mdns@")
 }
 
 func runMDNS(dir, arg string) error {
@@ -88,14 +84,18 @@ func runMDNS(dir, arg string) error {
 		fmt.Println("mdns: browsing")
 		return r.Run(ctx)
 	}
-	id, rest := mdnsID, strings.TrimPrefix(arg, "mdns:")
-	if low, ok := strings.CutPrefix(arg, "mdns-low:"); ok {
-		id, rest = mdnsLowID, low
+	id := mdnsID
+	if rest, ok := strings.CutPrefix(arg, "mdns@"); ok {
+		var ok bool
+		if id, rest, ok = strings.Cut(rest, ":"); !ok || len(id) != len(mdnsID) {
+			return fmt.Errorf("mdns@ID:SECONDS:TXT,..., not %q", arg)
+		}
+		arg = "mdns:" + rest
 	}
-	f := strings.SplitN(rest, ":", 2)
+	f := strings.SplitN(strings.TrimPrefix(arg, "mdns:"), ":", 2)
 	secs, err := strconv.Atoi(f[0])
 	if err != nil || len(f) != 2 {
-		return fmt.Errorf("mdns:SECONDS:TXT,... or mdns-low:SECONDS:TXT,..., not %q", arg)
+		return fmt.Errorf("mdns:SECONDS:TXT,... or mdns@ID:SECONDS:TXT,..., not %q", arg)
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(secs)*time.Second)
 	defer cancel()
