@@ -23,6 +23,11 @@ import (
 	"time"
 )
 
+// siteBody is what the web server serves outside the path, so that a
+// visitor who is no client of the forwarder's VLESS can tell it got the
+// site (W34).
+const siteBody = "cbb-bench site"
+
 func webCase(c string) bool { return strings.HasPrefix(c, "web:") }
 
 // runWeb plays the web server of a forwarder's site, in front of its

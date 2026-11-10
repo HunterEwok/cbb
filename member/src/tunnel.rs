@@ -43,8 +43,27 @@ pub(crate) const KEEPALIVE: u16 = 25;
 /// The MTU inside the tunnel: IPv6's minimum, which fits in a UDP datagram
 /// on any path, so nothing is fragmented.
 pub(crate) const MTU: usize = 1280;
+
+/// How long a TCP connection inside the tunnel may hear nothing from the
+/// other end before it is dropped. smoltcp counts it from the last packet
+/// that came in even while nothing waits to be sent, so a connection that
+/// is only quiet (a join waiting for the admin's answer) would be dropped
+/// too: TCP_KEEP_ALIVE has the other end answer meanwhile.
+pub(crate) const TCP_TIMEOUT: smoltcp::time::Duration = smoltcp::time::Duration::from_secs(30);
+/// How often a quiet TCP connection inside the tunnel sends a keep-alive,
+/// well within TCP_TIMEOUT, so that a lost one or two do not drop it.
+pub(crate) const TCP_KEEP_ALIVE: smoltcp::time::Duration = smoltcp::time::Duration::from_secs(10);
+
+/// Sets a TCP socket inside the tunnel to drop a dead connection, never a
+/// quiet one.
+pub(crate) fn set_tcp_timeouts(sock: &mut tcp::Socket) {
+    sock.set_timeout(Some(TCP_TIMEOUT));
+    sock.set_keep_alive(Some(TCP_KEEP_ALIVE));
+}
 /// How long the link waits for the hub's answer at one endpoint before it
-/// tries the next.
+/// tries the next: counted from when it started there, last heard the hub or
+/// began a rekey, so a rekey, which WireGuard starts once a session is two
+/// minutes old, does not leave an endpoint that works.
 const ENDPOINT_WAIT: Duration = Duration::from_secs(10);
 const MAX_ENDPOINTS: usize = 8;
 pub(crate) const TCP_BUFFER: usize = 64 << 10;
@@ -780,8 +799,8 @@ fn random_key() -> Result<Vec<u8>> {
 
 /// Checks the offer of the hub `from` and returns what this member keeps of
 /// it: with AmneziaWG's settings (src/awg.rs) and the way over VLESS with
-/// XHTTP (src/vless.rs), if it has them. REALITY, as rustls cannot make a
-/// browser's ClientHello, only when cbb-helper makes that way.
+/// XHTTP (src/vless.rs), if it has them; an older forwarder's REALITY is
+/// refused.
 pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
     if let Some(v) = &o.vless {
         crate::vless::check_offer(v)?;
@@ -904,6 +923,8 @@ impl Link {
             IndexTable::from_os_rng(),
             limiter.clone(),
         );
+        #[cfg(test)]
+        let tunn = tests::with_test_timers(tunn);
         let stop = Arc::new(AtomicBool::new(false));
         let answered = Arc::new(AtomicBool::new(false));
         let wanted = Arc::new(Mutex::new(None));
@@ -1015,7 +1036,11 @@ struct Pump {
     limiter: Arc<RateLimiter>,
     endpoints: Vec<SocketAddr>,
     current: usize,
+    /// When the link started at the current endpoint, last heard the hub or
+    /// began a rekey.
     since: Instant,
+    /// Whether the session was active when the link last looked.
+    active: bool,
     udp: UdpSocket,
     ln: TcpListener,
     iface: Interface,
@@ -1074,6 +1099,7 @@ impl Pump {
             endpoints,
             current: 0,
             since: Instant::now(),
+            active: false,
             udp,
             ln,
             iface,
@@ -1164,6 +1190,7 @@ impl Pump {
 
     /// Notes that the hub answered, and through which way.
     fn answer(&mut self) {
+        self.since = Instant::now();
         if self.answered.swap(true, Ordering::SeqCst) {
             return;
         }
@@ -1178,7 +1205,16 @@ impl Pump {
 
     /// Tries the next endpoint while the hub does not answer at this one.
     fn next_endpoint(&mut self) {
-        if self.tunn.has_active_session() || self.endpoints.len() < 2 || self.since.elapsed() < ENDPOINT_WAIT {
+        if self.tunn.has_active_session() {
+            self.active = true;
+            return;
+        }
+        if std::mem::take(&mut self.active) {
+            // The session is old enough for a rekey: its handshake gets
+            // the whole wait at the endpoint that has worked.
+            self.since = Instant::now();
+        }
+        if self.endpoints.len() < 2 || self.since.elapsed() < ENDPOINT_WAIT {
             return;
         }
         self.use_endpoint((self.current + 1) % self.endpoints.len());
@@ -1219,7 +1255,7 @@ impl Pump {
                 tcp::SocketBuffer::new(vec![0; TCP_BUFFER]),
             );
             sock.set_nagle_enabled(false);
-            sock.set_timeout(Some(smoltcp::time::Duration::from_secs(30)));
+            set_tcp_timeouts(&mut sock);
             let port = self.next_port;
             self.next_port = if self.next_port == u16::MAX { 49152 } else { self.next_port + 1 };
             if sock.connect(self.iface.context(), (IpAddress::Ipv6(self.peer), MEMBER_PORT), port).is_err() {
@@ -1402,13 +1438,19 @@ pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) ->
     busy
 }
 
-/// The kernel's table of IPv4 TCP sockets, or "" where there is none.
+/// The kernel's tables of TCP sockets, IPv4's then IPv6's, or "" where
+/// there are none. A client on a dual-stack socket (Java's, on a system
+/// with IPv6) that dials the loopback port is in IPv6's table, by its
+/// IPv4-mapped address.
 fn tcp_table() -> String {
-    std::fs::read_to_string("/proc/net/tcp").unwrap_or_default()
+    let mut t = std::fs::read_to_string("/proc/net/tcp").unwrap_or_default();
+    t.push_str(&std::fs::read_to_string("/proc/net/tcp6").unwrap_or_default());
+    t
 }
 
 /// Reports whether the socket at from, connected to the listener at to,
-/// belongs to this process's user by table, the text of /proc/net/tcp.
+/// belongs to this process's user by table, the text of /proc/net/tcp and
+/// /proc/net/tcp6.
 /// Without the table (a system without /proc) it cannot tell and lets the
 /// connection through.
 fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
@@ -1419,17 +1461,108 @@ fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
     // Addresses are written as the kernel holds them: the IPv4 address in
     // the host's byte order, the port in network order.
     let hex = |a: std::net::SocketAddrV4| format!("{:08X}:{:04X}", u32::from_ne_bytes(a.ip().octets()), a.port());
-    let (local, remote) = (hex(from), hex(to));
+    // IPv6's table writes the address as four such words: here the
+    // IPv4-mapped one, ::ffff:a.b.c.d.
+    let hex6 = |a: std::net::SocketAddrV4| {
+        let words: String = a
+            .ip()
+            .to_ipv6_mapped()
+            .octets()
+            .chunks(4)
+            .map(|w| format!("{:08X}", u32::from_ne_bytes([w[0], w[1], w[2], w[3]])))
+            .collect();
+        format!("{words}:{:04X}", a.port())
+    };
+    let pairs = [(hex(from), hex(to)), (hex6(from), hex6(to))];
     let me = sys::euid();
-    table.lines().skip(1).any(|l| {
+    table.lines().any(|l| {
         let f: Vec<&str> = l.split_whitespace().collect();
-        f.len() > 7 && f[1] == local && f[2] == remote && f[7].parse::<u32>().ok() == Some(me)
+        f.len() > 7
+            && pairs.iter().any(|(local, remote)| f[1] == local && f[2] == remote)
+            && f[7].parse::<u32>().ok() == Some(me)
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    std::thread_local! {
+        /// The session age at which the links this thread starts rekey.
+        static REKEY_AFTER: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+    }
+
+    /// Gives a link's WireGuard the rekey time a test set for its thread.
+    pub(super) fn with_test_timers(mut tunn: Tunn) -> Tunn {
+        if let Some(d) = REKEY_AFTER.get() {
+            tunn.dangerously_set_timer_params(gotatun::noise::TimerParams {
+                rekey_after_time: d..=d,
+                ..Default::default()
+            });
+        }
+        tunn
+    }
+
+    /// A session old enough for a rekey keeps the link at the endpoint
+    /// where the hub answers: the rekey's handshake gets the whole wait
+    /// there, as the way over VLESS must not be left for a blocked UDP
+    /// every time WireGuard renews its keys.
+    #[test]
+    fn rekey_keeps_the_endpoint_that_works() {
+        let st = State::new("g").unwrap();
+        let me = DeviceId::parse("0123456789abcdef0123456789abcdef").unwrap();
+        let mut raw = [0u8; 32];
+        raw.copy_from_slice(&random_key().unwrap());
+        let hub_secret = StaticSecret::from(raw);
+        let hub_public = PublicKey::from(&hub_secret);
+        let good = UdpSocket::bind("127.0.0.1:0").unwrap();
+        good.set_read_timeout(Some(Duration::from_millis(100))).unwrap();
+        let blocked = UdpSocket::bind("127.0.0.1:0").unwrap();
+        blocked.set_nonblocking(true).unwrap();
+        let hub = Hub {
+            device: "fedcba98765432100123456789abcd0e".into(),
+            key: hub_public.as_bytes().to_vec(),
+            psk: st.psk.clone(),
+            endpoints: vec![good.local_addr().unwrap(), blocked.local_addr().unwrap()],
+            next: vec![],
+            obfuscation: None,
+            vless: None,
+        };
+        // A rekey once the session is a little older than the wait at an
+        // endpoint, which a link counted from its start counts as gone.
+        REKEY_AFTER.set(Some(ENDPOINT_WAIT + Duration::from_secs(1)));
+        let link = Link::start(&st, &hub, &me, Arc::new(|_: &str| {})).unwrap();
+        REKEY_AFTER.set(None);
+
+        let mut psk = [0u8; 32];
+        psk.copy_from_slice(&st.psk);
+        let limiter = Arc::new(RateLimiter::new(&hub_public, HANDSHAKE_RATE_LIMIT));
+        let mut tunn = Tunn::new(
+            hub_secret,
+            PublicKey::from(&st.secret()),
+            Some(psk),
+            None,
+            IndexTable::from_os_rng(),
+            limiter.clone(),
+        );
+        let until = Instant::now() + ENDPOINT_WAIT + Duration::from_secs(6);
+        let mut buf = [0u8; 2048];
+        while Instant::now() < until {
+            assert!(
+                blocked.recv_from(&mut buf).is_err(),
+                "the link left the endpoint that works when its session became old enough for a rekey"
+            );
+            let Ok((n, from)) = good.recv_from(&mut buf) else { continue };
+            let Ok(wg) = limiter.verify_packet(from, Packet::from_bytes(BytesMut::from(&buf[..n]))) else {
+                continue;
+            };
+            if let TunnResult::WriteToNetwork(p) = tunn.handle_incoming_packet(wg) {
+                let _ = good.send_to(Packet::from(p).as_ref(), from);
+            }
+        }
+        assert!(link.answered(), "the hub never answered");
+        drop(link);
+    }
 
     // A link that ends before the hub answers makes the next one start at
     // the following endpoint; the way over VLESS is found again by its
@@ -1549,6 +1682,30 @@ mod tests {
         };
         assert!(!own_user(&line(other), from, to));
         assert!(own_user(&line(other - 1), from, to));
+        // A dual-stack client, in IPv6's table by its IPv4-mapped address.
+        let hex6 = |a: SocketAddr| match a {
+            SocketAddr::V4(a) => {
+                let w: String = a
+                    .ip()
+                    .to_ipv6_mapped()
+                    .octets()
+                    .chunks(4)
+                    .map(|w| format!("{:08X}", u32::from_ne_bytes([w[0], w[1], w[2], w[3]])))
+                    .collect();
+                format!("{w}:{:04X}", a.port())
+            }
+            _ => unreachable!(),
+        };
+        let line6 = |uid: u32| {
+            format!(
+                "  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n   0: {} {} 01 00000000:00000000 00:00000000 00000000 {uid:5} 0 1 1\n",
+                hex6(from),
+                hex6(to.unwrap())
+            )
+        };
+        assert!(own_user(&(line(other) + &line6(other - 1)), from, to), "a dual-stack client of this user");
+        assert!(!own_user(&line6(other), from, to), "a dual-stack client of another user");
+        assert!(line6(0).contains("0000000000000000"), "the mapped address's first words are zero");
         assert!(!own_user("header\n", from, to), "a connection the table does not show");
         assert!(own_user("", from, to), "no table");
     }

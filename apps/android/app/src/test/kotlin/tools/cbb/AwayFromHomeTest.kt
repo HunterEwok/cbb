@@ -140,7 +140,7 @@ class AwayFromHomeTest {
      */
     @Test
     fun triesAmneziaWGBeforeVLESS() {
-        val vless = """{"endpoint":"203.0.113.9:443","public_key":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk=","short_id":"ab","server_name":"www.example.com","id":"5f0c1e2d-3b4a-4c5d-8e6f-7a8b9c0d1e2f"}"""
+        val vless = """{"transport":"xhttp","endpoint":"203.0.113.9:443","server_name":"cbb.tools","path":"/banMEJvnYJJap8S/AbCdEfGhIjKlMnOpQr","id":"5f0c1e2d-3b4a-4c5d-8e6f-7a8b9c0d1e2f"}"""
         for ((obfuscation, ways) in listOf("""{"jc":4}""" to listOf("", "", vless, ""), null to listOf(vless, vless))) {
             val tunnels = FakeTunnels()
             val a = AwayFromHome(

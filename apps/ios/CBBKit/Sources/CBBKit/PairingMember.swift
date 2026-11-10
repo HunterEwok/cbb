@@ -54,6 +54,12 @@ public enum PairingMember {
         public var device: String
         public var info: Pairing.Info
         public var fingerprint: String
+
+        public init(device: String, info: Pairing.Info, fingerprint: String) {
+            self.device = device
+            self.info = info
+            self.fingerprint = fingerprint
+        }
     }
 
     /// A remote invitation's side of the exchange: its secret in place of

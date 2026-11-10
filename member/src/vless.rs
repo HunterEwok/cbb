@@ -81,37 +81,13 @@ enum Out {
 /// The running way. Dropping it stops it.
 pub struct Client {
     addr: SocketAddr,
-    ctx: Option<Arc<Ctx>>,
+    ctx: Arc<Ctx>,
     thread: Option<JoinHandle<()>>,
-    /// A way inside REALITY that cbb-helper runs, by its ID.
-    helper: Option<(Arc<crate::helper::Helper>, String)>,
-}
-
-/// The helper ops of a way over VLESS inside REALITY (internal/helper's
-/// vless.go).
-const OP_DIAL: &str = "vless-dial";
-const OP_CLOSE: &str = "vless-close";
-
-/// Whether the `vless` settings of a hub's offer are VLESS inside REALITY,
-/// which its transport, none, says.
-pub fn is_reality(offer: &Value) -> bool {
-    offer.get("transport").and_then(Value::as_str).unwrap_or_default().is_empty()
-}
-
-/// cbb-helper, if it runs beside cbb and makes the way inside REALITY,
-/// which rustls cannot: a computer's service has it, the lite member on a
-/// Pi or a router and the phones do not.
-pub fn reality_helper() -> Option<Arc<crate::helper::Helper>> {
-    let h = crate::helper::shared()?;
-    h.hello().ok().filter(|hello| hello.ops.iter().any(|o| o == OP_DIAL)).map(|_| h)
 }
 
 /// Checks the `vless` settings of a hub's offer: XHTTP, which this member
-/// speaks, or REALITY when cbb-helper makes that way.
+/// speaks; an older forwarder's REALITY is refused.
 pub fn check_offer(offer: &Value) -> Result<()> {
-    if is_reality(offer) && reality_helper().is_some() {
-        return Ok(());
-    }
     Link::from_offer(offer).map(|_| ())
 }
 
@@ -119,24 +95,6 @@ impl Client {
     /// Starts the way for the `vless` settings of a hub's offer. Nothing is
     /// sent until the tunnel sends its first packet.
     pub fn start(offer: &Value, log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<Client> {
-        if is_reality(offer)
-            && let Some(h) = reality_helper()
-        {
-            let payload = serde_json::to_vec(offer).context("cannot encode the hub's VLESS settings")?;
-            let m = h.call(
-                crate::control::Header { op: OP_DIAL.into(), ..Default::default() },
-                payload,
-                Duration::from_secs(30),
-            )?;
-            #[derive(serde::Deserialize)]
-            struct Way {
-                id: String,
-                addr: String,
-            }
-            let w: Way = serde_json::from_slice(&m.payload).context("cbb-helper's way over VLESS does not read")?;
-            let addr = w.addr.parse().map_err(|_| Error::msg(format!("cbb-helper's way is at {:?}", w.addr)))?;
-            return Ok(Client { addr, ctx: None, thread: None, helper: Some((h, w.id)) });
-        }
         let link = Link::from_offer(offer)?;
         let endpoint: SocketAddr =
             link.endpoint.parse().map_err(|_| Error::msg(format!("{:?} is not an address", link.endpoint)))?;
@@ -151,7 +109,7 @@ impl Client {
             let ctx = ctx.clone();
             std::thread::spawn(move || upload(&ctx))
         };
-        Ok(Client { addr, ctx: Some(ctx), thread: Some(thread), helper: None })
+        Ok(Client { addr, ctx, thread: Some(thread) })
     }
 
     /// The local address the tunnel sends to.
@@ -162,15 +120,9 @@ impl Client {
 
 impl Drop for Client {
     fn drop(&mut self) {
-        if let Some(ctx) = &self.ctx {
-            ctx.stop.store(true, Ordering::SeqCst);
-        }
+        self.ctx.stop.store(true, Ordering::SeqCst);
         if let Some(t) = self.thread.take() {
             let _ = t.join();
-        }
-        if let Some((h, id)) = self.helper.take() {
-            let close = crate::control::Header { op: OP_CLOSE.into(), name: id, ..Default::default() };
-            let _ = h.call(close, Vec::new(), Duration::from_secs(5));
         }
     }
 }

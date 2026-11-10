@@ -534,7 +534,7 @@ impl Pump {
                 tcp::SocketBuffer::new(vec![0; TCP_BUFFER]),
             );
             sock.set_nagle_enabled(false);
-            sock.set_timeout(Some(smoltcp::time::Duration::from_secs(30)));
+            crate::tunnel::set_tcp_timeouts(&mut sock);
             if sock.listen((IpAddress::Ipv6(self.own), MEMBER_PORT)).is_err() {
                 return;
             }
