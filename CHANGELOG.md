@@ -2023,6 +2023,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A tunnel's loopback port on Linux takes a client on a dual-stack socket, as Java's on a system
+  with IPv6: its user is looked up in the kernel's IPv6 table too, by its IPv4-mapped address,
+  where before it was refused at once.
 - A member removed from the group while it was still answering the hello of the connection that
   removed it hears that it was removed: when its own writing failed first, as the other end hung
   up, it dropped the records it had already read, and every later connection was refused.

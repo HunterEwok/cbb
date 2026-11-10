@@ -1382,13 +1382,19 @@ pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) ->
     busy
 }
 
-/// The kernel's table of IPv4 TCP sockets, or "" where there is none.
+/// The kernel's tables of TCP sockets, IPv4's then IPv6's, or "" where
+/// there are none. A client on a dual-stack socket (Java's, on a system
+/// with IPv6) that dials the loopback port is in IPv6's table, by its
+/// IPv4-mapped address.
 fn tcp_table() -> String {
-    std::fs::read_to_string("/proc/net/tcp").unwrap_or_default()
+    let mut t = std::fs::read_to_string("/proc/net/tcp").unwrap_or_default();
+    t.push_str(&std::fs::read_to_string("/proc/net/tcp6").unwrap_or_default());
+    t
 }
 
 /// Reports whether the socket at from, connected to the listener at to,
-/// belongs to this process's user by table, the text of /proc/net/tcp.
+/// belongs to this process's user by table, the text of /proc/net/tcp and
+/// /proc/net/tcp6.
 /// Without the table (a system without /proc) it cannot tell and lets the
 /// connection through.
 fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
@@ -1399,11 +1405,25 @@ fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
     // Addresses are written as the kernel holds them: the IPv4 address in
     // the host's byte order, the port in network order.
     let hex = |a: std::net::SocketAddrV4| format!("{:08X}:{:04X}", u32::from_ne_bytes(a.ip().octets()), a.port());
-    let (local, remote) = (hex(from), hex(to));
+    // IPv6's table writes the address as four such words: here the
+    // IPv4-mapped one, ::ffff:a.b.c.d.
+    let hex6 = |a: std::net::SocketAddrV4| {
+        let words: String = a
+            .ip()
+            .to_ipv6_mapped()
+            .octets()
+            .chunks(4)
+            .map(|w| format!("{:08X}", u32::from_ne_bytes([w[0], w[1], w[2], w[3]])))
+            .collect();
+        format!("{words}:{:04X}", a.port())
+    };
+    let pairs = [(hex(from), hex(to)), (hex6(from), hex6(to))];
     let me = sys::euid();
-    table.lines().skip(1).any(|l| {
+    table.lines().any(|l| {
         let f: Vec<&str> = l.split_whitespace().collect();
-        f.len() > 7 && f[1] == local && f[2] == remote && f[7].parse::<u32>().ok() == Some(me)
+        f.len() > 7
+            && pairs.iter().any(|(local, remote)| f[1] == local && f[2] == remote)
+            && f[7].parse::<u32>().ok() == Some(me)
     })
 }
 
@@ -1529,6 +1549,30 @@ mod tests {
         };
         assert!(!own_user(&line(other), from, to));
         assert!(own_user(&line(other - 1), from, to));
+        // A dual-stack client, in IPv6's table by its IPv4-mapped address.
+        let hex6 = |a: SocketAddr| match a {
+            SocketAddr::V4(a) => {
+                let w: String = a
+                    .ip()
+                    .to_ipv6_mapped()
+                    .octets()
+                    .chunks(4)
+                    .map(|w| format!("{:08X}", u32::from_ne_bytes([w[0], w[1], w[2], w[3]])))
+                    .collect();
+                format!("{w}:{:04X}", a.port())
+            }
+            _ => unreachable!(),
+        };
+        let line6 = |uid: u32| {
+            format!(
+                "  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n   0: {} {} 01 00000000:00000000 00:00000000 00000000 {uid:5} 0 1 1\n",
+                hex6(from),
+                hex6(to.unwrap())
+            )
+        };
+        assert!(own_user(&(line(other) + &line6(other - 1)), from, to), "a dual-stack client of this user");
+        assert!(!own_user(&line6(other), from, to), "a dual-stack client of another user");
+        assert!(line6(0).contains("0000000000000000"), "the mapped address's first words are zero");
         assert!(!own_user("header\n", from, to), "a connection the table does not show");
         assert!(own_user("", from, to), "no table");
     }
