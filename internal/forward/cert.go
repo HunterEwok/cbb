@@ -81,41 +81,6 @@ func LoadCert(path string) (tls.Certificate, error) {
 	return cert, nil
 }
 
-// realityBlock is the PEM type of the forwarder's REALITY key in its key
-// file, next to its own key and certificate.
-const realityBlock = "CBB REALITY KEY"
-
-// LoadRealityKey reads the forwarder's REALITY key, X25519, for VLESS from
-// its key file at path, and adds a new one to the file if it has none.
-func LoadRealityKey(path string) ([32]byte, error) {
-	var key [32]byte
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return key, err
-	}
-	for rest := data; ; {
-		var b *pem.Block
-		if b, rest = pem.Decode(rest); b == nil {
-			break
-		}
-		if b.Type == realityBlock {
-			if len(b.Bytes) != len(key) {
-				return key, fmt.Errorf("%s: the REALITY key is not %d bytes", path, len(key))
-			}
-			copy(key[:], b.Bytes)
-			return key, nil
-		}
-	}
-	if _, err := rand.Read(key[:]); err != nil {
-		return key, err
-	}
-	data = append(data, pem.EncodeToMemory(&pem.Block{Type: realityBlock, Bytes: key[:]})...)
-	if err := atomicfile.Write(path, data, 0o600); err != nil {
-		return key, err
-	}
-	return key, nil
-}
-
 // xhttpBlock is the PEM type of the path the web server passes to the
 // forwarder's XHTTP, in its key file.
 const xhttpBlock = "CBB XHTTP PATH"

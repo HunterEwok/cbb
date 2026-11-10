@@ -240,13 +240,19 @@ final class LiveGroup: GroupController {
     func makeRecovery() async throws -> Core.RecoverySheet {
         guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
         let root = try await caSigner(reason: String(localized: "Make a recovery key", bundle: .app))
-        guard var g = state else { throw PhoneGroup.Failure.notRoot }
-        let made = try g.makeRecovery(rootSigner: root, now: Date())
-        try g.save(to: file)
-        state = g
+        return try rootRecord(root) { n, p, s in try n.makeRecovery(public: p, sign: s) }
+    }
+
+    /// Has the phone's member in the core build, check and sign one of the
+    /// root's own records with the root key (cbb_core::root), which it adds
+    /// and sends, then takes the member's records into the group.
+    @discardableResult
+    private func rootRecord<T>(_ root: SecKeySigner, _ act: (CoreMember, Data, @escaping (Data) throws -> Data) throws -> T) throws -> T {
+        guard let node else { throw CoreMember.Failure.notConnected }
+        let out = try act(node, root.publicKeyDER, { try root.signature(digest: $0) })
+        pullRecords()
         groupChanged()
-        sendRecords([made.record])
-        return made.sheet
+        return out
     }
 
     var keyLevel: String? { state?.isRoot == true ? state?.keyLevel : nil }
@@ -276,12 +282,9 @@ final class LiveGroup: GroupController {
     func setKeyLevel(_ level: String) async throws {
         guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
         let root = try await caSigner(reason: String(localized: "Change which keys may be admins", bundle: .app))
-        guard var g = state else { throw PhoneGroup.Failure.notRoot }
-        let r = try g.setKeyLevel(level, rootSigner: root, now: Date())
-        try g.save(to: file)
-        state = g
-        groupChanged()
-        sendRecords([r])
+        let own = state.flatMap { g in g.devices.first(where: { $0.id == g.device })?.store } ?? Records.hardware
+        guard Records.levelAllows(level, store: own, consent: true) else { throw PhoneGroup.Failure.belowKeyLevel }
+        try rootRecord(root) { n, p, s in try n.setKeyLevel(level, public: p, sign: s) }
     }
 
     /// Puts the group's recovery key on a YubiKey held to the phone (Core
@@ -293,27 +296,21 @@ final class LiveGroup: GroupController {
     func makeRecoveryOnCard(pin: String) async throws -> UInt8 {
         guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
         let root = try await caSigner(reason: String(localized: "Put the recovery key on a YubiKey", bundle: .app))
-        guard let before = state else { throw PhoneGroup.Failure.notRoot }
-        let (slot, record) = try await YubiKeyNfc.withCard(
+        guard let n = node else { throw CoreMember.Failure.notConnected }
+        let slot = try await YubiKeyNfc.withCard(
             prompt: String(localized: "Hold the YubiKey to the top of the phone.", bundle: .app),
             done: String(localized: "The recovery key is on the YubiKey.", bundle: .app)
-        ) { (card: SmartCard) throws -> (UInt8, Member.Record) in
-            var g = before
+        ) { (card: SmartCard) throws -> UInt8 in
             try Piv.select(card)
             try Piv.verify(card, pin: pin)
             try Piv.authenticate(card)
             let slot = try Piv.freeSlot(card)
-            let (ca, record) = try g.makeRecoveryOnCard(publicKey: try Piv.generate(card, slot: slot), rootSigner: root, now: Date())
+            let ca = try n.recoveryFor(try Piv.generate(card, slot: slot), public: root.publicKeyDER, sign: { try root.signature(digest: $0) })
             try Piv.putCertificate(card, slot: slot, cert: ca)
-            return (slot, record)
+            return slot
         }
-        // Into the group as it is now, which sync may have changed while the phone waited for the card.
-        guard var g = state else { throw PhoneGroup.Failure.notRoot }
-        guard g.add([record]).count == 1 else { throw PhoneGroup.Failure.notRoot }
-        try g.save(to: file)
-        state = g
+        pullRecords()
         groupChanged()
-        sendRecords([record])
         return slot
     }
 
@@ -322,12 +319,7 @@ final class LiveGroup: GroupController {
     func removeRecovery() async throws {
         guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
         let root = try await caSigner(reason: String(localized: "Remove the recovery key", bundle: .app))
-        guard var g = state else { throw PhoneGroup.Failure.notRoot }
-        let r = try g.removeRecovery(rootSigner: root, now: Date())
-        try g.save(to: file)
-        state = g
-        groupChanged()
-        sendRecords([r])
+        try rootRecord(root) { n, p, s in try n.removeRecovery(public: p, sign: s) }
     }
 
     /// The label of the key this phone signs with: the root key, or the
@@ -1268,19 +1260,17 @@ final class LiveGroup: GroupController {
         guard Records.store(store, role: "member") != Records.rootless else { throw PhoneGroup.Failure.rootless }
         guard Records.store(store, role: "member") == Records.hardware || allowFileKey else { throw PhoneGroup.Failure.fileKey }
         let root = try await caSigner(reason: String(localized: "Make a computer an admin", bundle: .app))
-        guard var g = state else { return }
-        var rs: [Member.Record] = []
         // The user's consent to a key in a file, after the dialog's
         // warning, lets the group take keys in files too.
-        if Records.store(store, role: "member") == Records.file, allowFileKey, g.keyLevel != Records.levelFiles {
-            rs.append(try g.setKeyLevel(Records.levelFiles, rootSigner: root, now: Date()))
+        if Records.store(store, role: "member") == Records.file, allowFileKey, state?.keyLevel != Records.levelFiles {
+            try rootRecord(root) { n, p, s in try n.setKeyLevel(Records.levelFiles, public: p, sign: s) }
         }
+        guard var g = state else { return }
         let (ca, r) = try g.makeAdmin(device: id, adminKey: key, rootSigner: root, now: Date(), keyStore: store, allowFileKey: allowFileKey)
-        rs.append(r)
         try g.save(to: file)
         state = g
         groupChanged()
-        sendRecords(rs)
+        sendRecords([r])
         _ = try? node?.sendAdminCA(to: id, ca: ca)
     }
 

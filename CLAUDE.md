@@ -78,7 +78,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   which opens only the member port to its clients, and the client;
   `state.go` and `internal/service/tunnel.go` exchange its keys in the member protocol
   (docs/protocol.md, section 11).
-- `internal/vless`: VLESS with REALITY (Xray-core in the process) between a client and the
+- `internal/vless`: VLESS over XHTTP (Xray-core in the process) between a client and the
   forwarder, for networks that block WireGuard: the forwarder's side passes every packet to its
   own UDP port, the client's side is a local UDP port for WireGuard (docs/protocol.md,
   sections 11 and 13).

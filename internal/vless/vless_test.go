@@ -5,9 +5,6 @@ package vless
 
 import (
 	"bytes"
-	"context"
-	"crypto/rand"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -45,28 +42,6 @@ func echo(t *testing.T) netip.AddrPort {
 	return pc.LocalAddr().(*net.UDPAddr).AddrPort()
 }
 
-func server(t *testing.T) (*Server, [32]byte) {
-	t.Helper()
-	var key [32]byte
-	rand.Read(key[:])
-	s, err := Listen(ServerConfig{Listen: "127.0.0.1:0", Dest: vlesstest.Decoy(t), ServerName: vlesstest.Site, Key: key, To: echo(t)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	return s, key
-}
-
-func link(t *testing.T, s *Server, key [32]byte, id string) tunnel.VLESS {
-	t.Helper()
-	pub, err := PublicKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return tunnel.VLESS{Endpoint: netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), s.Port()), PublicKey: pub,
-		ShortID: ShortID(key), ServerName: vlesstest.Site, ID: id}
-}
-
 // roundTrip sends a packet through the client and tells whether it came
 // back. Each try sends from a port of its own: the client carries the
 // packets of one source port in one flow, an XHTTP session of its own,
@@ -97,51 +72,6 @@ func roundTrip(t *testing.T, l tunnel.VLESS) bool {
 	return false
 }
 
-func TestThroughVLESS(t *testing.T) {
-	s, key := server(t)
-	id, err := tunnel.NewVLESSID()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if roundTrip(t, link(t, s, key, id)) {
-		t.Fatal("a group that was not let in got through")
-	}
-	if err := s.AddUser(id); err != nil {
-		t.Fatal(err)
-	}
-	if !roundTrip(t, link(t, s, key, id)) {
-		t.Fatal("nothing came back")
-	}
-	other, _ := tunnel.NewVLESSID()
-	if roundTrip(t, link(t, s, key, other)) {
-		t.Fatal("another group's ID got through")
-	}
-	var wrong [32]byte
-	rand.Read(wrong[:])
-	if roundTrip(t, link(t, s, wrong, id)) {
-		t.Fatal("a client with another REALITY key got through")
-	}
-	if err := s.RemoveUser(id); err != nil {
-		t.Fatal(err)
-	}
-	if roundTrip(t, link(t, s, key, id)) {
-		t.Fatal("a group that was shut out got through")
-	}
-}
-
-// TestProbe checks that whoever is not a client sees the borrowed site.
-func TestProbe(t *testing.T) {
-	s, _ := server(t)
-	c, err := tls.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(int(s.Port()))), &tls.Config{ServerName: vlesstest.Site, InsecureSkipVerify: true})
-	if err != nil {
-		t.Fatalf("a probe: %v", err)
-	}
-	defer c.Close()
-	if names := c.ConnectionState().PeerCertificates[0].DNSNames; len(names) != 1 || names[0] != vlesstest.Site {
-		t.Fatalf("a probe got the certificate for %v", names)
-	}
-}
-
 // TestUserOfEachClient checks that the forwarder's side tells the clients
 // of one VLESS user from those of another by the loopback port their
 // packets come from.
@@ -151,13 +81,11 @@ func TestUserOfEachClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { pc.Close() })
-	var key [32]byte
-	rand.Read(key[:])
-	s, err := Listen(ServerConfig{Listen: "127.0.0.1:0", Dest: vlesstest.Decoy(t), ServerName: vlesstest.Site, Key: key, To: pc.LocalAddr().(*net.UDPAddr).AddrPort()})
+	path, err := tunnel.NewVLESSPath()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { s.Close() })
+	s, l := behindWebServerWith(t, ServerConfig{Listen: "127.0.0.1:0", Path: path, To: pc.LocalAddr().(*net.UDPAddr).AddrPort()}, "")
 	// The forwarder's port answers each packet with the user it came from.
 	go func() {
 		b := make([]byte, 2048)
@@ -171,7 +99,9 @@ func TestUserOfEachClient(t *testing.T) {
 		}
 	}()
 	ask := func(id string) string {
-		c, err := Dial(link(t, s, key, id))
+		l := l
+		l.ID = id
+		c, err := Dial(l)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -192,13 +122,6 @@ func TestUserOfEachClient(t *testing.T) {
 			}
 		}
 		return ""
-	}
-	// A client that comes before the server has learned the site's
-	// handshakes waits for it, longer than ask does.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	if err := s.Ready(ctx); err != nil {
-		t.Fatal(err)
 	}
 	a, _ := tunnel.NewVLESSID()
 	b, _ := tunnel.NewVLESSID()
@@ -262,11 +185,6 @@ func TestThroughXHTTP(t *testing.T) {
 	if err := l.Check(); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	if err := s.Ready(ctx); err != nil {
-		t.Fatal(err)
-	}
 	if roundTrip(t, l) {
 		t.Fatal("a group that was not let in got through")
 	}
@@ -281,10 +199,21 @@ func TestThroughXHTTP(t *testing.T) {
 	if roundTrip(t, other) {
 		t.Fatal("another path got through")
 	}
+	otherID := l
+	otherID.ID, _ = tunnel.NewVLESSID()
+	if roundTrip(t, otherID) {
+		t.Fatal("another group's ID got through")
+	}
 	wrongName := l
 	wrongName.ServerName = "www.example.org"
 	if roundTrip(t, wrongName) {
 		t.Fatal("a site whose certificate does not carry the name got through")
+	}
+	if err := s.RemoveUser(id); err != nil {
+		t.Fatal(err)
+	}
+	if roundTrip(t, l) {
+		t.Fatal("a group that was shut out got through")
 	}
 }
 
@@ -327,11 +256,6 @@ func TestXHTTPHoldsLittleForStrangers(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := s.Ready(ctx); err != nil {
-		t.Fatal(err)
-	}
 	padding := "?x_padding=" + strings.Repeat("X", 500)
 	// An upload that the server neither takes nor refuses waits for a
 	// place in the queue: 0 here.
@@ -426,11 +350,6 @@ func TestMirrorThroughXHTTP(t *testing.T) {
 	}
 	id, _ := tunnel.NewVLESSID()
 	s, l := behindWebServerWith(t, ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t), Mirror: tcpEcho(t)}, id)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := s.Ready(ctx); err != nil {
-		t.Fatal(err)
-	}
 	if throughMirror(t, l) {
 		t.Fatal("a group that was not let in reached the mirror")
 	}

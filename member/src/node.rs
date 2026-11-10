@@ -376,6 +376,11 @@ struct Conn {
     /// connection carries records and nothing else, until the records let
     /// the peer in and it connects again as a member.
     records_only: bool,
+    /// The peer's own key is removed or frozen (Refusal::Removed): the
+    /// connection carries records only, the records go out when the peer's
+    /// digest differs, and it closes after them; the peer's records are
+    /// not taken.
+    removed: bool,
     /// The peer came through this hub's tunnel.
     tunneled: bool,
     closed: AtomicBool,
@@ -1547,11 +1552,16 @@ impl Node {
             return Ok(Dialed { up: true, again: false });
         }
         let before = self.reconnects.load(Ordering::SeqCst);
+        // A connection that only tells a removed device so, or that this
+        // removed device gets, is dialed again as after a failure: the
+        // records went over once, and the wait grows.
+        let told = matches!(self.records.lock().unwrap().refused_peer(&chain), Some(Refusal::Removed(_)));
         // How it ended is logged; a connection that came up and ended is
         // dialed again at once when this member ended it to connect again,
         // else after a second.
         let _ = self.run(sock, conn, id, chain, addr, true);
-        Ok(Dialed { up: true, again: self.reconnects.load(Ordering::SeqCst) != before })
+        let up = !told && !self.removed();
+        Ok(Dialed { up, again: up && self.reconnects.load(Ordering::SeqCst) != before })
     }
 
     /// Runs a connection that a member (a phone or a lite member)
@@ -1717,7 +1727,8 @@ impl Node {
         let lower_dialed = dialed == (self.ident.read().unwrap().id < id);
         sock.set_read_timeout(Some(TIMEOUT)).context("the connection broke")?;
         let why = self.records.lock().unwrap().refused_peer(&chain);
-        let records_only = matches!(why, Some(Refusal::NotListed | Refusal::Stopped | Refusal::TakenOver));
+        let removed = matches!(why, Some(Refusal::Removed(_)));
+        let records_only = removed || matches!(why, Some(Refusal::NotListed | Refusal::Stopped | Refusal::TakenOver));
         if !records_only
             && !addr.ip().to_canonical().is_loopback()
             && let (Some(n), Ok(local)) = (self.networks.read().unwrap().clone(), sock.local_addr())
@@ -1735,6 +1746,7 @@ impl Node {
             peer: Mutex::new(None),
             chain,
             records_only,
+            removed,
             tunneled: matches!(addr.ip(), std::net::IpAddr::V6(a) if a.octets()[..4] == [0xfd, 0x00, 0x0c, 0xbb]),
             closed: AtomicBool::new(false),
             bye: AtomicBool::new(false),
@@ -1789,7 +1801,10 @@ impl Node {
                 ));
             }
         }
-        if records_only {
+        if removed {
+            let why = why.map_or("", |w| w.why());
+            self.logf(&format!("cbb: {id} at {addr}: {why}; it gets the records that say so"));
+        } else if records_only {
             let why = why.map_or("", |w| w.why());
             self.logf(&format!("cbb: {id} at {addr}: {why}; exchanging records only"));
         } else {
@@ -1853,7 +1868,7 @@ impl Node {
                 // while this member was still answering its hello): dropped,
                 // this member would never hear it was removed, since its next
                 // connection is refused.
-                if !first && m.kind == "records" && !m.records.is_empty() {
+                if !first && !c.removed && m.kind == "records" && !m.records.is_empty() {
                     self.add_records(&m.records, &c.id);
                     continue;
                 }
@@ -1884,6 +1899,12 @@ impl Node {
                     }
                 }
                 drop(st);
+                if c.removed {
+                    // The records that say it was removed went out above,
+                    // unless it holds them; the bye follows them.
+                    c.close(true);
+                    continue;
+                }
                 // After the records, as Go's: the credentials and the offers
                 // that follow are checked against them, and a device that
                 // just joined finds its own device record there.
@@ -1932,7 +1953,7 @@ impl Node {
             }
             if c.records_only {
                 match m.kind.as_str() {
-                    "records" if !m.records.is_empty() => self.add_records(&m.records, &c.id),
+                    "records" if !m.records.is_empty() && !c.removed => self.add_records(&m.records, &c.id),
                     "bye" => return Ok(()),
                     _ => {}
                 }
@@ -2240,7 +2261,7 @@ impl Node {
         self.apply_copy_rules();
         let st = self.records.lock().unwrap();
         for c in self.conns.lock().unwrap().values() {
-            if let Some(Refusal::Refused(why)) = st.refused_peer(&c.chain) {
+            if let Some(Refusal::Refused(why) | Refusal::Removed(why)) = st.refused_peer(&c.chain) {
                 self.logf(&format!("cbb: closing the connection to {}: {why}", c.id));
                 c.close(true);
             }
@@ -2288,7 +2309,7 @@ impl Node {
         let st = self.records.lock().unwrap();
         for c in self.conns.lock().unwrap().values() {
             match st.refused_peer(&c.chain) {
-                Some(Refusal::Refused(why)) => {
+                Some(Refusal::Refused(why) | Refusal::Removed(why)) if !c.removed => {
                     // The records that refuse it go first, so that it
                     // hears it was removed or frozen, as Go's settleRecords.
                     self.logf(&format!("cbb: closing the connection to {}: {why}", c.id));

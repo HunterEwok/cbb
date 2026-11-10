@@ -636,14 +636,14 @@ func hubLoad(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	})
 }
 
-// vlessAway (W34): a forwarder that takes VLESS with REALITY too, borrowing
-// the TLS of a stand-in for a well-known site; once the hub says its
-// clients reach it only over VLESS, a client away syncs with every UDP
-// packet from its network to the internet dropped, and anyone who is not a client gets the
-// borrowed site.
+// vlessAway (W34): a forwarder that takes VLESS over XHTTP too, behind a
+// web server of its own; once the hub says its clients reach it only over
+// VLESS, a client away syncs with every UDP packet from its network to the
+// internet dropped, and anyone who is not a client gets the web server's
+// site.
 func vlessAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/W34-vless/"
-	a := newAwayGroupWith(ctx, r, f, "fleet/W34-vless", 1, realityVLESS)
+	a := newAwayGroupWith(ctx, r, f, "fleet/W34-vless", 1, xhttpVLESS)
 	if a == nil {
 		return
 	}
@@ -656,6 +656,14 @@ func vlessAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) 
 	if r.Do("fleet/W34-vless-only", func() error {
 		if err := connected(ctx, c, wait); err != nil {
 			return err
+		}
+		// The forwarder's web server has a certificate from a CA of its
+		// own, which the members must trust.
+		if err := a.trustWeb(ctx, hub, c); err != nil {
+			return err
+		}
+		if err := connected(ctx, c, wait); err != nil {
+			return fmt.Errorf("after the web server's CA: %w", err)
 		}
 		if err := succeeds(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-vless"), "", "VLESS"); err != nil {
 			return err
@@ -689,7 +697,7 @@ func vlessAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) 
 	}) != nil {
 		return
 	}
-	r.Do("fleet/W34-borrowed-site", func() error {
+	r.Do("fleet/W34-site", func() error {
 		v, err := f.AddOn(ctx, a.away)
 		if err != nil {
 			return err
@@ -697,9 +705,9 @@ func vlessAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) 
 		if err := a.in.reach(ctx, v); err != nil {
 			return err
 		}
-		out, err := Run(ctx, v, "curl -sk --max-time 10 --resolve "+siteName+":443:"+fwdPublic+" https://"+siteName+"/", "")
-		if err == nil && !strings.Contains(out, "cbb-bench borrowed site") {
-			err = fmt.Errorf("a visitor of the forwarder's port got %q, not the borrowed site", firstLine(out))
+		out, err := Run(ctx, v, "curl -sk --max-time 10 --resolve "+xhttpName+":443:"+fwdPublic+" https://"+xhttpName+"/", "")
+		if err == nil && !strings.Contains(out, "cbb-bench site") {
+			err = fmt.Errorf("a visitor of the forwarder's web server got %q, not its site", firstLine(out))
 		}
 		return err
 	})

@@ -163,7 +163,9 @@ fn verdict(v: Option<Verdict>, taken: Option<(String, KeyHash)>) -> Vec<u8> {
             m.insert("verdict".into(), Value::from("taken_over"));
             m.insert("why".into(), Value::from(Verdict::TakenOver.why()));
         }
-        Some(Verdict::Refused(why)) => {
+        // Records::refused never says Removed either: the API's verdict is
+        // the device's, not how a connection to it goes.
+        Some(Verdict::Refused(why) | Verdict::Removed(why)) => {
             m.insert("verdict".into(), Value::from("refused"));
             m.insert("why".into(), Value::from(why));
         }
