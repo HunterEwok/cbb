@@ -141,14 +141,10 @@ func getScript(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[st
 // getLite (I1): get.sh --lite on a computer with nothing installed takes
 // the lite member's archive from a release that holds both, checks its
 // signature and leaves the lite member running under systemd. It packs
-// the archive from -cbb-lite with member/packaging/archive.sh, which needs
-// cargo and jq for the crates' notices.
+// the archive from the fleet's cbb with member/packaging/archive.sh, which
+// needs cargo and jq for the crates' notices.
 func getLite(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[string]string) {
 	const p = "fleet/I1-get-lite/"
-	if fleetLite == "" {
-		r.Skip(p[:len(p)-1], "give -cbb-lite FILE, the lite member's cbb for Linux, to install it with get.sh --lite")
-		return
-	}
 	var built string
 	var d *Device
 	if r.Do(p+"setup", func() error {
@@ -160,7 +156,7 @@ func getLite(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[stri
 			return fmt.Errorf("%v: %s", err, out)
 		}
 		target := map[string]string{"amd64": "x86_64-unknown-linux-gnu", "arm64": "aarch64-unknown-linux-gnu"}[goarchOf()]
-		if out, err := exec.CommandContext(ctx, "sh", "member/packaging/archive.sh", fleetLite, target, goarchOf(), built).CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(ctx, "sh", "member/packaging/archive.sh", f.cbb, target, goarchOf(), built).CombinedOutput(); err != nil {
 			return fmt.Errorf("member/packaging/archive.sh: %v: %s", err, out)
 		}
 		var err error
@@ -194,7 +190,7 @@ func getLite(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[stri
 		}
 		return eventually(ctx, 30*time.Second, func() error {
 			out, err := Run(ctx, d, "systemctl is-active cbb; cbb status 2>&1; true", "")
-			if err == nil && (!strings.HasPrefix(out, "active") || !strings.Contains(out, "in no group")) {
+			if err == nil && (!strings.HasPrefix(out, "active") || !strings.Contains(out, "Not in a group.")) {
 				err = fmt.Errorf("the lite member after get.sh --lite: %q", out)
 			}
 			return err
