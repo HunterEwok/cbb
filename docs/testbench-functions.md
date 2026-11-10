@@ -405,7 +405,7 @@ line here with every new function, and a case for it in the catalogue.
 | W.33 | The forwarder restarted or down | W31 |
 | W.34 | The forwarder's limits | W32 |
 | W.35 | Groups apart on one forwarder | W33 |
-| W.36 | `-vless-site`, `-vless-listen` | W34 |
+| W.36 | `-vless-xhttp`, `-vless-listen` | W34, W46 |
 | W.37 | `cbb relay -group`, `-open` | W36 |
 | W.38 | `cbb global relay` and its consent | W36 |
 | W.39 | Relay credentials and pseudonyms | W37 |

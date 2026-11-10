@@ -356,7 +356,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W31 | The forwarder down [F7], restarted (the hub registers again by itself), unreachable, a wrong key pinned | real, fleet | |
 | W32 | The forwarder's limits: 16 clients per group, packets and bytes per second, registrations per address and network; a busy group slowed alone | fleet | |
 | W33 | Two groups on one forwarder cannot reach each other [S8] | fleet | |
-| W34 | VLESS: a forwarder with `-vless-site`; anyone who is not a client gets the borrowed site; clients reach the hub only over VLESS; with UDP to the forwarder blocked, VLESS still works [P20] | real, fleet | |
+| W34 | VLESS: a forwarder with `-vless-xhttp` behind a web server whose CA the members trust; anyone who is not a client gets the web server's site; clients reach the hub only over VLESS; with UDP to the forwarder blocked, VLESS still works [P20] | real, fleet | |
 | W35 | AmneziaWG: nothing on the wire starts or is sized like WireGuard, directly and through the forwarder | fleet | |
 | W36 | The blind relay: `-group TAG` and `-open`; the consent text and `-yes`; sync both ways; a member and the relay restarted; a wrong key [P12] | real, fleet | |
 | W37 | The relay with credentials: pseudonyms only; a device the members' credential does not list is refused; one a newer credential leaves out is dropped | fleet | |
