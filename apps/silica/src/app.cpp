@@ -12,6 +12,7 @@
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QHash>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -30,6 +31,8 @@ const int renewFirstMs = 60 * 1000;
 // had time to reach its peers.
 const int claimEveryMs = 60 * 1000;
 const int claimFirstMs = 10 * 1000;
+// Camera frames are scaled down to this before the core reads their codes.
+const int maxSheetFrameSide = 1024;
 
 // Runs KeyStore::ensure in a thread of its own and hands the key back.
 class KeyThread : public QThread
@@ -122,6 +125,47 @@ private:
                           len, QStringLiteral("manage"), &failure);
     }
 };
+
+// Restores a group from its recovery sheet off the GUI thread: the core
+// browses for a member of the group, takes its records on a connection
+// that carries records only and checks them, the member key signing this
+// phone's side of the handshake in the TEE.
+class RestoreThread : public QThread
+{
+public:
+    QJsonObject request;
+    QJsonObject answer; // a join's fields
+    Failure failure;
+
+protected:
+    void run() override
+    {
+        const QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
+        size_t len = 0;
+        answer = Core::take(cbb_restore(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()),
+                                        Core::signDigest, nullptr, &len),
+                            len, QStringLiteral("restore"), &failure);
+    }
+};
+
+// What the user reads when restoring failed: the core's refusals it knows
+// said in the user's language, the core's own words kept in the details.
+Failure restoreFailure(const Failure &f)
+{
+    const QString d = f.message + QLatin1Char(' ') + f.details;
+    QString shown;
+    if (d.contains(QStringLiteral("scan the QR code of the recovery sheet")))
+        shown = QCoreApplication::translate("Errors", "Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.");
+    else if (d.contains(QStringLiteral("not the group's recovery key now")))
+        shown = QCoreApplication::translate("Errors", "This is not the group's recovery key now: the root removed it or made a new one.");
+    else if (d.contains(QStringLiteral("no device of the group was found")))
+        shown = QCoreApplication::translate("Errors", "No device of the group was found on this network. Turn on a phone or a computer of the group and try again.");
+    else if (d.contains(QStringLiteral("not a cbb recovery sheet")))
+        shown = QCoreApplication::translate("Errors", "This is not a CBB recovery sheet.");
+    else
+        shown = QCoreApplication::translate("Errors", "The phone could not restore the group.");
+    return {shown, QStringLiteral("%1 (%2)").arg(f.details, f.message)};
+}
 
 // Runs KeyStore::forget in a thread of its own.
 class ForgetThread : public QThread
@@ -302,6 +346,19 @@ void App::resolve(const QStringList &records)
 
 void App::manage(const QString &action, const QString &device, const QString &name, int forMinutes)
 {
+    QJsonObject extra{
+        {QStringLiteral("name"), name},
+        {QStringLiteral("for_ms"), double(qint64(forMinutes) * 60 * 1000)},
+    };
+    // A resolve's records come joined in name, as QML hands them.
+    if (action == QStringLiteral("resolve"))
+        extra.insert(QStringLiteral("records"), QJsonArray::fromStringList(name.split(QLatin1Char(','), QString::SkipEmptyParts)));
+    runManage(action, device, extra, nullptr);
+}
+
+void App::runManage(const QString &action, const QString &device, const QJsonObject &extra,
+                    std::function<void(const QJsonObject &)> done)
+{
     if (!m_member.isAdmin() || !m_node.handle()) {
         show(Errors::shown({QCoreApplication::translate("Errors", "Only an admin of the group changes its devices."),
                             QStringLiteral("manage: not an admin or no member")}));
@@ -314,19 +371,14 @@ void App::manage(const QString &action, const QString &device, const QString &na
     emit keyChanged();
     auto *thread = new ManageThread;
     thread->member = m_node.handle();
-    thread->request = QJsonObject{
-        {QStringLiteral("action"), action},
-        {QStringLiteral("device"), device},
-        {QStringLiteral("name"), name},
-        {QStringLiteral("for_ms"), double(qint64(forMinutes) * 60 * 1000)},
-    };
-    // A resolve's records come joined in name, as QML hands them.
-    if (action == QStringLiteral("resolve"))
-        thread->request.insert(QStringLiteral("records"), QJsonArray::fromStringList(name.split(QLatin1Char(','), QString::SkipEmptyParts)));
+    thread->request = extra;
+    thread->request.insert(QStringLiteral("action"), action);
+    thread->request.insert(QStringLiteral("device"), device);
     if (!m_member.adminCa.isEmpty() && !m_member.root)
         thread->request.insert(QStringLiteral("admin_ca"), QString::fromLatin1(m_member.adminCa.toBase64()));
-    connect(thread, &QThread::finished, this, [this, thread, action, device]() {
+    connect(thread, &QThread::finished, this, [this, thread, action, device, done]() {
         const Failure failure = thread->failure;
+        const QJsonObject answer = thread->answer;
         thread->deleteLater();
         m_busy = false;
         emit keyChanged();
@@ -337,10 +389,69 @@ void App::manage(const QString &action, const QString &device, const QString &na
         }
         Errors::log(QStringLiteral("manage: %1 %2").arg(action, device));
         show(QString());
+        if (done)
+            done(answer);
         m_node.pollDevices();
         emit managed(action, device, true);
     });
     thread->start();
+}
+
+void App::setTakeoverDelay(int hours)
+{
+    if (!m_member.root)
+        return;
+    runManage(QStringLiteral("takeover_delay"), QString(),
+              QJsonObject{{QStringLiteral("delay_ms"), double(qint64(hours) * 3600 * 1000)}}, nullptr);
+}
+
+void App::setGroupKeyLevel(const QString &level)
+{
+    if (!m_member.root)
+        return;
+    runManage(QStringLiteral("key_level"), QString(), QJsonObject{{QStringLiteral("level"), level}},
+              [this](const QJsonObject &a) {
+                  m_belowLevel = a.value(QStringLiteral("below")).toVariant().toStringList();
+                  emit recoveryChanged();
+              });
+}
+
+void App::handOver(const QString &device)
+{
+    if (!m_member.root)
+        return;
+    runManage(QStringLiteral("hand_over"), device, QJsonObject(), nullptr);
+}
+
+void App::makeRecovery()
+{
+    if (!m_member.root)
+        return;
+    runManage(QStringLiteral("make_recovery"), QString(), QJsonObject(), [this](const QJsonObject &a) {
+        m_recoveryText = a.value(QStringLiteral("text")).toString();
+        m_recoveryModules.clear();
+        for (const QJsonValue &row : a.value(QStringLiteral("modules")).toArray())
+            m_recoveryModules.append(row.toString());
+        emit recoveryChanged();
+    });
+}
+
+void App::forgetRecovery()
+{
+    // The sheet is shown once; nothing of the key stays in the app.
+    m_recoveryText.fill(QLatin1Char('0'));
+    m_recoveryText.clear();
+    for (QString &row : m_recoveryModules)
+        row.fill(QLatin1Char('0'));
+    m_recoveryModules.clear();
+    emit recoveryChanged();
+}
+
+void App::removeRecovery()
+{
+    if (!m_member.root)
+        return;
+    runManage(QStringLiteral("remove_recovery"), QString(), QJsonObject(), nullptr);
 }
 
 void App::renew()
@@ -498,13 +609,185 @@ void App::finishTakeover()
                 return;
             m_claimTimer.stop();
             Errors::log(QStringLiteral("takeover: the claim is %1").arg(state));
-            show(Errors::shown({state == QStringLiteral("cancelled")
-                                    ? QCoreApplication::translate("Errors", "The group's root cancelled the claim; the phone stays an admin.")
-                                    : QCoreApplication::translate("Errors", "The claim to take the group over became void; the phone stays an admin."),
-                                QStringLiteral("takeover: the claim is %1").arg(state)}));
+            // A phone that restored the group from its sheet is no admin.
+            const bool admin = m_member.isAdmin();
+            const bool cancelled = state == QStringLiteral("cancelled");
+            const QString shown = admin
+                ? (cancelled ? QCoreApplication::translate("Errors", "The group's root cancelled the claim; the phone stays an admin.")
+                             : QCoreApplication::translate("Errors", "The claim to take the group over became void; the phone stays an admin."))
+                : (cancelled ? QCoreApplication::translate("Errors", "The group's root cancelled the claim to restore the group.")
+                             : QCoreApplication::translate("Errors", "The claim to restore the group became void."));
+            if (!admin)
+                setRestoreState(QStringLiteral("failed"));
+            show(Errors::shown({shown, QStringLiteral("takeover: the claim is %1").arg(state)}));
         }
         m_claimState = state;
         emit claimChanged();
+    });
+    thread->start();
+}
+
+QString App::scanSheet(const QVariant &frame)
+{
+    QImage img = frame.value<QImage>();
+    if (img.isNull())
+        return QString();
+    if (img.width() > maxSheetFrameSide || img.height() > maxSheetFrameSide)
+        img = img.scaled(maxSheetFrameSide, maxSheetFrameSide, Qt::KeepAspectRatio, Qt::FastTransformation);
+    img = img.convertToFormat(QImage::Format_Grayscale8);
+    size_t len = 0;
+    Failure failure;
+    const QJsonObject read = Core::take(cbb_qr_read(img.constBits(), size_t(img.width()), size_t(img.height()), size_t(img.bytesPerLine()), &len),
+                                        len, QStringLiteral("qr"), &failure);
+    if (!failure.isNull()) {
+        Errors::log(QStringLiteral("restore: reading a frame: %1: %2").arg(failure.message, failure.details));
+        return QString();
+    }
+    for (const QJsonValue &t : read.value(QStringLiteral("texts")).toArray()) {
+        const QString text = t.toString().trimmed();
+        if (text.startsWith(QStringLiteral("cbb://recover?")))
+            return text;
+        const QString hint = QCoreApplication::translate("Errors", "This is not the QR code of a CBB recovery sheet.");
+        if (m_restoreHint != hint) {
+            m_restoreHint = hint;
+            emit restoreChanged();
+        }
+    }
+    return QString();
+}
+
+void App::setRestoreState(const QString &state)
+{
+    if (m_restoreState == state)
+        return;
+    m_restoreState = state;
+    emit restoreChanged();
+}
+
+void App::resetRestore()
+{
+    if (m_restoreState == QStringLiteral("restoring") || m_restoreState == QStringLiteral("claiming"))
+        return;
+    m_restoreHint.clear();
+    m_restoreState.clear();
+    emit restoreChanged();
+}
+
+void App::restore(const QString &sheet)
+{
+    if (m_busy)
+        return;
+    // A phone that restored the group but did not get its claim out claims
+    // again; any other phone in a group has nothing to restore.
+    if (!m_member.isNull()) {
+        if (!m_member.isAdmin() && m_member.claim.isEmpty() && m_node.running())
+            claimWithSheet(sheet);
+        return;
+    }
+    if (m_publicKey.isEmpty()) {
+        show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("restore: no key")}));
+        setRestoreState(QStringLiteral("failed"));
+        return;
+    }
+    m_busy = true;
+    emit keyChanged();
+    m_restoreHint.clear();
+    setRestoreState(QStringLiteral("restoring"));
+    show(QString());
+    auto *thread = new RestoreThread;
+    thread->request = QJsonObject{
+        {QStringLiteral("sheet"), sheet},
+        {QStringLiteral("public"), QString::fromLatin1(m_publicKey.toBase64())},
+        {QStringLiteral("name"), phoneName()},
+        {QStringLiteral("os"), phoneOs()},
+    };
+    connect(thread, &QThread::finished, this, [this, thread, sheet]() {
+        const QJsonObject answer = thread->answer;
+        Failure failure = thread->failure;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull()) {
+            show(Errors::shown(restoreFailure(failure)));
+            setRestoreState(QStringLiteral("failed"));
+            return;
+        }
+        Membership m = Membership::fromJoined(answer);
+        m.root = false;
+        if (m.isNull() || !m.save(&failure)) {
+            show(Errors::shown(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "The phone could not save the group."), QStringLiteral("restore: no device in the answer")} : failure));
+            setRestoreState(QStringLiteral("failed"));
+            return;
+        }
+        Errors::log(QStringLiteral("restore: restored %1 as %2 from %3").arg(m.groupTag(), m.device, answer.value(QStringLiteral("addr")).toString()));
+        m_member = m;
+        emit groupChanged();
+        startMember();
+        claimWithSheet(sheet);
+    });
+    thread->start();
+}
+
+void App::claimWithSheet(const QString &sheet)
+{
+    if (!m_node.running()) {
+        show(Errors::shown({QCoreApplication::translate("Errors", "The phone is not connected to its group yet. Try again in a moment."),
+                            QStringLiteral("restore: no member")}));
+        setRestoreState(QStringLiteral("failed"));
+        return;
+    }
+    m_busy = true;
+    emit keyChanged();
+    setRestoreState(QStringLiteral("claiming"));
+    // The new root is the admin key, which stays in the TEE: its root CA is
+    // kept before the claim goes out, as in takeOver.
+    auto *thread = new ManageThread;
+    thread->member = m_node.handle();
+    thread->request = QJsonObject{{QStringLiteral("action"), QStringLiteral("root_ca")}};
+    connect(thread, &QThread::finished, this, [this, thread, sheet]() {
+        const Failure failure = thread->failure;
+        const QByteArray rootCa = QByteArray::fromBase64(thread->answer.value(QStringLiteral("root_ca")).toString().toLatin1());
+        thread->deleteLater();
+        Membership next = m_member;
+        next.claim = rootCa;
+        if (!failure.isNull() || rootCa.isEmpty() || !keep(next)) {
+            m_busy = false;
+            emit keyChanged();
+            if (!failure.isNull())
+                show(Errors::shown(failure));
+            setRestoreState(QStringLiteral("failed"));
+            return;
+        }
+        auto *claim = new ManageThread;
+        claim->member = m_node.handle();
+        claim->request = QJsonObject{
+            {QStringLiteral("action"), QStringLiteral("recover_with_sheet")},
+            {QStringLiteral("sheet"), sheet},
+            {QStringLiteral("root_ca"), QString::fromLatin1(rootCa.toBase64())},
+        };
+        connect(claim, &QThread::finished, this, [this, claim]() {
+            const Failure failure = claim->failure;
+            claim->deleteLater();
+            m_busy = false;
+            emit keyChanged();
+            if (!failure.isNull()) {
+                Membership next = m_member;
+                next.claim.clear();
+                keep(next);
+                show(Errors::shown(restoreFailure(failure)));
+                setRestoreState(QStringLiteral("failed"));
+                emit claimChanged();
+                return;
+            }
+            Errors::log(QStringLiteral("restore: claimed the group with the recovery key"));
+            m_claimState = QStringLiteral("pending");
+            emit claimChanged();
+            show(QString());
+            setRestoreState(QStringLiteral("claimed"));
+            m_claimTimer.start();
+            finishTakeover();
+        });
+        claim->start();
     });
     thread->start();
 }

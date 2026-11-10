@@ -691,6 +691,35 @@ impl Member {
         takeover::claim_state(&self.node.records().lock().unwrap(), new_root)
     }
 
+    /// Adds a record the root signed about the group itself
+    /// (cbb_core::root), which make signs from the group's records at the
+    /// wall clock's milliseconds, and passes it to the group.
+    pub fn add_root_record(
+        &self,
+        make: impl FnOnce(&cbb_core::group::Records, i64) -> cbb_core::error::Result<Record>,
+    ) -> Result<()> {
+        let records = self.node.records();
+        let r = make(&records.lock().unwrap(), uptime::wall_ms())?;
+        self.node.add_own_records(std::slice::from_ref(&r));
+        if !records.lock().unwrap().has(&r) {
+            return Err(Error::msg("the group's records did not take the record; the log says why"));
+        }
+        Ok(())
+    }
+
+    /// The group's takeover delay, key level, recovery key and handover, for
+    /// the root's settings (cbb_core::root::view).
+    pub fn root_view(&self) -> cbb_core::root::View {
+        cbb_core::root::view(&self.node.records().lock().unwrap())
+    }
+
+    /// The admins and hubs other than this phone whose keys the key level
+    /// would not let in, by device ID (cbb_core::root::below_level).
+    pub fn below_level(&self, level: &str) -> Vec<String> {
+        let me = self.node.identity().id.to_string();
+        cbb_core::root::below_level(&self.node.records().lock().unwrap(), &me, level)
+    }
+
     /// Makes the phone the group's root once its claim took effect: s is
     /// the new root, which signs the phone's member certificate from it and
     /// the records a new root starts with. The identity event gives the

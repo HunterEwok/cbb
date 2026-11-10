@@ -70,8 +70,8 @@ these words depends on it.
   byte. In a URL's query each `+`, `/` and `=` is percent-encoded, and a reader decodes only
   percent escapes, never a `+` as a space. Three kinds of value stay in lowercase hex: the
   identifiers (device IDs, event and command IDs, group and period tags), which compare as
-  strings; the SHA-256 of a file (release files, Docker digests), which `sha256sum` prints;
-  and the REALITY short ID (section 13), whose form Xray sets.
+  strings; and the SHA-256 of a file (release files, Docker digests), which `sha256sum`
+  prints.
 - **Fingerprints.** A key has one fingerprint: SHA-256 over its SubjectPublicKeyInfo (DER),
   in standard base64, 44 characters, the same as a record's key hash (section 10). The
   join QR code, the confirmation of a joining device, a forwarder's or a relay's pin and a
@@ -2136,7 +2136,13 @@ beyond) and check the same bytes.
 - After adding records that refuse a certificate a member first queues the new records for
   its peers, then closes every connection whose peer certificate is now refused
   ("Certificates"), after what is queued for it and a `bye`, and the TLS check refuses it from
-  then on. So a revoked member that is connected gets the record that revokes it. A member
+  then on. So a revoked member that is connected gets the record that revokes it. One that
+  was not connected gets it on its next connection with any member: a peer whose own key
+  (its certificate's) the records revoke or freeze passes the TLS check, and its connection
+  carries records only; the member sends its records when the digests in the hellos differ,
+  takes nothing from the peer, and closes the connection after them and a `bye`. Either side
+  dials such a peer again as after a failure (1 s, doubling to 30 s), so that a removed
+  device costs one handshake now and then. A member
   that learns that its own key is revoked logs that it was removed from the group, and its
   status says so (`removed`); an admin computer whose admin key is frozen says that instead
   (`frozen`); the others refuse it. A member MUST close a connection, and refuse new ones,
@@ -2177,7 +2183,7 @@ the Rust core (`ffi/src/tunnel.rs`), and both apps turn it on in their settings;
 the offer and hand them to the tunnel. The lite member on Linux takes part as a client, with
 plain WireGuard only: GotaTun's WireGuard and smoltcp's TCP in its process
 (`member/src/tunnel.rs`, `member/src/away.rs`), with AmneziaWG (`member/src/awg.rs`) and VLESS over
-XHTTP (`member/src/vless.rs`); it refuses an offer whose `vless` is REALITY and then syncs at home only ("Through the tunnel" below).
+XHTTP (`member/src/vless.rs`).
 
 - Sync away from home is off by default; nothing in this section happens on a device until
   the user turns it on there (`cbb global on`, the control operation `away`). Go turns it on
@@ -2436,21 +2442,18 @@ with AmneziaWG's own names; every client sets them on its end before the hub as 
 
 A hub with a forwarder where the user asked for it (`cbb global hub -forwarder ... -vless`)
 has its clients reach the forwarder inside VLESS where UDP does not pass, which to the network is HTTPS to a
-website (docs/design.md, "Blocked networks"), in the transport the forwarder runs: XHTTP
-behind the web server of the forwarder's own site, or REALITY, which borrows a well-known
-site's TLS. The hub makes a VLESS user ID for the group once and keeps it
+website (docs/design.md, "Blocked networks"): XHTTP behind the web server of the
+forwarder's own site. The hub makes a VLESS user ID for the group once and keeps it
 (`forwarder.vless_id` in its `tunnel.json`); it learns the rest from the forwarder's answer
 when it registers (section 13) and keeps that too (`forwarder.vless`). Its offer then
 carries:
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `transport` | string or absent | `xhttp`, or absent for REALITY |
-| `endpoint` | string | `ip:port` (TCP): the forwarder's address with the port its answer gave, the web server's with XHTTP |
-| `public_key` | base64 | REALITY: the forwarder's key, X25519, 32 bytes; absent with XHTTP |
-| `short_id` | string | REALITY: the short ID, 2 to 16 hex digits; absent with XHTTP |
-| `server_name` | string | the site whose name the TLS handshake carries; with XHTTP, the name the site's certificate must carry |
-| `path` | string | XHTTP: the path the web server passes, a slash and 8 to 64 of `A-Z a-z 0-9 - _`; absent with REALITY |
+| `transport` | string | `xhttp`; a client refuses any other, and an offer without it, which an older forwarder's REALITY made |
+| `endpoint` | string | `ip:port` (TCP): the web server's, the forwarder's address with the port its answer gave |
+| `server_name` | string | the site whose name the TLS handshake carries and its certificate must carry |
+| `path` | string | the path the web server passes, a slash and 8 to 64 of `A-Z a-z 0-9 - _`, then the group's own part |
 | `id` | string | the group's VLESS user ID, a random UUID (version 4) |
 
 - A hub that sets VLESS speaks AmneziaWG as well ("Obfuscation" above): its offer carries
@@ -2465,8 +2468,7 @@ carries:
   comes, or changes, the members connect again and get the new offer.
 - The client runs VLESS without encryption (Xray-core) from a local UDP port to that
   endpoint, and points its WireGuard at the local port instead of the offer's `endpoints`.
-  With REALITY it is inside REALITY, with the TLS fingerprint of Chrome. With XHTTP it is
-  XHTTP's `packet-up` mode (plain HTTP requests, which any web server and proxy passes) on
+  It is XHTTP's `packet-up` mode (plain HTTP requests, which any web server and proxy passes) on
   `path`, with `server_name` as the host, over TLS with the fingerprint of Chrome, ALPN `h2`
   and `http/1.1`, and the site's certificate checked against the public CAs for
   `server_name`. Its HTTP connections are reused as Xray's own client configuration does
@@ -2751,10 +2753,8 @@ together, and close the connection beyond that; a sender MUST stay below it.
    freeze the hub, the obfuscation settings are outside their bounds,
    another group registered that key or that VLESS user ID, the forwarder has no VLESS
    and the hub asked for it, or the forwarder is full. To a hub that asked for VLESS the
-   answer adds `"vless": {"port": number, "public_key": bytes, "short_id": string,
-   "server_name": string}` with REALITY, or `"vless": {"transport": "xhttp", "port":
-   number, "server_name": string, "path": string}` with XHTTP, where `port` is the web
-   server's, and the forwarder lets that user ID in while the registration lasts. A group has one registration: a new one replaces the old, whose
+   answer adds `"vless": {"transport": "xhttp", "port": number, "server_name": string,
+   "path": string}`, where `port` is the web server's, and the forwarder lets that user ID in while the registration lasts. A group has one registration: a new one replaces the old, whose
    connection closes.
 5. The registration lasts while the connection does; the hub sends nothing more on it. The
    forwarder sends `{"seen": "ip:port"}` whenever it learns a new address of the hub's
@@ -2808,9 +2808,7 @@ protection off a copy, and checks that the type field is in the message's range 
 
 ### VLESS
 
-A forwarder takes VLESS in one of two transports.
-
-With XHTTP (`cbb forward -vless-xhttp cbb.tools`) it listens on the loopback address
+A forwarder takes VLESS over XHTTP (`cbb forward -vless-xhttp cbb.tools`): it listens on the loopback address
 (`-vless-listen`, `127.0.0.1:3276` by default) for XHTTP as plain HTTP, behind the web
 server of its site, which ends the TLS on TCP 443 with the site's certificate and passes
 the path to it:
@@ -2830,16 +2828,7 @@ the path to it:
 - Every other request gets the site. The web server sees the VLESS user ID and the
   encrypted WireGuard packets and SHOULD keep no log of that path.
 
-With REALITY (`cbb forward -vless-site www.example.com`) it listens on TCP
-(`-vless-listen`, port 443 by default) for VLESS inside REALITY:
-
-- Its REALITY key is X25519, kept in its key file as a PEM block `CBB REALITY
-  KEY` of 32 bytes, made the first time. The short ID is the first 8 bytes of
-  HMAC-SHA256(that key, `cbb reality short id`), in hex.
-- A connection that is not a client's, by REALITY's check, gets the borrowed site's own
-  TLS and answers, from port 443 of that site.
-
-Either way:
+Beyond the paths:
 
 - Only the VLESS user IDs of registered hubs that asked for VLESS are let in. A client's
   UDP packets, whatever address the client names, go to the forwarder's own UDP port, from
@@ -2865,8 +2854,7 @@ Either way:
   forwarder, those the signed entry points name (section 16, "Entry points"), else the
   built-in ones: XHTTP on port 443 of `cbb.tools`, the path `/banMEJvnYJJap8S`.
   A registration over VLESS is charged to the client's own address as a direct one is:
-  over REALITY the address it connects from, over XHTTP the one the web server in front
-  names (`X-Real-IP`); when that is not known, those registrations share an eighth of
+  the one the web server in front names (`X-Real-IP`); when that is not known, those registrations share an eighth of
   the setup slots. All the registrations over VLESS, held or being set up, are bounded
   together at 1024 (relay-budget.md, "XHTTP").
   The forwarder knows which group's ID each of those ports serves, and the per-source
@@ -3867,7 +3855,7 @@ does not know unless its section says it refuses it.
 | `cbb-forward/2` | TCP on the forwarder's port (8764 by default) | 13 |
 | `cbb-relay/2` | TCP on the relay's port (8764 by default) | 14 |
 | (WireGuard, AmneziaWG) | UDP on the hub's, forwarder's or relay's port (8764 by default) | 11, 13, 14 |
-| (VLESS with REALITY) | TCP 443 on a forwarder, by default | 11, 13 |
+| (VLESS over XHTTP) | TCP 443 on the web server in front of a forwarder | 11, 13 |
 | (mDNS) | UDP 5353, 224.0.0.251 and ff02::fb | 3 |
 
 ### Labels and domain separation
@@ -3880,7 +3868,6 @@ does not know unless its section says it refuses it.
 | `cbb forwarder admin` | TLS exporter label: the root's or an admin's signature of a registration | 13 |
 | `cbb forwarder hello` | TLS exporter label: the MAC key of a hub's hellos | 13 |
 | `cbb forwarder state` | HMAC input: the key of the forwarder's state file | 13 |
-| `cbb reality short id` | HMAC input: the forwarder's REALITY short ID | 13 |
 | `cbb relay key` | TLS exporter label: a device's proof of its WireGuard key | 14 |
 | `cbb attest v1` | the attestation challenge's prefix | 17 |
 | `cbb copy v1` | the start of a copy's header, whose hash binds its payload and wraps | 4 |

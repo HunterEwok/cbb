@@ -22,9 +22,8 @@ use crate::error::{Error, Result};
 /// (internal/vless's MaxPostBytes).
 pub const MAX_POST: usize = 32 << 10;
 
-/// The VLESS settings of a hub's offer, with XHTTP: REALITY needs a
-/// browser's ClientHello, which rustls does not make, so the lite member
-/// refuses it.
+/// The VLESS settings of a hub's offer, over XHTTP, the only transport; an
+/// older forwarder's REALITY is refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Link {
     /// The web server's address, `ip:port`.
@@ -37,6 +36,8 @@ pub struct Link {
     pub id: [u8; 16],
 }
 
+/// The settings as they come; an older forwarder's REALITY carries a key
+/// and a short ID, read here only to be refused with a clear reason.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Raw {
@@ -63,7 +64,7 @@ impl Link {
             "xhttp" => {}
             "" => {
                 return Err(Error::msg(
-                    "the hub's forwarder runs VLESS inside REALITY, which the lite member cannot speak; it needs XHTTP",
+                    "the hub's forwarder runs VLESS inside REALITY, which this version no longer speaks; it needs XHTTP",
                 ));
             }
             t => return Err(Error::msg(format!("the hub's VLESS transport {t:?} needs a newer version"))),

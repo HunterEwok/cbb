@@ -796,8 +796,8 @@ fn random_key() -> Result<Vec<u8>> {
 
 /// Checks the offer of the hub `from` and returns what this member keeps of
 /// it: with AmneziaWG's settings (src/awg.rs) and the way over VLESS with
-/// XHTTP (src/vless.rs), if it has them. REALITY, as rustls cannot make a
-/// browser's ClientHello, only when cbb-helper makes that way.
+/// XHTTP (src/vless.rs), if it has them; an older forwarder's REALITY is
+/// refused.
 pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
     if let Some(v) = &o.vless {
         crate::vless::check_offer(v)?;

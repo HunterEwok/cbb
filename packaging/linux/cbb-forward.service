@@ -14,7 +14,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# -vless-site, -vless-listen and the other flags of cbb forward go in
+# -vless-xhttp, -vless-path and the other flags of cbb forward go in
 # CBB_FORWARD_FLAGS in /etc/cbb/forward.env.
 Environment=CBB_FORWARD_FLAGS=
 EnvironmentFile=-/etc/cbb/forward.env
@@ -32,10 +32,8 @@ RestartSec=2s
 Environment=GOMEMLIMIT=768MiB
 MemoryMax=1G
 
-# It needs no privileges: it listens on port 8764. For VLESS on port 443 a
-# drop-in sets CapabilityBoundingSet=CAP_NET_BIND_SERVICE,
-# AmbientCapabilities=CAP_NET_BIND_SERVICE and PrivateUsers=no: in a user
-# namespace of its own the capability would not cover the host's network.
+# It needs no privileges: it listens on port 8764, and for VLESS on a
+# loopback port behind the web server.
 NoNewPrivileges=yes
 CapabilityBoundingSet=
 AmbientCapabilities=
