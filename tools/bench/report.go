@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -23,9 +24,10 @@ type Report struct {
 	debug bool
 	start time.Time
 
-	mu     sync.Mutex
-	cases  []Case
-	prefix string // put before each case's name, as "all" does around its resets
+	mu      sync.Mutex
+	cases   []Case
+	metrics []Metric // what the load cases measured (trend.go)
+	prefix  string   // put before each case's name, as "all" and -repeat do
 }
 
 // Case is one test case's result.
@@ -177,5 +179,13 @@ func (r *Report) Write(dir string) error {
 	if err := os.WriteFile(filepath.Join(dir, "report.xml"), append([]byte(xml.Header), b...), 0o600); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, "report.txt"), []byte(txt.String()), 0o600)
+	if err := os.WriteFile(filepath.Join(dir, "report.txt"), []byte(txt.String()), 0o600); err != nil {
+		return err
+	}
+	if len(r.metrics) == 0 {
+		return nil
+	}
+	ms := append([]Metric(nil), r.metrics...)
+	sort.Slice(ms, func(i, j int) bool { return ms[i].Name < ms[j].Name })
+	return writeMetrics(dir, ms)
 }

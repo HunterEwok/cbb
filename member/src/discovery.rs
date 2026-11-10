@@ -185,6 +185,22 @@ const REPUBLISH_GAP: Duration = Duration::from_millis(1500);
 /// The addresses of a found member; None once it is gone.
 type Addrs = Arc<Mutex<Option<Vec<SocketAddr>>>>;
 
+/// Keeps the addresses of a member the app found: a member found again
+/// takes the new ones, and a new one is kept while fewer than MAX_FOUND
+/// are, and returned to be dialed. A member past MAX_FOUND is not dialed.
+fn remember(found: &mut HashMap<String, Addrs>, key: String, addrs: Vec<SocketAddr>) -> Option<Addrs> {
+    if let Some(a) = found.get(&key) {
+        *a.lock().unwrap() = Some(addrs);
+        return None;
+    }
+    if found.len() >= MAX_FOUND {
+        return None;
+    }
+    let a: Addrs = Arc::new(Mutex::new(Some(addrs)));
+    found.insert(key, a.clone());
+    Some(a)
+}
+
 /// Dials the member at addrs again and again: at once after this member
 /// ended the connection to connect again (a new hello), a second after a
 /// connection that came up ended, and after a round of failures 1 s,
@@ -428,16 +444,11 @@ impl Dialers {
         let mut addrs: Vec<SocketAddr> = addrs.into_iter().filter(|a| home_address(a.ip())).collect();
         addrs.sort_by_key(|a| (a.ip().is_ipv6(), a.ip().is_loopback()));
         addrs.dedup();
-        let mut found = self.found.lock().unwrap();
-        if let Some(a) = found.get(key) {
-            *a.lock().unwrap() = Some(addrs);
-        } else if found.len() < MAX_FOUND {
-            let a: Addrs = Arc::new(Mutex::new(Some(addrs)));
-            found.insert(key.to_string(), a.clone());
+        let a = remember(&mut self.found.lock().unwrap(), key.to_string(), addrs);
+        if let Some(a) = a {
             let node = node.clone();
             std::thread::spawn(move || dial_loop(node, a, peer));
         }
-        drop(found);
         node.kick();
     }
 
@@ -671,7 +682,7 @@ fn browse(
                 if !as_phone && !dials {
                     continue;
                 }
-                let later = !as_phone && !listens_only(r) && id < me;
+                let later = dials_later(as_phone, port.is_some(), r, &id, &me);
                 let addrs = order(dial_addrs(&info).into_iter());
                 if addrs.is_empty() {
                     log(&format!(
@@ -730,6 +741,15 @@ fn browse(
 /// Reports whether a TXT `r` value names a member that does not dial,
 /// which every other member dials; keys and values are compared without
 /// regard to case.
+/// Reports whether a member dials one it found with the TXT `r` and the
+/// device ID `id` only after FALLBACK: when that one also dials and has the
+/// lower ID, so that it is the one to dial. A phone dials everyone at once,
+/// and so does a member that does not listen (-no-listen), which no one
+/// else can reach.
+fn dials_later(as_phone: bool, listening: bool, r: Option<&str>, id: &DeviceId, me: &DeviceId) -> bool {
+    !as_phone && listening && !listens_only(r) && id < me
+}
+
 fn listens_only(r: Option<&str>) -> bool {
     r.is_some_and(|v| v.eq_ignore_ascii_case("listen"))
 }
@@ -818,6 +838,24 @@ mod tests {
         assert_eq!(instance_id(&format!("{id}.{SERVICE}")), want);
     }
 
+    /// The members the app finds and dials are bounded: past MAX_FOUND a
+    /// new one is not dialed, while one found again takes its new addresses.
+    #[test]
+    fn dials_at_most_max_found() {
+        use super::{MAX_FOUND, remember};
+        let addr = |i: usize| vec![std::net::SocketAddr::from(([192, 168, 0, (i % 250) as u8], 7000))];
+        let mut found = std::collections::HashMap::new();
+        for i in 0..MAX_FOUND {
+            assert!(remember(&mut found, i.to_string(), addr(i)).is_some(), "member {i}");
+        }
+        assert!(remember(&mut found, MAX_FOUND.to_string(), addr(1)).is_none());
+        assert_eq!(found.len(), MAX_FOUND);
+        assert!(remember(&mut found, "3".into(), addr(9)).is_none());
+        assert_eq!(*found["3"].lock().unwrap(), Some(addr(9)));
+        found.remove("0");
+        assert!(remember(&mut found, MAX_FOUND.to_string(), addr(1)).is_some());
+    }
+
     /// A connection this member ended to send a new hello (a mode, a tunnel
     /// key) is dialed again at once, one that came up and ended after a
     /// second, and failures back off from 1 s to 30 s: a phone whose mode
@@ -846,6 +884,20 @@ mod tests {
         assert_eq!(instance_id(&format!("{id}._cbb._tcp.local.")).unwrap().as_str(), id);
         assert!(instance_id("printer._cbb._tcp.local.").is_none());
         assert!(instance_id(&format!("{id}._http._tcp.local.")).is_none());
+    }
+
+    #[test]
+    fn who_dials_later() {
+        let low = DeviceId::parse("00000000000000000000000000000001").unwrap();
+        let high = DeviceId::parse("fffffffffffffffffffffffffffffffe").unwrap();
+        // Of two that dial, the higher ID waits for the lower one.
+        assert!(dials_later(false, true, None, &low, &high));
+        assert!(!dials_later(false, true, None, &high, &low));
+        // Not for one that never dials, nor as a phone.
+        assert!(!dials_later(false, true, Some("listen"), &low, &high));
+        assert!(!dials_later(true, true, None, &low, &high));
+        // A member that does not listen cannot be dialed: it dials at once.
+        assert!(!dials_later(false, false, None, &low, &high));
     }
 
     #[test]

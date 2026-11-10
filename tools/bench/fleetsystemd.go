@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 )
@@ -15,10 +16,13 @@ import (
 // Members with systemd (the installer's and the feed's cases, I1 to I12): a
 // container that boots systemd, as a Linux computer does, with no cbb until
 // the case installs one from a release archive with install.sh or get.sh.
-const systemdImage = "cbbbench-systemd:3"
+// Its /tmp is the image's, not the tmpfs Debian 13 mounts there, so that
+// what docker cp puts there is what the container sees.
+const systemdImage = "cbbbench-systemd:4"
 
 const systemdDockerfile = `FROM debian:stable-slim
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd systemd-sysv dbus iproute2 iptables nftables procps curl ca-certificates openssl tmux ufw avahi-daemon avahi-utils && rm -rf /var/lib/apt/lists/*
+RUN systemctl mask tmp.mount
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
 `
@@ -81,7 +85,9 @@ func runsVersion(ctx context.Context, d *Device, version string) error {
 		if err != nil {
 			return err
 		}
-		if !strings.Contains(firstLine(out), " v"+version+" ") {
+		// The first line names the version, bare or as "cbb vX.Y.Z (...)".
+		words := strings.Fields(firstLine(out))
+		if !slices.Contains(words, version) && !slices.Contains(words, "v"+version) {
 			return fmt.Errorf("%s runs %q, not %s", d.Name, firstLine(out), version)
 		}
 		return nil
