@@ -15,7 +15,9 @@ services:
   forward:
     image: ghcr.io/hunterewok/cbb:latest # pin a release by its digest
     command: ["forward", "-listen", ":8764"]
-    # With VLESS: add "-vless-site", "www.example.com" and publish 443/tcp.
+    # With VLESS behind the host's web server: add "-vless-xhttp", "vpn.example.org",
+    # "-vless-listen", ":3276" and publish "127.0.0.1:3276:3276/tcp" for it
+    # (docs/admin/self-hosting.md, "VLESS on the forwarder").
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]

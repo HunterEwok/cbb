@@ -26,12 +26,11 @@ func Command(args []string, stdout, stderr io.Writer, defaultKey string) int {
 	listen := fs.String("listen", ":8764", "the address to listen on, UDP and TCP")
 	keyFile := fs.String("key", defaultKey, "the forwarder's key, made on the first run")
 	showKey := fs.Bool("show-key", false, "print the key for cbb global hub -forwarder-key and stop")
-	vlessSite := fs.String("vless-site", "", "take VLESS with REALITY too, borrowing the TLS of this well-known site, such as www.example.com")
 	vlessXHTTP := fs.String("vless-xhttp", "", "take VLESS over XHTTP too, behind the web server of this site, such as cbb.tools, which passes -vless-path to -vless-listen")
 	vlessPath := fs.String("vless-path", "", "with -vless-xhttp, the path the web server passes (default: made once and kept in the key file)")
 	vlessPort := fs.Uint("vless-port", 443, "with -vless-xhttp, the web server's TCP port at the forwarder's address")
 	vlessMirror := fs.String("vless-mirror", "", "with VLESS, the TCP address of the mirror of the releases on this server, such as 127.0.0.1:443, which the clients of registered hubs reach over VLESS for their updates")
-	vlessListen := fs.String("vless-listen", "", "the TCP address to listen on for VLESS (default :443 with -vless-site, 127.0.0.1:3276 with -vless-xhttp)")
+	vlessListen := fs.String("vless-listen", "127.0.0.1:3276", "with -vless-xhttp, the TCP address to listen on for the web server in front")
 	state := fs.String("state", "", "the file that keeps, under a hash of each group's tag, the version of its newest credential (default: forward-state.json next to the key; \"none\" keeps them in memory only)")
 	records := fs.String("records", "", "where earlier versions kept a file for each group; they are deleted (default: groups next to the key)")
 	if fs.Parse(args) != nil {
@@ -68,20 +67,7 @@ func Command(args []string, stdout, stderr io.Writer, defaultKey string) int {
 	} else if n > 0 {
 		logf("cbb forward: deleted the %d group files that earlier versions kept", n)
 	}
-	switch {
-	case *vlessSite != "" && *vlessXHTTP != "":
-		fmt.Fprintln(stderr, "cbb: forward takes -vless-site or -vless-xhttp, not both")
-		return 2
-	case *vlessSite != "":
-		key, err := LoadRealityKey(*keyFile)
-		if err != nil {
-			return fail(stderr, err)
-		}
-		if *vlessListen == "" {
-			*vlessListen = ":443"
-		}
-		cfg.VLESS = &VLESSConfig{Listen: *vlessListen, Site: *vlessSite, Key: key}
-	case *vlessXHTTP != "":
+	if *vlessXHTTP != "" {
 		if *vlessPort == 0 || *vlessPort > 65535 {
 			fmt.Fprintln(stderr, "cbb: forward: -vless-port is not a TCP port")
 			return 2
@@ -92,14 +78,11 @@ func Command(args []string, stdout, stderr io.Writer, defaultKey string) int {
 				return fail(stderr, err)
 			}
 		}
-		if *vlessListen == "" {
-			*vlessListen = "127.0.0.1:3276"
-		}
 		cfg.VLESS = &VLESSConfig{Listen: *vlessListen, XHTTP: &XHTTPConfig{Host: *vlessXHTTP, Port: uint16(*vlessPort), Path: path}}
 	}
 	if *vlessMirror != "" {
 		if cfg.VLESS == nil {
-			fmt.Fprintln(stderr, "cbb: forward: -vless-mirror goes with -vless-site or -vless-xhttp")
+			fmt.Fprintln(stderr, "cbb: forward: -vless-mirror goes with -vless-xhttp")
 			return 2
 		}
 		if _, _, err := net.SplitHostPort(*vlessMirror); err != nil {
@@ -113,10 +96,8 @@ func Command(args []string, stdout, stderr io.Writer, defaultKey string) int {
 		return fail(stderr, err)
 	}
 	logf("cbb forward: listening on UDP and TCP port %d; its key, for cbb global hub -forwarder-key: %s", f.Addr().Port(), pin)
-	if v := cfg.VLESS; v != nil && v.XHTTP != nil {
+	if v := cfg.VLESS; v != nil {
 		logf("cbb forward: VLESS over XHTTP on %s, behind the web server of %s on TCP port %d, which passes the path %s to it; hubs ask for it with cbb global hub -vless", *vlessListen, v.XHTTP.Host, v.XHTTP.Port, v.XHTTP.Path)
-	} else if v != nil {
-		logf("cbb forward: VLESS on TCP %s, with the TLS of %s; hubs ask for it with cbb global hub -vless", *vlessListen, *vlessSite)
 	}
 	if *vlessMirror != "" {
 		logf("cbb forward: the clients of registered hubs reach the mirror at %s over VLESS", *vlessMirror)
