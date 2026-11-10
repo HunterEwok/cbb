@@ -923,8 +923,8 @@
         <translation>群组已停止：在群组的根做出决定之前，其设备只交换记录，不交换剪贴板。</translation>
     </message>
     <message>
-        <source>The group sends no secrets until its root decides.</source>
-        <translation>在其根做出决定之前，群组不发送任何机密。</translation>
+        <source>The group sends no secrets until its owner decides.</source>
+        <translation>在所有者做出决定之前，群组不会发送任何秘密。</translation>
     </message>
     <message>
         <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
@@ -1356,40 +1356,40 @@
         <translation>如果此设备并未丢失，请将 %1 移出群组。</translation>
     </message>
     <message>
-        <source>Another admin froze this device's admin key.</source>
-        <translation>另一位管理员冻结了此设备的管理员密钥。</translation>
+        <source>This device's rights as a trusted device are paused.</source>
+        <translation>此设备作为受信任设备的权限已暂停。</translation>
     </message>
     <message>
-        <source>Ask the group's root to unfreeze it.</source>
-        <translation>请群组的根设备解冻它。</translation>
+        <source>Ask the group's owner to restore its rights.</source>
+        <translation>请群组的所有者恢复它的权限。</translation>
     </message>
     <message>
         <source>This device's certificate ended on %1.</source>
         <translation>此设备的证书已于 %1 到期。</translation>
     </message>
     <message>
-        <source>Bring it home to an admin of the group: the admin renews the certificate.</source>
-        <translation>在家中将它连接到群组的管理员设备：管理员会续订证书。</translation>
+        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
+        <translation>在家中将它连接到群组的受信任设备：该设备会续订证书。</translation>
     </message>
     <message>
         <source>This device's certificate ends on %1.</source>
         <translation>此设备的证书将于 %1 到期。</translation>
     </message>
     <message>
-        <source>Connect it at home to an admin of the group before then.</source>
-        <translation>在此之前，请在家中将它连接到群组的管理员设备。</translation>
+        <source>Connect it at home to a trusted device of the group before then.</source>
+        <translation>在此之前，请在家中将它连接到群组的受信任设备。</translation>
     </message>
     <message>
         <source>The group's records stop the exchange.</source>
         <translation>群组的记录已停止交换。</translation>
     </message>
     <message>
-        <source>The group's root decides on its alerts.</source>
-        <translation>由群组的根设备在其提醒中决定。</translation>
+        <source>The group's owner decides on its alerts.</source>
+        <translation>由群组的所有者在其提醒中决定。</translation>
     </message>
     <message>
-        <source>The group sends no secrets until its root decides.</source>
-        <translation>在根设备做出决定之前，群组不发送机密内容。</translation>
+        <source>The group sends no secrets until its owner decides.</source>
+        <translation>在所有者做出决定之前，群组不会发送任何秘密。</translation>
     </message>
     <message>
         <source>Sync is off on this device.</source>
@@ -1424,32 +1424,32 @@
         <translation>这台电脑尚未在此网络中遇到它的群组。</translation>
     </message>
     <message>
-        <source>If this is your home network, run sudo cbb network.</source>
-        <translation>如果这是你的家庭网络，请运行 sudo cbb network。</translation>
+        <source>If this is your home network, mark it as home.</source>
+        <translation>如果这是你的家庭网络，请将它标记为家庭网络。</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no hub.</source>
-        <translation>“随处”已打开，但群组没有中心节点。</translation>
+        <source>Everywhere is on, but the group has no base.</source>
+        <translation>“随处”已打开，但群组没有主站。</translation>
     </message>
     <message>
-        <source>Make a computer at home the hub, in its advanced settings.</source>
-        <translation>在家中某台电脑的高级设置中，将它设为中心节点。</translation>
+        <source>Make a computer at home the base, in its advanced settings.</source>
+        <translation>在家中某台电脑的高级设置中，将它设为主站。</translation>
     </message>
     <message>
-        <source>The tunnel to the hub %1 does not get through.</source>
-        <translation>通往中心节点 %1 的隧道无法连通。</translation>
+        <source>The tunnel to the base %1 does not get through.</source>
+        <translation>通往主站 %1 的隧道无法连通。</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on the tunnel's disguise on the hub.</source>
-        <translation>此网络可能会阻止隧道：请在中心节点上打开隧道伪装。</translation>
+        <source>This network may block tunnels: turn on Strict networks on the base.</source>
+        <translation>此网络可能会阻止隧道：请在主站上打开“严格网络”。</translation>
     </message>
     <message>
-        <source>The hub %1 does not answer.</source>
-        <translation>中心节点 %1 没有响应。</translation>
+        <source>The base %1 does not answer.</source>
+        <translation>主站 %1 没有响应。</translation>
     </message>
     <message>
-        <source>Check that the hub is on and online.</source>
-        <translation>请确认中心节点已开机并联网。</translation>
+        <source>Check that the base is on and online.</source>
+        <translation>请确认主站已开机并联网。</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1460,44 +1460,44 @@
         <translation>打开群组中的另一台设备。</translation>
     </message>
     <message>
-        <source>The relay does not answer.</source>
-        <translation>中继服务器没有响应。</translation>
+        <source>The backup server does not answer.</source>
+        <translation>备用服务器没有响应。</translation>
     </message>
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>请检查网络连接；CBB 会自动重试。</translation>
     </message>
     <message>
-        <source>This device is the hub, and no device has connected yet.</source>
-        <translation>此设备是中心节点，但尚无设备连接。</translation>
+        <source>This device is the base, and no device has connected yet.</source>
+        <translation>此设备是主站，但尚无设备连接。</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
         <translation>请确认其他设备已打开“随处”。</translation>
     </message>
     <message>
-        <source>An admin muted this device: its copies do not reach the group.</source>
-        <translation>管理员已将此设备静音：它的复制内容不会到达群组。</translation>
+        <source>This device is muted: its copies do not reach the group.</source>
+        <translation>此设备已静音：它的复制内容不会到达群组。</translation>
     </message>
     <message>
-        <source>An admin muted this device until %1: its copies do not reach the group.</source>
-        <translation>管理员已将此设备静音至 %1：它的复制内容不会到达群组。</translation>
+        <source>This device is muted until %1: its copies do not reach the group.</source>
+        <translation>此设备已静音至 %1：它的复制内容不会到达群组。</translation>
     </message>
     <message>
-        <source>Ask an admin to unmute it.</source>
-        <translation>请管理员取消静音。</translation>
+        <source>Unmute it from a trusted device of the group.</source>
+        <translation>请在群组的受信任设备上取消它的静音。</translation>
     </message>
     <message>
-        <source>The forwarder does not take this hub.</source>
-        <translation>转发器未接受此中心节点。</translation>
+        <source>The connection server does not take this base.</source>
+        <translation>连接服务器未接受此主站。</translation>
     </message>
     <message>
         <source>Devices away from home may not reach it; CBB tries again by itself.</source>
         <translation>在家以外的设备可能无法连接到它；CBB 会自动重试。</translation>
     </message>
     <message>
-        <source>The list of the forwarders' entry points is out of date.</source>
-        <translation>转发器入口列表已过期。</translation>
+        <source>The list of the connection servers' entry points is out of date.</source>
+        <translation>连接服务器的入口列表已过期。</translation>
     </message>
     <message>
         <source>Update CBB on a computer of the group.</source>
@@ -1528,8 +1528,8 @@
         <translation>以下设备已关闭同步：%1。</translation>
     </message>
     <message>
-        <source>Muted by an admin: %1.</source>
-        <translation>已被管理员静音：%1。</translation>
+        <source>Muted: %1.</source>
+        <translation>已静音：%1。</translation>
     </message>
     <message>
         <source>CBB %1 is available.</source>

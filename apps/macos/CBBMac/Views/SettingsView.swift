@@ -240,7 +240,9 @@ struct WhySheet: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
-                WhyList(reasons: model.status.map { $0.why ?? [] }, details: errorDetails)
+                WhyList(reasons: model.status.map { $0.why ?? [] }, details: errorDetails) {
+                    Task { await model.homeNetwork() }
+                }
             }
             .formStyle(.grouped)
             HStack {

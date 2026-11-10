@@ -923,8 +923,8 @@
         <translation>Kikundi kimesimamishwa: vifaa vyake vinabadilishana rekodi zao tu, bila ubao wa kunakili, hadi mzizi wa kikundi uamue.</translation>
     </message>
     <message>
-        <source>The group sends no secrets until its root decides.</source>
-        <translation>Kikundi hakitumi siri hadi mzizi wake uamue.</translation>
+        <source>The group sends no secrets until its owner decides.</source>
+        <translation>Kikundi hakitumi siri zozote hadi mmiliki wake aamue.</translation>
     </message>
     <message>
         <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
@@ -1356,40 +1356,40 @@
         <translation>Ikiwa kifaa hiki hakikupotea, ondoa %1 kwenye kikundi.</translation>
     </message>
     <message>
-        <source>Another admin froze this device's admin key.</source>
-        <translation>Msimamizi mwingine aligandisha ufunguo wa usimamizi wa kifaa hiki.</translation>
+        <source>This device's rights as a trusted device are paused.</source>
+        <translation>Haki za kifaa hiki kama kifaa kinachoaminika zimesitishwa.</translation>
     </message>
     <message>
-        <source>Ask the group's root to unfreeze it.</source>
-        <translation>Omba mzizi wa kikundi auyeyushe.</translation>
+        <source>Ask the group's owner to restore its rights.</source>
+        <translation>Omba mmiliki wa kikundi arejeshe haki zake.</translation>
     </message>
     <message>
         <source>This device's certificate ended on %1.</source>
         <translation>Cheti cha kifaa hiki kiliisha %1.</translation>
     </message>
     <message>
-        <source>Bring it home to an admin of the group: the admin renews the certificate.</source>
-        <translation>Kiunganishe nyumbani na msimamizi wa kikundi: msimamizi atafanya upya cheti.</translation>
+        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
+        <translation>Kiunganishe nyumbani na kifaa kinachoaminika cha kikundi, nacho kitafanya upya cheti.</translation>
     </message>
     <message>
         <source>This device's certificate ends on %1.</source>
         <translation>Cheti cha kifaa hiki kinaisha %1.</translation>
     </message>
     <message>
-        <source>Connect it at home to an admin of the group before then.</source>
-        <translation>Kabla ya hapo, kiunganishe nyumbani na msimamizi wa kikundi.</translation>
+        <source>Connect it at home to a trusted device of the group before then.</source>
+        <translation>Kabla ya hapo, kiunganishe nyumbani na kifaa kinachoaminika cha kikundi.</translation>
     </message>
     <message>
         <source>The group's records stop the exchange.</source>
         <translation>Rekodi za kikundi zimesimamisha ubadilishanaji.</translation>
     </message>
     <message>
-        <source>The group's root decides on its alerts.</source>
-        <translation>Mzizi wa kikundi huamua kwenye arifa zake.</translation>
+        <source>The group's owner decides on its alerts.</source>
+        <translation>Mmiliki wa kikundi huamua kwenye arifa zake.</translation>
     </message>
     <message>
-        <source>The group sends no secrets until its root decides.</source>
-        <translation>Kikundi hakitumi siri hadi mzizi wake uamue.</translation>
+        <source>The group sends no secrets until its owner decides.</source>
+        <translation>Kikundi hakitumi siri zozote hadi mmiliki wake aamue.</translation>
     </message>
     <message>
         <source>Sync is off on this device.</source>
@@ -1424,32 +1424,32 @@
         <translation>Kompyuta hii bado haijakutana na kikundi chake kwenye mtandao huu.</translation>
     </message>
     <message>
-        <source>If this is your home network, run sudo cbb network.</source>
-        <translation>Ikiwa huu ni mtandao wa nyumbani kwako, endesha sudo cbb network.</translation>
+        <source>If this is your home network, mark it as home.</source>
+        <translation>Ikiwa huu ni mtandao wa nyumbani kwako, uweke kama wa nyumbani.</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no hub.</source>
-        <translation>Kila mahali kimewashwa, lakini kikundi hakina kitovu.</translation>
+        <source>Everywhere is on, but the group has no base.</source>
+        <translation>Kila mahali kimewashwa, lakini kikundi hakina kituo.</translation>
     </message>
     <message>
-        <source>Make a computer at home the hub, in its advanced settings.</source>
-        <translation>Fanya kompyuta ya nyumbani kuwa kitovu, kwenye mipangilio yake ya hali ya juu.</translation>
+        <source>Make a computer at home the base, in its advanced settings.</source>
+        <translation>Fanya kompyuta ya nyumbani kuwa kituo, kwenye mipangilio yake ya hali ya juu.</translation>
     </message>
     <message>
-        <source>The tunnel to the hub %1 does not get through.</source>
-        <translation>Handaki kwenda kitovu %1 halipiti.</translation>
+        <source>The tunnel to the base %1 does not get through.</source>
+        <translation>Handaki kwenda kituo %1 halipiti.</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on the tunnel's disguise on the hub.</source>
-        <translation>Mtandao huu unaweza kuzuia mahandaki: washa ufichaji wa handaki kwenye kitovu.</translation>
+        <source>This network may block tunnels: turn on Strict networks on the base.</source>
+        <translation>Mtandao huu unaweza kuzuia mahandaki: washa Mitandao mikali kwenye kituo.</translation>
     </message>
     <message>
-        <source>The hub %1 does not answer.</source>
-        <translation>Kitovu %1 hakijibu.</translation>
+        <source>The base %1 does not answer.</source>
+        <translation>Kituo %1 hakijibu.</translation>
     </message>
     <message>
-        <source>Check that the hub is on and online.</source>
-        <translation>Hakikisha kitovu kimewashwa na kiko mtandaoni.</translation>
+        <source>Check that the base is on and online.</source>
+        <translation>Hakikisha kituo kimewashwa na kiko mtandaoni.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1460,44 +1460,44 @@
         <translation>Washa kifaa kingine cha kikundi.</translation>
     </message>
     <message>
-        <source>The relay does not answer.</source>
-        <translation>Relei haijibu.</translation>
+        <source>The backup server does not answer.</source>
+        <translation>Seva mbadala haijibu.</translation>
     </message>
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>Angalia muunganisho wa intaneti; CBB hujaribu tena yenyewe.</translation>
     </message>
     <message>
-        <source>This device is the hub, and no device has connected yet.</source>
-        <translation>Kifaa hiki ndicho kitovu, na bado hakuna kifaa kilichounganishwa.</translation>
+        <source>This device is the base, and no device has connected yet.</source>
+        <translation>Kifaa hiki ndicho kituo, na bado hakuna kifaa kilichounganishwa.</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
         <translation>Hakikisha vifaa vingine vimewasha Kila mahali.</translation>
     </message>
     <message>
-        <source>An admin muted this device: its copies do not reach the group.</source>
-        <translation>Msimamizi amenyamazisha kifaa hiki: nakala zake hazifiki kwa kikundi.</translation>
+        <source>This device is muted: its copies do not reach the group.</source>
+        <translation>Kifaa hiki kimenyamazishwa: nakala zake hazifiki kwa kikundi.</translation>
     </message>
     <message>
-        <source>An admin muted this device until %1: its copies do not reach the group.</source>
-        <translation>Msimamizi amenyamazisha kifaa hiki hadi %1: nakala zake hazifiki kwa kikundi.</translation>
+        <source>This device is muted until %1: its copies do not reach the group.</source>
+        <translation>Kifaa hiki kimenyamazishwa hadi %1: nakala zake hazifiki kwa kikundi.</translation>
     </message>
     <message>
-        <source>Ask an admin to unmute it.</source>
-        <translation>Omba msimamizi aondoe unyamazishaji.</translation>
+        <source>Unmute it from a trusted device of the group.</source>
+        <translation>Ondoa unyamazishaji wake kutoka kifaa kinachoaminika cha kikundi.</translation>
     </message>
     <message>
-        <source>The forwarder does not take this hub.</source>
-        <translation>Kisambazaji hakikubali kitovu hiki.</translation>
+        <source>The connection server does not take this base.</source>
+        <translation>Seva ya muunganisho haikubali kituo hiki.</translation>
     </message>
     <message>
         <source>Devices away from home may not reach it; CBB tries again by itself.</source>
         <translation>Vifaa vilivyo mbali na nyumbani huenda visikifikie; CBB hujaribu tena yenyewe.</translation>
     </message>
     <message>
-        <source>The list of the forwarders' entry points is out of date.</source>
-        <translation>Orodha ya vituo vya kuingia vya visambazaji imepitwa na wakati.</translation>
+        <source>The list of the connection servers' entry points is out of date.</source>
+        <translation>Orodha ya vituo vya kuingia vya seva za muunganisho imepitwa na wakati.</translation>
     </message>
     <message>
         <source>Update CBB on a computer of the group.</source>
@@ -1528,8 +1528,8 @@
         <translation>Usawazishaji umezimwa kwenye: %1.</translation>
     </message>
     <message>
-        <source>Muted by an admin: %1.</source>
-        <translation>Vimenyamazishwa na msimamizi: %1.</translation>
+        <source>Muted: %1.</source>
+        <translation>Vimenyamazishwa: %1.</translation>
     </message>
     <message>
         <source>CBB %1 is available.</source>

@@ -169,10 +169,12 @@ function glyph(d, size = 44) {
     `stroke-width="1.8" stroke-linecap="round">${shapes[kindOf(d)]}</svg></span>`;
 }
 
-// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
-const tunnels = ["plain", "obfuscate", "vless"];
-const tunnelName = (m) => ({ plain: "WireGuard", obfuscate: "AmneziaWG", vless: "VLESS" })[m];
+// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS, which
+// strict networks' two switches set: networks that block VPNs (AmneziaWG)
+// and networks that let only the web through (VLESS, over AmneziaWG).
 const hubTunnel = (a) => a?.vless ? "vless" : a?.obfuscated ? "obfuscate" : "plain";
+// The tunnel after a switch: VLESS goes only with AmneziaWG.
+const tunnelAfter = (sw, on) => sw === "web" ? (on ? "vless" : "obfuscate") : (on ? "obfuscate" : "plain");
 
 // noHub says why d cannot be a hub, "" when it can: a phone only from its
 // own app, never a member without the cap hub, a watch or a computer without root, and a
@@ -213,9 +215,11 @@ function hubCard(d) {
   if (!d.self || !a?.hub || !state.settings.advanced) return "";
   const cur = hubTunnel(a);
   const fwd = a.forwarder ? a.forwarder.endpoint : t("none");
-  return `<div class="card"><div class="dim small">${esc(t("How the hub's tunnel hides"))}</div><div class="segmented">` +
-    tunnels.map((m) => `<button type="button" data-tunnel="${m}" aria-checked="${m === cur}" ${state.busy ? "disabled" : ""}>${esc(tunnelName(m))}</button>`).join("") +
-    `</div><div class="line"><span class="dim">${esc(t("Forwarder"))}</span><span class="value mono">${esc(fwd)}</span></div>` +
+  const busy = state.busy ? "disabled" : "";
+  return `<div class="card"><div class="dim small">${esc(t("Strict networks"))}</div>` +
+    `<label class="switch"><input type="checkbox" data-strict="vpn" ${cur !== "plain" ? "checked" : ""} ${busy}> <span>${esc(t("Networks that block VPNs (AmneziaWG)"))}</span></label>` +
+    `<label class="switch"><input type="checkbox" data-strict="web" ${cur === "vless" ? "checked" : ""} ${cur === "plain" || busy ? "disabled" : ""}> <span>${esc(t("Networks that let only the web through (VLESS)"))}</span></label>` +
+    `<div class="line"><span class="dim">${esc(t("Forwarder"))}</span><span class="value mono">${esc(fwd)}</span></div>` +
     // The project's forwarder does not answer and the list of its entry
     // points has expired (docs/protocol.md, section 16).
     (a.forwarder?.entries_stale ? `<p class="small">⚠ ${esc(t("The list of the project's entry points is out of date, and the forwarder does not answer on the ways this device knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on."))}</p>` : "") +
@@ -430,7 +434,7 @@ function alertLines(st) {
     ? t("An admin muted this computer until %s: its copies do not reach the group.", clock(st.muted_until_ms))
     : t("An admin muted this computer: its copies do not reach the group until an admin unmutes it."), unmute: true, remove: [] });
   if (st.stop === "full") out.push({ text: t("The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides."), remove: [] });
-  if (st.stop === "secrets") out.push({ text: t("The group sends no secrets until its root decides."), remove: [] });
+  if (st.stop === "secrets") out.push({ text: t("The group sends no secrets until its owner decides."), remove: [] });
   for (const c of st.conflicts ?? []) {
     const who = c.devices?.length ? c.devices.join(", ") : t("devices unknown here");
     if (c.kind === "two_histories") out.push({ text: t("%s signed two histories with one key, as a stolen key or a restore from a backup would.", who), resolve: true, remove: [] });
@@ -954,29 +958,29 @@ function whyTitle(r) {
     case "not_in_group": return t("This device is in no group.");
     case "removed": return t("This device was removed from the group.");
     case "taken_over": return t("%s took the group over from this device.", r.device);
-    case "frozen": return t("Another admin froze this device's admin key.");
+    case "frozen": return t("This device's rights as a trusted device are paused.");
     case "cert_expired": return t("This device's certificate ended on %s.", date);
     case "cert_ending": return t("This device's certificate ends on %s.", date);
     case "stopped": return t("The group's records stop the exchange.");
-    case "secrets_stopped": return t("The group sends no secrets until its root decides.");
+    case "secrets_stopped": return t("The group sends no secrets until its owner decides.");
     case "sync_off": return r.until_ms ? t("Sync is off on this device until %s.", date) : t("Sync is off on this device.");
     case "only_device": return t("This is the group's only device.");
     case "away_off": return t("No device of the group is on this network.");
     case "new_network": return t("This computer has not met its group on this network.");
-    case "no_hub": return t("Everywhere is on, but the group has no hub.");
-    case "tunnel_blocked": return t("The tunnel to the hub %s does not get through.", r.device);
-    case "hub_unreachable": return t("The hub %s does not answer.", r.device);
+    case "no_hub": return t("Everywhere is on, but the group has no base.");
+    case "tunnel_blocked": return t("The tunnel to the base %s does not get through.", r.device);
+    case "hub_unreachable": return t("The base %s does not answer.", r.device);
     case "alone": return t("Connected, but no other device of the group is online.");
-    case "relay_down": return t("The relay does not answer.");
-    case "hub_waiting": return t("This device is the hub, and no device has connected yet.");
-    case "muted": return r.until_ms ? t("An admin muted this device until %s: its copies do not reach the group.", date) : t("An admin muted this device: its copies do not reach the group.");
-    case "forwarder_down": return t("The forwarder does not take this hub.");
-    case "entries_stale": return t("The list of the forwarders' entry points is out of date.");
+    case "relay_down": return t("The backup server does not answer.");
+    case "hub_waiting": return t("This device is the base, and no device has connected yet.");
+    case "muted": return r.until_ms ? t("This device is muted until %s: its copies do not reach the group.", date) : t("This device is muted: its copies do not reach the group.");
+    case "forwarder_down": return t("The connection server does not take this base.");
+    case "entries_stale": return t("The list of the connection servers' entry points is out of date.");
     case "newer": return t("The group has records of a newer version.");
     case "unreached": return t("Devices at home cannot connect to this one: %s.", names);
     case "devices_offline": return t("Offline: %s.", names);
     case "devices_sync_off": return t("Sync is off on: %s.", names);
-    case "devices_muted": return t("Muted by an admin: %s.", names);
+    case "devices_muted": return t("Muted: %s.", names);
     case "update": return t("CBB %s is available.", r.value);
     default: return r.code;
   }
@@ -987,21 +991,21 @@ function whyAction(r) {
     case "not_in_group": return t("Start a group or join one.");
     case "removed": return t("Leave the group on this device, then join again.");
     case "taken_over": return t("If this device was not lost, remove %s from the group.", r.device);
-    case "frozen": return t("Ask the group's root to unfreeze it.");
-    case "cert_expired": return t("Bring it home to an admin of the group: the admin renews the certificate.");
-    case "cert_ending": return t("Connect it at home to an admin of the group before then.");
-    case "stopped": return t("The group's root decides on its alerts.");
+    case "frozen": return t("Ask the group's owner to restore its rights.");
+    case "cert_expired": return t("Bring it home to a trusted device of the group, which renews the certificate.");
+    case "cert_ending": return t("Connect it at home to a trusted device of the group before then.");
+    case "stopped": return t("The group's owner decides on its alerts.");
     case "sync_off": return t("Turn sync on.");
     case "only_device": return t("Add a phone or a computer.");
     case "away_off": return t("Turn on Everywhere to sync away from home.");
-    case "new_network": return t("If this is your home network, run sudo cbb network.");
-    case "no_hub": return t("Make a computer at home the hub, in its advanced settings.");
-    case "tunnel_blocked": return t("This network may block tunnels: turn on the tunnel's disguise on the hub.");
-    case "hub_unreachable": return t("Check that the hub is on and online.");
+    case "new_network": return t("If this is your home network, mark it as home.");
+    case "no_hub": return t("Make a computer at home the base, in its advanced settings.");
+    case "tunnel_blocked": return t("This network may block tunnels: turn on Strict networks on the base.");
+    case "hub_unreachable": return t("Check that the base is on and online.");
     case "alone": return t("Turn on another device of the group.");
     case "relay_down": return t("Check the internet connection; CBB tries again by itself.");
     case "hub_waiting": return t("Check that the other devices have Everywhere on.");
-    case "muted": return t("Ask an admin to unmute it.");
+    case "muted": return t("Unmute it from a trusted device of the group.");
     case "forwarder_down": return t("Devices away from home may not reach it; CBB tries again by itself.");
     case "entries_stale": return t("Update CBB on a computer of the group.");
     case "newer": return t("Update CBB on this device.");
@@ -1015,8 +1019,11 @@ function renderWhy() {
   const row = (r, main) => {
     const action = whyAction(r);
     const detail = (state.settings?.details ?? state.show_details) ? [r.code, r.detail].filter(Boolean).join(": ") : "";
+    // A network where the group is, which this computer has not met it
+    // on, the user names as home here, as cbb network does.
+    const fix = r.code === "new_network" ? `<button data-home-network ${state.busy ? "disabled" : ""}>${esc(t("This is my home network"))}</button>` : "";
     return `<div class="why ${esc(r.level)}${main ? " main" : ""}" data-code="${esc(r.code)}"><div>${esc(whyTitle(r))}</div>` +
-      (action ? `<div class="dim small">${esc(action)}</div>` : "") +
+      (action ? `<div class="dim small">${esc(action)}</div>` : "") + fix +
       (detail ? `<div class="dim small mono">${esc(detail)}</div>` : "") + `</div>`;
   };
   $("why-list").innerHTML = !state.status ? "" : why.length === 0
@@ -1210,12 +1217,18 @@ document.addEventListener("click", async (e) => {
     const on = !(el.dataset.syncFor ? state.devices.find((d) => d.id === el.dataset.syncFor)?.mode !== "own" : state.status?.mode !== "own");
     return act("SetSync", el.dataset.syncFor, on, 0);
   }
-  if (el.dataset.tunnel) {
-    if (el.dataset.tunnel === hubTunnel(state.status?.away)) return;
-    const text = el.dataset.tunnel === "vless"
+  if (el.dataset.homeNetwork !== undefined) return act("HomeNetwork");
+  if (el.dataset.strict) {
+    // The box stays as it was until the change is saved and the status
+    // says so.
+    e.preventDefault();
+    const cur = hubTunnel(state.status?.away);
+    const to = tunnelAfter(el.dataset.strict, el.dataset.strict === "web" ? cur !== "vless" : cur === "plain");
+    if (to === cur) return;
+    const text = to === "vless"
       ? t("Your devices then try AmneziaWG first and, where UDP does not pass, reach this hub over VLESS to its forwarder, which must take VLESS. They get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
       : t("Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.");
-    if (await ask(t("Change how the hub's tunnel hides?"), text, t("Change"))) await act("SetHub", el.dataset.tunnel, "", "");
+    if (await ask(t("Change how the hub's tunnel hides?"), text, t("Change"))) await act("SetHub", to, "", "");
     return;
   }
   if (el.dataset.id) {

@@ -923,8 +923,8 @@
         <translation>समूह रुका हुआ है: जब तक समूह का रूट तय नहीं करता, इसके डिवाइस केवल अपने रिकॉर्ड बदलते हैं, क्लिपबोर्ड नहीं।</translation>
     </message>
     <message>
-        <source>The group sends no secrets until its root decides.</source>
-        <translation>जब तक इसका रूट तय नहीं करता, समूह कोई रहस्य नहीं भेजता।</translation>
+        <source>The group sends no secrets until its owner decides.</source>
+        <translation>जब तक स्वामी निर्णय न ले, समूह कोई रहस्य नहीं भेजता।</translation>
     </message>
     <message>
         <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
@@ -1356,40 +1356,40 @@
         <translation>अगर यह डिवाइस खोया नहीं था, तो %1 को समूह से हटाएँ।</translation>
     </message>
     <message>
-        <source>Another admin froze this device's admin key.</source>
-        <translation>किसी दूसरे एडमिन ने इस डिवाइस की एडमिन कुंजी फ़्रीज़ कर दी।</translation>
+        <source>This device's rights as a trusted device are paused.</source>
+        <translation>भरोसेमंद डिवाइस के रूप में इस डिवाइस के अधिकार रोके गए हैं।</translation>
     </message>
     <message>
-        <source>Ask the group's root to unfreeze it.</source>
-        <translation>समूह के रूट से इसे अनफ़्रीज़ करने को कहें।</translation>
+        <source>Ask the group's owner to restore its rights.</source>
+        <translation>समूह के स्वामी से इसके अधिकार लौटाने को कहें।</translation>
     </message>
     <message>
         <source>This device's certificate ended on %1.</source>
         <translation>इस डिवाइस का प्रमाणपत्र %1 को समाप्त हो गया।</translation>
     </message>
     <message>
-        <source>Bring it home to an admin of the group: the admin renews the certificate.</source>
-        <translation>इसे घर पर समूह के एडमिन से जोड़ें: एडमिन प्रमाणपत्र नवीनीकृत करेगा।</translation>
+        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
+        <translation>इसे घर पर समूह के किसी भरोसेमंद डिवाइस से जोड़ें, वह प्रमाणपत्र नवीनीकृत करेगा।</translation>
     </message>
     <message>
         <source>This device's certificate ends on %1.</source>
         <translation>इस डिवाइस का प्रमाणपत्र %1 को समाप्त होगा।</translation>
     </message>
     <message>
-        <source>Connect it at home to an admin of the group before then.</source>
-        <translation>उससे पहले इसे घर पर समूह के एडमिन से जोड़ें।</translation>
+        <source>Connect it at home to a trusted device of the group before then.</source>
+        <translation>उससे पहले इसे घर पर समूह के किसी भरोसेमंद डिवाइस से जोड़ें।</translation>
     </message>
     <message>
         <source>The group's records stop the exchange.</source>
         <translation>समूह के रिकॉर्ड ने आदान-प्रदान रोक दिया है।</translation>
     </message>
     <message>
-        <source>The group's root decides on its alerts.</source>
-        <translation>समूह का रूट अपनी चेतावनियों में फ़ैसला करता है।</translation>
+        <source>The group's owner decides on its alerts.</source>
+        <translation>समूह का स्वामी अपनी चेतावनियों में फ़ैसला करता है।</translation>
     </message>
     <message>
-        <source>The group sends no secrets until its root decides.</source>
-        <translation>रूट के फ़ैसले तक समूह कोई गोपनीय चीज़ नहीं भेजता।</translation>
+        <source>The group sends no secrets until its owner decides.</source>
+        <translation>जब तक स्वामी निर्णय न ले, समूह कोई रहस्य नहीं भेजता।</translation>
     </message>
     <message>
         <source>Sync is off on this device.</source>
@@ -1424,32 +1424,32 @@
         <translation>यह कंप्यूटर इस नेटवर्क पर अभी अपने समूह से नहीं मिला है।</translation>
     </message>
     <message>
-        <source>If this is your home network, run sudo cbb network.</source>
-        <translation>अगर यह आपका घरेलू नेटवर्क है, तो sudo cbb network चलाएँ।</translation>
+        <source>If this is your home network, mark it as home.</source>
+        <translation>अगर यह आपका घरेलू नेटवर्क है, तो इसे घरेलू के रूप में चिह्नित करें।</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no hub.</source>
-        <translation>हर जगह चालू है, पर समूह में कोई हब नहीं है।</translation>
+        <source>Everywhere is on, but the group has no base.</source>
+        <translation>हर जगह चालू है, पर समूह में कोई बेस नहीं है।</translation>
     </message>
     <message>
-        <source>Make a computer at home the hub, in its advanced settings.</source>
-        <translation>घर के किसी कंप्यूटर को उसकी उन्नत सेटिंग्स में हब बनाएँ।</translation>
+        <source>Make a computer at home the base, in its advanced settings.</source>
+        <translation>घर के किसी कंप्यूटर को उसकी उन्नत सेटिंग्स में बेस बनाएँ।</translation>
     </message>
     <message>
-        <source>The tunnel to the hub %1 does not get through.</source>
-        <translation>हब %1 तक सुरंग नहीं पहुँच रही।</translation>
+        <source>The tunnel to the base %1 does not get through.</source>
+        <translation>बेस %1 तक सुरंग नहीं पहुँच रही।</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on the tunnel's disguise on the hub.</source>
-        <translation>यह नेटवर्क सुरंगें रोक सकता है: हब पर सुरंग का छद्मावरण चालू करें।</translation>
+        <source>This network may block tunnels: turn on Strict networks on the base.</source>
+        <translation>यह नेटवर्क सुरंगें रोक सकता है: बेस पर सख़्त नेटवर्क चालू करें।</translation>
     </message>
     <message>
-        <source>The hub %1 does not answer.</source>
-        <translation>हब %1 जवाब नहीं दे रहा।</translation>
+        <source>The base %1 does not answer.</source>
+        <translation>बेस %1 जवाब नहीं दे रहा।</translation>
     </message>
     <message>
-        <source>Check that the hub is on and online.</source>
-        <translation>जाँचें कि हब चालू है और ऑनलाइन है।</translation>
+        <source>Check that the base is on and online.</source>
+        <translation>जाँचें कि बेस चालू है और ऑनलाइन है।</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1460,44 +1460,44 @@
         <translation>समूह का कोई दूसरा डिवाइस चालू करें।</translation>
     </message>
     <message>
-        <source>The relay does not answer.</source>
-        <translation>रिले जवाब नहीं दे रहा।</translation>
+        <source>The backup server does not answer.</source>
+        <translation>बैकअप सर्वर जवाब नहीं दे रहा।</translation>
     </message>
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>इंटरनेट कनेक्शन जाँचें; CBB खुद फिर कोशिश करता है।</translation>
     </message>
     <message>
-        <source>This device is the hub, and no device has connected yet.</source>
-        <translation>यह डिवाइस हब है, और अभी तक कोई डिवाइस नहीं जुड़ा।</translation>
+        <source>This device is the base, and no device has connected yet.</source>
+        <translation>यह डिवाइस बेस है, और अभी तक कोई डिवाइस नहीं जुड़ा।</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
         <translation>जाँचें कि दूसरे डिवाइसों पर हर जगह चालू है।</translation>
     </message>
     <message>
-        <source>An admin muted this device: its copies do not reach the group.</source>
-        <translation>एक एडमिन ने इस डिवाइस को म्यूट किया है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
+        <source>This device is muted: its copies do not reach the group.</source>
+        <translation>यह डिवाइस म्यूट है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
     </message>
     <message>
-        <source>An admin muted this device until %1: its copies do not reach the group.</source>
-        <translation>एक एडमिन ने इस डिवाइस को %1 तक म्यूट किया है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
+        <source>This device is muted until %1: its copies do not reach the group.</source>
+        <translation>यह डिवाइस %1 तक म्यूट है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
     </message>
     <message>
-        <source>Ask an admin to unmute it.</source>
-        <translation>किसी एडमिन से इसे अनम्यूट करने को कहें।</translation>
+        <source>Unmute it from a trusted device of the group.</source>
+        <translation>समूह के किसी भरोसेमंद डिवाइस से इसे अनम्यूट करें।</translation>
     </message>
     <message>
-        <source>The forwarder does not take this hub.</source>
-        <translation>फ़ॉरवर्डर इस हब को स्वीकार नहीं कर रहा।</translation>
+        <source>The connection server does not take this base.</source>
+        <translation>कनेक्शन सर्वर इस बेस को स्वीकार नहीं कर रहा।</translation>
     </message>
     <message>
         <source>Devices away from home may not reach it; CBB tries again by itself.</source>
         <translation>घर से बाहर के डिवाइस शायद इस तक न पहुँचें; CBB खुद फिर कोशिश करता है।</translation>
     </message>
     <message>
-        <source>The list of the forwarders' entry points is out of date.</source>
-        <translation>फ़ॉरवर्डरों के प्रवेश बिंदुओं की सूची पुरानी है।</translation>
+        <source>The list of the connection servers' entry points is out of date.</source>
+        <translation>कनेक्शन सर्वरों के प्रवेश बिंदुओं की सूची पुरानी है।</translation>
     </message>
     <message>
         <source>Update CBB on a computer of the group.</source>
@@ -1528,8 +1528,8 @@
         <translation>इन पर सिंक बंद है: %1।</translation>
     </message>
     <message>
-        <source>Muted by an admin: %1.</source>
-        <translation>एडमिन द्वारा म्यूट: %1।</translation>
+        <source>Muted: %1.</source>
+        <translation>म्यूट: %1।</translation>
     </message>
     <message>
         <source>CBB %1 is available.</source>

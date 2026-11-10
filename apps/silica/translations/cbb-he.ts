@@ -923,8 +923,8 @@
         <translation>הקבוצה עצורה: המכשירים שלה מחליפים רק את הרשומות שלהם, בלי לוח העתקה, עד שהשורש של הקבוצה יחליט.</translation>
     </message>
     <message>
-        <source>The group sends no secrets until its root decides.</source>
-        <translation>הקבוצה לא שולחת סודות עד שהשורש שלה יחליט.</translation>
+        <source>The group sends no secrets until its owner decides.</source>
+        <translation>הקבוצה לא שולחת סודות עד שהבעלים שלה יחליטו.</translation>
     </message>
     <message>
         <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
@@ -1356,40 +1356,40 @@
         <translation>אם המכשיר לא אבד, הסירו את %1 מהקבוצה.</translation>
     </message>
     <message>
-        <source>Another admin froze this device's admin key.</source>
-        <translation>מנהל אחר הקפיא את מפתח הניהול של המכשיר הזה.</translation>
+        <source>This device's rights as a trusted device are paused.</source>
+        <translation>ההרשאות של המכשיר הזה כמכשיר מהימן מושהות.</translation>
     </message>
     <message>
-        <source>Ask the group's root to unfreeze it.</source>
-        <translation>בקשו מהשורש של הקבוצה לבטל את ההקפאה.</translation>
+        <source>Ask the group's owner to restore its rights.</source>
+        <translation>בקשו מהבעלים של הקבוצה להחזיר לו את ההרשאות.</translation>
     </message>
     <message>
         <source>This device's certificate ended on %1.</source>
         <translation>התעודה של המכשיר הזה פגה ב־%1.</translation>
     </message>
     <message>
-        <source>Bring it home to an admin of the group: the admin renews the certificate.</source>
-        <translation>חברו אותו בבית למנהל של הקבוצה: המנהל יחדש את התעודה.</translation>
+        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
+        <translation>חברו אותו בבית למכשיר מהימן של הקבוצה, והוא יחדש את התעודה.</translation>
     </message>
     <message>
         <source>This device's certificate ends on %1.</source>
         <translation>התעודה של המכשיר הזה תפוג ב־%1.</translation>
     </message>
     <message>
-        <source>Connect it at home to an admin of the group before then.</source>
-        <translation>לפני כן, חברו אותו בבית למנהל של הקבוצה.</translation>
+        <source>Connect it at home to a trusted device of the group before then.</source>
+        <translation>לפני כן, חברו אותו בבית למכשיר מהימן של הקבוצה.</translation>
     </message>
     <message>
         <source>The group's records stop the exchange.</source>
         <translation>הרשומות של הקבוצה עצרו את ההחלפה.</translation>
     </message>
     <message>
-        <source>The group's root decides on its alerts.</source>
-        <translation>השורש של הקבוצה מחליט בהתראות שלו.</translation>
+        <source>The group's owner decides on its alerts.</source>
+        <translation>הבעלים של הקבוצה מחליטים בהתראות שלהם.</translation>
     </message>
     <message>
-        <source>The group sends no secrets until its root decides.</source>
-        <translation>הקבוצה לא שולחת סודות עד שהשורש שלה יחליט.</translation>
+        <source>The group sends no secrets until its owner decides.</source>
+        <translation>הקבוצה לא שולחת סודות עד שהבעלים שלה יחליטו.</translation>
     </message>
     <message>
         <source>Sync is off on this device.</source>
@@ -1424,32 +1424,32 @@
         <translation>המחשב הזה עוד לא פגש את הקבוצה שלו ברשת הזו.</translation>
     </message>
     <message>
-        <source>If this is your home network, run sudo cbb network.</source>
-        <translation>אם זו הרשת הביתית שלכם, הריצו sudo cbb network.</translation>
+        <source>If this is your home network, mark it as home.</source>
+        <translation>אם זו הרשת הביתית שלכם, סמנו אותה כרשת הבית.</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no hub.</source>
-        <translation>״בכל מקום״ מופעל, אבל לקבוצה אין רכזת.</translation>
+        <source>Everywhere is on, but the group has no base.</source>
+        <translation>״בכל מקום״ מופעל, אבל לקבוצה אין בסיס.</translation>
     </message>
     <message>
-        <source>Make a computer at home the hub, in its advanced settings.</source>
-        <translation>הפכו מחשב בבית לרכזת, בהגדרות המתקדמות שלו.</translation>
+        <source>Make a computer at home the base, in its advanced settings.</source>
+        <translation>הפכו מחשב בבית לבסיס, בהגדרות המתקדמות שלו.</translation>
     </message>
     <message>
-        <source>The tunnel to the hub %1 does not get through.</source>
-        <translation>המנהרה לרכזת %1 לא עוברת.</translation>
+        <source>The tunnel to the base %1 does not get through.</source>
+        <translation>המנהרה לבסיס %1 לא עוברת.</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on the tunnel's disguise on the hub.</source>
-        <translation>ייתכן שהרשת הזו חוסמת מנהרות: הפעילו הסוואת מנהרה ברכזת.</translation>
+        <source>This network may block tunnels: turn on Strict networks on the base.</source>
+        <translation>ייתכן שהרשת הזו חוסמת מנהרות: הפעילו ״רשתות מחמירות״ בבסיס.</translation>
     </message>
     <message>
-        <source>The hub %1 does not answer.</source>
-        <translation>הרכזת %1 לא עונה.</translation>
+        <source>The base %1 does not answer.</source>
+        <translation>הבסיס %1 לא עונה.</translation>
     </message>
     <message>
-        <source>Check that the hub is on and online.</source>
-        <translation>ודאו שהרכזת דולקת ומחוברת לרשת.</translation>
+        <source>Check that the base is on and online.</source>
+        <translation>ודאו שהבסיס דולק ומחובר לרשת.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1460,44 +1460,44 @@
         <translation>הפעילו מכשיר אחר של הקבוצה.</translation>
     </message>
     <message>
-        <source>The relay does not answer.</source>
-        <translation>הממסר לא עונה.</translation>
+        <source>The backup server does not answer.</source>
+        <translation>שרת הגיבוי לא עונה.</translation>
     </message>
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>בדקו את החיבור לאינטרנט; CBB ינסה שוב בעצמו.</translation>
     </message>
     <message>
-        <source>This device is the hub, and no device has connected yet.</source>
-        <translation>המכשיר הזה הוא הרכזת, ועוד אף מכשיר לא התחבר.</translation>
+        <source>This device is the base, and no device has connected yet.</source>
+        <translation>המכשיר הזה הוא הבסיס, ועוד אף מכשיר לא התחבר.</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
         <translation>ודאו שבמכשירים האחרים ״בכל מקום״ מופעל.</translation>
     </message>
     <message>
-        <source>An admin muted this device: its copies do not reach the group.</source>
-        <translation>מנהל השתיק את המכשיר הזה: ההעתקות שלו לא מגיעות לקבוצה.</translation>
+        <source>This device is muted: its copies do not reach the group.</source>
+        <translation>המכשיר הזה מושתק: ההעתקות שלו לא מגיעות לקבוצה.</translation>
     </message>
     <message>
-        <source>An admin muted this device until %1: its copies do not reach the group.</source>
-        <translation>מנהל השתיק את המכשיר הזה עד %1: ההעתקות שלו לא מגיעות לקבוצה.</translation>
+        <source>This device is muted until %1: its copies do not reach the group.</source>
+        <translation>המכשיר הזה מושתק עד %1: ההעתקות שלו לא מגיעות לקבוצה.</translation>
     </message>
     <message>
-        <source>Ask an admin to unmute it.</source>
-        <translation>בקשו ממנהל לבטל את ההשתקה.</translation>
+        <source>Unmute it from a trusted device of the group.</source>
+        <translation>בטלו את ההשתקה שלו ממכשיר מהימן של הקבוצה.</translation>
     </message>
     <message>
-        <source>The forwarder does not take this hub.</source>
-        <translation>המעביר לא מקבל את הרכזת הזו.</translation>
+        <source>The connection server does not take this base.</source>
+        <translation>שרת החיבור לא מקבל את הבסיס הזה.</translation>
     </message>
     <message>
         <source>Devices away from home may not reach it; CBB tries again by itself.</source>
         <translation>ייתכן שמכשירים מחוץ לבית לא יגיעו אליה; CBB ינסה שוב בעצמו.</translation>
     </message>
     <message>
-        <source>The list of the forwarders' entry points is out of date.</source>
-        <translation>רשימת נקודות הכניסה של המעבירים לא עדכנית.</translation>
+        <source>The list of the connection servers' entry points is out of date.</source>
+        <translation>רשימת נקודות הכניסה של שרתי החיבור לא עדכנית.</translation>
     </message>
     <message>
         <source>Update CBB on a computer of the group.</source>
@@ -1528,8 +1528,8 @@
         <translation>הסנכרון כבוי ב: %1.</translation>
     </message>
     <message>
-        <source>Muted by an admin: %1.</source>
-        <translation>הושתקו על ידי מנהל: %1.</translation>
+        <source>Muted: %1.</source>
+        <translation>מושתקים: %1.</translation>
     </message>
     <message>
         <source>CBB %1 is available.</source>

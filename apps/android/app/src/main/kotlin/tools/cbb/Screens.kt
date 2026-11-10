@@ -883,9 +883,16 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                 val changed = address != (own?.endpoint ?: "") || pin != (own?.pin ?: "")
                 AccentButton(stringResource(R.string.hub_forwarder_save), enabled = changed && !busy, onClick = { act { model.setForwarder(address, pin) } })
                 Text(stringResource(R.string.hub_disguise), fontWeight = FontWeight.SemiBold)
+                // Strict networks: AmneziaWG for networks that block VPNs,
+                // and VLESS over it for those that let only the web through.
                 var disguiseTo by remember { mutableStateOf<HubOnPhone.Disguise?>(null) }
-                for (d in HubOnPhone.Disguise.entries) {
-                    Choice(disguiseName(d), hub.disguise == d) { if (!busy && d != hub.disguise) disguiseTo = d }
+                val vpn = hub.disguise != HubOnPhone.Disguise.PLAIN
+                val web = hub.disguise == HubOnPhone.Disguise.VLESS
+                StrictSwitch(stringResource(R.string.hub_strict_vpn), vpn, !busy) {
+                    disguiseTo = if (vpn) HubOnPhone.Disguise.PLAIN else HubOnPhone.Disguise.OBFUSCATE
+                }
+                StrictSwitch(stringResource(R.string.hub_strict_web), web, !busy && vpn) {
+                    disguiseTo = if (web) HubOnPhone.Disguise.OBFUSCATE else HubOnPhone.Disguise.VLESS
                 }
                 Tip(R.string.hub_disguise_body)
                 disguiseTo?.let { d ->
@@ -913,11 +920,16 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
     }
 }
 
-/** The names of the ways the hub's tunnel hides, the protocols' own. */
-private fun disguiseName(d: HubOnPhone.Disguise) = when (d) {
-    HubOnPhone.Disguise.PLAIN -> "WireGuard"
-    HubOnPhone.Disguise.OBFUSCATE -> "AmneziaWG"
-    HubOnPhone.Disguise.VLESS -> "VLESS"
+/** One switch of strict networks, which asks before it changes the hub. */
+@Composable
+private fun StrictSwitch(label: String, on: Boolean, enabled: Boolean, flip: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch, enabled = enabled, onClick = flip),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, modifier = Modifier.weight(1f))
+        Switch(checked = on, onCheckedChange = null, enabled = enabled)
+    }
 }
 
 /**

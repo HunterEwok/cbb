@@ -299,21 +299,20 @@ final class MacModel: ObservableObject {
         let args = d.isSelf ? ["global", "hub", "off", "-yes"] : ["global", "hub", "off", "-on", d.id, "-yes"]
         await admin(args, done: String(localized: "It is no hub any more."))
     }
+    /// Takes the networks this Mac is on now as ones where the group is, as
+    /// cbb network does with administrator privileges.
+    func homeNetwork() async {
+        await admin(["network"], done: String(localized: "This network counts as home now."))
+    }
     /// Whether the group has a hub other than d that this Mac knows of.
     func otherHub(than d: Control.Device) -> Bool {
         devices.contains { $0.id != d.id && $0.hub }
     }
-    /// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
+    /// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS over
+    /// it, which the two switches of strict networks set.
     enum HubTunnel: String, CaseIterable, Identifiable {
         case plain, obfuscate, vless
         var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .plain: "WireGuard"
-            case .obfuscate: "AmneziaWG"
-            case .vless: "VLESS"
-            }
-        }
     }
 
     /// How this Mac's tunnel hides while it is a hub.

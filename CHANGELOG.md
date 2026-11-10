@@ -12,6 +12,9 @@ All notable changes to cbb are documented in this file. The format follows
   The Rust core decides them (`cbb_core::why`, the core's call `why`, the phone member's `why`,
   `why` in a computer's status), the apps say them in eight languages, and `cbb status` prints
   the first that stops sync.
+  The apps word them with the interface's names (base, connection server, backup server,
+  owner, trusted device), and on a computer that has not met its group on this network the
+  tray and Mac apps offer the button "This is my home network" instead of a command.
 - A panic stops at the core's C functions: a call that breaks answers code 5 `panic` with
   what broke and where, and a panic in one of the phone's member threads becomes a `panic`
   event, on which the iPhone, Android and Aurora apps start the member again
@@ -1546,6 +1549,9 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The tunnel's disguise on a hub is now "Strict networks", two switches in the tray, Mac,
+  iPhone and Android apps: networks that block VPNs (AmneziaWG) and networks that let only the
+  web through (VLESS, which needs the first).
 - The apps' settings are simpler: making a device the hub and the hub's tunnel show only with
   the advanced settings on (the hub is chosen by itself), and the Bluetooth keyboard sits in a
   "Lab" section of the advanced settings on Android and Aurora, beside the other things that

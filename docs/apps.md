@@ -158,7 +158,8 @@ they look, so both apps are built to the same plan.
    switch "Show error details", which puts the error itself under each error message; it is
    on in debug builds, and the launch argument or extra `ShowErrorDetails` sets it too).
    The advanced ones: why it does not sync (below), away from home (the hub, moving it to a
-   computer, the tunnel disguise, the blind relay) and, for admins, the group ("Copy lifetime", "Security level": root,
+   computer, "Strict networks": two switches, for networks that block VPNs (AmneziaWG) and for
+   networks that let only the web through (VLESS), the blind relay) and, for admins, the group ("Copy lifetime", "Security level": root,
    admins, hubs). No long text sits under an item: a hard one has a tip of a sentence or
    two, shown from the first launch until the user closes it (TipKit on the iPhone). Sync
    away from home is turned on by the globe on Home (docs/design.md, "Sync away from
@@ -243,7 +244,7 @@ shows its code and the member's own words.
 | `stopped` | stop | the group's records stop the exchange until the root decides |
 | `sync_off` | stop | sync is off here, until a time or until turned on |
 | `away_off` | stop | no device of the group is on this network: turn on Everywhere |
-| `new_network` | stop | a computer has not met its group on this network (`sudo cbb network`) |
+| `new_network` | stop | a computer has not met its group on this network (the apps' button "This is my home network", `sudo cbb network` in the command line) |
 | `no_hub` | stop | Everywhere is on, but the group has no hub |
 | `tunnel_blocked` | stop | the plain WireGuard tunnel to the hub does not get through: the network may block it |
 | `hub_unreachable` | stop | the hub does not answer, though its tunnel is disguised |

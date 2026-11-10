@@ -309,6 +309,12 @@ func (d *Desk) SetHub(tunnel, fwd, key string) {
 	d.admin(args, false, "The hub's settings are saved.")
 }
 
+// HomeNetwork takes the networks this computer is on now as ones where
+// the group is, as cbb network does as the administrator.
+func (d *Desk) HomeNetwork() {
+	d.admin([]string{"network"}, false, "This network counts as home now.")
+}
+
 // Resolve, on the group's root, voids both histories of every key that
 // signed two, as cbb resolve does as the administrator.
 func (d *Desk) Resolve() {

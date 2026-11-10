@@ -221,18 +221,22 @@ struct DeviceDetail: View {
 
     private var line: some View { Divider().overlay(palette.line) }
 
-    /// This Mac's own settings as a hub: how its tunnel hides and its
+    /// This Mac's own settings as a hub: strict networks and its
     /// forwarder, kept apart from its addresses and port (cbb global hub
     /// -keep).
     @ViewBuilder private func hubSettings(_ d: Control.Device) -> some View {
         if d.isSelf, let away = model.status?.away, away.hub == true {
             VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
-                Text("How the hub's tunnel hides").font(.footnote).foregroundStyle(palette.textDim)
-                Picker(selection: Binding(get: { model.hubTunnel }, set: { if $0 != model.hubTunnel { tunnelTo = $0 } })) {
-                    ForEach(MacModel.HubTunnel.allCases) { Text(verbatim: $0.title).tag($0) }
-                } label: { EmptyView() }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                // Strict networks: AmneziaWG for networks that block VPNs,
+                // and VLESS over it for those that let only the web through.
+                Text("Strict networks").font(.footnote).foregroundStyle(palette.textDim)
+                Toggle(isOn: Binding(get: { model.hubTunnel != .plain }, set: { tunnelTo = $0 ? .obfuscate : .plain })) {
+                    Text("Networks that block VPNs (AmneziaWG)")
+                }
+                Toggle(isOn: Binding(get: { model.hubTunnel == .vless }, set: { tunnelTo = $0 ? .vless : .obfuscate })) {
+                    Text("Networks that let only the web through (VLESS)")
+                }
+                .disabled(model.hubTunnel == .plain)
                 line
                 row(Text("Forwarder"), away.forwarder.map { Text(verbatim: $0.endpoint).monospaced() } ?? Text("none"))
                 if away.forwarder?.entriesStale == true {

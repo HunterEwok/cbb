@@ -923,8 +923,8 @@
         <translation>El grupo está detenido: sus dispositivos solo intercambian sus registros, sin portapapeles, hasta que decida la raíz del grupo.</translation>
     </message>
     <message>
-        <source>The group sends no secrets until its root decides.</source>
-        <translation>El grupo no envía secretos hasta que decida su raíz.</translation>
+        <source>The group sends no secrets until its owner decides.</source>
+        <translation>El grupo no envía secretos hasta que su propietario decida.</translation>
     </message>
     <message>
         <source>%1 signed two histories with one key, as a stolen key or a restore from a backup would.</source>
@@ -1356,40 +1356,40 @@
         <translation>Si este dispositivo no se perdió, quita %1 del grupo.</translation>
     </message>
     <message>
-        <source>Another admin froze this device's admin key.</source>
-        <translation>Otro administrador congeló la clave de administrador de este dispositivo.</translation>
+        <source>This device's rights as a trusted device are paused.</source>
+        <translation>Los derechos de este dispositivo como dispositivo de confianza están en pausa.</translation>
     </message>
     <message>
-        <source>Ask the group's root to unfreeze it.</source>
-        <translation>Pide a la raíz del grupo que la descongele.</translation>
+        <source>Ask the group's owner to restore its rights.</source>
+        <translation>Pide al propietario del grupo que le devuelva sus derechos.</translation>
     </message>
     <message>
         <source>This device's certificate ended on %1.</source>
         <translation>El certificado de este dispositivo venció el %1.</translation>
     </message>
     <message>
-        <source>Bring it home to an admin of the group: the admin renews the certificate.</source>
-        <translation>Conéctalo en casa a un administrador del grupo: el administrador renueva el certificado.</translation>
+        <source>Bring it home to a trusted device of the group, which renews the certificate.</source>
+        <translation>Conéctalo en casa a un dispositivo de confianza del grupo, que renueva el certificado.</translation>
     </message>
     <message>
         <source>This device's certificate ends on %1.</source>
         <translation>El certificado de este dispositivo vence el %1.</translation>
     </message>
     <message>
-        <source>Connect it at home to an admin of the group before then.</source>
-        <translation>Antes de esa fecha, conéctalo en casa a un administrador del grupo.</translation>
+        <source>Connect it at home to a trusted device of the group before then.</source>
+        <translation>Antes de esa fecha, conéctalo en casa a un dispositivo de confianza del grupo.</translation>
     </message>
     <message>
         <source>The group's records stop the exchange.</source>
         <translation>Los registros del grupo detienen el intercambio.</translation>
     </message>
     <message>
-        <source>The group's root decides on its alerts.</source>
-        <translation>La raíz del grupo decide en sus avisos.</translation>
+        <source>The group's owner decides on its alerts.</source>
+        <translation>El propietario del grupo decide en sus avisos.</translation>
     </message>
     <message>
-        <source>The group sends no secrets until its root decides.</source>
-        <translation>El grupo no envía secretos hasta que su raíz decida.</translation>
+        <source>The group sends no secrets until its owner decides.</source>
+        <translation>El grupo no envía secretos hasta que su propietario decida.</translation>
     </message>
     <message>
         <source>Sync is off on this device.</source>
@@ -1424,32 +1424,32 @@
         <translation>Este ordenador aún no ha encontrado su grupo en esta red.</translation>
     </message>
     <message>
-        <source>If this is your home network, run sudo cbb network.</source>
-        <translation>Si es tu red de casa, ejecuta sudo cbb network.</translation>
+        <source>If this is your home network, mark it as home.</source>
+        <translation>Si es tu red de casa, márcala como la de casa.</translation>
     </message>
     <message>
-        <source>Everywhere is on, but the group has no hub.</source>
-        <translation>En todas partes está activado, pero el grupo no tiene hub.</translation>
+        <source>Everywhere is on, but the group has no base.</source>
+        <translation>En todas partes está activado, pero el grupo no tiene base.</translation>
     </message>
     <message>
-        <source>Make a computer at home the hub, in its advanced settings.</source>
-        <translation>Haz que un ordenador de casa sea el hub, en su configuración avanzada.</translation>
+        <source>Make a computer at home the base, in its advanced settings.</source>
+        <translation>Haz que un ordenador de casa sea la base, en su configuración avanzada.</translation>
     </message>
     <message>
-        <source>The tunnel to the hub %1 does not get through.</source>
-        <translation>El túnel al hub %1 no pasa.</translation>
+        <source>The tunnel to the base %1 does not get through.</source>
+        <translation>El túnel a la base %1 no pasa.</translation>
     </message>
     <message>
-        <source>This network may block tunnels: turn on the tunnel's disguise on the hub.</source>
-        <translation>Esta red puede bloquear túneles: activa el camuflaje del túnel en el hub.</translation>
+        <source>This network may block tunnels: turn on Strict networks on the base.</source>
+        <translation>Esta red puede bloquear túneles: activa Redes estrictas en la base.</translation>
     </message>
     <message>
-        <source>The hub %1 does not answer.</source>
-        <translation>El hub %1 no responde.</translation>
+        <source>The base %1 does not answer.</source>
+        <translation>La base %1 no responde.</translation>
     </message>
     <message>
-        <source>Check that the hub is on and online.</source>
-        <translation>Comprueba que el hub está encendido y conectado.</translation>
+        <source>Check that the base is on and online.</source>
+        <translation>Comprueba que la base está encendida y conectada.</translation>
     </message>
     <message>
         <source>Connected, but no other device of the group is online.</source>
@@ -1460,44 +1460,44 @@
         <translation>Enciende otro dispositivo del grupo.</translation>
     </message>
     <message>
-        <source>The relay does not answer.</source>
-        <translation>El relé no responde.</translation>
+        <source>The backup server does not answer.</source>
+        <translation>El servidor de respaldo no responde.</translation>
     </message>
     <message>
         <source>Check the internet connection; CBB tries again by itself.</source>
         <translation>Comprueba la conexión a internet; CBB lo intenta de nuevo solo.</translation>
     </message>
     <message>
-        <source>This device is the hub, and no device has connected yet.</source>
-        <translation>Este dispositivo es el hub y aún no se ha conectado ningún dispositivo.</translation>
+        <source>This device is the base, and no device has connected yet.</source>
+        <translation>Este dispositivo es la base y aún no se ha conectado ningún dispositivo.</translation>
     </message>
     <message>
         <source>Check that the other devices have Everywhere on.</source>
         <translation>Comprueba que los otros dispositivos tienen activado En todas partes.</translation>
     </message>
     <message>
-        <source>An admin muted this device: its copies do not reach the group.</source>
-        <translation>Un administrador silenció este dispositivo: sus copias no llegan al grupo.</translation>
+        <source>This device is muted: its copies do not reach the group.</source>
+        <translation>Este dispositivo está silenciado: sus copias no llegan al grupo.</translation>
     </message>
     <message>
-        <source>An admin muted this device until %1: its copies do not reach the group.</source>
-        <translation>Un administrador silenció este dispositivo hasta %1: sus copias no llegan al grupo.</translation>
+        <source>This device is muted until %1: its copies do not reach the group.</source>
+        <translation>Este dispositivo está silenciado hasta %1: sus copias no llegan al grupo.</translation>
     </message>
     <message>
-        <source>Ask an admin to unmute it.</source>
-        <translation>Pide a un administrador que lo vuelva a activar.</translation>
+        <source>Unmute it from a trusted device of the group.</source>
+        <translation>Quítale el silencio desde un dispositivo de confianza del grupo.</translation>
     </message>
     <message>
-        <source>The forwarder does not take this hub.</source>
-        <translation>El reenviador no acepta este hub.</translation>
+        <source>The connection server does not take this base.</source>
+        <translation>El servidor de conexión no acepta esta base.</translation>
     </message>
     <message>
         <source>Devices away from home may not reach it; CBB tries again by itself.</source>
         <translation>Los dispositivos fuera de casa podrían no alcanzarlo; CBB lo intenta de nuevo solo.</translation>
     </message>
     <message>
-        <source>The list of the forwarders' entry points is out of date.</source>
-        <translation>La lista de puntos de entrada de los reenviadores está desactualizada.</translation>
+        <source>The list of the connection servers' entry points is out of date.</source>
+        <translation>La lista de puntos de entrada de los servidores de conexión está desactualizada.</translation>
     </message>
     <message>
         <source>Update CBB on a computer of the group.</source>
@@ -1528,8 +1528,8 @@
         <translation>La sincronización está desactivada en: %1.</translation>
     </message>
     <message>
-        <source>Muted by an admin: %1.</source>
-        <translation>Silenciados por un administrador: %1.</translation>
+        <source>Muted: %1.</source>
+        <translation>Silenciados: %1.</translation>
     </message>
     <message>
         <source>CBB %1 is available.</source>

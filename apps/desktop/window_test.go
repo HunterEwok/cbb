@@ -556,8 +556,10 @@ func (w *window) admin(t *testing.T) {
 		w.svc.mu.Unlock()
 	}()
 	w.eval(`$click('.tile[data-id="self"]')`, nil)
-	w.wait(`$q('[data-tunnel="obfuscate"]') && $q('[data-tunnel="plain"]').getAttribute("aria-checked") === "true"`)
-	w.eval(`$click('[data-tunnel="obfuscate"]')`, nil)
+	// Strict networks: a plain hub has both switches off, and the one for
+	// networks that let only the web through waits for the other.
+	w.wait(`$q('[data-strict="vpn"]') && !$q('[data-strict="vpn"]').checked && $q('[data-strict="web"]').disabled`)
+	w.eval(`$click('[data-strict="vpn"]')`, nil)
 	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("next time they meet this hub at home")`)
 	w.eval(`$click("#confirm-ok")`, nil)
 	w.wait(`$q("#message").textContent === "The hub's settings are saved."`)
@@ -576,6 +578,47 @@ func (w *window) admin(t *testing.T) {
 	if !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-no-obfuscate", "-no-vless", "-forwarder", "203.0.113.9:8764", "-forwarder-key", "KEY"}}) {
 		t.Errorf("the forwarder ran %q", r)
 	}
+
+	// A hub with AmneziaWG turns VLESS on with the second switch.
+	w.svc.mu.Lock()
+	w.svc.status.Away = &control.Away{Hub: true, Obfuscated: true, Forwarder: &control.Forwarder{Endpoint: "198.51.100.20:8764", Registered: true}}
+	w.svc.mu.Unlock()
+	w.wait(`$q('[data-strict="vpn"]').checked && !$q('[data-strict="web"]').disabled && !$q('[data-strict="web"]').checked`)
+	w.eval(`$click('[data-strict="web"]')`, nil)
+	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("over VLESS")`)
+	w.eval(`$click("#confirm-ok")`, nil)
+	// The message is still the one of the switch above, so wait for the run.
+	r = nil
+	for deadline := time.Now().Add(10 * time.Second); len(r) == 0 && time.Now().Before(deadline); {
+		time.Sleep(50 * time.Millisecond)
+		r = ran()
+	}
+	if !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no"}}) {
+		t.Errorf("VLESS on ran %q", r)
+	}
+
+	// A network where this computer has not met its group: the user names
+	// it home from the window, as cbb network does, without a terminal.
+	w.svc.mu.Lock()
+	w.svc.status.Away = nil
+	w.svc.status.Why = []control.WhyReason{{Code: "new_network", Level: "stop", Devices: []string{"mac"}}}
+	w.svc.mu.Unlock()
+	defer func() {
+		w.svc.mu.Lock()
+		w.svc.status.Why = nil
+		w.svc.mu.Unlock()
+	}()
+	// The window refreshes only with no dialog open: the hub's card going
+	// away shows it has read the new status.
+	w.wait(`!$q('[data-strict="vpn"]')`)
+	w.eval(`$click("#advanced-why")`, nil)
+	w.wait(`$q("[data-home-network]") && !$q("[data-home-network]").disabled && !$q("#why-list").textContent.includes("sudo")`)
+	w.eval(`$click("[data-home-network]")`, nil)
+	w.wait(`$q("#message").textContent === "This network counts as home now."`)
+	if r := ran(); !reflect.DeepEqual(r, [][]string{{"network"}}) {
+		t.Errorf("this is my home network ran %q", r)
+	}
+	w.eval(`$q("#why-dialog").close(); true`, nil)
 }
 
 // joinGroup joins a group from a computer in none, from the start window:
