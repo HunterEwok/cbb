@@ -145,6 +145,38 @@
         <source>The phone could not delete its key.</source>
         <translation>تعذّر على الهاتف حذف مفتاحه.</translation>
     </message>
+    <message>
+        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
+        <translation>امسح رمز QR في ورقة الاسترداد: على هاتف جديد لا يكفي المفتاح المكتوب.</translation>
+    </message>
+    <message>
+        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
+        <translation>لم يعد هذا مفتاح استرداد المجموعة الآن: أزاله الجذر أو أنشأ واحدًا جديدًا.</translation>
+    </message>
+    <message>
+        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
+        <translation>لم يُعثر على أي جهاز من المجموعة على هذه الشبكة. شغّل هاتفًا أو حاسوبًا من المجموعة وحاول مرة أخرى.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB recovery sheet.</source>
+        <translation>هذه ليست ورقة استرداد CBB.</translation>
+    </message>
+    <message>
+        <source>The phone could not restore the group.</source>
+        <translation>تعذّر على الهاتف استعادة المجموعة.</translation>
+    </message>
+    <message>
+        <source>This is not the QR code of a CBB recovery sheet.</source>
+        <translation>هذا ليس رمز QR لورقة استرداد CBB.</translation>
+    </message>
+    <message>
+        <source>The group's root cancelled the claim to restore the group.</source>
+        <translation>ألغى جذر المجموعة طلب استعادة المجموعة.</translation>
+    </message>
+    <message>
+        <source>The claim to restore the group became void.</source>
+        <translation>أصبح طلب استعادة المجموعة باطلًا.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -331,9 +363,29 @@
         <source>Off until I turn it on</source>
         <translation>إيقاف حتى أشغّلها</translation>
     </message>
+    <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>الاستعادة بورقة الاسترداد</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
+    <message>
+        <source>Hand the group over</source>
+        <translation>تسليم المجموعة</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>جارٍ تسليم المجموعة إلى %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>تم تسليم المجموعة</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>طلبه يستولي على المجموعة فورًا</translation>
+    </message>
     <message>
         <source>Take the group over</source>
         <translation>تولَّ المجموعة</translation>
@@ -441,6 +493,62 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>ينتظر طلب الاستيلاء على المجموعة</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>لا وقت</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>ساعة واحدة</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>يوم واحد</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 أيام</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 أيام</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>المفاتيح التي يجوز للمشرف حفظها</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>بعض المشرفين يحفظون مفاتيح أضعف؛ ويبقون حتى تتم إزالتهم</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>عتاد مُثبَت فقط</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>عتاد</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>عتاد أو ملف</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>تم إنشاؤه</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>لا يوجد</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>لوحة مفاتيح بلوتوث</translation>
@@ -1199,6 +1307,92 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>عندما لا يكون الهاتف على الشبكة المنزلية، يُزامن عبر نفق WireGuard الخاص بالمحور الخاص بك، وهو حاسوب من المجموعة مُعدّ باستخدام cbb global hub؛ منفذه متاح من الإنترنت، ولكن فقط عبر WireGuard بمفاتيح المجموعة. يردّ المحور على هذا الهاتف في المرة التالية التي يتصل فيها في المنزل. لا يذهب شيء إلى أي مكان آخر، ومن دون النفق لا يوجد اتصال. إيقافه يجعل هذا الهاتف ينسى مفتاح النفق الخاص به.</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>إزالة مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>جارٍ إزالة مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>إنشاء مفتاح استرداد جديد</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>إنشاء مفتاح استرداد</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>جارٍ استبدال مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>اكتب المفتاح أو اطبع هذه الصفحة واحفظه في مكان آمن. يُعرض مرة واحدة فقط.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>لدى المجموعة مفتاح استرداد. به يستولي حاسوب من المجموعة أو هاتف جديد على المجموعة إذا فُقد هذا الهاتف.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>يتيح مفتاح الاسترداد لحاسوب من المجموعة أو هاتف جديد الاستيلاء على المجموعة إذا فُقد هذا الهاتف. اسحب للأسفل لإنشائه.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>لقد كتبته</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>استعادة المجموعة</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>هذا الهاتف هو جذر المجموعة الآن.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>جارٍ البحث عن هاتف أو حاسوب من المجموعة على هذه الشبكة…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>جارٍ طلب المجموعة…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>استُعيدت المجموعة على هذا الهاتف. يصبح جذر المجموعة عند انتهاء مدة الانتظار، بعد %1 ساعة، ما لم يلغِ الجذر الطلب.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>استُعيدت المجموعة على هذا الهاتف. يصبح جذر المجموعة عند انتهاء مدة انتظار المجموعة، ما لم يلغِ الجذر الطلب.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>وجّه الكاميرا إلى رمز QR في ورقة استرداد المجموعة. أبقِ هاتفًا أو حاسوبًا من المجموعة قيد التشغيل على هذه الشبكة.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>الكاميرا لا تعمل: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>أو الصق نص الرمز، cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>حاول مرة أخرى</translation>
     </message>
 </context>
 </TS>

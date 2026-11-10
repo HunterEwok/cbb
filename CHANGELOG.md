@@ -15,6 +15,21 @@ All notable changes to cbb are documented in this file. The format follows
 - The monitor watches the traffic of cbb.tools: `cbb-traffic.timer` on the server publishes
   the totals of the last 24 hours at `/status/traffic.json`, and the monitor fails past 1 TB
   or when the file stops changing (docs/relay-budget.md, "Money and traffic").
+- The Aurora app's root sets how long a claim to take the group over waits and which keys an
+  admin may keep, hands the group to an admin (its claim then takes effect at once), and makes
+  or removes the group's recovery key, whose sheet it shows once. The core builds and signs
+  these records (`cbb_core::root`, `cbb_member_manage`'s `takeover_delay`, `key_level`,
+  `hand_over`, `make_recovery` and `remove_recovery`, and the member's `root_view`).
+- The Android app's root asks the core for these records too: the key level, the recovery key
+  as a sheet and on a YubiKey (`recovery_for`) and its removal go through the kit's
+  `CoreMember`, and the Kotlin kit no longer builds them itself. The iPhone app does the same through
+  the Swift kit's `CoreMember`.
+- A new Aurora phone restores the group from its recovery sheet: Start's "Restore with a recovery
+  sheet" reads the sheet's QR code, finds a phone or a computer of the group on the network,
+  checks the records it sends, and claims the group with the sheet's key for a new root key in
+  the TEE; the phone becomes the root once the group's delay passes, unless the root cancels.
+  The core does the restoring for any app whose keys it does not hold (`cbb_restore`,
+  `cbb_member_manage`'s `recover_with_sheet`, `cbb_lite::restore`).
 - Nightly fuzzing reaches the Rust service: the control socket's messages, which cbb-helper's
   channel uses too, and the ZX Spectrum Next's frames (`member/fuzz`), and the forwarder's
   VLESS and XHTTP answers in the core (`vless`); Miri checks the phones' C functions and
@@ -125,8 +140,7 @@ All notable changes to cbb are documented in this file. The format follows
   undoes the takeover by removing the admin; a hub fetches the group's current copy for
   the devices away from home even with sync off, serves through its tunnel only what is
   within its limit away from home, and a fetch that no peer gives is tried again; the
-  copies' cache starts empty, as Go's. The way over VLESS inside REALITY goes through
-  cbb-helper (`vless-dial`, `vless-close`), since rustls makes no browser's ClientHello; a
+  copies' cache starts empty, as Go's. A
   client tries a hub's current and next key at once; a restarted tunnel link starts at a
   random port, not one the hub still holds; `cbb devices` marks the hubs; a device that
   joined by address dials it again until it finds a hub; after a thaw, or a record that
@@ -290,8 +304,7 @@ All notable changes to cbb are documented in this file. The format follows
   HTTPS to the forwarder's site, its certificate checked against the system's CA certificates
   or `SSL_CERT_FILE` (RSA and P-384 added to the core's TLS provider for that), HTTP/1.1
   packet-up requests, its UDP addresses tried first only with AmneziaWG
-  (`TestLiteMemberAwayXHTTP` against the Go forwarder behind a web server). REALITY stays
-  with the full member.
+  (`TestLiteMemberAwayXHTTP` against the Go forwarder behind a web server).
 - The phones' tunnel in Rust (ffi/, `cbb_tunnel`, feature `tunnel`): the lite member's
   WireGuard with AmneziaWG and VLESS with XHTTP behind a loopback port, for the iPhone and
   Android apps (`TestRustPhoneTunnel` against the Go hub); the phone
@@ -586,7 +599,7 @@ All notable changes to cbb are documented in this file. The format follows
   command gives none. A phone hub makes its AmneziaWG settings and VLESS user ID with the new
   `new_obfuscation` and `new_vless_id` of the phones' tunnel, keeps them in its state, starts its
   tunnel with them and registers with its forwarder over VLESS when asked.
-- **VLESS over XHTTP behind a web server**, beside REALITY: `cbb forward -vless-xhttp
+- **VLESS over XHTTP behind a web server**, in place of REALITY (see Removed): `cbb forward -vless-xhttp
   cbb.tools` listens on the loopback address (`-vless-listen`, default `127.0.0.1:3276`) and
   the site's web server, which ends the TLS with the site's own certificate, passes it one
   path (`-vless-path`, or one made at random and kept in the key file; the forwarder prints
@@ -594,8 +607,7 @@ All notable changes to cbb are documented in this file. The format follows
   carries `transport`, the site's name, the web server's port and `path`; `cbb` and the
   phones' tunnel speak it with Chrome's TLS fingerprint and XHTTP's `packet-up` mode, and
   check the site's certificate against the public CAs. A client that does not know a
-  transport stays at home. REALITY stays for forwarders without a site of their own;
-  docs/admin/self-hosting.md has the nginx location.
+  transport stays at home; docs/admin/self-hosting.md has the nginx location.
 - **VLESS comes with AmneziaWG, and UDP goes first.** A hub that sets VLESS (`cbb global hub
   -vless`, or VLESS in the apps) speaks AmneziaWG too, and its clients, `cbb` and both
   phones, try the hub's endpoints in AmneziaWG over UDP first and VLESS after them, keeping
@@ -2026,6 +2038,13 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Removed
 
+- VLESS with REALITY (D-91): `cbb forward -vless-site` is gone, with the REALITY key, the Go
+  client and `cbb-helper`'s way for it. VLESS runs over XHTTP behind the web server of the
+  forwarder's own site, on every member and phone. A forwarder started with `-vless-site`
+  stops with an error, and a client refuses an older forwarder's REALITY offer and stays at
+  home; move such a forwarder behind a web server (docs/admin/self-hosting.md). The
+  forwarder's key file may keep its old `CBB REALITY KEY` block, which nothing reads.
+
 - The Go command line `cmd/cbb` and the Go service in it: `cbb` is the Rust program on every
   member, with `cbb-helper` beside it on computers. Its tests run on the Rust `cbb`
   (`member/tests/cli_commands.rs`, the service tests in `internal/service`).
@@ -2051,6 +2070,11 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A device removed from the group while it was not connected hears that it was removed: on its
+  next connection with any member it gets the records that remove it, and its status says so.
+  Until now every member refused it before it could hear, so it kept saying it was in the group.
+- On Android, pressing the button while the app was still sending as it opened no longer loses
+  what the button did: the sync as the app opened, ending later, cleared its message.
 - A member started with `-no-listen` dials the members it finds at once, also those with a
   lower device ID: it waited 30 s for them to dial it, which they cannot.
 - The Rust member cleans the reason of a command's result before it shows or passes it on,

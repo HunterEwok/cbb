@@ -14,7 +14,7 @@ For anyone with a phone or a computer, in plain words.
 | [Installing](guide/install.md) | every system, Homebrew, winget, Docker, the firewall, updating, removing |
 | [The apps](guide/apps.md) | the phone, watch and desktop apps |
 | [Away from home](guide/away-from-home.md) | the hub, a forwarder, invitations |
-| [Networks that block VPNs](guide/blocked-networks.md) | AmneziaWG and VLESS with REALITY |
+| [Networks that block VPNs](guide/blocked-networks.md) | AmneziaWG and VLESS |
 | [Images, files and formatted text](guide/images-and-files.md) | what goes where, the sizes, saving received files |
 | [Remote paste](guide/remote-paste.md) | an admin puts a text into the focused app on another device |
 | [Keyboards and TVs](guide/keyboards-and-tvs.md) | type into a TV, tablet, console or computer as a Bluetooth or USB keyboard, or as the TV's remote |

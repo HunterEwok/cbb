@@ -342,7 +342,7 @@ fn joined_answer(j: &cbb_core::pair_session::Joined, now_ms: i64) -> Result<Join
 }
 
 /// The QR code's modules for text, a string of '1' (dark) and '0' per row.
-fn modules(text: &str) -> Result<Vec<String>> {
+pub(crate) fn modules(text: &str) -> Result<Vec<String>> {
     let code = qrcode::QrCode::with_error_correction_level(text.as_bytes(), qrcode::EcLevel::M)
         .map_err(|e| Error::msg(format!("cannot make the QR code: {e}")))?;
     let width = code.width();

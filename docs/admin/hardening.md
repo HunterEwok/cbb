@@ -69,8 +69,8 @@ Both are off on every device until its own user turns them on there.
 - **Your own servers.** A forwarder or a blind relay you run yourself keeps the times and
   addresses of your devices away from anyone else ([running your own servers](self-hosting.md)).
   A relay sees which devices are online and when; a hub at home with a forwarder sees less.
-- **Networks that watch traffic.** AmneziaWG's obfuscation, or VLESS with REALITY on your
-  forwarder, hides that the tunnel is WireGuard ([networks that block VPNs](../guide/blocked-networks.md)).
+- **Networks that watch traffic.** AmneziaWG's obfuscation, or VLESS over XHTTP behind your
+  forwarder's site, hides that the tunnel is WireGuard ([networks that block VPNs](../guide/blocked-networks.md)).
 
 ## Updates and downloads
 
