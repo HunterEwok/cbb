@@ -7,6 +7,20 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Remote invitations on every device: any admin makes one, on the group's hub or through a
+  hub it is connected to, which lets the guest in and passes the pairing to the admin's
+  window (`guest` messages, docs/protocol.md, section 12, "Through the hub"). The invitation
+  is a QR code first, with its text or file as the fallback: the iPhone, Android and Aurora
+  apps show it from Send an invitation, and the Mac and tray apps through `cbb invite -app`,
+  which they run as the administrator (`TestInviteApp`). A phone far from the group joins
+  with Join with an invitation on its Start screen: it scans the QR code, or takes the text
+  or the file, and the invitation waits to be joined or declined; joined, the phone shows the
+  fingerprint the admin compares (`TestFFIJoinInvite`, `TestFFIInviteThroughHub`). An
+  invitation carries the hub's way over VLESS with XHTTP (`x`), for a network that lets no
+  UDP through. The hub keeps the guest for a day after it admitted the device, and the device
+  keeps the invitation and offers its own tunnel key again until the hub answers, after a
+  restart too, so a device that starts late or loses its network after the join still gets
+  through.
 - The Aurora app's root sets how long a claim to take the group over waits and which keys an
   admin may keep, hands the group to an admin (its claim then takes effect at once), and makes
   or removes the group's recovery key, whose sheet it shows once. The core builds and signs
@@ -2062,6 +2076,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A tunnel's loopback port on Linux takes a client on a dual-stack socket, as Java's on a system
+  with IPv6: its user is looked up in the kernel's IPv6 table too, by its IPv4-mapped address,
+  where before it was refused at once.
 - The tunnel to the hub of a lite member or a phone stays on the way over VLESS when
   WireGuard renews its keys. Once a session was two minutes old the link took the hub for
   silent and moved on to the next endpoint at once, a blocked UDP port when only VLESS gets

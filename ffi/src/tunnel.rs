@@ -16,6 +16,11 @@
 //! - `start` with `key`, `device`, `hub` (the hub's device ID) and `offer`
 //!   (the hub's tunnel offer as the member protocol carries it):
 //!   `{"id", "port"}`;
+//! - `guest_start` with `invite` (a remote invitation's text): `{"id",
+//!   "port"}`, the invitation's guest tunnel, whose port leads to the hub's
+//!   member port once the hub admitted the device that joined by it: the
+//!   app's node dials it to offer its own tunnel key, until the hub's offer
+//!   comes (docs/protocol.md, section 12); `status` and `stop` take its id;
 //! - `status` with `id`: `{"answered", "log"}`, whether the hub answered
 //!   and the log lines since the last status;
 //! - `set_endpoint` with `id` and `endpoint` ("ip:port"): the tunnel tries
@@ -32,11 +37,12 @@
 //!   (`{"udp_port", "log"}`) and `hub_stop` with `id`;
 //! - `hub_invite` with `id`, `group` (the group's tag), `endpoints` (the
 //!   hub's addresses away from home, "ip:port"), `lifetime` (seconds, at
-//!   most a day) and `guest_port` (the app's pairing window):
+//!   most a day), `guest_port` (the app's pairing window) and `vless` (the
+//!   VLESS settings of the hub's offers, or none):
 //!   `{"guest", "text", "secret", "expires"}`, a remote invitation
 //!   (docs/protocol.md, section 12) whose guest tunnel leads to the window;
 //! - `guest_admitted` with `id` and `guest`: the window admitted the device,
-//!   whose connections now go to the member port for 2 minutes;
+//!   whose connections now go to the member port, for a day at most;
 //!   `guest_close` with `id` and `guest` drops the guest;
 //! - `hub_set_records` with `id` and `records`: the group's authority
 //!   records the next registration with the forwarder carries;
@@ -124,6 +130,9 @@ enum Request {
         hub: String,
         offer: Box<TunnelOffer>,
     },
+    GuestStart {
+        invite: String,
+    },
     Status {
         id: u64,
     },
@@ -164,6 +173,10 @@ enum Request {
         lifetime: u64,
         /// The loopback port of the app's pairing window for it.
         guest_port: u16,
+        /// The VLESS settings of the hub's offers, for a guest whose
+        /// network lets no UDP through.
+        #[serde(default)]
+        vless: Option<Value>,
     },
     GuestAdmitted {
         id: u64,
@@ -423,10 +436,12 @@ struct Guest {
     admitted: bool,
 }
 
-/// The longest an invitation is valid, and how long its guest stays after
-/// the window admitted the device, as on a computer's hub.
+/// The longest an invitation is valid, and how long its guest stays at most
+/// after the window admitted the device, for its first member connection,
+/// as on a computer's hub: it reaches only that device's member TLS by
+/// then.
 const MAX_LIFETIME: u64 = 24 * 60 * 60;
-const GUEST_GRACE: Duration = Duration::from_secs(120);
+const GUEST_GRACE: Duration = Duration::from_secs(24 * 60 * 60);
 /// The pairing secret's length.
 const SECRET: usize = 16;
 
@@ -442,7 +457,14 @@ impl RunningHub {
         self.hub.set_peers(peers, &self.device)
     }
 
-    fn invite(&self, group: &str, endpoints: &[String], lifetime: u64, guest_port: u16) -> Result<Value> {
+    fn invite(
+        &self,
+        group: &str,
+        endpoints: &[String],
+        lifetime: u64,
+        guest_port: u16,
+        vless: Option<&Value>,
+    ) -> Result<Value> {
         if lifetime == 0 || lifetime > MAX_LIFETIME {
             return Err(Error::msg("an invitation is valid for a day at most"));
         }
@@ -475,6 +497,7 @@ impl RunningHub {
             secret: secret.clone(),
             expires,
             obfuscation,
+            vless: vless.and_then(invite::vless_from_offer),
         };
         let text = inv.to_text();
         // Read back as the joiner will: the group's tag, 1 to 8 endpoints.
@@ -532,6 +555,7 @@ fn handle(request: &[u8]) -> Result<Value> {
         Request::NewKey => Ok(json!({ "key": b64(&tunnel::new_key()?) })),
         Request::PublicKey { key } => Ok(json!({ "public": b64(&State::with_key(&key)?.public_key()) })),
         Request::Start { key, device, hub, offer } => start(&key, &device, &hub, &offer),
+        Request::GuestStart { invite } => guest_start(&invite),
         Request::Status { id } => with(id, |r| {
             let log: Vec<String> = r.log.lock().map(|mut l| l.drain(..).collect()).unwrap_or_default();
             Ok(json!({ "answered": r.link.answered(), "log": log }))
@@ -555,9 +579,9 @@ fn handle(request: &[u8]) -> Result<Value> {
             r.set_peers()?;
             Ok(json!({}))
         }),
-        Request::HubInvite { id, group, endpoints, lifetime, guest_port } => hubs(|t| {
+        Request::HubInvite { id, group, endpoints, lifetime, guest_port, vless } => hubs(|t| {
             let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
-            r.invite(&group, &endpoints, lifetime, guest_port)
+            r.invite(&group, &endpoints, lifetime, guest_port, vless.as_ref())
         }),
         Request::GuestAdmitted { id, guest } => hubs(|t| {
             let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
@@ -631,6 +655,19 @@ fn start(key: &[u8], device: &str, hub: &str, offer: &TunnelOffer) -> Result<Val
     let h = tunnel::hub_from_offer(&from, offer)?;
     let log = Arc::new(Mutex::new(VecDeque::new()));
     let link = Link::start(&st, &h, &me, logger(log.clone()))?;
+    let port = link.local().port();
+    let id = NEXT.fetch_add(1, Ordering::SeqCst);
+    tunnels(|t| {
+        t.insert(id, Running { link, log });
+        Ok(())
+    })?;
+    Ok(json!({ "id": id, "port": port }))
+}
+
+fn guest_start(text: &str) -> Result<Value> {
+    let inv = cbb_core::invite::parse(text).map_err(|r| Error::msg(r.message()))?;
+    let log = Arc::new(Mutex::new(VecDeque::new()));
+    let link = cbb_lite::phone::GuestTunnel::start(&inv, logger(log.clone()))?.into_link();
     let port = link.local().port();
     let id = NEXT.fetch_add(1, Ordering::SeqCst);
     tunnels(|t| {

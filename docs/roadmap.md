@@ -25,7 +25,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **9.** Apps for iPhone and Android, which make the phone the group's root of trust
    ([design](design.md#the-phone-apps)); tested in CI, not yet on a real phone or in a store.
 - **12.** Sync away from home through the group's own WireGuard tunnel: the hub, the phones and the
-    lite member on Linux as clients, remote invitations for computers, the forwarder, the
+    lite member on Linux as clients, remote invitations for computers and phones, the forwarder, the
     blind relay, AmneziaWG and VLESS ([design](design.md#sync-away-from-home)).
 - **16.** Full members, admins and the device's system, in 0.3 and 0.4
     ([design](design.md#members-capabilities-admins-and-the-operating-system)).

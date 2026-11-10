@@ -32,7 +32,7 @@ final class HubOnPhoneTests: XCTestCase {
         func setProjectWays(_ ways: String) throws { self.ways = ways }
         func status() -> String { report }
         var invited: [String]?
-        func invite(group: String, endpoints: String, lifetime: Int, guestPort: UInt16) throws -> HubGuest {
+        func invite(group: String, endpoints: String, lifetime: Int, guestPort: UInt16, vless: String) throws -> HubGuest {
             invited = [group, endpoints, "\(lifetime)", "\(guestPort)"]
             return Guest()
         }
