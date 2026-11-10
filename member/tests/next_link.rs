@@ -88,17 +88,51 @@ fn bytes_through_the_esp_and_back() {
     // The fake ESP: AT lines in, answers out; its connection 0 is a real
     // socket to the echo server, whose bytes come back as +IPD.
     let (tx, rx) = mpsc::channel::<Vec<u8>>();
-    let mut taken = 0u16;
+    // The link's frames come through a thread, so that a wait for one can
+    // end: the link refuses the member's connection when it takes it before
+    // the ESP's last answer, and then the member dials again.
+    let (frames_tx, frames) = mpsc::channel::<(u8, Vec<u8>, u16)>();
+    std::thread::spawn(move || {
+        let mut taken = 0u16;
+        loop {
+            let (kind, data) = read_frame(&mut from_link, &mut taken);
+            if frames_tx.send((kind, data, taken)).is_err() {
+                break;
+            }
+        }
+    });
     let mut esp_in = Vec::new();
     let mut peer: Option<TcpStream> = None;
     let mut sending: Option<usize> = None;
     let mut member: Option<TcpStream> = None;
     let mut mux = false;
     let mut got = Vec::new();
+    let dial = |member: &mut Option<TcpStream>| {
+        let mut m = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        m.write_all(b"ping").unwrap();
+        m.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        *member = Some(m);
+    };
     let deadline = std::time::Instant::now() + Duration::from_secs(20);
     while got.len() < 4 {
         assert!(std::time::Instant::now() < deadline, "no echo through the link; got {got:?}");
-        let (kind, data) = read_frame(&mut from_link, &mut taken);
+        let (kind, data, taken) = match frames.recv_timeout(Duration::from_millis(200)) {
+            Ok(f) => f,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // A member's connection the link closed is dialled again.
+                let closed = member.as_ref().is_some_and(|m| {
+                    m.set_nonblocking(true).unwrap();
+                    let closed = matches!(m.peek(&mut [0u8]), Ok(0));
+                    m.set_nonblocking(false).unwrap();
+                    closed
+                });
+                if closed && peer.is_none() {
+                    dial(&mut member);
+                }
+                continue;
+            }
+            Err(e) => panic!("the link's output: {e}"),
+        };
         assert_eq!(kind, b'e');
         to_link.write_all(&frame(b'A', &taken.to_le_bytes())).unwrap();
         esp_in.extend(data);
@@ -141,10 +175,7 @@ fn bytes_through_the_esp_and_back() {
         }
         // Once the ESP is set up, the member dials the link's port.
         if member.is_none() && mux {
-            let mut m = TcpStream::connect(("127.0.0.1", port)).unwrap();
-            m.write_all(b"ping").unwrap();
-            m.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-            member = Some(m);
+            dial(&mut member);
         }
         let sent = answers.windows(7).any(|w| w == b"SEND OK");
         if sent {

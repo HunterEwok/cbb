@@ -90,6 +90,7 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import tools.cbb.kit.RemotePaste
+import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -135,8 +136,8 @@ private fun LocalNetworkPermission(model: AppModel) {
 
 /**
  * No group yet (docs/apps.md, Start): settings and the language at the
- * top, the logo, "Create a group", "Join a group" and a small link to
- * restore with the recovery key.
+ * top, the logo, "Create a group", "Join a group", "Join with an
+ * invitation" and a small link to restore with the recovery key.
  */
 @Composable
 private fun StartScreen(model: AppModel) {
@@ -144,7 +145,16 @@ private fun StartScreen(model: AppModel) {
     var adding by rememberSaveable { mutableStateOf(false) }
     var restoring by rememberSaveable { mutableStateOf(false) }
     var settings by rememberSaveable { mutableStateOf(false) }
+    var invited by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { model.prepare() }
+    model.pendingInvite?.let { p ->
+        InvitationAnswerScreen(model, p)
+        return
+    }
+    if (invited) {
+        InvitationScreen(model) { invited = false }
+        return
+    }
     if (adding || restoring) {
         AddDeviceScreen(model, restore = restoring) {
             adding = false
@@ -188,6 +198,7 @@ private fun StartScreen(model: AppModel) {
         AccentButton(stringResource(R.string.create_group), onClick = { adding = true }, modifier = Modifier.widthIn(max = 480.dp))
         QuietButton(stringResource(R.string.join_group), onClick = { model.startJoining() })
         QuietButton(stringResource(R.string.join_admin), onClick = { model.startJoining(admin = true) })
+        QuietButton(stringResource(R.string.invitation_join), onClick = { invited = true })
         TextButton(onClick = { restoring = true }) {
             Text(stringResource(R.string.restore_link), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
         }
@@ -219,6 +230,10 @@ private fun StartLanguageMenu(model: AppModel) {
 /** Joining another phone's group: this phone's QR code, which the other phone scans in Add a device. */
 @Composable
 private fun JoinScreen(model: AppModel) {
+    if (model.joiningInvite != null) {
+        JoinByInviteScreen(model)
+        return
+    }
     val palette = LocalPalette.current
     LaunchedEffect(Unit) { model.join() }
     BackHandler { model.cancelJoin() }
@@ -263,6 +278,156 @@ private fun JoinScreen(model: AppModel) {
         model.message?.let { NoteText(it) }
         Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
         QuietButton(stringResource(R.string.cancel), onClick = { model.cancelJoin() })
+    }
+}
+
+/**
+ * Joining by an accepted invitation: the fingerprint this phone shows, which
+ * the inviting admin compares before admitting it.
+ */
+@Composable
+private fun JoinByInviteScreen(model: AppModel) {
+    val palette = LocalPalette.current
+    LaunchedEffect(Unit) { model.joinByInvite() }
+    BackHandler { model.cancelJoin() }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Tokens.spacingLarge),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Tokens.spacingLarge),
+    ) {
+        Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
+        Text(
+            stringResource(R.string.invitation_join),
+            style = MaterialTheme.typography.headlineMedium,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            color = palette.accent,
+            textAlign = TextAlign.Center,
+        )
+        val fp = model.inviteFingerprint
+        if (fp != null) {
+            Text(fp, style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Text(stringResource(R.string.invitation_fingerprint_hint), textAlign = TextAlign.Center, color = palette.textDim)
+        }
+        if (model.message == null) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
+                CircularProgressIndicator(Modifier.size(20.dp), color = palette.accent, strokeWidth = 2.dp)
+                Text(stringResource(R.string.invitation_connecting))
+            }
+        }
+        model.message?.let { NoteText(it) }
+        Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
+        QuietButton(stringResource(R.string.cancel), onClick = { model.cancelJoin() })
+    }
+}
+
+/**
+ * Join with an invitation (docs/apps.md, Start): the camera for the
+ * invitation's QR code, the usual way; its file, or its text pasted, when
+ * the QR code came another way. What it reads goes to the screen that
+ * accepts or declines it.
+ */
+@Composable
+private fun InvitationScreen(model: AppModel, close: () -> Unit) {
+    val context = LocalContext.current
+    val hasCamera = remember { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
+    var allowed by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+    }
+    var asked by rememberSaveable { mutableStateOf(false) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        allowed = it
+        asked = true
+    }
+    var cameraError by remember { mutableStateOf<Exception?>(null) }
+    LaunchedEffect(Unit) {
+        model.message = null
+        if (hasCamera && !allowed && !asked) launcher.launch(Manifest.permission.CAMERA)
+    }
+    val read = { text: String -> if (model.readInvitation(text)) close() }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        // An invitation's file is one short line; a big file is none.
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { readUpTo(it, INVITE_FILE_MAX + 1) }
+        }.getOrNull()
+        if (text == null || text.size > INVITE_FILE_MAX) {
+            model.message = AppModel.Note(R.string.invitation_not_one, error = true)
+        } else {
+            read(String(text, Charsets.UTF_8))
+        }
+    }
+    BackHandler { close() }
+    Page(stringResource(R.string.invitation_join), close) {
+        if (hasCamera && allowed && cameraError == null) {
+            QrScanner(
+                onCode = { text -> read(text) },
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Tokens.radiusCard)),
+                onError = { cameraError = it },
+            )
+            Text(stringResource(R.string.invitation_scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        } else if (cameraError != null) {
+            NoteText(model.describe(cameraError!!, R.string.camera_failed, log = false))
+        }
+        var typed by rememberSaveable { mutableStateOf("") }
+        OutlinedTextField(
+            value = typed,
+            onValueChange = { typed = it },
+            label = { Text(stringResource(R.string.invitation_text)) },
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        AccentButton(stringResource(R.string.invitation_read), enabled = typed.isNotBlank(), onClick = { read(typed) })
+        QuietButton(stringResource(R.string.invitation_open_file), onClick = { picker.launch(arrayOf("*/*")) })
+        model.message?.let { NoteText(it) }
+    }
+}
+
+/** The longest file read as an invitation: its one line is far shorter. */
+private const val INVITE_FILE_MAX = 4096
+
+/** Up to max bytes of a stream. */
+private fun readUpTo(input: java.io.InputStream, max: Int): ByteArray {
+    val buf = ByteArray(max)
+    var n = 0
+    while (n < max) {
+        val r = input.read(buf, n, max - n)
+        if (r < 0) break
+        n += r
+    }
+    return buf.copyOf(n)
+}
+
+/** An invitation that waits for the user: the group it joins, its hub and when it expires, with Join and Decline. Declining sends nothing. */
+@Composable
+private fun InvitationAnswerScreen(model: AppModel, invite: AppModel.PendingInvite) {
+    val palette = LocalPalette.current
+    BackHandler { model.declineInvitation() }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Tokens.spacingLarge),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Tokens.spacingLarge),
+    ) {
+        Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
+        Text(
+            stringResource(R.string.invitation_title),
+            style = MaterialTheme.typography.headlineMedium,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            color = palette.accent,
+            textAlign = TextAlign.Center,
+        )
+        val until = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
+            .format(Instant.ofEpochSecond(invite.invitation.expires).atZone(ZoneId.systemDefault()))
+        Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
+            Text(stringResource(R.string.invitation_group, invite.invitation.group), fontFamily = FontFamily.Monospace)
+            Text(stringResource(R.string.invitation_hub, invite.invitation.hub.take(12)), fontFamily = FontFamily.Monospace)
+            Text(stringResource(R.string.invitation_until, until))
+        }
+        Text(stringResource(R.string.invitation_answer_hint), textAlign = TextAlign.Center, color = palette.textDim)
+        AccentButton(stringResource(R.string.invitation_accept), onClick = model::acceptInvitation, modifier = Modifier.widthIn(max = 480.dp))
+        QuietButton(stringResource(R.string.invitation_decline), onClick = model::declineInvitation)
     }
 }
 
@@ -950,14 +1115,14 @@ private fun MoveHub(model: AppModel, hub: AppModel.Hub) {
 }
 
 /**
- * Home's + "Send an invitation": made on the group's hub, so on this phone
- * while it is the hub; otherwise it says where to make one.
+ * Home's + "Send an invitation": any admin makes one, on this phone while it
+ * is the group's hub, else through a hub of the group it reaches; a phone
+ * that is no admin says where to make one.
  */
 @Composable
 internal fun InviteSection(model: AppModel) {
-    val hub = model.hub
     Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-        if (hub != null && hub.on && hub.status == HubOnPhone.Status.REGISTERED) {
+        if (model.isAdmin) {
             InviteFromAfar(model)
         } else {
             Text(stringResource(R.string.invite_on_hub), style = MaterialTheme.typography.bodyMedium)
@@ -967,8 +1132,9 @@ internal fun InviteSection(model: AppModel) {
 
 /**
  * A remote invitation for a device far away (docs/protocol.md, section 12):
- * the button that opens it, then its file to share, and the question about
- * the device that used it, with the fingerprint to compare.
+ * the button that opens it, then its QR code, its file to share as the
+ * fallback, and the question about the device that used it, with the
+ * fingerprint to compare.
  */
 @Composable
 private fun InviteFromAfar(model: AppModel) {
@@ -982,8 +1148,15 @@ private fun InviteFromAfar(model: AppModel) {
         QuietButton(stringResource(R.string.invite_open), onClick = { scope.launch { model.openInvite() } })
     } else {
         val until = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).format(invite.expires.atZone(ZoneId.systemDefault()))
+        val label = stringResource(R.string.invite_qr_label)
+        QrCode(
+            invite.text,
+            Modifier.widthIn(max = 280.dp).fillMaxWidth().aspectRatio(1f)
+                .clip(RoundedCornerShape(Tokens.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
+                .semantics { contentDescription = label },
+        )
         Text(stringResource(R.string.invite_open_until, until), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
-        AccentButton(stringResource(R.string.invite_share), onClick = { context.startActivity(Invitations.share(context, invite.file)) })
+        QuietButton(stringResource(R.string.invite_share), onClick = { context.startActivity(Invitations.share(context, invite.file)) })
         QuietButton(stringResource(R.string.invite_cancel), onClick = model::cancelInvite)
         invite.request?.let { req ->
             AlertDialog(

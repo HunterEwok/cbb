@@ -146,6 +146,30 @@
         <translation>手机无法删除它的密钥。</translation>
     </message>
     <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>群组的中心节点没有响应。请确认邀请仍然有效且中心节点已开启，然后重试。</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>无法加入该群组。请重试。</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>只有管理员可以创建邀请：这里的管理员手机，或管理员电脑上的 cbb invite。</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>这部手机已在一个群组中。请先退出，再加入其他群组。</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>这不是 CBB 邀请。</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>邀请已过期。请索要新的邀请。</translation>
+    </message>
+    <message>
         <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
         <translation>扫描恢复单上的二维码：在新手机上，仅输入密钥是不够的。</translation>
     </message>
@@ -211,6 +235,18 @@
     <message>
         <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
         <translation>在群组的根电脑上用此代码以管理员身份接纳此手机：在 CBB 应用中添加设备并选择以管理员身份接纳，或运行 cbb pair -qr -admin。请保持此屏幕打开。</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>通过邀请加入</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>邀请你的人会在其设备上看到这些词，若一致便会接纳这部手机。请保持此界面打开。</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>正在连接群组的中心节点…</translation>
     </message>
 </context>
 <context>
@@ -364,28 +400,20 @@
         <translation>关闭，直到我打开</translation>
     </message>
     <message>
+        <source>Join with an invitation</source>
+        <translation>通过邀请加入</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>发送邀请</translation>
+    </message>
+    <message>
         <source>Restore with a recovery sheet</source>
         <translation>用恢复单恢复</translation>
     </message>
 </context>
 <context>
     <name>DevicePage</name>
-    <message>
-        <source>Hand the group over</source>
-        <translation>移交群组</translation>
-    </message>
-    <message>
-        <source>Handing the group over to %1</source>
-        <translation>正在将群组移交给 %1</translation>
-    </message>
-    <message>
-        <source>The group is handed over</source>
-        <translation>群组已移交</translation>
-    </message>
-    <message>
-        <source>Its claim takes the group at once</source>
-        <translation>它的申请会立即接管群组</translation>
-    </message>
     <message>
         <source>Take the group over</source>
         <translation>接管群组</translation>
@@ -490,65 +518,25 @@
         <source>Device ID</source>
         <translation>设备 ID</translation>
     </message>
+    <message>
+        <source>Hand the group over</source>
+        <translation>移交群组</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>正在将群组移交给 %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>群组已移交</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>它的申请会立即接管群组</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>
-    <message>
-        <source>A claim to take the group over waits</source>
-        <translation>接管群组的申请等待</translation>
-    </message>
-    <message>
-        <source>No time</source>
-        <translation>不等待</translation>
-    </message>
-    <message>
-        <source>1 hour</source>
-        <translation>1 小时</translation>
-    </message>
-    <message>
-        <source>1 day</source>
-        <translation>1 天</translation>
-    </message>
-    <message>
-        <source>3 days</source>
-        <translation>3 天</translation>
-    </message>
-    <message>
-        <source>7 days</source>
-        <translation>7 天</translation>
-    </message>
-    <message>
-        <source>Keys an admin may keep</source>
-        <translation>管理员可保存的密钥</translation>
-    </message>
-    <message>
-        <source>Some admins keep weaker keys; they stay until removed</source>
-        <translation>部分管理员的密钥较弱；在被移除之前他们仍会保留</translation>
-    </message>
-    <message>
-        <source>Proven hardware only</source>
-        <translation>仅限经验证的硬件</translation>
-    </message>
-    <message>
-        <source>Hardware</source>
-        <translation>硬件</translation>
-    </message>
-    <message>
-        <source>Hardware or a file</source>
-        <translation>硬件或文件</translation>
-    </message>
-    <message>
-        <source>Recovery key</source>
-        <translation>恢复密钥</translation>
-    </message>
-    <message>
-        <source>Made</source>
-        <translation>已创建</translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation>无</translation>
-    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>蓝牙键盘</translation>
@@ -676,6 +664,62 @@
     <message>
         <source>Device</source>
         <translation>设备</translation>
+    </message>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>接管群组的申请等待</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>不等待</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>1 小时</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>1 天</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 天</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 天</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>管理员可保存的密钥</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>部分管理员的密钥较弱；在被移除之前他们仍会保留</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>仅限经验证的硬件</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>硬件</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>硬件或文件</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>恢复密钥</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>已创建</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>无</translation>
     </message>
 </context>
 <context>
@@ -1307,6 +1351,100 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>手机不在家庭网络中时，它通过你自己的中枢的 WireGuard 隧道同步；中枢是群组中用 cbb global hub 设置的一台电脑，它的端口可从互联网访问，但只能通过带有群组密钥的 WireGuard。中枢会在这部手机下次在家连接时回应它。数据不会去往别处，没有隧道就没有连接。关闭它会让这部手机忘记它的隧道密钥。</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>通过邀请加入</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>你被邀请加入一个群组</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>将相机对准邀请的二维码。</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>相机无法启动：%1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>或粘贴邀请文本，cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>群组</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>中心节点</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>有效期至</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>仅在你自己请求了此邀请时才加入。创建邀请的人看到这部手机显示的词后会接纳它。</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>加入</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>拒绝</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>发送邀请</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>正在群组的中心节点上打开邀请…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上用其文本运行 cbb pair -invite。只能使用一次，有效期至 %1。</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>%1 已加入群组；连接后会出现在列表中。</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>只向要加入的人出示或发送此二维码：任何持有它的人都可以申请加入。</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>复制邀请文本</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>接纳 %1（%2）？仅当该设备显示相同的词时才接纳：</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>接纳</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>不是这个</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>重试</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>邀请另一台设备</translation>
     </message>
 </context>
 <context>

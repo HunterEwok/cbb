@@ -76,5 +76,9 @@
  "{} is muted until {}: its copies do not reach the group.": "{} 已被静音，直到 {}：它的副本不会到达群组。",
  "{} is no longer muted: its copies reach the group again.": "{} 已取消静音：它的副本又会到达群组。",
  "{} is removed.": "{} 已移除。",
- "{} ran {}.": "{} 运行了 {}。"
+ "{} ran {}.": "{} 运行了 {}。",
+ "Handing this device's tunnel key to the hub...": "正在把此设备的隧道密钥交给中心节点...",
+ "The hub took it: this device syncs from afar now.": "中心节点已接受：此设备现在可以远程同步。",
+ "The hub has not answered yet; the service keeps trying for a day.": "中心节点尚未响应；服务会在一天内持续尝试。",
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "请在一天内启动服务（cbb service）：它会把此设备的密钥交给中心节点。"
 }

@@ -16,11 +16,17 @@
 #include <QNetworkInterface>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <QTimer>
 
 namespace {
 
 // How many wrong codes a listening join takes (pair::MAX_FAILURES).
 const int maxWrongCodes = 3;
+
+// How many times a join by an invitation dials its guest tunnel, and the
+// pause between the attempts, as the other phones' apps.
+const int inviteAttempts = 5;
+const int inviteDialPauseMs = 2000;
 
 // Whether an address is on the home network, as mDNS would publish it:
 // private IPv4, unique-local IPv6, or link-local.
@@ -65,6 +71,8 @@ Join::~Join()
 void Join::start(const QString &name, const QString &os, const QByteArray &publicKey, const QByteArray &adminKey)
 {
     stop();
+    m_invite.clear();
+    m_fingerprint.clear();
     m_publicKey = publicKey;
     m_admin = !adminKey.isEmpty();
     m_wrongCodes = 0;
@@ -121,6 +129,105 @@ void Join::start(const QString &name, const QString &os, const QByteArray &publi
     setState(QStringLiteral("listening"));
 }
 
+void Join::startInvite(const QString &name, const QString &os, const QByteArray &publicKey, const QString &invite)
+{
+    stop();
+    m_publicKey = publicKey;
+    m_admin = false;
+    m_wrongCodes = 0;
+    m_inviteAttempts = 0;
+    m_error.clear();
+    m_fingerprint.clear();
+    m_invite = invite.trimmed();
+    Failure failure;
+    const QByteArray secret = sealSecret(&failure);
+    if (secret.isEmpty())
+        return fail(failure);
+    const QJsonObject seal =
+        Core::call(QStringLiteral("seal_public"), QJsonObject{{QStringLiteral("secret"), QString::fromLatin1(secret.toBase64())}}, &failure).toObject();
+    if (!failure.isNull())
+        return fail(failure);
+    const QJsonObject req{
+        {QStringLiteral("name"), name},
+        {QStringLiteral("os"), os},
+        {QStringLiteral("public"), QString::fromLatin1(publicKey.toBase64())},
+        {QStringLiteral("seal"), seal.value(QStringLiteral("key"))},
+        {QStringLiteral("invite"), m_invite},
+    };
+    const QByteArray bytes = QJsonDocument(req).toJson(QJsonDocument::Compact);
+    uint8_t *answer = nullptr;
+    size_t len = 0;
+    m_join = cbb_join_new(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()), Core::signDigest, nullptr, &answer, &len);
+    const QJsonObject made = Core::take(answer, len, QStringLiteral("join"), &failure);
+    if (!m_join)
+        return fail(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "This build of CBB is broken."), QStringLiteral("join: no joiner")} : failure);
+    m_invitePort = quint16(made.value(QStringLiteral("port")).toInt());
+    m_fingerprint = made.value(QStringLiteral("fingerprint")).toString();
+    if (m_invitePort == 0)
+        return fail({QCoreApplication::translate("Errors", "This build of CBB is broken."), QStringLiteral("join: the invitation's tunnel has no port")});
+    Errors::log(QStringLiteral("join: by an invitation, as %1, through the guest tunnel on port %2").arg(made.value(QStringLiteral("device")).toString()).arg(m_invitePort));
+    setState(QStringLiteral("dialing"));
+    dialInvite();
+}
+
+void Join::dialInvite()
+{
+    if (!m_join || m_invite.isEmpty() || m_conn)
+        return;
+    ++m_inviteAttempts;
+    auto *s = new QTcpSocket(this);
+    m_conn = s;
+    connect(s, &QTcpSocket::connected, this, [this, s]() {
+        if (s != m_conn || !m_join)
+            return;
+        size_t len = 0;
+        Failure failure;
+        const QJsonObject first = Core::take(cbb_join_accept(m_join, &len), len, QStringLiteral("join"), &failure);
+        if (!failure.isNull())
+            return fail(failure);
+        s->write(b64(first.value(QStringLiteral("send"))));
+    });
+    connect(s, &QTcpSocket::readyRead, this, [this, s]() {
+        if (s != m_conn)
+            return;
+        if (m_state == QStringLiteral("dialing"))
+            setState(QStringLiteral("joining"));
+        feed(s->readAll());
+    });
+    connect(s, &QTcpSocket::disconnected, this, [this, s]() {
+        s->deleteLater();
+        if (s == m_conn) {
+            m_conn = nullptr;
+            inviteAttemptEnded();
+        }
+    });
+    connect(s, static_cast<void (QAbstractSocket::*)(QAbstractSocket::SocketError)>(&QAbstractSocket::error), this, [this, s](QAbstractSocket::SocketError) {
+        if (s != m_conn)
+            return;
+        Errors::log(QStringLiteral("join: dialing the invitation's tunnel: %1").arg(s->errorString()));
+        m_conn = nullptr;
+        s->abort();
+        s->deleteLater();
+        inviteAttemptEnded();
+    });
+    s->connectToHost(QHostAddress::LocalHost, m_invitePort);
+}
+
+void Join::inviteAttemptEnded()
+{
+    if (!m_join || m_state == QStringLiteral("joined") || m_state == QStringLiteral("failed"))
+        return;
+    if (m_inviteAttempts >= inviteAttempts) {
+        if (!cbb_join_answered(m_join))
+            return fail({QCoreApplication::translate("Errors", "The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again."),
+                         QStringLiteral("join: the invitation's hub never answered through the tunnel")});
+        return fail({QCoreApplication::translate("Errors", "The other phone's group could not be joined. Try again."),
+                     QStringLiteral("join: %1 attempts through the invitation failed").arg(inviteAttempts)});
+    }
+    setState(QStringLiteral("dialing"));
+    QTimer::singleShot(inviteDialPauseMs, this, &Join::dialInvite);
+}
+
 void Join::stop()
 {
     if (m_conn)
@@ -132,7 +239,7 @@ void Join::stop()
     }
     cbb_join_free(m_join);
     m_join = nullptr;
-    if (m_state == QStringLiteral("listening") || m_state == QStringLiteral("joining"))
+    if (m_state == QStringLiteral("listening") || m_state == QStringLiteral("dialing") || m_state == QStringLiteral("joining"))
         setState(QStringLiteral("idle"));
 }
 
@@ -190,8 +297,11 @@ void Join::feed(const QByteArray &data)
     if (state == QStringLiteral("failed")) {
         const QJsonObject e = step.value(QStringLiteral("error")).toObject();
         Errors::log(QStringLiteral("join: an attempt failed: %1: %2").arg(e.value(QStringLiteral("message")).toString(), e.value(QStringLiteral("details")).toString()));
-        m_conn->disconnectFromHost();
+        QTcpSocket *conn = m_conn;
         m_conn = nullptr;
+        conn->disconnectFromHost();
+        if (!m_invite.isEmpty())
+            return inviteAttemptEnded();
         const bool wrongCode = step.value(QStringLiteral("wrong_code")).toBool();
         if (wrongCode && ++m_wrongCodes >= maxWrongCodes)
             return fail({QCoreApplication::translate("Errors", "The other device showed a wrong code three times. Start again."), QStringLiteral("join: too many wrong codes")});
@@ -208,9 +318,12 @@ void Join::feed(const QByteArray &data)
     const Membership m = Membership::fromJoined(step.value(QStringLiteral("joined")).toObject());
     const bool saved = m.save(&failure);
     const QJsonObject last = Core::take(cbb_join_finish(m_join, saved ? 1 : 0, &len), len, QStringLiteral("join"), &failure);
-    m_conn->write(b64(last.value(QStringLiteral("send"))));
-    m_conn->disconnectFromHost();
+    // Let go of the socket first: its disconnected signal, which may come
+    // at once, must not count as a failed attempt.
+    QTcpSocket *conn = m_conn;
     m_conn = nullptr;
+    conn->write(b64(last.value(QStringLiteral("send"))));
+    conn->disconnectFromHost();
     if (!saved)
         return fail(failure);
     Errors::log(QStringLiteral("join: joined the group %1 as %2%3").arg(m.groupTag(), m.device, m.isAdmin() ? QStringLiteral(", an admin") : QString()));

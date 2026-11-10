@@ -146,6 +146,30 @@
         <translation>Телефону не удалось удалить свой ключ.</translation>
     </message>
     <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>Хаб группы не ответил. Проверьте, что приглашение ещё действует и хаб включён, и попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>Не удалось вступить в группу. Попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>Приглашение делает только админ: телефон-админ здесь или cbb invite на компьютере-админе.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>Этот телефон уже в группе. Сначала выйдите из неё, чтобы вступить в другую.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>Это не приглашение CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>Срок приглашения истёк. Попросите новое.</translation>
+    </message>
+    <message>
         <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
         <translation>Отсканируйте QR-код листа восстановления: на новом телефоне введённого ключа недостаточно.</translation>
     </message>
@@ -211,6 +235,18 @@
     <message>
         <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
         <translation>На корневом компьютере группы примите этот телефон как админа по этому коду: в приложении CBB добавьте устройство и выберите «принять как админа» или выполните cbb pair -qr -admin. Не закрывайте этот экран.</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Вступить по приглашению</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>Тот, кто вас пригласил, видит эти слова на своём устройстве и впустит телефон, если они совпадают. Не закрывайте этот экран.</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>Подключение к хабу группы…</translation>
     </message>
 </context>
 <context>
@@ -364,28 +400,20 @@
         <translation>Выключить, пока не включу</translation>
     </message>
     <message>
+        <source>Join with an invitation</source>
+        <translation>Вступить по приглашению</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Отправить приглашение</translation>
+    </message>
+    <message>
         <source>Restore with a recovery sheet</source>
         <translation>Восстановить по листу восстановления</translation>
     </message>
 </context>
 <context>
     <name>DevicePage</name>
-    <message>
-        <source>Hand the group over</source>
-        <translation>Передать группу</translation>
-    </message>
-    <message>
-        <source>Handing the group over to %1</source>
-        <translation>Передаём группу: %1</translation>
-    </message>
-    <message>
-        <source>The group is handed over</source>
-        <translation>Группа передана</translation>
-    </message>
-    <message>
-        <source>Its claim takes the group at once</source>
-        <translation>Его заявка забирает группу сразу</translation>
-    </message>
     <message>
         <source>Take the group over</source>
         <translation>Забрать группу</translation>
@@ -490,65 +518,25 @@
         <source>Device ID</source>
         <translation>ID устройства</translation>
     </message>
+    <message>
+        <source>Hand the group over</source>
+        <translation>Передать группу</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>Передаём группу: %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>Группа передана</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>Его заявка забирает группу сразу</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>
-    <message>
-        <source>A claim to take the group over waits</source>
-        <translation>Заявка на захват группы ждёт</translation>
-    </message>
-    <message>
-        <source>No time</source>
-        <translation>Нисколько</translation>
-    </message>
-    <message>
-        <source>1 hour</source>
-        <translation>1 час</translation>
-    </message>
-    <message>
-        <source>1 day</source>
-        <translation>1 день</translation>
-    </message>
-    <message>
-        <source>3 days</source>
-        <translation>3 дня</translation>
-    </message>
-    <message>
-        <source>7 days</source>
-        <translation>7 дней</translation>
-    </message>
-    <message>
-        <source>Keys an admin may keep</source>
-        <translation>Какие ключи может хранить админ</translation>
-    </message>
-    <message>
-        <source>Some admins keep weaker keys; they stay until removed</source>
-        <translation>У некоторых админов ключи слабее; они остаются, пока их не удалят</translation>
-    </message>
-    <message>
-        <source>Proven hardware only</source>
-        <translation>Только проверенное железо</translation>
-    </message>
-    <message>
-        <source>Hardware</source>
-        <translation>Железо</translation>
-    </message>
-    <message>
-        <source>Hardware or a file</source>
-        <translation>Железо или файл</translation>
-    </message>
-    <message>
-        <source>Recovery key</source>
-        <translation>Ключ восстановления</translation>
-    </message>
-    <message>
-        <source>Made</source>
-        <translation>Создан</translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation>Нет</translation>
-    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>Bluetooth-клавиатура</translation>
@@ -676,6 +664,62 @@
     <message>
         <source>Device</source>
         <translation>Устройство</translation>
+    </message>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>Заявка на захват группы ждёт</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>Нисколько</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>1 час</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>1 день</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 дня</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 дней</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>Какие ключи может хранить админ</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>У некоторых админов ключи слабее; они остаются, пока их не удалят</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>Только проверенное железо</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>Железо</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>Железо или файл</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>Создан</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Нет</translation>
     </message>
 </context>
 <context>
@@ -1307,6 +1351,100 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Когда телефон не в домашней сети, он синхронизируется через туннель WireGuard вашего собственного хаба: компьютера группы, настроенного командой cbb global hub. Его порт доступен из интернета, но только через WireGuard с ключами группы. Хаб ответит этому телефону, когда тот в следующий раз подключится дома. Больше никуда ничего не уходит, а без туннеля нет и соединения. При выключении телефон забывает свой ключ туннеля.</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Вступить по приглашению</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>Вас приглашают в группу</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>Наведите камеру на QR-код приглашения.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Камера не запускается: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>Или вставьте текст приглашения, cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Группа</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>Хаб</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>Действует до</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>Вступайте, только если вы сами просили это приглашение. Тот, кто его сделал, впустит телефон, когда увидит показанные им слова.</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Вступить</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>Отклонить</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Отправить приглашение</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>Приглашение открывается на хабе группы…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite с его текстом. Приглашение работает один раз, до %1.</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>%1 вступил в группу; он появится в списке, когда подключится.</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>Показывайте или отправляйте код только тому, кто вступает: любой, у кого он есть, может попросить доступ.</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>Скопировать текст приглашения</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>Впустить %1 (%2)? Впускайте, только если устройство показывает те же слова:</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>Впустить</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>Не этот</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Попробовать снова</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>Пригласить ещё устройство</translation>
     </message>
 </context>
 <context>

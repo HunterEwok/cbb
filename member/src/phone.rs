@@ -26,12 +26,15 @@ use cbb_core::takeover::{self, ClaimState, How};
 use cbb_core::wire::{self, CommandResult, DeviceInfo};
 
 use crate::away::Away;
+pub use crate::away::GuestTunnel;
 use crate::button::{self, Own};
 use crate::content::Source;
 use crate::discovery::{Dialers, Listener};
 use crate::error::{Error, Result};
+pub use crate::inviter::Invite;
 use crate::node::{KeepIdentity, Node, OnCommand, OnMessage, OnPeer, OnTunnel, Peer, Presence, WriteReq};
 use crate::records::{Record, Records, Stored as _};
+pub use crate::window::{CONFIRM_WAIT, Confirm, Joined};
 use crate::{discovery, mute, service, uptime};
 use cbb_core::media::Part;
 
@@ -661,6 +664,39 @@ impl Member {
         let r = admit::device_record(&records.lock().unwrap(), admitter, a, uptime::wall_ms())?;
         self.node.add_own_records(&[r]);
         Ok(())
+    }
+
+    /// Makes a remote invitation as an admin of the group, with admitter's
+    /// CA key, valid for lifetime (an hour when zero, a day at most): its
+    /// guest tunnel on this phone when it is the group's hub, else through
+    /// hub or the first connected hub that takes it (docs/protocol.md,
+    /// section 12). confirm is asked about each device that uses it; the
+    /// app waits on the invitation and closes it.
+    pub fn invite(
+        &self,
+        admitter: Admitter,
+        lifetime: Duration,
+        hub: Option<&DeviceId>,
+        confirm: crate::window::Confirm,
+    ) -> Result<crate::inviter::Invite> {
+        let group = self.node.identity().tag();
+        let (node, away) = (&self.node, &self.away);
+        let open = |keys: &crate::inviter::GuestKeys, w: &Arc<crate::window::Window>, life: Duration| {
+            crate::inviter::open_where(node, away, hub, keys, w, life)
+        };
+        let inv = crate::inviter::Invite::start(admitter, &group, lifetime, confirm, &open)?;
+        (self.log)(&format!("cbb: an invitation is open for {} minutes", inv.lifetime.as_secs() / 60));
+        Ok(inv)
+    }
+
+    /// Takes up the invitation this phone joined with, once the app stored
+    /// its identity: sync away from home goes on, and the member offers its
+    /// own tunnel key to the invitation's hub through the guest tunnel until
+    /// the hub answers.
+    pub fn joined_by_invite(&self, text: &str) -> Result<()> {
+        cbb_core::invite::parse(text).map_err(|r| Error::msg(r.message()))?;
+        self.away_on()?;
+        crate::away::keep_guest(&self.state_dir, text)
     }
 
     /// What the group's records stop and what ends it, for the app's card.

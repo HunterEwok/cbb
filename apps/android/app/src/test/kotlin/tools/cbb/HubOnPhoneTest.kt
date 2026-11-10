@@ -52,7 +52,7 @@ class HubOnPhoneTest {
 
         var invited: List<Any>? = null
 
-        override fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int): HubGuest {
+        override fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int, vless: String): HubGuest {
             invited = listOf(group, endpoints, lifetimeS, guestPort)
             return object : HubGuest {
                 override val text = "cbb://invite#x"

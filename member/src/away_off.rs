@@ -82,19 +82,19 @@ impl Away {
         self.turn_on()
     }
 
-    pub fn invite(
+    pub fn open_own(
         self: &Arc<Self>,
-        _admitter: cbb_core::admit::Admitter,
-        _expires: i64,
-        _r: control::Reader<crate::sys::UnixStream>,
-        _out: &mut crate::sys::UnixStream,
-    ) -> Result<()> {
+        _keys: &crate::inviter::GuestKeys,
+        _w: &Arc<crate::window::Window>,
+    ) -> Result<crate::inviter::Opened> {
         Err(off())
     }
 
     pub fn is_hub(&self) -> bool {
         false
     }
+
+    pub fn guest_message(self: &Arc<Self>, _node: &Node, _from: &DeviceId, _chain: &[Cert], _g: crate::wire::Guest) {}
 
     pub fn known_hubs(&self, _order: &[String]) -> Vec<String> {
         Vec::new()
@@ -149,4 +149,26 @@ pub fn join_invite(
 /// Why sync away from home is off in this build.
 fn off() -> Error {
     Error::msg("this build of the lite member has no tunnel for sync away from home (MIPS); it syncs at home only")
+}
+
+/// A build without the tunnel keeps no invitation: it cannot join by one.
+pub fn keep_guest(_dir: &std::path::Path, _text: &str) -> Result<()> {
+    Err(off())
+}
+
+/// A build without the tunnel has no guest tunnel.
+pub struct GuestTunnel;
+
+impl GuestTunnel {
+    pub fn start(_inv: &cbb_core::invite::Invitation, _log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<GuestTunnel> {
+        Err(off())
+    }
+
+    pub fn port(&self) -> u16 {
+        0
+    }
+
+    pub fn answered(&self) -> bool {
+        false
+    }
 }

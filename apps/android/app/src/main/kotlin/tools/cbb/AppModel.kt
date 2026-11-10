@@ -226,10 +226,11 @@ class AppModel(private val app: Context) {
     private var relayError: String? = null
 
     /**
-     * A remote invitation as Settings shows it: when it expires, the file to
-     * share, and the device waiting for the user's answer.
+     * A remote invitation as Home's + shows it: its text for the QR code,
+     * when it expires, the file to share as the fallback, and the device
+     * waiting for the user's answer.
      */
-    data class Invite(val expires: Instant, val file: File, val request: PairingMember.Request? = null)
+    data class Invite(val text: String, val expires: Instant, val file: File, val request: PairingMember.Request? = null)
 
     var invite by mutableStateOf<Invite?>(null)
         private set
@@ -342,7 +343,93 @@ class AppModel(private val app: Context) {
     fun startJoining(admin: Boolean = false) {
         message = null
         joinAsAdmin = admin
+        joiningInvite = null
         phase = Phase.JOINING
+    }
+
+    /** A remote invitation the user scanned, opened or pasted, which waits to be accepted or declined (docs/apps.md, Start). */
+    data class PendingInvite(val text: String, val invitation: Core.Invitation)
+
+    var pendingInvite by mutableStateOf<PendingInvite?>(null)
+        private set
+
+    /** The invitation the join screen joins by, once accepted. */
+    var joiningInvite by mutableStateOf<PendingInvite?>(null)
+        private set
+
+    /** The fingerprint this phone shows while it joins by an invitation. */
+    var inviteFingerprint by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * Reads a remote invitation the user scanned, opened or pasted, for the
+     * screen that accepts or declines it; false with a message when it is
+     * none, has expired, or the phone is in a group already.
+     */
+    fun readInvitation(text: String): Boolean {
+        val t = text.trim()
+        if (phase != Phase.START) {
+            message = Note(R.string.invitation_has_group, error = true)
+            return false
+        }
+        return try {
+            when (val r = Core.readInvite(t)) {
+                is Core.InviteReading.Refused -> {
+                    message = Note(R.string.invitation_not_one, if (settings.showsErrorDetails) r.message else null, error = true)
+                    false
+                }
+                is Core.InviteReading.Read -> {
+                    if (Instant.ofEpochSecond(r.invitation.expires) <= Instant.now()) {
+                        message = Note(R.string.invitation_expired, error = true)
+                        false
+                    } else {
+                        message = null
+                        pendingInvite = PendingInvite(t, r.invitation)
+                        true
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            message = describe(e)
+            false
+        }
+    }
+
+    /** The user declined the invitation: nothing is sent. */
+    fun declineInvitation() {
+        pendingInvite = null
+    }
+
+    /** The user accepted the invitation: the join screen joins by it. */
+    fun acceptInvitation() {
+        val p = pendingInvite ?: return
+        pendingInvite = null
+        message = null
+        joinAsAdmin = false
+        joiningInvite = p
+        phase = Phase.JOINING
+    }
+
+    /**
+     * Joins by the accepted invitation: shows the fingerprint for the
+     * inviting admin to compare, then goes Home once admitted. The join
+     * screen runs it as its effect, so leaving the screen cancels it.
+     */
+    suspend fun joinByInvite() {
+        val p = joiningInvite ?: return
+        try {
+            group.joinByInvite(p.text) { fp -> main.post { inviteFingerprint = fp } }
+            joiningInvite = null
+            update()
+            phase = Phase.HOME
+            message = Note(R.string.invitation_joined)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = describe(e)
+        } finally {
+            inviteFingerprint = null
+        }
     }
 
     /**
@@ -367,6 +454,8 @@ class AppModel(private val app: Context) {
     /** Leaves the join screen without joining. */
     fun cancelJoin() {
         joinCode = null
+        joiningInvite = null
+        inviteFingerprint = null
         message = null
         phase = Phase.START
     }
@@ -635,7 +724,7 @@ class AppModel(private val app: Context) {
             val inv = withContext(Dispatchers.IO) { group.invite(INVITE_SECONDS, ::ask) { r -> main.post { inviteEnded(r) } } }
             val file = withContext(Dispatchers.IO) { Invitations.write(app, inv.text) }
             invitation = inv
-            invite = Invite(inv.expires, file)
+            invite = Invite(inv.text, inv.expires, file)
             null
         } catch (e: CancellationException) {
             throw e
@@ -1223,6 +1312,7 @@ class AppModel(private val app: Context) {
                 LiveGroup.Failure.Kind.NO_GROUP_COMPUTER -> R.string.error_no_group_computer
                 LiveGroup.Failure.Kind.NO_GROUP -> R.string.error_nothing_to_leave
                 LiveGroup.Failure.Kind.ROOT_LEAVES -> R.string.error_root_leaves
+                LiveGroup.Failure.Kind.HUB_UNREACHABLE -> R.string.error_hub_unreachable
             }
             is Restore.Failure -> when (e.kind) {
                 Restore.Kind.NEEDS_QR -> R.string.error_restore_needs_qr
