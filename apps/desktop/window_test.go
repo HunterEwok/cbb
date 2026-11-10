@@ -561,7 +561,7 @@ func (w *window) admin(t *testing.T) {
 	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("next time they meet this hub at home")`)
 	w.eval(`$click("#confirm-ok")`, nil)
 	w.wait(`$q("#message").textContent === "The hub's settings are saved."`)
-	if r := ran(); !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-obfuscate"}}) {
+	if r := ran(); !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-no-vless"}}) {
 		t.Errorf("the disguise ran %q", r)
 	}
 	w.wait(`$q('[data-action="forwarder"]') && !$q('[data-action="forwarder"]').disabled`)
@@ -573,7 +573,7 @@ func (w *window) admin(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 		r = ran()
 	}
-	if !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-forwarder", "203.0.113.9:8764", "-forwarder-key", "KEY"}}) {
+	if !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-no-obfuscate", "-no-vless", "-forwarder", "203.0.113.9:8764", "-forwarder-key", "KEY"}}) {
 		t.Errorf("the forwarder ran %q", r)
 	}
 }

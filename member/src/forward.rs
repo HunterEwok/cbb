@@ -407,7 +407,8 @@ fn once(
         .ok_or_else(|| Error::msg("registering with the forwarder: no key for the hellos' mask"))?;
     let vless = match (&cfg.vless_id, a.vless) {
         (Some(id), Some(v)) => Some(vless_offer(cfg.endpoint, id, v)),
-        (Some(_), None) => return Err(Error::msg("registering with the forwarder: it gave no VLESS settings")),
+        // A forwarder without VLESS registers the hub for UDP alone.
+        (Some(_), None) => None,
         (None, _) => None,
     };
     if vless.is_some()

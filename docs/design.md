@@ -292,7 +292,7 @@ ends, the Go service described below is still the computers' member.
   pins this release knows) registers while it serves through the phones' `forward.rs`: its
   member certificate with the roots, the group's records as the proof that it is the root or
   an admin, and hellos from its WireGuard port; status shows the registration as Go's
-  `forwarder` (`TestLiteHubForwarder`). With `-vless` it registers the group's VLESS user ID
+  `forwarder` (`TestLiteHubForwarder`). Unless `-no-vless` turned it off it registers the group's VLESS user ID
   (kept in `tunnel.json`'s forwarder, as Go's), keeps the forwarder's VLESS settings once the
   registration returns them (`vless_learned`, Go's `vlessLearnedLocked`) and has the members
   connect again for the offer with them; VLESS brings AmneziaWG (`TestLiteHubVLESS`). An admin signs the `hubs` record of main hubs as Go's
@@ -1577,8 +1577,8 @@ relay, or a hub.
 #### Blocked networks
 
 1. **AmneziaWG**, a fork of wireguard-go that randomises message headers, adds junk and
-   imitation packets before the handshake and pads messages. Same keys and code; the user
-   switches it on per group, on the hub (`cbb global hub -obfuscate`, or the hub's setting
+   imitation packets before the handshake and pads messages. Same keys and code; a hub
+   speaks it unless the user switches it off (`cbb global hub -no-obfuscate -no-vless`, or the hub's setting
    in the apps: `cbb global hub -keep` on the computers, the phone hub's own on the phones). `cbb` and the phones'
    tunnel run on amneziawg-go always; without settings it is plain WireGuard on the wire.
    - The hub makes the group's settings once, at random, and keeps them while obfuscation
@@ -1751,9 +1751,10 @@ only adds to it.
    invitation on a phone follows.
 8. Blocked networks: AmneziaWG, then VLESS. Done: `cbb` runs on amneziawg-go, and the
    phones' and the lite member's tunnel on GotaTun with AmneziaWG of its own (`awg.rs`);
-   obfuscation per group between computers (`cbb global hub -obfuscate`), in the hub's offer and in invitations, on both phones, and through the
+   obfuscation per group between computers (on by default, `cbb global hub -no-obfuscate` with
+   `-no-vless` off), in the hub's offer and in invitations, on both phones, and through the
    forwarder; VLESS between computers (`cbb forward -vless-xhttp` behind a web server or
-   `-vless-site` with REALITY, `cbb global hub -vless`) and on both phones.
+   `-vless-site` with REALITY, asked for by every hub at a forwarder unless `-no-vless`) and on both phones.
 9. The lite member on Linux (done: `cbb global on`, GotaTun and smoltcp in `cbb`, with
    AmneziaWG and VLESS over XHTTP, but no REALITY); the ESP32 when WireGuard on it is mature.
 

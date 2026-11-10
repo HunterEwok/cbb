@@ -476,7 +476,7 @@ container of the build under test, and `down` removes it with its volume.
 A device with `os = "netns"` is a second full member on a Linux host, for a way out that
 the host's own member does not take, such as a VPN: it runs in a network namespace whose
 only interface is tun2socks's, which carries its traffic to a SOCKS5 proxy on the host:
-over a proxy without UDP the member goes away from home with VLESS (`-vless`), over one
+over a proxy without UDP the member goes away from home with VLESS (a hub's default at a forwarder), over one
 with UDP with WireGuard too; it resolves names over TCP. `tools/bench/setup-netns.sh setup NAME SOCKS
 TUN2SOCKS` prepares it once in `/opt/cbbbench-netns/NAME`, with the units `cbbbench-NAME-net`
 (tun2socks) and `cbbbench-NAME` (the service, as root, with its own state and socket), and

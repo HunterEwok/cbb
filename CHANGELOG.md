@@ -1513,6 +1513,14 @@ All notable changes to cbb are documented in this file. The format follows
   work but are no promise of 1.0. Aurora gets the advanced settings switch, and the tray app
   keeps it on between launches.
 - The member keeps the user's order of the device tiles and their collections, in
+-- A hub hides its tunnel by default: it speaks AmneziaWG and, at a forwarder, asks for VLESS,
+  so sync away from home works on networks that block WireGuard without a setting.
+  `cbb global hub -no-vless` turns VLESS off and `-no-obfuscate` with it plain WireGuard;
+  `-obfuscate` and `-vless` are gone, and the control socket's `obfuscate` and `vless`
+  became `obfuscate_off` and `vless_off`. A forwarder without VLESS registers such a hub for
+  UDP alone instead of refusing it.
+
+ The member keeps the user's order of the device tiles and their collections, in
   `arrangement.json` in its state folder, and answers `view` with the tiles ready to draw
   and `arrange` with the user's change (docs/apps.md, "What the member shows"). The iPhone,
   Android, Aurora, Mac and tray apps only draw it: none keeps an order in its settings or
@@ -2070,6 +2078,11 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Muting or unmuting a device, and turning sync away from home on or off or making a device a
+  hub, no longer drops its connections, so the device no longer vanishes from the others for
+  a moment: it tells its peers in a new `presence` message (docs/protocol.md, section 4,
+  "Presence"). A device that refuses to let a phone join as an admin, or to admit while its
+  admin key is frozen, now says so in its log as well as to the app.
 - A member removed from the group while it was still answering the hello of the connection that
   removed it hears that it was removed: when its own writing failed first, as the other end hung
   up, it dropped the records it had already read, and every later connection was refused.

@@ -494,7 +494,7 @@ impl Member {
             Some(t) => self.node.engine.set_mute(t),
             None => self.node.engine.unmute(),
         }
-        self.node.reconnect();
+        self.node.announce(false);
     }
 
     /// Sends a command the app's admin key signed and waits for its result.
@@ -932,9 +932,8 @@ impl Commands {
     }
 
     /// Mutes the phone until `until` (0 for until an admin lifts it), or
-    /// ends its mute, saves it, tells the app, and connects to the members
-    /// again once the result had a moment to go back, so that their hellos
-    /// show it.
+    /// ends its mute, saves it, tells the app, and tells the members
+    /// connected in a presence message, without connecting again.
     fn set_muted(&self, node: &Arc<Node>, on: bool, until: i64, by: &str) -> Result<()> {
         if on {
             node.engine.set_mute(until);
@@ -948,11 +947,7 @@ impl Commands {
             (true, _) => format!("cbb: {by} muted this device for {} s", (until - uptime::wall_ms()) / 1000),
         });
         (self.on_mute)(on.then_some(until), by);
-        let node = node.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            node.reconnect();
-        });
+        node.announce(false);
         Ok(())
     }
 }

@@ -153,10 +153,14 @@ pub struct Header {
     pub relay: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub relay_key: String,
+    /// away hub: plain WireGuard, without AmneziaWG, which a hub offers by
+    /// default; it goes with vless_off where there is a forwarder.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub obfuscate: bool,
+    pub obfuscate_off: bool,
+    /// away hub: no VLESS at the forwarder, which a hub with one asks for
+    /// by default.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub vless: bool,
+    pub vless_off: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub keep: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

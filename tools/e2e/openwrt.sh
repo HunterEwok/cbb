@@ -187,17 +187,25 @@ vm)
 		echo "vm: the hub rule came and went with the service data"
 
 		# After a boot the service waits for NTP; ntpd itself stays out of it.
-		# The old process may take a moment to exit, and NTP events that
-		# ntpd sent before it stopped may still bring the flag back, more than
-		# once; then the start proves nothing and is tried again. Only a
-		# service that runs without the flag fails, and the wait must be seen
-		# without the flag at least once.
+		# The old process may take a moment to exit, and the reloads of the
+		# hub port above may still be restarting it (procd stops the old
+		# process, then starts the new one), so the service counts as stopped
+		# only after no process was seen for three seconds in a row. NTP
+		# events that ntpd sent before it stopped may still bring the flag
+		# back, more than once; then the start proves nothing and is tried
+		# again. Only a service that runs without the flag fails, and the
+		# wait must be seen without the flag at least once.
 		/etc/init.d/sysntpd stop
 		waited=
 		for try in 1 2 3 4 5; do
 			/etc/init.d/cbb stop
-			for i in $(seq 20); do pgrep -f "cbb service" >/dev/null || break; sleep 1; done
-			if pgrep -f "cbb service" >/dev/null; then echo "it did not stop" >&2; exit 1; fi
+			quiet=0
+			for i in $(seq 30); do
+				if pgrep -f "cbb service" >/dev/null; then quiet=0; else quiet=$((quiet + 1)); fi
+				[ "$quiet" -ge 3 ] && break
+				sleep 1
+			done
+			if [ "$quiet" -lt 3 ]; then echo "it did not stop" >&2; exit 1; fi
 			rm -f /var/state/cbb.time
 			/etc/init.d/cbb start
 			sleep 2

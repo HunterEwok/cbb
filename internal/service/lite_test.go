@@ -1711,7 +1711,7 @@ func TestLiteMemberAwayObfuscated(t *testing.T) {
 		t.Fatal(err)
 	}
 	port := freeUDP(t)
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}, Obfuscate: true}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}}, ""); err != nil {
 		t.Fatal(err)
 	}
 	piID := pi.status(t).Device
@@ -1803,7 +1803,7 @@ func TestLiteMemberAwayXHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(),
-		ForwarderKey: forward.Pin(cert.Leaf), VLESS: true}, ""); err != nil {
+		ForwarderKey: forward.Pin(cert.Leaf)}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the hub registers with the forwarder", func() bool {

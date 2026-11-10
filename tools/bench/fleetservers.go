@@ -28,7 +28,7 @@ func leaveHome(ctx context.Context, f *Fleet, d *Device) error {
 }
 
 // learnAtHome brings the away client c home until it has the hub's new
-// offer, which a change of how the tunnel hides (-obfuscate, -vless) makes
+// offer, which a change of how the tunnel hides (-no-obfuscate, -no-vless) makes
 // it need there (W18), and takes it away again.
 func learnAtHome(ctx context.Context, f *Fleet, a *awayGroup, c *Device) error {
 	if err := comeHome(ctx, f, c); err != nil {
@@ -160,7 +160,7 @@ func obfuscation(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 		return
 	}
 	r.Do("fleet/W18-not-away", func() error {
-		if _, err := Run(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-obfuscate"), ""); err != nil {
+		if _, err := Run(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-no-vless"), ""); err != nil {
 			return err
 		}
 		if err := cutOff(ctx, c, wait); err != nil {
@@ -657,7 +657,7 @@ func vlessAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) 
 		if err := connected(ctx, c, wait); err != nil {
 			return err
 		}
-		if err := succeeds(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-vless"), "", "VLESS"); err != nil {
+		if err := succeeds(ctx, hub, a.hubCmdWith(hubPublic, a.fwdKey), "", "VLESS"); err != nil {
 			return err
 		}
 		// VLESS turns AmneziaWG on too, so the client away, which knows

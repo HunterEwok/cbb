@@ -53,7 +53,7 @@ in again (on Windows, open a new terminal); until then, `sudo cbb ...` works.
 not forward the hub's UDP port to the hub, the hub's firewall drops it, or the address given
 to `cbb global hub` is not the one the internet reaches. A device that has not met the hub
 at home since sync away from home was turned on, or since the hub changed its settings
-(`-obfuscate`, `-vless`), does not know how to reach it: bring it home once. A network that
+(`-no-obfuscate`, `-no-vless`), does not know how to reach it: bring it home once. A network that
 blocks VPNs needs [AmneziaWG or VLESS](blocked-networks.md). With `CBB_DEBUG=1` in the service's
 environment the log also shows WireGuard's handshakes. On Linux:
 

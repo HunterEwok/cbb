@@ -211,7 +211,7 @@ Turn it on at home: the device then meets the group's hub (a full member made th
 neither found on the home network nor connected, it dials the hub through the tunnel: plain
 WireGuard to the hub's UDP port, with the member TLS inside, so the clipboard stays encrypted
 end to end. At home it sends nothing to the hub's outside addresses. A hub that hides its
-tunnel (`-obfuscate` or `-vless`, for networks that block WireGuard) is reached too: the lite
+tunnel (AmneziaWG and VLESS, as a hub does unless `-no-obfuscate -no-vless`) is reached too: the lite
 member speaks AmneziaWG, and VLESS over XHTTP through the forwarder's web site, whose
 certificate it checks against the system's CA certificates (`ca-certificates`, or the file
 `SSL_CERT_FILE` names). Over REALITY, which only the full member speaks, the device syncs at

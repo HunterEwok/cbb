@@ -322,14 +322,16 @@ final class MacModel: ObservableObject {
         return a.vless == true ? .vless : a.obfuscated == true ? .obfuscate : .plain
     }
 
-    /// Sets how this hub's tunnel hides and, with forwarder, its forwarder
-    /// ("default" for the project's), keeping its addresses and port.
+    /// Sets how this hub's tunnel hides (VLESS, which a hub with a
+    /// forwarder offers by default, AmneziaWG alone or plain WireGuard) and,
+    /// with forwarder, its forwarder ("default" for the project's), keeping
+    /// its addresses and port.
     func setHub(_ tunnel: HubTunnel, forwarder: String? = nil, key: String? = nil) async {
         var args = ["global", "hub", "-keep", "-firewall", "no"]
         switch tunnel {
-        case .plain: break
-        case .obfuscate: args.append("-obfuscate")
-        case .vless: args.append("-vless")
+        case .plain: args += ["-no-obfuscate", "-no-vless"]
+        case .obfuscate: args.append("-no-vless")
+        case .vless: break
         }
         if let forwarder, !forwarder.isEmpty {
             args += ["-forwarder", forwarder]

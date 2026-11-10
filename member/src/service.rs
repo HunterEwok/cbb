@@ -903,9 +903,9 @@ impl Service {
                 crate::admin::may_be_hub(&self.state_dir, &node)?;
                 node.set_tunnel_key(Some(away.make_hub(h)?));
                 away.serve_if_first(&node);
-                // The members connect again, so their hellos carry the key
-                // and get the hub's offer.
-                node.reconnect();
+                // The members connected get the hub's offer without
+                // connecting again (docs/protocol.md, section 4, "Presence").
+                node.announce(true);
             }
             "hub-off" => away.stop_hub(&node, h.force)?,
             "relay" => node.set_tunnel_key(Some(away.meet_at(&node, h)?)),
@@ -916,10 +916,8 @@ impl Service {
     }
 
     /// Mutes this member at the admin `by`'s order until `until` (0 for
-    /// until an admin lifts it), or ends
-    /// its mute, saves it, and connects to the members again once a
-    /// command's result had a moment to go back, so that their hellos show
-    /// it.
+    /// until an admin lifts it), or ends its mute, saves it, and tells the
+    /// members connected in a presence message, without connecting again.
     fn set_muted(&self, node: &Arc<Node>, on: bool, until: i64, by: &str) -> Result<()> {
         if on {
             node.engine.set_mute(until);
@@ -932,11 +930,7 @@ impl Service {
             (true, 0) => format!("cbb: {by} muted this device until an admin unmutes it"),
             (true, _) => format!("cbb: {by} muted this device for {} s", (until - uptime::wall_ms()) / 1000),
         });
-        let node = node.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            node.reconnect();
-        });
+        node.announce(false);
         Ok(())
     }
 
@@ -1075,8 +1069,8 @@ impl Service {
                 match self.away().and_then(|a| a.turn_off()) {
                     Ok(()) => {
                         (self.log)(&format!("cbb: {} turned sync away from home off here", body.by));
-                        // The members connect again once the result has gone
-                        // back on the connection that brought the command.
+                        // The members learn it once the result has gone back
+                        // on the connection that brought the command.
                         let node = node.clone();
                         std::thread::spawn(move || {
                             std::thread::sleep(std::time::Duration::from_millis(500));
