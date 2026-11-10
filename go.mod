@@ -19,7 +19,7 @@ require (
 	github.com/jezek/xgb v1.3.1
 	github.com/tetratelabs/wazero v1.12.0
 	github.com/xtls/reality v0.0.0-20261014101318-83f621788ca8
-	github.com/xtls/xray-core v1.260327.1-0.20261021115930-1b1647cd9ddf
+	github.com/xtls/xray-core v1.260327.1-0.20261031132019-a4a3dff5b20c // v26.10.31
 	github.com/yuin/goldmark v1.8.7
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.62.0
@@ -47,7 +47,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/mattn/go-shellwords v1.0.12 // indirect
 	github.com/miekg/dns v1.1.73 // indirect
-	github.com/pires/go-proxyproto v0.15.0 // indirect
+	github.com/pires/go-proxyproto v0.16.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/refraction-networking/utls v1.8.3-0.20260301010127-aa6edf4b11af // indirect
 	github.com/rhysd/actionlint v1.7.12 // indirect
