@@ -380,15 +380,11 @@ phones' `member/src/node.rs` and `member/src/phone.rs`.
   be given a member's address with `-peer`; it MUST NOT dial an address outside the home network
   (private IPv4, unique-local and link-local IPv6, loopback), so away from home it reaches
   the group only through the tunnel.
-- A computer that joined by a code, at an address the user gave (`cbb pair -code ADDRESS`, as
-  through an SSH forward or a VPN) or at the pairing window that discovery found, also dials
-  the member that admitted it at that address, whatever the rules above say: at once, though
-  another member is connected already, and later while discovery does not find that member
-  and no other connection is up. So it reaches the member that admitted it when that
-  member's announcements come late or are lost as its pairing window closes, while the rules
-  above have the member wait for this computer to dial. It keeps doing so, with the same waits,
-  until it holds the hub's tunnel offer (section 11) or the service stops; the address is not
-  stored.
+- A computer that joined at an address the user gave (`cbb pair -code ADDRESS`, as through
+  an SSH forward or a VPN) also dials the member that admitted it at that address, whatever
+  the rules above say, while discovery does not find that member and no other connection to
+  it is up. It keeps doing so, with the same waits, until it holds the hub's tunnel offer
+  (section 11) or the service stops; the address is not stored.
 - Addresses come from discovery; a member MUST NOT authenticate a peer by resolving a
   `.local` name, since the certificate, not the name, says who the peer is. They are tried IPv4
   first, then routable IPv6, then link-local IPv6. After a round of failures the dialer waits

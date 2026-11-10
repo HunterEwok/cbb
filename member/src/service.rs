@@ -2752,9 +2752,6 @@ impl Service {
                 };
                 match crate::pair::join(&joiner, sock, &code, &*save) {
                     Ok(id) => {
-                        // The member that admitted it is dialed there at
-                        // once, without waiting for discovery to find it.
-                        *self.joined_at.lock().unwrap() = Some(*a);
                         joined = Some(id);
                         break;
                     }
@@ -3200,32 +3197,26 @@ fn group_status(node: &Node) -> Status {
 }
 
 /// Keeps a member connection up to the member that admitted this device at
-/// addr, the address it joined at, as Go's dialJoined: that member syncs
-/// with it at once, though discovery has not found it yet (its
-/// announcements may come late, or be lost while its pairing window
-/// closes), and when it is the group's hub it learns this device's tunnel
-/// key as soon as sync away from home is turned on here. It stops once
-/// this device knows a hub of the group, whose tunnel reaches it from then
-/// on, or when the member stops.
+/// addr, the address the user gave for the join, as Go's dialJoined: that
+/// member syncs with it at once, and when it is the group's hub it learns
+/// this device's tunnel key as soon as sync away from home is turned on
+/// here. It stops once this device knows a hub of the group, whose tunnel
+/// reaches it from then on, or when the member stops.
 fn keep_joined(node: Arc<Node>, away: Arc<Away>, addr: SocketAddr, log: Arc<dyn Fn(&str) + Send + Sync>) {
     const MIN: Duration = Duration::from_secs(1);
     const MAX: Duration = Duration::from_secs(30);
     std::thread::spawn(move || {
         let mut backoff = MIN;
-        // Whether a connection at addr came up once.
-        let mut reached = false;
         while !node.is_closed() && away.known_hubs(&node.hub_order()).is_empty() {
             let start = std::time::Instant::now();
-            // Once it reached that member, it waits while another way
-            // connects this device to the group, as discovery; until then
-            // another peer is no sign that this member reaches it.
-            if reached && !node.peers().is_empty() {
+            // While another way connects this device to the group, as
+            // discovery, it waits.
+            if !node.peers().is_empty() {
                 std::thread::sleep(MIN);
                 continue;
             }
-            match node.dial_ended(addr, None) {
-                Ok(d) => reached |= d.up,
-                Err(e) => log(&format!("cbb: connection at {addr}, where this device joined: {}", e.for_log())),
+            if let Err(e) = node.dial(addr, None) {
+                log(&format!("cbb: connection at {addr}, where this device joined: {}", e.for_log()));
             }
             if start.elapsed() > MAX {
                 backoff = MIN;
