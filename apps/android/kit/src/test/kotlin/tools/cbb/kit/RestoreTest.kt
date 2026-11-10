@@ -51,7 +51,7 @@ class RestoreTest {
         val rootKey = SoftwareSigner()
         val root = PhoneGroup.create(rootKey, SoftwareSigner().publicKeyDER, t0, "Lost")
         val computer = RootTest.Computer(root.groupCA, rootKey, t0)
-        val recovery: PhoneGroup.Recovery
+        val recovery: Recovery
 
         init {
             root.records.clock = { t0 }

@@ -158,7 +158,7 @@ The Rust program `cbb` (`member/`) becomes the one member on every device, a com
 much as a router: the group, sync, records, seals, admitting devices, commands and the
 control socket. What needs Go stays in Go, in `cbb-helper` (`cmd/cbb-helper`,
 `internal/helper`): keys in the TPM, the Secure Enclave and on a YubiKey, the hub's and the
-forwarder's tunnel with VLESS and REALITY, the relay, remote paste into desktop sessions and
+forwarder's tunnel with VLESS, the relay, remote paste into desktop sessions and
 Windows, quick actions, TVs and the Bluetooth keyboard. The move happens in steps; until it
 ends, the Go service described below is still the computers' member.
 
@@ -212,11 +212,8 @@ ends, the Go service described below is still the computers' member.
   watchers; one typed after its answer stops when remote paste goes off, which the helper
   reads in the same folder, or when `cbb`'s records no longer take its command, when `cbb`
   sends `peripheral-stop` (`TestLitePeripherals`).
-- **The way over VLESS inside REALITY.** rustls makes no browser's ClientHello, so for a
-  hub that offers REALITY `cbb` asks `vless-dial` with the hub's VLESS settings: the helper
-  runs Go's `internal/vless` client and answers with the way's ID and a local UDP port, to
-  which `cbb`'s tunnel sends its WireGuard packets; `vless-close` with the ID ends the way.
-  The way over XHTTP `cbb` makes itself (`member/src/vless.rs`).
+- **The way over VLESS.** `cbb` makes it itself, over XHTTP (`member/src/vless.rs`); the
+  helper has no part in it (REALITY, which it once made for `cbb`, is gone: D-91).
 - **The agent.** `cbb agent`, which the user's session starts, links that session's clipboard
   with the service: it starts its own `cbb-helper`, with the session's whole environment (its
   display and D-Bus), and asks it `agent` with the service's socket. The helper runs the Go
@@ -1140,7 +1137,7 @@ These take precedence over convenience:
 What no design hides, and the documentation says so: the network between a client and the
 hub (or the forwarder) sees that encrypted packets go to that address, when, and roughly how
 many. VLESS makes them look like an ordinary HTTPS connection to a website: the
-forwarder's own site, or a well-known one with REALITY. Where a network admits only listed addresses (allow-lists), no protocol helps.
+forwarder's own site. Where a network admits only listed addresses (allow-lists), no protocol helps.
 
 #### The hub
 
@@ -1218,8 +1215,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   (`ffi/src/tunnel.rs`), beside the client side: the lite member's tunnel, one for the lite
   member and every phone, rather than a Go tunnel bound by gomobile, which would keep a
   second WireGuard, AmneziaWG and VLESS to maintain and Go in both apps' builds (D-87). The
-  phones then reach a forwarder over VLESS with XHTTP only: REALITY needs a browser's
-  ClientHello, which rustls does not give, so it stays on the Go servers.
+  phones then reach a forwarder over VLESS with XHTTP, the only transport (D-91).
 - **The clients come quickly.** A phone hub is there for minutes at a time, so its clients
   keep trying it every few seconds while their own app or service runs, instead of backing
   off to 30 s and more; a handshake initiation to the forwarder costs one small packet, and
@@ -1615,13 +1611,12 @@ relay, or a hub.
      (`ffi/src/tunnel.rs` takes them as JSON), as the lite member does (`member/src/awg.rs`).
 2. **WireGuard inside VLESS**, between a client and the forwarder, with
    Xray-core (MPL-2.0) as a Go module in `cbb`, and in the phones' and the lite member's
-   Rust tunnel (`member/src/vless.rs`, XHTTP only: REALITY stays on the Go servers); VLESS
+   Rust tunnel (`member/src/vless.rs`); VLESS
    carries the UDP packets itself. The forwarder then has one path for everything, the hub does not
    change, and traffic is always inside our own tunnel. VLESS adds no security of its own and
    the design does not rely on it: the boundary stays the member TLS, then WireGuard.
-   - The forwarder's operator picks the transport, and the forwarder tells each registering
-     hub which one it runs:
-     - **XHTTP behind the web server of its own site**, the default on `cbb.tools`
+   - The transport is XHTTP, which the forwarder names to each registering hub:
+     - **XHTTP behind the web server of its own site**, as on `cbb.tools`
        (`cbb forward -vless-xhttp cbb.tools`): the web server (nginx) ends the TLS with the
        site's own certificate on TCP 443 and passes one path to the forwarder, which listens
        only on the loopback address; every other request gets the site. The path is made at
@@ -1631,10 +1626,6 @@ relay, or a hub.
        plain HTTP requests, which every web server and proxy passes. The web server sees the
        group's VLESS user ID and encrypted packets, nothing more, and that location keeps no
        log.
-     - **REALITY**, for forwarders on servers without a site of their own (`cbb forward
-       -vless-site www.example.com`): the forwarder listens on TCP 443, and whoever is not a
-       client gets that well-known site's own TLS and pages. Its REALITY key stays in its
-       key file.
    - The hub's user switches it on per group (`cbb global hub -forwarder ... -vless`, or the
      apps' switch). The hub makes the group's VLESS user ID, the forwarder lets that ID in
      while the hub is registered and tells the hub its transport and settings, and the hub
@@ -1665,8 +1656,10 @@ relay, or a hub.
    in `cbb_core::vless`), without Chrome's TLS fingerprint: a network sees rustls's
    ClientHello and HTTP/1.1 where Xray's client shows a browser's and HTTP/2. The site's
    certificate is checked against the system's roots with `cbb_core::tls::web`, which adds
-   RSA and P-384 to the members' provider. REALITY stays Go's: it needs a browser's
-   ClientHello ([roadmap item 46](roadmap.md#vless-behind-a-web-server)).
+   RSA and P-384 to the members' provider. REALITY, which borrows a well-known site's TLS,
+   was dropped rather than written in Rust (D-91): it needs a browser's ClientHello, which
+   rustls does not make, and nobody used it once `cbb.tools` ran XHTTP; a browser-like
+   ClientHello for the Rust XHTTP comes first, should a network single out rustls's.
 
 sing-box is not used (GPL).
 
@@ -1677,7 +1670,7 @@ sing-box is not used (GPL).
 | Go service (Linux, FreeBSD, macOS, Windows) | amneziawg-go with netstack in `cbb`; Xray-core as a Go module                | hub, forwarder, relay or client |
 | iPhone app                     | in the app process, no Network Extension; the Rust tunnel of `ffi/src/tunnel.rs` (D-87)        | client, or the hub, while the app is open |
 | Android app                    | in the app process, in the foreground service the app already has; no `VpnService`            | client, or the hub while the app is open or in its foreground service |
-| the lite member on Linux       | GotaTun's WireGuard (from Mullvad) with smoltcp's TCP, in its process; AmneziaWG and VLESS over XHTTP of its own, no REALITY | client |
+| the lite member on Linux       | GotaTun's WireGuard (from Mullvad) with smoltcp's TCP, in its process; AmneziaWG and VLESS over XHTTP of its own | client |
 | the lite member on the ESP32   | none: the home network only, until a mature WireGuard exists for it                           | home only                |
 
 - On phones the tunnel is ordinary UDP traffic of the app. It does not take the phone's
@@ -1696,7 +1689,7 @@ sing-box is not used (GPL).
   implementation its TLS uses too, so it stays all Rust and links with rust-lld. GotaTun
   speaks plain WireGuard; the lite member wraps its messages in AmneziaWG for a hub that
   hides its tunnel (`member/src/awg.rs`) and carries them over VLESS with XHTTP when the offer
-  has it (`member/src/vless.rs`). A hub reached over VLESS with REALITY only keeps it at home.
+  has it (`member/src/vless.rs`).
 - No push notifications: they go through Apple's and Google's servers. A phone gets the
   current text when the app opens, as at home.
 
@@ -1761,10 +1754,10 @@ only adds to it.
 8. Blocked networks: AmneziaWG, then VLESS. Done: `cbb` runs on amneziawg-go, and the
    phones' and the lite member's tunnel on GotaTun with AmneziaWG of its own (`awg.rs`);
    obfuscation per group between computers (`cbb global hub -obfuscate`), in the hub's offer and in invitations, on both phones, and through the
-   forwarder; VLESS between computers (`cbb forward -vless-xhttp` behind a web server or
-   `-vless-site` with REALITY, `cbb global hub -vless`) and on both phones.
+   forwarder; VLESS between computers (`cbb forward -vless-xhttp` behind a web server,
+   `cbb global hub -vless`) and on both phones.
 9. The lite member on Linux (done: `cbb global on`, GotaTun and smoltcp in `cbb`, with
-   AmneziaWG and VLESS over XHTTP, but no REALITY); the ESP32 when WireGuard on it is mature.
+   AmneziaWG and VLESS over XHTTP); the ESP32 when WireGuard on it is mature.
 
 ### What the servers learn
 

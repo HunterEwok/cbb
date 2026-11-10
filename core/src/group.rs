@@ -121,6 +121,12 @@ pub enum Refusal {
     /// the old root, if it is still in use, learns of the takeover and can
     /// undo it. Only Records::refused_peer returns it.
     TakenOver,
+    /// The chain's own key is removed or frozen: the connection carries
+    /// the records that say so, if the peer lacks them, and then closes, so
+    /// that a device removed while it was not connected hears it on its
+    /// next connection (docs/protocol.md, section 10, "Certificates"). Only
+    /// Records::refused_peer returns it.
+    Removed(&'static str),
 }
 
 impl Refusal {
@@ -129,7 +135,7 @@ impl Refusal {
             Refusal::NotListed => "no device record that counts names the device's key",
             Refusal::Stopped => "the group's records stop the exchange until its root decides",
             Refusal::TakenOver => "the group was taken over from this root; its connection carries records only",
-            Refusal::Refused(why) => why,
+            Refusal::Refused(why) | Refusal::Removed(why) => why,
         }
     }
 }
@@ -513,10 +519,20 @@ impl Records {
 
     /// Why a peer's connection is refused or carries records only: refused,
     /// except that an old root an admin took the group over from gets
-    /// records only (Refusal::TakenOver), as Go's allow.
+    /// records only (Refusal::TakenOver), as Go's allow, and a device whose
+    /// own key is removed or frozen gets the records that say so
+    /// (Refusal::Removed).
     pub fn refused_peer(&self, chain: &[Cert]) -> Option<Refusal> {
         match self.refused(chain) {
             Some(Refusal::Refused(_)) if self.taken_over(chain).is_some() => Some(Refusal::TakenOver),
+            Some(Refusal::Refused(why))
+                if chain.first().is_some_and(|c| {
+                    let k = c.key_hash();
+                    self.revoked(&k) || self.frozen(&k)
+                }) =>
+            {
+                Some(Refusal::Removed(why))
+            }
             r => r,
         }
     }

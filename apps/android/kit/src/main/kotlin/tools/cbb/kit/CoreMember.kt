@@ -489,6 +489,59 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         return Takeover(state, a.optLong("left_ms") ?: 0, a.optBytes("cert"))
     }
 
+    // The root's own records (cbb_core::root, docs/protocol.md, section 10,
+    // "Handing the group over" and "The recovery key"): the core builds and
+    // checks them, signs them with the root key public through sign, adds
+    // them and sends them to every member.
+
+    /** Sets how long a claim from a lost root waits, from 0 to 7 days; the settings record keeps the key level. */
+    fun setTakeoverDelay(ms: Long, public: ByteArray, sign: (ByteArray) -> ByteArray) {
+        root(Wire.obj("action" to Wire.str("takeover_delay"), "delay_ms" to Wire.num(ms)), public, sign)
+    }
+
+    /**
+     * Sets the group's key level (proven, hardware or files), keeping the
+     * takeover delay; never a level this phone's own keys do not pass. It
+     * returns the admins and hubs whose keys the level would not let in, by
+     * device ID: they stay until the user removes them.
+     */
+    fun setKeyLevel(level: String, public: ByteArray, sign: (ByteArray) -> ByteArray): List<String> =
+        root(Wire.obj("action" to Wire.str("key_level"), "level" to Wire.str(level)), public, sign)
+            .optArray("below")?.map { it.jsonPrimitive.content }.orEmpty()
+
+    /** Hands the group to the admin device, whose claim then takes effect at once. */
+    fun handOver(device: String, public: ByteArray, sign: (ByteArray) -> ByteArray) {
+        root(Wire.obj("action" to Wire.str("hand_over"), "device" to Wire.str(device)), public, sign)
+    }
+
+    /** Makes the group's recovery key, which replaces the one before it, and returns its sheet; nothing of the key stays in the core. */
+    fun makeRecovery(public: ByteArray, sign: (ByteArray) -> ByteArray): Core.RecoverySheet {
+        val a = root(Wire.obj("action" to Wire.str("make_recovery")), public, sign)
+        return Core.RecoverySheet(
+            a.optString("qr") ?: throw Core.Mismatch("the member's recovery sheet has no qr"),
+            a.optString("text") ?: throw Core.Mismatch("the member's recovery sheet has no text"),
+            a.optBytes("admin") ?: throw Core.Mismatch("the member's recovery sheet has no admin"),
+        )
+    }
+
+    /**
+     * Makes the group's recovery key from a key a YubiKey made (spki, a
+     * SubjectPublicKeyInfo; [Piv.generate]): it returns the key's admin CA,
+     * which goes into the YubiKey's slot.
+     */
+    fun recoveryFor(spki: ByteArray, public: ByteArray, sign: (ByteArray) -> ByteArray): ByteArray =
+        root(Wire.obj("action" to Wire.str("recovery_for"), "key" to Wire.bytes(spki)), public, sign).optBytes("admin_ca")
+            ?: throw Core.Mismatch("the member's recovery key has no admin CA")
+
+    /** Removes the group's recovery key: the root revokes it, and a sheet printed for it no longer works. */
+    fun removeRecovery(public: ByteArray, sign: (ByteArray) -> ByteArray) {
+        root(Wire.obj("action" to Wire.str("remove_recovery")), public, sign)
+    }
+
+    /** A root's action: request with the root key's point, which the member checks against the group's root CA. */
+    private fun root(request: JsonObject, public: ByteArray, sign: (ByteArray) -> ByteArray): JsonObject =
+        manage(JsonObject(request + ("public" to Wire.bytes(point(public))!!)), sign)
+
     /** Asks the member for an admin's change or a step of a takeover (cbb_member_manage), signed through sign during this call. */
     fun manage(request: JsonObject, sign: (ByteArray) -> ByteArray): JsonObject {
         if (closed.get()) throw IllegalStateException("the member is stopped")

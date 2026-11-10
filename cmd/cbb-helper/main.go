@@ -62,6 +62,5 @@ func newServer() *helper.Server {
 	s.HandleKeys()
 	s.HandlePeripherals(os.Stderr)
 	s.HandleAgent(os.Stderr)
-	s.HandleVLESS()
 	return s
 }

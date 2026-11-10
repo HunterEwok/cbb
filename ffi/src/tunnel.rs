@@ -874,7 +874,7 @@ mod tests {
         assert!(!refused(json!({"op": "set_endpoint", "id": id, "endpoint": "nowhere"})).is_empty());
         ok(json!({"op": "stop", "id": id}));
         assert!(refused(json!({"op": "status", "id": id})).contains("no tunnel"));
-        // An offer the member refuses: REALITY, which rustls cannot hide.
+        // An offer the member refuses: an older forwarder's REALITY.
         let reality = json!({"hub_key": b64(&[1; 32]), "psk": b64(&[2; 32]),
             "vless": {"endpoint": "192.0.2.7:443", "public_key": "AAAA", "short_id": "ab",
                       "server_name": "cbb.example.org", "id": "6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d"}});

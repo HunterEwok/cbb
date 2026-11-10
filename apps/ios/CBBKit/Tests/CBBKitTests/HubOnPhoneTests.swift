@@ -228,7 +228,7 @@ final class HubOnPhoneTests: XCTestCase {
         let v = try XCTUnwrap(tunnels.started.last)
         XCTAssertEqual(try JSONDecoder().decode(Member.Obfuscation.self, from: Data(v.obfuscation.utf8)), obf)
         XCTAssertEqual(v.vlessID, "00000000-0000-4000-8000-000000000000")
-        v.report = #"{"registered":true,"vless":{"endpoint":"203.0.113.9:443","public_key":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk=","short_id":"ab","server_name":"www.example.com","id":"00000000-0000-4000-8000-000000000000"}}"#
+        v.report = #"{"registered":true,"vless":{"transport":"xhttp","endpoint":"203.0.113.9:443","server_name":"cbb.tools","path":"/banMEJvnYJJap8S/AbCdEfGhIjKlMnOpQr","id":"00000000-0000-4000-8000-000000000000"}}"#
         XCTAssertEqual(h.status(paused: false).0, .registered)
         XCTAssertEqual(h.offer(device: pc, key: Data(repeating: 2, count: 32))?.vless?.endpoint, "203.0.113.9:443")
 

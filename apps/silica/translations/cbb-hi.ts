@@ -169,6 +169,38 @@
         <source>The invitation has expired. Ask for a new one.</source>
         <translation>निमंत्रण की अवधि समाप्त हो गई है। नया माँगें।</translation>
     </message>
+    <message>
+        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
+        <translation>रिकवरी शीट का QR कोड स्कैन करें: नए फ़ोन पर टाइप की गई कुंजी काफ़ी नहीं है।</translation>
+    </message>
+    <message>
+        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
+        <translation>यह अब समूह की रिकवरी कुंजी नहीं है: रूट ने इसे हटा दिया या नई बना ली।</translation>
+    </message>
+    <message>
+        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
+        <translation>इस नेटवर्क पर समूह का कोई डिवाइस नहीं मिला। समूह का कोई फ़ोन या कंप्यूटर चालू करें और फिर से कोशिश करें।</translation>
+    </message>
+    <message>
+        <source>This is not a CBB recovery sheet.</source>
+        <translation>यह CBB रिकवरी शीट नहीं है।</translation>
+    </message>
+    <message>
+        <source>The phone could not restore the group.</source>
+        <translation>फ़ोन समूह बहाल नहीं कर सका।</translation>
+    </message>
+    <message>
+        <source>This is not the QR code of a CBB recovery sheet.</source>
+        <translation>यह CBB रिकवरी शीट का QR कोड नहीं है।</translation>
+    </message>
+    <message>
+        <source>The group's root cancelled the claim to restore the group.</source>
+        <translation>समूह के रूट ने समूह बहाल करने का अनुरोध रद्द कर दिया।</translation>
+    </message>
+    <message>
+        <source>The claim to restore the group became void.</source>
+        <translation>समूह बहाल करने का अनुरोध अमान्य हो गया।</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -375,6 +407,10 @@
         <source>Send an invitation</source>
         <translation>निमंत्रण भेजें</translation>
     </message>
+    <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>रिकवरी शीट से बहाल करें</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -481,6 +517,22 @@
     <message>
         <source>Device ID</source>
         <translation>डिवाइस ID</translation>
+    </message>
+    <message>
+        <source>Hand the group over</source>
+        <translation>समूह सौंपें</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>समूह %1 को सौंपा जा रहा है</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>समूह सौंप दिया गया है</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>इसका दावा समूह को तुरंत ले लेता है</translation>
     </message>
 </context>
 <context>
@@ -612,6 +664,62 @@
     <message>
         <source>Device</source>
         <translation>डिवाइस</translation>
+    </message>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>समूह संभालने का दावा प्रतीक्षा करता है</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>बिल्कुल नहीं</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>1 घंटा</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>1 दिन</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 दिन</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 दिन</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>व्यवस्थापक कौन-सी कुंजियाँ रख सकता है</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>कुछ व्यवस्थापकों की कुंजियाँ कमज़ोर हैं; हटाए जाने तक वे बने रहते हैं</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>केवल प्रमाणित हार्डवेयर</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>हार्डवेयर</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>हार्डवेयर या फ़ाइल</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>पुनर्प्राप्ति कुंजी</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>बनाई गई</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>कोई नहीं</translation>
     </message>
 </context>
 <context>
@@ -1337,6 +1445,92 @@
     <message>
         <source>Invite another device</source>
         <translation>एक और डिवाइस आमंत्रित करें</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>पुनर्प्राप्ति कुंजी हटाएँ</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>पुनर्प्राप्ति कुंजी हटाई जा रही है</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>नई पुनर्प्राप्ति कुंजी बनाएँ</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>पुनर्प्राप्ति कुंजी बनाएँ</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>पुनर्प्राप्ति कुंजी बदली जा रही है</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>पुनर्प्राप्ति कुंजी</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>कुंजी लिख लें या यह पृष्ठ प्रिंट करें और सुरक्षित रखें। यह केवल एक बार दिखाई जाती है।</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>समूह के पास पुनर्प्राप्ति कुंजी है। इस फ़ोन के खो जाने पर समूह का कोई कंप्यूटर या नया फ़ोन इससे समूह संभाल लेता है।</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>पुनर्प्राप्ति कुंजी से इस फ़ोन के खो जाने पर समूह का कोई कंप्यूटर या नया फ़ोन समूह संभाल सकता है। बनाने के लिए नीचे खींचें।</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>मैंने लिख लिया</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>समूह बहाल करें</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>यह फ़ोन अब समूह का रूट है।</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>इस नेटवर्क पर समूह का फ़ोन या कंप्यूटर खोजा जा रहा है…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>समूह के लिए अनुरोध भेजा जा रहा है…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>समूह इस फ़ोन पर बहाल हो गया है। प्रतीक्षा समय ख़त्म होने पर, %1 घंटे में, यह समूह का रूट बन जाएगा, जब तक रूट अनुरोध रद्द न करे।</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>समूह इस फ़ोन पर बहाल हो गया है। समूह का प्रतीक्षा समय ख़त्म होने पर यह समूह का रूट बन जाएगा, जब तक रूट अनुरोध रद्द न करे।</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>कैमरा समूह की रिकवरी शीट के QR कोड की ओर करें। समूह का कोई फ़ोन या कंप्यूटर चालू और इसी नेटवर्क पर रखें।</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>कैमरा शुरू नहीं हो रहा: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>या कोड का टेक्स्ट चिपकाएँ, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>फिर से कोशिश करें</translation>
     </message>
 </context>
 </TS>

@@ -96,6 +96,8 @@ pub mod join;
 pub mod member;
 #[cfg(feature = "join")]
 pub mod qr;
+#[cfg(feature = "member")]
+pub mod restore;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
 
@@ -360,6 +362,34 @@ pub unsafe extern "C" fn cbb_member_start(
     // SAFETY: the caller gives a writable pointer at answer.
     unsafe { answer.write(to_c(ans, answer_len)) };
     m.map_or(core::ptr::null_mut(), |m| Box::into_raw(Box::new(m)))
+}
+
+/// Restores a group on a new phone with its recovery key (src/restore.rs):
+/// `request` is `{"sheet", "public", "name", "os", "addrs", "wait_ms"}`, `sign` with
+/// `ctx` signs with the member key `public` names during this call only.
+/// It blocks while it browses for the group and fetches its records; the
+/// answer is `{"device", "cert", "issuer", "group_ca", "roots", "records", "addr"}`,
+/// what the app starts its member with, or `{"error"}`.
+///
+/// # Safety
+///
+/// `request` must point to `len` readable bytes and `answer_len` to a
+/// writable `size_t`, for the time of the call.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_restore(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(restore::restore(req, sign, ctx as usize), answer_len)
 }
 
 /// Asks the member: `request` is `{"op", "args"}` (src/member.rs,

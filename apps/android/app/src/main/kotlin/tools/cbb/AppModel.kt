@@ -461,10 +461,17 @@ class AppModel(private val app: Context) {
     }
 
     /** The one big button. */
+    /** Counts the syncs started, so that only the newest one says how it went. */
+    private var syncs = 0
+
     suspend fun sync() {
         busy = true
+        val mine = ++syncs
         try {
             val (result, fetched) = withContext(Dispatchers.IO) { group.sync { Clipboard.readForSync(app) } }
+            // A sync started meanwhile (the button pressed while the one as
+            // the app opened was still going) says how it went, not this one.
+            if (mine != syncs) return
             when (fetched) {
                 is LiveGroup.Got.Text -> Clipboard.write(app, fetched.text, fetched.kind)
                 is LiveGroup.Got.Image -> Clipboard.writeImage(app, fetched.file, fetched.alt)
@@ -482,9 +489,9 @@ class AppModel(private val app: Context) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            message = describe(e)
+            if (mine == syncs) message = describe(e)
         } finally {
-            busy = false
+            if (mine == syncs) busy = false
             update()
         }
     }
@@ -497,7 +504,10 @@ class AppModel(private val app: Context) {
     suspend fun sendOnOpen() {
         if (!group.hasGroup || busy || syncOff != null || phase != Phase.HOME) return
         val before = message
+        val started = syncs
         sync()
+        // The button pressed meanwhile: its sync says how it went.
+        if (syncs != started + 1) return
         sendFailed = message?.error == true
         if (message?.text == R.string.nothing_new) message = before
     }

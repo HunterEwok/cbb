@@ -23,6 +23,7 @@
 #include <QStringList>
 #include <QTimer>
 #include <QVariantList>
+#include <QVariantMap>
 
 struct cbb_member;
 class QThread;
@@ -38,6 +39,10 @@ class Member : public QObject
     // What the group's records stop and what ends it (docs/core-api.md, the
     // member's alerts): maps with kind, names, devices, records, left_ms, count.
     Q_PROPERTY(QVariantList alerts READ alerts NOTIFY devicesChanged)
+    // The root's settings as the group's records hold them (the member's
+    // root_view op, cbb_core::root::view): delay_ms, key_level, recovery,
+    // handed_to.
+    Q_PROPERTY(QVariantMap rootView READ rootView NOTIFY devicesChanged)
     Q_PROPERTY(QString last READ last NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
     // Sync turned off (design.md, "Sync on and off"): the clipboard is the
@@ -71,6 +76,7 @@ public:
     QStringList peers() const { return m_peers; }
     QVariantList devices() const { return m_devices; }
     QVariantList alerts() const { return m_alerts; }
+    QVariantMap rootView() const { return m_rootView; }
     // What the clipboard got or sent last, shortened, for the main page.
     QString last() const { return m_last; }
     QString error() const { return m_error; }
@@ -159,6 +165,7 @@ private:
     QStringList m_peers;
     QVariantList m_devices;
     QVariantList m_alerts;
+    QVariantMap m_rootView;
     QString m_last;
     QString m_error;
     // The clipboard's text as the group last set it or the phone last sent it.

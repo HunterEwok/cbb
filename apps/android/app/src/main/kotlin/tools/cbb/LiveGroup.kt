@@ -1945,21 +1945,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         if (KitRecords.storeOf(store, "member") == KitRecords.ROOTLESS) throw PhoneGroup.Rootless()
         if (KitRecords.storeOf(store, "member") == KitRecords.FILE && !allowFileKey) throw PhoneGroup.FileKey()
         val root = caSigner(R.string.reason_make_admin)
-        val g = copyOfState() ?: return
-        val rs = withContext(Dispatchers.IO) {
-            // The user's consent to a key in a file, after the dialog's
-            // warning, lets the group take keys in files too.
-            val level = if (KitRecords.storeOf(store, "member") == KitRecords.FILE && allowFileKey && g.keyLevel != KitRecords.LEVEL_FILES) {
-                listOf(g.setKeyLevel(KitRecords.LEVEL_FILES, root, Instant.now()))
-            } else {
-                emptyList()
-            }
-            val (ca, r) = g.makeAdmin(id, key, root, Instant.now(), store, allowFileKey)
-            ca to level + r
+        // The user's consent to a key in a file, after the dialog's
+        // warning, lets the group take keys in files too.
+        if (KitRecords.storeOf(store, "member") == KitRecords.FILE && allowFileKey && keyLevel != KitRecords.LEVEL_FILES) {
+            rootRecord(root) { m, public, sign -> m.setKeyLevel(KitRecords.LEVEL_FILES, public, sign) }
         }
-        val ca = rs.first
+        val g = copyOfState() ?: return
+        val (ca, r) = withContext(Dispatchers.IO) { g.makeAdmin(id, key, root, Instant.now(), store, allowFileKey) }
         withContext(Dispatchers.IO) { adopt(g) }
-        published(rs.second)
+        published(listOf(r))
         currentNode?.let { m -> runCatching { m.sendAdminCA(id, ca) } }
     }
 
@@ -2000,11 +1994,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     suspend fun makeRecovery(): Core.RecoverySheet {
         if (!isRoot) throw PhoneGroup.Failure("only the root makes the recovery key")
         val root = caSigner(R.string.reason_make_recovery, prompts = Prompts(2))
-        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val made = withContext(Dispatchers.IO) { g.makeRecovery(root, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(made.record))
-        return made.sheet
+        return rootRecord(root) { m, public, sign -> m.makeRecovery(public, sign) }
     }
 
     /** The group's key level (KitRecords.KEY_LEVELS) on the root phone; null elsewhere. */
@@ -2035,11 +2025,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     suspend fun setKeyLevel(level: String) {
         if (!isRoot) throw PhoneGroup.Failure("only the root sets the key level")
+        // The core refuses it too; asked here first, the screen says why before the fingerprint.
+        val own = synchronized(lock) { state?.let { g -> g.devices.firstOrNull { it.id == g.device }?.store } } ?: KitRecords.HARDWARE
+        if (!KitRecords.levelAllows(level, own, true)) throw PhoneGroup.BelowKeyLevel()
         val root = caSigner(R.string.reason_key_level)
-        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val r = withContext(Dispatchers.IO) { g.setKeyLevel(level, root, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
+        rootRecord(root) { m, public, sign -> m.setKeyLevel(level, public, sign) }
     }
 
     /**
@@ -2053,19 +2043,18 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     suspend fun makeRecoveryOnCard(pin: String): Int {
         if (!isRoot) throw PhoneGroup.Failure("only the root makes the recovery key")
         val root = caSigner(R.string.reason_make_recovery)
-        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
         val ui = activity as? android.app.Activity ?: throw Failure(Failure.Kind.NO_SCREEN)
-        val (slot, record) = YubiKeyNfc.withCard(ui) { card ->
+        val slot = YubiKeyNfc.withCard(ui) { card ->
             Piv.select(card)
             Piv.verify(card, pin)
             Piv.authenticate(card)
             val slot = Piv.freeSlot(card)
-            val (ca, r) = g.makeRecoveryOnCard(Piv.generate(card, slot), root, Instant.now())
+            val ca = n.recoveryFor(Piv.generate(card, slot), root.publicKeyDER, root::signDigest)
             Piv.putCertificate(card, slot, ca)
-            slot to r
+            slot
         }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(record))
+        withContext(Dispatchers.IO) { takeRecords(n) }
         return slot
     }
 
@@ -2146,10 +2135,17 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     suspend fun removeRecovery() {
         if (!isRoot) throw PhoneGroup.Failure("only the root removes the recovery key")
         val root = caSigner(R.string.reason_remove_recovery)
-        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val r = withContext(Dispatchers.IO) { g.removeRecovery(root, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
+        rootRecord(root) { m, public, sign -> m.removeRecovery(public, sign) }
+    }
+
+    /**
+     * Has the core's member build and sign one of the root's own records
+     * (cbb_core::root) with root, which adds it and sends it to every
+     * member, and takes it into the group's file.
+     */
+    private suspend fun <T> rootRecord(root: KeystoreSigner, act: (CoreMember, ByteArray, (ByteArray) -> ByteArray) -> T): T {
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        return withContext(Dispatchers.IO) { act(n, root.publicKeyDER, root::signDigest).also { takeRecords(n) } }
     }
 
     /** What the group's watch may do to a device (PhoneGroup.WatchAction keys). */
