@@ -10,7 +10,7 @@
   "A message to yourself": "Un mensaje a ti mismo",
   "A message to yourself works, but it takes several steps every time, and your text stays on someone else's server. A clipboard built into one system works only within it.": "Un mensaje a ti mismo funciona, pero cada vez son varios pasos, y tu texto se queda en el servidor de otro. El portapapeles integrado en un sistema solo funciona dentro de él.",
   "A phone keeps its keys in its security chip (the Secure Enclave, Android's Keystore); they never leave it. A computer keeps them in its TPM or Secure Enclave when it has one, otherwise in files that only Copy Beyond Borders can read.": "Un teléfono guarda sus claves en su chip de seguridad (el Secure Enclave, el Keystore de Android) y nunca salen de él. Un ordenador las guarda en su TPM o su Secure Enclave si lo tiene y, si no, en archivos que solo Copy Beyond Borders puede leer.",
-  "A router or a Raspberry Pi Zero that should only sync takes the lite member. On Linux:": "Un router o una Raspberry Pi Zero que solo deba sincronizar usa el miembro ligero. En Linux:",
+  "A router or a Raspberry Pi Zero that should only sync takes the same installer and can leave out the helper. On Linux:": "Un router o una Raspberry Pi Zero que solo deba sincronizar usa el mismo instalador y puede prescindir del ayudante. En Linux:",
   "A small member that only syncs, or a Docker image that is always on.": "Un miembro pequeño que solo sincroniza, o una imagen de Docker siempre encendida.",
   "A source that breaks these terms may be refused, at the level of its address, network or provider.": "A una fuente que incumpla estas condiciones se la puede rechazar, al nivel de su dirección, su red o su proveedor.",
   "Add the computer.": "Añade el ordenador.",

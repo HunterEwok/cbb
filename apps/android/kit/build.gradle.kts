@@ -46,6 +46,8 @@ val coreDir = rust.resolve("target/release").path
 val buildCore by tasks.registering(Exec::class) {
     workingDir = rust
     commandLine("cargo", "build", "--locked", "--release", "-p", "cbb-ffi", "--features", "member,tunnel")
+    // As ffi/bind.sh: the library unwinds a panic, which its C functions answer.
+    environment("CARGO_PROFILE_RELEASE_PANIC", "unwind")
 }
 
 tasks.test {

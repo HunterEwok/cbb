@@ -11,7 +11,7 @@
   "A message to yourself": "رسالة إلى نفسك",
   "A message to yourself works, but it takes several steps every time, and your text stays on someone else's server. A clipboard built into one system works only within it.": "الرسالة إلى نفسك تنفع، لكنها تتطلب عدة خطوات في كل مرة، ويبقى نصك على خادم شخص آخر. والحافظة المدمجة في نظام واحد لا تعمل إلا داخله.",
   "A phone keeps its keys in its security chip (the Secure Enclave, Android's Keystore); they never leave it. A computer keeps them in its TPM or Secure Enclave when it has one, otherwise in files that only Copy Beyond Borders can read.": "يحفظ الهاتف مفاتيحه في شريحة الأمان (Secure Enclave، أو Keystore في Android)، ولا تغادرها أبدًا. ويحفظها الحاسوب في شريحة TPM أو Secure Enclave إن وُجدت فيه، وإلا ففي ملفات لا يقرؤها إلا Copy Beyond Borders.",
-  "A router or a Raspberry Pi Zero that should only sync takes the lite member. On Linux:": "الموجّه أو Raspberry Pi Zero الذي يكفيه أن يزامن فقط يستخدم العضو الخفيف. على Linux:",
+  "A router or a Raspberry Pi Zero that should only sync takes the same installer and can leave out the helper. On Linux:": "الراوتر أو Raspberry Pi Zero الذي يكفيه أن يزامن يستخدم المثبّت نفسه ويمكنه الاستغناء عن المساعد. على Linux:",
   "A small member that only syncs, or a Docker image that is always on.": "عضو صغير لا يفعل سوى المزامنة، أو صورة Docker تعمل دائمًا.",
   "A source that breaks these terms may be refused, at the level of its address, network or provider.": "المصدر الذي يخالف هذه الشروط قد يُرفض، على مستوى عنوانه أو شبكته أو مزوّده.",
   "Add the computer.": "أضف الحاسوب.",

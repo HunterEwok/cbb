@@ -5,7 +5,7 @@
 //! 2 and 10), as the Go package internal/group does them.
 //!
 //! Every key is ECDSA P-256 and every signature ECDSA with SHA-256. This
-//! module parses certificates and checks them; a lite member never issues
+//! module parses certificates and checks them; a member in Rust never issues
 //! one, except the self-signed certificate it pairs with (pair.rs).
 
 use alloc::format;

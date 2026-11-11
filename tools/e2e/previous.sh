@@ -41,20 +41,19 @@ mkdir -p "$out"
 out=$(cd "$out" && pwd)
 base="https://github.com/$repo/releases/download/v$tag"
 curl -fsSL --retry 3 -o "$out/SHA256SUMS" "$base/SHA256SUMS"
-for archive in cbb-linux-amd64.tar.gz cbb-lite-linux-amd64.tar.gz; do
-	grep -q " \*\?$archive\$" "$out/SHA256SUMS" || continue
-	curl -fsSL --retry 3 -o "$out/$archive" "$base/$archive"
-	(cd "$out" && grep " \*\?$archive\$" SHA256SUMS | sha256sum -c - >&2)
-	mkdir -p "$out/v$tag"
-	tar -xzf "$out/$archive" -C "$out/v$tag"
-	bin=$(find "$out/v$tag" -type f -name cbb | head -n 1)
-	[ -n "$bin" ] || {
-		echo "previous.sh: $archive of v$tag holds no cbb" >&2
-		exit 1
-	}
-	echo "previous.sh: v$tag's cbb from $archive" >&2
-	echo "$bin"
-	exit 0
-done
-echo "previous.sh: v$tag has no cbb for Linux on amd64" >&2
-exit 1
+archive=cbb-linux-amd64.tar.gz
+grep -q " \*\?$archive\$" "$out/SHA256SUMS" || {
+	echo "previous.sh: v$tag has no cbb for Linux on amd64" >&2
+	exit 1
+}
+curl -fsSL --retry 3 -o "$out/$archive" "$base/$archive"
+(cd "$out" && grep " \*\?$archive\$" SHA256SUMS | sha256sum -c - >&2)
+mkdir -p "$out/v$tag"
+tar -xzf "$out/$archive" -C "$out/v$tag"
+bin=$(find "$out/v$tag" -type f -name cbb | head -n 1)
+[ -n "$bin" ] || {
+	echo "previous.sh: $archive of v$tag holds no cbb" >&2
+	exit 1
+}
+echo "previous.sh: v$tag's cbb from $archive" >&2
+echo "$bin"

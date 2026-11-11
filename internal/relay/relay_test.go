@@ -10,7 +10,6 @@ import (
 	"errors"
 	"net"
 	"net/netip"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -61,7 +60,7 @@ func newDevice(t *testing.T, ca *group.CA) device {
 	return device{cert: tls.Certificate{Certificate: [][]byte{leaf.Raw, ca.Cert.Raw}, PrivateKey: key, Leaf: leaf}, id: string(id), key: wg}
 }
 
-func startRelay(t *testing.T, groups ...*group.CA) (testRelay, Link) {
+func startRelay(t *testing.T, groups ...*group.CA) (running, Link) {
 	t.Helper()
 	keys, err := NewKeys()
 	if err != nil {
@@ -71,39 +70,7 @@ func startRelay(t *testing.T, groups ...*group.CA) (testRelay, Link) {
 	for _, g := range groups {
 		tags = append(tags, group.Tag(g.Cert))
 	}
-	return startAny(t, Config{Keys: keys, Groups: tags})
-}
-
-// startWith runs a relay with cfg on a port of its own.
-func startWith(t *testing.T, cfg Config) (*Relay, Link) {
-	t.Helper()
-	cfg.Listen = "127.0.0.1:0"
-	if cfg.Logf == nil {
-		cfg.Logf = t.Logf
-	}
-	if cfg.Keys.Cert.Leaf == nil {
-		keys, err := NewKeys()
-		if err != nil {
-			t.Fatal(err)
-		}
-		cfg.Keys = keys
-	}
-	r, err := Listen(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		r.Serve(ctx)
-	}()
-	t.Cleanup(func() {
-		cancel()
-		<-done
-	})
-	ep := netip.MustParseAddrPort(r.Addr().String())
-	return r, Link{Endpoint: ep, Pin: cfg.Keys.Pin()}
+	return startWith(t, Config{Keys: keys, Groups: tags})
 }
 
 // joined is a member's link to the relay in a test: it echoes each line it
@@ -363,7 +330,7 @@ func TestRefused(t *testing.T) {
 // TestOpenRelay: an open relay serves any group that registers, within
 // its limits on groups and on registrations from one address.
 func TestOpenRelay(t *testing.T) {
-	r, link := startAny(t, Config{Open: true, Limits: Limits{Groups: 2, PerAddress: 3}})
+	r, link := startWith(t, Config{Open: true, Limits: Limits{Groups: 2, PerAddress: 3}})
 	ctx := context.Background()
 	reg := func(d device) error {
 		tc, _, _, err := register(ctx, MemberConfig{Link: link, Key: d.key, Cert: func() tls.Certificate { return d.cert }})
@@ -391,60 +358,16 @@ func TestOpenRelay(t *testing.T) {
 	if g, n := r.Stats(); g != 2 || n != 3 {
 		t.Errorf("the relay holds %d groups and %d devices, want 2 and 3", g, n)
 	}
-	keys, err := NewKeys()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Listen(Config{Listen: "127.0.0.1:0", Keys: keys, Open: true, Groups: []string{group.Tag(g1.Cert)}}); err == nil {
-		t.Error("an open relay with groups given")
-	}
-}
-
-// TestRate: a group's rate holds back what goes over it.
-func TestRate(t *testing.T) {
-	b := newRate(1000)
-	start := time.Now()
-	b.take(500, nil)
-	b.take(1500, nil) // the two seconds' burst is spent now
-	b.take(300, nil)  // and this waits for 300 ms of rate
-	if d := time.Since(start); d < 250*time.Millisecond {
-		t.Errorf("2300 bytes at 1000 a second with a 2000-byte burst took %v", d)
-	}
-	stop := make(chan struct{})
-	close(stop)
-	if b.take(10000, stop) {
-		t.Error("a wait that was stopped reported tokens")
-	}
-}
-
-func TestListen(t *testing.T) {
-	keys, err := NewKeys()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Listen(Config{Listen: "127.0.0.1:0", Keys: keys}); err == nil {
-		t.Error("a relay for no group")
-	}
-	if _, err := Listen(Config{Listen: "127.0.0.1:0", Keys: keys, Groups: []string{"nope"}}); err == nil {
-		t.Error("a relay for a bad tag")
-	}
-}
-
-func TestKeys(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "relay.pem")
-	k1, err := LoadKeys(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	k2, err := LoadKeys(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if k1.Pin() != k2.Pin() || k1.WireGuard != k2.WireGuard {
-		t.Error("the keys changed when read again")
-	}
-	if err := CheckPin(k1.Pin()); err != nil {
-		t.Error(err)
+	if bin := Binary(); bin != "" {
+		if _, err := Start(bin, Config{Open: true, Groups: []string{group.Tag(g1.Cert)}}); err == nil {
+			t.Error("an open relay with groups given")
+		}
+		if _, err := Start(bin, Config{}); err == nil {
+			t.Error("a relay for no group")
+		}
+		if _, err := Start(bin, Config{Groups: []string{"nope"}}); err == nil {
+			t.Error("a relay for a bad tag")
+		}
 	}
 }
 

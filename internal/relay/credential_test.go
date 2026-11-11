@@ -82,8 +82,7 @@ func (g credGroup) sign(t *testing.T, version uint64, admin *ecdsa.PrivateKey, s
 // fixed list of groups, takes a device only with its group's root.
 func TestCredentialedRelay(t *testing.T) {
 	g := newCredGroup(t)
-	r, link := startAny(t, Config{Open: true})
-	gr := goRelay(r)
+	r, link := startWith(t, Config{Open: true})
 	a, aKey := g.device(t)
 	b, _ := g.device(t)
 	c, _ := g.device(t)
@@ -97,17 +96,6 @@ func TestCredentialedRelay(t *testing.T) {
 	}
 	if got := receive(t, jb.called, "b's call"); got != a.id {
 		t.Errorf("b was called by %s, not a's pseudonym %s", got, a.id)
-	}
-	if gr != nil {
-		gr.mu.Lock()
-		for _, grp := range gr.groups {
-			for name, m := range grp {
-				if _, err := group.ParseDeviceID(name); err == nil || m.device != name || !strings.HasPrefix(m.tag, "period ") {
-					t.Errorf("the relay holds %q in %q", name, m.tag)
-				}
-			}
-		}
-		gr.mu.Unlock()
 	}
 
 	ctx := context.Background()
@@ -124,9 +112,9 @@ func TestCredentialedRelay(t *testing.T) {
 
 	// The admin signs a members' credential without the other device:
 	// that one goes.
-	admin, other := a, b
+	admin := a
 	if group.KeyHashOf(b.cert.Leaf) == group.PublicKeyHash(&aKey.PublicKey) {
-		admin, other = b, a
+		admin = b
 	}
 	g.sign(t, 2, aKey, aKey, []device{admin}, &admin)
 	tc, _, _, err := register(ctx, MemberConfig{Link: link, Key: admin.key, Cert: func() tls.Certificate { return admin.cert }, Credentialed: credOf(admin)})
@@ -135,19 +123,9 @@ func TestCredentialedRelay(t *testing.T) {
 	}
 	defer tc.Close()
 	waitFor(t, "the device left out to go", func() bool {
-		if gr == nil {
-			// The admin, by its link or by the registration above.
-			_, n := r.Stats()
-			return n == 1
-		}
-		gr.mu.Lock()
-		defer gr.mu.Unlock()
-		for _, grp := range gr.groups {
-			if grp[other.id] != nil {
-				return false
-			}
-		}
-		return true
+		// The admin, by its link or by the registration above.
+		_, n := r.Stats()
+		return n == 1
 	})
 
 	// A relay for a fixed list of groups wants the root.

@@ -18,7 +18,7 @@
   "Laptop": "笔记本",
   "Desktop": "台式机",
   "Raspberry Pi": "树莓派",
-  "lite member": "轻量成员",
+  "small device": "小型设备",
   "with the app": "装有应用",
   "direct, encrypted connections, found by mDNS": "加密直连，通过 mDNS 发现",
   "No server in the middle: any device can be off, and the others go on syncing.": "中间没有服务器：任何设备关机，其余设备照常同步。",

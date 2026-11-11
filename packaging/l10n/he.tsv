@@ -45,20 +45,17 @@ CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes th
 --port needs a port number	--port צריך מספר יציאה
 --home-cgnat needs on or off	--home-cgnat צריך on או off
 --auto-update needs on or off	--auto-update צריך on או off
-unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	אפשרות לא מוכרת %s (מוכרות: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
+unknown option %s (known: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	אפשרות לא מוכרת %s (מוכרות: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
 --rootless installs for your own user: run it without sudo: %s	--rootless מתקין עבור המשתמש שלך: הרץ אותו בלי sudo: %s
 --rootless is for Linux computers	--rootless מיועד למחשבי Linux
 run it with sudo: %s	הרץ אותו עם sudo: %s
 no release for this MIPS system: it is not OpenWrt, which names its byte order	אין גרסה למערכת MIPS זו: היא אינה OpenWrt, שמציינת את סדר הבתים שלה
 no release for the architecture %s	אין גרסה לארכיטקטורה %s
-the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	לחבר הקל ל-MIPS עדיין אין סנכרון מחוץ לבית (פריט 37 במפת הדרכים); לחבר המלא יש.
 --console is not for a router	--console אינו לנתב
 --uinput is not for a router	--uinput אינו לנתב
 --home-cgnat is not for a router	--home-cgnat אינו לנתב
---lite is for Linux; a Mac runs the full member	--lite מיועד ל-Linux; Mac מריץ את החבר המלא
 --console is for Linux	--console מיועד ל-Linux
 --uinput is for Linux	--uinput מיועד ל-Linux
---lite is for Linux; FreeBSD runs the full member	--lite מיועד ל-Linux; FreeBSD מריץ את החבר המלא
 this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	תוכנית התקנה זו מיועדת ל-Linux, macOS ו-FreeBSD; ב-Windows השתמש ב-get.ps1
 tar is required	נדרש tar
 sha256sum or shasum is required	נדרש sha256sum או shasum
@@ -106,7 +103,6 @@ no ufw or firewalld is active; nothing was added.	לא ufw ולא firewalld פע
 %s needs root; a rootless install has no console or uinput helper	%s צריך root; להתקנה ללא root אין עוזר console או uinput
 --rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless מתקין עבור המשתמש שלך: הרץ אותו בלי sudo. עם sudo, install.sh בלי --rootless מתקין את שירות המערכת, וזה בטוח יותר.
 a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	התקנה ללא root רצה כיחידת משתמש של systemd, ובהפעלה הזו אין מנהל משתמש של systemd; התחבר לשולחן עבודה או דרך ssh והרץ אותה שוב
---home-cgnat is for the full member	--home-cgnat מיועד לחבר המלא
 CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	CBB מותקן כאן לכל המערכת (%s), ומכשיר אחד מריץ שירות אחד; הסר אותו קודם או השאר אותו
 the desktop agent did not start; it starts at your next login	סוכן שולחן העבודה לא הופעל; הוא יופעל בכניסה הבאה שלך
 CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB רץ כל עוד אתה מחובר. כדי שימשיך לרוץ אחרי שתתנתק, מנהל מערכת מריץ: sudo loginctl enable-linger %s
@@ -116,12 +112,9 @@ Next: see member/README.md; in short, %s pair here, and scan its QR code with th
 Next: run %s pair and scan its QR code with the CBB app on your phone.	הבא: הרץ %s pair וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון.
 this archive has no install-rootless.sh, so it cannot install without root	בארכיון הזה אין install-rootless.sh, לכן אי אפשר להתקין בלי root
 systemd is required	נדרש systemd
-the full member is installed here, and the lite member cannot use its keys; remove it first: %s	החבר המלא מותקן כאן, והחבר הקל לא יכול להשתמש במפתחות שלו; הסר אותו קודם: %s
-the lite member is installed here, and the full member cannot use its keys; remove it first: %s	החבר הקל מותקן כאן, והחבר המלא לא יכול להשתמש במפתחות שלו; הסר אותו קודם: %s
 an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	קיים כאן חשבון בשם cbb שאינו של השירות הזה (ההערה שלו אינה "cbb service"); הוא היה מקבל את המפתחות של הקבוצה. שנה את שמו או הסר אותו, ואז הרץ install.sh שוב.
 a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	קיימת כאן קבוצה בשם cbb עם חברים (%s), ואין חשבון שירות; הם היו מגיעים לשירות. שנה את שם הקבוצה או הסר אותה, ואז הרץ install.sh שוב.
 Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	לא הותקן: אפליקציית המגש, שצריכה GTK 4 ו-WebKitGTK 6.0 (Debian ו-Ubuntu: %s; Fedora: %s). התקן אותם והרץ את זה שוב כדי להוסיף אותה.
---uinput is for the full member, which runs the desktop connector	--uinput מיועד לחבר המלא, שמריץ את מחבר שולחן העבודה
 could not load the uinput module now; it loads at the next boot	לא ניתן לטעון עכשיו את המודול uinput; הוא ייטען באתחול הבא
 100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	100.64.0.0/10 נחשב לרשת הביתית במכשיר הזה (--home-cgnat on).
 New member and admin keys of this device go into its TPM.	מפתחות חבר ומנהל חדשים של המכשיר הזה נשמרים ב-TPM שלו.
@@ -160,7 +153,6 @@ see logread -e cbb	ראה logread -e cbb
 CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB רץ ביציאת TCP %s, באזור lan. להסרה: sh /usr/share/cbb/uninstall.sh
 Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	חבילות מחוץ למאגרים של OpenWrt אינן נכללות ב-attended sysupgrade (ASU, owut): התקן אותו שוב אחרי שדרוג כזה.
 Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	הבא: הרץ su -s /bin/sh cbb -c 'cbb pair -name router' וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון.
-Next: run cbb pair and scan its QR code with the CBB app on your phone.	הבא: הרץ cbb pair וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון.
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-/etc/cbb להתקנה מחדש; --purge מסיר אותם.
 This device is in no group yet, so it starts pairing now (--no-pair skips this).	המכשיר הזה עדיין לא בשום קבוצה, לכן הוא מתחיל צימוד עכשיו (--no-pair מדלג על זה).
 could not record how CBB was installed; cbb update takes it as get.sh	לא ניתן לרשום איך CBB הותקן; cbb update יתייחס לזה כ-get.sh
@@ -259,3 +251,7 @@ removing cbb from PATH	מסיר את cbb מ-PATH
 removing %s	מסיר את %s
 removing %s and the %s group	מסיר את %s ואת הקבוצה %s
 CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-%s להתקנה מחדש; -Purge מסיר אותם.
+cbb for MIPS has no sync away from home yet (roadmap item 37).	ל־cbb עבור MIPS עדיין אין סנכרון מחוץ לבית (סעיף 37 במפת הדרכים).
+--no-helper is for Linux	‏--no-helper מיועד ל־Linux בלבד
+cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	כאן cbb פועל עם העוזר שלו, שעשוי להחזיק את המפתחות שלו; בלעדיו cbb לא יכול להשתמש בהם. הסירו אותו קודם: %s
+--uinput needs cbb's helper, which runs the desktop connector	‏--uinput דורש את העוזר של cbb, שמריץ את המחבר של שולחן העבודה

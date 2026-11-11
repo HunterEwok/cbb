@@ -16,6 +16,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.Closeable
 import java.io.File
@@ -23,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The phone's member in the Rust core (docs/core-api.md, "The member"): the
- * lite member's node on threads of its own inside the app, through the C
+ * Rust member's node on threads of its own inside the app, through the C
  * functions cbb_member_start, cbb_member_call and cbb_member_stop of
  * ffi/, loaded by JNA from libcbb_ffi as [Core] loads it. It dials the
  * members the app hands in ([found]), syncs with them and calls the app back
@@ -225,6 +226,12 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
 
         /** An admin muted this phone for [forMS] milliseconds (0: until an admin lifts it), or ended its mute; the node carried it out and keeps it. */
         class Mute(val muted: Boolean, val forMS: Long, val by: String) : Event()
+
+        /**
+         * Something in the member broke (docs/core-api.md, "Panics"): details say what and
+         * where. The app logs it, shows it and starts the member again.
+         */
+        class Panic(val details: String) : Event()
     }
 
     /** What a member port is for. */
@@ -245,7 +252,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
 
     /** Sends a text; board says it came from the phone's clipboard, which the button then compares with it. */
     fun copy(text: String, secret: Boolean = false, board: Boolean = true) {
-        call("copy", Wire.obj("text" to Wire.str(text), "secret" to JsonPrimitive(secret), "board" to JsonPrimitive(board)))
+        call("copy", Wire.obj("text" to Wire.str(text), "kind" to Wire.str(if (secret) "secret" else "text"), "board" to JsonPrimitive(board)))
     }
 
     /** Sends images or files with their plain-text alternative; board says they came from the phone's clipboard. */
@@ -332,14 +339,33 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
 
     /** Sets until when an admin muted this phone, in Unix milliseconds, 0 for until an admin unmutes it; null unmutes. */
     fun setMute(untilMS: Long?) {
-        call("mute", Wire.obj("until_ms" to (untilMS?.let { JsonPrimitive(it) } ?: JsonNull)))
+        call("set_mute", Wire.obj("until_ms" to (untilMS?.let { JsonPrimitive(it) } ?: JsonNull)))
     }
 
     // What the app shows.
 
     /** The members connected now, those whose connection carries records only too when all. */
+    /**
+     * The device tiles in the user's order, with the user's change op applied
+     * and kept first (docs/apps.md, "What the member shows"); a change that
+     * does not fit throws and changes nothing.
+     */
+    fun view(op: Arrangement.Op? = null, away: WhyAway? = null): Arrangement.View {
+        val a = away?.toJson() ?: JsonNull
+        val answer = if (op == null) call("view", Wire.obj("away" to a)) else call("arrange", Wire.obj("arrange" to Arrangement.json(op), "away" to a))
+        return Arrangement.view(answer.getValue("view").jsonObject)
+    }
+
     fun peers(all: Boolean = false): List<Peer> =
         call("peers", Wire.obj("all" to JsonPrimitive(all))).optArray("peers").orEmpty().mapNotNull { (it as? JsonObject)?.let(Peer::fromJson) }
+
+    /**
+     * Why the phone does not sync, the reason that stops the most first
+     * (docs/apps.md, "Why it does not sync"); empty when everything syncs.
+     * away is where the app's own tunnel stands, null while it is off.
+     */
+    fun why(away: WhyAway? = null): List<WhyReason> =
+        call("why", Wire.obj("away" to (away?.toJson() ?: JsonNull))).optArray("why").orEmpty().mapNotNull { (it as? JsonObject)?.let(WhyReason::fromJson) }
 
     /** The group's records the node keeps. */
     fun records(): List<Member.Record> =
@@ -695,6 +721,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
                     Event.Command(o.optLong("token") ?: return null, o.optString("from") ?: "", Member.Record.fromJson(c))
                 }
                 "mute" -> Event.Mute(o.optBool("muted") ?: return null, o.optLong("for_ms") ?: 0, o.optString("by") ?: "")
+                "panic" -> Event.Panic(o.optString("details") ?: "")
                 "caller" -> Event.Caller(o.optLong("token") ?: return null, o.optLong("port")?.toInt() ?: return null, o.optString("device") ?: "")
                 else -> null
             }
