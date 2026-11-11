@@ -925,18 +925,22 @@ impl<'e, 'a> Epoch<'e, 'a> {
     }
 
     /// The records the current root's resolve records name; a resolve
-    /// counts here when its own chain is whole.
+    /// counts here when its own chain is whole. A root's removal is final:
+    /// no resolve voids a revoke a root signed, its own or an earlier
+    /// root's; a removed device comes back only with a new key.
     fn voids(&self) -> BTreeSet<RecordId> {
         let rs = self.of(&self.cur);
         let by_id: BTreeMap<RecordId, usize> = rs.iter().map(|&i| (self.r(i).id, i)).collect();
         let wholes = self.e.wholes(rs, &by_id, &self.capped);
+        let final_: BTreeSet<RecordId> =
+            self.all().map(|i| self.r(i)).filter(|r| r.role == Role::Root && r.is_revoke()).map(|r| r.id).collect();
         let mut v = BTreeSet::new();
         for &i in rs {
             let r = self.r(i);
             if let (Kind::Resolve(ids), Role::Root, false) = (&r.b().kind, r.role, r.held)
                 && wholes.contains(&i)
             {
-                v.extend(ids.iter().copied());
+                v.extend(ids.iter().copied().filter(|id| !final_.contains(id)));
             }
         }
         v

@@ -1074,6 +1074,35 @@ fn an_admin_removing_its_own_key_signs_nothing_after() {
     assert!(s.device(&k("late").key.device_id()).is_none());
 }
 
+/// A root's removal is final: its resolve does not bring the device back.
+#[test]
+fn a_roots_removal_is_final() {
+    let mut g = G::new();
+    g.device(&k("root"), &k("d"), "d", |_| {});
+    let rv = g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    assert!(g.state().revoked.contains(&k("d").hash));
+    g.root_rec(Kind::Resolve(vec![rv.id()]));
+    let s = g.state();
+    assert!(s.revoked.contains(&k("d").hash) && s.counting.contains(&rv.id()));
+    assert!(s.id_taken(&k("d").key.device_id()) && s.device(&k("d").key.device_id()).is_none());
+}
+
+/// The root voids an admin's removal: the device counts again, with its
+/// key and ID.
+#[test]
+fn the_root_voids_an_admins_removal() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
+    let d = g.device(&k("root"), &k("d"), "d", |_| {});
+    let rv = g.rec(&a, Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    assert!(g.state().revoked.contains(&k("d").hash));
+    g.root_rec(Kind::Resolve(vec![rv.id()]));
+    let s = g.state();
+    assert!(!s.revoked.contains(&k("d").hash) && !s.counting.contains(&rv.id()));
+    assert!(s.counting.contains(&d.id()) && s.device(&k("d").key.device_id()).is_some());
+}
+
 /// What a command's receiver asks of the state: a key with two histories,
 /// a removed or frozen admin, and every admin during a full stop sign no
 /// command; the root does.
