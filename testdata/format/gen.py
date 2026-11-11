@@ -339,6 +339,16 @@ def profile_vectors():
     return v
 
 
+def set_key(x):
+    """The order of a set (section 1): an element's encoding, an array
+    element by its first element's."""
+    return enc(x[0]) if isinstance(x, list) else enc(x)
+
+
+def srt(xs):
+    return sorted(xs, key=set_key)
+
+
 def rec(signer, seq, typ, fields, prev=None, time=None, extra=None):
     m = {1: typ, 2: GROUP, 3: signer.hash, 4: seq, 6: time if time is not None else T0 + seq * 1000}
     if prev is not None:
@@ -389,18 +399,20 @@ def record_vectors():
     add("settings", ROOT, 7, {10: 0, 14: 1,
                               15: [[1, "forward.cbb.tools:8764", OPERATOR.key]]})
     add("copies", ADMIN, 8, {10: 30000})
-    add("hubs", ROOT, 10, {10: [LAPTOP.id16]})
-    add("revoke", ROOT, 2, {10: [STRANGER.hash], 11: [[ADMIN.hash, 2], [ROOT.hash, 5]]})
-    add("freeze", ROOT, 3, {10: [ADMIN.hash], 11: [[ADMIN.hash, 2], [ROOT.hash, 6]]})
+    # hubs keep the user's order (not sorted), each once
+    add("hubs", ROOT, 10, {10: sorted([LAPTOP.id16, PHONE.id16], reverse=True)})
+    add("revoke", ROOT, 2, {10: srt([STRANGER.hash, Signer("stranger 2").hash]),
+                            11: srt([[ADMIN.hash, 2], [ROOT.hash, 5]])})
+    add("freeze", ROOT, 3, {10: [ADMIN.hash], 11: srt([[ADMIN.hash, 2], [ROOT.hash, 6]])})
     thaw_target = take[-1]["id"]
     add("thaw", ROOT, 4, {10: [bytes.fromhex(thaw_target)]})
-    add("claim", ADMIN, 5, {10: ROOT2.key, 11: [[ADMIN.hash, 2], [ROOT.hash, 8]]})
+    add("claim", ADMIN, 5, {10: ROOT2.key, 11: srt([[ADMIN.hash, 2], [ROOT.hash, 8]])})
     add("resolve", ROOT, 6, {10: [bytes.fromhex(take[-1]["id"])]})
     add("recovery", ROOT, 11, {10: Signer("recovery").key})
     add("handover", ROOT, 12, {10: ADMIN.hash})
-    add("checkpoint", ROOT, 9, {10: [[ADMIN.hash, 3, bytes.fromhex(take[-2]["id"])],
-                                     [ROOT.hash, 11, bytes.fromhex(take[-1]["id"])]],
-                                11: [bytes.fromhex(take[0]["id"])]})
+    add("checkpoint", ROOT, 9, {10: srt([[ADMIN.hash, 3, bytes.fromhex(take[-2]["id"])],
+                                         [ROOT.hash, 11, bytes.fromhex(take[-1]["id"])]]),
+                                11: srt([bytes.fromhex(take[0]["id"]), bytes.fromhex(take[1]["id"])])})
     add("device with an optional field from a later version", ROOT, 1,
         {10: Signer("tv").key, 11: "TV", 12: 1, 13: 0b0011},
         extra={300: "later"},
@@ -517,6 +529,24 @@ def record_vectors():
     m = dict(lap_m)
     m[24] = LAPTOP.hash
     bad_body("replaces itself", "records/device/replaces", m)
+    # sets (section 1): sorted by the element's encoding (an array element
+    # by its first element's), each value once; hubs each once, in order
+    a, b = srt([STRANGER.hash, Signer("stranger 2").hash])
+    i1, i2 = srt([bytes.fromhex(take[0]["id"]), bytes.fromhex(take[1]["id"])])
+    sa, sb = srt([[ADMIN.hash, 2], [ROOT.hash, 5]])
+    ha, hb = srt([[ADMIN.hash, 3, i1], [ROOT.hash, 11, i2]])
+    for name, rule, typ, fields in [
+        ("revoke keys out of order", "records/revoke/keys", 2, {10: [b, a], 11: [sa, sb]}),
+        ("revoke keys with one twice", "records/revoke/keys", 2, {10: [a, a], 11: [sa, sb]}),
+        ("revoke seen out of order", "records/revoke/seen", 2, {10: [a], 11: [sb, sa]}),
+        ("revoke seen with one key twice", "records/revoke/seen", 2, {10: [a], 11: [sa, [sa[0], 3]]}),
+        ("thaw records out of order", "records/thaw/records", 4, {10: [i2, i1]}),
+        ("checkpoint heads out of order", "records/checkpoint/heads", 9, {10: [hb, ha]}),
+        ("checkpoint heads with one key twice", "records/checkpoint/heads", 9, {10: [ha, [ha[0], 4, i2]]}),
+        ("checkpoint keep out of order", "records/checkpoint/keep", 9, {10: [ha, hb], 11: [i2, i1]}),
+        ("hubs with one device twice", "records/hubs/hubs", 10, {10: [LAPTOP.id16, LAPTOP.id16]}),
+    ]:
+        bad_body(name, rule, rec(ROOT, 90, typ, fields))
     return take, refuse
 
 
@@ -663,6 +693,14 @@ def grant_vectors(admin_record):
     bad("five readers", "grants/readers", message(genv))
     _, genv, _ = signed({**kettle, **{4: 2}}, ADMIN)
     bad("admin's first grant without the root's record", "grants/admin", message(genv))
+    for name, rule, field, val in [
+        ("commanders out of order", "grants/commanders", 12, list(reversed(g[12]))),
+        ("readers out of order", "grants/readers", 13, list(reversed(g[13]))),
+        ("neighbors out of order", "grants/neighbors", 14, list(reversed(g[14]))),
+        ("neighbors with one twice", "grants/neighbors", 14, [g[14][0], g[14][0]]),
+    ]:
+        _, genv, _ = signed({**g, field: val}, ROOT)
+        bad(name, rule, message(genv))
     bad("message without its grant", "grants/shape", {0: 20})
     _, genv, gbody = signed({**kettle, **{4: 2}}, ROOT)
     bad("grant signed by a key other than its signer's", "sig/verify",
@@ -856,6 +894,11 @@ def copy_vector():
         "blob_key": hkdf(K, h, b"cbb copy blob v2").hex(),
         "W": W.hex(), "P": P.hex(), "sig": sig.hex(),
         "copy": enc(full).hex(), "reduced_copy_for_board": enc(reduced).hex(),
+        "refuse_readers": [
+            {"name": name, "rule": "copy/readers", "copy": enc({**full, 1: enc({**hdr, 4: rs})}).hex()}
+            for name, rs in [("readers out of order", list(reversed(readers))),
+                             ("a reader twice", [readers[0], [readers[0][0], 3], readers[2]])]
+        ],
         "content_plaintext": enc(content).hex(), "content_diag": diag({k: v for k, v in content.items() if k != 1}) + " with pad to 1024",
         "frame": frame({0: 2, 2: full}).hex(),
         "content_edges": [
@@ -902,9 +945,11 @@ def message_vectors(records_take):
     add("welcome", {0: 67, 2: fake("Tb", 32), 3: {
         1: ROOT.key,
         2: [dec(bytes.fromhex(r["envelope"])) for r in records_take[:3]],
-        3: [[bytes.fromhex(records_take[9]["id"]), 3600000]],
+        3: srt([[bytes.fromhex(records_take[9]["id"]), 3600000], [bytes.fromhex(records_take[10]["id"]), 60000]]),
         5: T0 + 60000}})
     add("pairing error taken", {0: 69, 2: 8})
+    add("have", {0: 6, 2: ids[:3]})
+    add("reach", {0: 18, 2: srt([LAPTOP.id16, PHONE.id16, BOARD.id16])})
     # The edges of a grid step: a message two bytes short of 64 takes an
     # empty `pad` (its key and an empty byte string are two bytes); one byte
     # short cannot be padded to 64 (no `pad` is one byte long), so it goes to
@@ -926,7 +971,21 @@ def message_vectors(records_take):
     m = enc({0: 3, 1: bytes(60)})
     bad.append({"name": "frame of 65 bytes", "rule": "frame/grid",
                 "frame": len(m + b"").to_bytes(4, "big").hex() + m.hex()})
-    return v, bad, digest.hex()
+    # sets in messages (section 1): a message whose set is out of order or
+    # holds a value twice is refused, with the field's rule
+    a, b = ids[0], ids[1]
+    w = [bytes.fromhex(records_take[9]["id"]), 3600000]
+    w2 = [bytes.fromhex(records_take[10]["id"]), 60000]
+    wa, wb = srt([w, w2])
+    fields = [
+        ("have out of order", "messages/have", [2], {0: 6, 2: [b, a]}),
+        ("have with one ID twice", "messages/have", [2], {0: 6, 2: [a, a]}),
+        ("reach out of order", "messages/reach", [2], {0: 18, 2: list(reversed(srt([LAPTOP.id16, PHONE.id16])))}),
+        ("welcome claim_ages out of order", "pairing/welcome/claim_ages", [3, 3],
+         {0: 67, 2: fake("Tb", 32), 3: {1: ROOT.key, 3: [wb, wa], 5: T0 + 60000}}),
+    ]
+    field_bad = [{"name": n, "rule": r, "path": p, "message": enc(m).hex()} for n, r, p, m in fields]
+    return v, bad, digest.hex(), field_bad
 
 
 def container_vector():
@@ -1073,7 +1132,7 @@ def main():
     ct, cr = command_vectors()
     gt, gr, gs, gq = grant_vectors(bytes.fromhex(rt[0]["envelope"]))
     kt, kr = credential_vectors()
-    mv, mb, digest = message_vectors(rt)
+    mv, mb, digest, mf = message_vectors(rt)
     files = {
         "profile.json": {"vectors": profile_vectors()},
         "keys.json": keys_table(),
@@ -1083,7 +1142,8 @@ def main():
         "grants.json": {"label": LABELS["grant"], "take": gt, "refuse": gr, "copy_senders": gs, "sequences": gq},
         "credentials.json": {"label": LABELS["credential"], "take": kt, "refuse": kr},
         "frames.json": {"grid": "64, 256, 1024, 4096, 16384, then multiples of 16384",
-                        "take": mv, "refuse": mb, "set_digest_of_records_take": digest},
+                        "take": mv, "refuse": mb, "refuse_fields": mf,
+                        "set_digest_of_records_take": digest},
         "copy.json": copy_vector(),
         "container.json": container_vector(),
     }

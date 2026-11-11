@@ -474,6 +474,9 @@ func main() {
 		if err != nil {
 			return nil, err
 		}
+		if err := grantSets(body); err != nil {
+			return nil, err
+		}
 		counter, _ := body[uint64(4)].(uint64)
 		madeUnder, named := body[uint64(17)].(uint64)
 		_, guarded := body[uint64(15)]
@@ -517,6 +520,14 @@ func main() {
 	}
 	checkedRefuse := 0
 	for _, r := range g.Refuse {
+		switch r.Rule {
+		case "grants/commanders", "grants/readers", "grants/neighbors":
+			checkedRefuse++
+			if _, err := grant(unhex(r.Message), nil); err == nil || err.Error() != r.Rule {
+				fail("grants %s: %v", r.Name, err)
+			}
+			continue
+		}
 		if !strings.HasPrefix(r.Rule, "sig/") && r.Rule != "grants/shape" && r.Rule != "grants/admin" &&
 			r.Rule != "grants/guarded" {
 			continue
@@ -841,6 +852,7 @@ func main() {
 	}
 	fmt.Printf("%-18s checked\n", "container.json")
 
+	checkSets(dir)
 	if bad > 0 {
 		fmt.Printf("%d failures\n", bad)
 		os.Exit(1)
@@ -908,4 +920,222 @@ func padded(m map[any]any, allowed func(int) bool) ([]byte, error) {
 		}
 	}
 	return nil, errors.New("no padding reaches an allowed size")
+}
+
+// setKey is the order of a set (section 1): an element's encoding, an
+// array element by its first element's.
+func setKey(x any) []byte {
+	if a, ok := x.([]any); ok {
+		if len(a) == 0 {
+			return nil
+		}
+		x = a[0]
+	}
+	b, err := em.Marshal(x)
+	must(err)
+	return b
+}
+
+// sortedSet says whether a is sorted by setKey with each value once.
+func sortedSet(a []any) bool {
+	for i := 1; i < len(a); i++ {
+		if bytes.Compare(setKey(a[i-1]), setKey(a[i])) >= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// onceSet says whether a holds each value once, in any order.
+func onceSet(a []any) bool {
+	seen := map[string]bool{}
+	for _, x := range a {
+		b, err := em.Marshal(x)
+		must(err)
+		if seen[string(b)] {
+			return false
+		}
+		seen[string(b)] = true
+	}
+	return true
+}
+
+// grantSets checks a grant body's lists: commanders by key hash, at most 8;
+// readers sorted, at most 4; neighbors sorted, at most 8.
+func grantSets(body map[any]any) error {
+	cs, _ := body[uint64(12)].([]any)
+	if len(cs) > 8 {
+		return errors.New("grants/commanders")
+	}
+	for i := 1; i < len(cs); i++ {
+		a, _, err1 := keyHash(cs[i-1])
+		b, _, err2 := keyHash(cs[i])
+		if err1 != nil || err2 != nil || bytes.Compare(a, b) >= 0 {
+			return errors.New("grants/commanders")
+		}
+	}
+	if rs, _ := body[uint64(13)].([]any); len(rs) > 4 || !sortedSet(rs) {
+		return errors.New("grants/readers")
+	}
+	if ns, _ := body[uint64(14)].([]any); len(ns) > 8 || !sortedSet(ns) {
+		return errors.New("grants/neighbors")
+	}
+	return nil
+}
+
+// recordSets checks a record body's sets: the sorted fields of its type,
+// and hubs each once in the user's order. It returns how many sets of two
+// or more it saw.
+func recordSets(m map[any]any) (int, bool) {
+	typ, _ := m[uint64(1)].(uint64)
+	var sorted, once []uint64
+	switch typ {
+	case 2, 3, 9:
+		sorted = []uint64{10, 11}
+	case 4, 6:
+		sorted = []uint64{10}
+	case 5:
+		sorted = []uint64{11}
+	case 10:
+		once = []uint64{10}
+	}
+	n, ok := 0, true
+	for _, f := range sorted {
+		a, _ := m[f].([]any)
+		if len(a) >= 2 {
+			n++
+		}
+		ok = ok && sortedSet(a)
+	}
+	for _, f := range once {
+		a, _ := m[f].([]any)
+		if len(a) >= 2 {
+			n++
+		}
+		ok = ok && onceSet(a)
+	}
+	return n, ok
+}
+
+// checkSets reads every set the vectors hold and checks its order by
+// itself, apart from gen.py's own.
+func checkSets(dir string) {
+	var rs struct {
+		Take []struct {
+			Name     string `json:"name"`
+			Envelope string `json:"envelope"`
+		} `json:"take"`
+		Refuse []struct {
+			Name     string `json:"name"`
+			Rule     string `json:"rule"`
+			Envelope string `json:"envelope"`
+		} `json:"refuse"`
+	}
+	load(dir, "records.json", &rs)
+	body := func(env string) map[any]any {
+		v, err := strict(unhex(env))
+		if err != nil {
+			return nil
+		}
+		a, _ := v.([]any)
+		if len(a) < 2 {
+			return nil
+		}
+		b, _ := a[0].([]byte)
+		m, err := strict(b)
+		if err != nil {
+			return nil
+		}
+		mm, _ := m.(map[any]any)
+		return mm
+	}
+	twos, refused := 0, 0
+	for _, t := range rs.Take {
+		n, ok := recordSets(body(t.Envelope))
+		twos += n
+		if !ok {
+			fail("records %s: a set out of order", t.Name)
+		}
+	}
+	if twos < 6 {
+		fail("records: only %d sets of two or more", twos)
+	}
+	setRule := map[string]bool{"records/revoke/keys": true, "records/revoke/seen": true, "records/thaw/records": true,
+		"records/checkpoint/heads": true, "records/checkpoint/keep": true, "records/hubs/hubs": true}
+	for _, t := range rs.Refuse {
+		if !setRule[t.Rule] {
+			continue
+		}
+		refused++
+		if _, ok := recordSets(body(t.Envelope)); ok {
+			fail("records %s: its sets hold", t.Name)
+		}
+	}
+	var fr struct {
+		Take []struct {
+			Name  string `json:"name"`
+			Frame string `json:"frame"`
+		} `json:"take"`
+		RefuseFields []struct {
+			Name    string   `json:"name"`
+			Path    []uint64 `json:"path"`
+			Message string   `json:"message"`
+		} `json:"refuse_fields"`
+	}
+	load(dir, "frames.json", &fr)
+	for _, t := range fr.Take {
+		v, err := strict(unhex(t.Frame)[4:])
+		must(err)
+		m, _ := v.(map[any]any)
+		typ, _ := m[uint64(0)].(uint64)
+		var set any
+		switch typ {
+		case 6, 18:
+			set = m[uint64(2)]
+		case 67:
+			if w, ok := m[uint64(3)].(map[any]any); ok {
+				set = w[uint64(3)]
+			}
+		}
+		if a, ok := set.([]any); ok && (len(a) < 2 || !sortedSet(a)) {
+			fail("frames %s: set out of order or short", t.Name)
+		}
+	}
+	for _, t := range fr.RefuseFields {
+		v, err := strict(unhex(t.Message))
+		must(err)
+		for _, k := range t.Path {
+			v = v.(map[any]any)[k]
+		}
+		refused++
+		if sortedSet(v.([]any)) {
+			fail("frames %s: its set holds", t.Name)
+		}
+	}
+	var cp struct {
+		Copy          string `json:"copy"`
+		RefuseReaders []struct {
+			Name string `json:"name"`
+			Copy string `json:"copy"`
+		} `json:"refuse_readers"`
+	}
+	load(dir, "copy.json", &cp)
+	readers := func(c string) []any {
+		v, err := strict(unhex(c))
+		must(err)
+		h, err := strict(v.(map[any]any)[uint64(1)].([]byte))
+		must(err)
+		a, _ := h.(map[any]any)[uint64(4)].([]any)
+		return a
+	}
+	if r := readers(cp.Copy); len(r) < 2 || !sortedSet(r) {
+		fail("copy: readers out of order")
+	}
+	for _, t := range cp.RefuseReaders {
+		refused++
+		if sortedSet(readers(t.Copy)) {
+			fail("copy %s: readers hold", t.Name)
+		}
+	}
+	fmt.Printf("%-18s %d sets of two or more taken, %d refused\n", "sets", twos, refused)
 }

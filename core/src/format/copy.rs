@@ -38,6 +38,13 @@ pub const WRAP_SIZE: usize = 1168;
 
 /// The rule a copy of the wrong form breaks.
 pub const RULE_SHAPE: Rule = Rule::field("copy/shape");
+/// A header whose readers are missing, more than 256, or not a set (each
+/// device once, sorted).
+pub const RULE_READERS: Rule = Rule::field("copy/readers");
+/// The header's field of its readers.
+pub const HDR_READERS: u16 = 4;
+/// The most readers of a copy.
+pub const MAX_READERS: usize = 256;
 /// The rule a commitment that does not match K breaks.
 pub const RULE_COMMIT: Rule = Rule::field("copy/commit");
 
@@ -128,6 +135,10 @@ impl<'a> Copy<'a> {
         let header = cbor::decode(hdr)?;
         if header.as_map().is_none() {
             return Err(RULE_SHAPE);
+        }
+        let readers = header.get(HDR_READERS).and_then(Value::as_array).ok_or(RULE_READERS)?;
+        if readers.is_empty() || readers.len() > MAX_READERS || !cbor::is_set(readers) {
+            return Err(RULE_READERS);
         }
         let age_ms = match v.get(FIELD_AGE) {
             None => 0,
