@@ -31,6 +31,26 @@ All notable changes to cbb are documented in this file. The format follows
   The phones' apps ask after a member's panic; on a computer a panic of `cbb` leaves
   `panic.json` in the state folder, its status says `bug`, and the Mac and tray apps ask
   (`bug`, `bug_allow`, `bug_cancel`). In debug mode the apps show what broke and ask nothing.
+- The installers and uninstallers (`get.sh`, `get.ps1`, Linux, rootless, macOS, FreeBSD,
+  OpenWrt and Windows) speak the user's language: Arabic, Chinese, English, Hebrew, Hindi,
+  Russian, Spanish or Swahili, from the system's locale (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`,
+  `LANG`, a Mac's preferred languages, Windows' display language), or `CBB_LANG`. The
+  release's `get.sh` and `get.ps1` carry their translations. The desktop entries have their
+  comments in these languages too.
+- Remote invitations on every device: any admin makes one, on the group's hub or through a
+  hub it is connected to, which lets the guest in and passes the pairing to the admin's
+  window (`guest` messages, docs/protocol.md, section 12, "Through the hub"). The invitation
+  is a QR code first, with its text or file as the fallback: the iPhone, Android and Aurora
+  apps show it from Send an invitation, and the Mac and tray apps through `cbb invite -app`,
+  which they run as the administrator (`TestInviteApp`). A phone far from the group joins
+  with Join with an invitation on its Start screen: it scans the QR code, or takes the text
+  or the file, and the invitation waits to be joined or declined; joined, the phone shows the
+  fingerprint the admin compares (`TestFFIJoinInvite`, `TestFFIInviteThroughHub`). An
+  invitation carries the hub's way over VLESS with XHTTP (`x`), for a network that lets no
+  UDP through. The hub keeps the guest for a day after it admitted the device, and the device
+  keeps the invitation and offers its own tunnel key again until the hub answers, after a
+  restart too, so a device that starts late or loses its network after the join still gets
+  through.
 - The Aurora app's root sets how long a claim to take the group over waits and which keys an
   admin may keep, hands the group to an admin (its claim then takes effect at once), and makes
   or removes the group's recovery key, whose sheet it shows once. The core builds and signs
@@ -2141,6 +2161,9 @@ All notable changes to cbb are documented in this file. The format follows
   a moment: it tells its peers in a new `presence` message (docs/protocol.md, section 4,
   "Presence"). A device that refuses to let a phone join as an admin, or to admit while its
   admin key is frozen, now says so in its log as well as to the app.
+- A tunnel's loopback port on Linux takes a client on a dual-stack socket, as Java's on a system
+  with IPv6: its user is looked up in the kernel's IPv6 table too, by its IPv4-mapped address,
+  where before it was refused at once.
 - The tunnel to the hub of a lite member or a phone stays on the way over VLESS when
   WireGuard renews its keys. Once a session was two minutes old the link took the hub for
   silent and moved on to the next endpoint at once, a blocked UDP port when only VLESS gets

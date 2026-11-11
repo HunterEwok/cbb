@@ -250,9 +250,9 @@
     <string name="event_unfrozen">%1$s разморожен.</string>
     <string name="event_taken_over">%1$s забрал группу себе: теперь он создатель группы.</string>
     <string name="invite_title">Пригласить устройство издалека</string>
-    <string name="invite_body">Для устройства не из вашей сети, например компьютера родителей: отправьте файл приглашения его владельцу, он подключится командой cbb pair -invite. Приглашение работает один раз, в течение часа, пока приложение открыто.</string>
+    <string name="invite_body">На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite с файлом. Приглашение работает один раз, в течение часа, пока приложение открыто; группе нужен хаб.</string>
     <string name="invite_open">Создать приглашение</string>
-    <string name="invite_open_until">Приглашение действует до %1$s. Отправьте файл только тому, кто подключается: любой, у кого он есть, может попросить доступ.</string>
+    <string name="invite_open_until">Приглашение действует до %1$s. Показывайте или отправляйте его QR-код только тому, кто вступает; файл — запасной вариант.</string>
     <string name="invite_share">Отправить приглашение</string>
     <string name="invite_cancel">Отменить приглашение</string>
     <string name="invite_ask_title">Принять %1$s?</string>
@@ -562,7 +562,7 @@
     <string name="turn_on">Включить</string>
     <string name="scan_code">Сканировать код</string>
     <string name="invite_send">Отправить приглашение</string>
-    <string name="invite_on_hub">Приглашение делается на хабе группы. На компьютере-хабе выполните cbb invite и отправьте получившийся файл по надёжному каналу; на новом устройстве выполните cbb pair -invite с этим файлом.</string>
+    <string name="invite_on_hub">Приглашение делает только админ: телефон-админ здесь или cbb invite на компьютере-админе.</string>
     <string name="more">Ещё</string>
     <string name="view_next">Показать: %1$s</string>
     <string name="lost_phone_title">Потеряли телефон?</string>
@@ -637,4 +637,24 @@
     <string name="bug_details">Технические подробности</string>
     <string name="bug_fixed_in">Это исправлено в версии %1$s: обновите CBB.</string>
     <string name="bug_broke_restarted">В CBB что-то сломалось. Он запустился заново.</string>
+    <string name="invitation_join">Вступить по приглашению</string>
+    <string name="invitation_has_group">Этот телефон уже в группе. Сначала выйдите из неё, чтобы вступить в другую.</string>
+    <string name="invitation_not_one">Это не приглашение CBB.</string>
+    <string name="invitation_expired">Срок приглашения истёк. Попросите новое.</string>
+    <string name="invitation_joined">Телефон в группе. Вне дома он синхронизируется через хаб группы.</string>
+    <string name="invitation_fingerprint_hint">Тот, кто вас пригласил, видит эти слова на своём устройстве и впустит телефон, если они совпадают. Не закрывайте этот экран.</string>
+    <string name="invitation_connecting">Подключение к хабу группы…</string>
+    <string name="invitation_scan_hint">Наведите камеру на QR-код приглашения.</string>
+    <string name="invitation_text">Текст приглашения</string>
+    <string name="invitation_read">Прочитать</string>
+    <string name="invitation_open_file">Открыть файл</string>
+    <string name="invitation_title">Вас приглашают в группу</string>
+    <string name="invitation_group">Группа: %1$s</string>
+    <string name="invitation_hub">Хаб: %1$s</string>
+    <string name="invitation_until">Действует до %1$s</string>
+    <string name="invitation_answer_hint">Вступайте, только если вы сами просили это приглашение. Тот, кто его сделал, впустит телефон, когда увидит показанные им слова.</string>
+    <string name="invitation_accept">Вступить</string>
+    <string name="invitation_decline">Отклонить</string>
+    <string name="error_hub_unreachable">Хаб группы не ответил. Проверьте, что приглашение ещё действует и хаб включён, и попробуйте снова.</string>
+    <string name="invite_qr_label">QR-код приглашения</string>
 </resources>

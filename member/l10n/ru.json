@@ -127,5 +127,9 @@
  "Sync is off on: {}.": "Синхронизация выключена на: {}.",
  "Muted by an admin: {}.": "Заглушены админом: {}.",
  "CBB {} is available.": "Доступна CBB {}.",
- "Why it does not sync: {}": "Почему не синхронизируется: {}"
+ "Why it does not sync: {}": "Почему не синхронизируется: {}",
+ "Handing this device's tunnel key to the hub...": "Передаю ключ туннеля этого устройства хабу...",
+ "The hub took it: this device syncs from afar now.": "Хаб принял его: теперь это устройство синхронизируется издалека.",
+ "The hub has not answered yet; the service keeps trying for a day.": "Хаб пока не ответил; служба будет пробовать в течение суток.",
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "Запустите службу (cbb service) в течение суток: она передаст ключ этого устройства хабу."
 }

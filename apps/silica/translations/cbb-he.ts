@@ -181,6 +181,30 @@
         <source>The claim to restore the group became void.</source>
         <translation>הבקשה לשחזר את הקבוצה בוטלה.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>הרכזת של הקבוצה לא ענתה. ודאו שההזמנה עדיין בתוקף ושהרכזת פועלת, ונסו שוב.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>לא ניתן היה להצטרף לקבוצה. נסו שוב.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>רק מנהל יוצר הזמנה: טלפון מנהל כאן, או cbb invite במחשב מנהל.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>הטלפון הזה כבר בקבוצה. צאו ממנה קודם כדי להצטרף לאחרת.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>זו לא הזמנה של CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>תוקף ההזמנה פג. בקשו הזמנה חדשה.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -215,6 +239,18 @@
     <message>
         <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
         <translation>במחשב השורש של הקבוצה, קבלו את הטלפון הזה כמנהל עם הקוד הזה: באפליקציית CBB הוסיפו מכשיר ובחרו לקבל אותו כמנהל, או הריצו cbb pair -qr -admin. השאירו את המסך הזה פתוח.</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>הצטרפות בהזמנה</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>מי שהזמין אתכם רואה את המילים האלה במכשיר שלו ומאשר את הטלפון אם הן תואמות. השאירו את המסך הזה פתוח.</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>מתחבר לרכזת של הקבוצה…</translation>
     </message>
 </context>
 <context>
@@ -370,6 +406,14 @@
     <message>
         <source>Restore with a recovery sheet</source>
         <translation>שחזור עם דף שחזור</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>הצטרפות בהזמנה</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>שליחת הזמנה</translation>
     </message>
 </context>
 <context>
@@ -1651,6 +1695,100 @@
     <message>
         <source>Try again</source>
         <translation>לנסות שוב</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>הצטרפות בהזמנה</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>הוזמנתם לקבוצה</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>כוונו את המצלמה לקוד ה-QR של ההזמנה.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>המצלמה לא מופעלת: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>או הדביקו את טקסט ההזמנה, cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>קבוצה</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>רכזת</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>בתוקף עד</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>הצטרפו רק אם ביקשתם את ההזמנה הזו. מי שיצר אותה מאשר את הטלפון כשהוא רואה את המילים שהוא מציג.</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>הצטרפות</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>דחייה</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>שליחת הזמנה</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>פותח את ההזמנה ברכזת של הקבוצה…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite עם הטקסט שלה. היא פועלת פעם אחת, עד %1.</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>%1 הצטרף לקבוצה; הוא יופיע ברשימה כשיתחבר.</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>הציגו או שלחו את הקוד רק למי שמצטרף: כל מי שיש לו אותו יכול לבקש להצטרף.</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>העתקת טקסט ההזמנה</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>לאשר את %1 (%2)? אשרו רק אם המכשיר מציג את אותן מילים:</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>אישור</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>לא זה</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>נסו שוב</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>הזמנת מכשיר נוסף</translation>
     </message>
 </context>
 </TS>

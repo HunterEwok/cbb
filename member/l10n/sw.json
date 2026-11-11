@@ -127,5 +127,9 @@
  "Sync is off on: {}.": "Usawazishaji umezimwa kwenye: {}.",
  "Muted by an admin: {}.": "Vimenyamazishwa na msimamizi: {}.",
  "CBB {} is available.": "CBB {} inapatikana.",
- "Why it does not sync: {}": "Kwa nini haisawazishi: {}"
+ "Why it does not sync: {}": "Kwa nini haisawazishi: {}",
+ "Handing this device's tunnel key to the hub...": "Inakabidhi ufunguo wa handaki wa kifaa hiki kwa kitovu...",
+ "The hub took it: this device syncs from afar now.": "Kitovu kimeupokea: kifaa hiki sasa kinasawazisha kikiwa mbali.",
+ "The hub has not answered yet; the service keeps trying for a day.": "Kitovu bado hakijajibu; huduma itaendelea kujaribu kwa siku moja.",
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "Anzisha huduma (cbb service) ndani ya siku moja: inakabidhi ufunguo wa kifaa hiki kwa kitovu."
 }

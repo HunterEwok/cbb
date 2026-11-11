@@ -236,6 +236,27 @@ object Core {
         return SheetReading.Refused(r.optString("reason") ?: "", r.optString("message") ?: "")
     }
 
+    /** A remote invitation as the screen that accepts or declines it shows it: its group's tag, its hub's device ID, and when it expires, Unix seconds. */
+    data class Invitation(val group: String, val hub: String, val expires: Long)
+
+    sealed class InviteReading {
+        class Read(val invitation: Invitation) : InviteReading()
+
+        /** reason is why the core refused it; message a sentence for the user. */
+        class Refused(val reason: String, val message: String) : InviteReading()
+    }
+
+    /** Reads what the user scanned, opened or pasted as a remote invitation, cbb://invite#... */
+    fun readInvite(text: String): InviteReading {
+        val ok = run("read_invite", Wire.obj("text" to Wire.str(text))) as? JsonObject
+            ?: throw Mismatch("the answer to read_invite is not an object")
+        (ok["invitation"] as? JsonObject)?.let { i ->
+            return InviteReading.Read(Invitation(i.optString("group") ?: "", i.optString("hub") ?: "", i.optLong("expires") ?: 0))
+        }
+        val r = ok["refused"] as? JsonObject ?: throw Mismatch("the answer to read_invite has neither invitation nor refused")
+        return InviteReading.Refused(r.optString("reason") ?: "", r.optString("message") ?: "")
+    }
+
     /** The linked core's version, ABI and the commit it was built from. */
     fun version(): Version {
         val ok = run("version") as? JsonObject ?: throw Mismatch("the answer to version is not an object")

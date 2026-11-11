@@ -181,6 +181,30 @@
         <source>The claim to restore the group became void.</source>
         <translation>Ombi la kurejesha kikundi limebatilika.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>Kitovu cha kikundi hakikujibu. Hakikisha mwaliko bado ni halali na kitovu kimewashwa, kisha jaribu tena.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>Imeshindikana kujiunga na kikundi. Jaribu tena.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>Ni msimamizi pekee anayeunda mwaliko: simu ya msimamizi hapa, au cbb invite kwenye kompyuta ya msimamizi.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>Simu hii tayari iko kwenye kikundi. Ondoka kwanza ili ujiunge na kingine.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>Huu si mwaliko wa CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>Mwaliko umeisha muda. Omba mpya.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -215,6 +239,18 @@
     <message>
         <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
         <translation>Kwenye kompyuta ya mzizi wa kikundi, ikubali simu hii kama msimamizi kwa msimbo huu: katika programu ya CBB ongeza kifaa na uchague kukikubali kama msimamizi, au endesha cbb pair -qr -admin. Acha skrini hii wazi.</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Jiunge kwa mwaliko</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>Aliyekualika anaona maneno haya kwenye kifaa chake na ataikubali simu hii yakilingana. Acha skrini hii wazi.</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>Inaunganisha na kitovu cha kikundi…</translation>
     </message>
 </context>
 <context>
@@ -370,6 +406,14 @@
     <message>
         <source>Restore with a recovery sheet</source>
         <translation>Rejesha kwa karatasi ya urejeshaji</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Jiunge kwa mwaliko</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Tuma mwaliko</translation>
     </message>
 </context>
 <context>
@@ -1651,6 +1695,100 @@
     <message>
         <source>Try again</source>
         <translation>Jaribu tena</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Jiunge kwa mwaliko</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>Umealikwa kwenye kikundi</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>Elekeza kamera kwenye msimbo wa QR wa mwaliko.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Kamera haianzi: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>Au bandika maandishi ya mwaliko, cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Kikundi</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>Kitovu</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>Halali hadi</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>Jiunge tu ikiwa uliomba mwaliko huu. Aliyeuunda ataikubali simu hii akiona maneno inayoonyesha.</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Jiunge</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>Kataa</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Tuma mwaliko</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>Inafungua mwaliko kwenye kitovu cha kikundi…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite ukitumia maandishi yake. Unafanya kazi mara moja, hadi %1.</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>%1 amejiunga na kikundi; kitaonekana kwenye orodha kikiunganishwa.</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>Onyesha au tuma msimbo kwa anayejiunga pekee: yeyote aliye nao anaweza kuomba kujiunga.</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>Nakili maandishi ya mwaliko</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>Kukubali %1 (%2)? Kikubali tu ikiwa kifaa kinaonyesha maneno yaleyale:</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>Kubali</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>Si hiki</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Jaribu tena</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>Alika kifaa kingine</translation>
     </message>
 </context>
 </TS>

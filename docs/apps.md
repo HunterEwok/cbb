@@ -31,7 +31,12 @@ they look, so both apps are built to the same plan.
    or StrongBox, becomes the group's root, admits the device and goes to Home), **Join a
    group** (one screen: this phone's QR code and six digits; a phone of the group scans the
    code, a computer of the group types the digits after "+", docs/protocol.md, section 6),
-   and, small, **Restore with the recovery key**. Admin rights come from the device that
+   **Join with an invitation** (for a phone far from the group: the camera reads the
+   invitation's QR code, or its text is pasted or its file opened; the invitation then
+   waits on a screen of its own, with its group, its hub and when it expires, to be joined
+   or declined, and declining sends nothing; joined, the phone shows the words the inviting
+   admin compares, docs/protocol.md, section 12), and, small, **Restore with the recovery
+   key**. Admin rights come from the device that
    admits the phone, not from a separate button. On Aurora the settings and the language are
    in the pull-down menu, as in every Silica app, and the Start screen also has **Join a group
    as an admin**.
@@ -200,11 +205,15 @@ they look, so both apps are built to the same plan.
    answers the clients' tunnel keys from the member's `peer` events, the Android app's
    `HubOnPhone` and the Swift kit's `HubOnPhone` drive the tunnel's hub, the tunnel's connections
    come to a member port on the loopback address, and on a home network the hub takes members
-   on a port on every address, which it publishes with `r=phone` (docs/protocol.md, section 3). While the hub is registered, "Invite a
-   device from afar" makes a remote invitation for an hour (docs/protocol.md, section 12):
-   the phone shares the file `cbb.cbbinvite`, the other side runs
-   `cbb pair -invite` with it, and the phone asks "Admit …?" with the device's fingerprint,
-   which `cbb` shows too; on yes it unlocks the group's key and admits it.
+   on a port on every address, which it publishes with `r=phone` (docs/protocol.md, section 3).
+   On an admin phone, Home's "+" "Send an invitation" makes a remote invitation for an hour
+   (docs/protocol.md, section 12): on this phone while it is the group's registered hub,
+   else through a hub of the group it is connected to. The phone shows the invitation's QR
+   code, which a new phone scans in Join with an invitation, and shares the file
+   `cbb.cbbinvite` as the fallback, for `cbb pair -invite` on a computer; it asks "Admit …?"
+   with the device's fingerprint, which the device shows too, and on yes unlocks the
+   group's key and admits it. On Aurora it is "Send an invitation" in the pull-down menu,
+   and "Copy the invitation's text" stands in for the file.
    At the end, "Leave the group" (D-83, docs/design.md, "Leaving the group") asks once, then
    stops syncing and deletes the phone's keys (root, admin, member, sealed messages, the
    servers'), the group's files and the tunnel's state; Android turns remote paste off too.
@@ -482,7 +491,11 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   a computer of the group types the digits after "+". Cancel removes the file, and cbb hangs
   up, which ends the wait. "+" on the root or an admin takes the digits, or the QR code's
   text or a picture of it, and runs `cbb pair -qr` with them on its standard input; "Device
-  far away? Send an invitation" says how to invite one through the hub.
+  far away? Send an invitation", on an admin, runs `cbb invite -app FILE -answers FILE` as
+  the administrator: the sheet shows the invitation's QR code that cbb writes into the first
+  file (JSON: `invite`, `expires`, and `joining` while it asks), with its text as the
+  fallback, asks about the device that uses it by its fingerprint and writes the answer into
+  the second; Cancel removes the first file, and cbb ends the invitation.
 
 Each release carries it in `cbb-X.Y.Z.pkg` with the service, signed with the Developer ID and
 notarized (docs/maintaining.md, "Signing for macOS"). CI's `Mac app` job builds it and runs
@@ -541,7 +554,7 @@ service and its clipboard agent keep syncing without it.
 - **Add a device** (+): on the root or an admin, one field for the six digits the new device
   shows (or its QR code's text, or a picture of it), which runs `cbb pair -qr` as the
   administrator with the code on its standard input; "Device far away? Send an invitation"
-  says how `cbb invite` does it on the hub.
+  runs `cbb invite -app` as the administrator, as the Mac app does (`invite.go`).
 - **Join a group**: runs `cbb pair -app FILE` as the administrator, as the Mac app does: the
   dialog shows the QR code cbb writes into the file the app made and its six digits, which a
   computer of the group types, and Cancel removes the file. On Linux the file is written over

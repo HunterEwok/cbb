@@ -180,9 +180,9 @@ tunnel (`cbb global`; `TestLiteMemberAway`).
 
 Next steps, roughly in order:
 
-1. TestFlight (needs the Apple account), a signed macOS `.pkg`, remote invitations on the
-   phones (sync away from home works between computers, on both phones and on the lite
-   member: docs/protocol.md section 11), the lite member on the ESP32 (see docs/roadmap.md).
+1. TestFlight (needs the Apple account), a signed macOS `.pkg`, a run of remote invitations
+   on real phones (built on every device, docs/protocol.md section 12; e2e through
+   `phone-on-linux`), the lite member on the ESP32 (see docs/roadmap.md).
 
 Windows (the service, the agent, the installers) passes CI on windows-latest and runs in a
 Windows 11 virtual machine (Arm), where the tray app and the agent's clipboard work; not yet

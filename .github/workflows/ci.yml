@@ -547,7 +547,8 @@ jobs:
           sh packaging/archive.sh "$RUNNER_TEMP/full/cbb" linux amd64 "$rel"
           sh member/packaging/archive.sh target/x86_64-unknown-linux-musl/release/cbb x86_64-unknown-linux-musl amd64 "$rel"
           (cd "$rel" && sha256sum -- *.tar.gz >SHA256SUMS)
-          cp packaging/get.sh "$rel/"
+          # get.sh as the release publishes it, with its translations.
+          sh packaging/l10n-embed.sh packaging/get.sh >"$rel/get.sh"
       - name: get.sh installs both in OpenWrt's root file system, and uninstall.sh removes them
         run: sh tools/e2e/openwrt.sh rootfs "$RUNNER_TEMP/release"
       - name: the apk feed, signed with a test key, installs and removes it
@@ -1176,6 +1177,22 @@ jobs:
           $found = Invoke-ScriptAnalyzer -Path packaging/windows -Recurse -ExcludeRule PSAvoidUsingWriteHost
           $found | Format-Table -AutoSize -Wrap
           if ($found) { exit 1 }
+      - name: the release's get.ps1 carries its translations
+        shell: bash
+        run: sh packaging/l10n-embed.sh packaging/windows/get.ps1 >"$RUNNER_TEMP/get.ps1"
+      - name: the release's get.ps1 speaks the user's language, in Windows PowerShell
+        # Windows PowerShell 5.1 reads a downloaded script as Latin-1; the
+        # translations come through it in base64. The Spanish catalog's
+        # "fallo" with an acute o, written as a code point to keep this file
+        # ASCII for PowerShell.
+        shell: powershell
+        env:
+          CBB_LANG: es
+          CBB_VERSION: bogus
+        run: |
+          $out = Get-Content (Join-Path $env:RUNNER_TEMP 'get.ps1') -Raw -Encoding Default | Invoke-Expression 6>&1 | Out-String
+          Write-Host $out
+          if (-not $out.Contains('fall' + [char]0x00F3) -or -not $out.Contains('CBB_VERSION debe tener la forma v1.2.3')) { throw 'get.ps1 did not speak Spanish' }
       - name: get.ps1 installs a release archive and refuses a changed one
         env:
           CBB_RELEASE_DIR: ${{ runner.temp }}/release
@@ -1424,6 +1441,7 @@ jobs:
             go build -trimpath -ldflags $ld -o "$dir\cbb-helper.exe" ./cmd/cbb-helper
             if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
             Copy-Item -Recurse packaging\windows "$dir\packaging\"
+            Copy-Item -Recurse packaging\l10n "$dir\packaging\"
             return $dir
           }
           rustup toolchain install stable --profile minimal

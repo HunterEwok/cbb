@@ -1456,7 +1456,8 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
 #### Joining from another network
 
 Three ways admit a device that is not on the home network. The first two work for the
-pairing itself; the third, the remote invitation, is built for computers.
+pairing itself; the third, the remote invitation, works for computers, phones and the lite
+member alike.
 
 - **Through SSH.** When the new computer can log in to a computer of the group that admits devices,
   it forwards a local port to the member port, `ssh -N -L 18764:localhost:8764 user@member`;
@@ -1482,19 +1483,24 @@ pairing itself; the third, the remote invitation, is built for computers.
   not kept across a restart of the service.
 - **Remote invitation**, for a device that shares no network and no SSH with the
   group. An admin makes it: the root or an admin phone, or the root or an admin computer
-  (`cbb invite`). Built so far for computers, made on the hub itself
-  when the hub can admit devices: `cbb invite` there, `cbb pair -invite FILE` on the new
-  computer (docs/protocol.md, section 12), and on a phone that is the hub, from its
-  Settings. Handing an invitation made on another admin to the hub, and using one on a
-  phone, are still planned. It is never typed: it comes only as a QR code or as
-  a file to open (`.cbbinvite`), and holds the group's tag, the hub's WireGuard public key
-  and addresses (and the forwarder's), a one-time WireGuard key pair with its preshared key
-  for a guest tunnel, a 128-bit one-time secret and the time it expires. It serves one
-  device once, for at most a day (an hour by default), and the admin can cancel it.
-  - The admin hands the invitation to the hub inside member TLS before it is used. The hub
-    adds the guest key as a peer that reaches only the pairing service inside the tunnel,
-    never the members' sync, and drops it after one use, at expiry, or after three failed
-    attempts. A packet without that key gets no answer, as for any unknown WireGuard key.
+  (`cbb invite`, or Send an invitation in the Mac app and the tray app, which run `cbb invite
+  -app` as the administrator). One button makes it, on the hub itself or through a hub of the
+  group the admin is connected to (docs/protocol.md, section 12). It is shown as a QR code,
+  the usual way; its text or its file (`.cbbinvite`) is the fallback for a computer and for a
+  channel that carries no picture. It is never typed. On a phone, Start's Join with an
+  invitation scans it, and the invitation waits on its own screen to be accepted or
+  declined; on a computer, `cbb pair -invite` takes the file or the text. It holds the
+  group's tag, the hub's WireGuard public key and addresses (and the forwarder's, with its
+  way over VLESS for networks that let no UDP through), a one-time WireGuard key pair with
+  its preshared key for a guest tunnel, a 128-bit one-time secret and the time it expires.
+  It serves one device once, for at most a day (an hour by default), and the admin can
+  cancel it.
+  - An admin that is not the hub hands the guest key to the hub inside member TLS before
+    the invitation is used, and keeps the pairing window and its CA key; the hub passes the
+    guest's pairing bytes to it. The hub adds the guest key as a peer that reaches only the
+    pairing service inside the tunnel, never the members' sync, and drops it after one use,
+    at expiry, or after three failed attempts. A packet without that key gets no answer, as
+    for any unknown WireGuard key.
   - The new device opens the guest tunnel and pairs with the hub with CPace on the secret,
     the same exchange as at home. The hub then shows the admin who made the invitation the
     device's name, system and key fingerprint; nothing is admitted until the admin
@@ -1504,7 +1510,9 @@ pairing itself; the third, the remote invitation, is built for computers.
     home or through the phone's own tunnel.
   - With its certificate the device offers its own tunnel key in its first hello through
     the guest tunnel; the hub admits it, drops the guest peer, and the device reconnects
-    with its own key as an ordinary client.
+    with its own key as an ordinary client. The guest stays for a day after the admission
+    until then, and the device keeps the invitation and tries again, so a device that
+    starts late or loses its network right after the join still gets through.
   - Why it is safe over the internet: without the guest key nobody reaches the hub at all;
     the 128-bit secret makes guessing hopeless and CPace allows no offline attack; the
     guest reaches nothing but the pairing; and the admin's confirmation names the device,

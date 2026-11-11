@@ -200,6 +200,35 @@ public enum Core {
         return .refused(reason: r.reason, message: r.message)
     }
 
+    /// A remote invitation as the screen that accepts or declines it shows
+    /// it (docs/protocol.md, section 12): its group's tag, its hub's device
+    /// ID, and when it expires.
+    public struct Invitation: Decodable, Equatable, Sendable {
+        public var group: String
+        public var hub: String
+        /// Unix seconds.
+        public var expires: Int64
+    }
+
+    /// What reading an invitation gave: it, or why it was refused (reason
+    /// and a sentence for the user).
+    public enum InviteReading: Equatable, Sendable {
+        case invitation(Invitation)
+        case refused(reason: String, message: String)
+    }
+
+    /// Reads what the user scanned, opened or pasted as a remote
+    /// invitation, cbb://invite#...
+    public static func readInvite(_ text: String) throws -> InviteReading {
+        struct Args: Encodable { var text: String }
+        struct Refused: Decodable { var reason: String, message: String }
+        struct Answer: Decodable { var invitation: Invitation?, refused: Refused? }
+        let a = try run("read_invite", Args(text: text), as: Answer.self)
+        if let i = a.invitation { return .invitation(i) }
+        guard let r = a.refused else { throw Mismatch(reason: "the answer to read_invite has neither invitation nor refused") }
+        return .refused(reason: r.reason, message: r.message)
+    }
+
     /// checkBody, with a refusal in words for the log: the core's message
     /// and its details.
     static func bodyRefusal(_ kind: String, _ body: Data) -> String? {

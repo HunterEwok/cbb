@@ -1,0 +1,261 @@
+  1. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  1. לאפשר TCP %s נכנס מ-%s. מטרה: חיבורים מהמכשירים של הקבוצה.
+  2. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  2. לאפשר UDP 5353 נכנס מ-%s. מטרה: מציאת המכשירים של הקבוצה (mDNS).
+%s: removed the CBB rules.	%s: כללי CBB הוסרו.
+Firewall: closed the hub's UDP port %s.	חומת אש: יציאת UDP %s של הרכזת נסגרה.
+  In Firewall > Rules, on each interface of the home network (LAN and the others):	  ב-Firewall > Rules, בכל ממשק של הרשת הביתית (LAN והאחרים):
+    Pass, protocol TCP, source %s, destination This Firewall, port %s	    Pass, פרוטוקול TCP, מקור %s, יעד This Firewall, יציאה %s
+    Pass, protocol UDP, the same sources, destination This Firewall, port 5353	    Pass, פרוטוקול UDP, אותם מקורות, יעד This Firewall, יציאה 5353
+  Add to /etc/pf.conf, before the rules that block, and run pfctl -f /etc/pf.conf:	  הוסף ל-/etc/pf.conf, לפני הכללים שחוסמים, והרץ pfctl -f /etc/pf.conf:
+  and the same lines in the script that firewall_script in rc.conf names, to keep them.	  ואת אותן שורות בסקריפט ש-firewall_script ב-rc.conf מציין, כדי לשמור אותן.
+  In Firewall > Rules on WAN: Pass, protocol UDP, source any, destination WAN address, port %s	  ב-Firewall > Rules ב-WAN: Pass, פרוטוקול UDP, מקור any, יעד WAN address, יציאה %s
+%s [y/N]	%s [y/N]
+No terminal to answer on; taken as No.	אין מסוף לענות בו; נחשב כ"לא".
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand:	לא נוספו כללי חומת אש. CBB עובד רק כל עוד חומת האש מאפשרת את הכללים שלמעלה. כדי להוסיף אותם ידנית:
+Firewall: no active firewall was found; no firewall rules are needed. If pf or ipfw is turned on later, run the installer again.	חומת אש: לא נמצאה חומת אש פעילה; אין צורך בכללים. אם pf או ipfw יופעלו בהמשך, הרץ את תוכנית ההתקנה שוב.
+Firewall: %s (active). CBB requires these rules:	חומת אש: %s (פעילה). CBB צריך את הכללים האלה:
+CBB does not change pfSense's rules, and runs there unsupported. Add them by hand:	CBB לא משנה את הכללים של pfSense, ורץ שם ללא תמיכה. הוסף אותם ידנית:
+ (express installation)	 (התקנה מהירה)
+ (as answered before)	 (לפי התשובה הקודמת)
+With Yes, CBB keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both.	עם "כן", CBB שומר את הכללים האלה בעוגן pf משלו, שה-hook של התוסף שלו מוסיף לכללים של OPNsense; הסרת ההתקנה מסירה את שניהם.
+With Yes, CBB keeps these rules in its own pf anchor and adds the lines that load it at the end of %s; uninstalling removes both.	עם "כן", CBB שומר את הכללים האלה בעוגן pf משלו ומוסיף את השורות שטוענות אותו בסוף %s; הסרת ההתקנה מסירה את שניהם.
+With Yes, CBB adds these rules to ipfw's set %s at every start, and removes them on uninstall.	עם "כן", CBB מוסיף את הכללים האלה לקבוצה %s של ipfw בכל הפעלה, ומסיר אותם בהסרת ההתקנה.
+Add these rules now?	להוסיף את הכללים האלה עכשיו?
+To let CBB add and manage them, run the installer again with --express.	כדי ש-CBB יוסיף וינהל אותם, הרץ את תוכנית ההתקנה שוב עם --express.
+Added the rules above%s. CBB manages them from now on.	הכללים שלמעלה נוספו%s. מעכשיו CBB מנהל אותם.
+run it as root	הרץ אותו כ-root
+neither pf nor ipfw is active; nothing was added.	לא pf ולא ipfw פעילים; לא נוסף דבר.
+failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again.	נכשל (קוד יציאה %s). לכל פקודה שהריץ: CBB_ERROR_DETAILS=1, והרץ אותו שוב.
+CBB_HOME_CGNAT is 1 or 0, not %s	CBB_HOME_CGNAT הוא 1 או 0, לא %s
+--port takes a port from 1024 to 65535	--port מקבל יציאה מ-1024 עד 65535
+CBB_FIREWALL is ask, express or no, not %s	CBB_FIREWALL הוא ask, express או no, לא %s
+run it as root (sudo or doas)	הרץ אותו כ-root (sudo או doas)
+this installer is for FreeBSD	תוכנית התקנה זו מיועדת ל-FreeBSD
+%s does not run on this machine; is it built for %s?	%s לא רץ על המחשב הזה; האם הוא נבנה עבור %s?
+an account named cbb exists here and is not this service's (its comment is not "CBB"); it would get the group's keys. Rename or remove it, then run install.sh again.	קיים כאן חשבון בשם cbb שאינו של השירות הזה (ההערה שלו אינה "CBB"); הוא היה מקבל את המפתחות של הקבוצה. שנה את שמו או הסר אותו, ואז הרץ install.sh שוב.
+a group named cbb exists here with members, and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	קיימת כאן קבוצה בשם cbb עם חברים, ואין חשבון שירות; הם היו מגיעים לשירות. שנה את שם הקבוצה או הסר אותה, ואז הרץ install.sh שוב.
+Added %s to the cbb group; log in again to use cbb copy and paste.	%s נוסף לקבוצה cbb; התחבר שוב כדי להשתמש ב-cbb copy וב-paste.
+CBB uses TCP port %s instead of 8764.	CBB משתמש ביציאת TCP %s במקום 8764.
+the service did not answer within 10 s: %s	השירות לא ענה תוך 10 שניות: %s
+CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	CBB רץ ביציאת TCP %s. להסרה: sh /usr/local/share/cbb/uninstall.sh
+OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense: הוא מופיע תחת System > Diagnostics > Services, והכללים שלו נשמרים בכל טעינה מחדש של המסנן.
+pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	pfSense אינו נתמך: עדכון של pfSense עלול להסיר את CBB; הרץ את תוכנית ההתקנה שוב אחרי עדכון.
+Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	הבא: הרץ cbb pair כ-root וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון; בלי האפליקציה, ראה docs/guide/without-app.md.
+CBB is removed, with this device's keys; it left its group.	CBB הוסר, יחד עם המפתחות של המכשיר הזה; הוא עזב את הקבוצה שלו.
+CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-/var/db/cbb להתקנה מחדש; --purge מסיר אותם.
+--port needs a port number	--port צריך מספר יציאה
+--home-cgnat needs on or off	--home-cgnat צריך on או off
+--auto-update needs on or off	--auto-update צריך on או off
+unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	אפשרות לא מוכרת %s (מוכרות: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
+--rootless installs for your own user: run it without sudo: %s	--rootless מתקין עבור המשתמש שלך: הרץ אותו בלי sudo: %s
+--rootless is for Linux computers	--rootless מיועד למחשבי Linux
+run it with sudo: %s	הרץ אותו עם sudo: %s
+no release for this MIPS system: it is not OpenWrt, which names its byte order	אין גרסה למערכת MIPS זו: היא אינה OpenWrt, שמציינת את סדר הבתים שלה
+no release for the architecture %s	אין גרסה לארכיטקטורה %s
+the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	לחבר הקל ל-MIPS עדיין אין סנכרון מחוץ לבית (פריט 37 במפת הדרכים); לחבר המלא יש.
+--console is not for a router	--console אינו לנתב
+--uinput is not for a router	--uinput אינו לנתב
+--home-cgnat is not for a router	--home-cgnat אינו לנתב
+--lite is for Linux; a Mac runs the full member	--lite מיועד ל-Linux; Mac מריץ את החבר המלא
+--console is for Linux	--console מיועד ל-Linux
+--uinput is for Linux	--uinput מיועד ל-Linux
+--lite is for Linux; FreeBSD runs the full member	--lite מיועד ל-Linux; FreeBSD מריץ את החבר המלא
+this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	תוכנית התקנה זו מיועדת ל-Linux, macOS ו-FreeBSD; ב-Windows השתמש ב-get.ps1
+tar is required	נדרש tar
+sha256sum or shasum is required	נדרש sha256sum או shasum
+curl or wget is required	נדרש curl או wget
+CBB_VERSION must look like v1.2.3	CBB_VERSION צריך להיראות כמו v1.2.3
+the signed %s file is not in the strict form of signed bodies; not installing	קובץ %s החתום אינו בצורה המחמירה של גופים חתומים; לא מתקין
+Not checked: the release's signature (CBB_VERIFY=skip).	לא נבדק: החתימה של הגרסה (CBB_VERIFY=skip).
+openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)	נדרש openssl כדי לבדוק את החתימה של הגרסה (או CBB_VERIFY=skip כדי להתקין אותה בלי בדיקה)
+%s has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)	ל-%s אין קבצי גרסה חתומים; לא מתקין אותה (CBB_VERIFY=skip מתקין אותה בלי בדיקה)
+keys.json is not signed by the project's root key; not installing	keys.json אינו חתום במפתח השורש של הפרויקט; לא מתקין
+keys.json has expired; check the clock, or try again later	תוקף keys.json פג; בדוק את השעון, או נסה שוב מאוחר יותר
+keys.json is not valid; not installing	keys.json אינו תקין; לא מתקין
+keys.json holds a key that is not valid	keys.json מכיל מפתח לא תקין
+keys.json holds no release key	keys.json אינו מכיל מפתח גרסה
+release.json is not signed by a release key; not installing	release.json אינו חתום במפתח גרסה; לא מתקין
+stable.json is not signed by a release or channel key; not installing	stable.json אינו חתום במפתח גרסה או ערוץ; לא מתקין
+stable.json is not the stable channel's	stable.json אינו של הערוץ היציב
+stable.json has expired; check the clock, or try again later	תוקף stable.json פג; בדוק את השעון, או נסה שוב מאוחר יותר
+release.json is not the release stable.json names; not installing	release.json אינו הגרסה ש-stable.json מציין; לא מתקין
+release.json is for %s, not %s	release.json מיועד ל-%s, לא ל-%s
+release.json does not list %s	release.json אינו מפרט את %s
+%s does not match the signed release.json; not installing it	%s אינו תואם ל-release.json החתום; לא מתקין אותו
+The release's signature checks out (%s).	החתימה של הגרסה תקינה (%s).
+could not download %s	לא ניתן להוריד את %s
+stable.json names no release	stable.json אינו מציין גרסה
+Downloading %s (%s)...	מוריד את %s (%s)...
+SHA256SUMS does not list %s	SHA256SUMS אינו מפרט את %s
+%s does not match SHA256SUMS; not installing it	%s אינו תואם ל-SHA256SUMS; לא מתקין אותו
+%s does not have this repository's build attestation; not installing it	ל-%s אין אישור בנייה של המאגר הזה; לא מתקין אותו
+The archive's build attestation checks out.	אישור הבנייה של הארכיון תקין.
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the archive's build attestation	CBB_ATTESTATION=require צריך gh, מחובר (gh auth login), כדי לבדוק את אישור הבנייה של הארכיון
+Not checked: the archive's build attestation (it needs gh, signed in). SHA256SUMS matched.	לא נבדק: אישור הבנייה של הארכיון (צריך gh, מחובר). SHA256SUMS תאם.
+  %s. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  %s. לאפשר TCP %s נכנס מ-%s. מטרה: חיבורים מהמכשירים של הקבוצה.
+  %s. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  %s. לאפשר UDP 5353 נכנס מ-%s. מטרה: מציאת המכשירים של הקבוצה (mDNS).
+ufw: removed the CBB rules.	ufw: כללי CBB הוסרו.
+firewalld: removed the CBB rules and service.	firewalld: כללי CBB והשירות שלו הוסרו.
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run:	לא נוספו כללי חומת אש. CBB עובד רק כל עוד חומת האש מאפשרת את הכללים שלמעלה. כדי להוסיף אותם ידנית, הרץ:
+Then make them permanent the way this system keeps its %s rules.	אחר כך הפוך אותם לקבועים בדרך שבה המערכת הזו שומרת את כללי %s שלה.
+Firewall: no active firewall was found; no firewall rules are needed. If a firewall is turned on later, run the installer again.	חומת אש: לא נמצאה חומת אש פעילה; אין צורך בכללים. אם חומת אש תופעל בהמשך, הרץ את תוכנית ההתקנה שוב.
+cbb does not manage %s rules: rules added at run time do not survive a restart.	cbb לא מנהל כללי %s: כללים שנוספים בזמן ריצה לא שורדים הפעלה מחדש.
+ (kept from an earlier installation)	 (נשמר מהתקנה קודמת)
+With Yes, CBB adds these rules, keeps them current on every update and removes them on uninstall.	עם "כן", CBB מוסיף את הכללים האלה, מעדכן אותם בכל עדכון ומסיר אותם בהסרת ההתקנה.
+run it with sudo	הרץ אותו עם sudo
+no ufw or firewalld is active; nothing was added.	לא ufw ולא firewalld פעילים; לא נוסף דבר.
+%s needs root; a rootless install has no console or uinput helper	%s צריך root; להתקנה ללא root אין עוזר console או uinput
+--rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless מתקין עבור המשתמש שלך: הרץ אותו בלי sudo. עם sudo, install.sh בלי --rootless מתקין את שירות המערכת, וזה בטוח יותר.
+a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	התקנה ללא root רצה כיחידת משתמש של systemd, ובהפעלה הזו אין מנהל משתמש של systemd; התחבר לשולחן עבודה או דרך ssh והרץ אותה שוב
+--home-cgnat is for the full member	--home-cgnat מיועד לחבר המלא
+CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	CBB מותקן כאן לכל המערכת (%s), ומכשיר אחד מריץ שירות אחד; הסר אותו קודם או השאר אותו
+the desktop agent did not start; it starts at your next login	סוכן שולחן העבודה לא הופעל; הוא יופעל בכניסה הבאה שלך
+CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB רץ כל עוד אתה מחובר. כדי שימשיך לרוץ אחרי שתתנתק, מנהל מערכת מריץ: sudo loginctl enable-linger %s
+CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	CBB רץ עבור %s ביציאת TCP %s, מותקן בלי root: הוא לעולם לא יוכל להיות השורש של הקבוצה, מנהל או הרכזת. אם חומת אש מגבילה כאן חיבורים נכנסים, מנהל מערכת מאפשר TCP %s ו-UDP 5353 מהרשת הביתית. להסרה: %s
+For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	להעתקה והדבקה ב-tmux, הוסף את השורה הזו ל-~/.tmux.conf: source-file -q %s/tmux.conf
+Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	הבא: ראה member/README.md; בקצרה, %s pair כאן, וסרוק את קוד ה-QR שלו באפליקציית הטלפון.
+Next: run %s pair and scan its QR code with the CBB app on your phone.	הבא: הרץ %s pair וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון.
+this archive has no install-rootless.sh, so it cannot install without root	בארכיון הזה אין install-rootless.sh, לכן אי אפשר להתקין בלי root
+systemd is required	נדרש systemd
+the full member is installed here, and the lite member cannot use its keys; remove it first: %s	החבר המלא מותקן כאן, והחבר הקל לא יכול להשתמש במפתחות שלו; הסר אותו קודם: %s
+the lite member is installed here, and the full member cannot use its keys; remove it first: %s	החבר הקל מותקן כאן, והחבר המלא לא יכול להשתמש במפתחות שלו; הסר אותו קודם: %s
+an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	קיים כאן חשבון בשם cbb שאינו של השירות הזה (ההערה שלו אינה "cbb service"); הוא היה מקבל את המפתחות של הקבוצה. שנה את שמו או הסר אותו, ואז הרץ install.sh שוב.
+a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	קיימת כאן קבוצה בשם cbb עם חברים (%s), ואין חשבון שירות; הם היו מגיעים לשירות. שנה את שם הקבוצה או הסר אותה, ואז הרץ install.sh שוב.
+Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	לא הותקן: אפליקציית המגש, שצריכה GTK 4 ו-WebKitGTK 6.0 (Debian ו-Ubuntu: %s; Fedora: %s). התקן אותם והרץ את זה שוב כדי להוסיף אותה.
+--uinput is for the full member, which runs the desktop connector	--uinput מיועד לחבר המלא, שמריץ את מחבר שולחן העבודה
+could not load the uinput module now; it loads at the next boot	לא ניתן לטעון עכשיו את המודול uinput; הוא ייטען באתחול הבא
+100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	100.64.0.0/10 נחשב לרשת הביתית במכשיר הזה (--home-cgnat on).
+New member and admin keys of this device go into its TPM.	מפתחות חבר ומנהל חדשים של המכשיר הזה נשמרים ב-TPM שלו.
+CBB uses TCP port %s instead of 8764. If a firewall on the network limits incoming connections, allow TCP %s from the home network.	CBB משתמש ביציאת TCP %s במקום 8764. אם חומת אש ברשת מגבילה חיבורים נכנסים, אפשר TCP %s מהרשת הביתית.
+the uinput helper did not start; see journalctl -u cbb-uinput	עוזר uinput לא הופעל; ראה journalctl -u cbb-uinput
+the desktop agent of %s did not start again; it starts at their next login	סוכן שולחן העבודה של %s לא הופעל מחדש; הוא יופעל בכניסה הבאה שלו
+cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow נכשל; הרץ sudo cbb global allow כשהשירות רץ.
+CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB רץ ביציאת TCP %s. להסרה: sudo sh %s/uninstall.sh
+Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	הבא: ראה member/README.md; בקצרה, sudo -u cbb %s pair כאן, וסרוק את קוד ה-QR שלו באפליקציית הטלפון.
+Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	הבא: הרץ sudo %s pair וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון; בלי האפליקציה, ראה docs/guide/without-app.md.
+CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-%s/cbb להתקנה מחדש; --purge מסיר אותם.
+CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-/var/lib/cbb להתקנה מחדש; --purge מסיר אותם.
+%s does not run on this Mac	%s לא רץ על ה-Mac הזה
+%s was built without cgo, so it cannot link this Mac's clipboard; use a release build, or build it with CGO_ENABLED=1	%s נבנה בלי cgo, לכן הוא לא יכול לגשת ללוח הגזירים של ה-Mac הזה; השתמש בגרסה רשמית, או בנה אותו עם CGO_ENABLED=1
+--in-place needs a path of letters, digits and / . _ + -, not %s	--in-place צריך נתיב של אותיות, ספרות ו-/ . _ + -, לא %s
+%s is a link, likely Homebrew's; run this with --in-place %s	%s הוא קישור, כנראה של Homebrew; הרץ את זה עם --in-place %s
+100.64.0.0/10 counts as the home network on this Mac (--home-cgnat on).	100.64.0.0/10 נחשב לרשת הביתית ב-Mac הזה (--home-cgnat on).
+Firewall: the macOS application firewall (on). CBB requires this rule:	חומת אש: חומת האש של היישומים של macOS (פועלת). CBB צריך את הכלל הזה:
+Firewall: the macOS application firewall (off). CBB requires this rule:	חומת אש: חומת האש של היישומים של macOS (כבויה). CBB צריך את הכלל הזה:
+  1. Allow incoming connections to %s. Purpose: connections from the group's devices on TCP %s and finding them on UDP 5353 (mDNS). The application firewall allows a program on every port and from every address; CBB itself accepts only the home network.	  1. לאפשר חיבורים נכנסים אל %s. מטרה: חיבורים מהמכשירים של הקבוצה ב-TCP %s ומציאתם ב-UDP 5353 (mDNS). חומת האש של היישומים מאפשרת לתוכנה כל יציאה וכל כתובת; CBB עצמו מקבל רק את הרשת הביתית.
+With Yes, CBB adds this rule, keeps it current on every update and removes it on uninstall.	עם "כן", CBB מוסיף את הכלל הזה, מעדכן אותו בכל עדכון ומסיר אותו בהסרת ההתקנה.
+Add this rule now? [y/N]	להוסיף את הכלל הזה עכשיו? [y/N]
+Added the rule above%s. CBB manages it from now on.	הכלל שלמעלה נוסף%s. מעכשיו CBB מנהל אותו.
+No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	לא נוסף כלל חומת אש. CBB עובד רק כל עוד חומת האש מאפשרת את הכלל שלמעלה. כדי להוסיף אותו ידנית, הרץ:
+To let CBB add and manage it, run the installer again with --express.	כדי ש-CBB יוסיף וינהל אותו, הרץ את תוכנית ההתקנה שוב עם --express.
+CBB is running on TCP port %s, in its group.	CBB רץ ביציאת TCP %s, בקבוצה שלו.
+CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	CBB רץ ביציאת TCP %s. הצטרף לקבוצה: sudo cbb pair, וסרוק את קוד ה-QR שלו בטלפון או הקלד את הקוד מ-cbb pair בשורש של הקבוצה או אצל מנהל; או צור קבוצה: sudo cbb new.
+CBB is removed, with this Mac's keys; it left its group.	CBB הוסר, יחד עם המפתחות של ה-Mac הזה; הוא עזב את הקבוצה שלו.
+CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-%s/state להתקנה מחדש; --purge מסיר אותם.
+this installer is for OpenWrt	תוכנית התקנה זו מיועדת ל-OpenWrt
+OpenWrt 25.12 or later is required (it installs packages with apk)	נדרש OpenWrt 25.12 ומעלה (הוא מתקין חבילות עם apk)
+%s does not run on this router; is it built for %s?	%s לא רץ על הנתב הזה; האם הוא נבנה עבור %s?
+CBB is installed; procd is not running here, so it starts at the next boot.	CBB מותקן; procd לא רץ כאן, לכן הוא יופעל באתחול הבא.
+the service did not answer within 40 s: %s	השירות לא ענה תוך 40 שניות: %s
+see logread -e cbb	ראה logread -e cbb
+CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB רץ ביציאת TCP %s, באזור lan. להסרה: sh /usr/share/cbb/uninstall.sh
+Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	חבילות מחוץ למאגרים של OpenWrt אינן נכללות ב-attended sysupgrade (ASU, owut): התקן אותו שוב אחרי שדרוג כזה.
+Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	הבא: הרץ su -s /bin/sh cbb -c 'cbb pair -name router' וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון.
+Next: run cbb pair and scan its QR code with the CBB app on your phone.	הבא: הרץ cbb pair וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון.
+CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-/etc/cbb להתקנה מחדש; --purge מסיר אותם.
+This device is in no group yet, so it starts pairing now (--no-pair skips this).	המכשיר הזה עדיין לא בשום קבוצה, לכן הוא מתחיל צימוד עכשיו (--no-pair מדלג על זה).
+could not record how CBB was installed; cbb update takes it as get.sh	לא ניתן לרשום איך CBB הותקן; cbb update יתייחס לזה כ-get.sh
+automatic updates are on or off, not %s	עדכונים אוטומטיים הם on או off, לא %s
+CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB יכול לבדוק פעם ביום אם יש גרסה שהפרויקט חתם ולהתקין אותה; הבדיקה מגלה ל-GitHub את הכתובת של המכשיר הזה, כמו כל הורדה.
+Update automatically? [y/N]	לעדכן אוטומטית? [y/N]
+No terminal to answer on; not now. Later: %scbb update -auto on	אין מסוף לענות בו; לא עכשיו. מאוחר יותר: %scbb update -auto on
+could not turn automatic updates %s; run %scbb update -auto %s	לא ניתן להעביר עדכונים אוטומטיים למצב %s; הרץ %scbb update -auto %s
+starting	מתחיל
+a key is not P-256	מפתח אינו P-256
+%s is not a valid release file; not installing	%s אינו קובץ גרסה תקין; לא מתקין
+%s is not signed by the project's key; not installing	%s אינו חתום במפתח של הפרויקט; לא מתקין
+keys.json holds a key whose use is empty; not installing	keys.json מכיל מפתח שהשימוש שלו ריק; לא מתקין
+checking for administrator rights	בודק הרשאות מנהל
+run it in a PowerShell opened with "Run as administrator"	הרץ אותו ב-PowerShell שנפתח עם "Run as administrator"
+finding the architecture	מזהה את הארכיטקטורה
+finding the latest release	מחפש את הגרסה האחרונה
+downloading %s (%s)	מוריד את %s (%s)
+checking %s against SHA256SUMS	בודק את %s מול SHA256SUMS
+checking the release's signature	בודק את החתימה של הגרסה
+checking the build attestation of %s	בודק את אישור הבנייה של %s
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the build attestation	CBB_ATTESTATION=require צריך gh, מחובר (gh auth login), כדי לבדוק את אישור הבנייה
+Not checked: the build attestation of the archive (it needs gh, signed in). SHA256SUMS matched.	לא נבדק: אישור הבנייה של הארכיון (צריך gh, מחובר). SHA256SUMS תאם.
+unpacking %s	פורס את %s
+running install.ps1	מריץ את install.ps1
+install.ps1 exited with %s	install.ps1 הסתיים עם %s
+get.ps1: %s failed: %s	get.ps1: %s נכשל: %s
+For the full error: $env:CBB_ERROR_DETAILS = "1", and run it again.	לשגיאה המלאה: $env:CBB_ERROR_DETAILS = "1", והרץ אותו שוב.
+install.ps1: %s failed: %s	install.ps1: %s נכשל: %s
+Run it again with -Details for the full error.	הרץ אותו שוב עם -Details לשגיאה המלאה.
+%s %s exited with %s: %s	%s %s הסתיים עם %s: %s
+install.ps1: run it in a PowerShell opened with "Run as administrator".	install.ps1: הרץ אותו ב-PowerShell שנפתח עם "Run as administrator".
+install.ps1: -Port takes a port from 1024 to 65535.	install.ps1: -Port מקבל יציאה מ-1024 עד 65535.
+checking the binaries	בודק את הקבצים הבינאריים
+cbbw.exe is missing beside %s	cbbw.exe חסר לצד %s
+%s is not built for Windows: %s	%s אינו בנוי ל-Windows: %s
+finding the signed-in user	מזהה את המשתמש המחובר
+stopping cbb	עוצר את cbb
+copying the files to %s	מעתיק את הקבצים אל %s
+adding cbb to PATH	מוסיף את cbb ל-PATH
+making the %s group	יוצר את הקבוצה %s
+adding %s to the %s group	מוסיף את %s לקבוצה %s
+net localgroup %s %s /add exited with %s: %s	net localgroup %s %s /add הסתיים עם %s: %s
+creating the service	יוצר את השירות
+setting the service's path failed with %s	הגדרת הנתיב של השירות נכשלה עם %s
+setting the port	מגדיר את היציאה
+100.64.0.0/10 counts as the home network on this PC (-HomeCgnat on).	100.64.0.0/10 נחשב לרשת הביתית במחשב הזה (-HomeCgnat on).
+narrowing %s	מצמצם את %s
+%s was not the administrators' own; it is now %s	%s לא היה בבעלות המנהלים; עכשיו הוא %s
+allowing cbb in Windows Firewall	מאפשר את cbb בחומת האש של Windows
+the local subnet	תת-הרשת המקומית
+the local subnet and 100.64.0.0/10	תת-הרשת המקומית ו-100.64.0.0/10
+Firewall: Windows Firewall (on for %s). CBB requires these rules:	חומת אש: חומת האש של Windows (פועלת עבור %s). CBB צריך את הכללים האלה:
+Firewall: Windows Firewall (off). CBB requires these rules:	חומת אש: חומת האש של Windows (כבויה). CBB צריך את הכללים האלה:
+  1. Allow incoming TCP %s from %s to %s. Purpose: connections from the group's devices.	  1. לאפשר TCP %s נכנס מ-%s אל %s. מטרה: חיבורים מהמכשירים של הקבוצה.
+  2. Allow incoming UDP 5353 from %s to %s. Purpose: finding the group's devices (mDNS).	  2. לאפשר UDP 5353 נכנס מ-%s אל %s. מטרה: מציאת המכשירים של הקבוצה (mDNS).
+Add these rules now? [y/N]	להוסיף את הכללים האלה עכשיו? [y/N]
+Add these rules now? [y/N] No console to answer on; taken as No.	להוסיף את הכללים האלה עכשיו? [y/N] אין מסוף לענות בו; נחשב כ"לא".
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run in an administrator PowerShell:	לא נוספו כללי חומת אש. CBB עובד רק כל עוד חומת האש מאפשרת את הכללים שלמעלה. כדי להוסיף אותם ידנית, הרץ ב-PowerShell של מנהל:
+To let CBB add and manage them, run the installer again with -Express ($env:CBB_FIREWALL = "express" for get.ps1).	כדי ש-CBB יוסיף וינהל אותם, הרץ את תוכנית ההתקנה שוב עם -Express ($env:CBB_FIREWALL = "express" עבור get.ps1).
+CBB also adds an outbound rule that keeps its service on the home network and, with cbb global on, its group's servers.	CBB מוסיף גם כלל יוצא שמשאיר את השירות שלו ברשת הביתית ובשרתים של הקבוצה שלו, כש-cbb global פועל.
+keeping the service on the home network	משאיר את השירות ברשת הביתית
+starting the service	מפעיל את השירות
+starting the agent with every sign-in	מפעיל את הסוכן בכל כניסה
+starting the agent for %s	מפעיל את הסוכן עבור %s
+starting the tray app for %s	מפעיל את אפליקציית המגש עבור %s
+The agent did not start now (%s); it starts when %s signs in again.	הסוכן לא הופעל עכשיו (%s); הוא יופעל כש-%s ייכנס שוב.
+The tray app did not start now (%s); it starts when %s signs in again.	אפליקציית המגש לא הופעלה עכשיו (%s); היא תופעל כש-%s ייכנס שוב.
+starting the tray app with every sign-in	מפעיל את אפליקציית המגש בכל כניסה
+adding CBB to the Start menu	מוסיף את CBB לתפריט התחל
+registering the uninstaller	רושם את מסיר ההתקנה
+waiting for the service	ממתין לשירות
+the service does not answer; its log is %s	השירות לא עונה; היומן שלו הוא %s
+writing the outbound rule for what the service reaches now	כותב את הכלל היוצא למה שהשירות מגיע אליו עכשיו
+cbb global allow exited with %s	cbb global allow הסתיים עם %s
+recording how CBB was installed	רושם איך CBB הותקן
+Could not record how CBB was installed; cbb update takes it as get.ps1.	לא ניתן לרשום איך CBB הותקן; cbb update יתייחס לזה כ-get.ps1.
+setting automatic updates	מגדיר עדכונים אוטומטיים
+Update automatically? [y/N] No console to answer on; not now. Later: cbb update -auto on	לעדכן אוטומטית? [y/N] אין מסוף לענות בו; לא עכשיו. מאוחר יותר: cbb update -auto on
+Could not turn automatic updates %s; run cbb update -auto %s as administrator.	לא ניתן להעביר עדכונים אוטומטיים למצב %s; הרץ cbb update -auto %s כמנהל.
+CBB %s is running on TCP port %s; %s may use it.	CBB %s רץ ביציאת TCP %s; %s יכול להשתמש בו.
+It stays in its group.	הוא נשאר בקבוצה שלו.
+Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	הבא, במסוף שנפתח כמנהל: cbb pair, וסרוק את קוד ה-QR שלו בטלפון או הקלד את הקוד מ-cbb pair בשורש של הקבוצה או אצל מנהל; או צור קבוצה: cbb new.
+To remove it: Settings, Apps, CBB, Uninstall.	להסרה: הגדרות, אפליקציות, CBB, הסר התקנה.
+Y	כ
+Yes	כן
+y	כ
+yes	כן
+uninstall.ps1: %s failed: %s	uninstall.ps1: %s נכשל: %s
+deleting the service	מוחק את השירות
+stopping the agents and the tray app	עוצר את הסוכנים ואת אפליקציית המגש
+removing the update task and cbb update's folder	מסיר את משימת העדכון ואת התיקייה של cbb update
+removing the firewall rules	מסיר את כללי חומת האש
+removing the sign-in entries, the Start menu shortcut and the uninstaller entry	מסיר את רשומות הכניסה, את קיצור הדרך בתפריט התחל ואת רשומת מסיר ההתקנה
+removing cbb from PATH	מסיר את cbb מ-PATH
+removing %s	מסיר את %s
+removing %s and the %s group	מסיר את %s ואת הקבוצה %s
+CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-%s להתקנה מחדש; -Purge מסיר אותם.

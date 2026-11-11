@@ -134,6 +134,31 @@
     </form>
   </dialog>
 
+  <dialog id="invite-dialog">
+    <form method="dialog">
+      <h2 data-t>Send an invitation</h2>
+      <p id="invite-wait" class="dim" data-t>Allow cbb to run as the administrator; the invitation opens on the group's hub next.</p>
+      <div id="invite-code" hidden>
+        <img id="invite-qr" alt="" data-t-title="The invitation's QR code">
+        <p data-t>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.</p>
+        <details>
+          <summary class="dim small" data-t>The invitation's text</summary>
+          <code id="invite-text" class="mono"></code>
+        </details>
+        <p class="dim small" id="invite-ends"></p>
+      </div>
+      <div id="invite-ask" hidden>
+        <p id="invite-ask-title"></p>
+        <p class="code mono" id="invite-fingerprint"></p>
+        <div class="buttons">
+          <button type="button" id="invite-no" class="glass" data-t>Not this one</button>
+          <button type="button" id="invite-yes" class="accent" data-t>Admit</button>
+        </div>
+      </div>
+      <menu><button value="cancel" class="glass" data-t>Cancel</button></menu>
+    </form>
+  </dialog>
+
   <dialog id="settings-dialog">
     <form method="dialog">
       <h2 data-t>Settings</h2>

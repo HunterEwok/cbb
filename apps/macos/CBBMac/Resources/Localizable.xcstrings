@@ -14215,6 +14215,374 @@
         }
       }
     },
+    "Allow cbb to run as the administrator; the invitation opens on the group's hub next.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسمح لـ cbb بالعمل كمسؤول؛ بعدها تُفتح الدعوة على محور المجموعة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permite que cbb se ejecute como administrador; después la invitación se abre en el hub del grupo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אפשרו ל-cbb לרוץ כמנהל המערכת; לאחר מכן ההזמנה נפתחת ברכזת של הקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cbb को व्यवस्थापक के रूप में चलने दें; इसके बाद निमंत्रण समूह के हब पर खुलता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разрешите cbb работать от имени администратора; затем приглашение откроется на хабе группы."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruhusu cbb iendeshwe kama msimamizi; kisha mwaliko unafunguliwa kwenye kitovu cha kikundi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请允许 cbb 以管理员身份运行；随后邀请会在群组的中心节点上打开。"
+          }
+        }
+      }
+    },
+    "Not this one": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ليس هذا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este no"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא זה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह नहीं"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не этот"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si hiki"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不是这个"
+          }
+        }
+      }
+    },
+    "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على هاتف جديد، افتح CBB واضغط «الانضمام بدعوة» وامسح الرمز. على حاسوب، شغّل cbb pair -invite مع نصها. اعرضها أو أرسلها فقط لمن سينضم."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En un teléfono nuevo, abre CBB, toca Unirse con una invitación y escanea el código. En un ordenador, ejecuta cbb pair -invite con su texto. Muéstralo o envíalo solo a quien se une."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite עם הטקסט שלה. הציגו או שלחו אותה רק למי שמצטרף."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर इसके पाठ के साथ cbb pair -invite चलाएँ। इसे केवल जुड़ने वाले व्यक्ति को दिखाएँ या भेजें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite с его текстом. Показывайте или отправляйте его только тому, кто вступает."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite ukitumia maandishi yake. Uonyeshe au utume kwa anayejiunga pekee."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上用其文本运行 cbb pair -invite。只向要加入的人出示或发送它。"
+          }
+        }
+      }
+    },
+    "The device joined the group; it appears in the list once it connects.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انضم الجهاز إلى المجموعة؛ يظهر في القائمة حين يتصل."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El dispositivo se unió al grupo; aparece en la lista cuando se conecta."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המכשיר הצטרף לקבוצה; הוא יופיע ברשימה כשיתחבר."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "डिवाइस समूह में जुड़ गया; जुड़ने पर यह सूची में दिखेगा।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство вступило в группу; оно появится в списке, когда подключится."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kimejiunga na kikundi; kitaonekana kwenye orodha kikiunganishwa."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备已加入群组；连接后会出现在列表中。"
+          }
+        }
+      }
+    },
+    "The invitation is valid until %@.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدعوة صالحة حتى %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La invitación es válida hasta las %@."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ההזמנה בתוקף עד %@."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निमंत्रण %@ तक मान्य है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приглашение действует до %@."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mwaliko ni halali hadi %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邀请在 %@ 之前有效。"
+          }
+        }
+      }
+    },
+    "The invitation's QR code": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رمز QR الخاص بالدعوة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El código QR de la invitación"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "קוד ה-QR של ההזמנה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निमंत्रण का QR कोड"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR-код приглашения"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Msimbo wa QR wa mwaliko"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邀请的二维码"
+          }
+        }
+      }
+    },
+    "The invitation's text": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نص الدعوة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El texto de la invitación"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "טקסט ההזמנה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निमंत्रण का पाठ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Текст приглашения"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maandishi ya mwaliko"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邀请文本"
+          }
+        }
+      }
+    },
+    "%@ (%@) used the invitation. Admit it only if the device shows the same fingerprint:": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استخدم %1$@ (%2$@) الدعوة. اقبله فقط إن عرض الجهاز البصمة نفسها:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@) usó la invitación. Admítelo solo si el dispositivo muestra la misma huella:"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@) השתמש בהזמנה. אשרו רק אם המכשיר מציג את אותה טביעת אצבע:"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@) ने निमंत्रण का उपयोग किया। केवल तभी शामिल करें जब डिवाइस वही फ़िंगरप्रिंट दिखाए:"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@) воспользовался приглашением. Впускайте, только если устройство показывает тот же отпечаток:"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@) ametumia mwaliko. Kikubali tu ikiwa kifaa kinaonyesha alama ileile:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@（%2$@）使用了邀请。仅当该设备显示相同的指纹时才接纳："
+          }
+        }
+      }
+    },
     "Oops, something broke": {
       "localizations": {
         "ru": {

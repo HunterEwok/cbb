@@ -127,5 +127,9 @@
  "Sync is off on: {}.": "הסנכרון כבוי ב: {}.",
  "Muted by an admin: {}.": "הושתקו על ידי מנהל: {}.",
  "CBB {} is available.": "CBB {} זמין.",
- "Why it does not sync: {}": "למה אין סנכרון: {}"
+ "Why it does not sync: {}": "למה אין סנכרון: {}",
+ "Handing this device's tunnel key to the hub...": "מוסר את מפתח המנהרה של המכשיר הזה לרכזת...",
+ "The hub took it: this device syncs from afar now.": "הרכזת קיבלה אותו: המכשיר הזה מסתנכרן עכשיו מרחוק.",
+ "The hub has not answered yet; the service keeps trying for a day.": "הרכזת עוד לא ענתה; השירות ממשיך לנסות במשך יום.",
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "הפעילו את השירות (cbb service) בתוך יום: הוא מוסר את המפתח של המכשיר הזה לרכזת."
 }

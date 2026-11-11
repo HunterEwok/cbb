@@ -55,6 +55,16 @@ type Desk struct {
 	joinPath      string
 	join          Join
 	joinCancelled bool
+	// invitePath and answersPath are the files of the invitation open now
+	// (invite.go), "" when none; inviteCancelled whether the window
+	// cancelled it.
+	invitePath      string
+	answersPath     string
+	inviteCancelled bool
+	// inviteSeen is the invitation whose end inviteEndsMs is, counted
+	// from when the window first read it.
+	inviteSeen   string
+	inviteEndsMs int64
 
 	// ask is what the window asks for next, once it reads it (TakeAsk):
 	// the tray's Settings, or the question before sync away from home.

@@ -116,6 +116,7 @@ struct MainView: View {
         }
         .sheet(isPresented: $adding) { AddDeviceSheet().modifier(Themed()) }
         .sheet(isPresented: Binding(get: { model.joining }, set: { if !$0 { model.cancelJoin() } })) { JoinSheet().modifier(Themed()) }
+        .sheet(isPresented: Binding(get: { model.inviting }, set: { if !$0 { model.cancelInvite() } })) { InviteSheet().modifier(Themed()) }
         .sheet(isPresented: $recovering) { RecoverySheet().modifier(Themed()) }
         .sheet(item: Binding(get: { model.bug }, set: { if $0 == nil, model.bug != nil { Task { await model.cancelBug() } } })) {
             BugSheet(offer: $0).modifier(Themed())

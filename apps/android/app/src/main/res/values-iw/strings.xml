@@ -246,9 +246,9 @@
     <string name="event_unfrozen">%1$s הופשר.</string>
     <string name="event_taken_over">%1$s השתלט על הקבוצה: הוא מחזיק עכשיו את השורש של הקבוצה.</string>
     <string name="invite_title">הזמנת מכשיר מרחוק</string>
-    <string name="invite_body">למכשיר שאינו ברשת שלכם, כמו המחשב של ההורים: שתפו את קובץ ההזמנה עם בעליו, שמצטרף עם cbb pair -invite. היא עובדת פעם אחת, למשך שעה, כל עוד היישום הזה פתוח.</string>
+    <string name="invite_body">בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite עם הקובץ. היא פועלת פעם אחת, למשך שעה, כל עוד האפליקציה פתוחה; הקבוצה צריכה רכזת.</string>
     <string name="invite_open">יצירת הזמנה</string>
-    <string name="invite_open_until">ההזמנה פתוחה עד %1$s. שתפו את הקובץ שלה רק עם מי שמצטרף: כל מי שמחזיק בו יכול לבקש להצטרף.</string>
+    <string name="invite_open_until">ההזמנה פתוחה עד %1$s. הציגו או שלחו את קוד ה-QR שלה רק למי שמצטרף; הקובץ הוא הגיבוי.</string>
     <string name="invite_share">שיתוף ההזמנה</string>
     <string name="invite_cancel">ביטול ההזמנה</string>
     <string name="invite_ask_title">לקבל את %1$s?</string>
@@ -557,7 +557,7 @@
     <string name="turn_on">הפעלה</string>
     <string name="scan_code">סריקת קוד</string>
     <string name="invite_send">שליחת הזמנה</string>
-    <string name="invite_on_hub">הזמנה נוצרת ברכזת של הקבוצה. במחשב שהוא הרכזת הריצו cbb invite ושלחו את הקובץ שהוא יוצר בערוץ שאתם סומכים עליו; במכשיר החדש הריצו cbb pair -invite עם הקובץ הזה.</string>
+    <string name="invite_on_hub">רק מנהל יוצר הזמנה: טלפון מנהל כאן, או cbb invite במחשב מנהל.</string>
     <string name="more">עוד</string>
     <string name="view_next">הצגה כ-%1$s</string>
     <string name="lost_phone_title">טלפון אבד?</string>
@@ -635,4 +635,24 @@
     <string name="bug_details">פרטים טכניים</string>
     <string name="bug_fixed_in">גרסה %1$s מתקנת את זה: יש לעדכן את CBB.</string>
     <string name="bug_broke_restarted">משהו ב-CBB נשבר. הוא הופעל מחדש.</string>
+    <string name="invitation_join">הצטרפות בהזמנה</string>
+    <string name="invitation_has_group">הטלפון הזה כבר בקבוצה. צאו ממנה קודם כדי להצטרף לאחרת.</string>
+    <string name="invitation_not_one">זו לא הזמנה של CBB.</string>
+    <string name="invitation_expired">תוקף ההזמנה פג. בקשו הזמנה חדשה.</string>
+    <string name="invitation_joined">הטלפון בקבוצה. מחוץ לבית הוא מסתנכרן דרך הרכזת של הקבוצה.</string>
+    <string name="invitation_fingerprint_hint">מי שהזמין אתכם רואה את המילים האלה במכשיר שלו ומאשר את הטלפון אם הן תואמות. השאירו את המסך הזה פתוח.</string>
+    <string name="invitation_connecting">מתחבר לרכזת של הקבוצה…</string>
+    <string name="invitation_scan_hint">כוונו את המצלמה לקוד ה-QR של ההזמנה.</string>
+    <string name="invitation_text">טקסט ההזמנה</string>
+    <string name="invitation_read">קריאה</string>
+    <string name="invitation_open_file">פתיחת קובץ</string>
+    <string name="invitation_title">הוזמנתם לקבוצה</string>
+    <string name="invitation_group">קבוצה: %1$s</string>
+    <string name="invitation_hub">רכזת: %1$s</string>
+    <string name="invitation_until">בתוקף עד %1$s</string>
+    <string name="invitation_answer_hint">הצטרפו רק אם ביקשתם את ההזמנה הזו. מי שיצר אותה מאשר את הטלפון כשהוא רואה את המילים שהוא מציג.</string>
+    <string name="invitation_accept">הצטרפות</string>
+    <string name="invitation_decline">דחייה</string>
+    <string name="error_hub_unreachable">הרכזת של הקבוצה לא ענתה. ודאו שההזמנה עדיין בתוקף ושהרכזת פועלת, ונסו שוב.</string>
+    <string name="invite_qr_label">קוד ה-QR של ההזמנה</string>
 </resources>

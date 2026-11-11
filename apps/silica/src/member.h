@@ -119,6 +119,9 @@ public:
     // Turns sync away from home on, with new tunnel keys that the hellos
     // offer the group's hubs, or off, forgetting them.
     Q_INVOKABLE void setAway(bool on);
+    // After joining by a remote invitation: turns sync away from home on
+    // and offers the tunnel key through the invitation's guest tunnel.
+    void joinedByInvite(const QString &invite);
 
 signals:
     void changed();

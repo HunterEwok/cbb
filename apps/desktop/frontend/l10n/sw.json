@@ -246,7 +246,6 @@
   "More": "Zaidi",
   "OK": "Sawa",
   "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.": "Kwenye simu ya kikundi, gusa + na uchanganue msimbo huu. Kwenye kompyuta ya kikundi, gusa + na uandike nambari. Acha dirisha hili wazi.",
-  "On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.": "Kwenye kitovu cha kikundi, endesha cbb invite na utume faili inalounda kupitia njia unayoiamini. Kwenye kifaa kipya, endesha cbb pair -invite pamoja na faili hilo.",
   "On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.": "Kwenye kifaa kipya, chagua Jiunge na kikundi: kinaonyesha msimbo wa QR na tarakimu sita. Simu ya kikundi huchanganua msimbo; hapa, andika tarakimu.",
   "Open a picture of its QR code": "Fungua picha ya msimbo wake wa QR",
   "Open at sign-in": "Fungua wakati wa kuingia",
@@ -328,5 +327,13 @@
   "Networks that block VPNs (AmneziaWG)": "Mitandao inayozuia VPN (AmneziaWG)",
   "Networks that let only the web through (VLESS)": "Mitandao inayoruhusu wavuti pekee (VLESS)",
   "This is my home network": "Huu ni mtandao wangu wa nyumbani",
-  "This network counts as home now.": "Mtandao huu sasa unahesabiwa kuwa wa nyumbani."
+  "This network counts as home now.": "Mtandao huu sasa unahesabiwa kuwa wa nyumbani.",
+  "Allow cbb to run as the administrator; the invitation opens on the group's hub next.": "Ruhusu cbb iendeshwe kama msimamizi; kisha mwaliko unafunguliwa kwenye kitovu cha kikundi.",
+  "The invitation's QR code": "Msimbo wa QR wa mwaliko",
+  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.": "Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite ukitumia maandishi yake. Uonyeshe au utume kwa anayejiunga pekee.",
+  "The invitation's text": "Maandishi ya mwaliko",
+  "Not this one": "Si hiki",
+  "The invitation is valid until %s.": "Mwaliko ni halali hadi %s.",
+  "%s (%s) used the invitation. Admit it only if the device shows the same fingerprint:": "%s (%s) ametumia mwaliko. Kikubali tu ikiwa kifaa kinaonyesha alama ileile:",
+  "The device joined the group; it appears in the list once it connects.": "Kifaa kimejiunga na kikundi; kitaonekana kwenye orodha kikiunganishwa."
 }
