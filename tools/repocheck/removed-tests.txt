@@ -437,3 +437,4 @@ internal/relay/provider_test.go TestAllowanceBoundByProvider D-88: the relay's s
 internal/relay/relay_test.go TestRate D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/limits.rs byte_rate_waits_for_its_tokens
 internal/relay/relay_test.go TestListen D-88: the relay's server is the Rust cbb-relay only; TestOpenRelay starts it with no group and with a bad tag
 internal/relay/relay_test.go TestKeys D-88: the relay's key file is the Rust cbb-relay's; member/src/relayd/keys.rs made_once_then_read, and every test of internal/relay hands it a file Go wrote
+member/src/update_os.rs archives_by_helper D-89: there is no lite archive any more, only one cbb-<system>-<arch> archive with or without cbb-helper beside cbb; renamed archive_of_the_system, which checks that name and the programs to replace

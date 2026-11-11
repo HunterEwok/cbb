@@ -1039,12 +1039,13 @@ func echoThroughPort(t *testing.T, port any) {
 }
 
 // startRelay runs the blind relay, the Rust cbb-relay, for the group of
-// tag until the test ends; the test skips without one (relay.Binary).
+// tag until the test ends. The tests that run tunnel-on-linux need one
+// beside it (relay.Binary), as CI gives them.
 func startRelay(t *testing.T, tag string) (*relay.Process, relay.Keys) {
 	t.Helper()
 	bin := relay.Binary()
 	if bin == "" {
-		t.Skip("CBB_TEST_RUST_RELAY is not set")
+		t.Fatal("no cbb-relay: set CBB_TEST_RUST_RELAY with CBB_TUNNEL_ON_LINUX")
 	}
 	r, err := relay.Start(bin, relay.Config{Groups: []string{tag}, Logf: t.Logf})
 	if err != nil {
