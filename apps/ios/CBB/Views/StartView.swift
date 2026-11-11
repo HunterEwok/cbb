@@ -103,9 +103,12 @@ struct StartView: View {
                     .contentShape(Rectangle())
             }
             // Plain, as the other buttons have styles of their own, so that
-            // its label is laid out as plain text in every script.
+            // its label is laid out as plain text in every script. Medium,
+            // as the other buttons' labels: at the regular weight Xcode's
+            // clipped text check flags Hindi's line in any text style, at
+            // the medium weight in none.
             .buttonStyle(.plain)
-            .font(.footnote)
+            .font(.footnote.weight(.medium))
             .foregroundStyle(palette.textDim)
         }
     }
