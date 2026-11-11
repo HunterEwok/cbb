@@ -232,6 +232,66 @@ fn an_admin_signs_only_a_new_devices_first_record() {
     assert_eq!(dl.key, laptop.key);
 }
 
+/// An admin admits an ordinary leaf like any device, never a guarded one;
+/// only a root sets the guard, and an admin cannot clear it (owner, 11.11).
+#[test]
+fn ordinary_and_guarded_leaves() {
+    let mut g = G::new();
+    let (pa, a, pm, m) = (k("phone a"), k("admin a"), k("phone m"), k("admin m"));
+    let (lamp, lock, kettle) = (k("lamp"), k("lock"), k("kettle"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_MANAGE);
+    g.admin(&pm, &m, POWER_MANAGE);
+    let leaf = |d: &mut Device| {
+        d.role = ROLE_LEAF;
+        d.rights = 0;
+    };
+    // An ordinary leaf from an admin counts.
+    let lamp_rec = g.device(&a, &lamp, "lamp", leaf);
+    // An admin's record with the guard does not.
+    let lock_rec = g.device(&a, &lock, "lock", |d| {
+        leaf(d);
+        d.guarded = true;
+    });
+    let s = g.state();
+    assert!(s.counting.contains(&lamp_rec.id()));
+    let d = s.device(&lamp.key.device_id()).unwrap();
+    assert!(d.role == ROLE_LEAF && !d.guarded && !d.by_root);
+    assert!(!s.counting.contains(&lock_rec.id()));
+    assert!(s.device(&lock.key.device_id()).is_none());
+    // A manage record cannot set the guard on the leaf, nor make it
+    // another role.
+    let set = g.device(&m, &lamp, "lamp", |d| {
+        leaf(d);
+        d.guarded = true;
+    });
+    let member = g.device(&m, &lamp, "lamp", |_| {});
+    let s = g.state();
+    assert!(!s.counting.contains(&set.id()) && !s.counting.contains(&member.id()));
+    assert_eq!(s.device(&lamp.key.device_id()).unwrap().role, ROLE_LEAF);
+    // The root marks an admin-admitted leaf guarded: it counts, and the
+    // leaf is the root's alone.
+    g.device(&a, &kettle, "kettle", leaf);
+    let guard = g.device(&k("root"), &kettle, "kettle", |d| {
+        leaf(d);
+        d.guarded = true;
+    });
+    let s = g.state();
+    assert!(s.counting.contains(&guard.id()));
+    let d = s.device(&kettle.key.device_id()).unwrap();
+    assert!(d.guarded && d.by_root);
+    // An admin's later record without the guard does not clear it.
+    let clear = g.device(&a, &kettle, "kettle", leaf);
+    let cleared = g.device(&m, &kettle, "kettle", leaf);
+    let s = g.state();
+    assert!(!s.counting.contains(&clear.id()) && !s.counting.contains(&cleared.id()));
+    assert!(s.device(&kettle.key.device_id()).unwrap().guarded);
+    // The guard is a leaf's only.
+    let mut d = Device::new(k("pc").key.clone(), "pc", ROLE_MEMBER);
+    d.guarded = true;
+    let body = g.body(&k("root"), Kind::Device(d));
+    assert!(body.check().unwrap_err().is("records/device/guarded"));
+}
+
 #[test]
 fn an_admin_never_widens_a_device() {
     let mut g = G::new();

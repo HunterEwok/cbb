@@ -185,6 +185,10 @@ pub struct Device {
     pub commands: u64,
     pub holds_root: bool,
     pub replaces: Option<KeyHash>,
+    /// A guarded leaf (a lock, a door): only a root's record for it counts,
+    /// and only the devices a root names command it. Field 25 here until
+    /// the format names it.
+    pub guarded: bool,
 }
 
 impl Device {
@@ -206,6 +210,7 @@ impl Device {
             commands: 0,
             holds_root: false,
             replaces: None,
+            guarded: false,
         }
     }
 
@@ -486,6 +491,9 @@ fn check_device(d: &Device) -> Result<bool, Rule> {
     if d.replaces == Some(d.key.hash()) {
         return Err(field(t, "replaces"));
     }
+    if d.guarded && d.role != ROLE_LEAF {
+        return Err(field(t, "guarded"));
+    }
     Ok(held)
 }
 
@@ -525,6 +533,9 @@ fn encode_device(m: &mut Map, d: &Device) {
     }
     if let Some(r) = &d.replaces {
         m.put(24, cbor::bytes(&r.0));
+    }
+    if d.guarded {
+        m.put(25, cbor::uint(1));
     }
 }
 

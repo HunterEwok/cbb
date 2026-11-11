@@ -17,8 +17,8 @@ use alloc::vec::Vec;
 
 use super::body::{
     self, Body, Device, Head, Kind, POWER_ADMIT, POWER_FREEZE, POWER_HUB, POWER_MANAGE, POWER_REMOVE,
-    POWER_REMOVE_ADMINS, POWER_TAKEOVER, POWER_THAW, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF,
-    ROLE_WATCH, Removal, Seen, Settings,
+    POWER_REMOVE_ADMINS, POWER_TAKEOVER, POWER_THAW, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_WATCH,
+    Removal, Seen, Settings,
 };
 use super::key::{DeviceId, GroupId, Key, KeyHash, RecordId};
 use super::{
@@ -164,6 +164,8 @@ pub struct DeviceState {
     pub commands: u64,
     pub frozen: bool,
     pub replaces: Option<KeyHash>,
+    /// A guarded leaf: its records are a root's alone.
+    pub guarded: bool,
     /// Its records are a root's (else an admin admitted it).
     pub by_root: bool,
 }
@@ -1005,7 +1007,8 @@ impl<'e, 'a> Epoch<'e, 'a> {
 
     /// Reports whether device record i keeps within what admin a may sign
     /// for any device: base rights, no accepts, no admin key, nothing a
-    /// root alone gives.
+    /// root alone gives. An admin may admit an ordinary leaf, never a
+    /// watch or a guarded leaf (owner, 11.11).
     fn admin_device_ok(&self, a: &KeyHash, d: &Device) -> bool {
         d.rights & !self.base_rights(a) == 0
             && d.accepts.is_empty()
@@ -1015,7 +1018,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             && !d.holds_root
             && d.replaces.is_none()
             && d.role != ROLE_WATCH
-            && d.role != ROLE_LEAF
+            && !d.guarded
     }
 
     /// For each device no root recorded, the admin record that counts by
@@ -1089,12 +1092,14 @@ impl<'e, 'a> Epoch<'e, 'a> {
                 }
                 match self.admitted.get(&dev) {
                     Some(&first) if first == i => true,
-                    // Later records narrow the admitted one: rights within
-                    // its, skip covering its.
+                    // Later records narrow the admitted one: its role,
+                    // rights within its, skip covering its.
                     Some(&first) => {
                         let base = self.r(first).dev();
                         self.has(a, POWER_MANAGE)
-                            && base.is_some_and(|b| d.rights & !b.rights == 0 && d.skip & b.skip == b.skip)
+                            && base.is_some_and(|b| {
+                                d.role == b.role && d.rights & !b.rights == 0 && d.skip & b.skip == b.skip
+                            })
                     }
                     None => false,
                 }
@@ -1637,6 +1642,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             commands: 0,
             frozen: false,
             replaces: n.replaces,
+            guarded: n.guarded && by_root,
             by_root,
         };
         if let Some(a) = n.admin.as_ref().map(Key::hash)
