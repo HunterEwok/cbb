@@ -28,6 +28,17 @@ final class CoreTests: XCTestCase {
     }
 
     /// Asks the version, and sees a refusal come back as a Refusal.
+    /// A panic in the core's library is an answer, code 5 with what broke
+    /// and where, and the core answers again after it.
+    func testPanicIsAnAnswer() throws {
+        let e = try Core.testPanic()
+        XCTAssertEqual(e.code, 5)
+        XCTAssertEqual(e.name, "panic")
+        XCTAssertTrue(e.details?.contains("cbb_test_panic") ?? false, e.description)
+        XCTAssertNotNil(Core.lastPanic())
+        XCTAssertEqual(try Core.version().abi, Core.abi)
+    }
+
     func testRun() throws {
         let v = try Core.version()
         XCTAssertEqual(v.abi, Core.abi)

@@ -55,6 +55,14 @@ pub fn write_status(st: &Status, devs: &[Device], now_ms: i64, limit: &str) -> S
     if !st.mode.is_empty() {
         let _ = writeln!(w, "{}", sync_line(st));
     }
+    // The first reason the screen in the apps shows, unless a line above
+    // already says it.
+    if let Some(r) = st.why.first().filter(|r| {
+        r.level == cbb_core::why::Level::Stop
+            && !matches!(r.code.as_str(), "removed" | "frozen" | "taken_over" | "sync_off")
+    }) {
+        let _ = writeln!(w, "{}", tr!("Why it does not sync: {}", why_line(r)));
+    }
     if st.muted && st.muted_until_ms == 0 {
         w.push_str("An admin muted this device: its copies do not reach the group until an admin unmutes it.\n");
     } else if st.muted {
@@ -79,6 +87,126 @@ pub fn write_status(st: &Status, devs: &[Device], now_ms: i64, limit: &str) -> S
     write_unreached(&mut w, st, devs);
     write_devices(&mut w, devs, &st.peers, &st.release, now_ms);
     w
+}
+
+/// One reason why this device does not sync (cbb_core::why) in the user's
+/// language: what is wrong, then what to do, as the apps' screen says it.
+pub fn why_line(r: &cbb_core::why::Reason) -> String {
+    match r.code.as_str() {
+        "not_in_group" => format!("{} {}", tr!("This device is in no group."), tr!("Start a group or join one.")),
+        "removed" => format!(
+            "{} {}",
+            tr!("This device was removed from the group."),
+            tr!("Leave the group on this device, then join again.")
+        ),
+        "taken_over" => format!(
+            "{} {}",
+            tr!("{} took the group over from this device.", r.device),
+            tr!("If this device was not lost, remove {} from the group.", r.device)
+        ),
+        "frozen" => format!(
+            "{} {}",
+            tr!("Another admin froze this device's admin key."),
+            tr!("Ask the group's root to unfreeze it.")
+        ),
+        "cert_expired" => format!(
+            "{} {}",
+            tr!("This device's certificate ended on {}.", crate::cli::local_minute(r.until_ms)),
+            tr!("Bring it home to an admin of the group: the admin renews the certificate.")
+        ),
+        "cert_ending" => format!(
+            "{} {}",
+            tr!("This device's certificate ends on {}.", crate::cli::local_minute(r.until_ms)),
+            tr!("Connect it at home to an admin of the group before then.")
+        ),
+        "stopped" => format!(
+            "{} {}",
+            tr!("The group's records stop the exchange."),
+            tr!("The group's root decides on its alerts.")
+        ),
+        "secrets_stopped" => tr!("The group sends no secrets until its root decides.").to_string(),
+        "sync_off" if r.until_ms > 0 => format!(
+            "{} {}",
+            tr!("Sync is off on this device until {}.", crate::cli::local_minute(r.until_ms)),
+            tr!("Turn sync on.")
+        ),
+        "sync_off" => format!("{} {}", tr!("Sync is off on this device."), tr!("Turn sync on.")),
+        "only_device" => format!("{} {}", tr!("This is the group's only device."), tr!("Add a phone or a computer.")),
+        "away_off" => format!(
+            "{} {}",
+            tr!("No device of the group is on this network."),
+            tr!("Turn on Everywhere to sync away from home.")
+        ),
+        "new_network" => format!(
+            "{} {}",
+            tr!("This computer has not met its group on this network."),
+            tr!("If this is your home network, run sudo cbb network.")
+        ),
+        "no_hub" => format!(
+            "{} {}",
+            tr!("Everywhere is on, but the group has no hub."),
+            tr!("Make a computer at home the hub, in its advanced settings.")
+        ),
+        "tunnel_blocked" => format!(
+            "{} {}",
+            tr!("The tunnel to the hub {} does not get through.", r.device),
+            tr!("This network may block tunnels: turn on the tunnel's disguise on the hub.")
+        ),
+        "hub_unreachable" => {
+            format!("{} {}", tr!("The hub {} does not answer.", r.device), tr!("Check that the hub is on and online."))
+        }
+        "alone" => format!(
+            "{} {}",
+            tr!("Connected, but no other device of the group is online."),
+            tr!("Turn on another device of the group.")
+        ),
+        "relay_down" => format!(
+            "{} {}",
+            tr!("The relay does not answer."),
+            tr!("Check the internet connection; CBB tries again by itself.")
+        ),
+        "hub_waiting" => format!(
+            "{} {}",
+            tr!("This device is the hub, and no device has connected yet."),
+            tr!("Check that the other devices have Everywhere on.")
+        ),
+        "muted" if r.until_ms > 0 => format!(
+            "{} {}",
+            tr!(
+                "An admin muted this device until {}: its copies do not reach the group.",
+                crate::cli::local_minute(r.until_ms)
+            ),
+            tr!("Ask an admin to unmute it.")
+        ),
+        "muted" => format!(
+            "{} {}",
+            tr!("An admin muted this device: its copies do not reach the group."),
+            tr!("Ask an admin to unmute it.")
+        ),
+        "forwarder_down" => format!(
+            "{} {}",
+            tr!("The forwarder does not take this hub."),
+            tr!("Devices away from home may not reach it; CBB tries again by itself.")
+        ),
+        "entries_stale" => format!(
+            "{} {}",
+            tr!("The list of the forwarders' entry points is out of date."),
+            tr!("Update CBB on a computer of the group.")
+        ),
+        "newer" => {
+            format!("{} {}", tr!("The group has records of a newer version."), tr!("Update CBB on this device."))
+        }
+        "unreached" => format!(
+            "{} {}",
+            tr!("Devices at home cannot connect to this one: {}.", r.devices.join(", ")),
+            tr!("Let CBB through this computer's firewall.")
+        ),
+        "devices_offline" => tr!("Offline: {}.", r.devices.join(", ")).to_string(),
+        "devices_sync_off" => tr!("Sync is off on: {}.", r.devices.join(", ")).to_string(),
+        "devices_muted" => tr!("Muted by an admin: {}.", r.devices.join(", ")).to_string(),
+        "update" => tr!("CBB {} is available.", r.value).to_string(),
+        other => other.to_string(),
+    }
 }
 
 /// Says when members at home could not connect to this device and sync
@@ -512,6 +640,32 @@ fn seen(d: &Device, now_ms: i64) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// Status prints the first reason that stops sync, with what to do,
+    /// unless a line above already says it.
+    #[test]
+    fn why_it_does_not_sync() {
+        let st = Status {
+            device: "me".into(),
+            group: "g".into(),
+            role: "member".into(),
+            mode: "shared".into(),
+            away: Some(crate::control::Away { hub_device: "mac".into(), ..Default::default() }),
+            ..Default::default()
+        };
+        let devs = [Device { id: "a".into(), name: "mac".into(), ..Default::default() }];
+        let st = Status { why: crate::why::reasons(&st, &devs, 1), ..st };
+        let w = write_status(&st, &devs, 1, "");
+        assert!(
+            w.contains(
+                "Why it does not sync: The tunnel to the hub mac does not get through. This network may block tunnels"
+            ),
+            "{w}"
+        );
+        let off = Status { mode: "own".into(), ..st.clone() };
+        let off = Status { why: crate::why::reasons(&off, &devs, 1), ..off };
+        assert!(!write_status(&off, &devs, 1, "").contains("Why it does not sync"));
+    }
+
     #[test]
     fn unreached() {
         let mut w = String::new();

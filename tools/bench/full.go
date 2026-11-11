@@ -247,7 +247,7 @@ func killService(ctx context.Context, r *Report, g *benchGroup, timeout time.Dur
 // bench may not.
 func killCmd(d *Device) string {
 	switch d.OS {
-	case "linux", "linux-lite":
+	case "linux":
 		return "sudo -n systemctl kill -s KILL cbb"
 	case "netns":
 		// Restart=always starts it again.

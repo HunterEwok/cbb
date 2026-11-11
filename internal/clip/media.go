@@ -12,7 +12,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/HunterEwok/cbb/internal/core"
 	"github.com/HunterEwok/cbb/internal/strict"
 
 	"github.com/HunterEwok/cbb/internal/jsonnum"
@@ -59,7 +58,7 @@ type Manifest struct {
 
 // UnmarshalJSON reads a manifest and refuses one with a number that is not
 // an integer written as in a signed body, such as "-0": Go takes it for 0,
-// the lite member's reader for a float, so the members would not read one
+// the Rust core's reader for a float, so the members would not read one
 // manifest alike.
 func (m *Manifest) UnmarshalJSON(data []byte) error {
 	if err := jsonnum.IntegersOnly(data); err != nil {
@@ -72,12 +71,8 @@ func (m *Manifest) UnmarshalJSON(data []byte) error {
 // ParseManifest reads a manifest received from another member
 // (docs/protocol.md, section 4, "Media"): in the strict form of signed
 // bodies and in its canonical form, with no member its table does not
-// name, and valid. A build that links the Rust core asks it first, so that
-// every program takes the same manifests.
+// name, and valid, as the Rust core reads it.
 func ParseManifest(b []byte) (*Manifest, error) {
-	if checked, err := core.CheckBody(core.KindManifest, b); checked && err != nil {
-		return nil, fmt.Errorf("clip: a manifest: %w", err)
-	}
 	if err := strict.CheckCanonical(b, "parts", "size"); err != nil {
 		return nil, fmt.Errorf("clip: a manifest is not in the strict form: %w", err)
 	}

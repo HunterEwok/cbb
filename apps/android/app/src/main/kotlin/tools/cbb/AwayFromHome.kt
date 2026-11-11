@@ -298,6 +298,14 @@ class AwayFromHome(
             return synchronized(lock) { using ?: state?.let { hubsToTry(o, it) }?.firstOrNull()?.first ?: state?.hubs?.firstOrNull()?.first }
         }
 
+    /** Whether [hub] hides its tunnel, with AmneziaWG or VLESS, for the screen that says why the phone does not sync. */
+    val hubHidesTunnel: Boolean
+        get() {
+            val h = hub ?: return false
+            val o = synchronized(lock) { state?.offer(h) } ?: return false
+            return o.obfuscation != null || o.vless != null
+        }
+
     /** The hub the phone reaches now, through the tunnel or at home; null while it reaches none. */
     val inUse: String? get() = synchronized(lock) { using }
 

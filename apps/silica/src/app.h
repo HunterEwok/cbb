@@ -6,6 +6,7 @@
 
 #include "admit.h"
 #include "blekeyboard.h"
+#include "bugs.h"
 #include "events.h"
 #include "invite.h"
 #include "join.h"
@@ -54,12 +55,16 @@ class App : public QObject
     Q_PROPERTY(Admit *admit READ admit CONSTANT)
     Q_PROPERTY(Invite *invite READ invite CONSTANT)
     Q_PROPERTY(Events *events READ events CONSTANT)
+    // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
+    Q_PROPERTY(Bugs *bugs READ bugs CONSTANT)
     Q_PROPERTY(BleKeyboard *keyboard READ keyboard CONSTANT)
     Q_PROPERTY(PasteReceiver *paste READ paste CONSTANT)
     // Settings: the error details under each error message (Errors::
     // showDetails), the language the next start uses ("" for the
     // system's), and whether the main page shows the devices as a list.
     Q_PROPERTY(bool errorDetails READ errorDetails WRITE setErrorDetails NOTIFY settingsChanged)
+    // The switch for the advanced settings, as on the other phones.
+    Q_PROPERTY(bool advanced READ advanced WRITE setAdvanced NOTIFY settingsChanged)
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY settingsChanged)
     Q_PROPERTY(bool deviceList READ deviceList WRITE setDeviceList NOTIFY settingsChanged)
     // The language chosen differs from the one the app started with.
@@ -108,11 +113,14 @@ public:
     Admit *admit() { return &m_admit; }
     Invite *invite() { return &m_invite; }
     Events *events() { return &m_events; }
+    Bugs *bugs() { return &m_bugs; }
     BleKeyboard *keyboard() { return &m_keyboard; }
     PasteReceiver *paste() { return &m_paste; }
 
     bool errorDetails() const;
     void setErrorDetails(bool on);
+    bool advanced() const;
+    void setAdvanced(bool on);
     QString language() const;
     void setLanguage(const QString &code);
     bool languagePending() const { return language() != m_startLanguage; }
@@ -150,17 +158,14 @@ public:
     Q_INVOKABLE void manage(const QString &action, const QString &device, const QString &name = QString(),
                             int forMinutes = 0);
     // The member's devices (Member::devices) in the user's order and
-    // collections (docs/apps.md, "Collections and the order of the tiles";
-    // cbb_core::arrange through the core's arrange call): each item is
-    // {kind: "device", device} or {kind: "collection", id, name, devices};
-    // this phone is first until the user moves it.
-    // The arrangement forgets devices that left the group once the list is
-    // whole (it holds this phone). stamp is the arrangement property.
+    // collections as the member keeps them (docs/apps.md, "What the member
+    // shows"): each item is {kind: "device", device} or {kind: "collection",
+    // id, name, devices}; this phone is first until the user moves it.
+    // stamp is the arrangement property.
     Q_INVOKABLE QVariantList arranged(const QVariantList &devices, int stamp);
-    // Applies a change of the arrangement, an operation of the core's
-    // arrange call ({op: "move", item: {device: id}, before: …}, "into",
-    // "out", "new", "rename", "ungroup", "reset") on the devices arranged
-    // was last given, keeps it in the settings and tells arrangementChanged.
+    // Sends a change of the arrangement to the member, which keeps it
+    // ({op: "move", item: {device: id}, before: …}, "into", "out", "new",
+    // "rename", "ungroup", "reset"), and tells arrangementChanged.
     Q_INVOKABLE bool arrange(const QVariantMap &op);
     // Takes the group over from its lost root, the device with the ID
     // device, as an admin (cbb_core::takeover): a new root CA for the admin
@@ -232,9 +237,6 @@ private:
     void finishTakeover();
     int arrangement() const { return m_arrangement; }
     bool hasArrangement() const;
-    // The core's arrange call on ids with op (null for none): {view, stored},
-    // the stored arrangement kept in the settings; null on a refusal, shown.
-    QJsonObject callArrange(const QStringList &ids, bool prune, const QJsonValue &op);
     // Claims the group with the recovery sheet's key, for restore.
     void claimWithSheet(const QString &sheet);
     void setRestoreState(const QString &state);
@@ -252,6 +254,7 @@ private:
     Admit m_admit;
     Invite m_invite;
     Events m_events;
+    Bugs m_bugs;
     BleKeyboard m_keyboard;
     PasteReceiver m_paste{&m_node, &m_keyboard};
     bool m_busy = false;
@@ -262,7 +265,6 @@ private:
     QString m_error;
     QString m_startLanguage;
     int m_arrangement = 0;
-    QStringList m_arrangeIds; // the devices arranged was last given
     QString m_recoveryText;
     QStringList m_recoveryModules;
     QStringList m_belowLevel;

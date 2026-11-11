@@ -4,17 +4,12 @@
 package clip
 
 import (
-	"fmt"
 	"time"
-
-	"github.com/HunterEwok/cbb/internal/core"
 )
 
 // The rule of incoming copies (docs/protocol.md, section 5, "Writing the
-// member's own clipboard") is the Rust core's (cbb_core::rule): a build that links
-// the core (every release build) asks it through copy_verdict, so that
-// every member keeps one rule; a build without it runs this copy of it,
-// which testdata/interop/copy-verdicts.json keeps the same.
+// member's own clipboard") is the Rust core's (cbb_core::rule); this is Go's
+// copy of it, which testdata/interop/copy-verdicts.json keeps the same.
 
 // Incoming is what the member knows of the group's current copy when it
 // decides whether the copy goes into its clipboard.
@@ -46,20 +41,9 @@ const (
 	VerdictOld        Verdict = "old"
 )
 
-// Decide gives the verdict on the copy: the core's in a build that links
-// it, Go's own otherwise. A core that does not answer leaves the copy
-// out of the clipboard, with the error for the log.
+// Decide gives the verdict on the copy, as cbb_core::rule::incoming does.
 func Decide(i Incoming) (Verdict, error) {
-	if !core.Linked() {
-		return decide(i), nil
-	}
-	var out struct {
-		Verdict Verdict `json:"verdict"`
-	}
-	if err := core.Do("copy_verdict", i, &out); err != nil {
-		return VerdictMode, fmt.Errorf("clip: the core's rule of incoming copies: %w", err)
-	}
-	return out.Verdict, nil
+	return decide(i), nil
 }
 
 // decide is Go's copy of cbb_core::rule::incoming.

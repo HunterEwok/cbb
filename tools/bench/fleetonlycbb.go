@@ -21,7 +21,7 @@ const outsidePublic = "203.0.113.99"
 // network and the hub's loopback, TCP and UDP, IPv4 and IPv6: nothing
 // answers, and nothing reaches the stand-in for the internet; the member
 // port still does. Unit tests check VLESS, the relay, the phones' hub and
-// the lite member's tunnel the same way (docs/roadmap.md, item 61).
+// cbb's own tunnel the same way (docs/roadmap.md, item 61).
 func onlyCBB(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/W44-only-cbb/"
 	a := newAwayGroup(ctx, r, f, "fleet/W44-only-cbb", 2)
@@ -132,7 +132,7 @@ func hubOverVLESS(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 		if err := connected(ctx, c, wait); err != nil {
 			return fmt.Errorf("after the web server's CA: %w", err)
 		}
-		if err := succeeds(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-vless"), "", "VLESS"); err != nil {
+		if err := succeeds(ctx, hub, a.hubCmdWith(hubPublic, a.fwdKey), "", "VLESS"); err != nil {
 			return err
 		}
 		// VLESS turns AmneziaWG on too: the client gets the new offer at
@@ -255,7 +255,7 @@ func hubOverXHTTP(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 		if err := connected(ctx, c, wait); err != nil {
 			return fmt.Errorf("after the web server's CA: %w", err)
 		}
-		if err := succeeds(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-vless"), "", "VLESS"); err != nil {
+		if err := succeeds(ctx, hub, a.hubCmdWith(hubPublic, a.fwdKey), "", "VLESS"); err != nil {
 			return err
 		}
 		if err := learnAtHome(ctx, f, a, c); err != nil {

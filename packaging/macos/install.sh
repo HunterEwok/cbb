@@ -248,7 +248,7 @@ if [ "$cgnat" = 1 ]; then
 	say "100.64.0.0/10 counts as the home network on this Mac (--home-cgnat on)."
 fi
 
-# The service takes connections from phones, other Macs and lite members at
+# The service takes connections from phones, other Macs and small devices at
 # home. With the application firewall on, an unsigned program gets none until
 # it is listed; the firewall knows the program by its real path, not a link.
 # It is listed only with the user's consent, kept in firewall.answer, and

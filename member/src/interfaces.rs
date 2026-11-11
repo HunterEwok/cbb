@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The interface list, CBB_INTERFACES, as the full member has it
-//! (docs/design.md): on a router the lite member publishes and browses
+//! (docs/design.md): on a router cbb publishes and browses
 //! mDNS, listens for members and joins only on the network devices it
 //! names, never on the one that faces the internet. A connection counts
 //! only when it arrives at an address of a listed device from an address

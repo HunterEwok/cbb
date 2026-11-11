@@ -37,6 +37,7 @@ SOURCES += \
     src/blekeyboard.cpp \
     src/pastereceiver.cpp \
     src/app.cpp \
+    src/bugs.cpp \
     src/core.cpp \
     src/errors.cpp \
     src/events.cpp \
@@ -50,6 +51,7 @@ HEADERS += \
     src/blekeyboard.h \
     src/pastereceiver.h \
     src/app.h \
+    src/bugs.h \
     src/core.h \
     src/errors.h \
     src/events.h \
@@ -104,6 +106,7 @@ DISTFILES += \
     qml/pages/AddDevicePage.qml \
     qml/pages/DevicePage.qml \
     qml/pages/AlertsCard.qml \
+    qml/pages/WhySection.qml \
     qml/pages/RenameDevicePage.qml \
     qml/pages/RecoveryPage.qml \
     qml/pages/RestorePage.qml \

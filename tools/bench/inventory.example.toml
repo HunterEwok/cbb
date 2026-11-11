@@ -16,10 +16,13 @@ roles = ["member", "hub", "away"]
 # reset: the installer opens the member port in the firewall.
 firewall = "yes"
 
-[device.lite]
-os = "linux-lite"
+[device.small]
+# A small board without cbb-helper (get.sh --no-helper) in a second subnet:
+# its service is told the hub's address with -peer for the run.
+os = "linux"
 ssh = "user@pi.lan"
 roles = ["member"]
+peer = true
 
 [device.mac]
 os = "darwin"

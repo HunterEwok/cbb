@@ -17,6 +17,16 @@ id = "RUSTSEC-2024-0449"
 ignoreUntil = 2027-04-25T00:00:00Z
 reason = "unsafe-libyaml is unmaintained; esp-config's build scripts read YAML with it, build time only"
 
+# block-buffer before 0.12.1 can be left with a bad cursor when the compression
+# callback panics and the caller catches the panic and uses the buffer again.
+# Nothing here can catch one: the firmware has no unwinding at all. The 0.10
+# line comes with digest 0.10 through esp-hal; it goes when esp-hal moves to
+# digest 0.11, which carries 0.12. ../osv-scanner.toml says the same for cbb.
+[[IgnoredVulns]]
+id = "GHSA-qwgh-2vcv-g2f7"
+ignoreUntil = 2027-01-27T00:00:00Z
+reason = "block-buffer 0.10 through esp-hal; the firmware does not unwind, nothing catches a panic"
+
 # crypto-bigint before 0.7.6 has branches that depend on secrets in operations
 # meant to be constant-time. The 0.5 line comes with p256 0.13 through
 # trouble-host (0.7 and 0.8 alike), which needs it for LE Secure Connections

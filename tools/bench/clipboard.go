@@ -22,7 +22,7 @@ const winBench = `C:\ProgramData\cbbbench`
 // XWayland, whose cookie file mutter names afresh at each login.
 const x11Env = `DISPLAY=${DISPLAY:-:0} XAUTHORITY=${XAUTHORITY:-$(ls /run/user/$(id -u)/.mutter-Xwaylandauth.* 2>/dev/null | head -n 1)} `
 
-// cbbCmd is how the bench calls cbb, the full or the lite member, on a
+// cbbCmd is how the bench calls cbb, with or without its helper, on a
 // device. In a container cbb runs as the image's user, the service's own,
 // so it reaches the control socket; the bench user on the host is in the
 // docker group.

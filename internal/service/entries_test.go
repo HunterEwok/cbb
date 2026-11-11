@@ -83,18 +83,18 @@ func TestEntriesSpread(t *testing.T) {
 	}
 }
 
-// TestLiteEntries: a lite member takes the signed entry points a computer
+// TestAloneEntries: a small device takes the signed entry points a computer
 // passes it, keeps them and says in its hello that it holds them, so the
 // computer does not send them again.
-func TestLiteEntries(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+func TestAloneEntries(t *testing.T) {
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	signer := newReleaseSigner(t)
 	var h hub
 	pi := startEnv(t, &h, "pi", signer.rootsEnv(t))
-	dir := joinLite(t, bin, pi)
+	dir := joinAlone(t, bin, pi)
 	pemFile := filepath.Join(t.TempDir(), "roots.pem")
 	if err := os.WriteFile(pemFile, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.roots(t)[0]}), 0o644); err != nil {
 		t.Fatal(err)
@@ -105,16 +105,16 @@ func TestLiteEntries(t *testing.T) {
 	}
 	port := free.Addr().(*net.TCPAddr).Port
 	free.Close()
-	lite := startLiteEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile}, "-no-mdns", "-port", strconv.Itoa(port), "-peer", pi.addr())
-	waitFor(t, "the lite member answers", func() bool {
-		_, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+	small := startAloneEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile}, "-no-mdns", "-port", strconv.Itoa(port), "-peer", pi.addr())
+	waitFor(t, "the small device answers", func() bool {
+		_, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil
 	})
-	waitFor(t, "the lite member connected", func() bool { return len(lite.status(t).Peers) == 1 })
+	waitFor(t, "the small device connected", func() bool { return len(small.status(t).Peers) == 1 })
 	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, signer.signEntries(t, 2, "/second-path-1")); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member keeps the entry points", func() bool {
+	waitFor(t, "the small device keeps the entry points", func() bool {
 		data, err := os.ReadFile(filepath.Join(dir, "entries.json"))
 		var set entriesSet
 		var e release.Entries
@@ -122,7 +122,7 @@ func TestLiteEntries(t *testing.T) {
 	})
 	// It writes the file before the line reaches its log, which can come
 	// later under emulation.
-	waitFor(t, "the lite member logs the entry points it took", func() bool { return lite.logged("took newer entry points") })
+	waitFor(t, "the small device logs the entry points it took", func() bool { return small.logged("took newer entry points") })
 	// Forged ones it drops.
 	other := newReleaseSigner(t)
 	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, other.signEntries(t, 3, "/forged-path-1")); err == nil {

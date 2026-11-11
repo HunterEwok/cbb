@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! VLESS over XHTTP for the lite member's tunnel (docs/protocol.md, section
+//! VLESS over XHTTP for the tunnel of cbb and the phones (docs/protocol.md, section
 //! 11, "VLESS"), without I/O: the settings of a hub's offer and their
 //! checks, VLESS's request and response headers, its framing of UDP
 //! packets, and the shape of XHTTP's `packet-up` requests (Xray-core's
-//! splithttp, which the forwarder runs). The lite member (member/src/vless.rs)
+//! splithttp, which the forwarder runs). cbb (member/src/vless.rs)
 //! carries them over TLS and TCP. VLESS adds no security: the boundary stays
 //! WireGuard, then the member TLS.
 

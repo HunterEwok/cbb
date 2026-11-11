@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use cbb_core::admit::Admitter;
 use cbb_core::certs::{self, Cert, DeviceId};
 use cbb_core::error::{Error, Result};
-use cbb_lite::phone::Member as Node;
+use cbb_member::phone::Member as Node;
 use serde::{Deserialize, Serialize};
 
 use crate::join::{AppKey, ErrorAnswer, SignFn, answer};
@@ -100,7 +100,7 @@ impl Shared {
 
 /// An open invitation of an admin phone.
 pub struct Invite {
-    inv: Arc<cbb_lite::phone::Invite>,
+    inv: Arc<cbb_member::phone::Invite>,
     shared: Arc<Shared>,
     answers: mpsc::SyncSender<bool>,
     closed: Arc<AtomicBool>,
@@ -148,7 +148,7 @@ impl Invite {
         });
         let closed = Arc::new(AtomicBool::new(false));
         let (answers, asked) = mpsc::sync_channel::<bool>(1);
-        let confirm: cbb_lite::phone::Confirm = {
+        let confirm: cbb_member::phone::Confirm = {
             let (shared, closed) = (shared.clone(), closed.clone());
             let asked = Mutex::new(asked);
             Box::new(move |req: &cbb_core::admit::Request| {
@@ -164,7 +164,7 @@ impl Invite {
                         fingerprint: req.fingerprint.clone(),
                     });
                 });
-                let until = Instant::now().checked_add(cbb_lite::phone::CONFIRM_WAIT);
+                let until = Instant::now().checked_add(cbb_member::phone::CONFIRM_WAIT);
                 let yes = loop {
                     if closed.load(Ordering::SeqCst) || until.is_none_or(|u| Instant::now() > u) {
                         break false;
