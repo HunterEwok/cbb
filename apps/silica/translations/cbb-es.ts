@@ -6,6 +6,22 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>Primero hace falta el PIN de administrador.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>El elemento seguro del teléfono no aceptó el PIN.</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>Siete PIN incorrectos bloquearon la clave de administrador para siempre; el teléfono sigue en el grupo como miembro.</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>Añadir un dispositivo requiere el PIN de administrador.</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>La raíz del grupo canceló la solicitud; el teléfono sigue siendo administrador.</translation>
     </message>
@@ -94,8 +110,8 @@
         <translation>Este teléfono no guarda claves para las apps.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>El otro dispositivo no admitió este teléfono como administrador. Solo la raíz del grupo nombra administradores: allí, admítelo como administrador (cbb pair -qr -admin), o únete sin ser administrador.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>El otro dispositivo no admitió este teléfono como administrador. Solo el dispositivo que creó el grupo nombra administradores: escanea el código allí, o únete sin ser administrador.</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -146,30 +162,6 @@
         <translation>El teléfono no pudo borrar su clave.</translation>
     </message>
     <message>
-        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
-        <translation>El hub del grupo no respondió. Comprueba que la invitación sigue siendo válida y que el hub está encendido, y vuelve a intentarlo.</translation>
-    </message>
-    <message>
-        <source>The other phone's group could not be joined. Try again.</source>
-        <translation>No se pudo unir al grupo. Vuelve a intentarlo.</translation>
-    </message>
-    <message>
-        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
-        <translation>Solo un administrador crea invitaciones: un teléfono administrador aquí, o cbb invite en un ordenador administrador.</translation>
-    </message>
-    <message>
-        <source>This phone is in a group already. Leave it first to join another.</source>
-        <translation>Este teléfono ya está en un grupo. Sal de él primero para unirte a otro.</translation>
-    </message>
-    <message>
-        <source>This is not a CBB invitation.</source>
-        <translation>Esto no es una invitación de CBB.</translation>
-    </message>
-    <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>La invitación ha caducado. Pide una nueva.</translation>
-    </message>
-    <message>
         <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
         <translation>Escanea el código QR de la hoja de recuperación: en un teléfono nuevo no basta con la clave escrita.</translation>
     </message>
@@ -201,6 +193,34 @@
         <source>The claim to restore the group became void.</source>
         <translation>La solicitud para restaurar el grupo dejó de ser válida.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>El hub del grupo no respondió. Comprueba que la invitación sigue siendo válida y que el hub está encendido, y vuelve a intentarlo.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>No se pudo unir al grupo. Vuelve a intentarlo.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>Solo un administrador crea invitaciones: un teléfono administrador aquí, o cbb invite en un ordenador administrador.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>Este teléfono ya está en un grupo. Sal de él primero para unirte a otro.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>Esto no es una invitación de CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>La invitación ha caducado. Pide una nueva.</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>La clave de administrador de este teléfono es anterior al PIN de administrador. Sal del grupo y vuelve a unirte.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -225,16 +245,8 @@
         <translation>Reintentar</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>Unirse como administrador</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>Creando la clave de administrador…</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>En el ordenador raíz del grupo, admite este teléfono como administrador con este código: en la app CBB, añade un dispositivo y elige admitirlo como administrador, o ejecuta cbb pair -qr -admin. Mantén esta pantalla abierta.</translation>
     </message>
     <message>
         <source>Join with an invitation</source>
@@ -294,10 +306,6 @@
     <message>
         <source>Join a group</source>
         <translation>Unirse a un grupo</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>Unirse a un grupo como administrador</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -376,10 +384,6 @@
         <translation>¿Perdiste el teléfono?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>Haz administrador a un segundo teléfono: en él, toca Unirse a un grupo como administrador y escanea su código aquí con Escanear un código. Toca para cerrar.</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>Dispositivos</translation>
     </message>
@@ -400,6 +404,10 @@
         <translation>Desactivar hasta que la active</translation>
     </message>
     <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>Restaurar con una hoja de recuperación</translation>
+    </message>
+    <message>
         <source>Join with an invitation</source>
         <translation>Unirse con una invitación</translation>
     </message>
@@ -408,8 +416,8 @@
         <translation>Enviar una invitación</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>Restaurar con una hoja de recuperación</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>Haz administrador a un segundo teléfono: añádelo al grupo, ábrelo aquí y toca Hacer admin. Toca para cerrar.</translation>
     </message>
 </context>
 <context>
@@ -537,6 +545,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Cambiar el PIN de administrador</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>Siete PIN incorrectos bloquearon la clave de administrador para siempre. El teléfono sigue en el grupo como miembro; para volver a ser administrador, reinstala CBB y únete como un dispositivo nuevo.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>El PIN de administrador ha cambiado.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN incorrecto. Intentos restantes: %1.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>El PIN de administrador no ha cambiado.</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>Teclado Bluetooth</translation>
@@ -721,6 +749,14 @@
         <source>None</source>
         <translation>Ninguna</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>Prepararse para ser admin</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>La raíz del grupo puede hacer admin a este teléfono: en la raíz, abre este teléfono y toca Hacer admin.</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -838,14 +874,6 @@
     <message>
         <source>Try again</source>
         <translation>Intentar de nuevo</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>Hacerlo admin</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>Para un teléfono que se une como admin</translation>
     </message>
 </context>
 <context>
@@ -1354,6 +1382,166 @@
     </message>
 </context>
 <context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>Elige el PIN de administrador</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>PIN de administrador</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>Fijar</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>El PIN otra vez</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>PIN incorrecto. Queda un intento: el próximo PIN incorrecto bloquea la clave de administrador para siempre.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN incorrecto. Intentos restantes: %1.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>El PIN propio de CBB, de al menos cuatro cifras. No uses el código de desbloqueo del teléfono. El elemento seguro del teléfono lo comprueba antes de cada acción de administrador; siete PIN incorrectos bloquean la clave de administrador para siempre y nadie puede desbloquearla.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>El elemento seguro del teléfono comprueba el PIN; siete PIN incorrectos bloquean la clave de administrador para siempre.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>Con el PIN de administrador, la raíz del grupo podrá hacer admin a este teléfono más adelante. Cancela para unirte solo como miembro.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>Con el PIN de administrador, la raíz del grupo puede hacer admin a este teléfono.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Cambiar el PIN de administrador</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>Cambiar</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>PIN actual</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>PIN nuevo</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>El PIN nuevo otra vez</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>Eliminar la clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>Eliminando la clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>Crear una nueva clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>Crear una clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>Reemplazando la clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>Anota la clave o imprime esta página y guárdala en un lugar seguro. Solo se muestra una vez.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>El grupo tiene una clave de recuperación. Con ella, un ordenador del grupo o un teléfono nuevo toma el grupo si se pierde este teléfono.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>Una clave de recuperación permite que un ordenador del grupo o un teléfono nuevo tome el grupo si se pierde este teléfono. Desliza hacia abajo para crear una.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>Ya la anoté</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>Restaurar el grupo</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>Este teléfono es ahora la raíz del grupo.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>Buscando un teléfono o un ordenador del grupo en esta red…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>Solicitando el grupo…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>El grupo está restaurado en este teléfono. Pasa a ser la raíz del grupo cuando termine el tiempo de espera, dentro de %1 h, salvo que la raíz cancele la solicitud.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>El grupo está restaurado en este teléfono. Pasa a ser la raíz del grupo cuando termine el tiempo de espera del grupo, salvo que la raíz cancele la solicitud.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>Apunta la cámara al código QR de la hoja de recuperación del grupo. Mantén encendido un teléfono o un ordenador del grupo en esta red.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>La cámara no se inicia: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>O pega el texto del código, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Intentar de nuevo</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Join with an invitation</source>
@@ -1445,92 +1633,6 @@
     <message>
         <source>Invite another device</source>
         <translation>Invitar otro dispositivo</translation>
-    </message>
-</context>
-<context>
-    <name>RecoveryPage</name>
-    <message>
-        <source>Remove the recovery key</source>
-        <translation>Eliminar la clave de recuperación</translation>
-    </message>
-    <message>
-        <source>Removing the recovery key</source>
-        <translation>Eliminando la clave de recuperación</translation>
-    </message>
-    <message>
-        <source>Make a new recovery key</source>
-        <translation>Crear una nueva clave de recuperación</translation>
-    </message>
-    <message>
-        <source>Make a recovery key</source>
-        <translation>Crear una clave de recuperación</translation>
-    </message>
-    <message>
-        <source>Replacing the recovery key</source>
-        <translation>Reemplazando la clave de recuperación</translation>
-    </message>
-    <message>
-        <source>Recovery key</source>
-        <translation>Clave de recuperación</translation>
-    </message>
-    <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>Anota la clave o imprime esta página y guárdala en un lugar seguro. Solo se muestra una vez.</translation>
-    </message>
-    <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>El grupo tiene una clave de recuperación. Con ella, un ordenador del grupo o un teléfono nuevo toma el grupo si se pierde este teléfono.</translation>
-    </message>
-    <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>Una clave de recuperación permite que un ordenador del grupo o un teléfono nuevo tome el grupo si se pierde este teléfono. Desliza hacia abajo para crear una.</translation>
-    </message>
-    <message>
-        <source>I wrote it down</source>
-        <translation>Ya la anoté</translation>
-    </message>
-</context>
-<context>
-    <name>RestorePage</name>
-    <message>
-        <source>Restore the group</source>
-        <translation>Restaurar el grupo</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>Este teléfono es ahora la raíz del grupo.</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>Buscando un teléfono o un ordenador del grupo en esta red…</translation>
-    </message>
-    <message>
-        <source>Claiming the group…</source>
-        <translation>Solicitando el grupo…</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>El grupo está restaurado en este teléfono. Pasa a ser la raíz del grupo cuando termine el tiempo de espera, dentro de %1 h, salvo que la raíz cancele la solicitud.</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>El grupo está restaurado en este teléfono. Pasa a ser la raíz del grupo cuando termine el tiempo de espera del grupo, salvo que la raíz cancele la solicitud.</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>Apunta la cámara al código QR de la hoja de recuperación del grupo. Mantén encendido un teléfono o un ordenador del grupo en esta red.</translation>
-    </message>
-    <message>
-        <source>The camera does not start: %1</source>
-        <translation>La cámara no se inicia: %1</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>O pega el texto del código, cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation>Intentar de nuevo</translation>
     </message>
 </context>
 </TS>

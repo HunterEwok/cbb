@@ -6,6 +6,22 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>يلزم رمز PIN للمشرف أولًا.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>لم يقبل العنصر الآمن في الهاتف رمز PIN.</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>قفلت سبعة رموز PIN خاطئة مفتاح المشرف نهائيًا؛ يبقى الهاتف في المجموعة عضوًا.</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>إضافة جهاز تتطلب رمز PIN للمشرف.</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>ألغى جذر المجموعة الطلب؛ يبقى الهاتف مشرفًا.</translation>
     </message>
@@ -94,8 +110,8 @@
         <translation>لا يحفظ هذا الهاتف مفاتيح للتطبيقات.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>لم يقبل الجهاز الآخر هذا الهاتف كمشرف. جذر المجموعة وحده يعيّن المشرفين: هناك اقبله كمشرف (cbb pair -qr -admin)، أو انضم دون أن تكون مشرفًا.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>لم يقبل الجهاز الآخر هذا الهاتف كمشرف. الجهاز الذي أنشأ المجموعة وحده يعيّن المشرفين: امسح الرمز عليه، أو انضم دون أن تكون مشرفًا.</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -146,30 +162,6 @@
         <translation>تعذّر على الهاتف حذف مفتاحه.</translation>
     </message>
     <message>
-        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
-        <translation>لم يستجب محور المجموعة. تحقّق من أن الدعوة ما زالت صالحة وأن المحور يعمل، ثم حاول مجددًا.</translation>
-    </message>
-    <message>
-        <source>The other phone's group could not be joined. Try again.</source>
-        <translation>تعذّر الانضمام إلى المجموعة. حاول مجددًا.</translation>
-    </message>
-    <message>
-        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
-        <translation>لا ينشئ الدعوة إلا مشرف: هاتف مشرف هنا، أو cbb invite على حاسوب مشرف.</translation>
-    </message>
-    <message>
-        <source>This phone is in a group already. Leave it first to join another.</source>
-        <translation>هذا الهاتف في مجموعة بالفعل. غادرها أولًا للانضمام إلى أخرى.</translation>
-    </message>
-    <message>
-        <source>This is not a CBB invitation.</source>
-        <translation>هذه ليست دعوة CBB.</translation>
-    </message>
-    <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>انتهت صلاحية الدعوة. اطلب دعوة جديدة.</translation>
-    </message>
-    <message>
         <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
         <translation>امسح رمز QR في ورقة الاسترداد: على هاتف جديد لا يكفي المفتاح المكتوب.</translation>
     </message>
@@ -201,6 +193,34 @@
         <source>The claim to restore the group became void.</source>
         <translation>أصبح طلب استعادة المجموعة باطلًا.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>لم يستجب محور المجموعة. تحقّق من أن الدعوة ما زالت صالحة وأن المحور يعمل، ثم حاول مجددًا.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>تعذّر الانضمام إلى المجموعة. حاول مجددًا.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>لا ينشئ الدعوة إلا مشرف: هاتف مشرف هنا، أو cbb invite على حاسوب مشرف.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>هذا الهاتف في مجموعة بالفعل. غادرها أولًا للانضمام إلى أخرى.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>هذه ليست دعوة CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>انتهت صلاحية الدعوة. اطلب دعوة جديدة.</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>مفتاح المشرف في هذا الهاتف أقدم من رمز PIN للمشرف. غادر المجموعة وانضم إليها مجددًا.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -225,16 +245,8 @@
         <translation>أعد المحاولة</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>الانضمام كمشرف</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>جارٍ إنشاء مفتاح المشرف…</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>على حاسوب جذر المجموعة، اقبل هذا الهاتف كمشرف بهذا الرمز: في تطبيق CBB أضف جهازًا واختر قبوله كمشرف، أو شغّل cbb pair -qr -admin. أبقِ هذه الشاشة مفتوحة.</translation>
     </message>
     <message>
         <source>Join with an invitation</source>
@@ -294,10 +306,6 @@
     <message>
         <source>Join a group</source>
         <translation>الانضمام إلى مجموعة</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>الانضمام إلى مجموعة كمشرف</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -376,10 +384,6 @@
         <translation>هل فقدت هاتفك؟</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>اجعل هاتفًا ثانيًا مشرفًا: اضغط عليه «الانضمام إلى مجموعة كمشرف»، ثم امسح رمزه هنا عبر «مسح رمز». اضغط للإغلاق.</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>الأجهزة</translation>
     </message>
@@ -400,6 +404,10 @@
         <translation>إيقاف حتى أشغّلها</translation>
     </message>
     <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>الاستعادة بورقة الاسترداد</translation>
+    </message>
+    <message>
         <source>Join with an invitation</source>
         <translation>الانضمام بدعوة</translation>
     </message>
@@ -408,8 +416,8 @@
         <translation>إرسال دعوة</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>الاستعادة بورقة الاسترداد</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>اجعل هاتفًا ثانيًا مشرفًا: أضفه إلى المجموعة، ثم افتحه هنا واضغط «اجعله مشرفًا». اضغط للإغلاق.</translation>
     </message>
 </context>
 <context>
@@ -537,6 +545,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>تغيير رمز PIN للمشرف</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>قفلت سبعة رموز PIN خاطئة مفتاح المشرف نهائيًا. يبقى الهاتف في المجموعة عضوًا؛ لتصبح مشرفًا مرة أخرى، أعد تثبيت CBB وانضم كجهاز جديد.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>تم تغيير رمز PIN للمشرف.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>رمز PIN خاطئ. المحاولات المتبقية: %1.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>لم يتغير رمز PIN للمشرف.</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>لوحة مفاتيح بلوتوث</translation>
@@ -721,6 +749,14 @@
         <source>None</source>
         <translation>لا يوجد</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>الاستعداد لتصبح مشرفًا</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>يستطيع جذر المجموعة جعل هذا الهاتف مشرفًا: على الجذر، افتح هذا الهاتف واضغط «اجعله مشرفًا».</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -838,14 +874,6 @@
     <message>
         <source>Try again</source>
         <translation>حاول مرة أخرى</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>اجعله مشرفًا</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>لهاتف ينضم كمشرف</translation>
     </message>
 </context>
 <context>
@@ -1354,6 +1382,166 @@
     </message>
 </context>
 <context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>اختر رمز PIN للمشرف</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>رمز PIN للمشرف</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>تعيين</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>تأكيد</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>رمز PIN مرة أخرى</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>رمز PIN خاطئ. بقيت محاولة واحدة: الرمز الخاطئ التالي يقفل مفتاح المشرف نهائيًا.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>رمز PIN خاطئ. المحاولات المتبقية: %1.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>رمز PIN خاص بـ CBB، من أربعة أرقام على الأقل. لا تستخدم رمز فتح قفل الهاتف. يتحقق منه العنصر الآمن في الهاتف قبل كل إجراء للمشرف؛ سبعة رموز خاطئة تقفل مفتاح المشرف نهائيًا، ولا يستطيع أحد فتحه.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>يتحقق العنصر الآمن في الهاتف من رمز PIN؛ سبعة رموز خاطئة تقفل مفتاح المشرف نهائيًا.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>برمز PIN للمشرف يستطيع جذر المجموعة لاحقًا جعل هذا الهاتف مشرفًا. ألغِ للانضمام كعضو فقط.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>برمز PIN للمشرف يستطيع جذر المجموعة جعل هذا الهاتف مشرفًا.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>تغيير رمز PIN للمشرف</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>تغيير</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>رمز PIN الحالي</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>رمز PIN الجديد</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>رمز PIN الجديد مرة أخرى</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>إزالة مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>جارٍ إزالة مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>إنشاء مفتاح استرداد جديد</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>إنشاء مفتاح استرداد</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>جارٍ استبدال مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>اكتب المفتاح أو اطبع هذه الصفحة واحفظه في مكان آمن. يُعرض مرة واحدة فقط.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>لدى المجموعة مفتاح استرداد. به يستولي حاسوب من المجموعة أو هاتف جديد على المجموعة إذا فُقد هذا الهاتف.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>يتيح مفتاح الاسترداد لحاسوب من المجموعة أو هاتف جديد الاستيلاء على المجموعة إذا فُقد هذا الهاتف. اسحب للأسفل لإنشائه.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>لقد كتبته</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>استعادة المجموعة</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>هذا الهاتف هو جذر المجموعة الآن.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>جارٍ البحث عن هاتف أو حاسوب من المجموعة على هذه الشبكة…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>جارٍ طلب المجموعة…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>استُعيدت المجموعة على هذا الهاتف. يصبح جذر المجموعة عند انتهاء مدة الانتظار، بعد %1 ساعة، ما لم يلغِ الجذر الطلب.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>استُعيدت المجموعة على هذا الهاتف. يصبح جذر المجموعة عند انتهاء مدة انتظار المجموعة، ما لم يلغِ الجذر الطلب.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>وجّه الكاميرا إلى رمز QR في ورقة استرداد المجموعة. أبقِ هاتفًا أو حاسوبًا من المجموعة قيد التشغيل على هذه الشبكة.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>الكاميرا لا تعمل: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>أو الصق نص الرمز، cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>حاول مرة أخرى</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Join with an invitation</source>
@@ -1445,92 +1633,6 @@
     <message>
         <source>Invite another device</source>
         <translation>دعوة جهاز آخر</translation>
-    </message>
-</context>
-<context>
-    <name>RecoveryPage</name>
-    <message>
-        <source>Remove the recovery key</source>
-        <translation>إزالة مفتاح الاسترداد</translation>
-    </message>
-    <message>
-        <source>Removing the recovery key</source>
-        <translation>جارٍ إزالة مفتاح الاسترداد</translation>
-    </message>
-    <message>
-        <source>Make a new recovery key</source>
-        <translation>إنشاء مفتاح استرداد جديد</translation>
-    </message>
-    <message>
-        <source>Make a recovery key</source>
-        <translation>إنشاء مفتاح استرداد</translation>
-    </message>
-    <message>
-        <source>Replacing the recovery key</source>
-        <translation>جارٍ استبدال مفتاح الاسترداد</translation>
-    </message>
-    <message>
-        <source>Recovery key</source>
-        <translation>مفتاح الاسترداد</translation>
-    </message>
-    <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>اكتب المفتاح أو اطبع هذه الصفحة واحفظه في مكان آمن. يُعرض مرة واحدة فقط.</translation>
-    </message>
-    <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>لدى المجموعة مفتاح استرداد. به يستولي حاسوب من المجموعة أو هاتف جديد على المجموعة إذا فُقد هذا الهاتف.</translation>
-    </message>
-    <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>يتيح مفتاح الاسترداد لحاسوب من المجموعة أو هاتف جديد الاستيلاء على المجموعة إذا فُقد هذا الهاتف. اسحب للأسفل لإنشائه.</translation>
-    </message>
-    <message>
-        <source>I wrote it down</source>
-        <translation>لقد كتبته</translation>
-    </message>
-</context>
-<context>
-    <name>RestorePage</name>
-    <message>
-        <source>Restore the group</source>
-        <translation>استعادة المجموعة</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>هذا الهاتف هو جذر المجموعة الآن.</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>جارٍ البحث عن هاتف أو حاسوب من المجموعة على هذه الشبكة…</translation>
-    </message>
-    <message>
-        <source>Claiming the group…</source>
-        <translation>جارٍ طلب المجموعة…</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>استُعيدت المجموعة على هذا الهاتف. يصبح جذر المجموعة عند انتهاء مدة الانتظار، بعد %1 ساعة، ما لم يلغِ الجذر الطلب.</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>استُعيدت المجموعة على هذا الهاتف. يصبح جذر المجموعة عند انتهاء مدة انتظار المجموعة، ما لم يلغِ الجذر الطلب.</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>وجّه الكاميرا إلى رمز QR في ورقة استرداد المجموعة. أبقِ هاتفًا أو حاسوبًا من المجموعة قيد التشغيل على هذه الشبكة.</translation>
-    </message>
-    <message>
-        <source>The camera does not start: %1</source>
-        <translation>الكاميرا لا تعمل: %1</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>أو الصق نص الرمز، cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation>حاول مرة أخرى</translation>
     </message>
 </context>
 </TS>

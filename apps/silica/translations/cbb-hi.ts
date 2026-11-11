@@ -6,6 +6,22 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>पहले एडमिन PIN चाहिए।</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>फ़ोन के सुरक्षित तत्व ने PIN स्वीकार नहीं किया।</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>सात गलत PIN ने एडमिन कुंजी को हमेशा के लिए लॉक कर दिया; फ़ोन समूह में सदस्य के रूप में रहता है।</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>डिवाइस जोड़ने के लिए एडमिन PIN चाहिए।</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>समूह के रूट ने अनुरोध रद्द कर दिया; फ़ोन एडमिन बना रहेगा।</translation>
     </message>
@@ -94,8 +110,8 @@
         <translation>यह फ़ोन ऐप्स के लिए कुंजियाँ नहीं रखता।</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>दूसरे डिवाइस ने इस फ़ोन को एडमिन के रूप में स्वीकार नहीं किया। केवल समूह का रूट एडमिन बनाता है: वहाँ इसे एडमिन के रूप में स्वीकार करें (cbb pair -qr -admin), या एडमिन बने बिना जुड़ें।</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>दूसरे डिवाइस ने इस फ़ोन को एडमिन के रूप में स्वीकार नहीं किया। केवल समूह बनाने वाला डिवाइस एडमिन बनाता है: वहाँ कोड स्कैन करें, या एडमिन बने बिना जुड़ें।</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -146,30 +162,6 @@
         <translation>फ़ोन अपनी कुंजी नहीं मिटा सका।</translation>
     </message>
     <message>
-        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
-        <translation>समूह के हब ने जवाब नहीं दिया। जाँचें कि निमंत्रण अभी मान्य है और हब चालू है, फिर दोबारा कोशिश करें।</translation>
-    </message>
-    <message>
-        <source>The other phone's group could not be joined. Try again.</source>
-        <translation>समूह में नहीं जुड़ सका। फिर से कोशिश करें।</translation>
-    </message>
-    <message>
-        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
-        <translation>निमंत्रण केवल एडमिन बनाता है: यहाँ एक एडमिन फ़ोन, या एडमिन कंप्यूटर पर cbb invite।</translation>
-    </message>
-    <message>
-        <source>This phone is in a group already. Leave it first to join another.</source>
-        <translation>यह फ़ोन पहले से एक समूह में है। दूसरे में जुड़ने के लिए पहले इसे छोड़ें।</translation>
-    </message>
-    <message>
-        <source>This is not a CBB invitation.</source>
-        <translation>यह CBB निमंत्रण नहीं है।</translation>
-    </message>
-    <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>निमंत्रण की अवधि समाप्त हो गई है। नया माँगें।</translation>
-    </message>
-    <message>
         <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
         <translation>रिकवरी शीट का QR कोड स्कैन करें: नए फ़ोन पर टाइप की गई कुंजी काफ़ी नहीं है।</translation>
     </message>
@@ -201,6 +193,34 @@
         <source>The claim to restore the group became void.</source>
         <translation>समूह बहाल करने का अनुरोध अमान्य हो गया।</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>समूह के हब ने जवाब नहीं दिया। जाँचें कि निमंत्रण अभी मान्य है और हब चालू है, फिर दोबारा कोशिश करें।</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>समूह में नहीं जुड़ सका। फिर से कोशिश करें।</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>निमंत्रण केवल एडमिन बनाता है: यहाँ एक एडमिन फ़ोन, या एडमिन कंप्यूटर पर cbb invite।</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>यह फ़ोन पहले से एक समूह में है। दूसरे में जुड़ने के लिए पहले इसे छोड़ें।</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>यह CBB निमंत्रण नहीं है।</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>निमंत्रण की अवधि समाप्त हो गई है। नया माँगें।</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>इस फ़ोन की एडमिन कुंजी एडमिन PIN से पुरानी है। समूह छोड़ें और फिर से जुड़ें।</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -225,16 +245,8 @@
         <translation>फिर से कोशिश करें</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>एडमिन के रूप में जुड़ें</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>एडमिन कुंजी बन रही है…</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>समूह के रूट कंप्यूटर पर इस कोड से इस फ़ोन को एडमिन के रूप में स्वीकार करें: CBB ऐप में डिवाइस जोड़ें और इसे एडमिन के रूप में स्वीकार करना चुनें, या cbb pair -qr -admin चलाएँ। यह स्क्रीन खुली रखें।</translation>
     </message>
     <message>
         <source>Join with an invitation</source>
@@ -294,10 +306,6 @@
     <message>
         <source>Join a group</source>
         <translation>समूह में शामिल हों</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>एडमिन के रूप में समूह से जुड़ें</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -376,10 +384,6 @@
         <translation>फ़ोन खो गया?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>दूसरे फ़ोन को एडमिन बनाएँ: उस पर “एडमिन के रूप में समूह से जुड़ें” टैप करें, फिर यहाँ “कोड स्कैन करें” से उसका कोड स्कैन करें। बंद करने के लिए टैप करें।</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>डिवाइस</translation>
     </message>
@@ -400,6 +404,10 @@
         <translation>जब तक मैं चालू न करूँ, बंद</translation>
     </message>
     <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>रिकवरी शीट से बहाल करें</translation>
+    </message>
+    <message>
         <source>Join with an invitation</source>
         <translation>निमंत्रण से जुड़ें</translation>
     </message>
@@ -408,8 +416,8 @@
         <translation>निमंत्रण भेजें</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>रिकवरी शीट से बहाल करें</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>दूसरे फ़ोन को एडमिन बनाएँ: उसे समूह में जोड़ें, फिर उसे यहाँ खोलें और “एडमिन बनाएँ” टैप करें। बंद करने के लिए टैप करें।</translation>
     </message>
 </context>
 <context>
@@ -537,6 +545,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>एडमिन PIN बदलें</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>सात गलत PIN ने एडमिन कुंजी को हमेशा के लिए लॉक कर दिया। फ़ोन समूह में सदस्य के रूप में रहता है; फिर से एडमिन बनने के लिए CBB दोबारा इंस्टॉल करें और नए डिवाइस के रूप में जुड़ें।</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>एडमिन PIN बदल दिया गया।</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>गलत PIN। बचे प्रयास: %1।</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>एडमिन PIN नहीं बदला।</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>ब्लूटूथ कीबोर्ड</translation>
@@ -721,6 +749,14 @@
         <source>None</source>
         <translation>कोई नहीं</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>एडमिन बनने की तैयारी करें</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>समूह का रूट इस फ़ोन को एडमिन बना सकता है: रूट पर इस फ़ोन को खोलें और “एडमिन बनाएँ” टैप करें।</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -838,14 +874,6 @@
     <message>
         <source>Try again</source>
         <translation>फिर से कोशिश करें</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>इसे एडमिन बनाएँ</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>उस फ़ोन के लिए जो एडमिन के रूप में जुड़ता है</translation>
     </message>
 </context>
 <context>
@@ -1354,6 +1382,166 @@
     </message>
 </context>
 <context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>एडमिन PIN चुनें</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>एडमिन PIN</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>सेट करें</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>पुष्टि करें</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>PIN फिर से</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>गलत PIN। एक प्रयास बचा है: अगला गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देगा।</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>गलत PIN। बचे प्रयास: %1।</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB का अपना PIN, कम से कम चार अंक। फ़ोन का अनलॉक कोड इस्तेमाल न करें। फ़ोन का सुरक्षित तत्व हर एडमिन कार्य से पहले इसे जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं, और कोई इसे अनलॉक नहीं कर सकता।</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>फ़ोन का सुरक्षित तत्व PIN जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं।</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>एडमिन PIN से समूह का रूट बाद में इस फ़ोन को एडमिन बना सकता है। केवल सदस्य के रूप में जुड़ने के लिए रद्द करें।</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>एडमिन PIN से समूह का रूट इस फ़ोन को एडमिन बना सकता है।</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>एडमिन PIN बदलें</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>बदलें</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>मौजूदा PIN</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>नया PIN</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>नया PIN फिर से</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>पुनर्प्राप्ति कुंजी हटाएँ</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>पुनर्प्राप्ति कुंजी हटाई जा रही है</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>नई पुनर्प्राप्ति कुंजी बनाएँ</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>पुनर्प्राप्ति कुंजी बनाएँ</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>पुनर्प्राप्ति कुंजी बदली जा रही है</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>पुनर्प्राप्ति कुंजी</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>कुंजी लिख लें या यह पृष्ठ प्रिंट करें और सुरक्षित रखें। यह केवल एक बार दिखाई जाती है।</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>समूह के पास पुनर्प्राप्ति कुंजी है। इस फ़ोन के खो जाने पर समूह का कोई कंप्यूटर या नया फ़ोन इससे समूह संभाल लेता है।</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>पुनर्प्राप्ति कुंजी से इस फ़ोन के खो जाने पर समूह का कोई कंप्यूटर या नया फ़ोन समूह संभाल सकता है। बनाने के लिए नीचे खींचें।</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>मैंने लिख लिया</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>समूह बहाल करें</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>यह फ़ोन अब समूह का रूट है।</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>इस नेटवर्क पर समूह का फ़ोन या कंप्यूटर खोजा जा रहा है…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>समूह के लिए अनुरोध भेजा जा रहा है…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>समूह इस फ़ोन पर बहाल हो गया है। प्रतीक्षा समय ख़त्म होने पर, %1 घंटे में, यह समूह का रूट बन जाएगा, जब तक रूट अनुरोध रद्द न करे।</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>समूह इस फ़ोन पर बहाल हो गया है। समूह का प्रतीक्षा समय ख़त्म होने पर यह समूह का रूट बन जाएगा, जब तक रूट अनुरोध रद्द न करे।</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>कैमरा समूह की रिकवरी शीट के QR कोड की ओर करें। समूह का कोई फ़ोन या कंप्यूटर चालू और इसी नेटवर्क पर रखें।</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>कैमरा शुरू नहीं हो रहा: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>या कोड का टेक्स्ट चिपकाएँ, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>फिर से कोशिश करें</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Join with an invitation</source>
@@ -1445,92 +1633,6 @@
     <message>
         <source>Invite another device</source>
         <translation>एक और डिवाइस आमंत्रित करें</translation>
-    </message>
-</context>
-<context>
-    <name>RecoveryPage</name>
-    <message>
-        <source>Remove the recovery key</source>
-        <translation>पुनर्प्राप्ति कुंजी हटाएँ</translation>
-    </message>
-    <message>
-        <source>Removing the recovery key</source>
-        <translation>पुनर्प्राप्ति कुंजी हटाई जा रही है</translation>
-    </message>
-    <message>
-        <source>Make a new recovery key</source>
-        <translation>नई पुनर्प्राप्ति कुंजी बनाएँ</translation>
-    </message>
-    <message>
-        <source>Make a recovery key</source>
-        <translation>पुनर्प्राप्ति कुंजी बनाएँ</translation>
-    </message>
-    <message>
-        <source>Replacing the recovery key</source>
-        <translation>पुनर्प्राप्ति कुंजी बदली जा रही है</translation>
-    </message>
-    <message>
-        <source>Recovery key</source>
-        <translation>पुनर्प्राप्ति कुंजी</translation>
-    </message>
-    <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>कुंजी लिख लें या यह पृष्ठ प्रिंट करें और सुरक्षित रखें। यह केवल एक बार दिखाई जाती है।</translation>
-    </message>
-    <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>समूह के पास पुनर्प्राप्ति कुंजी है। इस फ़ोन के खो जाने पर समूह का कोई कंप्यूटर या नया फ़ोन इससे समूह संभाल लेता है।</translation>
-    </message>
-    <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>पुनर्प्राप्ति कुंजी से इस फ़ोन के खो जाने पर समूह का कोई कंप्यूटर या नया फ़ोन समूह संभाल सकता है। बनाने के लिए नीचे खींचें।</translation>
-    </message>
-    <message>
-        <source>I wrote it down</source>
-        <translation>मैंने लिख लिया</translation>
-    </message>
-</context>
-<context>
-    <name>RestorePage</name>
-    <message>
-        <source>Restore the group</source>
-        <translation>समूह बहाल करें</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>यह फ़ोन अब समूह का रूट है।</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>इस नेटवर्क पर समूह का फ़ोन या कंप्यूटर खोजा जा रहा है…</translation>
-    </message>
-    <message>
-        <source>Claiming the group…</source>
-        <translation>समूह के लिए अनुरोध भेजा जा रहा है…</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>समूह इस फ़ोन पर बहाल हो गया है। प्रतीक्षा समय ख़त्म होने पर, %1 घंटे में, यह समूह का रूट बन जाएगा, जब तक रूट अनुरोध रद्द न करे।</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>समूह इस फ़ोन पर बहाल हो गया है। समूह का प्रतीक्षा समय ख़त्म होने पर यह समूह का रूट बन जाएगा, जब तक रूट अनुरोध रद्द न करे।</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>कैमरा समूह की रिकवरी शीट के QR कोड की ओर करें। समूह का कोई फ़ोन या कंप्यूटर चालू और इसी नेटवर्क पर रखें।</translation>
-    </message>
-    <message>
-        <source>The camera does not start: %1</source>
-        <translation>कैमरा शुरू नहीं हो रहा: %1</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>या कोड का टेक्स्ट चिपकाएँ, cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation>फिर से कोशिश करें</translation>
     </message>
 </context>
 </TS>

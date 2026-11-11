@@ -16,6 +16,10 @@ typedef CK_ULONG CK_OBJECT_HANDLE;
 typedef unsigned char CK_BBOOL;
 
 struct CK_VERSION { unsigned char major, minor; };
+struct CK_SESSION_INFO {
+    CK_SLOT_ID slotID;
+    CK_ULONG state, flags, ulDeviceError;
+};
 struct CK_TOKEN_INFO {
     unsigned char label[32], manufacturerID[32], model[16], serialNumber[16];
     CK_ULONG flags, ulMaxSessionCount, ulSessionCount, ulMaxRwSessionCount, ulRwSessionCount,
@@ -36,10 +40,15 @@ struct CK_FUNCTION_LIST {
     CK_RV (*C_GetSlotList)(CK_BBOOL, CK_SLOT_ID *, CK_ULONG *);
     Unused C_GetSlotInfo;
     CK_RV (*C_GetTokenInfo)(CK_SLOT_ID, CK_TOKEN_INFO *);
-    Unused C_GetMechanismList, C_GetMechanismInfo, C_InitToken, C_InitPIN, C_SetPIN;
+    Unused C_GetMechanismList, C_GetMechanismInfo;
+    CK_RV (*C_InitToken)(CK_SLOT_ID, const unsigned char *, CK_ULONG, const unsigned char *);
+    CK_RV (*C_InitPIN)(CK_SESSION_HANDLE, const unsigned char *, CK_ULONG);
+    CK_RV (*C_SetPIN)(CK_SESSION_HANDLE, const unsigned char *, CK_ULONG, const unsigned char *, CK_ULONG);
     CK_RV (*C_OpenSession)(CK_SLOT_ID, CK_ULONG, void *, void *, CK_SESSION_HANDLE *);
     CK_RV (*C_CloseSession)(CK_SESSION_HANDLE);
-    Unused C_CloseAllSessions, C_GetSessionInfo, C_GetOperationState, C_SetOperationState;
+    Unused C_CloseAllSessions;
+    CK_RV (*C_GetSessionInfo)(CK_SESSION_HANDLE, CK_SESSION_INFO *);
+    Unused C_GetOperationState, C_SetOperationState;
     CK_RV (*C_Login)(CK_SESSION_HANDLE, CK_ULONG, const unsigned char *, CK_ULONG);
     CK_RV (*C_Logout)(CK_SESSION_HANDLE);
     Unused C_CreateObject, C_CopyObject;
@@ -64,8 +73,14 @@ struct CK_FUNCTION_LIST {
 
 // Return values.
 const CK_RV CKR_OK = 0x0;
+const CK_RV CKR_GENERAL_ERROR = 0x5;
 const CK_RV CKR_CRYPTOKI_ALREADY_INITIALIZED = 0x191;
 const CK_RV CKR_USER_ALREADY_LOGGED_IN = 0x100;
+const CK_RV CKR_PIN_INCORRECT = 0xA0;
+const CK_RV CKR_PIN_LEN_RANGE = 0xA2;
+const CK_RV CKR_PIN_LOCKED = 0xA4;
+// A read/write session with the user logged in.
+const CK_ULONG CKS_RW_USER_FUNCTIONS = 3;
 
 // Token flags.
 const CK_ULONG CKF_LOGIN_REQUIRED = 0x4;
@@ -78,6 +93,7 @@ const CK_ULONG CKF_USER_PIN_LOCKED = 0x40000;
 // Sessions and users.
 const CK_ULONG CKF_RW_SESSION = 0x2;
 const CK_ULONG CKF_SERIAL_SESSION = 0x4;
+const CK_ULONG CKU_SO = 0;
 const CK_ULONG CKU_USER = 1;
 
 // Attributes.

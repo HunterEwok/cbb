@@ -105,6 +105,8 @@ DISTFILES += \
     qml/pages/DevicePage.qml \
     qml/pages/AlertsCard.qml \
     qml/pages/RenameDevicePage.qml \
+    qml/pages/PinDialog.qml \
+    qml/pages/ChangePinDialog.qml \
     qml/pages/RecoveryPage.qml \
     qml/pages/RestorePage.qml \
     qml/pages/DeviceTile.qml \

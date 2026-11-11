@@ -6,6 +6,22 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>Сначала нужен PIN администратора.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>Защищённый модуль телефона не принял PIN.</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>Семь неверных PIN навсегда заблокировали ключ администратора; телефон остаётся в группе участником.</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>Чтобы добавить устройство, нужен PIN администратора.</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>Корень группы отменил заявку; телефон остаётся админом.</translation>
     </message>
@@ -94,8 +110,8 @@
         <translation>Этот телефон не хранит ключи приложений.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>Другое устройство не приняло этот телефон как админа. Админов назначает только корень группы: там примите его как админа (cbb pair -qr -admin) или войдите в группу не как админ.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>Другое устройство не приняло этот телефон как админа. Админов назначает только устройство, которое создало группу: отсканируйте код на нём или войдите в группу не как админ.</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -146,30 +162,6 @@
         <translation>Телефону не удалось удалить свой ключ.</translation>
     </message>
     <message>
-        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
-        <translation>Хаб группы не ответил. Проверьте, что приглашение ещё действует и хаб включён, и попробуйте снова.</translation>
-    </message>
-    <message>
-        <source>The other phone's group could not be joined. Try again.</source>
-        <translation>Не удалось вступить в группу. Попробуйте снова.</translation>
-    </message>
-    <message>
-        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
-        <translation>Приглашение делает только админ: телефон-админ здесь или cbb invite на компьютере-админе.</translation>
-    </message>
-    <message>
-        <source>This phone is in a group already. Leave it first to join another.</source>
-        <translation>Этот телефон уже в группе. Сначала выйдите из неё, чтобы вступить в другую.</translation>
-    </message>
-    <message>
-        <source>This is not a CBB invitation.</source>
-        <translation>Это не приглашение CBB.</translation>
-    </message>
-    <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>Срок приглашения истёк. Попросите новое.</translation>
-    </message>
-    <message>
         <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
         <translation>Отсканируйте QR-код листа восстановления: на новом телефоне введённого ключа недостаточно.</translation>
     </message>
@@ -201,6 +193,34 @@
         <source>The claim to restore the group became void.</source>
         <translation>Заявка на восстановление группы стала недействительной.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>Хаб группы не ответил. Проверьте, что приглашение ещё действует и хаб включён, и попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>Не удалось вступить в группу. Попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>Приглашение делает только админ: телефон-админ здесь или cbb invite на компьютере-админе.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>Этот телефон уже в группе. Сначала выйдите из неё, чтобы вступить в другую.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>Это не приглашение CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>Срок приглашения истёк. Попросите новое.</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>Ключ администратора на этом телефоне старше PIN администратора. Покиньте группу и вступите в неё снова.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -225,16 +245,8 @@
         <translation>Попробовать снова</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>Войти как админ</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>Создаётся ключ админа…</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>На корневом компьютере группы примите этот телефон как админа по этому коду: в приложении CBB добавьте устройство и выберите «принять как админа» или выполните cbb pair -qr -admin. Не закрывайте этот экран.</translation>
     </message>
     <message>
         <source>Join with an invitation</source>
@@ -294,10 +306,6 @@
     <message>
         <source>Join a group</source>
         <translation>Войти в группу</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>Войти в группу как админ</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -376,10 +384,6 @@
         <translation>Потеряли телефон?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>Сделайте второй телефон админом: на нём нажмите «Войти в группу как админ», затем отсканируйте его код здесь через «Сканировать код». Нажмите, чтобы закрыть.</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>Устройства</translation>
     </message>
@@ -400,6 +404,10 @@
         <translation>Выключить, пока не включу</translation>
     </message>
     <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>Восстановить по листу восстановления</translation>
+    </message>
+    <message>
         <source>Join with an invitation</source>
         <translation>Вступить по приглашению</translation>
     </message>
@@ -408,8 +416,8 @@
         <translation>Отправить приглашение</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>Восстановить по листу восстановления</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>Сделайте второй телефон админом: добавьте его в группу, затем откройте его здесь и нажмите «Сделать админом». Нажмите, чтобы закрыть.</translation>
     </message>
 </context>
 <context>
@@ -537,6 +545,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Сменить PIN администратора</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>Семь неверных PIN навсегда заблокировали ключ администратора. Телефон остаётся в группе участником; чтобы снова стать администратором, переустановите CBB и вступите как новое устройство.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>PIN администратора изменён.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>Неверный PIN. Осталось попыток: %1.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>PIN администратора не изменён.</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>Bluetooth-клавиатура</translation>
@@ -721,6 +749,14 @@
         <source>None</source>
         <translation>Нет</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>Подготовиться стать админом</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>Корень группы может сделать этот телефон админом: на корне откройте этот телефон и нажмите «Сделать админом».</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -838,14 +874,6 @@
     <message>
         <source>Try again</source>
         <translation>Попробовать снова</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>Сделать админом</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>Для телефона, который вступает как админ</translation>
     </message>
 </context>
 <context>
@@ -1354,6 +1382,166 @@
     </message>
 </context>
 <context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>Выберите PIN администратора</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>PIN администратора</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>Задать</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Подтвердить</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>PIN ещё раз</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>Неверный PIN. Осталась одна попытка: следующий неверный PIN навсегда заблокирует ключ администратора.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>Неверный PIN. Осталось попыток: %1.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>Собственный PIN CBB, не короче четырёх цифр. Не используйте код разблокировки телефона. Защищённый модуль телефона проверяет его перед каждым действием администратора; семь неверных PIN навсегда блокируют ключ администратора, и разблокировать его нельзя.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN проверяет защищённый модуль телефона; семь неверных PIN навсегда блокируют ключ администратора.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>С PIN администратора корень группы сможет позже сделать этот телефон админом. Отмените, чтобы войти просто участником.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>С PIN администратора корень группы сможет сделать этот телефон админом.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Сменить PIN администратора</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>Сменить</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>Текущий PIN</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>Новый PIN</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>Новый PIN ещё раз</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>Удалить ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>Удаляем ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>Создать новый ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>Создать ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>Заменяем ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>Запишите ключ или распечатайте эту страницу и храните в надёжном месте. Он показывается только один раз.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>У группы есть ключ восстановления. С ним компьютер группы или новый телефон заберёт группу, если этот телефон потеряется.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>Ключ восстановления позволит компьютеру группы или новому телефону забрать группу, если этот телефон потеряется. Потяните вниз, чтобы создать его.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>Я записал ключ</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>Восстановить группу</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>Теперь этот телефон — корень группы.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>Ищем телефон или компьютер группы в этой сети…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>Отправляем заявку на группу…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>Группа восстановлена на этом телефоне. Он станет корнем группы, когда истечёт время ожидания, через %1 ч, если корень не отменит заявку.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>Группа восстановлена на этом телефоне. Он станет корнем группы, когда истечёт время ожидания группы, если корень не отменит заявку.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>Наведите камеру на QR-код листа восстановления группы. Телефон или компьютер группы должен быть включён и в этой сети.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Камера не запускается: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>Или вставьте текст кода, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Попробовать снова</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Join with an invitation</source>
@@ -1445,92 +1633,6 @@
     <message>
         <source>Invite another device</source>
         <translation>Пригласить ещё устройство</translation>
-    </message>
-</context>
-<context>
-    <name>RecoveryPage</name>
-    <message>
-        <source>Remove the recovery key</source>
-        <translation>Удалить ключ восстановления</translation>
-    </message>
-    <message>
-        <source>Removing the recovery key</source>
-        <translation>Удаляем ключ восстановления</translation>
-    </message>
-    <message>
-        <source>Make a new recovery key</source>
-        <translation>Создать новый ключ восстановления</translation>
-    </message>
-    <message>
-        <source>Make a recovery key</source>
-        <translation>Создать ключ восстановления</translation>
-    </message>
-    <message>
-        <source>Replacing the recovery key</source>
-        <translation>Заменяем ключ восстановления</translation>
-    </message>
-    <message>
-        <source>Recovery key</source>
-        <translation>Ключ восстановления</translation>
-    </message>
-    <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>Запишите ключ или распечатайте эту страницу и храните в надёжном месте. Он показывается только один раз.</translation>
-    </message>
-    <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>У группы есть ключ восстановления. С ним компьютер группы или новый телефон заберёт группу, если этот телефон потеряется.</translation>
-    </message>
-    <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>Ключ восстановления позволит компьютеру группы или новому телефону забрать группу, если этот телефон потеряется. Потяните вниз, чтобы создать его.</translation>
-    </message>
-    <message>
-        <source>I wrote it down</source>
-        <translation>Я записал ключ</translation>
-    </message>
-</context>
-<context>
-    <name>RestorePage</name>
-    <message>
-        <source>Restore the group</source>
-        <translation>Восстановить группу</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>Теперь этот телефон — корень группы.</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>Ищем телефон или компьютер группы в этой сети…</translation>
-    </message>
-    <message>
-        <source>Claiming the group…</source>
-        <translation>Отправляем заявку на группу…</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>Группа восстановлена на этом телефоне. Он станет корнем группы, когда истечёт время ожидания, через %1 ч, если корень не отменит заявку.</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>Группа восстановлена на этом телефоне. Он станет корнем группы, когда истечёт время ожидания группы, если корень не отменит заявку.</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>Наведите камеру на QR-код листа восстановления группы. Телефон или компьютер группы должен быть включён и в этой сети.</translation>
-    </message>
-    <message>
-        <source>The camera does not start: %1</source>
-        <translation>Камера не запускается: %1</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>Или вставьте текст кода, cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation>Попробовать снова</translation>
     </message>
 </context>
 </TS>

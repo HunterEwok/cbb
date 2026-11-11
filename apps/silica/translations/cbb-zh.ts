@@ -6,6 +6,22 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>需要先输入管理员 PIN。</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>手机的安全元件未接受该 PIN。</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>连续七次输错 PIN，管理员密钥已被永久锁定；手机仍作为成员留在群组中。</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>添加设备需要管理员 PIN。</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>群组的根设备取消了申请；手机仍是管理员。</translation>
     </message>
@@ -94,8 +110,8 @@
         <translation>此手机不为应用保存密钥。</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>另一台设备没有以管理员身份接纳此手机。只有群组的根设备可以设立管理员：请在根设备上以管理员身份接纳它（cbb pair -qr -admin），或者以非管理员身份加入。</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>另一台设备没有以管理员身份接纳此手机。只有创建群组的设备可以设立管理员：请在那台设备上扫描代码，或者以非管理员身份加入。</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -146,30 +162,6 @@
         <translation>手机无法删除它的密钥。</translation>
     </message>
     <message>
-        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
-        <translation>群组的中心节点没有响应。请确认邀请仍然有效且中心节点已开启，然后重试。</translation>
-    </message>
-    <message>
-        <source>The other phone's group could not be joined. Try again.</source>
-        <translation>无法加入该群组。请重试。</translation>
-    </message>
-    <message>
-        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
-        <translation>只有管理员可以创建邀请：这里的管理员手机，或管理员电脑上的 cbb invite。</translation>
-    </message>
-    <message>
-        <source>This phone is in a group already. Leave it first to join another.</source>
-        <translation>这部手机已在一个群组中。请先退出，再加入其他群组。</translation>
-    </message>
-    <message>
-        <source>This is not a CBB invitation.</source>
-        <translation>这不是 CBB 邀请。</translation>
-    </message>
-    <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>邀请已过期。请索要新的邀请。</translation>
-    </message>
-    <message>
         <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
         <translation>扫描恢复单上的二维码：在新手机上，仅输入密钥是不够的。</translation>
     </message>
@@ -201,6 +193,34 @@
         <source>The claim to restore the group became void.</source>
         <translation>恢复群组的申请已失效。</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>群组的中心节点没有响应。请确认邀请仍然有效且中心节点已开启，然后重试。</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>无法加入该群组。请重试。</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>只有管理员可以创建邀请：这里的管理员手机，或管理员电脑上的 cbb invite。</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>这部手机已在一个群组中。请先退出，再加入其他群组。</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>这不是 CBB 邀请。</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>邀请已过期。请索要新的邀请。</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>此手机的管理员密钥早于管理员 PIN。请退出群组，然后重新加入。</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -225,16 +245,8 @@
         <translation>重试</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>以管理员身份加入</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>正在生成管理员密钥…</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>在群组的根电脑上用此代码以管理员身份接纳此手机：在 CBB 应用中添加设备并选择以管理员身份接纳，或运行 cbb pair -qr -admin。请保持此屏幕打开。</translation>
     </message>
     <message>
         <source>Join with an invitation</source>
@@ -294,10 +306,6 @@
     <message>
         <source>Join a group</source>
         <translation>加入群组</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>以管理员身份加入群组</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -376,10 +384,6 @@
         <translation>手机丢了？</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>让第二部手机成为管理员：在那部手机上点按“以管理员身份加入群组”，然后在这里用“扫描代码”扫描它的代码。点按即可关闭。</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>设备</translation>
     </message>
@@ -400,6 +404,10 @@
         <translation>关闭，直到我打开</translation>
     </message>
     <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>用恢复单恢复</translation>
+    </message>
+    <message>
         <source>Join with an invitation</source>
         <translation>通过邀请加入</translation>
     </message>
@@ -408,8 +416,8 @@
         <translation>发送邀请</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>用恢复单恢复</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>让第二部手机成为管理员：先把它加入群组，然后在这里打开它并点按“设为管理员”。点按即可关闭。</translation>
     </message>
 </context>
 <context>
@@ -537,6 +545,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>更改管理员 PIN</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>连续七次输错 PIN，管理员密钥已被永久锁定。手机仍作为成员留在群组中；若要重新成为管理员，请重新安装 CBB 并作为新设备加入。</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>管理员 PIN 已更改。</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN 错误。剩余次数：%1。</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>管理员 PIN 未更改。</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>蓝牙键盘</translation>
@@ -721,6 +749,14 @@
         <source>None</source>
         <translation>无</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>准备成为管理员</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>群组的根可以将此手机设为管理员：在根设备上打开此手机，然后点按“设为管理员”。</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -838,14 +874,6 @@
     <message>
         <source>Try again</source>
         <translation>重试</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>设为管理员</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>适用于以管理员身份加入的手机</translation>
     </message>
 </context>
 <context>
@@ -1354,6 +1382,166 @@
     </message>
 </context>
 <context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>设置管理员 PIN</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>管理员 PIN</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>设置</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>确认</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>再次输入 PIN</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>PIN 错误。只剩一次机会：再输错一次将永久锁定管理员密钥。</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN 错误。剩余次数：%1。</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB 自己的 PIN，至少四位数字。请勿使用手机的解锁密码。每次管理员操作前由手机的安全元件验证；七次输错将永久锁定管理员密钥，任何人都无法解锁。</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN 由手机的安全元件验证；七次输错将永久锁定管理员密钥。</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>设置管理员 PIN 后，群组的根以后可以将此手机设为管理员。取消则仅以成员身份加入。</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>设置管理员 PIN 后，群组的根可以将此手机设为管理员。</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>更改管理员 PIN</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>更改</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>当前 PIN</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>新 PIN</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>再次输入新 PIN</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>移除恢复密钥</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>正在移除恢复密钥</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>创建新的恢复密钥</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>创建恢复密钥</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>正在替换恢复密钥</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>恢复密钥</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>请抄下密钥或打印此页，并妥善保管。它只显示一次。</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>群组已有恢复密钥。如果此手机丢失，群组中的电脑或新手机可凭它接管群组。</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>恢复密钥可让群组中的电脑或新手机在此手机丢失时接管群组。下拉即可创建。</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>我已抄下</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>恢复群组</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>这部手机现在是群组的根设备。</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>正在此网络上查找群组的手机或电脑…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>正在申请群组…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>群组已在这部手机上恢复。等待时间结束后（%1 小时后），它将成为群组的根设备，除非根设备取消申请。</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>群组已在这部手机上恢复。群组的等待时间结束后，它将成为群组的根设备，除非根设备取消申请。</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>将相机对准群组恢复单上的二维码。让群组中的一部手机或一台电脑保持开机并连接到此网络。</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>相机无法启动：%1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>或粘贴二维码的文本 cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>重试</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Join with an invitation</source>
@@ -1445,92 +1633,6 @@
     <message>
         <source>Invite another device</source>
         <translation>邀请另一台设备</translation>
-    </message>
-</context>
-<context>
-    <name>RecoveryPage</name>
-    <message>
-        <source>Remove the recovery key</source>
-        <translation>移除恢复密钥</translation>
-    </message>
-    <message>
-        <source>Removing the recovery key</source>
-        <translation>正在移除恢复密钥</translation>
-    </message>
-    <message>
-        <source>Make a new recovery key</source>
-        <translation>创建新的恢复密钥</translation>
-    </message>
-    <message>
-        <source>Make a recovery key</source>
-        <translation>创建恢复密钥</translation>
-    </message>
-    <message>
-        <source>Replacing the recovery key</source>
-        <translation>正在替换恢复密钥</translation>
-    </message>
-    <message>
-        <source>Recovery key</source>
-        <translation>恢复密钥</translation>
-    </message>
-    <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>请抄下密钥或打印此页，并妥善保管。它只显示一次。</translation>
-    </message>
-    <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>群组已有恢复密钥。如果此手机丢失，群组中的电脑或新手机可凭它接管群组。</translation>
-    </message>
-    <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>恢复密钥可让群组中的电脑或新手机在此手机丢失时接管群组。下拉即可创建。</translation>
-    </message>
-    <message>
-        <source>I wrote it down</source>
-        <translation>我已抄下</translation>
-    </message>
-</context>
-<context>
-    <name>RestorePage</name>
-    <message>
-        <source>Restore the group</source>
-        <translation>恢复群组</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>这部手机现在是群组的根设备。</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>正在此网络上查找群组的手机或电脑…</translation>
-    </message>
-    <message>
-        <source>Claiming the group…</source>
-        <translation>正在申请群组…</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>群组已在这部手机上恢复。等待时间结束后（%1 小时后），它将成为群组的根设备，除非根设备取消申请。</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>群组已在这部手机上恢复。群组的等待时间结束后，它将成为群组的根设备，除非根设备取消申请。</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>将相机对准群组恢复单上的二维码。让群组中的一部手机或一台电脑保持开机并连接到此网络。</translation>
-    </message>
-    <message>
-        <source>The camera does not start: %1</source>
-        <translation>相机无法启动：%1</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>或粘贴二维码的文本 cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation>重试</translation>
     </message>
 </context>
 </TS>

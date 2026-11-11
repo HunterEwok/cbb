@@ -53,7 +53,7 @@ on every platform of the class, on the roadmap).
 
 | Capability | Android | iPhone | Aurora OS | Notes |
 |---|---|---|---|---|
-| Make a group, root key in hardware behind biometrics | yes | yes | yes, the root key in the TEE; no prompt before signing: Aurora 5.1.5 keeps its authentication service out of a regular app's sandbox (a probe on the R570E shows it); making a group not yet tried on the phone | StrongBox or TEE; Secure Enclave |
+| Make a group, root key in hardware behind biometrics | yes | yes | yes, the root key in the TEE behind the app's own PIN, which the TEE checks (D-94): Aurora 5.1.5 gives a regular app neither its authentication service nor the fingerprint (a probe on the R570E and Open Mobile Platform's answer, 2026-11-09); making a group not yet tried on the phone | StrongBox or TEE; Secure Enclave |
 | Add a computer or a lite device by QR code | yes | yes | yes, as an admin; not yet tried on the phone | the Aurora app reads the code with the core's reader |
 | Join another phone's group, as a member with one button | yes | yes | yes; the second button "Join as an admin" goes after the admin PIN (D-94) | the root makes it an admin later (D-95) |
 | Make an admin, remove, take over from a lost root, renew certificates | yes | yes | remove, renew and take over from a lost root (its admin key in the TEE becomes the new root), as the root or an admin; not yet tried on the phone | the core signs (`cbb_core::takeover` for the takeover), the app's admin key in the TEE |

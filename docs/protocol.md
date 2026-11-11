@@ -1406,7 +1406,10 @@ has a root of the same form, which the computer holds in a file (section 10, "Ad
   phone has an admin CA (section 10). Computers get member certificates; a computer holds a
   CA key only when the root phone makes it an admin (section 10, "Admins").
   A phone MUST ask for the user's presence (Face ID, the fingerprint or the passcode) before
-  it signs with the root or an admin key. A group CA has path length 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
+  it signs with the root or an admin key. Aurora OS lets no regular app ask the system for it,
+  so the Aurora app keeps its root or admin key in a token of its own in the TEE behind a PIN
+  the user chooses (at least four digits, apart from the phone's), which the TEE checks
+  before the key signs and which locks the key for good after seven wrong ones (D-94). A group CA has path length 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
   6).
 - **The app is a member.** It holds a member certificate of its own group with role
   `phone` and speaks the member protocol of section 4. It dials and never listens for

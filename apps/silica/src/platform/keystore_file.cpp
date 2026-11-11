@@ -99,7 +99,7 @@ Key ensure(Which which)
     return key;
 }
 
-QByteArray sign(const QByteArray &digest, Failure *failure, Which which)
+QByteArray sign(const QByteArray &digest, Failure *failure, Which which, bool *)
 {
     QByteArray secret;
     {
@@ -114,6 +114,34 @@ QByteArray sign(const QByteArray &digest, Failure *failure, Which which)
     const QJsonObject ok = Core::call(QStringLiteral("sign_digest"), args, failure).toObject();
     return b64(ok.value(QStringLiteral("sig")));
 }
+
+// A key in a file has no PIN of its own: the file is as safe as the app's
+// data folder (level 3, "file").
+PinStatus adminPin()
+{
+    PinStatus s;
+    s.state = PinState::None;
+    return s;
+}
+
+PinResult enterAdminPin(const QByteArray &, PinStatus *after, Failure *)
+{
+    after->state = PinState::None;
+    return PinResult::Right;
+}
+
+PinResult changeAdminPin(const QByteArray &, const QByteArray &, PinStatus *after, Failure *)
+{
+    after->state = PinState::None;
+    return PinResult::Right;
+}
+
+bool adminPinHeld()
+{
+    return true;
+}
+
+void dropAdminPin() {}
 
 bool forget(Failure *failure)
 {

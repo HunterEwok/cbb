@@ -7,6 +7,11 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The Aurora app asks for a PIN of its own before its root or admin key signs, since Aurora OS
+  gives an app neither its authentication service nor the fingerprint. The key moves to a
+  second token of the app in the TEE, whose PIN the user chooses (at least four digits) and
+  the TEE checks; seven wrong PINs lock it for good. The member key stays where it was, so
+  sync needs no PIN. Settings change the PIN.
 - The installers and uninstallers (`get.sh`, `get.ps1`, Linux, rootless, macOS, FreeBSD,
   OpenWrt and Windows) speak the user's language: Arabic, Chinese, English, Hebrew, Hindi,
   Russian, Spanish or Swahili, from the system's locale (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`,
@@ -1553,6 +1558,11 @@ All notable changes to cbb are documented in this file. The format follows
   once it names its key, its device and the current root. The root refuses an admin key that
   the records already name for another device or a root (D-95; docs/protocol.md, section 10,
   "Admins").
+- The Aurora app has one "Join a group" button too. Joining makes the admin key behind the
+  admin PIN (cancelling joins without it, and Settings' "Get ready to be an admin" makes it
+  later), the member's hellos offer it, and the root's device page has "Make an admin" for
+  phones; the member checks the admin CA of the root's admin message (`take_admin_ca`) before
+  the app keeps it.
 - The bench's fleet runs its small devices with the same `cbb` as its computers, as the
   service alone (`-cbb-lite` is gone, `-coverdir` takes the Rust `cbb`'s coverage too), and its
   D3 case checks whom the members dial by D-89: one with a higher device ID at once, one with

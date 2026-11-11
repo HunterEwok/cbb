@@ -6,6 +6,22 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>PIN ya msimamizi inahitajika kwanza.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>Kipengele salama cha simu hakikukubali PIN.</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>PIN saba zisizo sahihi zimefunga ufunguo wa msimamizi kabisa; simu inabaki kwenye kikundi kama mwanachama.</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>Kuongeza kifaa kunahitaji PIN ya msimamizi.</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>Mzizi wa kikundi umeghairi ombi; simu inabaki kuwa msimamizi.</translation>
     </message>
@@ -94,8 +110,8 @@
         <translation>Simu hii haihifadhi funguo za programu.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>Kifaa kingine hakikukubali simu hii kama msimamizi. Ni mzizi wa kikundi pekee unaoteua wasimamizi: huko, ikubali kama msimamizi (cbb pair -qr -admin), au jiunge bila kuwa msimamizi.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>Kifaa kingine hakikukubali simu hii kama msimamizi. Ni kifaa kilichounda kikundi pekee kinachoteua wasimamizi: changanua msimbo huko, au jiunge bila kuwa msimamizi.</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -146,30 +162,6 @@
         <translation>Simu haikuweza kufuta ufunguo wake.</translation>
     </message>
     <message>
-        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
-        <translation>Kitovu cha kikundi hakikujibu. Hakikisha mwaliko bado ni halali na kitovu kimewashwa, kisha jaribu tena.</translation>
-    </message>
-    <message>
-        <source>The other phone's group could not be joined. Try again.</source>
-        <translation>Imeshindikana kujiunga na kikundi. Jaribu tena.</translation>
-    </message>
-    <message>
-        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
-        <translation>Ni msimamizi pekee anayeunda mwaliko: simu ya msimamizi hapa, au cbb invite kwenye kompyuta ya msimamizi.</translation>
-    </message>
-    <message>
-        <source>This phone is in a group already. Leave it first to join another.</source>
-        <translation>Simu hii tayari iko kwenye kikundi. Ondoka kwanza ili ujiunge na kingine.</translation>
-    </message>
-    <message>
-        <source>This is not a CBB invitation.</source>
-        <translation>Huu si mwaliko wa CBB.</translation>
-    </message>
-    <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>Mwaliko umeisha muda. Omba mpya.</translation>
-    </message>
-    <message>
         <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
         <translation>Changanua msimbo wa QR wa karatasi ya urejeshaji: kwenye simu mpya ufunguo ulioandikwa hautoshi.</translation>
     </message>
@@ -201,6 +193,34 @@
         <source>The claim to restore the group became void.</source>
         <translation>Ombi la kurejesha kikundi limebatilika.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>Kitovu cha kikundi hakikujibu. Hakikisha mwaliko bado ni halali na kitovu kimewashwa, kisha jaribu tena.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>Imeshindikana kujiunga na kikundi. Jaribu tena.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>Ni msimamizi pekee anayeunda mwaliko: simu ya msimamizi hapa, au cbb invite kwenye kompyuta ya msimamizi.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>Simu hii tayari iko kwenye kikundi. Ondoka kwanza ili ujiunge na kingine.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>Huu si mwaliko wa CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>Mwaliko umeisha muda. Omba mpya.</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>Ufunguo wa msimamizi wa simu hii ni wa kabla ya PIN ya msimamizi. Ondoka kwenye kikundi kisha ujiunge tena.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -225,16 +245,8 @@
         <translation>Jaribu tena</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>Jiunge kama msimamizi</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>Inatengeneza ufunguo wa msimamizi…</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>Kwenye kompyuta ya mzizi wa kikundi, ikubali simu hii kama msimamizi kwa msimbo huu: katika programu ya CBB ongeza kifaa na uchague kukikubali kama msimamizi, au endesha cbb pair -qr -admin. Acha skrini hii wazi.</translation>
     </message>
     <message>
         <source>Join with an invitation</source>
@@ -294,10 +306,6 @@
     <message>
         <source>Join a group</source>
         <translation>Jiunge na kikundi</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>Jiunge na kikundi kama msimamizi</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -376,10 +384,6 @@
         <translation>Umepoteza simu?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>Fanya simu ya pili kuwa msimamizi: kwenye simu hiyo, gusa Jiunge na kikundi kama msimamizi, kisha changanua msimbo wake hapa kwa Changanua msimbo. Gusa ili kufunga.</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>Vifaa</translation>
     </message>
@@ -400,6 +404,10 @@
         <translation>Zima hadi niiwashe</translation>
     </message>
     <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>Rejesha kwa karatasi ya urejeshaji</translation>
+    </message>
+    <message>
         <source>Join with an invitation</source>
         <translation>Jiunge kwa mwaliko</translation>
     </message>
@@ -408,8 +416,8 @@
         <translation>Tuma mwaliko</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>Rejesha kwa karatasi ya urejeshaji</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>Fanya simu ya pili kuwa msimamizi: iongeze kwenye kikundi, kisha ifungue hapa na uguse Fanya msimamizi. Gusa ili kufunga.</translation>
     </message>
 </context>
 <context>
@@ -537,6 +545,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Badilisha PIN ya msimamizi</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>PIN saba zisizo sahihi zimefunga ufunguo wa msimamizi kabisa. Simu inabaki kwenye kikundi kama mwanachama; ili kuwa msimamizi tena, sakinisha CBB upya na ujiunge kama kifaa kipya.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>PIN ya msimamizi imebadilishwa.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN si sahihi. Majaribio yaliyobaki: %1.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>PIN ya msimamizi haijabadilishwa.</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>Kibodi ya Bluetooth</translation>
@@ -721,6 +749,14 @@
         <source>None</source>
         <translation>Hakuna</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>Jiandae kuwa msimamizi</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>Mzizi wa kikundi unaweza kuifanya simu hii kuwa msimamizi: kwenye mzizi, fungua simu hii na uguse Fanya msimamizi.</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -838,14 +874,6 @@
     <message>
         <source>Try again</source>
         <translation>Jaribu tena</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>Kifanye msimamizi</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>Kwa simu inayojiunga kama msimamizi</translation>
     </message>
 </context>
 <context>
@@ -1354,6 +1382,166 @@
     </message>
 </context>
 <context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>Chagua PIN ya msimamizi</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>PIN ya msimamizi</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>Weka</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Thibitisha</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>PIN tena</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>PIN si sahihi. Imebaki jaribio moja: PIN nyingine isiyo sahihi itafunga ufunguo wa msimamizi kabisa.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN si sahihi. Majaribio yaliyobaki: %1.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>PIN ya CBB yenyewe, angalau tarakimu nne. Usitumie msimbo wa kufungua simu. Kipengele salama cha simu huikagua kabla ya kila kitendo cha msimamizi; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa, na hakuna anayeweza kuufungua.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>Kipengele salama cha simu hukagua PIN; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>Ukiwa na PIN ya msimamizi, mzizi wa kikundi unaweza baadaye kuifanya simu hii kuwa msimamizi. Ghairi ili ujiunge kama mwanachama tu.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>Ukiwa na PIN ya msimamizi, mzizi wa kikundi unaweza kuifanya simu hii kuwa msimamizi.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Badilisha PIN ya msimamizi</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>Badilisha</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>PIN ya sasa</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>PIN mpya</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>PIN mpya tena</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>Ondoa ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>Inaondoa ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>Unda ufunguo mpya wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>Unda ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>Inabadilisha ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>Andika ufunguo au chapisha ukurasa huu, na uuhifadhi salama. Unaonyeshwa mara moja tu.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>Kikundi kina ufunguo wa kurejesha. Kwa huo kompyuta ya kikundi au simu mpya huchukua kikundi simu hii ikipotea.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>Ufunguo wa kurejesha huruhusu kompyuta ya kikundi au simu mpya kuchukua kikundi simu hii ikipotea. Vuta chini kuunda mmoja.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>Nimeuandika</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>Rejesha kikundi</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>Simu hii sasa ni mzizi wa kikundi.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>Inatafuta simu au kompyuta ya kikundi kwenye mtandao huu…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>Inaomba kikundi…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>Kikundi kimerejeshwa kwenye simu hii. Inakuwa mzizi wa kikundi muda wa kusubiri ukiisha, baada ya saa %1, isipokuwa mzizi ukighairi ombi.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>Kikundi kimerejeshwa kwenye simu hii. Inakuwa mzizi wa kikundi muda wa kusubiri wa kikundi ukiisha, isipokuwa mzizi ukighairi ombi.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>Elekeza kamera kwenye msimbo wa QR wa karatasi ya urejeshaji ya kikundi. Weka simu au kompyuta ya kikundi ikiwa imewashwa na kwenye mtandao huu.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Kamera haianzi: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>Au bandika maandishi ya msimbo, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Jaribu tena</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Join with an invitation</source>
@@ -1445,92 +1633,6 @@
     <message>
         <source>Invite another device</source>
         <translation>Alika kifaa kingine</translation>
-    </message>
-</context>
-<context>
-    <name>RecoveryPage</name>
-    <message>
-        <source>Remove the recovery key</source>
-        <translation>Ondoa ufunguo wa kurejesha</translation>
-    </message>
-    <message>
-        <source>Removing the recovery key</source>
-        <translation>Inaondoa ufunguo wa kurejesha</translation>
-    </message>
-    <message>
-        <source>Make a new recovery key</source>
-        <translation>Unda ufunguo mpya wa kurejesha</translation>
-    </message>
-    <message>
-        <source>Make a recovery key</source>
-        <translation>Unda ufunguo wa kurejesha</translation>
-    </message>
-    <message>
-        <source>Replacing the recovery key</source>
-        <translation>Inabadilisha ufunguo wa kurejesha</translation>
-    </message>
-    <message>
-        <source>Recovery key</source>
-        <translation>Ufunguo wa kurejesha</translation>
-    </message>
-    <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>Andika ufunguo au chapisha ukurasa huu, na uuhifadhi salama. Unaonyeshwa mara moja tu.</translation>
-    </message>
-    <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>Kikundi kina ufunguo wa kurejesha. Kwa huo kompyuta ya kikundi au simu mpya huchukua kikundi simu hii ikipotea.</translation>
-    </message>
-    <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>Ufunguo wa kurejesha huruhusu kompyuta ya kikundi au simu mpya kuchukua kikundi simu hii ikipotea. Vuta chini kuunda mmoja.</translation>
-    </message>
-    <message>
-        <source>I wrote it down</source>
-        <translation>Nimeuandika</translation>
-    </message>
-</context>
-<context>
-    <name>RestorePage</name>
-    <message>
-        <source>Restore the group</source>
-        <translation>Rejesha kikundi</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>Simu hii sasa ni mzizi wa kikundi.</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>Inatafuta simu au kompyuta ya kikundi kwenye mtandao huu…</translation>
-    </message>
-    <message>
-        <source>Claiming the group…</source>
-        <translation>Inaomba kikundi…</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>Kikundi kimerejeshwa kwenye simu hii. Inakuwa mzizi wa kikundi muda wa kusubiri ukiisha, baada ya saa %1, isipokuwa mzizi ukighairi ombi.</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>Kikundi kimerejeshwa kwenye simu hii. Inakuwa mzizi wa kikundi muda wa kusubiri wa kikundi ukiisha, isipokuwa mzizi ukighairi ombi.</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>Elekeza kamera kwenye msimbo wa QR wa karatasi ya urejeshaji ya kikundi. Weka simu au kompyuta ya kikundi ikiwa imewashwa na kwenye mtandao huu.</translation>
-    </message>
-    <message>
-        <source>The camera does not start: %1</source>
-        <translation>Kamera haianzi: %1</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>Au bandika maandishi ya msimbo, cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation>Jaribu tena</translation>
     </message>
 </context>
 </TS>

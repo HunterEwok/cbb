@@ -163,7 +163,8 @@ they look, so both apps are built to the same plan.
 5. **Settings**, the same on the iPhone, Android and Aurora: first the basic ones, the theme
    (System, Dark or Light) as icons with the language in a row and the ten colours, without
    a heading, the notifications, the watch, the recovery key on the root, the switch
-   "Advanced settings", leaving the group, and about (seven taps on the version show the
+   "Advanced settings", the admin PIN on Aurora ("The admin PIN on Aurora" below), leaving
+   the group, and about (seven taps on the version show the
    switch "Show error details", which puts the error itself under each error message; it is
    on in debug builds, and the launch argument or extra `ShowErrorDetails` sets it too).
    The advanced ones: away from home (the hub, moving it to a computer, the tunnel disguise,
@@ -766,6 +767,47 @@ computer, never a member: it holds no key of the group.
 The tests run against a fake Android TV (`androidtv/atvtest`), a fake Apple TV
 (`appletv/atvtest`) and a fake Roku; the Go remotes are not yet tried on real TVs. Samsung
 and LG follow (roadmap item 25).
+
+## The admin PIN on Aurora
+
+Aurora OS 5.1.5 gives a regular app no way to have the user confirm an action: its
+authentication service (authd) is outside the app's sandbox, the phone's unlock code is not
+offered, and the fingerprint has no API (a probe on the R570E, and Open Mobile Platform's
+answer of 2026-11-09). So the Aurora app asks for a PIN of its own wherever the iPhone asks
+for Face ID (D-94, docs/protocol.md section 3):
+
+- **The keys.** The member key stays in the token QCA initializes for the app (label "CBB",
+  PIN `0000`), so sync, copies and the keyboard need no PIN. The app makes that token only on its first
+  run; once it saw the token, or while the phone is in a group, a TEE that does not answer is an
+  error the app retries and shows, never a reason to make the token again, which would wipe the
+  member key. The root or admin key sits in a
+  second token of the app, the TEE's slot "APP", which the app initializes itself
+  (`src/platform/keystore_tee.cpp`): its user PIN is the user's, its SO PIN starts as the same
+  PIN and becomes a random one, kept nowhere, once the PIN has been entered right. Another app
+  sees neither token.
+- **When it asks.** Before the admin key is made or signs: making a group, or joining a
+  group, which makes the admin key the member's hellos offer the root for its "Make an
+  admin" (docs/protocol.md, section 10, "Admins"); the first time it sets the PIN (typed
+  twice, at least four digits). A user who cancels it joins as a member whose hellos offer
+  no key, and Settings' "Get ready to be an admin" makes it later. Then adding a device, an action on a device's
+  page, the root's decision on an alert, the takeover and its finish. The app hands the PIN
+  to the TEE and wipes it at once; the token then stays logged in for five minutes (as the iPhone app trusts one Face ID) after its
+  last use and is logged out when the app leaves the screen; renewals of the members'
+  certificates go only while it is logged in. The dialog asks not to reuse the phone's unlock
+  code. Settings change it ("Change the
+  admin PIN"), after the current one.
+- **Wrong PINs.** The TEE counts them; the dialog says how many of the seven tries are left.
+  The seventh locks the token for good: nothing unlocks it, the phone stays in its group as a
+  member, Settings say so, and an admin phone again needs CBB installed afresh and joined as a
+  new device. A lost root is taken over by an admin phone or with the recovery key.
+- **Leaving the group** deletes the admin key while its token is logged in; otherwise the key stays,
+  useless without the PIN, and the next admin key replaces it.
+- **An admin phone from before the PIN** keeps its admin key in the QCA token, and the group's
+  root certified that key; the app makes no new key beside it but asks to leave the group and
+  join again, which sets the PIN, for the root to make the phone an admin again.
+- **The root's admin CA** comes in its `admin` message once the root made the phone an admin;
+  the member checks it (ffi's `take_admin_ca`) before the app keeps it in `member.json`.
+- Sailfish OS and Aurora 4 keep their keys in files (level `file`) and ask for no PIN.
 
 ## Collections and the order of the tiles
 

@@ -6,6 +6,22 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>קודם צריך את קוד ה-PIN של המנהל.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>הרכיב המאובטח של הטלפון לא קיבל את ה-PIN.</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>שבעה קודי PIN שגויים נעלו את מפתח המנהל לתמיד; הטלפון נשאר בקבוצה כחבר.</translation>
+    </message>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>הוספת מכשיר דורשת את ה-PIN של המנהל.</translation>
+    </message>
+    <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
         <translation>השורש של הקבוצה ביטל את הבקשה; הטלפון נשאר מנהל.</translation>
     </message>
@@ -94,8 +110,8 @@
         <translation>הטלפון הזה לא שומר מפתחות לאפליקציות.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>המכשיר השני לא קיבל את הטלפון הזה כמנהל. רק השורש של הקבוצה ממנה מנהלים: שם, קבלו אותו כמנהל (cbb pair -qr -admin), או הצטרפו בלי להיות מנהל.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>המכשיר השני לא קיבל את הטלפון הזה כמנהל. רק המכשיר שיצר את הקבוצה ממנה מנהלים: סרקו את הקוד בו, או הצטרפו בלי להיות מנהל.</translation>
     </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
@@ -146,30 +162,6 @@
         <translation>הטלפון לא הצליח למחוק את המפתח שלו.</translation>
     </message>
     <message>
-        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
-        <translation>הרכזת של הקבוצה לא ענתה. ודאו שההזמנה עדיין בתוקף ושהרכזת פועלת, ונסו שוב.</translation>
-    </message>
-    <message>
-        <source>The other phone's group could not be joined. Try again.</source>
-        <translation>לא ניתן היה להצטרף לקבוצה. נסו שוב.</translation>
-    </message>
-    <message>
-        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
-        <translation>רק מנהל יוצר הזמנה: טלפון מנהל כאן, או cbb invite במחשב מנהל.</translation>
-    </message>
-    <message>
-        <source>This phone is in a group already. Leave it first to join another.</source>
-        <translation>הטלפון הזה כבר בקבוצה. צאו ממנה קודם כדי להצטרף לאחרת.</translation>
-    </message>
-    <message>
-        <source>This is not a CBB invitation.</source>
-        <translation>זו לא הזמנה של CBB.</translation>
-    </message>
-    <message>
-        <source>The invitation has expired. Ask for a new one.</source>
-        <translation>תוקף ההזמנה פג. בקשו הזמנה חדשה.</translation>
-    </message>
-    <message>
         <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
         <translation>סרקו את קוד ה-QR בדף השחזור: בטלפון חדש המפתח המוקלד לא מספיק.</translation>
     </message>
@@ -201,6 +193,34 @@
         <source>The claim to restore the group became void.</source>
         <translation>הבקשה לשחזר את הקבוצה בוטלה.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>הרכזת של הקבוצה לא ענתה. ודאו שההזמנה עדיין בתוקף ושהרכזת פועלת, ונסו שוב.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>לא ניתן היה להצטרף לקבוצה. נסו שוב.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>רק מנהל יוצר הזמנה: טלפון מנהל כאן, או cbb invite במחשב מנהל.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>הטלפון הזה כבר בקבוצה. צאו ממנה קודם כדי להצטרף לאחרת.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>זו לא הזמנה של CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>תוקף ההזמנה פג. בקשו הזמנה חדשה.</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>מפתח המנהל בטלפון הזה ישן יותר מ-PIN המנהל. צאו מהקבוצה והצטרפו אליה שוב.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -225,16 +245,8 @@
         <translation>נסה שוב</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>הצטרפות כמנהל</translation>
-    </message>
-    <message>
         <source>Making the admin key…</source>
         <translation>יוצר את מפתח המנהל…</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>במחשב השורש של הקבוצה, קבלו את הטלפון הזה כמנהל עם הקוד הזה: באפליקציית CBB הוסיפו מכשיר ובחרו לקבל אותו כמנהל, או הריצו cbb pair -qr -admin. השאירו את המסך הזה פתוח.</translation>
     </message>
     <message>
         <source>Join with an invitation</source>
@@ -294,10 +306,6 @@
     <message>
         <source>Join a group</source>
         <translation>הצטרפות לקבוצה</translation>
-    </message>
-    <message>
-        <source>Join a group as an admin</source>
-        <translation>הצטרפות לקבוצה כמנהל</translation>
     </message>
     <message>
         <source>The phone has no key yet. Pull down to check it again.</source>
@@ -376,10 +384,6 @@
         <translation>הטלפון אבד?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>הפכו טלפון שני למנהל: בו הקישו ״הצטרפות לקבוצה כמנהל״, ואז סרקו את הקוד שלו כאן דרך ״סריקת קוד״. הקישו לסגירה.</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>מכשירים</translation>
     </message>
@@ -400,6 +404,10 @@
         <translation>כיבוי עד שאפעיל</translation>
     </message>
     <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>שחזור עם דף שחזור</translation>
+    </message>
+    <message>
         <source>Join with an invitation</source>
         <translation>הצטרפות בהזמנה</translation>
     </message>
@@ -408,8 +416,8 @@
         <translation>שליחת הזמנה</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>שחזור עם דף שחזור</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>הפכו טלפון שני למנהל: הוסיפו אותו לקבוצה, פתחו אותו כאן והקישו ״הפיכה למנהל״. הקישו לסגירה.</translation>
     </message>
 </context>
 <context>
@@ -537,6 +545,26 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>שינוי PIN של מנהל</translation>
+    </message>
+    <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>שבעה קודי PIN שגויים נעלו את מפתח המנהל לתמיד. הטלפון נשאר בקבוצה כחבר; כדי להיות מנהל שוב, התקינו מחדש את CBB והצטרפו כמכשיר חדש.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is changed.</source>
+        <translation>ה-PIN של המנהל שונה.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN שגוי. ניסיונות שנותרו: %1.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>ה-PIN של המנהל לא שונה.</translation>
+    </message>
     <message>
         <source>Bluetooth keyboard</source>
         <translation>מקלדת בלוטות'</translation>
@@ -721,6 +749,14 @@
         <source>None</source>
         <translation>אין</translation>
     </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>היערכות להיות מנהל</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>השורש של הקבוצה יכול להפוך את הטלפון הזה למנהל: בשורש, פתחו את הטלפון הזה והקישו ״הפיכה למנהל״.</translation>
+    </message>
 </context>
 <context>
     <name>devices</name>
@@ -838,14 +874,6 @@
     <message>
         <source>Try again</source>
         <translation>לנסות שוב</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>להפוך למנהל</translation>
-    </message>
-    <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>לטלפון שמצטרף כמנהל</translation>
     </message>
 </context>
 <context>
@@ -1354,6 +1382,166 @@
     </message>
 </context>
 <context>
+    <name>PinDialog</name>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>בחרו PIN של מנהל</translation>
+    </message>
+    <message>
+        <source>Admin PIN</source>
+        <translation>PIN של מנהל</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>הגדרה</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>אישור</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>ה-PIN שוב</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>PIN שגוי. נותר ניסיון אחד: ה-PIN השגוי הבא ינעל את מפתח המנהל לתמיד.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN שגוי. ניסיונות שנותרו: %1.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>PIN משלו של CBB, לפחות ארבע ספרות. אל תשתמשו בקוד פתיחת הנעילה של הטלפון. הרכיב המאובטח של הטלפון בודק אותו לפני כל פעולת מנהל; שבעה קודים שגויים נועלים את מפתח המנהל לתמיד, ואיש אינו יכול לשחרר אותו.</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>הרכיב המאובטח של הטלפון בודק את ה-PIN; שבעה קודים שגויים נועלים את מפתח המנהל לתמיד.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>עם PIN של מנהל, השורש של הקבוצה יוכל בהמשך להפוך את הטלפון הזה למנהל. בטלו כדי להצטרף כחבר בלבד.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>עם PIN של מנהל, השורש של הקבוצה יכול להפוך את הטלפון הזה למנהל.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>שינוי PIN של מנהל</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>שינוי</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>PIN נוכחי</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>PIN חדש</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>ה-PIN החדש שוב</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>הסרת מפתח השחזור</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>מסיר את מפתח השחזור</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>יצירת מפתח שחזור חדש</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>יצירת מפתח שחזור</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>מחליף את מפתח השחזור</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>מפתח שחזור</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>רשמו את המפתח או הדפיסו את הדף ושמרו אותו במקום בטוח. הוא מוצג פעם אחת בלבד.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>לקבוצה יש מפתח שחזור. בעזרתו מחשב של הקבוצה או טלפון חדש משתלטים על הקבוצה אם הטלפון הזה אובד.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>מפתח שחזור מאפשר למחשב של הקבוצה או לטלפון חדש להשתלט על הקבוצה אם הטלפון הזה אובד. משכו למטה כדי ליצור אחד.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>רשמתי אותו</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>שחזור הקבוצה</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>הטלפון הזה הוא עכשיו השורש של הקבוצה.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>מחפש טלפון או מחשב של הקבוצה ברשת הזו…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>מבקש את הקבוצה…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>הקבוצה שוחזרה בטלפון הזה. הוא יהפוך לשורש הקבוצה כשזמן ההמתנה יסתיים, בעוד %1 שעות, אלא אם השורש יבטל את הבקשה.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>הקבוצה שוחזרה בטלפון הזה. הוא יהפוך לשורש הקבוצה כשזמן ההמתנה של הקבוצה יסתיים, אלא אם השורש יבטל את הבקשה.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>כוונו את המצלמה לקוד ה-QR בדף השחזור של הקבוצה. השאירו טלפון או מחשב של הקבוצה דולק וברשת הזו.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>המצלמה לא מופעלת: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>או הדביקו את טקסט הקוד, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>לנסות שוב</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Join with an invitation</source>
@@ -1445,92 +1633,6 @@
     <message>
         <source>Invite another device</source>
         <translation>הזמנת מכשיר נוסף</translation>
-    </message>
-</context>
-<context>
-    <name>RecoveryPage</name>
-    <message>
-        <source>Remove the recovery key</source>
-        <translation>הסרת מפתח השחזור</translation>
-    </message>
-    <message>
-        <source>Removing the recovery key</source>
-        <translation>מסיר את מפתח השחזור</translation>
-    </message>
-    <message>
-        <source>Make a new recovery key</source>
-        <translation>יצירת מפתח שחזור חדש</translation>
-    </message>
-    <message>
-        <source>Make a recovery key</source>
-        <translation>יצירת מפתח שחזור</translation>
-    </message>
-    <message>
-        <source>Replacing the recovery key</source>
-        <translation>מחליף את מפתח השחזור</translation>
-    </message>
-    <message>
-        <source>Recovery key</source>
-        <translation>מפתח שחזור</translation>
-    </message>
-    <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>רשמו את המפתח או הדפיסו את הדף ושמרו אותו במקום בטוח. הוא מוצג פעם אחת בלבד.</translation>
-    </message>
-    <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>לקבוצה יש מפתח שחזור. בעזרתו מחשב של הקבוצה או טלפון חדש משתלטים על הקבוצה אם הטלפון הזה אובד.</translation>
-    </message>
-    <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>מפתח שחזור מאפשר למחשב של הקבוצה או לטלפון חדש להשתלט על הקבוצה אם הטלפון הזה אובד. משכו למטה כדי ליצור אחד.</translation>
-    </message>
-    <message>
-        <source>I wrote it down</source>
-        <translation>רשמתי אותו</translation>
-    </message>
-</context>
-<context>
-    <name>RestorePage</name>
-    <message>
-        <source>Restore the group</source>
-        <translation>שחזור הקבוצה</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>הטלפון הזה הוא עכשיו השורש של הקבוצה.</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>מחפש טלפון או מחשב של הקבוצה ברשת הזו…</translation>
-    </message>
-    <message>
-        <source>Claiming the group…</source>
-        <translation>מבקש את הקבוצה…</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>הקבוצה שוחזרה בטלפון הזה. הוא יהפוך לשורש הקבוצה כשזמן ההמתנה יסתיים, בעוד %1 שעות, אלא אם השורש יבטל את הבקשה.</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>הקבוצה שוחזרה בטלפון הזה. הוא יהפוך לשורש הקבוצה כשזמן ההמתנה של הקבוצה יסתיים, אלא אם השורש יבטל את הבקשה.</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>כוונו את המצלמה לקוד ה-QR בדף השחזור של הקבוצה. השאירו טלפון או מחשב של הקבוצה דולק וברשת הזו.</translation>
-    </message>
-    <message>
-        <source>The camera does not start: %1</source>
-        <translation>המצלמה לא מופעלת: %1</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>או הדביקו את טקסט הקוד, cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation>לנסות שוב</translation>
     </message>
 </context>
 </TS>

@@ -126,6 +126,11 @@ void Member::start(const Membership &membership, const QString &name, const QByt
     };
     if (!membership.issuer.isEmpty())
         req.insert(QStringLiteral("issuer"), b64(membership.issuer));
+    // The admin key the hellos offer the root, as a SubjectPublicKeyInfo:
+    // P-256's fixed prefix before the point.
+    if (!membership.isAdmin() && membership.adminOffer.size() == 65)
+        req.insert(QStringLiteral("admin_key"),
+                   b64(QByteArray::fromHex("3059301306072a8648ce3d020106082a8648ce3d030107034200") + membership.adminOffer));
     const QByteArray bytes = QJsonDocument(req).toJson(QJsonDocument::Compact);
     current.store(this);
     uint8_t *answer = nullptr;
@@ -413,7 +418,21 @@ void Member::event(const QByteArray &json)
         const QJsonObject copy = e.value(QStringLiteral("copy")).toObject();
         if (copy.value(QStringLiteral("kind")).toString() == QStringLiteral("media") && !m_paused)
             take(copy);
+    } else if (type == QStringLiteral("message")) {
+        const QJsonObject m = e.value(QStringLiteral("message")).toObject();
+        if (m.value(QStringLiteral("t")).toString() == QStringLiteral("admin"))
+            emit adminCaArrived(QByteArray::fromBase64(m.value(QStringLiteral("admin_ca")).toString().toLatin1()));
     }
+}
+
+bool Member::takeAdminCa(const QByteArray &ca, Failure *failure)
+{
+    if (!m_member) {
+        *failure = {QCoreApplication::translate("Errors", "The phone is not connected to its group yet. Try again in a moment."), QStringLiteral("member: not running")};
+        return false;
+    }
+    call(m_member, QStringLiteral("take_admin_ca"), QJsonObject{{QStringLiteral("key"), b64(ca)}}, failure);
+    return failure->isNull();
 }
 
 void Member::command(double token, const QString &from, const QJsonObject &record)
