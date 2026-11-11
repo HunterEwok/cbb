@@ -493,6 +493,15 @@ def record_vectors():
     m = dict(lap_m)
     m[16] = 0b1000
     bad_body("unknown capability bit", "records/device/caps", m)
+    # os numbers: 11 harmonyos; a number this version does not name (a later
+    # version's system) is taken as it is and shown as unknown
+    for name, n, os_name in [("HarmonyOS phone", 11, "harmonyos"), ("phone of a later system", 12, "unknown")]:
+        add(f"device with os {n} ({os_name})", ROOT, 1,
+            {10: Signer(name).key, 11: name, 12: 2, 13: 0b0011, 17: n},
+            note="an os number this version does not name is kept, signed bytes untouched, and shown as unknown"
+            if os_name == "unknown" else None)
+        take[-1]["os"] = n
+        take[-1]["os_name"] = os_name
     # non-canonical body: the same map with a key written long
     mm = dict(lap_m)
     body_long = enc(mm).replace(bytes([0x0b]) + enc("Laptop"), bytes([0x18, 0x0b]) + enc("Laptop"), 1)

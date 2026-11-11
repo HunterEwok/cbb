@@ -131,6 +131,11 @@ fn signed(file: &str, by_key: bool) {
             _ => Kind::Credential,
         };
         assert!(print::describe(kind, &e.map).starts_with('{'));
+        if let Some(os) = t["os_name"].as_str() {
+            let n = t["os"].as_u64().unwrap();
+            assert_eq!(print::os_name(n), os, "{name}");
+            assert!(print::describe(kind, &e.map).contains(&format!("os(17): {n} {os}")), "{name}");
+        }
         assert!(print::describe_envelope(kind, &b).starts_with("envelope"));
     }
     for t in f["refuse"].as_array().unwrap() {

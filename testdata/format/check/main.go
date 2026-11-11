@@ -365,6 +365,32 @@ func main() {
 	fmt.Printf("%-18s %d checked\n", "profile.json", len(prof.Vectors))
 
 	checkSigned(dir, "records.json", bySignerHash)
+	// os numbers: one this version does not name is taken and shown as unknown
+	osNames := []string{"", "linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "watchos", "wearos", "none", "harmonyos"}
+	var rs struct {
+		Take []struct {
+			Name   string `json:"name"`
+			Body   string `json:"body"`
+			Os     uint64 `json:"os"`
+			OsName string `json:"os_name"`
+		} `json:"take"`
+	}
+	load(dir, "records.json", &rs)
+	for _, t := range rs.Take {
+		if t.OsName == "" {
+			continue
+		}
+		v, err := strict(unhex(t.Body))
+		must(err)
+		got, _ := v.(map[any]any)[uint64(17)].(uint64)
+		name := "unknown"
+		if got < uint64(len(osNames)) && osNames[got] != "" {
+			name = osNames[got]
+		}
+		if got != t.Os || name != t.OsName {
+			fail("records %s: os %d %s", t.Name, got, name)
+		}
+	}
 	checkSigned(dir, "statements.json", bySignerHash)
 	checkSigned(dir, "commands.json", bySignerHash)
 	checkSigned(dir, "credentials.json", bySignerKey)

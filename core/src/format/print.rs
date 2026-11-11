@@ -149,6 +149,18 @@ const MESSAGES: [&str; 26] = [
     "entries",
 ];
 
+/// The names of the `os` numbers (device record field 17, `hello` field 3,
+/// the joiner's info): a number this version does not name is kept as it
+/// is and shown as unknown.
+const OS: [&str; 12] =
+    ["", "linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "watchos", "wearos", "none", "harmonyos"];
+
+/// The name of an `os` number, or "unknown" for one this version does not
+/// name (a later version's system).
+pub fn os_name(n: u64) -> &'static str {
+    usize::try_from(n).ok().and_then(|i| OS.get(i)).copied().filter(|n| !n.is_empty()).unwrap_or("unknown")
+}
+
 fn record_field(typ: u64, k: u16) -> Option<&'static str> {
     let device = [
         "key",
@@ -294,6 +306,10 @@ pub fn describe(kind: Kind, v: &Value<'_>) -> String {
             None => s.push_str(&format!("{k}: ")),
         }
         write_diag(&mut s, x);
+        if let (Some("os"), Some(n)) = (field_name(kind, typ, *k), x.as_uint()) {
+            s.push(' ');
+            s.push_str(os_name(n));
+        }
         if *k == typ_key {
             let label = match kind {
                 Kind::Record => usize::try_from(typ).ok().and_then(|t| RECORD_TYPES.get(t)),
