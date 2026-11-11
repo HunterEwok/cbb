@@ -681,7 +681,23 @@ def grant_vectors(admin_record):
         step("root grant, root counter 1, below the admin counter 2", k_root1, ROOT),
         step("root grant, root counter 2", k_root2, ROOT),
         step("the old root grant replayed", k_root1, ROOT, "grants/counter"),
-        step("grant from a current commander, admin counter 3", {**k_a2, **{4: 3}}, ADMIN2),
+        step("grant from a current commander made under root counter 2, admin counter 1",
+             {**k_a2, **{4: 1, 17: 2}}, ADMIN2),
+    ]})
+    # An admin grant names the root counter it was made under (field 17), so
+    # one signed before a root grant never beats it, whatever its counter.
+    both = by_hash([ADMIN.key, ADMIN2.key])
+    sequences.append({"name": "ordinary kettle, an admin grant held back past the root's", "steps": [
+        step("first grant from the admitting admin, admin counter 1", {**kettle, **{4: 1, 12: both}}, ADMIN,
+             admin=admin_record),
+        step("grant from a commander, admin counter 2", {**kettle, **{4: 2, 12: both}}, ADMIN2),
+        step("root grant without the removed admin, root counter 1", {**kettle, **{4: 1, 12: [ADMIN2.key]}}, ROOT),
+        step("a commander's grant at admin counter 3 made before the root grant, delivered late",
+             {**kettle, **{4: 3, 12: both}}, ADMIN2, "grants/counter"),
+        step("the same commander's grant made under root counter 1, admin counter 1",
+             {**kettle, **{4: 1, 12: [ADMIN2.key], 17: 1}}, ADMIN2),
+        step("a root grant that names a root counter", {**kettle, **{4: 2, 12: [ADMIN2.key], 17: 1}}, ROOT,
+             "grants/counter"),
     ]})
     sequences.append({"name": "guarded lock", "steps": [
         step("root grant, root counter 3", lock, ROOT),

@@ -448,7 +448,15 @@ func main() {
 			return nil, err
 		}
 		counter, _ := body[uint64(4)].(uint64)
+		madeUnder, named := body[uint64(17)].(uint64)
 		_, guarded := body[uint64(15)]
+		var rootC uint64
+		if st != nil {
+			rootC = st.rootC
+		}
+		if byRoot && named || !byRoot && madeUnder != rootC {
+			return nil, errors.New("grants/counter")
+		}
 		next := &leafState{guarded: guarded, commanders: map[string][]byte{}}
 		if st != nil {
 			next.guarded = next.guarded || st.guarded
@@ -461,7 +469,7 @@ func main() {
 			}
 		}
 		if byRoot {
-			next.rootC = counter
+			next.rootC, next.adminC = counter, 0
 		} else {
 			next.adminC = counter
 		}

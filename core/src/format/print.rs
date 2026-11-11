@@ -217,6 +217,7 @@ pub fn field_name(kind: Kind, typ: u64, k: u16) -> Option<&'static str> {
                 ["leaf", "life_ms", "commanders", "readers", "neighbors", "guarded"].get(ki.wrapping_sub(10)).copied()
             }
             16 => Some("time_ms"),
+            17 => Some("root_counter"),
             _ => None,
         },
         Kind::Credential => match k {

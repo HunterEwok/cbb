@@ -12,7 +12,9 @@
 //! root's record of that admin key. A guarded leaf takes grants from the
 //! root only. The leaf keeps two counters, the root's and the admins', so a
 //! root grant replaces an admin grant whatever the admin counter is, and an
-//! old root grant is never taken again.
+//! old root grant is never taken again. An admin grant names the root
+//! counter it was made under (field 17) and counts its own from 1 again
+//! after each root grant, so one made before a root grant never beats it.
 
 use alloc::vec::Vec;
 
@@ -40,6 +42,9 @@ pub const FIELD_COMMANDERS: u16 = 12;
 pub const FIELD_READERS: u16 = 13;
 /// The grant's flag of a guarded leaf.
 pub const FIELD_GUARDED: u16 = 15;
+/// An admin grant's field of the root counter it was made under (absent:
+/// 0, before any root grant); a root grant has none.
+pub const FIELD_ROOT_COUNTER: u16 = 17;
 /// The most readers of a leaf.
 pub const MAX_READERS: usize = 4;
 /// The most commanders of a leaf.
@@ -62,7 +67,8 @@ pub const RULE_ADMIN: Rule = Rule::field("grants/admin");
 /// commanders of the leaf's current grant.
 pub const RULE_SIGNER: Rule = Rule::field("grants/signer");
 /// A counter not above the leaf's last of its signer's side (the root's or
-/// the admins').
+/// the admins'), an admin grant made under another root counter than the
+/// leaf's, or a root grant that names one.
 pub const RULE_COUNTER: Rule = Rule::field("grants/counter");
 
 /// A commander: its key hash and its uncompressed point.
@@ -75,7 +81,8 @@ pub struct Kept {
     pub guarded: bool,
     /// The counter of the last root grant, 0 before the first.
     pub root_counter: u64,
-    /// The counter of the last admin grant, 0 before the first.
+    /// The counter of the last admin grant since the last root grant, 0
+    /// before the first.
     pub admin_counter: u64,
     /// The commanders of the current grant, sorted by key hash.
     pub commanders: Vec<Commander>,
@@ -115,7 +122,7 @@ impl Granted<'_> {
         Kept {
             guarded: b.guarded || self.guarded,
             root_counter: if self.by_root { self.counter } else { b.root_counter },
-            admin_counter: if self.by_root { b.admin_counter } else { self.counter },
+            admin_counter: if self.by_root { 0 } else { self.counter },
             commanders: self.commanders.clone(),
         }
     }
@@ -189,15 +196,23 @@ pub fn read<'a>(msg: &Value<'a>, root: &[u8], kept: Option<&Kept>) -> Result<Gra
     };
     let was_guarded = kept.is_some_and(|k| k.guarded);
     let by_root = signer == Key::new(Alg::Es256, root).hash();
+    let made_under = match map.get(FIELD_ROOT_COUNTER) {
+        None => 0,
+        Some(Value::Uint(0)) => return Err(Rule::FORM_DEFAULT),
+        Some(v) => v.as_uint().ok_or(Rule::GRANTS_SHAPE)?,
+    };
     let mut admin = None;
     if by_root {
         grant.verify(root, sig::LABEL_GRANT)?;
-        if kept.is_some_and(|k| counter <= k.root_counter) {
+        if map.get(FIELD_ROOT_COUNTER).is_some() || kept.is_some_and(|k| counter <= k.root_counter) {
             return Err(RULE_COUNTER);
         }
     } else {
         if guarded || was_guarded {
             return Err(RULE_GUARDED);
+        }
+        if made_under != kept.map_or(0, |k| k.root_counter) {
+            return Err(RULE_COUNTER);
         }
         match kept {
             None => {
