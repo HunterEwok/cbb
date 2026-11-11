@@ -38,12 +38,10 @@
 //!     signs after it, removals included, does not count once the claim
 //!     does; a live root cancels the claim within the delay instead.
 //!
-//! The format's codec (`crate::format`) is built beside this module; until
-//! it is in the tree, `cbor` and `key` hold the little of it the rules
-//! need, and a record is built from its body's Rust value.
+//! The bytes are the format's (`crate::format`): a record is read from its
+//! envelope with [`Record::decode`] and written with [`Record::envelope`].
 
 pub mod body;
-mod cbor;
 pub mod eval;
 pub mod keep;
 pub mod key;
@@ -127,6 +125,12 @@ impl Rule {
     }
 }
 
+impl From<crate::format::Rule> for Rule {
+    fn from(r: crate::format::Rule) -> Rule {
+        Rule::new(r.name())
+    }
+}
+
 impl fmt::Display for Rule {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.field.is_empty() { f.write_str(self.kind) } else { write!(f, "records/{}/{}", self.kind, self.field) }
@@ -178,6 +182,26 @@ impl Record {
         Ok(Record { bytes, sig, sig2, body, id })
     }
 
+    /// Reads a record from its envelope's bytes, checking all that can be
+    /// checked without its signer's key: the envelope's size and shape, the
+    /// profile, the body's fields against their rows, and the signature's
+    /// form (64 bytes, in range, low S). The signature itself is checked
+    /// when the record is put into a set (`RecordSet::insert`), which knows
+    /// the signer's key; the group is the set's too. A body with a
+    /// critical field or a type this version does not know reads as held.
+    pub fn decode(envelope: &[u8]) -> Result<Record, Rule> {
+        let e = crate::format::Envelope::parse_limited(envelope, MAX_CHECKPOINT_BODY)?;
+        let body = Body::from_value(&e.map)?;
+        let max = if matches!(body.kind, Kind::Checkpoint { .. }) { MAX_CHECKPOINT_BODY } else { MAX_BODY };
+        if e.body.len() > max {
+            return Err(crate::format::Rule::ENV_SIZE.into());
+        }
+        crate::format::sig::check_form(e.sig)?;
+        body.check()?;
+        let id = RecordId(sha256(e.body));
+        Ok(Record { bytes: e.body.to_vec(), sig: e.sig.to_vec(), sig2: e.sig2.map(<[u8]>::to_vec), body, id })
+    }
+
     pub fn id(&self) -> RecordId {
         self.id
     }
@@ -196,11 +220,7 @@ impl Record {
 
     /// The envelope's bytes: `[body, sig]`, or with sig2.
     pub fn envelope(&self) -> Vec<u8> {
-        let mut items = alloc::vec![cbor::bytes(&self.bytes), cbor::bytes(&self.sig)];
-        if let Some(s) = &self.sig2 {
-            items.push(cbor::bytes(s));
-        }
-        cbor::array(items)
+        crate::format::envelope::write(&self.bytes, &self.sig, self.sig2.as_deref())
     }
 
     /// The bytes the record takes in a set: its envelope's.
