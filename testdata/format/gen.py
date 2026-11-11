@@ -231,6 +231,7 @@ ADMIN = Signer("admin key")
 PHONE = Signer("phone member key")
 LAPTOP = Signer("laptop member key")
 BOARD = Signer("board member key")
+LOCK = Signer("lock member key")
 STRANGER = Signer("stranger")
 PERIOD = Signer("period key")
 SRVKEY = Signer("laptop server key")
@@ -381,8 +382,8 @@ def record_vectors():
     lap_env, lap_body, lap_m = add("laptop admitted by the root", ROOT, 1,
                                    {10: LAPTOP.key, 11: "Laptop", 12: 1, 13: 0b0111, 16: 0b111, 17: 1, 18: 2})
     add("board admitted by an admin, base rights", ADMIN, 1,
-        {10: BOARD.key, 11: "Kettle", 12: 4, 13: 0b0011, 17: 10,
-         15: [[PHONE.hash, 0b011]]})
+        {10: BOARD.key, 11: "Kettle", 12: 4, 13: 0b0011, 17: 10},
+        note="an ordinary leaf: any admin with admit admits it, and it obeys the group's admins")
     add("settings", ROOT, 7, {10: 0, 13: 64, 14: 1,
                               15: [[1, "forward.cbb.tools:8764", OPERATOR.key]]})
     add("copies", ADMIN, 8, {10: 30000})
@@ -416,6 +417,14 @@ def record_vectors():
         {10: Signer("desktop member key").key, 11: "Desktop", 12: 1, 13: 0b1011, 17: 1, 18: 2},
         note="the admin's own device (the root's phone record, admin key) has the secrets bit, "
              "so it may give it; one without it may not (records/device/admin-rights)")
+
+    add("guarded lock admitted by the root", ROOT, 1,
+        {10: LOCK.key, 11: "Lock", 12: 4, 13: 0b0011, 17: 10, 25: 1},
+        note="guarded (25): only the root admits it and signs its grant")
+    add("admin marks a leaf guarded", ADMIN, 1,
+        {10: Signer("lamp member key").key, 11: "Lamp", 12: 4, 13: 0b0011, 17: 10, 25: 1},
+        verdict="refuse",
+        note="records/device/guarded: only a root sets guarded; the form is valid, the evaluation counts it for nothing")
 
     # an admin's later record of the board that widens it: counts for nothing
     add("admin widens a device it admitted", ADMIN, 1,
@@ -487,9 +496,11 @@ def record_vectors():
     body_long = enc(mm).replace(bytes([0x0b]) + enc("Laptop"), bytes([0x18, 0x0b]) + enc("Laptop"), 1)
     bad_body("key written in two bytes", "cbor/shortest", raw=body_long)
     m = dict(lap_m)
-    m[15] = [[PHONE.hash, 1], [ADMIN.hash, 1]]
-    m[15].sort(key=lambda a: a[0], reverse=True)
-    bad_body("accepts not sorted", "records/device/accepts", m)
+    m[25] = 1
+    bad_body("guarded on a member, not a leaf", "records/device/guarded", m)
+    m = dict(lap_m)
+    m[15] = [[PHONE.hash, 1]]
+    bad_body("field 15 (accepts, gone)", "form/critical", m)
     m = dict(lap_m)
     m[24] = LAPTOP.hash
     bad_body("replaces itself", "records/device/replaces", m)
@@ -550,9 +561,9 @@ def command_vectors():
     env, body = envelope("command", ADMIN, m)
     take.append({"name": "paste-off, no orders", "verdict": "take", "diag": diag(m),
                  "body": body.hex(), "envelope": env.hex()})
-    m, _ = cmd(10, PHONE, 7, BOARD.id16, {12: 4, 13: fake("nonce", 16)})
+    m, _ = cmd(10, PHONE, 7, LOCK.id16, {13: fake("nonce", 16)})
     env, body = envelope("command", PHONE, m)
-    take.append({"name": "device command, dangerous, with the board's nonce", "verdict": "take",
+    take.append({"name": "device command to a guarded lock, with its nonce", "verdict": "take",
                  "diag": diag(m), "body": body.hex(), "envelope": env.hex(),
                  "orders": enc({10: "heat", 11: enc({1: 90})}).hex()})
     m, _ = cmd(3, ADMIN, 9, LAPTOP.id16, {7: T0 + 5000 + 30001})
@@ -560,10 +571,15 @@ def command_vectors():
     env, body = envelope("command", ADMIN, m)
     refuse.append({"name": "lifetime over 30 s", "rule": "commands/expires", "verdict": "refuse",
                    "envelope": env.hex()})
-    m, _ = cmd(10, PHONE, 8, BOARD.id16, {12: 4})
+    m, _ = cmd(10, PHONE, 8, LOCK.id16, {})
     env, body = envelope("command", PHONE, m)
-    refuse.append({"name": "dangerous without a nonce", "rule": "commands/nonce", "verdict": "refuse",
-                   "envelope": env.hex()})
+    refuse.append({"name": "command to a guarded lock without a nonce", "rule": "commands/nonce", "verdict": "refuse",
+                   "envelope": env.hex(),
+                   "note": "the form is valid; the lock, which knows it is guarded, refuses it"})
+    m, _ = cmd(10, PHONE, 9, LOCK.id16, {12: 4, 13: fake("nonce 2", 16)})
+    env, body = envelope("command", PHONE, m)
+    refuse.append({"name": "field 12 (class, gone)", "rule": "form/critical", "verdict": "refuse",
+                   "envelope": env.hex(), "note": "command classes are gone; 12 stays unused"})
     m, _ = cmd(3, ADMIN, 10, LAPTOP.id16, {}, sealed=False)
     m[300] = 1
     env, body = envelope("command", ADMIN, m)
@@ -621,50 +637,84 @@ def merkle_check(leaf, index, count, path, root):
     return k == len(path) and h == root
 
 
-def grant_vectors():
-    take, refuse = [], []
-    g = {1: 1, 2: GROUP, 4: 3, 10: BOARD.id16,
-         12: sorted([[PHONE.key, 0b011], [ADMIN.key, 0b001]], key=lambda a: sha(enc(a[0]))),
-         13: [[LAPTOP.id16, LAPTOP.key]],
-         14: sorted([LAPTOP.hash, PHONE.hash]),
-         16: T0 + 9000}
-    gbody = enc(g)
-    others = [enc({1: 1, 2: GROUP, 4: 1, 10: Signer(f"lamp {i}").id16, 14: [LAPTOP.hash]})
-              for i in range(4)]
+def batch_of(signer, n, gbody, others, label_n):
     bodies = sorted([gbody] + others, key=merkle_leaf)
     leaves = [merkle_leaf(b) for b in bodies]
     root, paths = merkle_root_and_paths(leaves)
     idx = bodies.index(gbody)
-    batch = {1: 1, 2: GROUP, 3: ROOT.hash, 4: 12, 6: T0 + 9000, 10: root, 11: len(leaves)}
-    benv, bbody = envelope("grant", ROOT, batch)
-    assert merkle_check(leaves[idx], idx, len(leaves), paths[idx], root)
+    batch = {1: 1, 2: GROUP, 3: signer.hash, 4: n, 6: T0 + 9000, 10: root, 11: len(leaves)}
+    benv, bbody = envelope("grant", signer, batch)
     for k in range(len(leaves)):
         assert merkle_check(leaves[k], k, len(leaves), paths[k], root)
-    msg = {0: 20, 2: dec(benv), 3: gbody, 4: paths[idx]}
-    if idx:
-        msg[5] = idx
-    assert len(enc(gbody)) <= 2048
-    take.append({"name": "grant for the board in a batch of five", "verdict": "take",
-                 "grant_diag": diag(g), "grant": gbody.hex(), "batch_diag": diag(batch),
-                 "batch": bbody.hex(), "leaf_index": idx, "path": [x.hex() for x in paths[idx]],
-                 "message": enc(msg).hex(), "frame": frame(msg).hex()})
+    return batch, benv, bbody, idx, paths[idx]
+
+
+def grant_vectors(admin_record):
+    """Two kinds of leaf (design-small-device section 15): an ordinary leaf's
+    grant is signed by the root or by an admin, and an admin's batch comes
+    with the root's record that makes its key an admin (message field 6); a
+    guarded leaf's grant is signed by the root only, names its commanders and
+    carries `guarded` (15)."""
+    take, refuse = [], []
+    others = [enc({1: 1, 2: GROUP, 4: 1, 10: Signer(f"lamp {i}").id16, 14: [LAPTOP.hash]})
+              for i in range(4)]
+
+    def message(batch_env, gbody, idx, path, admin=None):
+        msg = {0: 20, 2: dec(batch_env), 3: gbody}
+        if path:
+            msg[4] = path
+        if idx:
+            msg[5] = idx
+        if admin is not None:
+            msg[6] = dec(admin)
+        return msg
+
+    def ok(name, g, signer, n, admin=None):
+        gbody = enc(g)
+        assert len(gbody) <= 2048
+        batch, benv, bbody, idx, path = batch_of(signer, n, gbody, others, n)
+        msg = message(benv, gbody, idx, path, admin)
+        take.append({"name": name, "verdict": "take", "grant_diag": diag(g), "grant": gbody.hex(),
+                     "batch_diag": diag(batch), "batch": bbody.hex(), "leaf_index": idx,
+                     "path": [x.hex() for x in path], "message": enc(msg).hex(), "frame": frame(msg).hex()})
+        return g, gbody, benv, idx, path, msg
+
+    ok("ordinary kettle, grant signed by an admin", {1: 1, 2: GROUP, 4: 1, 10: BOARD.id16,
+       13: [[LAPTOP.id16, LAPTOP.key]], 14: sorted([LAPTOP.hash, PHONE.hash]), 16: T0 + 9000},
+       ADMIN, 1, admin=admin_record)
+    g, gbody, benv, idx, path, msg = ok("guarded lock, grant signed by the root", {
+        1: 1, 2: GROUP, 4: 3, 10: LOCK.id16,
+        12: sorted([PHONE.key, LAPTOP.key], key=lambda k: sha(enc(k))),
+        13: [[LAPTOP.id16, LAPTOP.key]], 14: sorted([LAPTOP.hash, PHONE.hash]),
+        15: 1, 16: T0 + 9000}, ROOT, 12)
     bad = dict(msg)
-    bad[4] = paths[idx][:-1]
+    bad[4] = path[:-1]
     refuse.append({"name": "path one hash short", "rule": "grants/batch", "verdict": "refuse",
                    "message": enc(bad).hex()})
     bad = dict(msg)
-    bad[5] = (idx + 1) % len(leaves)
+    bad[5] = (idx + 1) % (len(others) + 1)
     if bad[5] == 0:
         del bad[5]
     refuse.append({"name": "wrong index", "rule": "grants/batch", "verdict": "refuse",
                    "message": enc(bad).hex()})
+    _, benv_a, _, idx_a, path_a = batch_of(ADMIN, 2, gbody, others, 2)
+    refuse.append({"name": "guarded grant signed by an admin", "rule": "grants/guarded", "verdict": "refuse",
+                   "message": enc(message(benv_a, gbody, idx_a, path_a, admin_record)).hex()})
+    g2 = {k: v for k, v in g.items() if k != 15}
+    gb2 = enc(g2)
+    _, benv2, _, idx2, path2 = batch_of(ROOT, 13, gb2, others, 13)
+    refuse.append({"name": "commanders in an ordinary grant", "rule": "grants/commanders", "verdict": "refuse",
+                   "message": enc(message(benv2, gb2, idx2, path2)).hex()})
     g5 = dict(g)
     g5[13] = sorted([[Signer(f"r{i}").id16, Signer(f"r{i}").key] for i in range(5)], key=lambda a: a[0])
     gb5 = enc(g5)
-    b5 = {1: 1, 2: GROUP, 3: ROOT.hash, 4: 13, 10: merkle_leaf(gb5), 11: 1}
+    b5 = {1: 1, 2: GROUP, 3: ROOT.hash, 4: 14, 10: merkle_leaf(gb5), 11: 1}
     benv5, _ = envelope("grant", ROOT, b5)
     refuse.append({"name": "five readers", "rule": "grants/readers", "verdict": "refuse",
                    "message": enc({0: 20, 2: dec(benv5), 3: gb5}).hex()})
+    _, benv6, _, idx6, path6 = batch_of(ADMIN, 3, others[0], others[1:], 3)
+    refuse.append({"name": "admin's batch without the root's record", "rule": "grants/admin", "verdict": "refuse",
+                   "message": enc(message(benv6, others[0], idx6, path6)).hex()})
     return take, refuse
 
 
@@ -934,7 +984,7 @@ def container_vector():
 
 def keys_table():
     rows = []
-    for s in [ROOT, ROOT2, ADMIN, PHONE, LAPTOP, BOARD, STRANGER, PERIOD, SRVKEY, OPERATOR]:
+    for s in [ROOT, ROOT2, ADMIN, PHONE, LAPTOP, BOARD, LOCK, STRANGER, PERIOD, SRVKEY, OPERATOR]:
         rows.append({"name": s.name, "private_scalar": format(s.d, "064x"), "key": enc(s.key).hex(),
                      "key_hash": s.hash.hex(), "id16": s.id16.hex()})
     return {"group_id": GROUP.hex(), "keys": rows,
@@ -947,7 +997,7 @@ def main():
     rt, rr = record_vectors()
     st, sr = statement_vectors()
     ct, cr = command_vectors()
-    gt, gr = grant_vectors()
+    gt, gr = grant_vectors(bytes.fromhex(rt[0]["envelope"]))
     kt, kr = credential_vectors()
     mv, mb, digest = message_vectors(rt)
     files = {

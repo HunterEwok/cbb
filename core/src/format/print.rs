@@ -158,7 +158,7 @@ fn record_field(typ: u64, k: u16) -> Option<&'static str> {
         "role",
         "rights",
         "skip",
-        "accepts",
+        "",
         "caps",
         "os",
         "store",
@@ -168,10 +168,11 @@ fn record_field(typ: u64, k: u16) -> Option<&'static str> {
         "commands",
         "holds_root",
         "replaces",
+        "guarded",
     ];
     let i = usize::from(k.checked_sub(10)?);
     match typ {
-        1 => device.get(i).copied(),
+        1 => device.get(i).copied().filter(|n| !n.is_empty()),
         2 | 3 => ["keys", "seen"].get(i).copied(),
         4 | 6 => ["records"].get(i).copied(),
         5 => ["root", "seen"].get(i).copied(),
@@ -203,7 +204,7 @@ pub fn field_name(kind: Kind, typ: u64, k: u16) -> Option<&'static str> {
         },
         Kind::Command => match k {
             4 => Some("n"),
-            10..=15 => ["to", "id", "class", "nonce", "epoch", "sealed"].get(ki.wrapping_sub(10)).copied(),
+            10 | 11 | 13..=15 => ["to", "id", "", "nonce", "epoch", "sealed"].get(ki.wrapping_sub(10)).copied(),
             _ => common(),
         },
         Kind::GrantBatch => match k {
@@ -216,7 +217,9 @@ pub fn field_name(kind: Kind, typ: u64, k: u16) -> Option<&'static str> {
             1 => Some("type"),
             2 => Some("group"),
             4 => Some("counter"),
-            10..=14 => ["leaf", "life_ms", "commanders", "readers", "neighbors"].get(ki.wrapping_sub(10)).copied(),
+            10..=15 => {
+                ["leaf", "life_ms", "commanders", "readers", "neighbors", "guarded"].get(ki.wrapping_sub(10)).copied()
+            }
             16 => Some("time_ms"),
             _ => None,
         },
@@ -260,7 +263,7 @@ pub fn field_name(kind: Kind, typ: u64, k: u16) -> Option<&'static str> {
             (2, 8) => Some("records"),
             (3, 8) => Some("keys"),
             (2, 9) => Some("command"),
-            (2..=5, 20) => ["batch", "grant", "path", "index"].get(ki.wrapping_sub(2)).copied(),
+            (2..=6, 20) => ["batch", "grant", "path", "index", "admin"].get(ki.wrapping_sub(2)).copied(),
             _ => None,
         },
         Kind::Copy => {

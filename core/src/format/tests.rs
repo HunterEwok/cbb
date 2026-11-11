@@ -225,7 +225,9 @@ fn grants() {
     for t in g["take"].as_array().unwrap() {
         let msg = unhex(s(t, "message"));
         let v = cbor::decode(&msg).unwrap();
-        let got = grant::read(&v, &root).unwrap();
+        let got = grant::read(&v, &root).unwrap_or_else(|r| panic!("{}: {r}", s(t, "name")));
+        assert_eq!(got.guarded, s(t, "name").contains("guarded"));
+        assert_eq!(got.admin.is_some(), s(t, "name").contains("admin"));
         assert_eq!(hex(got.grant), s(t, "grant"));
         assert_eq!(hex(got.batch.body), s(t, "batch"));
         assert_eq!(print::diag(&got.map), s(t, "grant_diag"));
@@ -238,11 +240,7 @@ fn grants() {
         let mb = unhex(s(t, "message"));
         let v = cbor::decode(&mb).unwrap();
         let got = grant::read(&v, &root);
-        if s(t, "rule") == "grants/batch" {
-            assert_eq!(got.err(), Some(Rule::GRANTS_BATCH), "{}", s(t, "name"));
-        } else {
-            got.unwrap();
-        }
+        assert_eq!(got.err().map(Rule::name), Some(s(t, "rule")), "{}", s(t, "name"));
     }
 }
 
