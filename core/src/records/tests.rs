@@ -1208,6 +1208,29 @@ fn the_three_kinds_of_admin() {
     assert!(!st.counting.contains(&claim_a.id()) && st.claims.iter().any(|c| c.record == claim_s.id()));
 }
 
+/// A computer admin never takes the group over, whatever the root is: a
+/// group with no phone is taken over with its recovery key alone.
+#[test]
+fn only_a_phone_admin_or_the_recovery_key_takes_over() {
+    let mut g = G::new();
+    let (pc, c, rk) = (k("computer"), k("computer admin"), k("recovery"));
+    g.device(&k("root"), &pc, "computer", |d| {
+        d.admin = Some(c.key.clone());
+        (d.powers, d.commands) = AdminKind::Computer.grants();
+    });
+    g.root_rec(Kind::Recovery { admin: rk.key.clone() });
+    let seen = g.seen();
+    let by_computer = g.rec(&c, Kind::Claim { root: k("nc").key.clone(), seen: seen.clone() });
+    let s = g.state();
+    assert!(!s.counting.contains(&by_computer.id()));
+    assert!(s.claims.iter().all(|cl| cl.record != by_computer.id() || cl.state == ClaimState::Void));
+    assert_eq!(s.stop, Stop::None);
+    let by_recovery = g.rec(&rk, Kind::Claim { root: k("nr").key.clone(), seen });
+    let held = BTreeMap::from([(by_recovery.id(), DEFAULT_DELAY_MS)]);
+    let s = state_of(&g.root.key, &g.recs, &held);
+    assert_eq!(s.roots, vec![g.root.hash, k("nr").hash]);
+}
+
 /// A pool of records that touches every rule: admins, devices, removals,
 /// a freeze and a thaw, two histories, claims, held records, settings.
 fn pool() -> (Key, Vec<Record>) {
