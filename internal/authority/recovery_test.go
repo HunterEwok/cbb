@@ -195,6 +195,31 @@ func TestHandover(t *testing.T) {
 	}
 }
 
+// TestOldRootAfterHandover: once the claim of the admin the root handed the
+// group to takes effect, what the old root signs after it counts for
+// nothing; an admin the old root removes then stays until the new root
+// removes it.
+func TestOldRootAfterHandover(t *testing.T) {
+	w := newWorld(t)
+	w.makeAdmin("A", "phone", phonePowers)
+	w.makeAdmin("B", "phone", phonePowers)
+	a, b := w.adminKey("A"), w.adminKey("B")
+	w.sign("handover A", "root", authority.Body{Type: authority.TypeHandover, Admin: &a}, nil)
+	c := w.claim("A", "R2", nil)
+	old := w.sign("old root removes B", "root", revoke(b), nil)
+	s := w.evalAll(nil)
+	if len(s.Roots) != 2 || claimState(s, c.ID()) != "effective" {
+		t.Fatalf("the claim should take effect: %s", mustEncode(t, s))
+	}
+	if revoked(s, b) || ignoredWhy(s, old.ID()) != authority.WhyCut {
+		t.Fatalf("the old root's removal after the handover should count for nothing: %s", mustEncode(t, s))
+	}
+	w.sign("new root removes B", "R2", revoke(b), nil)
+	if s = w.evalAll(nil); !revoked(s, b) || revoked(s, a) {
+		t.Fatalf("the new root's removal should count: %s", mustEncode(t, s))
+	}
+}
+
 // TestHandoverReplaced: a newer handover names another admin; the first
 // one's claim waits again. An admin's handover counts for nothing.
 func TestHandoverReplaced(t *testing.T) {

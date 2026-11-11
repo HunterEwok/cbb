@@ -6,10 +6,6 @@
 <context>
     <name>Errors</name>
     <message>
-        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
-        <translation>Ключ администратора на этом телефоне старше PIN администратора. Покиньте группу и вступите в неё снова.</translation>
-    </message>
-    <message>
         <source>The admin PIN is needed first.</source>
         <translation>Сначала нужен PIN администратора.</translation>
     </message>
@@ -165,6 +161,66 @@
         <source>The phone could not delete its key.</source>
         <translation>Телефону не удалось удалить свой ключ.</translation>
     </message>
+    <message>
+        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
+        <translation>Отсканируйте QR-код листа восстановления: на новом телефоне введённого ключа недостаточно.</translation>
+    </message>
+    <message>
+        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
+        <translation>Это больше не ключ восстановления группы: корень удалил его или сделал новый.</translation>
+    </message>
+    <message>
+        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
+        <translation>В этой сети не нашлось ни одного устройства группы. Включите телефон или компьютер группы и попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB recovery sheet.</source>
+        <translation>Это не лист восстановления CBB.</translation>
+    </message>
+    <message>
+        <source>The phone could not restore the group.</source>
+        <translation>Телефону не удалось восстановить группу.</translation>
+    </message>
+    <message>
+        <source>This is not the QR code of a CBB recovery sheet.</source>
+        <translation>Это не QR-код листа восстановления CBB.</translation>
+    </message>
+    <message>
+        <source>The group's root cancelled the claim to restore the group.</source>
+        <translation>Корень группы отменил заявку на восстановление группы.</translation>
+    </message>
+    <message>
+        <source>The claim to restore the group became void.</source>
+        <translation>Заявка на восстановление группы стала недействительной.</translation>
+    </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>Хаб группы не ответил. Проверьте, что приглашение ещё действует и хаб включён, и попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>Не удалось вступить в группу. Попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>Приглашение делает только админ: телефон-админ здесь или cbb invite на компьютере-админе.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>Этот телефон уже в группе. Сначала выйдите из неё, чтобы вступить в другую.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>Это не приглашение CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>Срок приглашения истёк. Попросите новое.</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>Ключ администратора на этом телефоне старше PIN администратора. Покиньте группу и вступите в неё снова.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -191,6 +247,18 @@
     <message>
         <source>Making the admin key…</source>
         <translation>Создаётся ключ админа…</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Вступить по приглашению</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>Тот, кто вас пригласил, видит эти слова на своём устройстве и впустит телефон, если они совпадают. Не закрывайте этот экран.</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>Подключение к хабу группы…</translation>
     </message>
 </context>
 <context>
@@ -316,10 +384,6 @@
         <translation>Потеряли телефон?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
-        <translation>Сделайте второй телефон админом: добавьте его в группу, затем откройте его здесь и нажмите «Сделать админом». Нажмите, чтобы закрыть.</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>Устройства</translation>
     </message>
@@ -338,6 +402,22 @@
     <message>
         <source>Off until I turn it on</source>
         <translation>Выключить, пока не включу</translation>
+    </message>
+    <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>Восстановить по листу восстановления</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Вступить по приглашению</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Отправить приглашение</translation>
+    </message>
+    <message>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>Сделайте второй телефон админом: добавьте его в группу, затем откройте его здесь и нажмите «Сделать админом». Нажмите, чтобы закрыть.</translation>
     </message>
 </context>
 <context>
@@ -445,6 +525,22 @@
     <message>
         <source>Device ID</source>
         <translation>ID устройства</translation>
+    </message>
+    <message>
+        <source>Hand the group over</source>
+        <translation>Передать группу</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>Передаём группу: %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>Группа передана</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>Его заявка забирает группу сразу</translation>
     </message>
 </context>
 <context>
@@ -596,6 +692,62 @@
     <message>
         <source>Device</source>
         <translation>Устройство</translation>
+    </message>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>Заявка на захват группы ждёт</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>Нисколько</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>1 час</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>1 день</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 дня</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 дней</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>Какие ключи может хранить админ</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>У некоторых админов ключи слабее; они остаются, пока их не удалят</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>Только проверенное железо</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>Железо</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>Железо или файл</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>Создан</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Нет</translation>
     </message>
     <message>
         <source>Get ready to be an admin</source>
@@ -1301,6 +1453,186 @@
     <message>
         <source>The new PIN again</source>
         <translation>Новый PIN ещё раз</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>Удалить ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>Удаляем ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>Создать новый ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>Создать ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>Заменяем ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>Запишите ключ или распечатайте эту страницу и храните в надёжном месте. Он показывается только один раз.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>У группы есть ключ восстановления. С ним компьютер группы или новый телефон заберёт группу, если этот телефон потеряется.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>Ключ восстановления позволит компьютеру группы или новому телефону забрать группу, если этот телефон потеряется. Потяните вниз, чтобы создать его.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>Я записал ключ</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>Восстановить группу</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>Теперь этот телефон — корень группы.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>Ищем телефон или компьютер группы в этой сети…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>Отправляем заявку на группу…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>Группа восстановлена на этом телефоне. Он станет корнем группы, когда истечёт время ожидания, через %1 ч, если корень не отменит заявку.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>Группа восстановлена на этом телефоне. Он станет корнем группы, когда истечёт время ожидания группы, если корень не отменит заявку.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>Наведите камеру на QR-код листа восстановления группы. Телефон или компьютер группы должен быть включён и в этой сети.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Камера не запускается: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>Или вставьте текст кода, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Попробовать снова</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Вступить по приглашению</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>Вас приглашают в группу</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>Наведите камеру на QR-код приглашения.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Камера не запускается: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>Или вставьте текст приглашения, cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Группа</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>Хаб</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>Действует до</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>Вступайте, только если вы сами просили это приглашение. Тот, кто его сделал, впустит телефон, когда увидит показанные им слова.</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Вступить</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>Отклонить</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Отправить приглашение</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>Приглашение открывается на хабе группы…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite с его текстом. Приглашение работает один раз, до %1.</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>%1 вступил в группу; он появится в списке, когда подключится.</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>Показывайте или отправляйте код только тому, кто вступает: любой, у кого он есть, может попросить доступ.</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>Скопировать текст приглашения</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>Впустить %1 (%2)? Впускайте, только если устройство показывает те же слова:</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>Впустить</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>Не этот</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Попробовать снова</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>Пригласить ещё устройство</translation>
     </message>
 </context>
 </TS>

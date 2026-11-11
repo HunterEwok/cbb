@@ -6,10 +6,6 @@
 <context>
     <name>Errors</name>
     <message>
-        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
-        <translation>此手机的管理员密钥早于管理员 PIN。请退出群组，然后重新加入。</translation>
-    </message>
-    <message>
         <source>The admin PIN is needed first.</source>
         <translation>需要先输入管理员 PIN。</translation>
     </message>
@@ -165,6 +161,66 @@
         <source>The phone could not delete its key.</source>
         <translation>手机无法删除它的密钥。</translation>
     </message>
+    <message>
+        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
+        <translation>扫描恢复单上的二维码：在新手机上，仅输入密钥是不够的。</translation>
+    </message>
+    <message>
+        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
+        <translation>这已不是群组当前的恢复密钥：根设备已将其移除或生成了新密钥。</translation>
+    </message>
+    <message>
+        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
+        <translation>在此网络上没有找到群组的设备。请打开群组中的一部手机或一台电脑，然后重试。</translation>
+    </message>
+    <message>
+        <source>This is not a CBB recovery sheet.</source>
+        <translation>这不是 CBB 恢复单。</translation>
+    </message>
+    <message>
+        <source>The phone could not restore the group.</source>
+        <translation>手机无法恢复群组。</translation>
+    </message>
+    <message>
+        <source>This is not the QR code of a CBB recovery sheet.</source>
+        <translation>这不是 CBB 恢复单的二维码。</translation>
+    </message>
+    <message>
+        <source>The group's root cancelled the claim to restore the group.</source>
+        <translation>群组的根设备取消了恢复群组的申请。</translation>
+    </message>
+    <message>
+        <source>The claim to restore the group became void.</source>
+        <translation>恢复群组的申请已失效。</translation>
+    </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>群组的中心节点没有响应。请确认邀请仍然有效且中心节点已开启，然后重试。</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>无法加入该群组。请重试。</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>只有管理员可以创建邀请：这里的管理员手机，或管理员电脑上的 cbb invite。</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>这部手机已在一个群组中。请先退出，再加入其他群组。</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>这不是 CBB 邀请。</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>邀请已过期。请索要新的邀请。</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>此手机的管理员密钥早于管理员 PIN。请退出群组，然后重新加入。</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -191,6 +247,18 @@
     <message>
         <source>Making the admin key…</source>
         <translation>正在生成管理员密钥…</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>通过邀请加入</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>邀请你的人会在其设备上看到这些词，若一致便会接纳这部手机。请保持此界面打开。</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>正在连接群组的中心节点…</translation>
     </message>
 </context>
 <context>
@@ -316,10 +384,6 @@
         <translation>手机丢了？</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
-        <translation>让第二部手机成为管理员：先把它加入群组，然后在这里打开它并点按“设为管理员”。点按即可关闭。</translation>
-    </message>
-    <message>
         <source>Devices</source>
         <translation>设备</translation>
     </message>
@@ -338,6 +402,22 @@
     <message>
         <source>Off until I turn it on</source>
         <translation>关闭，直到我打开</translation>
+    </message>
+    <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>用恢复单恢复</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>通过邀请加入</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>发送邀请</translation>
+    </message>
+    <message>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>让第二部手机成为管理员：先把它加入群组，然后在这里打开它并点按“设为管理员”。点按即可关闭。</translation>
     </message>
 </context>
 <context>
@@ -445,6 +525,22 @@
     <message>
         <source>Device ID</source>
         <translation>设备 ID</translation>
+    </message>
+    <message>
+        <source>Hand the group over</source>
+        <translation>移交群组</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>正在将群组移交给 %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>群组已移交</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>它的申请会立即接管群组</translation>
     </message>
 </context>
 <context>
@@ -596,6 +692,62 @@
     <message>
         <source>Device</source>
         <translation>设备</translation>
+    </message>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>接管群组的申请等待</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>不等待</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>1 小时</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>1 天</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 天</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 天</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>管理员可保存的密钥</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>部分管理员的密钥较弱；在被移除之前他们仍会保留</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>仅限经验证的硬件</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>硬件</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>硬件或文件</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>恢复密钥</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>已创建</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>无</translation>
     </message>
     <message>
         <source>Get ready to be an admin</source>
@@ -1301,6 +1453,186 @@
     <message>
         <source>The new PIN again</source>
         <translation>再次输入新 PIN</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>移除恢复密钥</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>正在移除恢复密钥</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>创建新的恢复密钥</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>创建恢复密钥</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>正在替换恢复密钥</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>恢复密钥</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>请抄下密钥或打印此页，并妥善保管。它只显示一次。</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>群组已有恢复密钥。如果此手机丢失，群组中的电脑或新手机可凭它接管群组。</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>恢复密钥可让群组中的电脑或新手机在此手机丢失时接管群组。下拉即可创建。</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>我已抄下</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>恢复群组</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>这部手机现在是群组的根设备。</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>正在此网络上查找群组的手机或电脑…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>正在申请群组…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>群组已在这部手机上恢复。等待时间结束后（%1 小时后），它将成为群组的根设备，除非根设备取消申请。</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>群组已在这部手机上恢复。群组的等待时间结束后，它将成为群组的根设备，除非根设备取消申请。</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>将相机对准群组恢复单上的二维码。让群组中的一部手机或一台电脑保持开机并连接到此网络。</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>相机无法启动：%1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>或粘贴二维码的文本 cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>重试</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>通过邀请加入</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>你被邀请加入一个群组</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>将相机对准邀请的二维码。</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>相机无法启动：%1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>或粘贴邀请文本，cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>群组</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>中心节点</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>有效期至</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>仅在你自己请求了此邀请时才加入。创建邀请的人看到这部手机显示的词后会接纳它。</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>加入</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>拒绝</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>发送邀请</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>正在群组的中心节点上打开邀请…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上用其文本运行 cbb pair -invite。只能使用一次，有效期至 %1。</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>%1 已加入群组；连接后会出现在列表中。</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>只向要加入的人出示或发送此二维码：任何持有它的人都可以申请加入。</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>复制邀请文本</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>接纳 %1（%2）？仅当该设备显示相同的词时才接纳：</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>接纳</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>不是这个</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>重试</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>邀请另一台设备</translation>
     </message>
 </context>
 </TS>

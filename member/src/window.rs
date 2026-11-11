@@ -394,3 +394,176 @@ pub fn refuse(sock: TcpStream, mut session: tls::Session, why: Refusal) {
     let _ = tls::flush(&mut session, &sock);
     let _ = sock.shutdown(Shutdown::Both);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{Ipv4Addr, TcpListener};
+
+    fn admitter() -> Admitter {
+        let dir =
+            std::env::temp_dir().join(format!("cbb-window-{}-{:?}", std::process::id(), std::thread::current().id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (ident, _) = crate::admin::new_group(&dir, "desk").unwrap();
+        let s = crate::admin::signer(&dir, &ident).unwrap().unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        Admitter { identity: ident, ca: s.ca, ca_key: s.key, make_admins: false }
+    }
+
+    /// A connected socket, which acquire keeps for close to shut.
+    fn sock() -> (TcpStream, TcpStream) {
+        let l = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let a = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        (a, l.accept().unwrap().0)
+    }
+
+    fn ip(n: u8) -> IpAddr {
+        IpAddr::V4(Ipv4Addr::new(10, 0, 0, n))
+    }
+
+    fn joined() -> Joined {
+        Joined { device: "d".into(), name: "phone".into(), confirmed: true }
+    }
+
+    fn ends(w: &Window) -> Option<std::result::Result<String, Refusal>> {
+        w.state.lock().unwrap().end.as_ref().map(|e| e.as_ref().map(|j| j.name.clone()).map_err(|r| *r))
+    }
+
+    #[test]
+    fn opens_for_its_lifetime() {
+        let w = Window::open(admitter(), "123-456").unwrap();
+        assert_eq!(w.code(), "123456");
+        let left = w.state.lock().unwrap().expires.saturating_sub(uptime::now());
+        assert!(left > LIFETIME - Duration::from_secs(5) && left <= LIFETIME, "{left:?}");
+        assert!(Window::open(admitter(), "12345").is_err());
+
+        let short = vec![7u8; cbb_core::pair::MIN_SECRET - 1];
+        assert!(Window::open_secret(admitter(), &short, LIFETIME, Box::new(|_| true)).is_err());
+        let secret = vec![7u8; cbb_core::pair::MIN_SECRET];
+        let w = Window::open_secret(admitter(), &secret, Duration::from_secs(60), Box::new(|_| true)).unwrap();
+        let left = w.state.lock().unwrap().expires.saturating_sub(uptime::now());
+        assert!(left > Duration::from_secs(55) && left <= Duration::from_secs(60), "{left:?}");
+    }
+
+    #[test]
+    fn one_attempt_at_a_time_and_few_from_one_address() {
+        let w = Window::open(admitter(), "123456").unwrap();
+        let (s, _peer) = sock();
+        assert_eq!(w.acquire(&s, ip(1)), Ok(()));
+        assert!(w.state.lock().unwrap().running.is_some());
+        assert_eq!(w.acquire(&s, ip(2)), Err(Refusal::Busy));
+        w.release(false, ip(1));
+        assert!(w.state.lock().unwrap().running.is_none());
+        // Attempts that end before they count still count against their
+        // address, up to MAX_IDLE.
+        for _ in 1..MAX_IDLE {
+            assert_eq!(w.acquire(&s, ip(1)), Ok(()));
+            w.release(false, ip(1));
+        }
+        assert_eq!(w.state.lock().unwrap().idle.get(&ip(1)), Some(&MAX_IDLE));
+        assert_eq!(w.acquire(&s, ip(1)), Err(Refusal::Busy));
+        assert_eq!(w.acquire(&s, ip(2)), Ok(()));
+        w.release(false, ip(2));
+        assert_eq!(ends(&w), None);
+    }
+
+    #[test]
+    fn failures_close_it() {
+        let w = Window::open(admitter(), "123456").unwrap();
+        let (s, _peer) = sock();
+        for _ in 1..MAX_FAILURES {
+            w.acquire(&s, ip(1)).unwrap();
+            w.release(true, ip(1));
+            assert_eq!(ends(&w), None);
+        }
+        w.acquire(&s, ip(1)).unwrap();
+        w.release(true, ip(1));
+        assert_eq!(ends(&w), Some(Err(Refusal::TooMany)));
+        assert_eq!(w.acquire(&s, ip(3)), Err(Refusal::TooMany));
+        assert!(w.wait(&|| false).is_err_and(|r| r == Refusal::TooMany));
+        // A second wait sees it closed.
+        assert!(w.wait(&|| false).is_err_and(|r| r == Refusal::Closed));
+    }
+
+    #[test]
+    fn close_stops_an_attempt_unless_it_committed() {
+        let w = Window::open(admitter(), "123456").unwrap();
+        let (s, mut peer) = sock();
+        w.acquire(&s, ip(1)).unwrap();
+        w.close();
+        assert_eq!(ends(&w), Some(Err(Refusal::Closed)));
+        // The running attempt's socket is shut.
+        peer.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        assert_eq!(peer.read(&mut [0u8; 1]).unwrap(), 0);
+        assert!(!w.commit(), "an attempt commits after close");
+        assert_eq!(w.acquire(&s, ip(2)), Err(Refusal::Closed));
+
+        // Committed and not closed: a failure counts as one.
+        let w = Window::open(admitter(), "123456").unwrap();
+        w.acquire(&s, ip(1)).unwrap();
+        assert!(w.commit());
+        w.release(true, ip(1));
+        assert_eq!(ends(&w), None);
+        assert!(!w.state.lock().unwrap().committed);
+
+        // Committed: close waits for the attempt, and a failure then closes.
+        let w = Window::open(admitter(), "123456").unwrap();
+        w.acquire(&s, ip(1)).unwrap();
+        assert!(w.commit());
+        w.close();
+        assert_eq!(ends(&w), None);
+        w.release(true, ip(1));
+        assert_eq!(ends(&w), Some(Err(Refusal::Closed)));
+
+        // Committed and closed, but admitted: the device counts.
+        let w = Window::open(admitter(), "123456").unwrap();
+        w.acquire(&s, ip(1)).unwrap();
+        assert!(w.commit());
+        w.close();
+        w.succeed(joined());
+        let st = w.state.lock().unwrap();
+        assert!(!st.busy && !st.committed && st.running.is_none());
+        drop(st);
+        assert_eq!(w.wait(&|| true).map(|j| j.name).ok(), Some("phone".to_string()));
+        assert_eq!(w.acquire(&s, ip(1)), Err(Refusal::Closed));
+        assert!(!w.commit());
+    }
+
+    #[test]
+    fn a_window_ends_when_its_time_is_up() {
+        let (s, _peer) = sock();
+        let w = Window::open(admitter(), "123456").unwrap();
+        w.state.lock().unwrap().expires = uptime::now();
+        assert_eq!(w.acquire(&s, ip(1)), Err(Refusal::Expired));
+
+        // A running attempt may finish after it, and ends the window then.
+        let w = Window::open(admitter(), "123456").unwrap();
+        w.acquire(&s, ip(1)).unwrap();
+        w.state.lock().unwrap().expires = uptime::now();
+        assert_eq!(ends(&w), None);
+        w.release(false, ip(1));
+        assert_eq!(ends(&w), Some(Err(Refusal::Expired)));
+
+        let w = Window::open(admitter(), "123456").unwrap();
+        w.state.lock().unwrap().expires = uptime::now();
+        assert!(w.wait(&|| false).is_err_and(|r| r == Refusal::Expired));
+    }
+
+    #[test]
+    fn wait_closes_it_when_asked() {
+        let w = Window::open(admitter(), "123456").unwrap();
+        assert!(w.wait(&|| true).is_err_and(|r| r == Refusal::Closed));
+        // wait returns what an attempt in another thread ends with.
+        let w = Window::open(admitter(), "123456").unwrap();
+        let (s, _peer) = sock();
+        w.acquire(&s, ip(1)).unwrap();
+        let w2 = w.clone();
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            w2.succeed(joined());
+        });
+        assert!(w.wait(&|| false).is_ok());
+        t.join().unwrap();
+    }
+}

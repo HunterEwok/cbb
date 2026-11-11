@@ -149,15 +149,25 @@ public enum CorePairing {
         public let fingerprint: String
         public let qr: String
 
+        /// With an invitation: the loopback port of its guest tunnel, which
+        /// the app dials for each attempt (Connection(host: "127.0.0.1")).
+        public let port: UInt16
+
+        /// With invite, a remote invitation's text (docs/protocol.md,
+        /// section 12), the phone joins by it in place of showing a QR code:
+        /// the core starts the invitation's guest tunnel, the app dials
+        /// `port` and runs `attempt` there, and the hub's admin admits the
+        /// phone by the fingerprint it shows.
         public init(name: String, os: String = "ios", publicKey: Data, seal: Data?, addrs: [String], sign: @escaping (Data) throws -> Data,
-                    adminPublic: Data? = nil, signAdmin: ((Data) throws -> Data)? = nil, code: String = "") throws {
+                    adminPublic: Data? = nil, signAdmin: ((Data) throws -> Data)? = nil, code: String = "", invite: String? = nil) throws {
             precondition((adminPublic == nil) == (signAdmin == nil), "the admin key needs both its public key and its signer")
             struct Request: Encodable {
-                var name: String, os: String, `public`: Data, admin_public: Data?, seal: Data?, addrs: [String], code: String
+                var name: String, os: String, `public`: Data, admin_public: Data?, seal: Data?, addrs: [String], code: String, invite: String?
             }
-            struct Answer: Decodable { var device: String?, code: String?, fingerprint: String?, qr: String? }
+            struct Answer: Decodable { var device: String?, code: String?, fingerprint: String?, qr: String?, port: UInt16? }
             let request = try JSONEncoder().encode(Request(name: name, os: os, public: try point(publicKey),
-                                                           admin_public: try adminPublic.map(point), seal: seal, addrs: addrs, code: code))
+                                                           admin_public: try adminPublic.map(point), seal: seal, addrs: addrs, code: code,
+                                                           invite: invite))
             let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
             let a = signAdmin.map { Unmanaged.passRetained(Signer($0)).toOpaque() }
             var answer: UnsafeMutablePointer<UInt8>?
@@ -183,6 +193,14 @@ public enum CorePairing {
             }
             (signer, adminSigner) = (s, a)
             (device, self.code, fingerprint, qr) = (o.device ?? "", o.code ?? "", o.fingerprint ?? "", o.qr ?? "")
+            port = o.port ?? 0
+        }
+
+        /// Whether the invitation's hub has answered through the guest
+        /// tunnel: an attempt that failed before it did says the hub is off
+        /// or cannot be reached.
+        public var answered: Bool {
+            lock.withLock { closed ? false : cbb_join_answered(handle) == 1 }
         }
 
         deinit { close() }
@@ -194,10 +212,11 @@ public enum CorePairing {
         /// connection Closed or the stream's error.
         public func attempt(_ stream: CorePairingStream, save: (Group) -> Bool) async throws -> Group {
             guard !lock.withLock({ closed }) else { throw Failure("the joiner is closed") }
-            _ = try ok("join", call { cbb_join_accept(handle, &$0) }, as: Step.self)
+            // With an invitation, the phone speaks first: the TLS client hello.
+            let started = try ok("join", call { cbb_join_accept(handle, &$0) }, as: Step.self)
             var joined: Group?
             var failed: Failure?
-            try await exchange(stream, first: Data()) { data in
+            try await exchange(stream, first: started.send ?? Data()) { data in
                 let step = try data.withUnsafeBytes { r in
                     try ok("join", call { cbb_join_feed(handle, r.bindMemory(to: UInt8.self).baseAddress, r.count, 0, &$0) }, as: Step.self)
                 }
@@ -340,6 +359,125 @@ public enum CorePairing {
             }
             guard first else { return }
             cbb_admit_free(handle)
+            Unmanaged<Signer>.fromOpaque(signer).release()
+        }
+    }
+
+    /// A remote invitation an admin phone makes (docs/protocol.md, section
+    /// 12) through member: its guest tunnel opens on this phone when it is
+    /// the group's hub, else through a connected hub of the group (hub
+    /// names one, empty for any). publicKey is the key sign holds, as for
+    /// Admitting; sign is called when a device the user confirmed is
+    /// admitted. expires is in seconds: an hour when 0, a day at most. It
+    /// waits for the hub, so the app makes it off its main thread.
+    public final class Inviting: @unchecked Sendable {
+        private let handle: OpaquePointer
+        private let signer: UnsafeMutableRawPointer
+        /// The member stays running until the invitation is freed.
+        private let member: CoreMember
+        /// Guards closed and calls: close frees the invitation once no call
+        /// is in it.
+        private let lock = NSCondition()
+        private var closed = false
+        private var calls = 0
+
+        /// The invitation's text, cbb://invite#..., for its QR code.
+        public let text: String
+        /// How long it is valid from when it was made, in seconds.
+        public let expires: Int
+
+        /// A device that proved the invitation's secret: the app asks the
+        /// user whether its fingerprint matches what the device shows.
+        public struct Request: Decodable, Equatable, Sendable {
+            public var device: String
+            public var name: String
+            public var os: String
+            public var fingerprint: String
+        }
+
+        /// Where the invitation is: open, joining (answer about request),
+        /// done (name joined) or failed.
+        public struct State: Sendable {
+            public var version: UInt64
+            public var state: String
+            public var request: Request?
+            public var name: String
+            public var failure: Failure?
+        }
+
+        public init(member: CoreMember, publicKey: Data, adminCA: Data?, expires: Int, hub: String = "",
+                    sign: @escaping (Data) throws -> Data) throws {
+            struct Args: Encodable { var `public`: Data, admin_ca: Data?, expires: Int, hub: String }
+            struct Answer: Decodable { var invite: String?, expires: Int? }
+            let request = try JSONEncoder().encode(Args(public: try point(publicKey), admin_ca: adminCA, expires: expires, hub: hub))
+            let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
+            var answer: UnsafeMutablePointer<UInt8>?
+            var count = 0
+            let h: OpaquePointer? = request.withUnsafeBytes { r in
+                cbb_invite_new(member.handle, r.bindMemory(to: UInt8.self).baseAddress, r.count, corePairingSign, s, &answer, &count)
+            }
+            let o: Answer
+            do {
+                guard let h else {
+                    _ = try ok("invite", take(answer, count), as: Answer.self)
+                    throw Core.Mismatch(reason: "the core made no invitation")
+                }
+                handle = h
+                o = try ok("invite", take(answer, count), as: Answer.self)
+            } catch {
+                if let h { cbb_invite_free(h) }
+                Unmanaged<Signer>.fromOpaque(s).release()
+                throw error
+            }
+            (signer, self.member, text, self.expires) = (s, member, o.invite ?? "", o.expires ?? 0)
+        }
+
+        deinit { close() }
+
+        /// Waits up to timeout for a state past version; it blocks, so the
+        /// app calls it off its main thread.
+        public func next(after version: UInt64, timeout: Duration = .seconds(1)) throws -> State {
+            struct Answer: Decodable {
+                var version: UInt64?, state: String?, joining: Request?, name: String?, error: Refused?
+            }
+            let ms = UInt64(max(0, timeout.components.seconds)) * 1000 + UInt64(timeout.components.attoseconds / 1_000_000_000_000_000)
+            try enter()
+            defer { leave() }
+            let a = try ok("invite", call { cbb_invite_next(handle, version, ms, &$0) }, as: Answer.self)
+            return State(version: a.version ?? version, state: a.state ?? "open", request: a.joining, name: a.name ?? "",
+                         failure: a.error.map { Failure($0.message, details: $0.details) })
+        }
+
+        /// The user's answer about the device that asks to join.
+        public func answer(_ yes: Bool) {
+            guard (try? enter()) != nil else { return }
+            defer { leave() }
+            cbb_invite_answer(handle, yes ? 1 : 0)
+        }
+
+        private func enter() throws {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !closed else { throw Failure("the invitation is closed") }
+            calls += 1
+        }
+
+        private func leave() {
+            lock.lock()
+            calls -= 1
+            lock.broadcast()
+            lock.unlock()
+        }
+
+        /// Ends the invitation; it waits a moment for its window to close.
+        public func close() {
+            lock.lock()
+            let first = !closed
+            closed = true
+            while calls > 0 { lock.wait() }
+            lock.unlock()
+            guard first else { return }
+            cbb_invite_free(handle)
             Unmanaged<Signer>.fromOpaque(signer).release()
         }
     }

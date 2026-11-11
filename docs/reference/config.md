@@ -47,10 +47,11 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_HUB_KEY_AHEAD` | the lite member's `cbb service` | Seconds a hub's offers carry its key for a new period of the server credentials before it serves with it, three days by default; tests set it shorter. |
 | `CBB_TEST_RESOLVE` | the lite member's `cbb service` | For tests only: `host=ip` pairs, separated by commas, that stand in for DNS when it looks up the project's relay by the names `entries.json` gives. |
 | `CBB_TEST_ELSEWHERE` | the lite member's `cbb service` | For tests only: a folder; while it holds a file named by the device's ID, the device neither publishes itself by mDNS nor dials the members it finds, as if on another network. |
+| `CBB_MDNS_TRACE` | the lite member's `cbb service` | For tests only: a file to which the service appends, by the time of day in UTC, every event its mDNS browsing sees and mdns-sd's debug log (packets sent and received, the cache); the service tests set it and log the file when a test fails. |
 | `CBB_TEST_FALLBACK` | the lite member's `cbb service` | For tests only: milliseconds a member waits for one with a lower device ID to dial it before it dials that one itself (30 s otherwise); set, the member also dials the members with a greater device ID at port 1, as if a firewall there dropped the member port. |
 | `CBB_TEST_APPLETV_NAME` | `cbb-helper` | For tests only: the name an Apple TV announces by mDNS, which the helper then takes instead of browsing for it; empty for none. |
 | `CBB_TEST_BLUEZ` | cbb-helper on Linux | For tests only: the D-Bus address of a test's BlueZ (`bluetest`), which the Bluetooth keyboard registers with instead of the system bus. |
-| `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-site www.example.com`. |
+| `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-xhttp vpn.example.org`. |
 | `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |
 
 ### The installers
@@ -67,6 +68,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_VERIFY` | `get.sh`, `get.ps1` | `skip` installs without checking the release's signature (`keys.json`, `stable.json`, `release.json`). Without it the installer stops when it cannot check the signature, for example without `openssl`, once the project's root keys are built into it. |
 | `CBB_ATTESTATION` | `get.sh`, `get.ps1` | `require` refuses to install unless GitHub's build attestation of the archive checks out (it needs `gh`, signed in); `skip` does not check it. Unset, it is checked when `gh` is signed in. |
 | `CBB_ERROR_DETAILS` | Linux, macOS and FreeBSD `install.sh` and `uninstall.sh`, `get.sh`, Windows `get.ps1`, `install.ps1` and `uninstall.ps1` | `1` shows every command the shell scripts run, so the output shows where and why one failed, and adds the full error record to the Windows scripts' messages (as `-Details` does). Without it a failed shell script names its exit status. |
+| `CBB_LANG` | `get.sh`, every `install.sh` and `uninstall.sh`, Windows `get.ps1`, `install.ps1` and `uninstall.ps1` | The language of the installers' messages: `zh`, `en`, `es`, `ru`, `ar`, `sw`, `he` or `hi`. Unset, it is the system's (the locale, as gettext reads it; on a Mac without one, the first of the user's languages; on Windows, the display language), and English where the project has no translation (packaging/l10n.sh). |
 | `CBB_OS_RELEASE` | the Linux `install.sh` | For tests: another `/etc/os-release`, whose `ID=steamos` makes it install as on SteamOS. |
 | `CBB_PF_CONF` | the FreeBSD firewall script | Another `pf.conf` than `/etc/pf.conf`, for tests. |
 | `CBB_IMAGE`, `CBB_PREVIEW` | the lite member's tests | For a look by eye at what the ZX Spectrum Next would show: `cargo test -p cbb-lite preview -- --ignored` reads the PNG or JPEG `CBB_IMAGE` names and writes what `cbb next image` makes of it to the PNG `CBB_PREVIEW` names. |
@@ -99,6 +101,9 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_E2E_COVERDIR` | `tools/e2e/e2e.sh` | A directory where a `cbb` built with `-cover` writes its coverage, as `GOCOVERDIR` in every container (CI's coverage, [testing](../testing.md#coverage)). |
 | `CBB_FAKE_HELPER` | the lite member's tests | Makes the test program play `cbb-helper` for the helper channel's tests. |
 | `CBB_LITE` | Go tests with the lite member | The lite member's binary (`cargo build` at the top, `target/`). |
+| `CBB_PREVIOUS` | Go tests of the service | The previous release's `cbb` for TestPreviousRelease (a device of version N in one group with N-1), as `tools/e2e/previous.sh` prints it. |
+| `CBB_REPO` | `tools/e2e/previous.sh` | The repository on GitHub whose releases it reads, `HunterEwok/cbb` by default. |
+| `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Limits the weekly fleet run to these scenarios (`-scenario`); all of them when unset. |
 | `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary: the tests of `internal/relay` that check a relay from outside run against it. |
 | `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `group_record_bytes`, `record_bytes`); the Go tests set it. |
 | `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |

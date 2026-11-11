@@ -24752,6 +24752,972 @@
         }
       }
     },
+    "Connecting to the group's hub…": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ الاتصال بمحور المجموعة…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectando con el hub del grupo…"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מתחבר לרכזת של הקבוצה…"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के हब से जुड़ रहा है…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключение к хабу группы…"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inaunganisha na kitovu cha kikundi…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在连接群组的中心节点…"
+          }
+        }
+      }
+    },
+    "Decline": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رفض"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechazar"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "דחייה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अस्वीकार करें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отклонить"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kataa"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拒绝"
+          }
+        }
+      }
+    },
+    "Expires in": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تنتهي خلال"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caduca en"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יפוג בעוד"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समाप्ति में"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Истекает через"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inaisha baada ya"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剩余有效期"
+          }
+        }
+      }
+    },
+    "Hub": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المحور"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hub"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "רכזת"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हब"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kitovu"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中心节点"
+          }
+        }
+      }
+    },
+    "Invitation text": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نص الدعوة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto de la invitación"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "טקסט ההזמנה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निमंत्रण का पाठ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Текст приглашения"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maandishi ya mwaliko"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邀请文本"
+          }
+        }
+      }
+    },
+    "Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انضم فقط إن كنت طلبت هذه الدعوة. من أنشأها يقبل هذا الهاتف حين يرى الكلمات التي يعرضها."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Únete solo si pediste esta invitación. Quien la creó admite este teléfono cuando ve las palabras que muestra."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הצטרפו רק אם ביקשתם את ההזמנה הזו. מי שיצר אותה מאשר את הטלפון כשהוא רואה את המילים שהוא מציג."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "तभी जुड़ें जब आपने यह निमंत्रण माँगा हो। इसे बनाने वाला इस फ़ोन के दिखाए शब्द देखकर इसे शामिल करता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вступайте, только если вы сами просили это приглашение. Тот, кто его сделал, впустит телефон, когда увидит показанные им слова."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jiunge tu ikiwa uliomba mwaliko huu. Aliyeuunda ataikubali simu hii akiona maneno inayoonyesha."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅在你自己请求了此邀请时才加入。创建邀请的人看到这部手机显示的词后会接纳它。"
+          }
+        }
+      }
+    },
+    "Join with an invitation": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الانضمام بدعوة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirse con una invitación"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הצטרפות בהזמנה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निमंत्रण से जुड़ें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вступить по приглашению"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jiunge kwa mwaliko"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过邀请加入"
+          }
+        }
+      }
+    },
+    "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with the file. It works once, for an hour, while this app is open; the group needs a hub.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على هاتف جديد، افتح CBB واضغط «الانضمام بدعوة» وامسح الرمز. على حاسوب، شغّل cbb pair -invite مع الملف. تعمل مرة واحدة، لمدة ساعة، ما دام هذا التطبيق مفتوحًا؛ وتحتاج المجموعة إلى محور."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En un teléfono nuevo, abre CBB, toca Unirse con una invitación y escanea el código. En un ordenador, ejecuta cbb pair -invite con el archivo. Sirve una vez, durante una hora, mientras esta app está abierta; el grupo necesita un hub."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite עם הקובץ. היא פועלת פעם אחת, למשך שעה, כל עוד האפליקציה פתוחה; הקבוצה צריכה רכזת."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर फ़ाइल के साथ cbb pair -invite चलाएँ। यह एक बार, एक घंटे के लिए, ऐप खुला रहने तक काम करता है; समूह को एक हब चाहिए।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite с файлом. Приглашение работает один раз, в течение часа, пока приложение открыто; группе нужен хаб."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite ukitumia faili. Unafanya kazi mara moja, kwa saa moja, programu hii ikiwa wazi; kikundi kinahitaji kitovu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上用该文件运行 cbb pair -invite。只能使用一次，有效期一小时，且需此应用保持打开；群组需要一个中心节点。"
+          }
+        }
+      }
+    },
+    "Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا ينشئ الدعوة إلا مشرف: هاتف مشرف هنا، أو cbb invite على حاسوب مشرف."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo un administrador crea invitaciones: un teléfono administrador aquí, o cbb invite en un ordenador administrador."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "רק מנהל יוצר הזמנה: טלפון מנהל כאן, או cbb invite במחשב מנהל."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निमंत्रण केवल एडमिन बनाता है: यहाँ एक एडमिन फ़ोन, या एडमिन कंप्यूटर पर cbb invite।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приглашение делает только админ: телефон-админ здесь или cbb invite на компьютере-админе."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ni msimamizi pekee anayeunda mwaliko: simu ya msimamizi hapa, au cbb invite kwenye kompyuta ya msimamizi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有管理员可以创建邀请：这里的管理员手机，或管理员电脑上的 cbb invite。"
+          }
+        }
+      }
+    },
+    "Open a file": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح ملف"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir un archivo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "פתיחת קובץ"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फ़ाइल खोलें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть файл"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fungua faili"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开文件"
+          }
+        }
+      }
+    },
+    "Point the camera at the invitation's QR code.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وجّه الكاميرا إلى رمز QR الخاص بالدعوة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apunta la cámara al código QR de la invitación."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "כוונו את המצלמה לקוד ה-QR של ההזמנה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कैमरे को निमंत्रण के QR कोड की ओर करें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Наведите камеру на QR-код приглашения."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elekeza kamera kwenye msimbo wa QR wa mwaliko."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将相机对准邀请的二维码。"
+          }
+        }
+      }
+    },
+    "Read": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قراءة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leer"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "קריאה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पढ़ें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прочитать"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soma"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取"
+          }
+        }
+      }
+    },
+    "The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يستجب محور المجموعة. تحقّق من أن الدعوة ما زالت صالحة وأن المحور يعمل، ثم حاول مجددًا."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El hub del grupo no respondió. Comprueba que la invitación sigue siendo válida y que el hub está encendido, y vuelve a intentarlo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הרכזת של הקבוצה לא ענתה. ודאו שההזמנה עדיין בתוקף ושהרכזת פועלת, ונסו שוב."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के हब ने जवाब नहीं दिया। जाँचें कि निमंत्रण अभी मान्य है और हब चालू है, फिर दोबारा कोशिश करें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хаб группы не ответил. Проверьте, что приглашение ещё действует и хаб включён, и попробуйте снова."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kitovu cha kikundi hakikujibu. Hakikisha mwaliko bado ni halali na kitovu kimewashwa, kisha jaribu tena."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组的中心节点没有响应。请确认邀请仍然有效且中心节点已开启，然后重试。"
+          }
+        }
+      }
+    },
+    "The invitation has expired. Ask for a new one.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انتهت صلاحية الدعوة. اطلب دعوة جديدة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La invitación ha caducado. Pide una nueva."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "תוקף ההזמנה פג. בקשו הזמנה חדשה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निमंत्रण की अवधि समाप्त हो गई है। नया माँगें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Срок приглашения истёк. Попросите новое."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mwaliko umeisha muda. Omba mpya."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邀请已过期。请索要新的邀请。"
+          }
+        }
+      }
+    },
+    "The invitation is open until %@. Show or send its QR code only to the person who joins; its file is the fallback.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدعوة مفتوحة حتى %@. اعرض رمز QR أو أرسله فقط لمن سينضم؛ والملف بديل احتياطي."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La invitación está abierta hasta las %@. Muestra o envía su código QR solo a quien se une; su archivo es la alternativa."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ההזמנה פתוחה עד %@. הציגו או שלחו את קוד ה-QR שלה רק למי שמצטרף; הקובץ הוא הגיבוי."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निमंत्रण %@ तक खुला है। इसका QR कोड केवल जुड़ने वाले व्यक्ति को दिखाएँ या भेजें; इसकी फ़ाइल विकल्प है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приглашение действует до %@. Показывайте или отправляйте его QR-код только тому, кто вступает; файл — запасной вариант."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mwaliko uko wazi hadi %@. Onyesha au tuma msimbo wake wa QR kwa anayejiunga pekee; faili lake ni la akiba."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邀请在 %@ 之前有效。只向要加入的人出示或发送它的二维码；文件作为备用。"
+          }
+        }
+      }
+    },
+    "The invitation's QR code": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رمز QR الخاص بالدعوة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El código QR de la invitación"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "קוד ה-QR של ההזמנה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निमंत्रण का QR कोड"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR-код приглашения"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Msimbo wa QR wa mwaliko"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邀请的二维码"
+          }
+        }
+      }
+    },
+    "This is not a CBB invitation.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه ليست دعوة CBB."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto no es una invitación de CBB."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "זו לא הזמנה של CBB."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह CBB निमंत्रण नहीं है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это не приглашение CBB."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Huu si mwaliko wa CBB."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这不是 CBB 邀请。"
+          }
+        }
+      }
+    },
+    "This phone is in a group already. Leave it first to join another.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الهاتف في مجموعة بالفعل. غادرها أولًا للانضمام إلى أخرى."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este teléfono ya está en un grupo. Sal de él primero para unirte a otro."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הטלפון הזה כבר בקבוצה. צאו ממנה קודם כדי להצטרף לאחרת."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह फ़ोन पहले से एक समूह में है। दूसरे में जुड़ने के लिए पहले इसे छोड़ें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон уже в группе. Сначала выйдите из неё, чтобы вступить в другую."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Simu hii tayari iko kwenye kikundi. Ondoka kwanza ili ujiunge na kingine."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这部手机已在一个群组中。请先退出，再加入其他群组。"
+          }
+        }
+      }
+    },
+    "This phone is in the group. It syncs through the group's hub away from home.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الهاتف في المجموعة. يتزامن عبر محور المجموعة خارج المنزل."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este teléfono está en el grupo. Fuera de casa se sincroniza a través del hub del grupo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הטלפון בקבוצה. מחוץ לבית הוא מסתנכרן דרך הרכזת של הקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह फ़ोन समूह में है। घर से दूर यह समूह के हब के ज़रिए सिंक करता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон в группе. Вне дома он синхронизируется через хаб группы."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Simu hii iko kwenye kikundi. Ukiwa mbali na nyumbani inasawazisha kupitia kitovu cha kikundi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这部手机已加入群组。离家时它通过群组的中心节点同步。"
+          }
+        }
+      }
+    },
+    "Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يرى من دعاك هذه الكلمات على جهازه ويقبل هذا الهاتف إن تطابقت. أبقِ هذه الشاشة مفتوحة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quien te invitó ve estas palabras en su dispositivo y admite este teléfono si coinciden. Mantén esta pantalla abierta."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מי שהזמין אתכם רואה את המילים האלה במכשיר שלו ומאשר את הטלפון אם הן תואמות. השאירו את המסך הזה פתוח."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जिसने आपको आमंत्रित किया वह अपने डिवाइस पर ये शब्द देखता है और मेल खाने पर इस फ़ोन को शामिल करता है। यह स्क्रीन खुली रखें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тот, кто вас пригласил, видит эти слова на своём устройстве и впустит телефон, если они совпадают. Не закрывайте этот экран."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aliyekualika anaona maneno haya kwenye kifaa chake na ataikubali simu hii yakilingana. Acha skrini hii wazi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邀请你的人会在其设备上看到这些词，若一致便会接纳这部手机。请保持此界面打开。"
+          }
+        }
+      }
+    },
+    "You are invited to a group": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنت مدعو إلى مجموعة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te invitan a un grupo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הוזמנתם לקבוצה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपको एक समूह में आमंत्रित किया गया है"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вас приглашают в группу"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umealikwa kwenye kikundi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你被邀请加入一个群组"
+          }
+        }
+      }
+    },
     "It can then add and remove devices, and take the group over if this phone is lost.": {
       "localizations": {
         "ru": {

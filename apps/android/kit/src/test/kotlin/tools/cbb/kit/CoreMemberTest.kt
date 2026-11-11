@@ -189,6 +189,43 @@ class CoreMemberTest {
         assertFailsWith<IllegalStateException> { m.current() }
     }
 
+    /** The root's own records, which the core builds, checks and signs with the root key outside it (cbb_core::root). */
+    @Test
+    fun theRootSignsItsOwnRecordsInTheCore() {
+        val root = SoftwareSigner()
+        val key = SoftwareSigner()
+        val g = PhoneGroup.create(root, key.publicKeyDER, now, seal = Core.sealPublic(seal))
+        val m = start(g.device, key, g.memberCert, g.groupCA)
+        m.addRecords(g.records.records)
+        val pub = root.publicKeyDER
+        assertFailsWith<Core.Refusal> { m.setTakeoverDelay(3_600_000, key.publicKeyDER, key::signDigest) }
+        assertFailsWith<Core.Refusal> { m.setTakeoverDelay(-1, pub, root::signDigest) }
+        assertFailsWith<Core.Refusal> { m.setKeyLevel("any", pub, root::signDigest) }
+        m.setTakeoverDelay(3_600_000, pub, root::signDigest)
+        assertEquals(emptyList(), m.setKeyLevel(Records.LEVEL_FILES, pub, root::signDigest))
+        g.add(m.records())
+        assertEquals(Records.LEVEL_FILES, g.keyLevel)
+        assertEquals(3_600_000L, g.settings(Records.keyHash(pub)).first, "the level keeps the delay")
+        assertFailsWith<Core.Refusal> { m.handOver(g.device, pub, root::signDigest) }
+        assertFailsWith<Core.Refusal> { m.handOver(SyncEngine.newID(), pub, root::signDigest) }
+        assertFailsWith<Core.Refusal> { m.removeRecovery(pub, root::signDigest) }
+
+        val sheet = m.makeRecovery(pub, root::signDigest)
+        assertTrue(sheet.qr.startsWith("cbb://recover?g=${g.tag}&"), sheet.qr)
+        assertEquals(69, sheet.text.length)
+        g.add(m.records())
+        assertTrue(g.records.recovery.contentEquals(sheet.admin), "the records name the sheet's key")
+        // A YubiKey's key replaces it; its admin CA goes into the card.
+        val card = SoftwareSigner()
+        val ca = m.recoveryFor(card.publicKeyDER, pub, root::signDigest)
+        assertTrue(CertificateInfo(ca).publicKey.contentEquals(card.publicKeyDER))
+        g.add(m.records())
+        assertTrue(g.records.recovery.contentEquals(Records.keyHashOfCert(ca)))
+        m.removeRecovery(pub, root::signDigest)
+        g.add(m.records())
+        assertNull(g.records.recovery)
+    }
+
     private inline fun <reified T : CoreMember.Event> next(q: LinkedBlockingQueue<CoreMember.Event>, crossinline ok: (T) -> Boolean = { true }): T {
         val deadline = System.nanoTime() + 15_000_000_000L
         while (true) {

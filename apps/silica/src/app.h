@@ -7,6 +7,7 @@
 #include "admit.h"
 #include "blekeyboard.h"
 #include "events.h"
+#include "invite.h"
 #include "join.h"
 #include "member.h"
 #include "membership.h"
@@ -18,8 +19,11 @@
 
 #include <functional>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QVariantList>
+
+#include <functional>
 
 class App : public QObject
 {
@@ -43,9 +47,17 @@ class App : public QObject
     Q_PROPERTY(QString claimState READ claimState NOTIFY claimChanged)
     // How long a pending claim still waits, in milliseconds.
     Q_PROPERTY(double claimLeftMs READ claimLeftMs NOTIFY claimChanged)
+    // Restoring the group from its recovery sheet on a new phone: "" before,
+    // "restoring" while the phone looks for a member and checks its records,
+    // "claiming" while it claims the group, "claimed" once the claim went out
+    // (claimState then says where it stands), "failed" (error says why).
+    Q_PROPERTY(QString restoreState READ restoreState NOTIFY restoreChanged)
+    // Why the last code the camera read is not a recovery sheet's.
+    Q_PROPERTY(QString restoreHint READ restoreHint NOTIFY restoreChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
     Q_PROPERTY(Member *member READ member CONSTANT)
     Q_PROPERTY(Admit *admit READ admit CONSTANT)
+    Q_PROPERTY(Invite *invite READ invite CONSTANT)
     Q_PROPERTY(Events *events READ events CONSTANT)
     Q_PROPERTY(BleKeyboard *keyboard READ keyboard CONSTANT)
     Q_PROPERTY(PasteReceiver *paste READ paste CONSTANT)
@@ -67,6 +79,14 @@ class App : public QObject
     // needs none, "unknown" until the TEE answered, "not_set", "set" or
     // "locked".
     Q_PROPERTY(QString adminPin READ adminPin NOTIFY adminPinChanged)
+    // The recovery sheet the root just made, shown once (makeRecovery):
+    // the key as groups of four and the QR code's modules, a string of '1'
+    // (dark) and '0' a row; empty when there is none to show.
+    Q_PROPERTY(QString recoveryText READ recoveryText NOTIFY recoveryChanged)
+    Q_PROPERTY(QStringList recoveryModules READ recoveryModules NOTIFY recoveryChanged)
+    // The admins and hubs whose keys the key level set last does not let
+    // in, by device ID: they stay until the user removes them.
+    Q_PROPERTY(QStringList belowLevel READ belowLevel NOTIFY recoveryChanged)
 
 public:
     explicit App(QObject *parent = nullptr);
@@ -88,12 +108,15 @@ public:
     // Whether the group's root made this phone an admin.
     bool admin() const { return m_member.isAdmin(); }
     bool root() const { return m_member.root; }
+    QString restoreState() const { return m_restoreState; }
+    QString restoreHint() const { return m_restoreHint; }
     bool adminOffered() const { return !m_member.isAdmin() && !m_member.adminOffer.isEmpty(); }
     QString claimState() const { return m_member.claim.isEmpty() ? QString() : m_claimState; }
     double claimLeftMs() const { return double(m_claimLeftMs); }
     Join *join() { return &m_join; }
     Member *member() { return &m_node; }
     Admit *admit() { return &m_admit; }
+    Invite *invite() { return &m_invite; }
     Events *events() { return &m_events; }
     BleKeyboard *keyboard() { return &m_keyboard; }
     PasteReceiver *paste() { return &m_paste; }
@@ -129,6 +152,11 @@ public:
     // with the admin key, found off the GUI thread.
     // makeAdmin: the root makes a phone that asks an admin.
     Q_INVOKABLE void startAdmit(const QString &qr, bool makeAdmin = false);
+    // Makes a remote invitation for a device far away, valid for seconds,
+    // as an admin (docs/protocol.md, section 12).
+    Q_INVOKABLE void startInvite(int seconds = 3600);
+    // Joins by a remote invitation's text, which the user accepted.
+    Q_INVOKABLE void startJoinByInvite(const QString &text);
     // Makes a group of the phone's own, its root key the admin key in the
     // TEE (docs/protocol.md, section 3), and starts the member as its root.
     Q_INVOKABLE void makeGroup();
@@ -157,8 +185,36 @@ public:
     // phone or else after the group's delay; the claim is then checked
     // every minute until it makes this phone the root, off the GUI thread.
     Q_INVOKABLE void takeOver(const QString &device);
+    // The text of the recovery sheet's QR code in a camera frame, or empty;
+    // another code sets restoreHint.
+    Q_INVOKABLE QString scanSheet(const QVariant &frame);
+    // Restores the group of the recovery sheet's QR code on this new phone
+    // (cbb_restore): finds a member of the group on the network, checks its
+    // records and starts the member with a certificate the sheet's key
+    // issued; then claims the group with the sheet's key for a new root CA
+    // of the admin key, kept first, as takeOver does. The claim waits the
+    // group's delay unless the root cancels it, and finishTakeover makes the
+    // phone the root. A phone that restored the group but whose claim failed
+    // only claims again. Off the GUI thread.
+    Q_INVOKABLE void restore(const QString &sheet);
+    Q_INVOKABLE void resetRestore();
     // The root's decision on an alert: voids the records it names.
     Q_INVOKABLE void resolve(const QStringList &records);
+    // The root's own records, built and signed in the core (cbb_core::root)
+    // with the root key, off the GUI thread: how long a claim from a lost
+    // root waits, in hours; which keys may be admins (proven, hardware or
+    // files); handing the group to the admin device, whose claim then takes
+    // effect at once; making the recovery key, whose sheet recoveryText and
+    // recoveryModules show once, until forgetRecovery; and removing it.
+    Q_INVOKABLE void setTakeoverDelay(int hours);
+    Q_INVOKABLE void setGroupKeyLevel(const QString &level);
+    Q_INVOKABLE void handOver(const QString &device);
+    Q_INVOKABLE void makeRecovery();
+    Q_INVOKABLE void forgetRecovery();
+    Q_INVOKABLE void removeRecovery();
+    QString recoveryText() const { return m_recoveryText; }
+    QStringList recoveryModules() const { return m_recoveryModules; }
+    QStringList belowLevel() const { return m_belowLevel; }
     // Leaves the group on this phone: stops the member and deletes the
     // membership. The group still lists the phone until an admin removes it.
     Q_INVOKABLE void leave();
@@ -189,6 +245,8 @@ signals:
     void pinRefused(bool locked, int triesLeft);
     void pinAccepted();
     void pinChanged(bool ok, bool locked, int triesLeft);
+    void recoveryChanged();
+    void restoreChanged();
 
 private:
     // Before the admin key signs: true when the PIN is asked first, run
@@ -199,6 +257,10 @@ private:
     void refreshAdminPin();
     void setAdminPin(const QString &state);
     void show(const QString &error);
+    // Signs action for device with extra in the request (manage's), then
+    // calls done with the member's answer when it worked.
+    void runManage(const QString &action, const QString &device, const QJsonObject &extra,
+                   std::function<void(const QJsonObject &)> done);
     // Starts the member once the phone has both its key and a group.
     void startMember();
     QString phoneName() const;
@@ -214,6 +276,9 @@ private:
     // The core's arrange call on ids with op (null for none): {view, stored},
     // the stored arrangement kept in the settings; null on a refusal, shown.
     QJsonObject callArrange(const QStringList &ids, bool prune, const QJsonValue &op);
+    // Claims the group with the recovery sheet's key, for restore.
+    void claimWithSheet(const QString &sheet);
+    void setRestoreState(const QString &state);
     // Keeps next as the membership, or shows why it could not.
     bool keep(const Membership &next);
 
@@ -226,6 +291,7 @@ private:
     Join m_join;
     Member m_node;
     Admit m_admit;
+    Invite m_invite;
     Events m_events;
     BleKeyboard m_keyboard;
     PasteReceiver m_paste{&m_node, &m_keyboard};
@@ -240,6 +306,11 @@ private:
     QStringList m_arrangeIds; // the devices arranged was last given
     QString m_adminPin = QStringLiteral("unknown");
     std::function<void()> m_pinRun, m_pinCancel;
+    QString m_recoveryText;
+    QStringList m_recoveryModules;
+    QStringList m_belowLevel;
+    QString m_restoreState;
+    QString m_restoreHint;
     QByteArray m_joinOffer; // the admin key the joining phone's hellos will offer
     int m_joinSerial = 0;   // bumped by each start and stop of a join
 };

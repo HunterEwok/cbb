@@ -5,7 +5,9 @@ import CoreImage.CIFilterBuiltins
 import SwiftUI
 
 /// Joining another phone's group: this phone's QR code, which the other
-/// phone scans in "Add a device" (docs/apps.md, Add a device).
+/// phone scans in "Add a device" (docs/apps.md, Add a device); or, with an
+/// accepted invitation, the fingerprint the inviting admin compares while
+/// the phone joins from afar.
 struct JoinView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
@@ -13,10 +15,23 @@ struct JoinView: View {
     var body: some View {
         VStack(spacing: Tokens.spacingLarge) {
             Spacer()
-            Text("Join a group")
+            Text(model.joiningInvite != nil ? LocalizedStringKey("Join with an invitation") : LocalizedStringKey("Join a group"))
                 .font(.system(.title, design: .monospaced).weight(.bold))
                 .foregroundStyle(palette.accent)
-            if let code = model.joinCode, let image = QRImage.make(code.qrText) {
+            if model.joiningInvite != nil {
+                if let fp = model.inviteFingerprint, model.message == nil {
+                    Text(verbatim: fp)
+                        .font(.system(.title2, design: .monospaced).weight(.bold))
+                        .multilineTextAlignment(.center)
+                        .textSelection(.enabled)
+                    Text("Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.")
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(palette.textDim)
+                    ProgressView()
+                } else if model.message == nil {
+                    ProgressView { Text("Connecting to the group's hub…") }
+                }
+            } else if let code = model.joinCode, let image = QRImage.make(code.qrText) {
                 Image(uiImage: image)
                     .interpolation(.none)
                     .resizable()
@@ -43,7 +58,9 @@ struct JoinView: View {
                 .buttonStyle(GlassButtonStyle())
         }
         .padding(Tokens.spacingLarge)
-        .task { await model.join() }
+        .task {
+            if model.joiningInvite != nil { await model.joinByInvite() } else { await model.join() }
+        }
     }
 }
 

@@ -63,3 +63,10 @@ path = "fuzz_targets/api.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "vless"
+path = "fuzz_targets/vless.rs"
+test = false
+doc = false
+bench = false

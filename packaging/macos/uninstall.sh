@@ -25,10 +25,16 @@ fi
 failed() {
 	rc=$1
 	if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ] && [ "${CBB_ERROR_DETAILS:-}" != 1 ]; then
-		echo "uninstall.sh: failed (exit status $rc). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." >&2
+		note uninstall.sh "failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." "$rc"
 	fi
 }
 trap 'failed $?' EXIT
+# The messages in the user's language (packaging/l10n.sh, beside this file
+# where install.sh put it, or in the archive).
+cbb_l10n=$(cd "$(dirname "$0")" && pwd)/l10n
+[ -f "$cbb_l10n.sh" ] || cbb_l10n=${cbb_l10n%/l10n}/../l10n
+# shellcheck source=packaging/l10n.sh
+. "$cbb_l10n.sh"
 
 purge=no
 case ${1:-} in
@@ -40,7 +46,7 @@ case ${1:-} in
 	;;
 esac
 if [ "$(id -u)" -ne 0 ]; then
-	echo "uninstall.sh: run it with sudo" >&2
+	note uninstall.sh "run it with sudo"
 	exit 1
 fi
 
@@ -88,8 +94,8 @@ if [ -f "$support/firewall" ]; then
 fi
 if [ "$purge" = yes ]; then
 	rm -rf "$support"
-	echo "CBB is removed, with this Mac's keys; it left its group."
+	say "CBB is removed, with this Mac's keys; it left its group."
 else
 	rm -f "$support/control.sock" "$support/admin.sock"
-	echo "CBB is removed. Its keys stay in $support/state for a reinstall; --purge removes them."
+	say "CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them." "$support"
 fi

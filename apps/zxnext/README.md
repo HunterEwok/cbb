@@ -282,7 +282,7 @@ tools do, and run:
 It finds a computer of the group each time, as the lite members on a network of their own
 do with mDNS: the question for `_cbb._tcp.local` goes from the ESP's UDP port 5354, which the
 members answer to that port alone (a legacy unicast query, RFC 6762 section 6.7), and the first
-computer to answer (not a lite member nor a phone, TXT `r=lite` or `r=phone`) is the one the
+computer to answer (not a member that only listens nor a phone, TXT `r=listen` or `r=phone`) is the one the
 Pi dials, at the port of its SRV record. With more than one group at home, or a network that
 drops multicast, name the computer: `.cbb net on 192.168.0.10` is short for
 `.cbb net on -to "192.168.0.10:8764" -serve "8764:8764"`; the long form takes `-zone "+01:00"`

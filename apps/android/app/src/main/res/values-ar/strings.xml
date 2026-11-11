@@ -245,9 +245,9 @@
     <string name="event_unfrozen">أُلغي تجميد %1$s.</string>
     <string name="event_taken_over">تولّى %1$s المجموعة: يحمل جذر المجموعة الآن.</string>
     <string name="invite_title">دعوة جهاز بعيد</string>
-    <string name="invite_body">لجهاز ليس على شبكتك، مثل حاسوب أحد الوالدين: شارك ملف الدعوة مع صاحبه، فينضم باستخدام cbb pair -invite. تعمل مرة واحدة، لمدة ساعة، ما دام هذا التطبيق مفتوحًا.</string>
+    <string name="invite_body">على هاتف جديد، افتح CBB واضغط «الانضمام بدعوة» وامسح الرمز. على حاسوب، شغّل cbb pair -invite مع الملف. تعمل مرة واحدة، لمدة ساعة، ما دام هذا التطبيق مفتوحًا؛ وتحتاج المجموعة إلى محور.</string>
     <string name="invite_open">إنشاء دعوة</string>
-    <string name="invite_open_until">الدعوة مفتوحة حتى %1$s. شارك ملفها فقط مع الشخص الذي ينضم: يمكن لأي شخص يملكه أن يطلب الانضمام.</string>
+    <string name="invite_open_until">الدعوة مفتوحة حتى %1$s. اعرض رمز QR أو أرسله فقط لمن سينضم؛ والملف بديل احتياطي.</string>
     <string name="invite_share">مشاركة الدعوة</string>
     <string name="invite_cancel">إلغاء الدعوة</string>
     <string name="invite_ask_title">قبول %1$s؟</string>
@@ -553,7 +553,7 @@
     <string name="turn_on">تشغيل</string>
     <string name="scan_code">مسح رمز</string>
     <string name="invite_send">إرسال دعوة</string>
-    <string name="invite_on_hub">تُنشأ الدعوة على محور المجموعة. على حاسوب هو المحور، شغّل cbb invite وأرسل الملف الذي ينشئه عبر قناة تثق بها؛ وعلى الجهاز الجديد شغّل cbb pair -invite مع ذلك الملف.</string>
+    <string name="invite_on_hub">لا ينشئ الدعوة إلا مشرف: هاتف مشرف هنا، أو cbb invite على حاسوب مشرف.</string>
     <string name="more">المزيد</string>
     <string name="view_next">العرض كـ %1$s</string>
     <string name="lost_phone_title">هاتف مفقود؟</string>
@@ -567,4 +567,24 @@
     <string name="saved_to_gallery">حُفظ في المعرض، في الألبوم CBB.</string>
     <string name="paste_pick">لصق صورة أو ملفات…</string>
     <string name="paste_pick_note">تذهب الصورة أو الملفات إلى المجموعة كنسخة، ويلصقها الكمبيوتر حيث يكون التركيز، كما يفعل Ctrl+V: في محادثة أو مستند أو مجلد. مفتاح Enter، إن كان مفعّلًا، يرسلها في المحادثة.</string>
+    <string name="invitation_join">الانضمام بدعوة</string>
+    <string name="invitation_has_group">هذا الهاتف في مجموعة بالفعل. غادرها أولًا للانضمام إلى أخرى.</string>
+    <string name="invitation_not_one">هذه ليست دعوة CBB.</string>
+    <string name="invitation_expired">انتهت صلاحية الدعوة. اطلب دعوة جديدة.</string>
+    <string name="invitation_joined">هذا الهاتف في المجموعة. يتزامن عبر محور المجموعة خارج المنزل.</string>
+    <string name="invitation_fingerprint_hint">يرى من دعاك هذه الكلمات على جهازه ويقبل هذا الهاتف إن تطابقت. أبقِ هذه الشاشة مفتوحة.</string>
+    <string name="invitation_connecting">جارٍ الاتصال بمحور المجموعة…</string>
+    <string name="invitation_scan_hint">وجّه الكاميرا إلى رمز QR الخاص بالدعوة.</string>
+    <string name="invitation_text">نص الدعوة</string>
+    <string name="invitation_read">قراءة</string>
+    <string name="invitation_open_file">فتح ملف</string>
+    <string name="invitation_title">أنت مدعو إلى مجموعة</string>
+    <string name="invitation_group">المجموعة: %1$s</string>
+    <string name="invitation_hub">المحور: %1$s</string>
+    <string name="invitation_until">صالحة حتى %1$s</string>
+    <string name="invitation_answer_hint">انضم فقط إن كنت طلبت هذه الدعوة. من أنشأها يقبل هذا الهاتف حين يرى الكلمات التي يعرضها.</string>
+    <string name="invitation_accept">انضمام</string>
+    <string name="invitation_decline">رفض</string>
+    <string name="error_hub_unreachable">لم يستجب محور المجموعة. تحقّق من أن الدعوة ما زالت صالحة وأن المحور يعمل، ثم حاول مجددًا.</string>
+    <string name="invite_qr_label">رمز QR الخاص بالدعوة</string>
 </resources>

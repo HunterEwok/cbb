@@ -59,6 +59,11 @@ Page {
             }
             MenuItem {
                 visible: app.admin && app.member.running
+                text: qsTr("Send an invitation")
+                onClicked: pageStack.push(Qt.resolvedUrl("InvitePage.qml"))
+            }
+            MenuItem {
+                visible: app.admin && app.member.running
                 text: qsTr("Scan a code")
                 onClicked: pageStack.push(Qt.resolvedUrl("AddDevicePage.qml"))
             }
@@ -110,6 +115,21 @@ Page {
                     preferredWidth: Theme.buttonWidthLarge
                     text: qsTr("Join a group")
                     onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"))
+                }
+                Button {
+                    visible: app.keyLevel !== "none"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    preferredWidth: Theme.buttonWidthLarge
+                    text: qsTr("Join with an invitation")
+                    onClicked: pageStack.push(Qt.resolvedUrl("InvitationPage.qml"))
+                }
+                Button {
+                    visible: app.keyLevel !== "none"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    preferredWidth: Theme.buttonWidthLarge
+                    text: qsTr("Restore with a recovery sheet")
+                    enabled: !app.busy
+                    onClicked: pageStack.push(Qt.resolvedUrl("RestorePage.qml"))
                 }
                 Label {
                     visible: app.keyLevel === "none" && !app.busy

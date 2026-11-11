@@ -27,10 +27,22 @@
 //! prints "ADMITTED <device>" and then "ADMIT DONE <confirmed>", or "ADMIT
 //! FAILED <message>", and "MANAGE <request as JSON>" (cbb_member_manage
 //! with the admin key), answered "MANAGED <answer as JSON>", on standard
-//! input. With -new-group it joins nothing:
+//! input, and "INVITE <seconds>", which makes a remote invitation with the
+//! admin key and prints "INVITE <text>", then "INVITE JOINING <name>
+//! <fingerprint>" for each device that uses it, "INVITE DONE <name>" or
+//! "INVITE FAILED <message>"; "INVITE ANSWER <yes|no>" answers about the
+//! joining device. With -invite TEXT it joins by that remote invitation in
+//! place of showing a QR code: it prints "Fingerprint <fingerprint>",
+//! dials the invitation's guest tunnel until the hub's admin admits it, and
+//! with -dir hands the invitation to the member, which offers its tunnel
+//! key to the hub through the guest tunnel. With -new-group it joins nothing:
 //! it makes a group of its own, the admin key standing for the root key,
 //! prints "Group <device> <group tag>", and runs the member as the group's
-//! root, which takes "ADMIT" too.
+//! root, which takes "ADMIT" too. With -restore <the recovery sheet's QR
+//! code> it restores the group as a new phone (cbb_restore), asking each
+//! -peer, prints "Restored <device> <group tag>" or "RESTORE FAILED
+//! <message>", and runs the member, the admin key standing for the new root
+//! key, which "MANAGE" signs root_ca with.
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
@@ -41,9 +53,10 @@ use std::process::ExitCode;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
-    cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_join_accept,
-    cbb_join_feed, cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call,
-    cbb_member_manage, cbb_member_start,
+    cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_invite_answer,
+    cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_join_accept, cbb_join_answered, cbb_join_feed,
+    cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call, cbb_member_manage,
+    cbb_member_start, cbb_restore,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -122,11 +135,54 @@ fn main() -> ExitCode {
             .unwrap_or_default();
         println!("Group {} {tag}", group["device"].as_str().unwrap_or_default());
         let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
-        return run_member(&key, &public_b64, &name, &dir, peers, &group, Some((&admin_key, admin_public.as_str())));
+        return run_member(
+            &key,
+            &public_b64,
+            &name,
+            &dir,
+            peers,
+            &group,
+            Some((&admin_key, admin_public.as_str())),
+            None,
+        );
     }
-    let ln = TcpListener::bind(&addr).expect("listen");
+    if let Some(sheet) = arg("-restore") {
+        let req = serde_json::json!({
+            "sheet": sheet, "public": public_b64, "name": name, "os": "aurora", "addrs": peers,
+        })
+        .to_string();
+        let mut n = 0usize;
+        let ctx = &key as *const SigningKey as *mut _;
+        // SAFETY: req and n live for the call, the key too.
+        let got = take(unsafe { cbb_restore(req.as_ptr(), req.len(), sign, ctx, &mut n) }, n);
+        let restored = got["ok"].clone();
+        if restored.is_null() {
+            println!("RESTORE FAILED {}", got["error"]["message"].as_str().unwrap_or_default());
+            return ExitCode::FAILURE;
+        }
+        let tag = cbb_core::certs::Cert::parse(&b64(&restored["group_ca"]))
+            .map(|ca| cbb_core::certs::tag(&ca))
+            .unwrap_or_default();
+        println!("Restored {} {tag}", restored["device"].as_str().unwrap_or_default());
+        let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
+        return run_member(
+            &key,
+            &public_b64,
+            &name,
+            &dir,
+            peers,
+            &restored,
+            Some((&admin_key, admin_public.as_str())),
+            None,
+        );
+    }
+    let invite = arg("-invite");
     let mut req =
         serde_json::json!({"name": name, "os": "aurora", "public": public_b64, "seal": seal, "addrs": [addr]});
+    if let Some(text) = &invite {
+        req["invite"] = text.clone().into();
+        req["addrs"] = serde_json::json!([]);
+    }
     if admin {
         req["admin_public"] = admin_public.clone().into();
     }
@@ -147,16 +203,34 @@ fn main() -> ExitCode {
         eprintln!("phone-on-linux: {created}");
         return ExitCode::FAILURE;
     }
-    println!("QR: {}", created["ok"]["qr"].as_str().unwrap_or_default());
+    let conns: Box<dyn Iterator<Item = std::net::TcpStream>> = match &invite {
+        Some(_) => {
+            println!("Fingerprint {}", created["ok"]["fingerprint"].as_str().unwrap_or_default());
+            let port = created["ok"]["port"].as_u64().unwrap_or_default();
+            // Dials the guest tunnel's port for each attempt, a few times.
+            Box::new((0..5).filter_map(move |i| {
+                if i > 0 {
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                }
+                std::net::TcpStream::connect(("127.0.0.1", port as u16)).ok()
+            }))
+        }
+        None => {
+            println!("QR: {}", created["ok"]["qr"].as_str().unwrap_or_default());
+            let ln = TcpListener::bind(&addr).expect("listen");
+            Box::new(std::iter::repeat_with(move || ln.accept()).filter_map(|r| r.ok().map(|(s, _)| s)))
+        }
+    };
     let mut joined = serde_json::Value::Null;
-    'conns: for conn in ln.incoming() {
-        let Ok(mut sock) = conn else { continue };
+    'conns: for mut sock in conns {
         // SAFETY: j is the joiner, used by this thread only.
         let a = take(unsafe { cbb_join_accept(j, &mut n) }, n);
         if a.get("error").is_some() {
             eprintln!("phone-on-linux: {a}");
             break;
         }
+        // With an invitation, the joiner speaks first.
+        let _ = sock.write_all(&b64(&a["ok"]["send"]));
         let mut buf = vec![0u8; 16 << 10];
         loop {
             let got = sock.read(&mut buf).unwrap_or(0);
@@ -180,7 +254,9 @@ fn main() -> ExitCode {
                     break 'conns;
                 }
                 Some("failed") => {
-                    eprintln!("phone-on-linux: an attempt failed: {}", ok["error"]);
+                    // SAFETY: j as above.
+                    let answered = unsafe { cbb_join_answered(j) } == 1;
+                    eprintln!("phone-on-linux: an attempt failed (hub answered: {answered}): {}", ok["error"]);
                     continue 'conns;
                 }
                 _ if got == 0 => continue 'conns,
@@ -201,7 +277,7 @@ fn main() -> ExitCode {
         joined["offer_admin_key"] = STANDARD.encode(spki).into();
     }
     let admin = admin.then_some((&admin_key, admin_public.as_str()));
-    run_member(&key, &public_b64, &name, &dir, peers, &joined, admin)
+    run_member(&key, &public_b64, &name, &dir, peers, &joined, admin, invite.as_deref())
 }
 
 unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize) {
@@ -225,7 +301,8 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
 }
 
 /// Runs the member as the app does once it joined, until standard input
-/// ends.
+/// ends; invite is the remote invitation it joined by.
+#[allow(clippy::too_many_arguments)]
 fn run_member(
     key: &SigningKey,
     public_b64: &str,
@@ -234,6 +311,7 @@ fn run_member(
     peers: Vec<String>,
     joined: &serde_json::Value,
     admin: Option<(&SigningKey, &str)>,
+    invite: Option<&str>,
 ) -> ExitCode {
     let records = b64(&joined["records"]);
     if std::fs::create_dir_all(dir).is_err() || std::fs::write(format!("{dir}/records.json"), records).is_err() {
@@ -263,6 +341,14 @@ fn run_member(
         // SAFETY: m runs; req and n live for the call.
         take(unsafe { cbb_member_call(m, req.as_ptr(), req.len(), &mut n) }, n)
     };
+    if let Some(text) = invite {
+        let a = call(serde_json::json!({ "op": "joined_by_invite", "args": { "invite": text } }).to_string());
+        if let Some(e) = a.get("error") {
+            eprintln!("phone-on-linux: joined_by_invite: {e}");
+            return ExitCode::FAILURE;
+        }
+    }
+    let mut inviting: Option<std::sync::Arc<Inviting>> = None;
     for line in std::io::stdin().lines() {
         let Ok(line) = line else { break };
         if let Some(text) = line.strip_prefix("COPY ") {
@@ -292,6 +378,17 @@ fn run_member(
                 Some((k, public)) => println!("MANAGED {}", manage(m, k, public, &joined["admin_ca"], req)),
                 None => println!("MANAGED {{\"error\":{{\"message\":\"this phone is not an admin\"}}}}"),
             }
+        } else if let Some(yes) = line.strip_prefix("INVITE ANSWER ") {
+            if let Some(i) = &inviting {
+                // SAFETY: the invitation lives until inviting is dropped.
+                unsafe { cbb_invite_answer(i.0, i32::from(yes == "yes")) };
+            }
+        } else if let Some(secs) = line.strip_prefix("INVITE ") {
+            inviting = None;
+            match admin {
+                Some((k, public)) => inviting = invite_new(m, k, public, &joined["admin_ca"], secs),
+                None => println!("INVITE FAILED this phone is not an admin"),
+            }
         } else if let Some(qr) = line.strip_prefix("ADMIT ") {
             match admin {
                 Some((k, public)) => admit(m, k, public, &joined["admin_ca"], qr),
@@ -300,6 +397,80 @@ fn run_member(
         }
     }
     ExitCode::SUCCESS
+}
+
+/// An invitation the phone made, freed when dropped.
+struct Inviting(*mut cbb_ffi::invite::Invite);
+
+// SAFETY: the library's invitation may be used from any thread.
+unsafe impl Send for Inviting {}
+unsafe impl Sync for Inviting {}
+
+impl Drop for Inviting {
+    fn drop(&mut self) {
+        // SAFETY: the invitation is freed once, here.
+        unsafe { cbb_invite_free(self.0) };
+    }
+}
+
+/// Makes a remote invitation with the admin key, as the app does, and
+/// prints its states from a thread of its own until it ends.
+fn invite_new(
+    m: *const cbb_ffi::member::Member,
+    key: &SigningKey,
+    public: &str,
+    admin_ca: &serde_json::Value,
+    secs: &str,
+) -> Option<std::sync::Arc<Inviting>> {
+    let req = serde_json::json!({
+        "public": public, "admin_ca": admin_ca, "expires": secs.trim().parse::<u64>().unwrap_or(0),
+    })
+    .to_string();
+    let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
+    let ctx = key as *const SigningKey as *mut core::ffi::c_void;
+    // SAFETY: m runs; req, ans and n live for the call; the key outlives the
+    // invitation.
+    let i = unsafe { cbb_invite_new(m, req.as_ptr(), req.len(), sign, ctx, &mut ans, &mut n) };
+    let created = take(ans, n);
+    if i.is_null() {
+        println!("INVITE FAILED {}", created["error"]["message"].as_str().unwrap_or_default());
+        return None;
+    }
+    println!("INVITE {}", created["ok"]["invite"].as_str().unwrap_or_default());
+    let inviting = std::sync::Arc::new(Inviting(i));
+    let held = inviting.clone();
+    std::thread::spawn(move || {
+        let i = held.0 as *const cbb_ffi::invite::Invite;
+        let mut version = 0u64;
+        loop {
+            let mut n = 0usize;
+            // SAFETY: held keeps the invitation until this thread ends.
+            let st = take(unsafe { cbb_invite_next(i, version, 1000, &mut n) }, n);
+            let ok = &st["ok"];
+            let v = ok["version"].as_u64().unwrap_or(version);
+            if v == version {
+                continue;
+            }
+            version = v;
+            match ok["state"].as_str() {
+                Some("joining") => println!(
+                    "INVITE JOINING {} {}",
+                    ok["joining"]["name"].as_str().unwrap_or_default(),
+                    ok["joining"]["fingerprint"].as_str().unwrap_or_default()
+                ),
+                Some("done") => {
+                    println!("INVITE DONE {}", ok["name"].as_str().unwrap_or_default());
+                    return;
+                }
+                Some("failed") => {
+                    println!("INVITE FAILED {}", ok["error"]["message"].as_str().unwrap_or_default());
+                    return;
+                }
+                _ => {}
+            }
+        }
+    });
+    Some(inviting)
 }
 
 /// Signs an admin's change or command (cbb_member_manage): req is the
