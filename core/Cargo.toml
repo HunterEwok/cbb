@@ -41,6 +41,7 @@ crypto-bigint = { version = "0.7.6", default-features = false, features = ["allo
 chacha20poly1305 = { version = "0.11", default-features = false, features = ["alloc"] }
 der = { version = "0.8", default-features = false, features = ["alloc", "oid"] }
 getrandom = { version = "0.4", default-features = false }
+hkdf = { version = "0.13", default-features = false }
 hmac = { version = "0.13", default-features = false }
 # seal: HPKE with X-Wing (ML-KEM-768 and X25519), HKDF-SHA256 and ChaCha20-Poly1305.
 hpke = { version = "0.15.1", default-features = false, features = ["alloc", "mlkem", "x25519", "chacha", "hkdfsha2"] }
