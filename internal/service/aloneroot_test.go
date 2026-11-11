@@ -20,6 +20,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1470,28 +1471,32 @@ func TestAloneRelay(t *testing.T) {
 	})
 }
 
-// startRelay runs a blind relay for the group of tag until the test ends.
-func startRelay(t *testing.T, tag string) (*relay.Relay, relay.Keys) {
+// startRelay runs a blind relay, the Rust cbb-relay, for the group of tag
+// until the test ends.
+func startRelay(t *testing.T, tag string) (*relay.Process, relay.Keys) {
 	t.Helper()
-	keys, err := relay.NewKeys()
+	r, _ := runRelay(t, relay.Keys{}, "", tag)
+	return r, r.Keys
+}
+
+// runRelay runs cbb-relay with keys (new ones when zero) at the address at
+// (a port of its own when empty) for the group of tag, and returns it and
+// how to stop it, which the end of the test does too. The test skips
+// without a cbb-relay (relay.Binary).
+func runRelay(t *testing.T, keys relay.Keys, at, tag string) (*relay.Process, func()) {
+	t.Helper()
+	bin := relay.Binary()
+	if bin == "" {
+		t.Skip("no cbb-relay beside cbb, nor CBB_TEST_RUST_RELAY")
+	}
+	r, err := relay.Start(bin, relay.Config{Listen: at, Keys: keys, Groups: []string{tag}, Logf: t.Logf})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := relay.Listen(relay.Config{Listen: "127.0.0.1:0", Keys: keys, Groups: []string{tag}, Logf: t.Logf})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	served := make(chan struct{})
-	go func() {
-		defer close(served)
-		r.Serve(ctx)
-	}()
-	t.Cleanup(func() {
-		cancel()
-		<-served
-	})
-	return r, keys
+	var once sync.Once
+	stop := func() { once.Do(r.Close) }
+	t.Cleanup(stop)
+	return r, stop
 }
 
 // TestAloneRelayRoot runs the Rust service as the root of a group that meets
@@ -1593,21 +1598,8 @@ func TestAloneRelayProject(t *testing.T) {
 	}
 	small := startAloneEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile, "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1"}, "-no-mdns", "-no-listen", "-peer", pi.addr())
 	group := pi.status(t).Group
-	serve := func(keys relay.Keys, at string) (*relay.Relay, func()) {
-		r, err := relay.Listen(relay.Config{Listen: at, Keys: keys, Groups: []string{group}, Logf: t.Logf})
-		if err != nil {
-			t.Fatal(err)
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		served := make(chan struct{})
-		go func() {
-			defer close(served)
-			r.Serve(ctx)
-		}()
-		return r, func() {
-			cancel()
-			<-served
-		}
+	serve := func(keys relay.Keys, at string) (*relay.Process, func()) {
+		return runRelay(t, keys, at, group)
 	}
 	oldKeys, err := relay.NewKeys()
 	if err != nil {
@@ -1623,7 +1615,7 @@ func TestAloneRelayProject(t *testing.T) {
 	if _, err := small.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 1, oldKeys)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := small.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: at, RelayKey: relay.Project, Consent: true}, ""); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: at, RelayKey: projectRelay, Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
 	connected := func() bool {

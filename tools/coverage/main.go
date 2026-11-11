@@ -70,6 +70,7 @@ var testFakes = []string{
 	"internal/attest/attesttest",
 	"internal/blekeyboard/bluetest",
 	"internal/ei/eitest",
+	"internal/relay",
 	"internal/testnet",
 	"internal/tpmkey/tpmtest",
 	"internal/tvremote/androidtv/atvtest",

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The relay's own keys, as Go's relay.LoadKeys keeps them: the TLS key of
+//! The relay's own keys: the TLS key of
 //! the registrations, which members pin, and the WireGuard key of the
 //! tunnels, which the registration gives them, in one PEM file, the one file
 //! the relay keeps: nothing about the groups is ever written.

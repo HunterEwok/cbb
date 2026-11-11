@@ -21,7 +21,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
@@ -593,24 +592,7 @@ func TestAwayThroughRelay(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
-	keys, err := relay.NewKeys()
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := relay.Listen(relay.Config{Listen: "127.0.0.1:0", Keys: keys, Groups: []string{pi.status(t).Group}, Logf: t.Logf})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	served := make(chan struct{})
-	go func() {
-		defer close(served)
-		r.Serve(ctx)
-	}()
-	defer func() {
-		cancel()
-		<-served
-	}()
+	r, keys := startRelay(t, pi.status(t).Group)
 
 	// The relay turns sync away from home on by itself (pi), or takes the
 	// place of its hubs (deck).

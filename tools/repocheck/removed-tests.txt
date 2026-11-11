@@ -414,3 +414,26 @@ internal/service/literoot_test.go TestLiteNetwork D-88: renamed TestAloneNetwork
 internal/service/literoot_test.go TestLiteRelay D-88: renamed TestAloneRelay in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
 internal/service/literoot_test.go TestLiteRelayRoot D-88: renamed TestAloneRelayRoot in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
 internal/service/literoot_test.go TestLiteRelayProject D-88: renamed TestAloneRelayProject in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/relay/budget_test.go TestRequestsBoundByWideNetwork D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs requests_bound_by_wide_network
+internal/relay/budget_test.go TestRegistrationsBoundByProvider D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs registrations_bound_by_provider
+internal/relay/budget_test.go TestOpenRelayBudgetProperty D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs open_relay_budget_property
+internal/relay/budget_test.go TestOpenRelayForgetsStrangers D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs open_relay_forgets_strangers
+internal/relay/command_test.go TestCommandKeys D-88: the relay's command is the Rust cbb-relay's; member/src/relayd/command.rs keys
+internal/relay/command_test.go TestPortOf D-88: the relay's command is the Rust cbb-relay's; member/src/relayd/command.rs ports_and_addresses
+internal/relay/cost_test.go TestRequestsBoundBySourceAndGroup D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs requests_bound_by_source_and_group
+internal/relay/cost_test.go TestRegisteredStrangersLeaveRequestSlots D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs requests_bound_by_source_and_group counts the requests by the source the devices registered from
+internal/relay/cost_test.go TestSetupsChargedPerSecond D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs setups_charged_per_second
+internal/relay/cost_test.go TestSetupsBoundByWideNetwork D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs setups_bound_by_wide_network
+internal/relay/cost_test.go TestAllowance D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs allowance
+internal/relay/cost_test.go TestRecordsVerifiedOnce D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs records_verified_once
+internal/relay/limits_test.go TestSetupsBoundByAddress D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs setups_bound_by_address
+internal/relay/limits_test.go TestRequestsBoundByDevice D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs requests_bound_by_device
+internal/relay/limits_test.go TestAddrOfWithoutAddress D-88: it checked a helper of the Go relay's server, which is gone
+internal/relay/member_test.go TestRelayNotesBounded D-88: it sent notes from the Go relay's server, which is gone; the devices' side is member/src/relay.rs, whose note takes no list longer than a group
+internal/relay/provider_test.go TestSetupsBoundByProvider D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs setups_bound_by_provider
+internal/relay/provider_test.go TestRequestsBoundByProvider D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs requests_bound_by_provider
+internal/relay/provider_test.go TestRecordCapsOfWideNetworkAndProvider D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs record_caps_of_wide_network_and_provider
+internal/relay/provider_test.go TestAllowanceBoundByProvider D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs allowance_bound_by_provider
+internal/relay/relay_test.go TestRate D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/limits.rs byte_rate_waits_for_its_tokens
+internal/relay/relay_test.go TestListen D-88: the relay's server is the Rust cbb-relay only; TestOpenRelay starts it with no group and with a bad tag
+internal/relay/relay_test.go TestKeys D-88: the relay's key file is the Rust cbb-relay's; member/src/relayd/keys.rs made_once_then_read, and every test of internal/relay hands it a file Go wrote

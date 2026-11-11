@@ -2892,8 +2892,8 @@ or to a log. With `CBB_DEBUG=1` it logs counts each minute.
 
 The meeting point, on the user's own server or the project's open relay, for a group that has
 no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Rust (`member/src/relayd`,
-`cbb-relay`, which `cbb relay` starts, and on the devices `member/src/relay.rs`), with Go's `internal/relay`
-kept as the reference its tests check it against, and on the phones through
+`cbb-relay`, which `cbb relay` starts, and on the devices `member/src/relay.rs`), with a device's side in Go
+(`internal/relay`) that its tests check it with from outside, and on the phones through
 the Rust tunnel (`cbb_tunnel_relay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
 tunnel and joins two devices' connections inside the tunnels, and member TLS (section 4)
 runs end to end between the two devices.
@@ -2919,7 +2919,7 @@ can change its key or move without a release and without the user:
 
 - At each start of the link, the device accepts the pins of the keys that the newest
   `keys.json` it holds (with a release or with the entry points) lists with `use` `relay` and
-  `name` `cbb.tools:8765`, else the pins built in (`internal/relay/project.go`). While the
+  `name` `cbb.tools:8765`, else the pins built in (`member/src/away/meet.rs`). While the
   key changes both are listed, and either is taken.
 - When a registration fails, the device fetches `keys.json` and `entries.json` from the
   mirror `dl.cbb.tools` (HTTPS, its certificate checked by name) at the relay's address on
@@ -3692,8 +3692,8 @@ serial number the last one revoked until its maintainer looks.
 What a forwarder and a relay check in place of the group's records, so that no device ID,
 name, system, root or date leaves the group, and a server cannot follow a group or a device
 from one month to the next ([design.md](design.md), D-67 and D-75). Implemented in Go
-(`internal/group/credential.go` and `serverkeys.go`, `internal/forward`, `internal/relay`,
-`internal/service/credentials.go`). The vectors in `testdata/interop/v2-credentials.json`
+(`internal/group/credential.go` and `serverkeys.go`, `internal/forward`,
+`internal/service/credentials.go`), and in Rust for the relay (`member/src/relayd`). The vectors in `testdata/interop/v2-credentials.json`
 (Go's `TestGoCredentialVectors`) give a group's records, the lists its credentials must hold,
 a period with its server credentials, its hubs' and members' credentials, and sets a server
 refuses. The lite member's core reads and checks them as Go does (`core/src/credential.rs`:

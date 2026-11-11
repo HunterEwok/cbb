@@ -20,8 +20,8 @@ use crate::control::{Away, Header, Message, Status};
 use crate::error::{Context, Error, Result};
 use crate::{Global, hubport, request, status_text};
 
-/// The project's forwarder and relay, as Go's forward.ProjectHost and
-/// relay.ProjectHost, and the word that names them.
+/// The project's forwarder (as Go's forward.ProjectHost) and relay, and the
+/// word that names them.
 const PROJECT_FORWARDER: &str = "cbb.tools:8764";
 const PROJECT_RELAY: &str = "cbb.tools:8765";
 const PROJECT: &str = "default";

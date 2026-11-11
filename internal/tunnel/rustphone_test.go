@@ -690,14 +690,7 @@ func TestRustPhoneRelay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys, err := relay.NewKeys()
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := relay.Listen(relay.Config{Listen: "127.0.0.1:0", Keys: keys, Groups: []string{group.Tag(ca.Cert)}, Logf: t.Logf})
-	if err != nil {
-		t.Fatal(err)
-	}
+	r, keys := startRelay(t, group.Tag(ca.Cert))
 	ctx, cancel := context.WithCancel(context.Background())
 	var done []chan struct{}
 	defer func() {
@@ -706,10 +699,7 @@ func TestRustPhoneRelay(t *testing.T) {
 			<-d
 		}
 	}()
-	go func() {
-		r.Serve(ctx)
-	}()
-	link := relay.Link{Endpoint: netip.MustParseAddrPort(r.Addr().String()), Pin: keys.Pin()}
+	link := r.Link
 
 	type device struct {
 		id   string
@@ -869,21 +859,9 @@ func TestRustPhoneRelayCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys, err := relay.NewKeys()
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := relay.Listen(relay.Config{Listen: "127.0.0.1:0", Keys: keys, Groups: []string{group.Tag(ca.Cert)}, Logf: t.Logf})
-	if err != nil {
-		t.Fatal(err)
-	}
+	r, keys := startRelay(t, group.Tag(ca.Cert))
 	ctx, cancel := context.WithCancel(context.Background())
-	served := make(chan struct{})
-	go func() {
-		defer close(served)
-		r.Serve(ctx)
-	}()
-	link := relay.Link{Endpoint: netip.MustParseAddrPort(r.Addr().String()), Pin: keys.Pin()}
+	link := r.Link
 
 	// The period, the two server keys and the lists.
 	tag, _ := group.NewPeriodTag()
@@ -954,7 +932,6 @@ func TestRustPhoneRelayCredentials(t *testing.T) {
 	}()
 	defer func() {
 		cancel()
-		<-served
 		<-pcDone
 	}()
 
@@ -1059,4 +1036,20 @@ func echoThroughPort(t *testing.T, port any) {
 	if got, err := bufio.NewReader(c).ReadString('\n'); err != nil || got != msg {
 		t.Fatalf("the phone's dial: %q, %v", got, err)
 	}
+}
+
+// startRelay runs the blind relay, the Rust cbb-relay, for the group of
+// tag until the test ends; the test skips without one (relay.Binary).
+func startRelay(t *testing.T, tag string) (*relay.Process, relay.Keys) {
+	t.Helper()
+	bin := relay.Binary()
+	if bin == "" {
+		t.Skip("CBB_TEST_RUST_RELAY is not set")
+	}
+	r, err := relay.Start(bin, relay.Config{Groups: []string{tag}, Logf: t.Logf})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(r.Close)
+	return r, r.Keys
 }

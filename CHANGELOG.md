@@ -2126,6 +2126,10 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Removed
 
+- The blind relay's server in Go (`internal/relay`): the relay is `cbb-relay`, in Rust, alone.
+  What stays of the package is a device's side in Go, with which the tests of
+  `internal/relay`, `internal/tunnel` and `internal/service` check `cbb-relay` from outside;
+  its tests that looked inside the Go server are the Rust relay's own (`member/src/relayd`).
 - The lite member's archives (`cbb-lite-linux-*`), their release jobs and unit, `get.sh
   --lite`, and OpenWrt's `memlimit` setting (`GOMEMLIMIT`, which only the Go service read).
 - The Rust core as WebAssembly in the Go programs (`internal/core`, `wasm/`, wazero and the
