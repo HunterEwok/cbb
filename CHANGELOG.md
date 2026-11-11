@@ -2091,6 +2091,8 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Builds use Go 1.27.4, which fixes a crash of an HTTP/1 server in the standard library
+  (GO-2026-6859), and rustix 1.1.6 (RUSTSEC-2026-0486).
 - A tunnel's loopback port on Linux takes a client on a dual-stack socket, as Java's on a system
   with IPv6: its user is looked up in the kernel's IPv6 table too, by its IPv4-mapped address,
   where before it was refused at once.
