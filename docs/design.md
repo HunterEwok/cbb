@@ -967,7 +967,8 @@ prompt exits with 75 and the apps say nothing. What needs root itself still does
 an update, and joining a group, where `cbb` writes the service's files. Any program of the
 user may start a confirmation, but only the system's prompt passes it, and within the five
 minutes only the everyday changes go through without one. The phones do the same with their
-own keys: one Face ID, fingerprint or PIN lets the root or admin key sign for five minutes.
+own keys: on Android one fingerprint, face or PIN lets the admin key sign for five minutes,
+while the group's root key asks at each signature.
 
 The mute lasts across restarts (`mute.json` in the state directory) and ends by itself when
 its time has passed. A device that does not take the command, an older or a broken one, is

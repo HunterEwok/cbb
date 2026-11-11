@@ -102,16 +102,18 @@ object Keys {
         KeyFactory.getInstance(k.privateKey.algorithm, PROVIDER).getKeySpec(k.privateKey, KeyInfo::class.java)
 
     /**
-     * How long one authentication lets the root or admin key sign: the
-     * group's changes for five minutes take one fingerprint, face or screen
-     * lock (docs/design.md, "Confirming admin actions").
+     * How long one authentication lets the admin key sign: the group's
+     * changes for five minutes take one fingerprint, face or screen lock
+     * (docs/design.md, "Confirming admin actions"). The root key asks at
+     * each signature.
      */
     const val KEEP_SECONDS = 300
 
     /**
      * A key for another time after an authentication than KEEP_SECONDS;
-     * one for each signature, from an earlier version, has 0 (Android 11
-     * on) or -1 (Android 10) and still signs, asking each time.
+     * one for each signature (the root key, or an admin key from an
+     * earlier version) has 0 (Android 11 on) or -1 (Android 10) and signs,
+     * asking each time.
      */
     private fun isOld(info: KeyInfo): Boolean =
         info.isUserAuthenticationRequired && info.userAuthenticationValidityDurationSeconds > 0 &&
@@ -184,7 +186,7 @@ object Keys {
             .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_NONE)
             .setIsStrongBoxBacked(strongBox)
             .apply { if (challenge != null) setAttestationChallenge(challenge) }
-            .apply { if (auth) authenticate(this) }
+            .apply { if (auth) authenticate(this, eachTime = alias == ROOT) }
             .build()
         val kpg = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, PROVIDER)
         kpg.initialize(spec)
@@ -194,16 +196,23 @@ object Keys {
 
     /**
      * Makes the key sign for KEEP_SECONDS after the fingerprint, the face
-     * or the screen lock. A fingerprint or face added later keeps the key:
-     * whoever adds one passed the screen lock, which the key takes anyway,
-     * and a group's root key lost that way would lose the group.
+     * or the screen lock, or with eachTime (the root key) once per
+     * authentication, through the prompt's CryptoObject. A fingerprint or
+     * face added later keeps the key: whoever adds one passed the screen
+     * lock, which the key takes anyway, and a group's root key lost that
+     * way would lose the group.
      */
     @Suppress("DEPRECATION")
-    private fun authenticate(b: KeyGenParameterSpec.Builder) {
+    private fun authenticate(b: KeyGenParameterSpec.Builder, eachTime: Boolean) {
         b.setUserAuthenticationRequired(true)
         b.setInvalidatedByBiometricEnrollment(false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            b.setUserAuthenticationParameters(KEEP_SECONDS, KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL)
+            val seconds = if (eachTime) 0 else KEEP_SECONDS
+            b.setUserAuthenticationParameters(seconds, KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL)
+        } else if (eachTime) {
+            // Android 10: each signature after a fingerprint or face, the
+            // only authentication it binds to one operation.
+            b.setUserAuthenticationValidityDurationSeconds(-1)
         } else {
             // Android 10: any authentication of the user, the screen lock too.
             b.setUserAuthenticationValidityDurationSeconds(KEEP_SECONDS)
