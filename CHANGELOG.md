@@ -2089,6 +2089,8 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Builds use Go 1.27.4, which fixes a crash of an HTTP/1 server in the standard library
+  (GO-2026-6859), and rustix 1.1.6 (RUSTSEC-2026-0486).
 - The tray window in Arabic and Hebrew sets the tiles, rows, menus and a card's values from
   the right, as it does the rest of the window.
 - The Ruby colour in the dark appearance is a shade lighter (#FF6681), so that its badges
