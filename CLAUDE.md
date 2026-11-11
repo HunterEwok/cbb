@@ -134,6 +134,11 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 - `apps/zxnext`: `.cbb`, the dot command for the ZX Spectrum Next in C for z88dk (`frame.c`
   parses the frames of the lite member's `cbb next`, `link.c` drives the UART to the Next's Pi; `make test`
   runs the parser's tests on the host).
+- `apps/harmony`: the app for HarmonyOS 5 and later (in development), ArkTS and ArkUI around
+  the Rust core through a Node-API module (`entry/src/main/cpp`: `napi_init.cpp` over
+  `cbb_core.h`, `keys.cpp` the keys in HUKS), as the Aurora app is Qt around it; its system
+  is `harmonyos`; `build.sh` and `ffi/bind.sh harmony` build the core with OpenHarmony's
+  native SDK (`ffi/ohos-sdk.sh`); CI's `HarmonyOS app` job.
 - `apps/macos`: the Mac app (SwiftUI, XcodeGen) over the service's control socket
   (`Control.swift`), admin actions through `cbb` with administrator privileges (`Admin.swift`),
   the Mac's remote paste target (`PasteTarget.swift`: a paste-only watch, Cmd+V or Unicode key

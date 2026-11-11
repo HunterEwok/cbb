@@ -895,6 +895,35 @@ of its collection (`collection` in WatchState), and the
 watch lists the devices in no collection under **Devices**, then a section for each
 collection. The watch does not change the arrangement.
 
+## HarmonyOS
+
+The app for HarmonyOS 5 and later (`apps/harmony`, in development), the system without
+Android's layer, is the Aurora app's twin: its own interface around the Rust core, which
+does the protocol, the pairing, sync and the tunnel. ArkTS and ArkUI make the interface;
+`libcbb_napi.so` gives it each C function of `ffi/include/cbb_core.h`, the ones that block or
+sign on a worker thread with a Promise. Its system in the protocol is `harmonyos`.
+
+- **Keys**: P-256 keys in HUKS, in the TEE (level "hardware"). The member key signs without
+  asking; the admin key (the root's in a group the phone made) only after the user's face,
+  fingerprint or PIN through User Authentication Kit, and the consent lasts half a minute, so
+  that one action that signs several times (a new group signs three times) asks once.
+- **Clipboard**: the app writes an incoming copy freely, but reads the clipboard only when the
+  user taps the system's Paste button (`PasteButton`) or with the restricted permission
+  `ohos.permission.READ_PASTEBOARD`, which Huawei grants on request. Sending is therefore a
+  tap, as on the iPhone.
+- **Background**: the system freezes an app soon after it leaves the screen; a long-running
+  task of the type "multi-device connection" keeps the member running, with its notification,
+  if the store allows it, and otherwise the app syncs while it is open, as on the iPhone.
+- **Building and signing**: the core builds with OpenHarmony's free native SDK; the app needs
+  DevEco Studio or the HarmonyOS command line tools, and a phone takes it only signed with a
+  profile from AppGallery Connect, so both need a Huawei developer account. DevEco Studio's
+  emulator runs on a Mac with Apple silicon, and Huawei offers its ready-made images only in
+  mainland China for now; elsewhere the app is tested on a phone with HarmonyOS 5 or later
+  (sold in China; the same models elsewhere run HarmonyOS 4, where the Android app works).
+
+The first version makes a new group. Joining, the devices, sync and the admin's actions
+follow in the order of the screens above, to the other phones' parity.
+
 ## Releasing the Android app
 
 Each release carries `cbb-X.Y.Z.apk` and the Wear OS app,

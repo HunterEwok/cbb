@@ -51,7 +51,7 @@ extension Control.Device {
         case (_, "none"): .board
         case ("watch", _): .watch
         case (_, "macos"): .laptop
-        case (_, "ios"), (_, "android"), (_, "aurora"), (_, "sailfish"): .phone
+        case (_, "ios"), (_, "android"), (_, "aurora"), (_, "sailfish"), (_, "harmonyos"): .phone
         default: .desktop
         }
     }
@@ -66,6 +66,7 @@ extension Control.Device {
         case "android": "Android"
         case "aurora": "Aurora OS"
         case "sailfish": "Sailfish OS"
+        case "harmonyos": "HarmonyOS"
         case "watchos": "watchOS"
         case "wearos": "Wear OS"
         default: nil

@@ -1,0 +1,19 @@
+{
+  "string": [
+    { "name": "app_name", "value": "CBB" },
+    { "name": "module_desc", "value": "Copy on one device, paste on another." },
+    { "name": "ability_desc", "value": "Copy on one device, paste on another." },
+    { "name": "reason_biometric", "value": "To confirm each change to your group with your face, fingerprint or PIN." },
+    { "name": "start_title", "value": "CBB" },
+    { "name": "start_lead", "value": "Copy on one device, paste on another." },
+    { "name": "start_new_group", "value": "Make a new group" },
+    { "name": "start_new_group_note", "value": "This phone becomes the group's root: it admits your computers and confirms each change with your face, fingerprint or PIN." },
+    { "name": "busy", "value": "One moment…" },
+    { "name": "auth_title", "value": "Confirm the change to your group" },
+    { "name": "group_title", "value": "Your group" },
+    { "name": "group_device", "value": "This phone" },
+    { "name": "group_tag", "value": "Group" },
+    { "name": "group_role_root", "value": "This phone is the group's root." },
+    { "name": "details", "value": "Details" }
+  ]
+}

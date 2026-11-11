@@ -231,6 +231,21 @@ sudo SYSTEM=sailfish apps/silica/psdk.sh /srv/sfos setup armv7hl
 sudo SYSTEM=sailfish apps/silica/psdk.sh /srv/sfos run '~/silica/build.sh rpm SailfishOS-4.6.0.13-armv7hl.default sailfish'
 ```
 
+The app for HarmonyOS 5 and later (`apps/harmony`, in development; the plan is
+[docs/apps.md](docs/apps.md)): ArkTS and ArkUI in `entry/src/main/ets`, over the Rust core
+through the Node-API module in `entry/src/main/cpp` (`napi_init.cpp`, one function for each
+C function of `ffi/include/cbb_core.h`; `keys.cpp`, the keys in HUKS). `build.sh` builds the
+core's static library with OpenHarmony's native SDK, which `ffi/ohos-sdk.sh` downloads (no
+account, about 2.5 GB); the app itself builds in DevEco Studio or with `hvigorw` from the
+HarmonyOS command line tools, both of which need a Huawei developer account, as does
+signing it for a phone. CI's `HarmonyOS app` job builds and links the native module and runs
+its host test.
+
+```sh
+apps/harmony/build.sh       # the core for arm64-v8a, into apps/harmony/build/ffi
+apps/harmony/build.sh hap   # also the app, with hvigorw on PATH and a signing config
+```
+
 The differential run of all four implementations (Go, Rust, JDK 17 and Docker for the Swift
 container; [docs/differential.md](docs/differential.md)):
 

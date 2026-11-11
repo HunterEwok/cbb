@@ -7,6 +7,13 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The app for HarmonyOS 5 and later (`apps/harmony`), in development: ArkTS around the same
+  Rust core as the Aurora app, through a Node-API module (`libcbb_napi.so`), with the keys in
+  HUKS and the admin key behind the user's face, fingerprint or PIN. Its first version makes
+  a new group. The protocol names its system `harmonyos`, a phone's system like `ios`,
+  `android`, `aurora` and `sailfish` (docs/protocol.md, section 6). `ffi/bind.sh harmony`
+  builds the core for it with OpenHarmony's native SDK (`ffi/ohos-sdk.sh`), and CI's
+  `HarmonyOS app` job builds and links the native module.
 - The installers and uninstallers (`get.sh`, `get.ps1`, Linux, rootless, macOS, FreeBSD,
   OpenWrt and Windows) speak the user's language: Arabic, Chinese, English, Hebrew, Hindi,
   Russian, Spanish or Swahili, from the system's locale (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`,

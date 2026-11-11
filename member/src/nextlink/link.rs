@@ -728,12 +728,12 @@ fn set_clock(secs: i64, log: &mut dyn FnMut(&str)) {
         return;
     }
     // A phone (the lite library inside its app) never sets the clock.
-    #[cfg(target_os = "ios")]
+    #[cfg(any(target_os = "ios", target_env = "ohos"))]
     let set = {
         let _ = secs;
         false
     };
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(not(any(target_os = "ios", target_env = "ohos")))]
     let set = {
         let ts = libc::timespec { tv_sec: secs as libc::time_t, tv_nsec: 0 };
         // SAFETY: clock_settime only reads the timespec passed to it.

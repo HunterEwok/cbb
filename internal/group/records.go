@@ -107,16 +107,17 @@ func StoreOf(store, role string) string {
 // Operating systems in device records, hellos and the pairing Info: what
 // the device runs, shown and never trusted for anything else.
 const (
-	OSLinux    = "linux"
-	OSWindows  = "windows"
-	OSMacOS    = "macos"
-	OSiOS      = "ios"
-	OSAndroid  = "android"
-	OSAurora   = "aurora"
-	OSSailfish = "sailfish"
-	OSWatchOS  = "watchos"
-	OSWearOS   = "wearos"
-	OSNone     = "none" // firmware without an operating system
+	OSLinux     = "linux"
+	OSWindows   = "windows"
+	OSMacOS     = "macos"
+	OSiOS       = "ios"
+	OSAndroid   = "android"
+	OSAurora    = "aurora"
+	OSSailfish  = "sailfish"
+	OSHarmonyOS = "harmonyos"
+	OSWatchOS   = "watchos"
+	OSWearOS    = "wearos"
+	OSNone      = "none" // firmware without an operating system
 )
 
 // A KeyHash names a key in records: SHA-256 over a SubjectPublicKeyInfo, or

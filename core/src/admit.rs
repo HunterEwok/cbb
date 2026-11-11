@@ -48,7 +48,7 @@ pub const SEAL_KEY_SIZE: usize = 1216;
 
 /// The systems of a phone with the app, which joins as a phone and may
 /// become an admin.
-pub const PHONE_SYSTEMS: [&str; 4] = ["ios", "android", "aurora", "sailfish"];
+pub const PHONE_SYSTEMS: [&str; 5] = ["ios", "android", "aurora", "sailfish", "harmonyos"];
 
 /// The joiner's description, its CPace associated data.
 #[derive(Deserialize, Clone, Debug, PartialEq)]
