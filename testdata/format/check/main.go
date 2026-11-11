@@ -510,8 +510,14 @@ func main() {
 	fmt.Printf("%-18s %d checked\n", "frames.json", len(fr.Take)+len(fr.Refuse))
 
 	// copy
-	var c map[string]string
-	load(dir, "copy.json", &c)
+	var cAny map[string]any
+	load(dir, "copy.json", &cAny)
+	c := map[string]string{}
+	for k, v := range cAny {
+		if str, ok := v.(string); ok {
+			c[k] = str
+		}
+	}
 	hdr := unhex(c["hdr"])
 	if _, err := strict(hdr); err != nil {
 		fail("copy hdr: %v", err)
@@ -563,6 +569,27 @@ func main() {
 		again, err := padded(cm, contentStep)
 		if err != nil || !bytes.Equal(again, unhex(c["content_plaintext"])) {
 			fail("copy content: not the one padding (%v)", err)
+		}
+	}
+	var edges struct {
+		Edges []struct {
+			Name    string `json:"name"`
+			Content string `json:"content"`
+		} `json:"content_edges"`
+	}
+	load(dir, "copy.json", &edges)
+	for _, e := range edges.Edges {
+		b := unhex(e.Content)
+		v, err := strict(b)
+		if err != nil {
+			fail("copy content %s: %v", e.Name, err)
+			continue
+		}
+		m := v.(map[any]any)
+		delete(m, uint64(1))
+		again, err := padded(m, contentStep)
+		if err != nil || !bytes.Equal(again, b) {
+			fail("copy content %s: not the one padding (%v)", e.Name, err)
 		}
 	}
 	if err := frame(unhex(c["frame"])); err != nil {

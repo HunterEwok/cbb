@@ -365,6 +365,15 @@ fn copies() {
     let v = copy::read_content(&content).unwrap();
     let without: Vec<(u16, Value<'_>)> = v.as_map().unwrap().iter().filter(|(k, _)| *k != 1).cloned().collect();
     assert_eq!(copy::write_content(&Value::Map(without)).unwrap(), content);
+    // The edges of a step: an empty pad, the next step, no pad.
+    for e in c["content_edges"].as_array().unwrap() {
+        let b = unhex(s(e, "content"));
+        assert_eq!(b.len() as u64, e["size"].as_u64().unwrap());
+        copy::read_content(&b).unwrap_or_else(|r| panic!("{}: {r}", s(e, "name")));
+        let text = "a".repeat(e["text_bytes"].as_u64().unwrap() as usize);
+        let written = copy::write_content(&Value::Map(vec![(0, Value::Uint(1)), (5, Value::Text(&text))])).unwrap();
+        assert_eq!(written, b, "{}", s(e, "name"));
+    }
     let fb = unhex(s(&c, "frame"));
     let f = frame::read(&fb, frame::LIMIT_MEMBER).unwrap();
     assert_eq!(f.t, 2);

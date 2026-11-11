@@ -739,6 +739,30 @@ def frame(msg):
                 break
 
 
+STEPS = [1 << 10, 4 << 10, 16 << 10, 64 << 10, 256 << 10, 1 << 20, 2 << 20, 3 << 20, 4 << 20]
+
+
+def pad_content(content):
+    """Pads a content (section 10.3) as frame() pads a message: no `pad` when
+    it is a step by itself, else the smallest step a `pad` of zeros reaches."""
+    assert 1 not in content
+    base = enc(content)
+    if len(base) in STEPS:
+        return base
+    for target in STEPS:
+        if target < len(base) + 2:
+            continue
+        for plen in range(0, target):
+            c = dict(content)
+            c[1] = bytes(plen)
+            b = enc(c)
+            if len(b) == target:
+                return b
+            if len(b) > target:
+                break
+    raise ValueError("content over 4 MiB")
+
+
 def copy_vector():
     K = sha(b"test copy key")
     readers = sorted([[LAPTOP.id16, 2], [PHONE.id16, 1], [BOARD.id16, 1]], key=lambda a: a[0])
@@ -756,15 +780,7 @@ def copy_vector():
     bi = [r[0] for r in readers].index(BOARD.id16)
     red_wraps = [w if i == bi else sha(w) for i, w in enumerate(wraps)]
     reduced = {1: hb, 2: 15, 3: red_wraps, 5: P, 6: sig}
-    content = {0: 1, 5: "hello"}
-    cb = enc(content)
-    # pad the content to 1 KiB exactly
-    for plen in range(1024):
-        c = dict(content)
-        c[1] = bytes(plen)
-        if len(enc(c)) == 1024:
-            content = c
-            break
+    content = dec(pad_content({0: 1, 5: "hello"}))
     assert len(enc(content)) == 1024
     assert verify(LAPTOP.key, "cbb copy sig v2", h + W + P, sig)
     return {
@@ -776,6 +792,15 @@ def copy_vector():
         "copy": enc(full).hex(), "reduced_copy_for_board": enc(reduced).hex(),
         "content_plaintext": enc(content).hex(), "content_diag": diag({k: v for k, v in content.items() if k != 1}) + " with pad to 1024",
         "frame": frame({0: 2, 2: full}).hex(),
+        "content_edges": [
+            {"name": name, "text_bytes": n, "content": pad_content({0: 1, 5: "a" * n}).hex(),
+             "size": len(pad_content({0: 1, 5: "a" * n})), "note": note}
+            for name, n, note in [
+                ("two bytes short of 1 KiB: empty pad", 1015, "1022 bytes without pad"),
+                ("one byte short of 1 KiB: next step", 1016, "1023 bytes without pad; no pad is one byte long, so 4 KiB"),
+                ("exactly 1 KiB: no pad", 1017, "a content that is a step by itself carries no pad, as a frame (10.3)"),
+            ]
+        ],
         "note": "wraps and payload are placeholder bytes of the right size; the signature and keys are real",
     }
 
@@ -814,6 +839,15 @@ def message_vectors(records_take):
         3: [[bytes.fromhex(records_take[9]["id"]), 3600000]],
         5: T0 + 60000}})
     add("pairing error taken", {0: 69, 2: 8})
+    # The edges of a grid step: a message two bytes short of 64 takes an
+    # empty `pad` (its key and an empty byte string are two bytes); one byte
+    # short cannot be padded to 64 (no `pad` is one byte long), so it goes to
+    # 256; a message of 64 bytes by itself has no `pad`.
+    add("two bytes short of 64: empty pad", {0: 3, 2: bytes(56)},
+        note="62 bytes without pad; the key 1 and an empty byte string make 64")
+    add("one byte short of 64: next step", {0: 3, 2: bytes(57)},
+        note="63 bytes without pad; no pad is one byte long, so the frame is 256")
+    add("exactly 64: no pad", {0: 3, 2: bytes(58)})
     digest = sha(b"cbb set v3\x00" + b"".join(ids))
     bad = []
     f = frame({0: 3})
