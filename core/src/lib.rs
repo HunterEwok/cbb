@@ -61,12 +61,14 @@ pub mod hlc;
 pub mod identity;
 pub mod invite;
 pub mod issue;
+pub mod join;
 pub mod keyboard;
 pub mod manage;
 pub mod media;
 pub mod pair;
 #[cfg(feature = "tls")]
 pub mod pair_session;
+pub mod peer;
 pub mod records;
 pub mod recovery;
 pub mod release;

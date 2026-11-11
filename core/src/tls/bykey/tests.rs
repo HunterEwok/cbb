@@ -12,6 +12,7 @@ use rustls::time_provider::TimeProvider;
 use super::*;
 use crate::identity::new_key;
 use crate::records::Key as RKey;
+use crate::records::State;
 use crate::records::eval::DeviceState;
 use crate::tls::{MEMBER_PROTOCOL, Session};
 
