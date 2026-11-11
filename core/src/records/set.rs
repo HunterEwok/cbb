@@ -50,6 +50,9 @@ pub struct RecordSet {
     units: BTreeMap<KeyHash, u64>,
     /// What the set remembers of the records it dropped.
     cut: keep::Cut,
+    /// The roots after the first that the member's evaluation put on the
+    /// path (`compact`): they have a root's room.
+    promoted: BTreeSet<KeyHash>,
     records: BTreeMap<RecordId, Entry>,
     bytes: usize,
 }
@@ -58,7 +61,15 @@ impl RecordSet {
     /// An empty set for the group whose first root key is root.
     pub fn new(root: Key) -> RecordSet {
         let keys = Keys::new(&root);
-        RecordSet { root, keys, units: BTreeMap::new(), cut: keep::Cut::default(), records: BTreeMap::new(), bytes: 0 }
+        RecordSet {
+            root,
+            keys,
+            units: BTreeMap::new(),
+            cut: keep::Cut::default(),
+            promoted: BTreeSet::new(),
+            records: BTreeMap::new(),
+            bytes: 0,
+        }
     }
 
     pub fn root(&self) -> &Key {
@@ -119,7 +130,7 @@ impl RecordSet {
         self.keys.learn(r.body(), role, held);
         let units = self.units.entry(signer).or_default();
         *units = units.saturating_add(eval::item(&r).units);
-        let over = *units > keep::ceiling(signer == self.root.hash());
+        let over = *units > self.ceiling(&signer).unwrap_or(keep::FUTURE);
         self.bytes = self.bytes.saturating_add(r.size());
         self.records.insert(id, Entry { record: r, role, held });
         let total: u64 = self.units.values().sum();
@@ -169,13 +180,31 @@ impl RecordSet {
     /// came in.
     fn cut(&mut self) {
         let items: Vec<keep::Item> = self.records.values().map(|e| eval::item(&e.record)).collect();
-        let root = self.root.hash();
-        let (kept, cut) = keep::keep_after(&items, |k| keep::ceiling(*k == root), &self.cut);
+        let (kept, cut) = keep::keep_after(&items, |k| self.ceiling(k), &self.cut);
         self.cut = cut;
         let drop: Vec<RecordId> = self.records.keys().filter(|id| !kept.contains(*id)).copied().collect();
         for id in drop {
             self.remove(&id);
         }
+        // A dropped claim takes its root's key with it.
+        let named: BTreeSet<KeyHash> = self
+            .records
+            .values()
+            .filter(|e| e.role == Role::Admin && !e.held)
+            .filter_map(|e| match &e.record.body().kind {
+                Kind::Claim { root, .. } => Some(root.hash()),
+                _ => None,
+            })
+            .collect();
+        let (promoted, first) = (&self.promoted, self.root.hash());
+        self.keys.retain_roots(|h| *h == first || named.contains(h) || promoted.contains(h));
+    }
+
+    /// A key's ceiling: a root's on the path, an admin key's, or None for a
+    /// root only claims name.
+    fn ceiling(&self, k: &KeyHash) -> Option<u64> {
+        let admins: BTreeSet<KeyHash> = if self.keys.is_admin(k) { BTreeSet::from([*k]) } else { BTreeSet::new() };
+        eval::ceiling_of(&self.root.hash(), &self.promoted, &admins, k)
     }
 
     fn remove(&mut self, id: &RecordId) {
@@ -203,12 +232,24 @@ impl RecordSet {
     /// The group's state. held_ms is how long the device has held each
     /// claim (rule 7).
     pub fn state(&self, held_ms: &BTreeMap<RecordId, u64>) -> State {
-        eval::evaluate_checked(&self.root, self.checked(), BTreeMap::new(), held_ms)
+        eval::evaluate_checked(&self.root, self.checked(), BTreeMap::new(), held_ms, &self.promoted)
     }
 
     /// Drops what the counting checkpoint of state leaves out: a root's
     /// checkpoint resets the set's count.
+    ///
+    /// It also gives the roots state put on the path after the first a
+    /// root's room (and takes it from those it no longer puts there): the
+    /// set's count starts again, and what it dropped before comes again
+    /// in sync. A member where the takeover does not count yet keeps only
+    /// 16 units of the new root's records until it does.
     pub fn compact(&mut self, state: &State) -> usize {
+        let promoted: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
+        if promoted != self.promoted {
+            self.promoted = promoted;
+            self.cut = keep::Cut::default();
+            self.cut();
+        }
         let Some(cp) = state.checkpoint else { return 0 };
         let Some(Kind::Checkpoint { heads, keep }) = self.get(&cp).map(|r| r.body().kind.clone()) else { return 0 };
         let anchors = eval::anchors_of(&heads, &keep);

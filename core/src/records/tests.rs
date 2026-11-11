@@ -617,10 +617,10 @@ fn newer_rules_stop_secrets_here() {
     assert!(s.too_old);
     assert_eq!(s.settings.rules(), 2);
     let mut g = G::new();
-    g.root_rec(Kind::Settings(Settings { admin_limit: 3, takeover_delay_ms: Some(0), ..Settings::default() }));
+    g.root_rec(Kind::Settings(Settings { takeover_delay_ms: Some(0), ..Settings::default() }));
     let s = g.state();
     assert!(!s.too_old);
-    assert_eq!((s.settings.admin_records(), s.settings.delay_ms()), (3, 0));
+    assert_eq!(s.settings.delay_ms(), 0);
     // A field at its default is never written.
     let bad = Settings { min_rules: 1, ..Settings::default() };
     assert!(
@@ -631,20 +631,20 @@ fn newer_rules_stop_secrets_here() {
     );
 }
 
+/// An admin key keeps at most 256 records: the hard ceiling, with no
+/// working limit under it.
 #[test]
-fn the_admin_limit_and_the_devices() {
+fn the_admin_ceiling() {
     let mut g = G::new();
     let (pa, a) = (k("phone a"), k("admin a"));
-    g.root_rec(Kind::Settings(Settings { admin_limit: 3, ..Settings::default() }));
     g.admin(&pa, &a, POWER_ADMIT);
-    let mut rs = Vec::new();
-    for i in 0..5 {
-        rs.push(g.device(&a, &k(&format!("d{i}")), "d", |_| {}));
-    }
+    let rs: Vec<Record> =
+        (0..MAX_ADMIN_RECORDS as u64 + 4).map(|i| g.rec(&a, Kind::Copies { incoming_ms: 5_000 + i })).collect();
     let s = g.state();
-    let counted: Vec<bool> = rs.iter().map(|r| s.counting.contains(&r.id())).collect();
-    assert_eq!(counted, [true, true, true, false, false]);
-    assert!(s.ignored.iter().any(|i| i.record == rs[3].id() && i.why == Why::Limit));
+    let counted = rs.iter().filter(|r| s.counting.contains(&r.id())).count();
+    assert_eq!(counted, MAX_ADMIN_RECORDS);
+    let last = rs.last().unwrap().id();
+    assert!(s.ignored.iter().any(|i| i.record == last && i.why == Why::Limit));
 }
 
 #[test]
@@ -820,10 +820,10 @@ fn the_set_stays_within_its_bytes_whatever_the_order() {
 
 #[test]
 fn many_claims_evaluate_quickly() {
-    // A claim takes 64 units of the set's 4096, so about 60 claims fit
-    // beside their admins' records: 56 here, all kept.
+    // A claim takes 80 units of the set's 4096, so about 50 claims fit
+    // beside their admins' records: 48 here, all kept.
     let mut g = G::new();
-    let n = 56;
+    let n = 48;
     let mut admins = Vec::new();
     for i in 0..n {
         let (p, a) = (k(&format!("p{i}")), k(&format!("a{i}")));
@@ -892,6 +892,23 @@ fn limits_hold_for_any_signer() {
             assert!(s.counting.contains(&r.id()));
         }
         assert!(flood.iter().all(|r| !s.counting.contains(&r.id())));
+        // X holds no more than its own 256 units whatever it signs: its
+        // claims' roots keep only what the claims paid ahead.
+        let units_of = |f: &dyn Fn(&KeyHash) -> bool| -> u64 {
+            set.ids()
+                .filter_map(|id| set.get(id))
+                .filter(|r| f(&r.body().signer))
+                .map(|r| super::eval::item(r).units)
+                .sum()
+        };
+        let roots: Vec<KeyHash> = (0..4).map(|i| k(&format!("x root {i}")).hash).collect();
+        let claims_kept = set
+            .ids()
+            .filter_map(|id| set.get(id))
+            .filter(|r| r.body().signer == x.hash && matches!(r.body().kind, Kind::Claim { .. }))
+            .count() as u64;
+        assert!(units_of(&|h| *h == x.hash) <= 256);
+        assert!(units_of(&|h| roots.contains(h)) <= 16 * claims_kept);
         assert_eq!(s.roots, vec![g.root.hash, k("t root").hash]);
         assert!(s.counting.contains(&claim.id()));
         // An admin still records.
@@ -899,6 +916,85 @@ fn limits_hold_for_any_signer() {
         let more = g2.device(&a, &k("one more"), "one more", |_| {});
         assert_eq!(set.insert(more.clone()), Ok(Added::Stored));
         assert!(set.state(&held).counting.contains(&more.id()));
+    }
+}
+
+/// Two members converge once both count a takeover: one where it does not
+/// count yet keeps only 16 units of the new root's records, and takes the
+/// rest by sync once it counts there too.
+#[test]
+fn members_converge_once_both_count_the_takeover() {
+    let mut g = G::new();
+    let (pt, t, n) = (k("phone t"), k("admin t"), k("new root"));
+    g.admin(&pt, &t, POWER_TAKEOVER);
+    let seen = g.seen();
+    let claim = g.rec(&t, Kind::Claim { root: n.key.clone(), seen });
+    let news: Vec<Record> = (0..60).map(|i| g.device(&n, &k(&format!("n{i}")), "n", |_| {})).collect();
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let sync = |set: &mut RecordSet, recs: &[Record], held: &BTreeMap<RecordId, u64>| {
+        for _ in 0..3 {
+            set.insert_all(recs.iter().cloned());
+            let st = set.state(held);
+            set.compact(&st);
+        }
+    };
+    let mut a = RecordSet::new(g.root.key.clone());
+    sync(&mut a, &g.recs, &held);
+    let mut b = RecordSet::new(g.root.key.clone());
+    let mut rev = g.recs.clone();
+    rev.reverse();
+    sync(&mut b, &rev, &BTreeMap::new());
+    // On b the claim does not count yet: 16 units of the new root.
+    let kept_b = news.iter().filter(|r| b.contains(&r.id())).count();
+    assert!(kept_b <= 16 && kept_b > 0);
+    assert!(news.iter().all(|r| a.contains(&r.id())));
+    assert_ne!(a.digest(), b.digest());
+    sync(&mut b, &rev, &held);
+    assert_eq!(a.digest(), b.digest());
+    assert_eq!(a.state(&held), b.state(&held));
+    assert_eq!(a.state(&held).roots, vec![g.root.hash, n.hash]);
+}
+
+/// A claim that is dropped takes its root's records and its key with it,
+/// whatever order the records came in.
+#[test]
+fn a_dropped_claim_takes_its_root_along() {
+    let mut g = G::new();
+    let (px, x, r) = (k("phone x"), k("admin x"), k("x root"));
+    g.admin(&px, &x, POWER_TAKEOVER);
+    // X's own records at seq 1, more than its 256 units.
+    let forks: Vec<Record> = (0..300)
+        .map(|i| {
+            let b = Body { seq: 1, prev: None, ..g.body(&x, Kind::Copies { incoming_ms: 5_000 + i }) };
+            Record::sign(b, &x).unwrap()
+        })
+        .collect();
+    let head = forks.iter().map(|f| f.id()).min().unwrap();
+    let seen = g.seen();
+    let claim_body = Body { seq: 2, prev: Some(head), ..g.body(&x, Kind::Claim { root: r.key.clone(), seen }) };
+    let claim = Record::sign(claim_body, &x).unwrap();
+    let root_recs: Vec<Record> = (0..5).map(|i| g.device(&r, &k(&format!("r{i}")), "r", |_| {})).collect();
+    let base: Vec<Record> = g.recs[..g.recs.len() - root_recs.len()].to_vec();
+    for order in 0..2 {
+        let mut set = RecordSet::new(g.root.key.clone());
+        set.insert_all(base.clone());
+        let mut later: Vec<Record> = forks.clone();
+        if order == 0 {
+            // The claim and its root first: kept until X's own records
+            // push the claim out.
+            assert_eq!(set.insert(claim.clone()), Ok(Added::Stored));
+            set.insert_all(root_recs.clone());
+            assert!(root_recs.iter().all(|r| set.contains(&r.id())));
+        } else {
+            later.push(claim.clone());
+            later.extend(root_recs.iter().cloned());
+            later.reverse();
+        }
+        set.insert_all(later);
+        assert!(!set.contains(&claim.id()));
+        assert!(root_recs.iter().all(|r| !set.contains(&r.id())));
+        let next = g.device(&r, &k("r late"), "r", |_| {});
+        assert_eq!(set.insert(next), Err(Refused::UnknownSigner));
     }
 }
 
@@ -1069,7 +1165,6 @@ fn pool() -> (Key, Vec<Record>) {
     let mut g = G::new();
     let root = k("root");
     let (pa, a, pb, b, pc, c) = (k("pa"), k("a"), k("pb"), k("b"), k("pc"), k("c"));
-    g.root_rec(Kind::Settings(Settings { admin_limit: 4, ..Settings::default() }));
     g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE | POWER_TAKEOVER);
     g.admin(&pb, &b, POWER_ADMIT | POWER_MANAGE | POWER_FREEZE | POWER_REMOVE_ADMINS);
     g.admin(&pc, &c, POWER_TAKEOVER | POWER_THAW | POWER_REMOVE_ADMINS);

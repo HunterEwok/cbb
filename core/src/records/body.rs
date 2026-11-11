@@ -69,7 +69,6 @@ pub const LEVEL_FILES: u64 = 3;
 /// The settings' defaults.
 pub const DEFAULT_DELAY_MS: u64 = 259_200_000;
 pub const MAX_DELAY_MS: u64 = 604_800_000;
-pub const DEFAULT_ADMIN_LIMIT: u64 = 128;
 pub const MIN_INCOMING_MS: u64 = 5_000;
 pub const MAX_INCOMING_MS: u64 = 3_600_000;
 pub const MAX_KEYS: usize = 256;
@@ -232,7 +231,6 @@ pub struct Settings {
     pub takeover_delay_ms: Option<u64>,
     pub key_level: u64,
     pub min_rules: u64,
-    pub admin_limit: u64,
     pub shared: bool,
     pub servers: Vec<Server>,
 }
@@ -546,9 +544,6 @@ fn check_settings(s: &Settings) -> Result<bool, Rule> {
     if s.min_rules == 1 {
         return Err(field(t, "min_rules"));
     }
-    if s.admin_limit > super::MAX_ADMIN_RECORDS as u64 || s.admin_limit == DEFAULT_ADMIN_LIMIT {
-        return Err(field(t, "admin_limit"));
-    }
     if s.servers.len() > MAX_SERVERS
         || s.servers.iter().any(|v| {
             !(SERVER_FORWARDER..=SERVER_RELAY).contains(&v.kind)
@@ -573,9 +568,6 @@ fn encode_settings(m: &mut Map, s: &Settings) {
     if s.min_rules != 0 {
         m.put(12, cbor::uint(s.min_rules));
     }
-    if s.admin_limit != 0 {
-        m.put(13, cbor::uint(s.admin_limit));
-    }
     if s.shared {
         m.put(14, cbor::uint(1));
     }
@@ -599,8 +591,5 @@ impl Settings {
     }
     pub fn rules(&self) -> u64 {
         if self.min_rules == 0 { 1 } else { self.min_rules }
-    }
-    pub fn admin_records(&self) -> usize {
-        if self.admin_limit == 0 { DEFAULT_ADMIN_LIMIT as usize } else { self.admin_limit as usize }
     }
 }

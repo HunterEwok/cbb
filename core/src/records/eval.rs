@@ -307,6 +307,18 @@ impl Keys {
     pub fn is_admin(&self, h: &KeyHash) -> bool {
         self.admins.contains(h)
     }
+
+    /// Forgets the roots of claims that keep does not hold: their claims
+    /// were dropped, and their records with them.
+    pub fn retain_roots(&mut self, keep: impl Fn(&KeyHash) -> bool) {
+        let gone: Vec<KeyHash> = self.roots.iter().filter(|h| !keep(h)).copied().collect();
+        for h in gone {
+            self.roots.remove(&h);
+            if !self.admins.contains(&h) {
+                self.keys.remove(&h);
+            }
+        }
+    }
 }
 
 /// A record the set verified, with its signer's role.
@@ -399,21 +411,59 @@ pub(crate) fn item(r: &Record) -> super::keep::Item {
         id: r.id(),
         units: super::keep::units(r.size(), claim),
         checkpoint: matches!(r.body().kind, Kind::Checkpoint { .. }),
+        names: match &r.body().kind {
+            Kind::Claim { root, .. } => Some(root.hash()),
+            _ => None,
+        },
     }
 }
 
 /// The records of checked the set keeps: each key within its ceiling, the
-/// set's room shared between keys.
-pub(crate) fn kept_of(group_root: &KeyHash, checked: &[Checked<'_>]) -> BTreeSet<RecordId> {
+/// set's room shared between keys. promoted are the roots the member's
+/// evaluation put on the path after the first: they have a root's room; a
+/// root only claims name has none of its own.
+pub(crate) fn kept_of(
+    group_root: &KeyHash,
+    promoted: &BTreeSet<KeyHash>,
+    checked: &[Checked<'_>],
+) -> BTreeSet<RecordId> {
+    let admins: BTreeSet<KeyHash> =
+        checked.iter().filter(|c| c.role == Role::Admin).map(|c| c.r.body().signer).collect();
     let items: Vec<super::keep::Item> = checked.iter().map(|c| item(c.r)).collect();
-    super::keep::keep(&items, |k| super::keep::ceiling(k == group_root))
+    super::keep::keep(&items, |k| ceiling_of(group_root, promoted, &admins, k))
+}
+
+/// A key's ceiling in the keeping: a root's on the path, an admin key's,
+/// or None for a root only claims name.
+pub(crate) fn ceiling_of(
+    group_root: &KeyHash,
+    promoted: &BTreeSet<KeyHash>,
+    admins: &BTreeSet<KeyHash>,
+    k: &KeyHash,
+) -> Option<u64> {
+    if k == group_root || promoted.contains(k) {
+        Some(super::keep::ceiling(true))
+    } else if admins.contains(k) {
+        Some(super::keep::ceiling(false))
+    } else {
+        None
+    }
 }
 
 /// Turns a record set into the group's state. Records that do not verify
 /// are dropped; the result depends only on the set, never on its order.
+///
+/// It evaluates as a member that has compacted: when a root after the
+/// first is on the path, that root has a root's room.
 pub fn evaluate(input: &Input) -> State {
     let (checked, failed) = check_all(input.root, input.records);
-    evaluate_checked(input.root, checked, failed, input.held_ms)
+    let none = BTreeSet::new();
+    let first = evaluate_checked(input.root, checked.clone(), failed.clone(), input.held_ms, &none);
+    let promoted: BTreeSet<KeyHash> = first.roots.iter().skip(1).copied().collect();
+    if promoted.is_empty() {
+        return first;
+    }
+    evaluate_checked(input.root, checked, failed, input.held_ms, &promoted)
 }
 
 pub(crate) fn evaluate_checked(
@@ -421,9 +471,10 @@ pub(crate) fn evaluate_checked(
     checked: Vec<Checked<'_>>,
     failed: BTreeMap<RecordId, Why>,
     held_ms: &BTreeMap<RecordId, u64>,
+    promoted: &BTreeSet<KeyHash>,
 ) -> State {
     let group_root = root.hash();
-    let full = Evaluation::new(root, checked.clone(), failed.clone(), BTreeSet::new());
+    let full = Evaluation::new(root, checked.clone(), failed.clone(), BTreeSet::new(), promoted);
     // The set a root's checkpoint prunes is evaluated as if the member had
     // dropped what it leaves out; the checkpoint that counts is the newest
     // that still counts there.
@@ -433,7 +484,7 @@ pub(crate) fn evaluate_checked(
         let (Kind::Checkpoint { heads, keep }, id) = (&x.b().kind, x.id) else { continue };
         let anchors = anchors_of(heads, keep);
         let pruned: Vec<Checked> = checked.iter().copied().filter(|c| !pruned_by(c.r, heads, &anchors)).collect();
-        let e = Evaluation::new(root, pruned, failed.clone(), anchors);
+        let e = Evaluation::new(root, pruned, failed.clone(), anchors, promoted);
         let ep = e.run(held_ms);
         let Some(i) = e.recs.iter().position(|r| r.id == id) else { continue };
         if !ep.root_record(i) {
@@ -559,9 +610,10 @@ impl<'a> Evaluation<'a> {
         mut checked: Vec<Checked<'a>>,
         failed: BTreeMap<RecordId, Why>,
         anchors: BTreeSet<RecordId>,
+        promoted: &BTreeSet<KeyHash>,
     ) -> Evaluation<'a> {
         let group_root = root.hash();
-        let kept = kept_of(&group_root, &checked);
+        let kept = kept_of(&group_root, promoted, &checked);
         let mut failed = failed;
         for c in &checked {
             if !kept.contains(&c.r.id()) {
@@ -804,7 +856,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// records past the settings' admin limit; a future root's past 16,
     /// counted in its claimant's own.
     fn cap_others(&mut self) {
-        let limit = self.settings.admin_records().min(MAX_ADMIN_RECORDS);
+        let limit = MAX_ADMIN_RECORDS;
         let mut future_of: BTreeMap<KeyHash, Vec<KeyHash>> = BTreeMap::new();
         let mut taken: BTreeSet<KeyHash> = BTreeSet::new();
         for (k, rs) in &self.e.by_sig {

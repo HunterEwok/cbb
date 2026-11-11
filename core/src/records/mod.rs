@@ -23,8 +23,9 @@
 //! 5. Unknown critical fields hold a record (kept, passed on, not applied);
 //!    `min_rules` in the settings stops older devices from secrets.
 //! 6. The kept set and the state depend on the set alone, never on the
-//!    order it came in; hard ceilings are in the format, working limits in
-//!    the settings.
+//!    order it came in; its ceilings are the format's, with no working
+//!    limits under them. A claim pays ahead for its root's first records,
+//!    which have no room of their own.
 //! 7. No rule reads a clock: the takeover delay is the time the device
 //!    itself held a claim, which its caller keeps.
 //! 8. Two competing claims stop the group; a root's own records still
@@ -76,8 +77,7 @@ pub const MAX_BODY: usize = 8 << 10;
 pub const MAX_CHECKPOINT_BODY: usize = 64 << 10;
 /// Records of one root key.
 pub const MAX_ROOT_RECORDS: usize = 1024;
-/// Records of one admin key; the settings' `admin_limit` is the working
-/// limit under it.
+/// Records of one admin key.
 pub const MAX_ADMIN_RECORDS: usize = 256;
 /// A claimant's records as the future root before its claim counts,
 /// counted in the claimant's own.
