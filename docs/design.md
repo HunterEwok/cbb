@@ -1266,7 +1266,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
 | Phones only, or phones and Android TVs or other Android devices | a phone with its app open is the hub; the others sync while they run (Android in its foreground service, an iPhone with its app open) | |
 | A phone and lite members | syncs at home, where lite members listen; from afar, the phone with its app open is the hub | |
 | The whole group away together (a trip, a hotel Wi-Fi that isolates its clients, mobile data) | the phone hub, through the forwarder | |
-| A computer is the hub but is off, broken or offline | another hub of the group serves: the root and every admin with a hub set up, phones first (docs/protocol.md, section 11, "Several hubs") | the user's main hubs in a signed table (D-65; `cbb global hubs` signs it, the apps later) |
+| A computer is the hub but is off, broken or offline | another hub of the group serves: the root and every admin with a hub set up, the computers first, then the phones (D-96; docs/protocol.md, section 11, "Several hubs") | the user's main hubs in a signed table (D-65; `cbb global hubs` signs it, the apps later) |
 | The hub's home has no public address and the project's forwarder is not reached | nothing syncs away from home, unless the group has a forwarder or relay of the user's own (`cbb forward`, `cbb relay`) | |
 | A network blocks WireGuard | AmneziaWG, then VLESS; the hub's setting in every app, the phone hub's too | VLESS for the phone hub's own registration is not yet tried against a real forwarder |
 | The root phone that is the hub is lost | an admin phone takes over and is the hub; devices far away are invited again | |

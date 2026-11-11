@@ -145,8 +145,8 @@ syncing away from home:
 
 A group may have several hubs: the root, every admin with a hub set up, and the hubs that only
 pass copies on. Devices away from
-home use the first one that answers, phones first, so a group of phones and a computer keeps
-working while the phone's app is closed.
+home use the first one that answers, the computers before the phones, so a group of phones and
+a computer keeps working while the phone's app is closed.
 
 **Planned:** a blind relay at `cbb.tools` for everyone who does not want to run a hub or a
 relay. It will see which devices talk and when, never what they copy, and you turn it on

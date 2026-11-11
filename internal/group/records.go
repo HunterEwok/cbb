@@ -741,8 +741,9 @@ func (s *Records) MayHost(dev DeviceID) bool {
 // HubOrder returns the devices that may be the group's hubs, in the order
 // in which they serve (docs/protocol.md, section 11, "Several hubs"):
 // first the main hubs of the hubs table, in its order, then the others:
-// the phones, whose keys are in hardware, then the computers that are the
-// root or admins, then the devices that only pass copies on, and in each
+// the computers that are the root or admins, which stay on, then the
+// phones, hubs only while their app is open, then the devices that only
+// pass copies on, and in each
 // part the root's own device first, then by device ID.
 func (s *Records) HubOrder() []DeviceID {
 	root, key := s.RootMember()
@@ -751,7 +752,7 @@ func (s *Records) HubOrder() []DeviceID {
 	}
 	type hub struct {
 		id   DeviceID
-		part int // 0 a phone, 1 a trusted computer, 2 one that only passes copies on
+		part int // 0 a trusted computer, 1 a phone, 2 one that only passes copies on
 	}
 	var hubs []hub
 	for _, d := range s.Devices() {
@@ -759,9 +760,9 @@ func (s *Records) HubOrder() []DeviceID {
 		switch {
 		case !d.MayHub():
 		case (trusted || d.ForwardOnly) && d.Role == RolePhone:
-			hubs = append(hubs, hub{d.ID, 0})
-		case trusted:
 			hubs = append(hubs, hub{d.ID, 1})
+		case trusted:
+			hubs = append(hubs, hub{d.ID, 0})
 		case d.ForwardOnly:
 			hubs = append(hubs, hub{d.ID, 2})
 		}

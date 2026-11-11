@@ -2195,10 +2195,10 @@ its own hub on; the clients keep its offer as any hub's.
 ### Several hubs
 
 The group's root, its admins with `hub` and its devices with `forward_only` are its hubs,
-in an order every member derives from the records alone: phones first (a phone is the hub
-while its app is open, so it serves whenever it is there), then the computers that are the
-root or admins, then the devices with `forward_only`; within each, the root first, then by
-device ID. The vectors in `testdata/interop/v2-hubs.json` (Go's `TestGoHubVectors`) give an
+in an order every member derives from the records alone: the computers that are the root or
+admins first (a computer stays on, so every client keeps one place), then the phones (a phone
+is a hub only while its app is open), then the devices with `forward_only`; within each, the
+root first, then by device ID (D-96). The vectors in `testdata/interop/v2-hubs.json` (Go's `TestGoHubVectors`) give an
 order that Go (`Records.HubOrder`), both kits (`RecordSet.hubOrder`) and the lite member
 (`hub_order`) must all derive. The root, or an admin with `hub`, may sign a table of main
 hubs in the user's order (a `hubs` record, section 10, "The hubs table"; `cbb global hubs`):
@@ -2243,8 +2243,9 @@ its hubs come first, in its order, then the others in the derived order (D-65 in
   keeps the new hub's offer from the result. The receiver takes it as in "Moving the hub" and
   refuses while sync away from home is off there, which only its own user turns on (D-45).
 - A phone that is the hub shares its clients, takes the others' and passes their offers on,
-  but does not yet stop serving for a hub above it, nor become another hub's client; as
-  phones come first in the order, the computers' hubs give way to it.
+  but does not yet stop serving for a hub above it, nor become another hub's client. Its
+  clients move to a computer's hub above it as any client below the first does, after 5
+  minutes, and a computer's hub keeps serving while the phone serves.
 
 ### Two kinds of hub
 

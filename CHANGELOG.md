@@ -1569,6 +1569,9 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- Away from home, the computers that are the group's root or admins come before the phones in
+  the order of hubs (D-96): a Mac or PC no longer keeps reaching for a phone whose app is
+  closed while a computer could serve.
 - The apps' strings have one source, `apps/l10n/<language>.json`, from which `tools/strings`
   writes the String Catalogs of the iPhone, Watch and Mac apps, Android's `strings.xml`, the
   Aurora app's Qt translations and the tray's texts; a text the apps share is translated once,
