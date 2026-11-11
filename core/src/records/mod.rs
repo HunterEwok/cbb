@@ -30,6 +30,10 @@
 //!    itself held a claim, which its caller keeps.
 //! 8. Two competing claims stop the group; a root's own records still
 //!    count during a stop, and only a root resolves it.
+//! 9. A root's removal is final: a resolve never voids a revoke signed by
+//!    a root, and the device comes back only by a new admission with a new
+//!    key. A root's resolve may void an admin's revoke; the device then
+//!    counts again with its key and ID.
 //!
 //! The format's codec (`crate::format`) is built beside this module; until
 //! it is in the tree, `cbor` and `key` hold the little of it the rules

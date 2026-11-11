@@ -898,7 +898,7 @@ fn limits_hold_for_any_signer() {
             set.ids()
                 .filter_map(|id| set.get(id))
                 .filter(|r| f(&r.body().signer))
-                .map(|r| super::eval::item(r).units)
+                .map(|r| super::eval::item(r, super::eval::Role::Admin).units)
                 .sum()
         };
         let roots: Vec<KeyHash> = (0..4).map(|i| k(&format!("x root {i}")).hash).collect();
@@ -1052,6 +1052,55 @@ fn a_removal_signed_again_keeps_what_it_saw() {
     let s = g.state();
     assert!(s.revoked.contains(&t.hash) && !s.two_histories(&s_.hash));
     assert!(later.iter().all(|r| !s.counting.contains(&r.id())));
+}
+
+/// An admin that removes its own key: nothing that key signs after the
+/// removal counts.
+#[test]
+fn an_admin_removing_its_own_key_signs_nothing_after() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE | POWER_REMOVE_ADMINS);
+    let d = g.device(&a, &k("d"), "d", |_| {});
+    let before = g.state();
+    assert!(before.counting.contains(&d.id()));
+    let own = g.rec(&a, Kind::Revoke(removal(&[a.hash], g.seen())));
+    let late = g.device(&a, &k("late"), "late", |_| {});
+    let rv = g.rec(&a, Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    let s = g.state();
+    assert!(s.revoked.contains(&a.hash) && s.counting.contains(&own.id()));
+    assert!(s.counting.contains(&d.id()) && !s.revoked.contains(&k("d").hash));
+    assert!(!s.counting.contains(&late.id()) && !s.counting.contains(&rv.id()));
+    assert!(s.device(&k("late").key.device_id()).is_none());
+}
+
+/// A root's removal is final: its resolve does not bring the device back.
+#[test]
+fn a_roots_removal_is_final() {
+    let mut g = G::new();
+    g.device(&k("root"), &k("d"), "d", |_| {});
+    let rv = g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    assert!(g.state().revoked.contains(&k("d").hash));
+    g.root_rec(Kind::Resolve(vec![rv.id()]));
+    let s = g.state();
+    assert!(s.revoked.contains(&k("d").hash) && s.counting.contains(&rv.id()));
+    assert!(s.id_taken(&k("d").key.device_id()) && s.device(&k("d").key.device_id()).is_none());
+}
+
+/// The root voids an admin's removal: the device counts again, with its
+/// key and ID.
+#[test]
+fn the_root_voids_an_admins_removal() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
+    let d = g.device(&k("root"), &k("d"), "d", |_| {});
+    let rv = g.rec(&a, Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    assert!(g.state().revoked.contains(&k("d").hash));
+    g.root_rec(Kind::Resolve(vec![rv.id()]));
+    let s = g.state();
+    assert!(!s.revoked.contains(&k("d").hash) && !s.counting.contains(&rv.id()));
+    assert!(s.counting.contains(&d.id()) && s.device(&k("d").key.device_id()).is_some());
 }
 
 /// What a command's receiver asks of the state: a key with two histories,
@@ -1233,6 +1282,108 @@ fn only_a_phone_admin_or_the_recovery_key_takes_over() {
 
 /// A pool of records that touches every rule: admins, devices, removals,
 /// a freeze and a thaw, two histories, claims, held records, settings.
+/// A full set never drops a root's removal or resolve: 16 admin keys fill
+/// their 256 units each, the root signs some 300 records after them, and
+/// its removal and its resolve at the end still count.
+#[test]
+fn a_full_set_keeps_the_roots_removals() {
+    let mut g = G::new();
+    let root = k("root");
+    let d = k("d");
+    g.device(&root, &d, "d", |_| {});
+    let admins: Vec<K> = (0..16).map(|i| k(&format!("a{i}"))).collect();
+    for (i, a) in admins.iter().enumerate() {
+        g.admin(&k(&format!("p{i}")), a, POWER_ADMIT | POWER_REMOVE);
+    }
+    let e = g.device(&admins[0], &k("e"), "e", |_| {});
+    let rv_e = g.rec(&admins[0], Kind::Revoke(removal(&[k("e").hash], g.seen())));
+    for a in &admins {
+        for i in g.heads.get(&a.hash).map_or(0, |h| h.0)..300 {
+            g.rec(a, Kind::Copies { incoming_ms: 5_000 + i });
+        }
+    }
+    let below: Vec<Record> = (0..300).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i })).collect();
+    let rv_d = g.root_rec(Kind::Revoke(removal(&[d.hash], g.seen())));
+    let resolve = g.root_rec(Kind::Resolve(vec![rv_e.id()]));
+    let mut set = RecordSet::new(g.root.key.clone());
+    set.insert_all(g.recs.clone());
+    assert!(set.len() < g.recs.len());
+    assert!(set.contains(&rv_d.id()) && set.contains(&resolve.id()));
+    // The root's records right under them are dropped: the removal stands
+    // for its chain.
+    assert!(!set.contains(&below[299].id()));
+    for s in [set.state(&BTreeMap::new()), g.state()] {
+        assert!(s.revoked.contains(&d.hash), "the root's removal counts");
+        assert!(s.counting.contains(&rv_d.id()) && s.counting.contains(&resolve.id()));
+        assert!(!s.revoked.contains(&k("e").hash) && s.counting.contains(&e.id()), "the root's resolve counts");
+    }
+}
+
+/// A root's removal counts without the records under it, but an ordinary
+/// root record above a gap waits for the gap to fill.
+#[test]
+fn a_roots_removal_counts_by_itself_and_nothing_above_it() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("d"), "d", |_| {});
+    g.device(&root, &k("x"), "x", |_| {});
+    let third = g.device(&root, &k("y"), "y", |_| {});
+    g.root_rec(Kind::Copies { incoming_ms: 6_000 });
+    let rv = g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    let sixth = g.device(&root, &k("z"), "z", |_| {});
+    let held = BTreeMap::new();
+    let without: Vec<Record> = g.recs.iter().filter(|r| r.id() != third.id()).cloned().collect();
+    let s = state_of(&g.root.key, &without, &held);
+    assert!(s.revoked.contains(&k("d").hash) && s.counting.contains(&rv.id()));
+    assert!(!s.counting.contains(&sixth.id()) && s.device(&k("z").key.device_id()).is_none());
+    let want = g.state();
+    assert!(want.counting.contains(&sixth.id()) && want.revoked.contains(&k("d").hash));
+    for seed in 1..6 {
+        let mut set = RecordSet::new(g.root.key.clone());
+        set.insert_all(shuffled(&g.recs, seed));
+        assert_eq!(set.state(&held), want, "order {seed}");
+    }
+}
+
+/// The same records in an order of seed.
+fn shuffled(recs: &[Record], seed: u64) -> Vec<Record> {
+    let mut out = recs.to_vec();
+    let mut s = seed;
+    for i in (1..out.len()).rev() {
+        s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        out.swap(i, (s >> 33) as usize % (i + 1));
+    }
+    out
+}
+
+/// More keys than the set has room for, each up to its ceiling: what the
+/// set keeps is the same whatever order the records come in, also while
+/// the units it stores fit.
+#[test]
+fn a_full_set_keeps_the_same_records_in_any_order() {
+    let mut g = G::new();
+    let admins: Vec<K> = (0..18).map(|i| k(&format!("a{i}"))).collect();
+    for (i, a) in admins.iter().enumerate() {
+        g.admin(&k(&format!("p{i}")), a, POWER_ADMIT);
+    }
+    for (i, a) in admins.iter().enumerate() {
+        for j in 0..(200 + 10 * i) {
+            g.rec(a, Kind::Copies { incoming_ms: 5_000 + j as u64 });
+        }
+    }
+    let mut want = RecordSet::new(g.root.key.clone());
+    want.insert_all(g.recs.clone());
+    assert!(want.len() < g.recs.len());
+    for seed in 1..3 {
+        let mut set = RecordSet::new(g.root.key.clone());
+        set.insert_all(shuffled(&g.recs, seed));
+        assert_eq!(set.digest(), want.digest(), "order {seed}");
+    }
+    // And it is what the evaluation of all the records keeps.
+    let strip = |s: &State| State { ignored: Vec::new(), ..s.clone() };
+    assert_eq!(strip(&want.state(&BTreeMap::new())), strip(&g.state()));
+}
+
 fn pool() -> (Key, Vec<Record>) {
     let mut g = G::new();
     let root = k("root");

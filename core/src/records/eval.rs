@@ -403,9 +403,11 @@ pub(crate) fn order_key(b: &Body, id: &RecordId) -> (u64, KeyHash, RecordId) {
 }
 
 /// The record as the keeping sees it (`keep`).
-pub(crate) fn item(r: &Record) -> super::keep::Item {
+pub(crate) fn item(r: &Record, role: Role) -> super::keep::Item {
     let claim = matches!(r.body().kind, Kind::Claim { .. });
+    let early = role == Role::Root && matches!(r.body().kind, Kind::Revoke(_) | Kind::Freeze(_) | Kind::Resolve(_));
     super::keep::Item {
+        early,
         signer: r.body().signer,
         seq: r.body().seq,
         id: r.id(),
@@ -429,7 +431,7 @@ pub(crate) fn kept_of(
 ) -> BTreeSet<RecordId> {
     let admins: BTreeSet<KeyHash> =
         checked.iter().filter(|c| c.role == Role::Admin).map(|c| c.r.body().signer).collect();
-    let items: Vec<super::keep::Item> = checked.iter().map(|c| item(c.r)).collect();
+    let items: Vec<super::keep::Item> = checked.iter().map(|c| item(c.r, c.role)).collect();
     super::keep::keep(&items, |k| ceiling_of(group_root, promoted, &admins, k))
 }
 
@@ -544,6 +546,11 @@ impl Rec<'_> {
     }
     fn admin(&self) -> bool {
         self.role == Role::Admin
+    }
+    /// A root's revoke, freeze or resolve: it comes early in its key's
+    /// order (`keep`).
+    fn early(&self) -> bool {
+        item(self.r, self.role).early
     }
     fn dev(&self) -> Option<&Device> {
         match &self.b().kind {
@@ -675,6 +682,10 @@ impl<'a> Evaluation<'a> {
 
     /// The records of rs (one signer's, by_id their IDs) whose prev chain
     /// down to seq 1, or to an anchor, is held, each step one seq lower.
+    /// A root's revoke, freeze or resolve counts by itself, without its
+    /// chain (a full set keeps it before its key's other records); it does
+    /// not make the records above it whole, since it states nothing about
+    /// those below it.
     fn wholes(&self, rs: &[usize], by_id: &BTreeMap<RecordId, usize>, skip: &[bool]) -> BTreeSet<usize> {
         let step = |i: usize| -> Result<bool, usize> {
             let Some(r) = self.recs.get(i) else { return Ok(false) };
@@ -696,7 +707,8 @@ impl<'a> Evaluation<'a> {
             Err(p)
         };
         let mut memo = BTreeMap::new();
-        rs.iter().copied().filter(|&i| walk(&mut memo, i, step)).collect()
+        let early = |i: usize| !skip.get(i).copied().unwrap_or(false) && self.recs.get(i).is_some_and(|r| r.early());
+        rs.iter().copied().filter(|&i| early(i) || walk(&mut memo, i, step)).collect()
     }
 
     /// Turns the evaluation into its last epoch, with the claims of the
@@ -845,7 +857,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         let roots: Vec<KeyHash> = self.on_path.keys().copied().collect();
         for k in roots {
             let mut rs = self.of(&k).to_vec();
-            rs.sort_by_key(|&i| item(self.r(i).r).pos());
+            rs.sort_by_key(|&i| item(self.r(i).r, self.r(i).role).pos());
             for i in rs.into_iter().skip(MAX_ROOT_RECORDS) {
                 self.capped[i] = true;
             }
@@ -925,18 +937,22 @@ impl<'e, 'a> Epoch<'e, 'a> {
     }
 
     /// The records the current root's resolve records name; a resolve
-    /// counts here when its own chain is whole.
+    /// counts here when its own chain is whole. A root's removal is final:
+    /// no resolve voids a revoke a root signed, its own or an earlier
+    /// root's; a removed device comes back only with a new key.
     fn voids(&self) -> BTreeSet<RecordId> {
         let rs = self.of(&self.cur);
         let by_id: BTreeMap<RecordId, usize> = rs.iter().map(|&i| (self.r(i).id, i)).collect();
         let wholes = self.e.wholes(rs, &by_id, &self.capped);
+        let final_: BTreeSet<RecordId> =
+            self.all().map(|i| self.r(i)).filter(|r| r.role == Role::Root && r.is_revoke()).map(|r| r.id).collect();
         let mut v = BTreeSet::new();
         for &i in rs {
             let r = self.r(i);
             if let (Kind::Resolve(ids), Role::Root, false) = (&r.b().kind, r.role, r.held)
                 && wholes.contains(&i)
             {
-                v.extend(ids.iter().copied());
+                v.extend(ids.iter().copied().filter(|id| !final_.contains(id)));
             }
         }
         v
@@ -1223,10 +1239,12 @@ impl<'e, 'a> Epoch<'e, 'a> {
     }
 
     /// Reports whether a, a revoke or freeze, cuts off b: it names b's
-    /// signer and saw fewer of its records than b's seq.
+    /// signer and saw fewer of its records than b's seq. A removal of its
+    /// own signer's key cuts off what that key signs after it too, but
+    /// never itself.
     fn cuts_off(&self, a: usize, b: usize) -> bool {
         let (ra, rb) = (self.r(a), self.r(b));
-        ra.b().signer != rb.b().signer
+        a != b
             && ra.removal().is_some_and(|rm| {
                 rm.keys.binary_search(&rb.b().signer).is_ok() && rm.seen_of(&rb.b().signer) < rb.b().seq
             })

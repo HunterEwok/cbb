@@ -123,18 +123,16 @@ impl RecordSet {
         let Some((key, role)) = self.keys.signer(&r.body().signer) else { return Err(Refused::UnknownSigner) };
         let held = r.verify(key).map_err(Refused::Broken)?;
         let signer = r.body().signer;
-        if self.cut.past(&eval::item(&r)) {
+        if self.cut.past(&eval::item(&r, role)) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
         self.keys.learn(r.body(), role, held);
         let units = self.units.entry(signer).or_default();
-        *units = units.saturating_add(eval::item(&r).units);
-        let over = *units > self.ceiling(&signer).unwrap_or(keep::FUTURE);
+        *units = units.saturating_add(eval::item(&r, role).units);
         self.bytes = self.bytes.saturating_add(r.size());
         self.records.insert(id, Entry { record: r, role, held });
-        let total: u64 = self.units.values().sum();
-        if over || total > keep::ROOM {
+        if self.needs_cut(&signer) {
             self.cut();
         }
         Ok(if self.records.contains_key(&id) { Added::Stored } else { Added::NoRoom })
@@ -179,8 +177,10 @@ impl RecordSet {
     /// changes nothing, so the set is the same whatever order the records
     /// came in.
     fn cut(&mut self) {
-        let items: Vec<keep::Item> = self.records.values().map(|e| eval::item(&e.record)).collect();
-        let (kept, cut) = keep::keep_after(&items, |k| self.ceiling(k), &self.cut);
+        let items: Vec<keep::Item> = self.records.values().map(|e| eval::item(&e.record, self.role_of(e))).collect();
+        let ceilings: BTreeMap<KeyHash, Option<u64>> =
+            items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
+        let (kept, cut) = keep::keep_after(&items, |k| ceilings.get(k).copied().flatten(), &self.cut);
         self.cut = cut;
         let drop: Vec<RecordId> = self.records.keys().filter(|id| !kept.contains(*id)).copied().collect();
         for id in drop {
@@ -200,6 +200,41 @@ impl RecordSet {
         self.keys.retain_roots(|h| *h == first || named.contains(h) || promoted.contains(h));
     }
 
+    /// Reports whether a record of signer just stored may change what the
+    /// set keeps. Before the set dropped anything, only a key past its
+    /// ceiling or a set past its room does. After, the units it dropped
+    /// still count in the shares, so the level can bind while the stored
+    /// units fit: the record is kept as it is only when its key dropped
+    /// nothing, stays within the level, and the shares, dropped units
+    /// included, still fit.
+    fn needs_cut(&self, signer: &KeyHash) -> bool {
+        let units = |k: &KeyHash| self.units.get(k).copied().unwrap_or(0);
+        if self.cut.is_empty() {
+            let total: u64 = self.units.values().sum();
+            return units(signer) > self.ceiling(signer).unwrap_or(keep::FUTURE) || total > keep::ROOM;
+        }
+        let Some(ceiling) = self.ceiling(signer) else { return true };
+        let level = self.cut.level();
+        if self.cut.dropped(signer).is_some() || units(signer) > level.min(ceiling) {
+            return true;
+        }
+        let mut demand = 0u64;
+        for (k, u) in &self.units {
+            if let Some(c) = self.ceiling(k) {
+                let total = u.saturating_add(self.cut.dropped(k).unwrap_or(0));
+                demand = demand.saturating_add(total.min(c).min(level));
+            }
+        }
+        for (k, u) in self.cut.dropped_all() {
+            if !self.units.contains_key(k)
+                && let Some(c) = self.ceiling(k)
+            {
+                demand = demand.saturating_add(u.min(c).min(level));
+            }
+        }
+        demand > keep::ROOM
+    }
+
     /// A key's ceiling: a root's on the path, an admin key's, or None for a
     /// root only claims name.
     fn ceiling(&self, k: &KeyHash) -> Option<u64> {
@@ -211,22 +246,19 @@ impl RecordSet {
         if let Some(e) = self.records.remove(id) {
             self.bytes = self.bytes.saturating_sub(e.record.size());
             if let Some(u) = self.units.get_mut(&e.record.body().signer) {
-                *u = u.saturating_sub(eval::item(&e.record).units);
+                *u = u.saturating_sub(eval::item(&e.record, e.role).units);
             }
         }
     }
 
+    /// A record's role, read from the final table: a key learned late may
+    /// make an admin of a key first taken for a claim's root.
+    fn role_of(&self, e: &Entry) -> Role {
+        self.keys.signer(&e.record.body().signer).map_or(e.role, |(_, role)| role)
+    }
+
     fn checked(&self) -> Vec<Checked<'_>> {
-        // Roles are read from the final table: a key learned late may make
-        // an admin of a key first taken for a claim's root.
-        self.records
-            .values()
-            .map(|e| Checked {
-                r: &e.record,
-                role: self.keys.signer(&e.record.body().signer).map_or(e.role, |(_, role)| role),
-                held: e.held,
-            })
-            .collect()
+        self.records.values().map(|e| Checked { r: &e.record, role: self.role_of(e), held: e.held }).collect()
     }
 
     /// The group's state. held_ms is how long the device has held each
