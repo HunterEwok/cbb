@@ -61,10 +61,13 @@ for archive in "$dist"/cbb-linux-*.tar.gz; do
 	cp "$here/cbb.json" "$root/etc/capabilities/cbb.json"
 	cp "$here/cbb.keep" "$root/lib/upgrade/keep.d/cbb"
 	cp "$here/firewall.sh" "$root/usr/share/cbb/firewall.sh"
+	# firewall.sh speaks through l10n.sh; the package, kept small for a
+	# router's flash, carries no catalog, so its messages are in English.
+	cp "$here/../l10n.sh" "$root/usr/share/cbb/l10n.sh"
 	chmod 0755 "$root/usr/bin/cbb" "$root/etc/init.d/cbb"
 	chmod 0644 "$root/etc/config/cbb" "$root/etc/hotplug.d/ntp/50-cbb" \
 		"$root/etc/capabilities/cbb.json" "$root/lib/upgrade/keep.d/cbb" \
-		"$root/usr/share/cbb/firewall.sh"
+		"$root/usr/share/cbb/firewall.sh" "$root/usr/share/cbb/l10n.sh"
 
 	mkdir -p "$out/$arch"
 	apk mkpkg \

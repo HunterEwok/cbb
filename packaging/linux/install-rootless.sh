@@ -26,10 +26,15 @@ fi
 failed() {
 	rc=$1
 	if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ] && [ "${CBB_ERROR_DETAILS:-}" != 1 ]; then
-		echo "install.sh: failed (exit status $rc). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." >&2
+		note install.sh "failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." "$rc"
 	fi
 }
 trap 'failed $?' EXIT
+# The messages in the user's language (packaging/l10n.sh), read before
+# LC_ALL=C below.
+cbb_l10n=$(cd "$(dirname "$0")" && pwd)/../l10n
+# shellcheck source=packaging/l10n.sh
+. "$cbb_l10n.sh"
 export LC_ALL=C
 
 usage() {
@@ -63,7 +68,7 @@ while [ $# -gt 1 ]; do
 		shift
 		;;
 	--console | --uinput)
-		echo "install.sh: $1 needs root; a rootless install has no console or uinput helper" >&2
+		note install.sh "%s needs root; a rootless install has no console or uinput helper" "$1"
 		exit 2
 		;;
 	*) usage ;;
@@ -74,7 +79,7 @@ done
 case $cgnat in
 '' | 0 | 1) ;;
 *)
-	echo "install.sh: CBB_HOME_CGNAT is 1 or 0, not $cgnat" >&2
+	note install.sh "CBB_HOME_CGNAT is 1 or 0, not %s" "$cgnat"
 	exit 2
 	;;
 esac
@@ -83,7 +88,7 @@ case $port in
 *[!0-9]*) usage ;;
 *)
 	if [ "$port" -lt 1024 ] || [ "$port" -gt 65535 ]; then
-		echo "install.sh: --port takes a port from 1024 to 65535" >&2
+		note install.sh "--port takes a port from 1024 to 65535"
 		exit 2
 	fi
 	;;
@@ -96,15 +101,15 @@ esac
 here=$(cd "$(dirname "$0")" && pwd)
 
 if [ "$(id -u)" -eq 0 ]; then
-	echo "install.sh: --rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer." >&2
+	note install.sh "--rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer."
 	exit 1
 fi
 if ! systemctl --user show-environment >/dev/null 2>&1; then
-	echo "install.sh: a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again" >&2
+	note install.sh "a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again"
 	exit 1
 fi
 if ! "$bin" version >/dev/null 2>&1; then
-	echo "install.sh: $bin does not run on this machine; is it built for $(uname -m)?" >&2
+	note install.sh "%s does not run on this machine; is it built for %s?" "$bin" "$(uname -m)"
 	exit 1
 fi
 kind=full
@@ -112,12 +117,12 @@ if "$bin" version 2>/dev/null | grep -q 'lite member'; then
 	kind=lite
 fi
 if [ "$kind" = lite ] && [ "$cgnat" = 1 ]; then
-	echo "install.sh: --home-cgnat is for the full member" >&2
+	note install.sh "--home-cgnat is for the full member"
 	exit 2
 fi
 for f in /usr/local/bin/cbb /opt/cbb/bin/cbb /etc/systemd/system/cbb.service; do
 	if [ -e "$f" ]; then
-		echo "install.sh: CBB is installed for the whole system here ($f), and one device runs one service; remove it first or keep it" >&2
+		note install.sh "CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it" "$f"
 		exit 1
 	fi
 done
@@ -148,6 +153,10 @@ if [ -f "$(dirname "$bin")/cbb-helper" ]; then
 	mv "${cbb%/*}/cbb-helper.new" "${cbb%/*}/cbb-helper"
 fi
 install -m 0644 "$here/uninstall.sh" "$share/uninstall.sh"
+# uninstall.sh speaks the user's language too.
+install -m 0644 "$here/../l10n.sh" "$share/l10n.sh"
+rm -rf "$share/l10n"
+cp -R "$here/../l10n" "$share/l10n"
 install -m 0644 "$here/../tmux/cbb.conf" "$share/tmux.conf"
 place "$here/cbb-rootless.service" "$units/cbb.service"
 # The lite member has no desktop clipboard, so no agent.
@@ -190,13 +199,13 @@ if [ "$kind" = full ]; then
 	systemctl --user enable cbb-agent.service >/dev/null 2>&1 || true
 	if systemctl --user is-active -q graphical-session.target 2>/dev/null; then
 		systemctl --user restart cbb-agent.service >/dev/null 2>&1 ||
-			echo "install.sh: the desktop agent did not start; it starts at your next login" >&2
+			note install.sh "the desktop agent did not start; it starts at your next login"
 	fi
 fi
 # Without lingering the user's services stop at the last logout.
 if [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)" != yes ]; then
 	if ! loginctl enable-linger "$(id -un)" >/dev/null 2>&1; then
-		echo "CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger $(id -un)"
+		say "CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s" "$(id -un)"
 	fi
 fi
 
@@ -208,7 +217,7 @@ answers() { # cbb
 		sleep 0.25
 		i=$((i + 1))
 	done
-	echo "install.sh: the service did not answer within 10 s: $out" >&2
+	note install.sh "the service did not answer within 10 s: %s" "$out"
 	return 1
 }
 answers "$cbb" || true
@@ -217,21 +226,19 @@ answers "$cbb" || true
 . "$here/../update.sh"
 update_setup "$cbb" "$bin" "$auto"
 
-echo "CBB is running for $(id -un) on TCP port $port, installed without root: it can never be"
-echo "the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator"
-echo "allows TCP $port and UDP 5353 from the home network. To remove it: sh $share/uninstall.sh"
+say "CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s" "$(id -un)" "$port" "$port" "sh $share/uninstall.sh"
 run=cbb
 case ":$PATH:" in
 *":${cbb%/*}:"*) ;;
 *) run=$cbb ;;
 esac
-echo "For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q $share/tmux.conf"
+say "For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf" "$share"
 if [ "$kind" = lite ]; then
 	# shellcheck source=packaging/pair.sh
 	. "$here/../pair.sh"
 	if ! pair_now "$cbb" ""; then
-		echo "Next: see member/README.md; in short, $run pair here, and scan its QR code with the phone app."
+		say "Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app." "$run"
 	fi
 else
-	echo "Next: run $run pair and scan its QR code with the CBB app on your phone."
+	say "Next: run %s pair and scan its QR code with the CBB app on your phone." "$run"
 fi
