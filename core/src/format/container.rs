@@ -123,7 +123,7 @@ pub fn read(cert: &[u8]) -> Result<[u8; 65], Rule> {
         return Err(Rule::CONTAINER);
     }
     match bits {
-        [0x03, n, 0x00, sig @ ..] if usize::from(*n) == sig.len() + 1 && well_formed(sig) => Ok(point),
+        [0x03, n, 0x00, sig @ ..] if usize::from(*n) == sig.len().saturating_add(1) && well_formed(sig) => Ok(point),
         _ => Err(Rule::CONTAINER),
     }
 }
@@ -135,7 +135,7 @@ fn well_formed(sig: &[u8]) -> bool {
     let integer = |b: &[u8]| -> Option<usize> {
         match b {
             [0x02, n, rest @ ..] if (1..=33).contains(n) && rest.len() >= usize::from(*n) => {
-                Some(2 + usize::from(*n))
+                Some(usize::from(*n).saturating_add(2))
             }
             _ => None,
         }
