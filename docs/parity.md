@@ -126,3 +126,36 @@ One pull request each, in this order; anything under 100 lines rides in the open
     images and files and the group's alerts (after the phones' node moves into the core), the
     cover, notifications and Share, sync away from home with the phones' tunnel, and a group
     of its own with its root on the phone.
+
+## On real devices
+
+What each part is, and whether it has run on real devices beyond CI. The README sums it up
+in three lines; this table has every part.
+
+| Part | State | On real devices |
+|---|---|---|
+| Linux service, desktop clipboard (X11, Wayland), tmux, `cbb copy`/`paste` | works | yes (Raspberry Pi, Steam Deck) |
+| macOS service and pasteboard agent | works | yes |
+| Windows service, clipboard agent, installer | built, CI on windows-latest | in a Windows 11 virtual machine (Arm), not yet on a PC |
+| FreeBSD service and installer | built, CI in a FreeBSD 15.1 virtual machine | not yet |
+| OpenWrt service and installer | built, CI on OpenWrt in QEMU | not yet |
+| iPhone app (the phone as the root, admin phones, devices list) | built, CI on a simulator | yes, on an iPhone 12 Pro Max: the root key in the Secure Enclave with Face ID, admitting computers, making a computer an admin, sync both ways; not yet a second phone or the takeover |
+| Android app | built, CI; APK in every release | not yet |
+| Mac app (menu bar) and the tray app for Linux and Windows | built, CI; the tray app in the Windows and Linux releases | the Mac app on a Mac; the tray app in the Windows 11 virtual machine |
+| Apple Watch and Wear OS apps (devices, events, away switch) | built, CI | the Apple Watch app on an Apple Watch Ultra: its list and remote paste; Wear OS not yet |
+| Lite member on Linux | built, CI e2e with Go members | joined a group on a Pi Zero W |
+| Lite member on the Arduino Nano ESP32 | firmware: Wi-Fi, joining by the phone, the USB port as a keyboard; CI in QEMU; syncing next | not yet |
+| Sync away from home between computers (`cbb global`, `cbb invite`) | built | not yet |
+| Sync away from home for the phones and the lite member | built | the iPhone on mobile data, through a Mac hub and the `cbb.tools` forwarder |
+| The phone as the hub, several hubs, your own blind relay | built | not yet |
+| Images, files and formatted text | built | not yet |
+| Remote paste and quick actions | built | remote paste from the iPhone and the watch to a Mac, at home and away from home; Windows, Linux and the quick actions not yet |
+| Keys in the TPM on Linux and Windows, proven Android keys, the group's key level (`cbb keys`) | built; CI against a software TPM | Windows in a virtual machine only |
+| Releases signed with the project's own keys | built; waits for the project's root keys | |
+| `cbb update`, automatic updates, the Android APK updating itself | built; takes only signed releases, so it waits for the root keys too | not yet |
+| The project's forwarder and relay at `cbb.tools`, open to everyone | being tested | the forwarder carried a phone's sync to a Mac hub |
+| Keyboards and TV remotes (`cbb keyboard`, `cbb remote`, the Android phone as a Bluetooth keyboard) | built, CI against fake TVs and BlueZ | typing on an Apple TV 4K |
+| Console paste on a key press | planned | |
+| Homebrew (`hunterewok/tap`) | a formula with each release | |
+| Signed macOS `.pkg` with the Mac app, TestFlight | built; the release signs them with the Apple developer account | not yet run |
+| App stores | planned | |
