@@ -232,6 +232,7 @@ dependencies = [
  "chacha20poly1305",
  "der 0.8.3",
  "getrandom 0.4.3",
+ "hkdf 0.13.0",
  "hmac 0.13.0",
  "hpke",
  "p256 0.14.0",

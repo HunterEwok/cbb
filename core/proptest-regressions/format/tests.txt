@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 36b737919fe845ea1914e7a85a00de69e386c840b4c5135cabaa71b04b230674 # shrinks to t = Map({0: Uint(0)})
+cc 663496a466120e8a8cdf743ec130b4be75de03554beedbe87cf74f1065c69841 # shrinks to i = 584, at = 13384, byte = 0, how = 0
