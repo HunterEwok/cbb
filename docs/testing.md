@@ -194,5 +194,6 @@ fix that removes the cause. The bench finds them too: `go run ./tools/bench -rep
 | Test | Where | Seen | What is known |
 |---|---|---|---|
 | `TestSeveralHubs` | `internal/service` | about one run in six, 2026-11 | not yet found |
+| `TestMacsListen` | `internal/service`, against the Rust service | once in CI, 2026-11-10; 0 in 15 in a container limited to 2 CPUs | the member with the lowest device ID did not see the pi's mDNS record within the wait, and the pi, finding the lower ID, waits for it to dial |
 | `TestLiteHubs` | `internal/service`, against the Rust service | about two runs in five in CI, 2026-11 | after the first hub stops, the client's tunnel connection to the second hub ends right after it comes up, and the copy made then is lost |
 | `TestWindow` | `apps/desktop`, Windows | rarely, 2026-11 | Chrome gave no DevTools port within 30 seconds; the test now prints Chrome's error output, to be read when it fails again |
