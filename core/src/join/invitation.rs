@@ -289,6 +289,10 @@ pub struct Open {
     pub expires_ms: u64,
     pub used: bool,
     pub failures: u32,
+    /// A key allowed ahead of time: the board's key read over the cable
+    /// when CBB flashed it (A-43). A joiner with this key needs no other
+    /// match; any other key is refused.
+    pub allowed_key: Option<crate::format::KeyHash>,
 }
 
 impl Open {
@@ -307,6 +311,13 @@ impl Open {
             return Err(PairError::Refused);
         }
         Ok(())
+    }
+
+    /// Whether the joiner's key matches a key allowed ahead of time: None
+    /// when the invitation names no such key (the user matches it another
+    /// way), else whether it is that key.
+    pub fn key_allowed(&self, joiner: &crate::format::KeyHash) -> Option<bool> {
+        self.allowed_key.map(|k| &k == joiner)
     }
 
     /// The joiner asks for more than the profile allows: a role of its
@@ -400,4 +411,14 @@ fn within_one(a: &[char], b: &[char]) -> bool {
     } else {
         s.get(i..) == l.get(i.saturating_add(1)..)
     }
+}
+
+/// The short code both screens show, for a device with a screen and no
+/// camera (A-43): six digits from the pairing session's exporter, which
+/// both ends share only when nobody sits between them. The user answers
+/// "they match".
+pub fn short_code(exporter: &[u8]) -> String {
+    let h = crate::format::sha256(&[b"cbb short code v1\0", exporter]);
+    let n = u32::from_be_bytes([h[0], h[1], h[2], h[3]]) % 1_000_000;
+    alloc::format!("{n:06}")
 }

@@ -453,6 +453,7 @@ fn an_open_invitation() {
         expires_ms: 5000,
         used: false,
         failures: 0,
+        allowed_key: None,
     };
     assert_eq!(open.may_use(Network::Guest, 2000), Ok(()));
     assert_eq!(open.may_use(Network::Guest, 5000), Err(PairError::Expired), "the admitter checks the expiry");
@@ -472,6 +473,18 @@ fn an_open_invitation() {
     ask.caps = CAP_HUB;
     assert!(open.asks_more(&ask));
     assert!(open.asks_more(&info("tv", ROLE_PHONE)));
+
+    // A key allowed ahead of time.
+    assert_eq!(open.key_allowed(&fhash(&k("board"))), None);
+    open.allowed_key = Some(fhash(&k("board")));
+    assert_eq!(open.key_allowed(&fhash(&k("board"))), Some(true));
+    assert_eq!(open.key_allowed(&fhash(&k("other board"))), Some(false));
+
+    // The short code: the same on both ends of one session, another for another.
+    let code = invitation::short_code(&[5; 32]);
+    assert_eq!(code.len(), 6);
+    assert_eq!(code, invitation::short_code(&[5; 32]));
+    assert_ne!(code, invitation::short_code(&[6; 32]));
 
     // The decision screen.
     let g = G::new();
