@@ -40,6 +40,7 @@ for f in $files; do
 	tools/tokens/* | tools/icon/* | apps/design/*) design=true; tools=true ;;
 	tools/site/*) site=true; tools=true ;;
 	tools/sbom/*) core=true; tools=true ;; # the packaging job and the Android job run it
+	tools/size/*) rust=true; tools=true ;; # the esp32 job measures the core with it
 	tools/*) tools=true ;;
 	# The Rust core's rules, which the phone kits and the Aurora app link.
 	core/* | ffi/* | Cargo.toml | Cargo.lock) rust=true; ios=true; android=true; silica=true ;;

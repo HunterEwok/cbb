@@ -269,6 +269,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cbb-size"
+version = "0.1.0"
+dependencies = [
+ "cbb-core",
+ "getrandom 0.4.3",
+ "rustls",
+ "serde_json",
+]
+
+[[package]]
 name = "cc"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

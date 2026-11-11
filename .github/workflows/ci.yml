@@ -2489,6 +2489,11 @@ jobs:
           cargo clippy --locked -p cbb-core --features tls --target riscv32imac-unknown-none-elf -- -D warnings
           cargo build --locked -p cbb-core --release --target riscv32imac-unknown-none-elf
           cargo build --locked -p cbb-core --features tls --release --target riscv32imac-unknown-none-elf
+      - name: what each part of the core costs in a small device's flash (tools/size), against its baseline
+        run: |
+          set -o pipefail
+          cargo clippy --locked -p cbb-size --release --target riscv32imac-unknown-none-elf --features p256,json,records,seal,copy,pair,tls,api -- -D warnings
+          sh tools/size/size.sh | tee -a "$GITHUB_STEP_SUMMARY"
       - name: the Rust toolchain for Xtensa
         working-directory: ${{ runner.temp }}
         run: |

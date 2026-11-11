@@ -1,0 +1,11 @@
+# What tools/size/size.sh measured: part, bytes of flash (riscv32imac, opt-level s).
+none 182
+p256 122396
+json 20226
+records 407894
+seal 53790
+copy 487058
+pair 234574
+tls 415610
+all 844036
+api 998914
