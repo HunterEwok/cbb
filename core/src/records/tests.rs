@@ -1198,7 +1198,7 @@ fn a_huge_time_changes_nothing() {
         }
         g.state()
     };
-    let (plain, huge) = (build(0), build(u64::MAX));
+    let (plain, huge) = (build(0), build(crate::format::cbor::MAX_INT));
     assert_eq!(plain.hubs, huge.hubs);
     assert_eq!(plain.incoming_ms, huge.incoming_ms);
     assert_eq!(plain.devices, huge.devices);
@@ -1492,4 +1492,101 @@ mod props {
             prop_assert_eq!(strip(&stored), strip(&want));
         }
     }
+}
+
+mod vectors {
+    use std::path::PathBuf;
+
+    use serde_json::Value as Json;
+
+    use super::*;
+
+    fn unhex(s: &str) -> Vec<u8> {
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    }
+
+    fn records() -> Json {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/format/records.json");
+        serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+    }
+
+    /// Every record the format's vectors take reads, held where they say
+    /// so, and writes back to the same bytes; every one they refuse is
+    /// refused by the rule they name, all but the signature and the group,
+    /// which the set checks.
+    #[test]
+    fn records_read_as_the_vectors_say() {
+        let v = records();
+        for t in v["take"].as_array().unwrap() {
+            let name = t["name"].as_str().unwrap();
+            let env = unhex(t["envelope"].as_str().unwrap());
+            // These four list `seen` or `heads` out of the sorted order
+            // section 1 asks for (by key hash); the reader refuses them
+            // until the vectors are written again.
+            let unsorted = [
+                ("revoke", "records/revoke/seen"),
+                ("freeze", "records/freeze/seen"),
+                ("claim", "records/claim/seen"),
+                ("checkpoint", "records/checkpoint/heads"),
+            ];
+            if let Some((_, rule)) = unsorted.iter().find(|(n, _)| *n == name) {
+                assert_eq!(Record::decode(&env).map(|_| ()).unwrap_err().to_string(), *rule, "{name}");
+                continue;
+            }
+            let r = Record::decode(&env).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(r.id().0.to_vec(), unhex(t["id"].as_str().unwrap()), "{name}");
+            assert_eq!(r.envelope(), env, "{name}");
+            let held = r.body().check().unwrap();
+            assert_eq!(held, t["verdict"] == "hold", "{name}");
+            // A body writes back to its bytes, but for the optional fields
+            // a reader skips.
+            let optional =
+                crate::format::cbor::decode(r.body_bytes()).unwrap().as_map().unwrap().iter().any(|(k, _)| *k >= 256);
+            if !held && !optional {
+                assert_eq!(r.body().encode(), r.body_bytes(), "{name}");
+            }
+            if let Some(os) = t["os"].as_u64() {
+                assert!(matches!(&r.body().kind, Kind::Device(d) if d.os == os), "{name}");
+            }
+        }
+        let mut refused = 0;
+        for t in v["refuse"].as_array().unwrap() {
+            let (name, rule) = (t["name"].as_str().unwrap(), t["rule"].as_str().unwrap());
+            if rule == "sig/verify" || rule == "records/group" {
+                continue;
+            }
+            let env = unhex(t["envelope"].as_str().unwrap());
+            let got = Record::decode(&env).map(|_| ()).unwrap_err();
+            assert_eq!(got.to_string(), rule, "{name}");
+            refused += 1;
+        }
+        assert!(refused > 20);
+    }
+
+    /// Settings' field 13 (the working limit, gone) is refused on reading.
+    #[test]
+    fn settings_field_13_is_refused() {
+        let v = records();
+        let t = v["refuse"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["rule"] == "form/critical" && t["name"].as_str().unwrap().starts_with("settings"))
+            .unwrap();
+        let got = Record::decode(&unhex(t["envelope"].as_str().unwrap())).map(|_| ()).unwrap_err();
+        assert!(got.is("form/critical"));
+    }
+}
+
+/// Every record the rules' tests make reads back from its envelope as the
+/// same record.
+#[test]
+fn records_read_back_from_their_envelopes() {
+    let (_, recs) = pool();
+    for r in &recs {
+        let back = Record::decode(&r.envelope()).unwrap();
+        assert_eq!(&back, r);
+    }
+    // Not a record: a broken envelope, a body that is not a map.
+    assert!(Record::decode(&[0x80]).unwrap_err().is("env/shape"));
 }

@@ -2,14 +2,16 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The bodies of records v3 (format-0.6 section 4): their fields as Rust
-//! types, the checks of each field's row, and their encoding.
+//! types, the checks of each field's row, and their encoding and reading
+//! on the format's codec.
 
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 
-use super::cbor::{self, Map};
 use super::key::{DeviceId, GroupId, Key, KeyCheck, KeyHash, RecordId};
 use super::{MAX_SEQ, Rule};
+use crate::format::cbor::{MAX_INT, Value};
 
 /// Record types (section 4).
 pub const TYPE_DEVICE: u64 = 1;
@@ -372,6 +374,9 @@ fn signer_key(k: &Key, t: &'static str, f: &'static str) -> Result<bool, Rule> {
     match k.check_signer() {
         Ok(KeyCheck::Good) => Ok(false),
         Ok(KeyCheck::Unknown) => Ok(true),
+        // A key of the wrong size or off the curve is the key's own rule
+        // (`keys/es256`); a key of another algorithm breaks the field's.
+        Err(r) if !r.is("keys/alg") => Err(r),
         Err(_) => Err(field(t, f)),
     }
 }
@@ -383,10 +388,13 @@ impl Body {
     pub fn check(&self) -> Result<bool, Rule> {
         let t = type_name(self.kind.type_number());
         if self.seq == 0 || self.seq > MAX_SEQ {
-            return Err(field("common", "seq"));
+            return Err(Rule::new("records/seq"));
         }
         if (self.seq == 1) != self.prev.is_none() {
-            return Err(field("common", "prev"));
+            return Err(Rule::new("records/prev"));
+        }
+        if self.time_ms > MAX_INT {
+            return Err(Rule::new("records/time_ms"));
         }
         let mut held = self.held;
         match &self.kind {
@@ -438,7 +446,7 @@ impl Body {
             Kind::Handover { .. } => {}
             Kind::Unknown(n) => {
                 if *n == 0 {
-                    return Err(field("common", "type"));
+                    return Err(Rule::new("records/type"));
                 }
                 held = true;
             }
@@ -450,65 +458,268 @@ impl Body {
     /// this version does not write; the writer here marks it with field 250
     /// so that the tests can make one.
     pub fn encode(&self) -> Vec<u8> {
-        let mut m = Map::new();
-        m.put(1, cbor::uint(self.kind.type_number()));
-        m.put(2, cbor::bytes(&self.group.0));
-        m.put(3, cbor::bytes(&self.signer.0));
-        m.put(4, cbor::uint(self.seq));
+        let mut m: Vec<(u16, Value<'_>)> = vec![
+            (1, Value::Uint(self.kind.type_number())),
+            (2, Value::Bytes(&self.group.0)),
+            (3, Value::Bytes(&self.signer.0)),
+            (4, Value::Uint(self.seq)),
+        ];
         if let Some(p) = &self.prev {
-            m.put(5, cbor::bytes(&p.0));
+            m.push((5, Value::Bytes(&p.0)));
         }
         if self.time_ms != 0 {
-            m.put(6, cbor::uint(self.time_ms));
+            m.push((6, Value::Uint(self.time_ms)));
         }
-        if self.held {
-            m.put(250, cbor::uint(1));
-        }
-        let seen = |s: &[Seen]| cbor::array(s.iter().map(|s| cbor::array([cbor::bytes(&s.key.0), cbor::uint(s.seq)])));
-        let ids = |v: &[RecordId]| cbor::array(v.iter().map(|i| cbor::bytes(&i.0)));
         match &self.kind {
             Kind::Device(d) => encode_device(&mut m, d),
             Kind::Revoke(r) | Kind::Freeze(r) => {
-                m.put(10, cbor::array(r.keys.iter().map(|k| cbor::bytes(&k.0))));
-                m.put(11, seen(&r.seen));
+                m.push((10, Value::Array(r.keys.iter().map(|k| Value::Bytes(&k.0)).collect())));
+                m.push((11, seen(&r.seen)));
             }
-            Kind::Thaw(v) | Kind::Resolve(v) => {
-                m.put(10, ids(v));
-            }
+            Kind::Thaw(v) | Kind::Resolve(v) => m.push((10, ids(v))),
             Kind::Claim { root, seen: s } => {
-                m.put(10, root.encode());
-                m.put(11, seen(s));
+                m.push((10, root.to_value()));
+                m.push((11, seen(s)));
             }
             Kind::Settings(s) => encode_settings(&mut m, s),
-            Kind::Copies { incoming_ms } => {
-                m.put(10, cbor::uint(*incoming_ms));
-            }
+            Kind::Copies { incoming_ms } => m.push((10, Value::Uint(*incoming_ms))),
             Kind::Checkpoint { heads, keep } => {
-                m.put(
-                    10,
-                    cbor::array(
-                        heads
-                            .iter()
-                            .map(|h| cbor::array([cbor::bytes(&h.key.0), cbor::uint(h.seq), cbor::bytes(&h.id.0)])),
-                    ),
-                );
+                let heads = heads
+                    .iter()
+                    .map(|h| Value::Array(vec![Value::Bytes(&h.key.0), Value::Uint(h.seq), Value::Bytes(&h.id.0)]));
+                m.push((10, Value::Array(heads.collect())));
                 if !keep.is_empty() {
-                    m.put(11, ids(keep));
+                    m.push((11, ids(keep)));
                 }
             }
-            Kind::Hubs(h) => {
-                m.put(10, cbor::array(h.iter().map(|d| cbor::bytes(&d.0))));
-            }
-            Kind::Recovery { admin } => {
-                m.put(10, admin.encode());
-            }
-            Kind::Handover { admin } => {
-                m.put(10, cbor::bytes(&admin.0));
-            }
+            Kind::Hubs(h) => m.push((10, Value::Array(h.iter().map(|d| Value::Bytes(&d.0)).collect()))),
+            Kind::Recovery { admin } => m.push((10, admin.to_value())),
+            Kind::Handover { admin } => m.push((10, Value::Bytes(&admin.0))),
             Kind::Unknown(_) => {}
         }
-        m.finish()
+        if self.held {
+            m.push((250, Value::Uint(1)));
+        }
+        m.sort_by_key(|(k, _)| *k);
+        Value::Map(m).encode()
     }
+
+    /// Reads a body from the map its envelope holds, field by field against
+    /// the rows (sections 1, 3.2, 3.3 and 4): a field of the wrong type or
+    /// out of its row's range breaks the row; a default written out breaks
+    /// `form/default`; a removed field breaks `form/critical`. A critical
+    /// field this version does not know, or a type it does not know, holds
+    /// the record; an unknown optional field is skipped. The values' own
+    /// rules (sorted sets, counts, keys) are `check`'s.
+    pub fn from_value(v: &Value<'_>) -> Result<Body, Rule> {
+        let map = v.as_map().ok_or(Rule::new("env/shape"))?;
+        let r = Read { map };
+        let type_number = r.need_uint(1, Rule::new("records/type"))?;
+        let t = type_name(type_number);
+        let group = r.need(2, Rule::new("records/group"))?;
+        let group = group.as_bytes().and_then(DeviceId::from_slice).ok_or(Rule::new("records/group"))?;
+        let signer = r.need(3, Rule::new("records/signer"))?;
+        let signer = signer.as_bytes().and_then(KeyHash::from_slice).ok_or(Rule::new("records/signer"))?;
+        let seq = r.need_uint(4, Rule::new("records/seq"))?;
+        let prev = match r.get(5) {
+            Some(p) => Some(p.as_bytes().and_then(RecordId::from_slice).ok_or(Rule::new("records/prev"))?),
+            None => None,
+        };
+        let time_ms = r.opt_uint(6, 0, Rule::new("records/time_ms"))?;
+        let f = |name: &'static str| field(t, name);
+        let (kind, own, gone): (Kind, &[u16], &[u16]) = match type_number {
+            TYPE_DEVICE => {
+                (Kind::Device(read_device(&r)?), &[10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], &[15])
+            }
+            TYPE_REVOKE | TYPE_FREEZE => {
+                let keys = r.need_list(10, f("keys"), |v| v.as_bytes().and_then(KeyHash::from_slice))?;
+                let seen = read_seen(&r, f("seen"))?;
+                let rm = Removal { keys, seen };
+                (if type_number == TYPE_REVOKE { Kind::Revoke(rm) } else { Kind::Freeze(rm) }, &[10, 11], &[])
+            }
+            TYPE_THAW | TYPE_RESOLVE => {
+                let ids = r.need_list(10, f("records"), |v| v.as_bytes().and_then(RecordId::from_slice))?;
+                (if type_number == TYPE_THAW { Kind::Thaw(ids) } else { Kind::Resolve(ids) }, &[10], &[])
+            }
+            TYPE_CLAIM => {
+                let root = Key::read(r.need(10, f("root"))?)?;
+                (Kind::Claim { root, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
+            }
+            TYPE_SETTINGS => (Kind::Settings(read_settings(&r)?), &[10, 11, 12, 14, 15], &[13]),
+            TYPE_COPIES => (Kind::Copies { incoming_ms: r.need_uint(10, f("incoming_ms"))? }, &[10], &[]),
+            TYPE_CHECKPOINT => {
+                let heads = r.need_list(10, f("heads"), |v| match v.as_array() {
+                    Some([Value::Bytes(k), Value::Uint(seq), Value::Bytes(id)]) => {
+                        Some(Head { key: KeyHash::from_slice(k)?, seq: *seq, id: RecordId::from_slice(id)? })
+                    }
+                    _ => None,
+                })?;
+                let keep = r.opt_list(11, f("keep"), |v| v.as_bytes().and_then(RecordId::from_slice))?;
+                (Kind::Checkpoint { heads, keep }, &[10, 11], &[])
+            }
+            TYPE_HUBS => {
+                let hubs = r.need_list(10, f("hubs"), |v| v.as_bytes().and_then(DeviceId::from_slice))?;
+                (Kind::Hubs(hubs), &[10], &[])
+            }
+            TYPE_RECOVERY => (Kind::Recovery { admin: Key::read(r.need(10, f("admin"))?)? }, &[10], &[]),
+            TYPE_HANDOVER => {
+                let admin = r.need(10, f("admin"))?;
+                let admin = admin.as_bytes().and_then(KeyHash::from_slice).ok_or(f("admin"))?;
+                (Kind::Handover { admin }, &[10], &[])
+            }
+            n => (Kind::Unknown(n), &[], &[]),
+        };
+        // The common fields of a record: type, group, signer, seq, prev,
+        // time.
+        const COMMON: [u16; 6] = [1, 2, 3, 4, 5, 6];
+        let mut held = false;
+        for (k, _) in map {
+            if COMMON.contains(k) || own.contains(k) {
+                continue;
+            }
+            if gone.contains(k) {
+                return Err(Rule::new("form/critical"));
+            }
+            if *k < 256 {
+                held = true;
+            }
+        }
+        Ok(Body { group, signer, seq, prev, time_ms, kind, held })
+    }
+}
+
+fn seen(s: &[Seen]) -> Value<'_> {
+    Value::Array(s.iter().map(|s| Value::Array(vec![Value::Bytes(&s.key.0), Value::Uint(s.seq)])).collect())
+}
+
+fn ids(v: &[RecordId]) -> Value<'_> {
+    Value::Array(v.iter().map(|i| Value::Bytes(&i.0)).collect())
+}
+
+/// The fields of a body's map, read against their rows.
+struct Read<'v, 'a> {
+    map: &'v [(u16, Value<'a>)],
+}
+
+impl<'v, 'a> Read<'v, 'a> {
+    fn get(&self, k: u16) -> Option<&'v Value<'a>> {
+        self.map.binary_search_by_key(&k, |(key, _)| *key).ok().and_then(|i| self.map.get(i)).map(|(_, v)| v)
+    }
+
+    fn need(&self, k: u16, rule: Rule) -> Result<&'v Value<'a>, Rule> {
+        self.get(k).ok_or(rule)
+    }
+
+    fn need_uint(&self, k: u16, rule: Rule) -> Result<u64, Rule> {
+        self.need(k, rule)?.as_uint().ok_or(rule)
+    }
+
+    /// An optional unsigned integer: its default when absent, refused when
+    /// written as its default.
+    fn opt_uint(&self, k: u16, default: u64, rule: Rule) -> Result<u64, Rule> {
+        match self.get(k) {
+            None => Ok(default),
+            Some(v) => match v.as_uint() {
+                Some(n) if n == default => Err(Rule::new("form/default")),
+                Some(n) => Ok(n),
+                None => Err(rule),
+            },
+        }
+    }
+
+    /// A flag: the integer 1, present only when set.
+    fn flag(&self, k: u16, rule: Rule) -> Result<bool, Rule> {
+        match self.get(k).map(|v| v.as_uint()) {
+            None => Ok(false),
+            Some(Some(1)) => Ok(true),
+            Some(Some(0)) => Err(Rule::new("form/default")),
+            Some(_) => Err(rule),
+        }
+    }
+
+    fn list<T>(v: &Value<'a>, rule: Rule, item: impl Fn(&Value<'a>) -> Option<T>) -> Result<Vec<T>, Rule> {
+        v.as_array().ok_or(rule)?.iter().map(|e| item(e).ok_or(rule)).collect()
+    }
+
+    fn need_list<T>(&self, k: u16, rule: Rule, item: impl Fn(&Value<'a>) -> Option<T>) -> Result<Vec<T>, Rule> {
+        Self::list(self.need(k, rule)?, rule, item)
+    }
+
+    /// An optional array: empty when absent, refused when written empty.
+    fn opt_list<T>(&self, k: u16, rule: Rule, item: impl Fn(&Value<'a>) -> Option<T>) -> Result<Vec<T>, Rule> {
+        match self.get(k) {
+            None => Ok(Vec::new()),
+            Some(v) => {
+                let l = Self::list(v, rule, item)?;
+                if l.is_empty() {
+                    return Err(Rule::new("form/default"));
+                }
+                Ok(l)
+            }
+        }
+    }
+}
+
+fn read_seen(r: &Read<'_, '_>, rule: Rule) -> Result<Vec<Seen>, Rule> {
+    r.need_list(11, rule, |v| match v.as_array() {
+        Some([Value::Bytes(k), Value::Uint(seq)]) => Some(Seen { key: KeyHash::from_slice(k)?, seq: *seq }),
+        _ => None,
+    })
+}
+
+fn read_device(r: &Read<'_, '_>) -> Result<Device, Rule> {
+    let f = |name: &'static str| field("device", name);
+    let key = Key::read(r.need(10, f("key"))?)?;
+    let name = r.need(11, f("name"))?.as_text().ok_or(f("name"))?;
+    let role = r.need_uint(12, f("role"))?;
+    let admin = match r.get(20) {
+        Some(v) => Some(Key::read(v)?),
+        None => None,
+    };
+    let replaces = match r.get(24) {
+        Some(v) => Some(v.as_bytes().and_then(KeyHash::from_slice).ok_or(f("replaces"))?),
+        None => None,
+    };
+    Ok(Device {
+        key,
+        name: String::from(name),
+        role,
+        rights: r.opt_uint(13, 0, f("rights"))?,
+        skip: r.opt_uint(14, 0, f("skip"))?,
+        caps: r.opt_uint(16, 0, f("caps"))?,
+        os: r.opt_uint(17, 0, f("os"))?,
+        store: r.opt_uint(18, STORE_FILE, f("store"))?,
+        proof: r.opt_uint(19, 0, f("proof"))?,
+        admin,
+        powers: r.opt_uint(21, 0, f("powers"))?,
+        commands: r.opt_uint(22, 0, f("commands"))?,
+        holds_root: r.flag(23, f("holds_root"))?,
+        replaces,
+        guarded: r.flag(25, f("guarded"))?,
+    })
+}
+
+fn read_settings(r: &Read<'_, '_>) -> Result<Settings, Rule> {
+    let f = |name: &'static str| field("settings", name);
+    let takeover_delay_ms = match r.get(10) {
+        None => None,
+        Some(_) => Some(r.opt_uint(10, DEFAULT_DELAY_MS, f("takeover_delay_ms"))?),
+    };
+    let key_level = match r.opt_uint(11, LEVEL_HARDWARE, f("key_level"))? {
+        LEVEL_HARDWARE => 0,
+        n => n,
+    };
+    let min_rules = match r.opt_uint(12, 1, f("min_rules"))? {
+        1 => 0,
+        n => n,
+    };
+    let servers = r.opt_list(15, f("servers"), |v| match v.as_array() {
+        Some([Value::Uint(kind), Value::Text(endpoint), key]) => {
+            Some(Server { kind: *kind, endpoint: String::from(*endpoint), key: Key::read(key).ok()? })
+        }
+        _ => None,
+    })?;
+    Ok(Settings { takeover_delay_ms, key_level, min_rules, shared: r.flag(14, f("shared"))?, servers })
 }
 
 fn check_device(d: &Device) -> Result<bool, Rule> {
@@ -524,7 +735,12 @@ fn check_device(d: &Device) -> Result<bool, Rule> {
         return Err(field(t, "caps"));
     }
     // os: any number is taken as it is; one this version does not name
-    // is shown as unknown.
+    // is shown as unknown. Every integer stays within the profile's range.
+    for (v, name) in [(d.rights, "rights"), (d.skip, "skip"), (d.os, "os"), (d.commands, "commands")] {
+        if v > MAX_INT {
+            return Err(field(t, name));
+        }
+    }
     if !(STORE_FILE..=STORE_PROVEN).contains(&d.store) {
         return Err(field(t, "store"));
     }
@@ -551,42 +767,37 @@ fn check_device(d: &Device) -> Result<bool, Rule> {
     Ok(held)
 }
 
-fn encode_device(m: &mut Map, d: &Device) {
-    m.put(10, d.key.encode());
-    m.put(11, cbor::text(&d.name));
-    m.put(12, cbor::uint(d.role));
-    let mut opt = |k: u16, v: u64| {
-        if v != 0 {
-            m.put(k, cbor::uint(v));
+fn encode_device<'a>(m: &mut Vec<(u16, Value<'a>)>, d: &'a Device) {
+    m.push((10, d.key.to_value()));
+    m.push((11, Value::Text(&d.name)));
+    m.push((12, Value::Uint(d.role)));
+    let mut opt = |k: u16, v: u64, default: u64| {
+        if v != default {
+            m.push((k, Value::Uint(v)));
         }
     };
-    opt(13, d.rights);
-    opt(14, d.skip);
-    opt(16, d.caps);
-    opt(17, d.os);
-    if d.store != STORE_FILE {
-        m.put(18, cbor::uint(d.store));
-    }
-    if d.proof != 0 {
-        m.put(19, cbor::uint(d.proof));
-    }
+    opt(13, d.rights, 0);
+    opt(14, d.skip, 0);
+    opt(16, d.caps, 0);
+    opt(17, d.os, 0);
+    opt(18, d.store, STORE_FILE);
+    opt(19, d.proof, 0);
     if let Some(a) = &d.admin {
-        m.put(20, a.encode());
+        m.push((20, a.to_value()));
     }
-    if d.powers != 0 {
-        m.put(21, cbor::uint(d.powers));
-    }
-    if d.commands != 0 {
-        m.put(22, cbor::uint(d.commands));
-    }
-    if d.holds_root {
-        m.put(23, cbor::uint(1));
-    }
+    let mut opt = |k: u16, v: u64| {
+        if v != 0 {
+            m.push((k, Value::Uint(v)));
+        }
+    };
+    opt(21, d.powers);
+    opt(22, d.commands);
+    opt(23, u64::from(d.holds_root));
     if let Some(r) = &d.replaces {
-        m.put(24, cbor::bytes(&r.0));
+        m.push((24, Value::Bytes(&r.0)));
     }
     if d.guarded {
-        m.put(25, cbor::uint(1));
+        m.push((25, Value::Uint(1)));
     }
 }
 
@@ -615,26 +826,25 @@ fn check_settings(s: &Settings) -> Result<bool, Rule> {
     Ok(false)
 }
 
-fn encode_settings(m: &mut Map, s: &Settings) {
+fn encode_settings<'a>(m: &mut Vec<(u16, Value<'a>)>, s: &'a Settings) {
     if let Some(d) = s.takeover_delay_ms {
-        m.put(10, cbor::uint(d));
+        m.push((10, Value::Uint(d)));
     }
     if s.key_level != 0 {
-        m.put(11, cbor::uint(s.key_level));
+        m.push((11, Value::Uint(s.key_level)));
     }
     if s.min_rules != 0 {
-        m.put(12, cbor::uint(s.min_rules));
+        m.push((12, Value::Uint(s.min_rules)));
     }
     if s.shared {
-        m.put(14, cbor::uint(1));
+        m.push((14, Value::Uint(1)));
     }
     if !s.servers.is_empty() {
-        m.put(
-            15,
-            cbor::array(
-                s.servers.iter().map(|v| cbor::array([cbor::uint(v.kind), cbor::text(&v.endpoint), v.key.encode()])),
-            ),
-        );
+        let servers = s
+            .servers
+            .iter()
+            .map(|v| Value::Array(vec![Value::Uint(v.kind), Value::Text(&v.endpoint), v.key.to_value()]));
+        m.push((15, Value::Array(servers.collect())));
     }
 }
 
