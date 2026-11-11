@@ -57,8 +57,9 @@ ditto "$helper" "$share/cbb-helper"
 for f in install.sh uninstall.sh tools.cbb.plist tools.cbb.agent.plist; do
 	cp "$here/$f" "$share/macos/"
 done
-# install.sh reads it beside its folder, as in a release archive.
-cp "$here/../update.sh" "$share/"
+# install.sh reads them beside its folder, as in a release archive.
+cp "$here/../update.sh" "$here/../l10n.sh" "$share/"
+cp -R "$here/../l10n" "$share/"
 
 cat >"$work/scripts/postinstall" <<'EOF'
 #!/bin/sh
@@ -74,7 +75,7 @@ pkg="/Library/Application Support/cbb-package"
 # nobody else may write to them.
 d=$pkg
 set --
-for f in "$pkg/cbb" "$pkg/cbb-helper" "$pkg/update.sh" "$pkg/macos" "$pkg/macos/"*; do
+for f in "$pkg/cbb" "$pkg/cbb-helper" "$pkg/update.sh" "$pkg/l10n.sh" "$pkg/l10n" "$pkg/l10n/"* "$pkg/macos" "$pkg/macos/"*; do
 	set -- "$f" "$@"
 done
 while :; do
