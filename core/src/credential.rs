@@ -597,3 +597,187 @@ pub fn members_body(p: &Body, members: &[KeyHash], version: u64) -> Result<Body>
         ..Body::default()
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec;
+
+    const NOW: i64 = 1_700_000_000_000;
+    const GROUP: &str = "0123456789abcdef";
+
+    struct Key {
+        pkcs8: Vec<u8>,
+        spki: Vec<u8>,
+    }
+
+    impl Key {
+        fn new() -> Key {
+            let pkcs8 = crate::identity::new_key().unwrap();
+            let spki = crate::certs::p256_spki_of(&crate::identity::public_key(&pkcs8).unwrap());
+            Key { pkcs8, spki }
+        }
+
+        fn sign(&self, b: Body) -> Credential {
+            sign(b, &self.spki, &mut |m: &[u8]| crate::identity::sign(&self.pkcs8, m)).unwrap()
+        }
+
+        fn hash(&self) -> KeyHash {
+            sha256(&self.spki)
+        }
+    }
+
+    /// A root, its period (version 1) and the period key.
+    fn period(root: &Key, pkey: &Key, version: u64) -> (Credential, Body) {
+        let p = period_body(GROUP, "00000000000000aa", &pkey.spki, version, NOW);
+        (root.sign(p.clone()), p)
+    }
+
+    #[test]
+    fn periods_last_as_go_says() {
+        assert_eq!(PERIOD_LIFETIME_MS, 35 * 86_400_000);
+        assert_eq!(PERIOD_RENEW_MS, 30 * 86_400_000);
+        assert_eq!(MAX_CREDENTIALS, 259);
+    }
+
+    #[test]
+    fn padding_is_random() {
+        let a = random32().unwrap();
+        assert_ne!(a, random32().unwrap());
+        // Each half has both of its words: none is left zero.
+        for w in a.chunks(8) {
+            assert_ne!(w, [0u8; 8], "{a:?}");
+        }
+        assert_ne!(a, [1u8; 32]);
+    }
+
+    #[test]
+    fn bodies_carry_the_period() {
+        let pkey = Key::new();
+        let (_, p) = period(&Key::new(), &pkey, 1);
+        let skey = Key::new();
+        let s = server_body(&p, &skey.spki, 7);
+        assert_eq!(
+            (s.kind.as_str(), s.group.as_str(), s.version, s.expires_ms, s.tag.as_str(), s.key.as_slice()),
+            (SERVER, GROUP, 7, p.expires_ms, p.tag.as_str(), skey.spki.as_slice())
+        );
+        let m = members_body(&p, &[[3; 32]], 9).unwrap();
+        assert_eq!(
+            (m.kind.as_str(), m.group.as_str(), m.version, m.expires_ms, m.members.len(), m.members[0]),
+            (MEMBERS, p.tag.as_str(), 9, p.expires_ms, 4, [3; 32])
+        );
+        pkey.sign(m);
+    }
+
+    #[test]
+    fn a_period_needs_its_root_and_group() {
+        let (root, pkey) = (Key::new(), Key::new());
+        let (pc, _) = period(&root, &pkey, 1);
+        let mut st = Store::new("fedcba9876543210");
+        let (fresh, errs) = st.add(&root.spki, &|_| true, std::slice::from_ref(&pc));
+        assert!(fresh.is_empty() && errs.len() == 1, "a period of another group");
+        let mut st = Store::new(GROUP);
+        let (fresh, errs) = st.add(&pkey.spki, &|_| true, std::slice::from_ref(&pc));
+        assert!(fresh.is_empty() && errs.len() == 1, "a period another key signed");
+        let (fresh, errs) = st.add(&root.spki, &|_| true, std::slice::from_ref(&pc));
+        assert!(fresh.len() == 1 && errs.is_empty());
+    }
+
+    #[test]
+    fn a_store_takes_only_newer_credentials() {
+        let (root, pkey, admin, stranger) = (Key::new(), Key::new(), Key::new(), Key::new());
+        let (pc, p) = period(&root, &pkey, 1);
+        let mut st = Store::new(GROUP);
+        assert!(st.hubs().is_none() && st.members().is_none());
+        st.add(&root.spki, &|_| true, &[pc]);
+        let hubs = |v: u64| pkey.sign(hubs_body(&p, &[[1; 32]], &[admin.hash()], v).unwrap());
+        assert_eq!(st.add(&root.spki, &|_| true, &[hubs(2)]).0.len(), 1);
+        assert!(st.add(&root.spki, &|_| true, &[hubs(1)]).0.is_empty(), "an older hubs' credential");
+        assert!(st.add(&root.spki, &|_| true, &[hubs(2)]).0.is_empty(), "the same version");
+        assert_eq!(st.add(&root.spki, &|_| true, &[hubs(3)]).0.len(), 1);
+        assert_eq!(st.hubs().unwrap().1.version, 3);
+        // The hubs' credential only from the period key.
+        let (fresh, errs) = st.add(&root.spki, &|_| true, &[admin.sign(hubs_body(&p, &[], &[], 9).unwrap())]);
+        assert!(fresh.is_empty() && errs.len() == 1);
+
+        // The members' credential from the period key or a listed admin, and
+        // from no one else.
+        let members = |k: &Key, v: u64| k.sign(members_body(&p, &[[2; 32]], v).unwrap());
+        let (fresh, errs) = st.add(&root.spki, &|_| true, &[members(&stranger, 1)]);
+        assert!(fresh.is_empty() && errs.len() == 1, "an admin the hubs' credential does not list");
+        assert_eq!(st.add(&root.spki, &|_| true, &[members(&admin, 1)]).0.len(), 1);
+        assert_eq!(st.add(&root.spki, &|_| true, &[members(&pkey, 2)]).0.len(), 1);
+        assert!(st.add(&root.spki, &|_| true, &[members(&admin, 2)]).0.is_empty());
+        assert_eq!(st.members().unwrap().1.version, 2);
+
+        // A server credential of another period is passed over.
+        let skey = Key::new();
+        let mut other = p.clone();
+        other.tag = "00000000000000bb".into();
+        let (fresh, errs) = st.add(&root.spki, &|_| true, &[stranger.sign(server_body(&other, &skey.spki, 1))]);
+        assert!(fresh.is_empty() && errs.is_empty());
+        let mut elsewhere = p.clone();
+        elsewhere.group = "fedcba9876543210".into();
+        let (fresh, errs) = st.add(&root.spki, &|_| true, &[stranger.sign(server_body(&elsewhere, &skey.spki, 1))]);
+        assert!(fresh.is_empty() && errs.is_empty());
+        let server = |v: u64| stranger.sign(server_body(&p, &skey.spki, v));
+        assert_eq!(st.add(&root.spki, &|_| true, &[server(2)]).0.len(), 1);
+        assert!(st.add(&root.spki, &|_| true, &[server(1)]).0.is_empty());
+        assert_eq!(st.server(&stranger.hash()), Some(skey.hash()));
+    }
+
+    #[test]
+    fn a_new_tag_drops_the_old_periods_credentials() {
+        let (root, pkey, member) = (Key::new(), Key::new(), Key::new());
+        let (pc, p) = period(&root, &pkey, 1);
+        let mut st = Store::new(GROUP);
+        let hc = pkey.sign(hubs_body(&p, &[[1; 32]], &[], 1).unwrap());
+        let sc = member.sign(server_body(&p, &Key::new().spki, 1));
+        assert_eq!(st.add(&root.spki, &|_| true, &[pc, hc, sc]).0.len(), 3);
+        // A newer version of the same period keeps them.
+        let (again, _) = period(&root, &pkey, 2);
+        assert_eq!(st.add(&root.spki, &|_| true, &[again]).0.len(), 1);
+        assert!(st.hubs().is_some() && st.server(&member.hash()).is_some());
+        // A new period does not.
+        let next = root.sign(period_body(GROUP, "00000000000000bb", &pkey.spki, 3, NOW));
+        assert_eq!(st.add(&root.spki, &|_| true, &[next]).0.len(), 1);
+        assert!(st.hubs().is_none() && st.server(&member.hash()).is_none());
+    }
+
+    #[test]
+    fn a_period_goes_stale_at_its_renewal() {
+        let (root, pkey) = (Key::new(), Key::new());
+        let (pc, p) = period(&root, &pkey, 1);
+        let mut st = Store::new(GROUP);
+        assert!(st.period_stale(&root.spki, &|_| true, NOW));
+        st.add(&root.spki, &|_| true, &[pc]);
+        let renew = p.expires_ms - (PERIOD_LIFETIME_MS - PERIOD_RENEW_MS);
+        assert!(!st.period_stale(&root.spki, &|_| true, renew));
+        assert!(st.period_stale(&root.spki, &|_| true, renew + 1));
+    }
+
+    #[test]
+    fn a_list_in_another_order_is_stale() {
+        let st = Store::new(GROUP);
+        let (a, b) = ([1; 32], [2; 32]);
+        let got = vec![b, a, [8; 32], [9; 32]];
+        assert!(st.list_stale(&got, &[a, b], true));
+        assert!(!st.list_stale(&got, &[a, b], false));
+        assert!(st.list_stale(&got[..3], &[a, b], false), "a list not padded");
+    }
+
+    #[test]
+    fn a_period_credential_must_match_the_hubs() {
+        let (root, pkey) = (Key::new(), Key::new());
+        let (pc, p) = period(&root, &pkey, 1);
+        let hc = pkey.sign(hubs_body(&p, &[[1; 32]], &[], 1).unwrap());
+        assert!(check_presented(&[hc.clone(), pc], NOW).is_ok());
+        // The same tag, another key.
+        let other = Key::new();
+        let pc = root.sign(period_body(GROUP, &p.tag, &other.spki, 1, NOW));
+        assert!(check_presented(&[hc.clone(), pc], NOW).is_err());
+        // Another tag, the same key.
+        let pc = root.sign(period_body(GROUP, "00000000000000bb", &pkey.spki, 1, NOW));
+        assert!(check_presented(&[hc, pc], NOW).is_err());
+    }
+}

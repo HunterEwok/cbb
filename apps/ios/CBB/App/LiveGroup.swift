@@ -26,7 +26,7 @@ private let syncLog = Logger(subsystem: "tools.cbb", category: "sync")
 /// keeps a connection to each, and syncs with them.
 @MainActor
 final class LiveGroup: GroupController {
-    enum Failure: Error, Equatable { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin, noWindow, twoWindows, needsRoot, noGroupComputer, noGroup, rootLeaves([String]) }
+    enum Failure: Error, Equatable { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin, noWindow, twoWindows, needsRoot, noGroupComputer, noGroup, rootLeaves([String]), hubUnreachable }
 
     /// The clipboard holds something the app could not read as text: the
     /// paste was not allowed, or it is not text. The button leaves it as it
@@ -89,6 +89,9 @@ final class LiveGroup: GroupController {
     /// "The member"), and the task that takes its events.
     private var node: CoreMember?
     private var events: Task<Void, Never>?
+    /// Offers this phone's tunnel key through the guest tunnel of the
+    /// invitation it joined by, until the hub's offer comes.
+    private var guestTask: Task<Void, Never>?
     private var browser: BonjourBrowser?
     private var relay: Relay?
     private var recordBox: RecordBox?
@@ -240,13 +243,19 @@ final class LiveGroup: GroupController {
     func makeRecovery() async throws -> Core.RecoverySheet {
         guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
         let root = try await caSigner(reason: String(localized: "Make a recovery key", bundle: .app))
-        guard var g = state else { throw PhoneGroup.Failure.notRoot }
-        let made = try g.makeRecovery(rootSigner: root, now: Date())
-        try g.save(to: file)
-        state = g
+        return try rootRecord(root) { n, p, s in try n.makeRecovery(public: p, sign: s) }
+    }
+
+    /// Has the phone's member in the core build, check and sign one of the
+    /// root's own records with the root key (cbb_core::root), which it adds
+    /// and sends, then takes the member's records into the group.
+    @discardableResult
+    private func rootRecord<T>(_ root: SecKeySigner, _ act: (CoreMember, Data, @escaping (Data) throws -> Data) throws -> T) throws -> T {
+        guard let node else { throw CoreMember.Failure.notConnected }
+        let out = try act(node, root.publicKeyDER, { try root.signature(digest: $0) })
+        pullRecords()
         groupChanged()
-        sendRecords([made.record])
-        return made.sheet
+        return out
     }
 
     var keyLevel: String? { state?.isRoot == true ? state?.keyLevel : nil }
@@ -276,12 +285,9 @@ final class LiveGroup: GroupController {
     func setKeyLevel(_ level: String) async throws {
         guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
         let root = try await caSigner(reason: String(localized: "Change which keys may be admins", bundle: .app))
-        guard var g = state else { throw PhoneGroup.Failure.notRoot }
-        let r = try g.setKeyLevel(level, rootSigner: root, now: Date())
-        try g.save(to: file)
-        state = g
-        groupChanged()
-        sendRecords([r])
+        let own = state.flatMap { g in g.devices.first(where: { $0.id == g.device })?.store } ?? Records.hardware
+        guard Records.levelAllows(level, store: own, consent: true) else { throw PhoneGroup.Failure.belowKeyLevel }
+        try rootRecord(root) { n, p, s in try n.setKeyLevel(level, public: p, sign: s) }
     }
 
     /// Puts the group's recovery key on a YubiKey held to the phone (Core
@@ -293,27 +299,21 @@ final class LiveGroup: GroupController {
     func makeRecoveryOnCard(pin: String) async throws -> UInt8 {
         guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
         let root = try await caSigner(reason: String(localized: "Put the recovery key on a YubiKey", bundle: .app))
-        guard let before = state else { throw PhoneGroup.Failure.notRoot }
-        let (slot, record) = try await YubiKeyNfc.withCard(
+        guard let n = node else { throw CoreMember.Failure.notConnected }
+        let slot = try await YubiKeyNfc.withCard(
             prompt: String(localized: "Hold the YubiKey to the top of the phone.", bundle: .app),
             done: String(localized: "The recovery key is on the YubiKey.", bundle: .app)
-        ) { (card: SmartCard) throws -> (UInt8, Member.Record) in
-            var g = before
+        ) { (card: SmartCard) throws -> UInt8 in
             try Piv.select(card)
             try Piv.verify(card, pin: pin)
             try Piv.authenticate(card)
             let slot = try Piv.freeSlot(card)
-            let (ca, record) = try g.makeRecoveryOnCard(publicKey: try Piv.generate(card, slot: slot), rootSigner: root, now: Date())
+            let ca = try n.recoveryFor(try Piv.generate(card, slot: slot), public: root.publicKeyDER, sign: { try root.signature(digest: $0) })
             try Piv.putCertificate(card, slot: slot, cert: ca)
-            return (slot, record)
+            return slot
         }
-        // Into the group as it is now, which sync may have changed while the phone waited for the card.
-        guard var g = state else { throw PhoneGroup.Failure.notRoot }
-        guard g.add([record]).count == 1 else { throw PhoneGroup.Failure.notRoot }
-        try g.save(to: file)
-        state = g
+        pullRecords()
         groupChanged()
-        sendRecords([record])
         return slot
     }
 
@@ -322,12 +322,7 @@ final class LiveGroup: GroupController {
     func removeRecovery() async throws {
         guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
         let root = try await caSigner(reason: String(localized: "Remove the recovery key", bundle: .app))
-        guard var g = state else { throw PhoneGroup.Failure.notRoot }
-        let r = try g.removeRecovery(rootSigner: root, now: Date())
-        try g.save(to: file)
-        state = g
-        groupChanged()
-        sendRecords([r])
+        try rootRecord(root) { n, p, s in try n.removeRecovery(public: p, sign: s) }
     }
 
     /// The label of the key this phone signs with: the root key, or the
@@ -626,7 +621,9 @@ final class LiveGroup: GroupController {
     func invite(lifetime: Int, ask: @escaping @MainActor (PairingMember.Request) async -> Bool,
                 ended: @escaping @MainActor (Result<String, Error>) -> Void) async throws -> AppModel.Invitation {
         guard let g = state, g.isAdmin else { throw Failure.notAdmin }
-        guard let hub, let identity = memberIdentity else { throw HubOnPhone.Failure.notRunning }
+        // A phone that is not the hub makes it through a hub of the group.
+        guard let hub, hub.isOn else { return try await inviteThroughHub(lifetime: lifetime, ask: ask, ended: ended) }
+        guard let identity = memberIdentity else { throw HubOnPhone.Failure.notRunning }
         let guestBox = GuestBox()
         let window = try InvitationWindow(identity: identity, expires: Date().addingTimeInterval(TimeInterval(lifetime)), admit: { [weak self] t, joinerCert, sid in
             guard let self, let guest = guestBox.guest else { throw HubOnPhone.Failure.notRunning }
@@ -647,6 +644,66 @@ final class LiveGroup: GroupController {
         }
         guestBox.guest = guest
         return AppModel.Invitation(text: guest.text, expires: guest.expires, cancel: { window.close() })
+    }
+
+    /// Opens a remote invitation through a hub of the group, for a phone
+    /// that is not the hub (docs/protocol.md, section 12, "Through the
+    /// hub"): the core opens the guest tunnel on a connected hub and runs
+    /// the pairing window here, the hub passing the pairing's bytes. Face
+    /// ID unlocks the key when the user says yes to a device.
+    private func inviteThroughHub(lifetime: Int, ask: @escaping @MainActor (PairingMember.Request) async -> Bool,
+                                  ended: @escaping @MainActor (Result<String, Error>) -> Void) async throws -> AppModel.Invitation {
+        guard let g = state else { throw Failure.notAdmin }
+        guard let node else { throw CoreMember.Failure.notConnected }
+        let unlocked = UnlockedSigner()
+        // The key's public half needs no Face ID; its signature does.
+        guard let k = try KeychainIdentity.loadKey(label: Self.signingLabel(g)) else { throw Failure.notAdmin }
+        let publicKey = try SecKeySigner(k).publicKeyDER
+        let adminCA = g.adminCA
+        let inviting = try await Task.detached(priority: .userInitiated) {
+            try CorePairing.Inviting(member: node, publicKey: publicKey, adminCA: adminCA, expires: lifetime) { digest in
+                guard let s = unlocked.signer else { throw Failure.notAdmin }
+                return try s.signature(digest: digest)
+            }
+        }.value
+        let reason = String(localized: "Add a computer to your group", bundle: .app)
+        Task.detached { [weak self] in
+            var version: UInt64 = 0
+            while true {
+                guard let st = try? inviting.next(after: version) else { break }
+                guard st.version != version else { continue }
+                version = st.version
+                switch st.state {
+                case "joining":
+                    guard let r = st.request else { continue }
+                    let req = PairingMember.Request(device: r.device, info: Pairing.Info(name: r.name, os: r.os), fingerprint: r.fingerprint)
+                    let yes = await self?.confirmInvited(req, ask: ask, reason: reason, unlocked: unlocked) ?? false
+                    inviting.answer(yes)
+                case "done":
+                    inviting.close()
+                    await MainActor.run { ended(.success(st.name)) }
+                    return
+                case "failed":
+                    inviting.close()
+                    let e: Error = st.failure ?? CorePairing.Failure("the invitation ended")
+                    await MainActor.run { ended(.failure(e)) }
+                    return
+                default:
+                    continue
+                }
+            }
+        }
+        let expires = Date().addingTimeInterval(TimeInterval(inviting.expires))
+        return AppModel.Invitation(text: inviting.text, expires: expires, cancel: { Task.detached { inviting.close() } })
+    }
+
+    /// Asks the user about a device that used the invitation and, on yes,
+    /// unlocks the key with Face ID for its certificate.
+    private func confirmInvited(_ req: PairingMember.Request, ask: @MainActor (PairingMember.Request) async -> Bool, reason: String,
+                                unlocked: UnlockedSigner) async -> Bool {
+        guard await ask(req), let ca = try? await caSigner(reason: reason) else { return false }
+        unlocked.signer = ca
+        return true
     }
 
     /// The guest tunnel, which the window's attempts need once it is open.
@@ -770,6 +827,102 @@ final class LiveGroup: GroupController {
         forgetCredentials()
         state = joined
         try startSync()
+    }
+
+    /// Joins a group from afar by a remote invitation's text
+    /// (docs/protocol.md, section 12), which the user scanned, opened or
+    /// pasted and accepted: the core starts the invitation's guest tunnel,
+    /// the phone dials it and proves the invitation's secret, and the hub's
+    /// admin admits it by the fingerprint shown hands it. Sync away from
+    /// home goes on, and the phone offers its tunnel key to the hub through
+    /// the guest tunnel until the hub answers.
+    func joinByInvite(_ text: String, shown: @escaping @MainActor (String) -> Void) async throws {
+        guard state == nil else { return }
+        guard case .invitation(let inv) = try Core.readInvite(text) else { throw Failure.noGroup }
+        let member = try memberSigner()
+        let joining = try CorePairing.Joining(name: PhoneGroup.validName(UIDevice.current.name), publicKey: member.publicKeyDER,
+                                              seal: Self.sealKey(), addrs: [], sign: { try member.signature(digest: $0) }, invite: text)
+        defer { joining.close() }
+        shown(joining.fingerprint)
+        let file = file
+        var joined: PhoneGroup?
+        var failure: Error?
+        for attempt in 0..<Self.inviteAttempts where joined == nil {
+            try Task.checkCancellation()
+            if attempt > 0 { try await Task.sleep(for: Self.dialPause) }
+            let c = CorePairing.Connection(host: "127.0.0.1", port: joining.port, timeout: TLSTransport.connectTimeout)
+            // The admin has up to 5 minutes to confirm the device.
+            let deadline = Task {
+                try await Task.sleep(for: Self.inviteDeadline)
+                c.close()
+            }
+            defer {
+                deadline.cancel()
+                c.close()
+            }
+            do {
+                try await c.start()
+                _ = try await joining.attempt(c) { j in
+                    let g = PhoneGroup.of(j, root: false)
+                    guard (try? g.save(to: file)) != nil else { return false }
+                    joined = g
+                    return true
+                }
+            } catch let e as CorePairing.Failure {
+                // The admin declined, or the secret was refused: no retry.
+                throw e
+            } catch {
+                if Task.isCancelled { throw CancellationError() }
+                failure = error
+            }
+        }
+        guard let joined else {
+            if !joining.answered { throw Failure.hubUnreachable }
+            throw failure ?? Failure.unreachable
+        }
+        try? InviteKeychain.save(InviteGuest(invite: text.trimmingCharacters(in: .whitespacesAndNewlines), hub: inv.hub, joined: Date()))
+        try modeBox.newDevice()
+        forgetCredentials()
+        state = joined
+        try startSync()
+        try await setAwayFromHome(true)
+    }
+
+    /// How many times joinByInvite dials the guest tunnel, and how long one
+    /// attempt may take with the admin's confirmation.
+    static let inviteAttempts = 5
+    static let inviteDeadline: Duration = .seconds(360)
+    /// How long the hub keeps the guest of the invitation this phone joined
+    /// by, as the core's guest grace.
+    static let guestGrace: TimeInterval = 24 * 3600
+
+    /// Offers this phone's tunnel key to the hub of the invitation it
+    /// joined by, through the invitation's guest tunnel, until the hub's
+    /// offer comes or a day passed: the hello offers the key, and the hub
+    /// answers with its offer on that connection.
+    private func offerThroughGuest(node: CoreMember, away: AwayFromHome) async {
+        while !Task.isCancelled {
+            guard let saved = InviteKeychain.load() else { return }
+            let hub = await away.hub
+            if Date().timeIntervalSince(saved.joined) > Self.guestGrace || hub != nil {
+                try? InviteKeychain.save(nil)
+                return
+            }
+            do {
+                let t = try RustTunnels().guest(invite: saved.invite)
+                defer { t.close() }
+                let link = try await Self.reach(node, key: "invite", port: t.port, device: saved.hub)
+                defer { link.close() }
+                let until = ContinuousClock.now + .seconds(60)
+                while (await away.hub) == nil, ContinuousClock.now < until, !Task.isCancelled {
+                    try await Task.sleep(for: .milliseconds(500))
+                }
+                if (await away.hub) != nil { awayLog.info("the invitation's hub took this phone's key") }
+            } catch {
+                awayLog.error("offering this phone's key through the invitation's guest tunnel: \(String(reflecting: error), privacy: .public)")
+            }
+            try? await Task.sleep(for: .seconds(15))
+        }
     }
 
     /// Joins a computer's group (docs/protocol.md, section 6, "A phone joins
@@ -1057,6 +1210,7 @@ final class LiveGroup: GroupController {
         }
         SealKey.remove()
         try? AwayKeychain.save(nil)
+        try? InviteKeychain.save(nil)
         try? HubKeychain.save(nil)
         try? RelayKeychain.save(nil)
         let dir = file.deletingLastPathComponent()
@@ -1307,19 +1461,17 @@ final class LiveGroup: GroupController {
             guard Records.store(store, role: "member") == Records.hardware || allowFileKey else { throw PhoneGroup.Failure.fileKey }
         }
         let root = try await caSigner(reason: String(localized: "Make a device an admin", bundle: .app))
-        guard var g = state else { return }
-        var rs: [Member.Record] = []
         // The user's consent to a key in a file, after the dialog's
         // warning, lets the group take keys in files too.
-        if !phone, Records.store(store, role: "member") == Records.file, allowFileKey, g.keyLevel != Records.levelFiles {
-            rs.append(try g.setKeyLevel(Records.levelFiles, rootSigner: root, now: Date()))
+        if !phone, Records.store(store, role: "member") == Records.file, allowFileKey, state?.keyLevel != Records.levelFiles {
+            try rootRecord(root) { n, p, s in try n.setKeyLevel(Records.levelFiles, public: p, sign: s) }
         }
+        guard var g = state else { return }
         let (ca, r) = try g.makeAdmin(device: id, adminKey: key, rootSigner: root, now: Date(), keyStore: store, allowFileKey: allowFileKey)
-        rs.append(r)
         try g.save(to: file)
         state = g
         groupChanged()
-        sendRecords(rs)
+        sendRecords([r])
         _ = try? node?.sendAdminCA(to: id, ca: ca)
     }
 
@@ -1598,6 +1750,8 @@ final class LiveGroup: GroupController {
             }
         }
         Task { await away.start() }
+        guestTask?.cancel()
+        guestTask = Task { [weak self] in await self?.offerThroughGuest(node: node, away: away) }
         if background { try? node.pause() }
         refreshHub()
         refreshCredentials()
@@ -1841,6 +1995,8 @@ final class LiveGroup: GroupController {
     /// Stops the member, its events and the browsing.
     private func stopNode() {
         events?.cancel()
+        guestTask?.cancel()
+        guestTask = nil
         browser?.stop()
         node?.stop()
         (node, events, browser, relay, recordBox, renewer, admins, away) = (nil, nil, nil, nil, nil, nil, nil, nil)

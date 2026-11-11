@@ -34,6 +34,37 @@
 # the other way (docs/guide/install.md).
 set -eu
 
+# l10n begin
+# The messages in the user's language: packaging/l10n.sh from beside get.sh
+# in a checkout, else English; the release puts l10n.sh and the catalogs
+# here (packaging/l10n-embed.sh).
+if [ -f "${0%/*}/l10n.sh" ]; then
+	cbb_l10n=${0%/*}/l10n
+	# shellcheck source=packaging/l10n.sh
+	. "${0%/*}/l10n.sh"
+else
+	# shellcheck disable=SC2059 # the format is the text
+	t() {
+		cbb_f=$1
+		shift
+		printf -- "$cbb_f" "$@"
+	}
+	say() {
+		t "$@"
+		echo
+	}
+	sayerr() {
+		t "$@" >&2
+		echo >&2
+	}
+	note() {
+		printf '%s: ' "$1" >&2
+		shift
+		sayerr "$@"
+	}
+fi
+# l10n end
+
 # A failure says so with its exit status; CBB_ERROR_DETAILS=1 shows every
 # command as it runs, so that the output shows where and why it failed.
 if [ "${CBB_ERROR_DETAILS:-}" = 1 ]; then
@@ -42,7 +73,7 @@ fi
 failed() {
 	rc=$1
 	if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ] && [ "${CBB_ERROR_DETAILS:-}" != 1 ]; then
-		echo "get.sh: failed (exit status $rc). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." >&2
+		note get.sh "failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." "$rc"
 	fi
 }
 
@@ -62,7 +93,7 @@ while [ $# -gt 0 ]; do
 	--uinput) uinput=--uinput ;;
 	--port)
 		[ $# -gt 1 ] || {
-			echo "get.sh: --port needs a port number" >&2
+			note get.sh "--port needs a port number"
 			exit 2
 		}
 		port="--port $2"
@@ -70,7 +101,7 @@ while [ $# -gt 0 ]; do
 		;;
 	--home-cgnat)
 		[ $# -gt 1 ] || {
-			echo "get.sh: --home-cgnat needs on or off" >&2
+			note get.sh "--home-cgnat needs on or off"
 			exit 2
 		}
 		cgnat="--home-cgnat $2"
@@ -80,7 +111,7 @@ while [ $# -gt 0 ]; do
 		case ${2:-} in
 		on | off) auto="--auto-update $2" ;;
 		*)
-			echo "get.sh: --auto-update needs on or off" >&2
+			note get.sh "--auto-update needs on or off"
 			exit 2
 			;;
 		esac
@@ -92,25 +123,26 @@ while [ $# -gt 0 ]; do
 	--no-pair) nopair=--no-pair ;;
 	--rootless) rootless=--rootless ;;
 	*)
-		echo "get.sh: unknown option $1 (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)" >&2
+		note get.sh "unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)" "$1"
 		exit 2
 		;;
 	esac
 	shift
 done
 
+# fail TEXT ARG... says why get.sh stops, and stops.
 fail() {
-	echo "get.sh: $*" >&2
+	note get.sh "$@"
 	exit 1
 }
 
 if [ -n "$rootless" ]; then
-	[ "$(id -u)" -ne 0 ] || fail "--rootless installs for your own user: run it without sudo: curl -fsSL $repo/releases/latest/download/get.sh | sh -s -- --rootless"
+	[ "$(id -u)" -ne 0 ] || fail "--rootless installs for your own user: run it without sudo: %s" "curl -fsSL $repo/releases/latest/download/get.sh | sh -s -- --rootless"
 	if [ "$(uname -s)" != Linux ] || [ -f /etc/openwrt_release ]; then
 		fail "--rootless is for Linux computers"
 	fi
 else
-	[ "$(id -u)" -eq 0 ] || fail "run it with sudo: curl -fsSL $repo/releases/latest/download/get.sh | sudo sh"
+	[ "$(id -u)" -eq 0 ] || fail "run it with sudo: %s" "curl -fsSL $repo/releases/latest/download/get.sh | sudo sh"
 fi
 case $(uname -s) in
 Linux)
@@ -129,12 +161,12 @@ Linux)
 		*) fail "no release for this MIPS system: it is not OpenWrt, which names its byte order" ;;
 		esac
 		;;
-	*) fail "no release for the architecture $(uname -m)" ;;
+	*) fail "no release for the architecture %s" "$(uname -m)" ;;
 	esac
 	if [ -f /etc/openwrt_release ]; then
 		os=openwrt
 		if [ "$lite-${arch%le}" = yes-mips ]; then
-			echo "get.sh: the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it." >&2
+			note get.sh "the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it."
 		fi
 		[ -z "$console" ] || fail "--console is not for a router"
 		[ -z "$uinput" ] || fail "--uinput is not for a router"
@@ -161,7 +193,7 @@ FreeBSD)
 	case $(uname -m) in
 	amd64) arch=amd64 ;;
 	arm64) arch=arm64 ;;
-	*) fail "no release for the architecture $(uname -m)" ;;
+	*) fail "no release for the architecture %s" "$(uname -m)" ;;
 	esac
 	;;
 *) fail "this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1" ;;
@@ -263,7 +295,7 @@ opened() {
 	field sig "$f" | openssl base64 -d -A >"$tmp/$kind.sig" 2>/dev/null || return 1
 	for k in "$@"; do
 		if openssl dgst -sha256 -verify "$k" -signature "$tmp/$kind.sig" "$tmp/$kind.body" >/dev/null 2>&1; then
-			strict "$tmp/$kind.body" || fail "the signed $kind file is not in the strict form of signed bodies; not installing"
+			strict "$tmp/$kind.body" || fail "the signed %s file is not in the strict form of signed bodies; not installing" "$kind"
 			[ "$(field type "$tmp/$kind.body")" = "$kind" ] || return 1
 			[ "$(number v "$tmp/$kind.body")" = 1 ] || return 1
 			[ -n "$(number time_ms "$tmp/$kind.body")" ] || return 1
@@ -279,7 +311,7 @@ opened() {
 # CBB_VERIFY=skip, since the sums come from the same server as the archive.
 verify_release() {
 	if [ "${CBB_VERIFY:-}" = skip ]; then
-		echo "Not checked: the release's signature (CBB_VERIFY=skip)."
+		say "Not checked: the release's signature (CBB_VERIFY=skip)."
 		return
 	fi
 	if [ -z "$roots" ]; then
@@ -289,7 +321,7 @@ verify_release() {
 		fail "openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)"
 	printf '%s\n' "$roots" | awk -v d="$tmp" '/BEGIN/ { n++ } { print > (d "/root-" n ".pem") }'
 	if ! fetch "$channel_files/keys.json" "$tmp/keys.json" || ! fetch "$base/release.json" "$tmp/release.json"; then
-		fail "$version has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)"
+		fail "%s has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)" "$version"
 	fi
 	opened "$tmp/keys.json" keys "$tmp"/root-*.pem || fail "keys.json is not signed by the project's root key; not installing"
 	now_ms=$(($(date +%s) * 1000))
@@ -329,15 +361,15 @@ verify_release() {
 			fail "release.json is not the release stable.json names; not installing"
 		fi
 	else
-		[ "v$got_version" = "$version" ] || fail "release.json is for $got_version, not $version"
+		[ "v$got_version" = "$version" ] || fail "release.json is for %s, not %s" "$got_version" "$version"
 	fi
 	entry=$(grep -o "{\"name\":\"$archive\",\"size\":[0-9]*,\"sha256\":\"[0-9a-f]*\"" "$tmp/release.body" | head -n 1)
-	[ -n "$entry" ] || fail "release.json does not list $archive"
+	[ -n "$entry" ] || fail "release.json does not list %s" "$archive"
 	printf '%s\n' "$entry" >"$tmp/entry"
 	if [ "$(field sha256 "$tmp/entry")" != "$got" ] || [ "$(number size "$tmp/entry")" != "$(wc -c <"$tmp/$archive" | tr -d ' ')" ]; then
-		fail "$archive does not match the signed release.json; not installing it"
+		fail "%s does not match the signed release.json; not installing it" "$archive"
 	fi
-	echo "The release's signature checks out ($got_version)."
+	say "The release's signature checks out (%s)." "$got_version"
 }
 
 tmp=$(mktemp -d)
@@ -348,7 +380,7 @@ named=
 if [ "$version" = latest ] && verifying; then
 	command -v openssl >/dev/null 2>&1 ||
 		fail "openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)"
-	fetch "$channel_files/stable.json" "$tmp/stable.json" || fail "could not download $channel_files/stable.json"
+	fetch "$channel_files/stable.json" "$tmp/stable.json" || fail "could not download %s" "$channel_files/stable.json"
 	named=$(field body "$tmp/stable.json" | openssl base64 -d -A 2>/dev/null | sed -n 's/.*"release":"\([^"]*\)".*/\1/p')
 	case $named in
 	[0-9]*.[0-9]*.[0-9]*) ;;
@@ -357,13 +389,13 @@ if [ "$version" = latest ] && verifying; then
 	version=v$named
 	[ -n "${CBB_RELEASE_DIR:-}" ] || base=$repo/releases/download/$version
 fi
-echo "Downloading $archive ($version)..."
-fetch "$base/$archive" "$tmp/$archive" || fail "could not download $base/$archive"
-fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not download $base/SHA256SUMS"
+say "Downloading %s (%s)..." "$archive" "$version"
+fetch "$base/$archive" "$tmp/$archive" || fail "could not download %s" "$base/$archive"
+fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not download %s" "$base/SHA256SUMS"
 want=$(awk -v f="$archive" '$2 == f || $2 == "*" f { print $1 }' "$tmp/SHA256SUMS")
 got=$(sha256 "$tmp/$archive")
-[ -n "$want" ] || fail "SHA256SUMS does not list $archive"
-[ "$want" = "$got" ] || fail "$archive does not match SHA256SUMS; not installing it"
+[ -n "$want" ] || fail "SHA256SUMS does not list %s" "$archive"
+[ "$want" = "$got" ] || fail "%s does not match SHA256SUMS; not installing it" "$archive"
 # SHA256SUMS comes from the same release, so it shows only that the download
 # is whole. The signed release files show that the project signed this
 # release (docs/protocol.md, section 16).
@@ -375,12 +407,12 @@ if [ -n "${CBB_RELEASE_DIR:-}" ] || [ "$attestation" = skip ]; then
 	:
 elif command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
 	gh attestation verify "$tmp/$archive" --repo HunterEwok/cbb >/dev/null ||
-		fail "$archive does not have this repository's build attestation; not installing it"
-	echo "The archive's build attestation checks out."
+		fail "%s does not have this repository's build attestation; not installing it" "$archive"
+	say "The archive's build attestation checks out."
 elif [ "$attestation" = require ]; then
 	fail "CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the archive's build attestation"
 else
-	echo "Not checked: the archive's build attestation (it needs gh, signed in). SHA256SUMS matched."
+	say "Not checked: the archive's build attestation (it needs gh, signed in). SHA256SUMS matched."
 fi
 tar -xzf "$tmp/$archive" -C "$tmp"
 

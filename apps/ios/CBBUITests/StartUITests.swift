@@ -145,7 +145,13 @@ final class StartUITests: XCTestCase {
         let settings = app.buttons["Settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 30))
         settings.tap()
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+        // A loaded simulator can lose a tap, as choose allows for: one
+        // more tap when the sheet has not opened.
+        let bar = app.navigationBars["Settings"]
+        if !bar.waitForExistence(timeout: 10), settings.exists {
+            settings.tap()
+        }
+        XCTAssertTrue(bar.waitForExistence(timeout: 10), "Settings did not open")
     }
 
     /// Whether e shows as selected within a few seconds: a tap reaches the

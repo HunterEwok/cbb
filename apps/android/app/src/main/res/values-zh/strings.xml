@@ -245,9 +245,9 @@
     <string name="event_unfrozen">%1$s 已解冻。</string>
     <string name="event_taken_over">%1$s 接管了群组：它现在持有群组的根。</string>
     <string name="invite_title">邀请远方的设备</string>
-    <string name="invite_body">用于不在你网络中的设备，例如父母的电脑：把邀请文件发给它的主人，主人用 cbb pair -invite 加入。只能使用一次，有效期一小时，且需此应用保持打开。</string>
+    <string name="invite_body">在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上用该文件运行 cbb pair -invite。只能使用一次，有效期一小时，且需此应用保持打开；群组需要一个中心节点。</string>
     <string name="invite_open">创建邀请</string>
-    <string name="invite_open_until">邀请在 %1$s 之前有效。只将它的文件分享给要加入的人：任何持有它的人都可以申请加入。</string>
+    <string name="invite_open_until">邀请在 %1$s 之前有效。只向要加入的人出示或发送它的二维码；文件作为备用。</string>
     <string name="invite_share">分享邀请</string>
     <string name="invite_cancel">取消邀请</string>
     <string name="invite_ask_title">接纳 %1$s？</string>
@@ -553,7 +553,7 @@
     <string name="turn_on">开启</string>
     <string name="scan_code">扫描代码</string>
     <string name="invite_send">发送邀请</string>
-    <string name="invite_on_hub">邀请在群组的中心节点上创建。在作为中心节点的电脑上运行 cbb invite，并通过你信任的渠道发送它生成的文件；在新设备上用该文件运行 cbb pair -invite。</string>
+    <string name="invite_on_hub">只有管理员可以创建邀请：这里的管理员手机，或管理员电脑上的 cbb invite。</string>
     <string name="more">更多</string>
     <string name="view_next">显示为 %1$s</string>
     <string name="lost_phone_title">手机丢失？</string>
@@ -567,4 +567,24 @@
     <string name="saved_to_gallery">已保存到图库的 CBB 相册中。</string>
     <string name="paste_pick">粘贴图片或文件…</string>
     <string name="paste_pick_note">图片或文件作为一份拷贝发送到群组，电脑会像按 Ctrl+V 一样把它们粘贴到焦点所在处：聊天、文档或文件夹中。如果开启了回车，会在聊天中发送它们。</string>
+    <string name="invitation_join">通过邀请加入</string>
+    <string name="invitation_has_group">这部手机已在一个群组中。请先退出，再加入其他群组。</string>
+    <string name="invitation_not_one">这不是 CBB 邀请。</string>
+    <string name="invitation_expired">邀请已过期。请索要新的邀请。</string>
+    <string name="invitation_joined">这部手机已加入群组。离家时它通过群组的中心节点同步。</string>
+    <string name="invitation_fingerprint_hint">邀请你的人会在其设备上看到这些词，若一致便会接纳这部手机。请保持此界面打开。</string>
+    <string name="invitation_connecting">正在连接群组的中心节点…</string>
+    <string name="invitation_scan_hint">将相机对准邀请的二维码。</string>
+    <string name="invitation_text">邀请文本</string>
+    <string name="invitation_read">读取</string>
+    <string name="invitation_open_file">打开文件</string>
+    <string name="invitation_title">你被邀请加入一个群组</string>
+    <string name="invitation_group">群组：%1$s</string>
+    <string name="invitation_hub">中心节点：%1$s</string>
+    <string name="invitation_until">有效期至 %1$s</string>
+    <string name="invitation_answer_hint">仅在你自己请求了此邀请时才加入。创建邀请的人看到这部手机显示的词后会接纳它。</string>
+    <string name="invitation_accept">加入</string>
+    <string name="invitation_decline">拒绝</string>
+    <string name="error_hub_unreachable">群组的中心节点没有响应。请确认邀请仍然有效且中心节点已开启，然后重试。</string>
+    <string name="invite_qr_label">邀请的二维码</string>
 </resources>

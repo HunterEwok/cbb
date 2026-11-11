@@ -161,8 +161,7 @@ limits never cut them off. Xray's defaults, 1 MB an upload and 30 of them, let o
 hold about 30 MB.
 
 A hub's registration over VLESS (`RegistrationID`) pays as a direct one, from the same setup
-slots and caps, charged to the client's address: over REALITY the one it connects from, over
-XHTTP the one the web server names. When the address is not known (a web server that does
+slots and caps, charged to the client's address: the one the web server names. When the address is not known (a web server that does
 not name it), the registrations over VLESS share at most an eighth of the setup slots, so
 that they never keep out a hub that registers directly; all of them together are bounded by
 1024.

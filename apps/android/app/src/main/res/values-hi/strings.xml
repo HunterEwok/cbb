@@ -245,9 +245,9 @@
     <string name="event_unfrozen">%1$s अनफ़्रीज़ कर दिया गया।</string>
     <string name="event_taken_over">%1$s ने समूह अपने हाथ में ले लिया: अब समूह का रूट उसके पास है।</string>
     <string name="invite_title">दूर के डिवाइस को आमंत्रित करें</string>
-    <string name="invite_body">उस डिवाइस के लिए जो आपके नेटवर्क पर नहीं है, जैसे माता-पिता का कंप्यूटर: आमंत्रण फ़ाइल उसके मालिक से साझा करें, जो cbb pair -invite से जुड़ता है। यह एक बार, एक घंटे तक, इस ऐप के खुले रहने तक काम करता है।</string>
+    <string name="invite_body">नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर फ़ाइल के साथ cbb pair -invite चलाएँ। यह एक बार, एक घंटे के लिए, ऐप खुला रहने तक काम करता है; समूह को एक हब चाहिए।</string>
     <string name="invite_open">आमंत्रण बनाएँ</string>
-    <string name="invite_open_until">आमंत्रण %1$s तक खुला है। इसकी फ़ाइल केवल उसी व्यक्ति से साझा करें जो जुड़ रहा है: जिसके पास भी यह हो, वह जुड़ने के लिए कह सकता है।</string>
+    <string name="invite_open_until">निमंत्रण %1$s तक खुला है। इसका QR कोड केवल जुड़ने वाले व्यक्ति को दिखाएँ या भेजें; इसकी फ़ाइल विकल्प है।</string>
     <string name="invite_share">आमंत्रण साझा करें</string>
     <string name="invite_cancel">आमंत्रण रद्द करें</string>
     <string name="invite_ask_title">%1$s को शामिल करें?</string>
@@ -553,7 +553,7 @@
     <string name="turn_on">चालू करें</string>
     <string name="scan_code">कोड स्कैन करें</string>
     <string name="invite_send">आमंत्रण भेजें</string>
-    <string name="invite_on_hub">आमंत्रण समूह के हब पर बनता है। हब वाले कंप्यूटर पर cbb invite चलाएँ और उसकी बनाई फ़ाइल किसी भरोसेमंद माध्यम से भेजें; नए डिवाइस पर उस फ़ाइल के साथ cbb pair -invite चलाएँ।</string>
+    <string name="invite_on_hub">निमंत्रण केवल एडमिन बनाता है: यहाँ एक एडमिन फ़ोन, या एडमिन कंप्यूटर पर cbb invite।</string>
     <string name="more">और</string>
     <string name="view_next">%1$s के रूप में दिखाएँ</string>
     <string name="lost_phone_title">फ़ोन खो गया?</string>
@@ -567,4 +567,24 @@
     <string name="saved_to_gallery">गैलरी में, CBB एल्बम में सहेजा गया।</string>
     <string name="paste_pick">तस्वीर या फ़ाइलें पेस्ट करें…</string>
     <string name="paste_pick_note">तस्वीर या फ़ाइलें ग्रुप में एक कॉपी के रूप में जाती हैं, और कंप्यूटर उन्हें वहाँ पेस्ट करता है जहाँ उसका फ़ोकस है, जैसे Ctrl+V करता: किसी चैट, दस्तावेज़ या फ़ोल्डर में। Enter, अगर चालू है, तो उन्हें चैट में भेज देता है।</string>
+    <string name="invitation_join">निमंत्रण से जुड़ें</string>
+    <string name="invitation_has_group">यह फ़ोन पहले से एक समूह में है। दूसरे में जुड़ने के लिए पहले इसे छोड़ें।</string>
+    <string name="invitation_not_one">यह CBB निमंत्रण नहीं है।</string>
+    <string name="invitation_expired">निमंत्रण की अवधि समाप्त हो गई है। नया माँगें।</string>
+    <string name="invitation_joined">यह फ़ोन समूह में है। घर से दूर यह समूह के हब के ज़रिए सिंक करता है।</string>
+    <string name="invitation_fingerprint_hint">जिसने आपको आमंत्रित किया वह अपने डिवाइस पर ये शब्द देखता है और मेल खाने पर इस फ़ोन को शामिल करता है। यह स्क्रीन खुली रखें।</string>
+    <string name="invitation_connecting">समूह के हब से जुड़ रहा है…</string>
+    <string name="invitation_scan_hint">कैमरे को निमंत्रण के QR कोड की ओर करें।</string>
+    <string name="invitation_text">निमंत्रण का पाठ</string>
+    <string name="invitation_read">पढ़ें</string>
+    <string name="invitation_open_file">फ़ाइल खोलें</string>
+    <string name="invitation_title">आपको एक समूह में आमंत्रित किया गया है</string>
+    <string name="invitation_group">समूह: %1$s</string>
+    <string name="invitation_hub">हब: %1$s</string>
+    <string name="invitation_until">%1$s तक मान्य</string>
+    <string name="invitation_answer_hint">तभी जुड़ें जब आपने यह निमंत्रण माँगा हो। इसे बनाने वाला इस फ़ोन के दिखाए शब्द देखकर इसे शामिल करता है।</string>
+    <string name="invitation_accept">जुड़ें</string>
+    <string name="invitation_decline">अस्वीकार करें</string>
+    <string name="error_hub_unreachable">समूह के हब ने जवाब नहीं दिया। जाँचें कि निमंत्रण अभी मान्य है और हब चालू है, फिर दोबारा कोशिश करें।</string>
+    <string name="invite_qr_label">निमंत्रण का QR कोड</string>
 </resources>

@@ -145,6 +145,17 @@ object RustTunnel {
         return Tunnel(long(ok, "id"), long(ok, "port").toInt())
     }
 
+    /**
+     * The guest tunnel of the remote invitation this phone joined by
+     * (docs/protocol.md, section 12): its port leads to the hub's member
+     * port, where the phone offers its own tunnel key until the hub's offer
+     * comes.
+     */
+    fun guest(invite: String): Tunnel {
+        val ok = call(obj("op" to JsonPrimitive("guest_start"), "invite" to JsonPrimitive(invite)))
+        return Tunnel(long(ok, "id"), long(ok, "port").toInt())
+    }
+
     /** The guest tunnel of a remote invitation. */
     class Guest internal constructor(private val hub: Long, private val guest: Long, val text: String, val secret: ByteArray, val expires: Long) {
         fun admitted() {
@@ -189,11 +200,14 @@ object RustTunnel {
         /** The forwarder's report: {} before the registration. */
         fun status(): String = runCatching { (op("hub_status")["forwarder"] as? JsonObject)?.toString() }.getOrNull() ?: "{}"
 
-        /** Opens a remote invitation; endpoints is a JSON array of "ip:port". */
-        fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int): Guest {
+        /**
+         * Opens a remote invitation; endpoints is a JSON array of "ip:port",
+         * vless the hub's way over VLESS as its offers carry it, "" without.
+         */
+        fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int, vless: String = ""): Guest {
             val ok = op(
                 "hub_invite", "group" to JsonPrimitive(group), "endpoints" to (json(endpoints) ?: JsonArray(emptyList())),
-                "lifetime" to JsonPrimitive(lifetimeS), "guest_port" to JsonPrimitive(guestPort),
+                "lifetime" to JsonPrimitive(lifetimeS), "guest_port" to JsonPrimitive(guestPort), "vless" to json(vless),
             )
             return Guest(id, long(ok, "guest"), ok.optString("text") ?: throw Failure("the tunnel gave no invitation"), bytes(ok, "secret"), long(ok, "expires"))
         }

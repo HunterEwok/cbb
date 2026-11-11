@@ -338,21 +338,6 @@ class PhoneGroup internal constructor(
         return sign(b, rootSigner)
     }
 
-    /**
-     * Sets how long a claim waits before it takes effect (0 to 7 days; 72
-     * hours without a settings record), as the current root. It returns the
-     * record to send.
-     */
-    fun setTakeoverDelay(ms: Long, rootSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isRoot) throw Failure("only the root does that")
-        if (ms !in 0..7L * 24 * 3600 * 1000) throw Failure(INVALID_DELAY)
-        val b = Records.Body.of("settings", rootSigner, now)
-        b.takeoverDelayMS = ms
-        // The newest settings record counts whole, so this one keeps the level.
-        b.keyLevel = settings(b.signer).second
-        return sign(b, rootSigner)
-    }
-
     /** The group's key level: which keys may be its root, an admin or a hub. */
     val keyLevel: String get() = records.keyLevel
 
@@ -371,44 +356,6 @@ class PhoneGroup internal constructor(
         val b = Records.Body.of("copies", caSigner, now)
         b.incomingMS = ms
         return sign(b, caSigner)
-    }
-
-    /**
-     * Sets the group's key level (Records.KEY_LEVELS), as the current root,
-     * keeping the takeover delay; never a level this phone's own key does
-     * not pass. It returns the record to send. The admins whose keys the new
-     * level would not let in stay until the user removes them (belowKeyLevel
-     * lists them).
-     */
-    fun setKeyLevel(level: String, rootSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isRoot) throw Failure("only the root does that")
-        if (level !in Records.KEY_LEVELS) throw Failure(INVALID_KEY_LEVEL)
-        val own = devices.firstOrNull { it.id == device }?.store ?: Records.HARDWARE
-        if (!Records.levelAllows(level, own, true)) throw BelowKeyLevel()
-        val b = Records.Body.of("settings", rootSigner, now)
-        b.takeoverDelayMS = settings(b.signer).first
-        b.keyLevel = level
-        return sign(b, rootSigner)
-    }
-
-    /** The admins, other than this phone, whose keys the level would not let in, by device ID. */
-    fun belowKeyLevel(level: String): List<String> =
-        devices.filter { it.id != device && it.adminKey != null && !Records.levelAllows(level, it.store, true) }.map { it.id }
-
-    /** What the newest settings record of the root whose key hash is root set, so that a new one keeps what it does not change. */
-    internal fun settings(root: ByteArray): Pair<Long?, String?> {
-        var seq = -1L
-        var out: Pair<Long?, String?> = null to null
-        for (r in records.authorityRecords) {
-            runCatching {
-                val o = Wire.parse(r.body) ?: return@runCatching
-                val q = o.optLong("seq") ?: return@runCatching
-                if (o.optString("type") != "settings" || o.optBytes("signer")?.contentEquals(root) != true || q <= seq) return@runCatching
-                seq = q
-                out = o.optLong("takeover_delay_ms") to o.optString("key_level")
-            }
-        }
-        return out
     }
 
     /**
@@ -652,57 +599,6 @@ class PhoneGroup internal constructor(
             throw Failure("the admin CA is not for this phone's admin key")
         }
         adminCA = ca
-    }
-
-    /**
-     * A new recovery key (docs/protocol.md, section 10, "The recovery key"):
-     * its 32 bytes, the admin CA the root issued it, the `recovery` record to
-     * send and the sheet to print. The app shows the sheet once and then
-     * forgets the key; nothing of it stays here.
-     */
-    class Recovery(val key: ByteArray, val adminCA: ByteArray, val record: Member.Record, val sheet: Core.RecoverySheet)
-
-    /**
-     * Makes the group's recovery key, as the root: a new P-256 key, an admin
-     * CA for it under the current root (its CN names a random ID, since the
-     * key has no device) and the `recovery` record that names it, which
-     * replaces the recovery key before it.
-     */
-    fun makeRecovery(rootSigner: CertificateSigner, now: Instant): Recovery {
-        if (!isRoot) throw Failure("only the root makes the recovery key")
-        val pair = SoftwareSigner.generate()
-        val s = (pair.private as java.security.interfaces.ECPrivateKey).s.toByteArray().takeLast(32)
-        val key = ByteArray(32 - s.size) + s.toByteArray()
-        val (ca, r) = recoveryFor(pair.public.encoded, rootSigner, now)
-        return Recovery(key, ca, r, Core.recoverySheet(key, ca, tag))
-    }
-
-    /**
-     * Makes the group's recovery key from a key a YubiKey made (publicKey, a
-     * SubjectPublicKeyInfo; [Piv.generate]), as the root: its admin CA,
-     * which goes into the YubiKey's slot, and the `recovery` record that
-     * names it.
-     */
-    fun makeRecoveryOnCard(publicKey: ByteArray, rootSigner: CertificateSigner, now: Instant): Pair<ByteArray, Member.Record> {
-        if (!isRoot) throw Failure("only the root makes the recovery key")
-        return recoveryFor(publicKey, rootSigner, now)
-    }
-
-    private fun recoveryFor(publicKey: ByteArray, rootSigner: CertificateSigner, now: Instant): Pair<ByteArray, Member.Record> {
-        val ca = GroupCertificates.adminCA(SyncEngine.newID(), publicKey, currentRoot, rootSigner)
-        val b = Records.Body.of("recovery", rootSigner, now)
-        b.admin = Records.keyHashOfCert(ca)
-        b.cert = ca
-        return ca to sign(b, rootSigner)
-    }
-
-    /** Removes the group's recovery key, as the root: a revocation of its key. It returns the record to send. */
-    fun removeRecovery(rootSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isRoot) throw Failure("only the root removes the recovery key")
-        val k = records.recovery ?: throw Failure("the group has no recovery key")
-        val b = Records.Body.of("revoke", rootSigner, now)
-        b.keys = listOf(k)
-        return sign(b, rootSigner)
     }
 
     /**
@@ -994,9 +890,7 @@ class PhoneGroup internal constructor(
         const val NOT_FOR_WATCH = "a watch may not do that to this device"
         const val NO_TAKEOVER = "the root did not give this admin the power to take the group over"
         const val CLAIM_WAITING = "this admin's claim to take the group over waits already"
-        const val INVALID_DELAY = "the delay before a claim takes effect is 0 to 7 days"
         const val INVALID_INCOMING = "how long an incoming copy stays live is 5 s to 1 h"
-        const val INVALID_KEY_LEVEL = "the key level is proven, hardware or files"
 
         /** The record or command a watch signed: body, its signature (ECDSA with SHA-256, DER) and the watch's admin CA. */
         fun watchRecord(body: ByteArray, signature: ByteArray, watchCA: ByteArray): Member.Record = Member.Record(body, signature, listOf(watchCA))

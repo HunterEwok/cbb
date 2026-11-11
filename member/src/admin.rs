@@ -24,6 +24,7 @@ use cbb_core::authority::{self, Body, Hash};
 use cbb_core::certs::{Cert, b64};
 use cbb_core::identity::{ExternalKey, FileKey, HeldKey};
 use cbb_core::manage::Signer;
+use cbb_core::root::{self, Setting};
 use cbb_core::takeover::{How, Own};
 use serde::{Deserialize, Serialize};
 
@@ -518,6 +519,25 @@ impl Admin<'_> {
         Ok(r)
     }
 
+    /// Signs, as the group's root s, the record about the group itself that
+    /// the core builds and checks (cbb_core::root) from the group's records
+    /// at the wall clock's milliseconds; it goes into the set and to the
+    /// group, as sign's.
+    fn sign_root(
+        &self,
+        s: &Signing,
+        make: impl FnOnce(&cbb_core::group::Records, &Signer, i64) -> cbb_core::error::Result<Record>,
+    ) -> Result<Record> {
+        let me = self.me();
+        let records = self.node.records();
+        let r = make(&records.lock().unwrap(), &Signer { ca: &s.ca, key: &*s.key, me: &me }, uptime::wall_ms())?;
+        self.node.add_own_records(std::slice::from_ref(&r));
+        if !records.lock().unwrap().has(&r) {
+            return Err(Error::msg("the group's records did not take the change; the log says why"));
+        }
+        Ok(r)
+    }
+
     /// Signs body as the next record of s, as sign does: for records signed
     /// again (signed.rs).
     pub fn sign_body(&self, s: &Signing, b: Body) -> Result<Record> {
@@ -958,16 +978,7 @@ impl Admin<'_> {
         }
         let own = own_store(self.dir, &self.node.identity());
         level_allows(level, own, "this device, the group's root,", "", true)?;
-        let delay = self.current_delay(&s.hash());
-        self.sign(
-            &s,
-            Body {
-                kind: authority::TYPE_SETTINGS.into(),
-                takeover_delay_ms: delay,
-                key_level: level.into(),
-                ..Default::default()
-            },
-        )?;
+        self.sign_root(&s, |rs, signer, now| root::settings(rs, signer, &Setting::KeyLevel(level), now))?;
         self.node.logf(&format!("cbb: the group's key level is {level} now"));
         let records = self.node.records();
         let rs = records.lock().unwrap();
@@ -995,16 +1006,7 @@ impl Admin<'_> {
             .ok_or_else(|| Error::msg("the takeover delay is a duration from 0s to 168h, as 72h"))?;
         let s = self.signing().ok().filter(|s| s.root);
         let s = s.ok_or_else(|| Error::msg("only the group's root sets how long a claim waits"))?;
-        let level = self.current_level(&s.hash());
-        self.sign(
-            &s,
-            Body {
-                kind: authority::TYPE_SETTINGS.into(),
-                takeover_delay_ms: Some(ms),
-                key_level: level,
-                ..Default::default()
-            },
-        )?;
+        self.sign_root(&s, |rs, signer, now| root::settings(rs, signer, &Setting::Delay(ms), now))?;
         self.node.logf(&format!("cbb: a claim to take the group over now waits {} on each member", go_duration(ms)));
         Ok(())
     }
@@ -1036,13 +1038,13 @@ impl Admin<'_> {
         if d.id == self.me() {
             return Err(Error::msg("this device is the group's root already"));
         }
-        let Some(admin) = d.admin_key.filter(|_| !d.frozen) else {
+        if d.admin_key.is_none() || d.frozen {
             return Err(Error::msg(format!(
                 "{} is no admin: make it one first (cbb admin), then hand the group over",
                 d.name
             )));
-        };
-        self.sign(&s, Body { kind: authority::TYPE_HANDOVER.into(), admin: Some(Hash(admin)), ..Default::default() })?;
+        }
+        self.sign_root(&s, |rs, signer, now| root::hand_over(rs, signer, &d.id, now))?;
         self.node.logf(&format!("cbb: handed the group over to {} ({}): its claim takes effect at once", d.name, d.id));
         Ok(d.name)
     }
@@ -1470,29 +1472,6 @@ impl Admin<'_> {
             "cbb: claimed the group {said}; this device becomes the root when the waiting time ends, unless the root cancels the claim"
         ));
         Ok(())
-    }
-
-    /// The key level of the newest settings record of the root whose key
-    /// hash is root, which a new one keeps.
-    fn current_level(&self, root: &Hash) -> String {
-        let all = self.node.records().lock().unwrap().all();
-        all.iter()
-            .filter_map(|r| Body::parse(&r.body).ok())
-            .filter(|b| b.kind == authority::TYPE_SETTINGS && b.signer == *root)
-            .max_by_key(|b| b.seq)
-            .map(|b| b.key_level)
-            .unwrap_or_default()
-    }
-
-    /// The takeover delay of the newest settings record of the root whose
-    /// key hash is root, which a new one keeps.
-    fn current_delay(&self, root: &Hash) -> Option<i64> {
-        let all = self.node.records().lock().unwrap().all();
-        all.iter()
-            .filter_map(|r| Body::parse(&r.body).ok())
-            .filter(|b| b.kind == authority::TYPE_SETTINGS && b.signer == *root)
-            .max_by_key(|b| b.seq)
-            .and_then(|b| b.takeover_delay_ms)
     }
 }
 

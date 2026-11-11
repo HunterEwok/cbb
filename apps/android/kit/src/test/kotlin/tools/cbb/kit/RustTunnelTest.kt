@@ -17,6 +17,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -54,6 +55,7 @@ class RustTunnelTest {
                 try {
                     assertNotEquals(0, t.port)
                     Socket(InetAddress.getLoopbackAddress(), t.port).close()
+                    t.setEndpoint("127.0.0.1:${hub.udpPort()}")
                 } finally {
                     t.close()
                 }
@@ -69,9 +71,44 @@ class RustTunnelTest {
         }
     }
 
+    /** The hub's settings the app passes on: AmneziaWG, VLESS, the records, the project's ways and the forwarder. */
+    @Test
+    fun hubSettings() {
+        val obfuscation = RustTunnel.newObfuscation()
+        assertTrue(obfuscation.startsWith("{"), obfuscation)
+        val vlessID = RustTunnel.newVLESSID()
+        assertTrue(vlessID.isNotEmpty())
+        val now = Instant.now()
+        val root = SoftwareSigner()
+        val groupCA = GroupCertificates.groupCA(root, now, 1)
+        val leaf = GroupCertificates.member(hubID, root.publicKeyDER, groupCA, root, now)
+        ServerSocket(0, 8, InetAddress.getLoopbackAddress()).use { member ->
+            val hub = RustTunnel.startHub(RustTunnel.newKey(), hubID, member.localPort, obfuscation, "[]")
+            try {
+                // The records go to the forwarder, so they wait for the registration.
+                assertFailsWith<RustTunnel.Failure> { hub.setRecords("[]") }
+                hub.setProjectWays("[]")
+                val vless = """{"transport":"xhttp","endpoint":"192.0.2.1:443","server_name":"example.org","path":"/cbb","id":"$vlessID"}"""
+                val g = hub.invite("0123456789abcdef", "[\"127.0.0.1:${hub.udpPort()}\"]", 600, member.localPort, vless)
+                try {
+                    assertIs<Core.InviteReading.Read>(Core.readInvite(g.text))
+                } finally {
+                    g.close()
+                }
+                // The registration goes on in the background, here toward a port where no forwarder listens.
+                hub.register("127.0.0.1:9", b64(ByteArray(32)), "[\"${b64(leaf)}\",\"${b64(groupCA)}\"]", root::signDigest, "[]", vlessID)
+                hub.setRecords("[]")
+                assertFailsWith<RustTunnel.Failure> { hub.register("127.0.0.1:9", "pin", "[]", root::signDigest, "[]", "") }
+            } finally {
+                hub.close()
+            }
+        }
+    }
+
     @Test
     fun refusals() {
-        assertFailsWith<RustTunnel.Failure> { RustTunnel.publicKey(ByteArray(5)) }
+        val e = assertFailsWith<RustTunnel.Failure> { RustTunnel.publicKey(ByteArray(5)) }
+        assertTrue(e.toString().startsWith("tunnel: "), e.toString())
         assertFailsWith<RustTunnel.Failure> { RustTunnel.startHub(ByteArray(32), hubID, 0, "", "") }
     }
 
@@ -101,6 +138,8 @@ class RustTunnelTest {
             val report = Json.parseToJsonElement(assertNotNull(states.firstOrNull(), "no report")) as JsonObject
             assertNull(report["type"], "the app gets the report as the hub gave it")
             assertNotNull(report["error"], report.toString())
+            link.setRecords("[]")
+            link.setCredentials(ByteArray(0), key::signDigest, "", "[]", "{}")
         } finally {
             link.close()
         }

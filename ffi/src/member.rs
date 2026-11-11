@@ -16,13 +16,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
-use cbb_core::authority::Record;
+use cbb_core::authority::{Body, Record};
 use cbb_core::certs::{self, Cert, DeviceId};
 use cbb_core::clip::{Event as Copy, Kind};
 use cbb_core::error::{Error, Result};
 use cbb_core::identity::Identity;
 use cbb_core::manage::{Change, Order, Signer};
 use cbb_core::media::Part;
+use cbb_core::root::{self, Setting};
 use cbb_core::takeover::How;
 use cbb_core::wire::CommandResult;
 use cbb_lite::content::Source;
@@ -179,6 +180,9 @@ struct CommandArgs {
 #[derive(Deserialize)]
 struct ManageArgs {
     action: String,
+    /// With recover_with_sheet: the recovery sheet's QR code.
+    #[serde(default)]
+    sheet: String,
     #[serde(default)]
     device: String,
     /// With make_admin: the user consented to a computer that keeps its
@@ -217,6 +221,17 @@ struct ManageArgs {
     store: String,
     #[serde(with = "certs::b64::opt", default)]
     seal: Option<Vec<u8>>,
+    /// With takeover_delay: how long a claim from a lost root waits, in
+    /// milliseconds.
+    #[serde(default)]
+    delay_ms: Option<i64>,
+    /// With key_level: proven, hardware or files.
+    #[serde(default)]
+    level: String,
+    /// With recovery_for: the recovery key a YubiKey made, as a
+    /// SubjectPublicKeyInfo (DER).
+    #[serde(with = "certs::b64::opt", default)]
+    key: Option<Vec<u8>>,
 }
 
 fn hardware() -> String {
@@ -695,6 +710,8 @@ impl Member {
                 Ok(json!({ "peers": ps.iter().map(peer_json).collect::<Vec<_>>() }))
             }
             "records" => Ok(json!({ "records": n.records() })),
+            // The root's settings: {delay_ms, key_level, recovery, handed_to}.
+            "root_view" => Ok(serde_json::to_value(n.root_view()).map_err(|e| Error::msg(e.to_string()))?),
             // The phone's own part.
             "answer" => {
                 let a: AnswerArgs = args(a)?;
@@ -747,6 +764,14 @@ impl Member {
                 Ok(json!({ "away": n.away_status() }))
             }
             "away_status" => Ok(json!({ "away": n.away_status() })),
+            // The phone joined by a remote invitation and stored its
+            // identity: sync away from home goes on, and the member offers
+            // its tunnel key to the hub through the invitation's guest
+            // tunnel.
+            "joined_by_invite" => {
+                n.joined_by_invite(arg(&a, "invite").as_str().unwrap_or_default())?;
+                Ok(json!({ "away": n.away_status() }))
+            }
             // Every device of the group as the app shows it.
             "devices" => {
                 let ds: Vec<DeviceAnswer> = n
@@ -910,6 +935,22 @@ impl Member {
                     let cert = self.node.finish_takeover(&s, &own)?;
                     return Ok(json!({ "state": "effective", "cert": b64(&cert) }));
                 }
+                // A new phone that restored the group (cbb_restore) claims
+                // it with the recovery key from the sheet, which signs the
+                // claim here and is not kept.
+                "recover_with_sheet" => {
+                    let sheet = cbb_core::recovery::read(&a.sheet).map_err(|r| Error::msg(r.message()))?;
+                    let der = sheet.cert.as_deref().ok_or_else(|| Error::msg(cbb_lite::restore::NEEDS_QR))?;
+                    let ca = Cert::parse(der)?;
+                    let pkcs8 = sheet.pkcs8().ok_or_else(|| Error::msg("the recovery key cannot be encoded"))?;
+                    let key = cbb_core::identity::FileKey::new(&pkcs8)?;
+                    if sheet.admin() != Some(ca.key_hash()) {
+                        return Err(Error::msg("the sheet's admin CA is for another key"));
+                    }
+                    let s = Signer { ca: &ca, key: &key, me: &me };
+                    self.node.claim(&s, How::Recovery, new_root()?)?;
+                    return Ok(json!({}));
+                }
                 _ => {}
             }
             let ca = match &a.admin_ca {
@@ -920,6 +961,57 @@ impl Member {
                 return Err(Error::msg("the key does not belong to the CA this phone signs with"));
             }
             let s = Signer { ca: &ca, key: &key, me: &me };
+            // The root's own records (cbb_core::root).
+            let rooted = |make: &dyn Fn(&cbb_core::group::Records, i64) -> Result<Record>| -> Result<Value> {
+                self.node.add_root_record(make)?;
+                Ok(json!({}))
+            };
+            match a.action.as_str() {
+                "takeover_delay" => {
+                    let ms = a.delay_ms.ok_or_else(|| Error::msg("the action needs delay_ms"))?;
+                    return rooted(&|rs, now| root::settings(rs, &s, &Setting::Delay(ms), now));
+                }
+                "key_level" => {
+                    rooted(&|rs, now| root::settings(rs, &s, &Setting::KeyLevel(&a.level), now))?;
+                    let below = self.node.below_level(&a.level);
+                    return Ok(json!({ "below": below }));
+                }
+                "hand_over" => return rooted(&|rs, now| root::hand_over(rs, &s, &a.device, now)),
+                "remove_recovery" => return rooted(&|rs, now| root::remove_recovery(rs, &s, now)),
+                // The sheet goes to the app once, with its QR code's
+                // modules to show; nothing of the key stays here.
+                "make_recovery" => {
+                    let made = std::cell::RefCell::new(None);
+                    rooted(&|rs, now| {
+                        let m = root::make_recovery(rs, &s, now)?;
+                        let r = m.record.clone();
+                        *made.borrow_mut() = Some(m);
+                        Ok(r)
+                    })?;
+                    let m = made.into_inner().ok_or_else(|| Error::msg("the recovery key was not made"))?;
+                    let modules = crate::join::modules(&m.qr)?;
+                    let admin = Body::parse(&m.record.body)?.admin.map(|h| h.0.to_vec()).unwrap_or_default();
+                    return Ok(json!({ "qr": m.qr, "text": m.text, "modules": modules, "admin": b64(&admin) }));
+                }
+                // The recovery key a YubiKey made, which never leaves it:
+                // its admin CA goes into the card's slot.
+                "recovery_for" => {
+                    let spki = a.key.as_deref().ok_or_else(|| Error::msg("the action needs key"))?;
+                    let point = certs::p256_spki(spki)
+                        .ok_or_else(|| Error::msg("the recovery key is no P-256 key"))?
+                        .to_sec1_point(false)
+                        .as_bytes()
+                        .to_vec();
+                    let ca = std::cell::RefCell::new(Vec::new());
+                    rooted(&|rs, now| {
+                        let (der, r) = root::recovery_for(rs, &s, &point, now)?;
+                        *ca.borrow_mut() = der;
+                        Ok(r)
+                    })?;
+                    return Ok(json!({ "admin_ca": b64(&ca.into_inner()) }));
+                }
+                _ => {}
+            }
             let order = |o: Order| -> Result<Value> {
                 let res = self.node.order(&s, &a.device, &o, Duration::from_millis(a.timeout_ms.min(60_000)))?;
                 Ok(json!({ "result": res }))
@@ -948,5 +1040,10 @@ impl Member {
     /// (src/admit.rs), with the issuing key's callback.
     pub fn admit(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::admit::Admit>, Vec<u8>) {
         crate::admit::Admit::new(self.node.clone(), request, sign, ctx)
+    }
+
+    /// Makes a remote invitation as an admin (src/invite.rs).
+    pub fn invite(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::invite::Invite>, Vec<u8>) {
+        crate::invite::Invite::new(self.node.clone(), request, sign, ctx)
     }
 }

@@ -1,0 +1,261 @@
+  1. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  1. 允许入站 TCP %s，来源 %s。用途：群组设备的连接。
+  2. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  2. 允许来自 %s 的入站 UDP 5353。用途：查找群组的设备（mDNS）。
+%s: removed the CBB rules.	%s：已移除 CBB 的规则。
+Firewall: closed the hub's UDP port %s.	防火墙：已关闭中心节点的 UDP 端口 %s。
+  In Firewall > Rules, on each interface of the home network (LAN and the others):	  在 Firewall > Rules 中，家庭网络的每个接口（LAN 及其他）上：
+    Pass, protocol TCP, source %s, destination This Firewall, port %s	    Pass，协议 TCP，来源 %s，目标 This Firewall，端口 %s
+    Pass, protocol UDP, the same sources, destination This Firewall, port 5353	    Pass，协议 UDP，相同来源，目标 This Firewall，端口 5353
+  Add to /etc/pf.conf, before the rules that block, and run pfctl -f /etc/pf.conf:	  添加到 /etc/pf.conf 中拦截规则之前，然后运行 pfctl -f /etc/pf.conf：
+  and the same lines in the script that firewall_script in rc.conf names, to keep them.	  并把相同的行加入 rc.conf 中 firewall_script 指定的脚本，以便保留。
+  In Firewall > Rules on WAN: Pass, protocol UDP, source any, destination WAN address, port %s	  在 WAN 的 Firewall > Rules 中：Pass，协议 UDP，来源 any，目标 WAN address，端口 %s
+%s [y/N]	%s [y/N]
+No terminal to answer on; taken as No.	没有可回答的终端；按“否”处理。
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand:	未添加防火墙规则。只有防火墙允许上述规则时 CBB 才能工作。手动添加：
+Firewall: no active firewall was found; no firewall rules are needed. If pf or ipfw is turned on later, run the installer again.	防火墙：未发现启用的防火墙，不需要规则。如果以后启用 pf 或 ipfw，请再次运行安装程序。
+Firewall: %s (active). CBB requires these rules:	防火墙：%s（已启用）。CBB 需要以下规则：
+CBB does not change pfSense's rules, and runs there unsupported. Add them by hand:	CBB 不会修改 pfSense 的规则，在那里运行不受支持。请手动添加：
+ (express installation)	（快速安装）
+ (as answered before)	（按之前的回答）
+With Yes, CBB keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both.	选择“是”时，CBB 把这些规则放在自己的 pf 锚点中，由其插件挂钩加入 OPNsense 的规则集；卸载时两者都会移除。
+With Yes, CBB keeps these rules in its own pf anchor and adds the lines that load it at the end of %s; uninstalling removes both.	选择“是”时，CBB 把这些规则放在自己的 pf 锚点中，并在 %s 末尾添加加载它的行；卸载时两者都会移除。
+With Yes, CBB adds these rules to ipfw's set %s at every start, and removes them on uninstall.	选择“是”时，CBB 每次启动都会把这些规则加入 ipfw 的集合 %s，卸载时移除。
+Add these rules now?	现在添加这些规则吗？
+To let CBB add and manage them, run the installer again with --express.	要让 CBB 添加并管理它们，请使用 --express 再次运行安装程序。
+Added the rules above%s. CBB manages them from now on.	已添加上述规则%s。今后由 CBB 管理。
+run it as root	请以 root 运行
+neither pf nor ipfw is active; nothing was added.	pf 和 ipfw 都未启用；未添加任何内容。
+failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again.	失败（退出状态 %s）。要查看运行的每条命令：设置 CBB_ERROR_DETAILS=1，然后再次运行。
+CBB_HOME_CGNAT is 1 or 0, not %s	CBB_HOME_CGNAT 应为 1 或 0，而不是 %s
+--port takes a port from 1024 to 65535	--port 接受 1024 到 65535 之间的端口
+CBB_FIREWALL is ask, express or no, not %s	CBB_FIREWALL 应为 ask、express 或 no，而不是 %s
+run it as root (sudo or doas)	请以 root 运行（sudo 或 doas）
+this installer is for FreeBSD	此安装程序用于 FreeBSD
+%s does not run on this machine; is it built for %s?	%s 无法在这台机器上运行；它是为 %s 构建的吗？
+an account named cbb exists here and is not this service's (its comment is not "CBB"); it would get the group's keys. Rename or remove it, then run install.sh again.	这里已有名为 cbb 的账户，且不属于本服务（其注释不是“CBB”）；它会获得群组的密钥。请重命名或删除它，然后再次运行 install.sh。
+a group named cbb exists here with members, and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	这里已有名为 cbb 的用户组，其中有成员，但没有服务账户；这些成员将能访问服务。请重命名或删除该用户组，然后再次运行 install.sh。
+Added %s to the cbb group; log in again to use cbb copy and paste.	已将 %s 加入 cbb 用户组；请重新登录以使用 cbb copy 和 paste。
+CBB uses TCP port %s instead of 8764.	CBB 使用 TCP 端口 %s，而不是 8764。
+the service did not answer within 10 s: %s	服务在 10 秒内没有响应：%s
+CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	CBB 正在 TCP 端口 %s 上运行。卸载：sh /usr/local/share/cbb/uninstall.sh
+OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense：它显示在 System > Diagnostics > Services 中，其规则在每次重新加载过滤器后保留。
+pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	不支持 pfSense：pfSense 更新可能会移除 CBB；更新后请再次运行此安装程序。
+Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	下一步：以 root 运行 cbb pair，并用手机上的 CBB 应用扫描二维码；没有应用时，请参阅 docs/guide/without-app.md。
+CBB is removed, with this device's keys; it left its group.	CBB 已移除，连同此设备的密钥；它已离开群组。
+CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 /var/db/cbb 中以便重新安装；--purge 会删除它们。
+--port needs a port number	--port 需要端口号
+--home-cgnat needs on or off	--home-cgnat 需要 on 或 off
+--auto-update needs on or off	--auto-update 需要 on 或 off
+unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	未知选项 %s（可用：--lite、--no-pair、--rootless、--console、--uinput、--port N、--home-cgnat on|off、--auto-update on|off、--express、--no-firewall）
+--rootless installs for your own user: run it without sudo: %s	--rootless 为你自己的用户安装：请不用 sudo 运行：%s
+--rootless is for Linux computers	--rootless 仅用于 Linux 电脑
+run it with sudo: %s	请用 sudo 运行：%s
+no release for this MIPS system: it is not OpenWrt, which names its byte order	没有适用于此 MIPS 系统的版本：它不是会注明字节序的 OpenWrt
+no release for the architecture %s	没有适用于架构 %s 的版本
+the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	MIPS 版轻量成员还不支持离家同步（路线图第 37 项）；完整成员支持。
+--console is not for a router	--console 不适用于路由器
+--uinput is not for a router	--uinput 不适用于路由器
+--home-cgnat is not for a router	--home-cgnat 不适用于路由器
+--lite is for Linux; a Mac runs the full member	--lite 仅用于 Linux；Mac 运行完整成员
+--console is for Linux	--console 仅用于 Linux
+--uinput is for Linux	--uinput 仅用于 Linux
+--lite is for Linux; FreeBSD runs the full member	--lite 仅用于 Linux；FreeBSD 运行完整成员
+this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	此安装程序用于 Linux、macOS 和 FreeBSD；在 Windows 上请使用 get.ps1
+tar is required	需要 tar
+sha256sum or shasum is required	需要 sha256sum 或 shasum
+curl or wget is required	需要 curl 或 wget
+CBB_VERSION must look like v1.2.3	CBB_VERSION 的格式必须类似 v1.2.3
+the signed %s file is not in the strict form of signed bodies; not installing	已签名的 %s 文件不符合签名内容的严格格式；不安装
+Not checked: the release's signature (CBB_VERIFY=skip).	未检查：版本的签名（CBB_VERIFY=skip）。
+openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)	检查版本签名需要 openssl（或设置 CBB_VERIFY=skip 不经检查安装）
+%s has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)	%s 没有已签名的版本文件；不安装（CBB_VERIFY=skip 会不经检查安装）
+keys.json is not signed by the project's root key; not installing	keys.json 未由项目的根密钥签名；不安装
+keys.json has expired; check the clock, or try again later	keys.json 已过期；请检查时钟，或稍后再试
+keys.json is not valid; not installing	keys.json 无效；不安装
+keys.json holds a key that is not valid	keys.json 中有无效的密钥
+keys.json holds no release key	keys.json 中没有版本密钥
+release.json is not signed by a release key; not installing	release.json 未由版本密钥签名；不安装
+stable.json is not signed by a release or channel key; not installing	stable.json 未由版本密钥或渠道密钥签名；不安装
+stable.json is not the stable channel's	stable.json 不属于稳定渠道
+stable.json has expired; check the clock, or try again later	stable.json 已过期；请检查时钟，或稍后再试
+release.json is not the release stable.json names; not installing	release.json 不是 stable.json 指定的版本；不安装
+release.json is for %s, not %s	release.json 属于 %s，而不是 %s
+release.json does not list %s	release.json 中没有列出 %s
+%s does not match the signed release.json; not installing it	%s 与已签名的 release.json 不符；不安装
+The release's signature checks out (%s).	版本签名验证通过（%s）。
+could not download %s	无法下载 %s
+stable.json names no release	stable.json 没有指定版本
+Downloading %s (%s)...	正在下载 %s（%s）...
+SHA256SUMS does not list %s	SHA256SUMS 中没有列出 %s
+%s does not match SHA256SUMS; not installing it	%s 与 SHA256SUMS 不符；不安装
+%s does not have this repository's build attestation; not installing it	%s 没有本仓库的构建证明；不安装
+The archive's build attestation checks out.	压缩包的构建证明验证通过。
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the archive's build attestation	CBB_ATTESTATION=require 需要已登录的 gh（gh auth login）来检查压缩包的构建证明
+Not checked: the archive's build attestation (it needs gh, signed in). SHA256SUMS matched.	未检查：压缩包的构建证明（需要已登录的 gh）。SHA256SUMS 一致。
+  %s. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  %s. 允许入站 TCP %s，来源 %s。用途：群组设备的连接。
+  %s. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  %s. 允许来自 %s 的入站 UDP 5353。用途：查找群组的设备（mDNS）。
+ufw: removed the CBB rules.	ufw：已移除 CBB 的规则。
+firewalld: removed the CBB rules and service.	firewalld：已移除 CBB 的规则和服务。
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run:	未添加防火墙规则。只有防火墙允许上述规则时 CBB 才能工作。要手动添加，请运行：
+Then make them permanent the way this system keeps its %s rules.	然后按本系统保存 %s 规则的方式使其永久生效。
+Firewall: no active firewall was found; no firewall rules are needed. If a firewall is turned on later, run the installer again.	防火墙：未发现启用的防火墙，不需要规则。如果以后启用防火墙，请再次运行安装程序。
+cbb does not manage %s rules: rules added at run time do not survive a restart.	cbb 不管理 %s 规则：运行时添加的规则在重启后不会保留。
+ (kept from an earlier installation)	（沿用之前的安装）
+With Yes, CBB adds these rules, keeps them current on every update and removes them on uninstall.	选择“是”时，CBB 会添加这些规则，每次更新时保持最新，卸载时移除。
+run it with sudo	请用 sudo 运行
+no ufw or firewalld is active; nothing was added.	ufw 和 firewalld 都未启用；未添加任何内容。
+%s needs root; a rootless install has no console or uinput helper	%s 需要 root；无 root 安装没有 console 和 uinput 助手
+--rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless 为你自己的用户安装：请不用 sudo 运行。使用 sudo 时，不带 --rootless 的 install.sh 会安装系统服务，这样更安全。
+a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	无 root 安装以 systemd 用户单元运行，而此会话没有 systemd 用户管理器；请登录桌面或通过 ssh 登录后再次运行
+--home-cgnat is for the full member	--home-cgnat 仅用于完整成员
+CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	这里已为整个系统安装了 CBB（%s），一台设备只运行一个服务；请先卸载它，或保留它
+the desktop agent did not start; it starts at your next login	桌面代理未启动；它会在你下次登录时启动
+CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB 在你登录期间运行。要在注销后继续运行，请管理员执行：sudo loginctl enable-linger %s
+CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	CBB 正在为 %s 在 TCP 端口 %s 上运行，未使用 root 安装：它不能成为群组的根、管理员或中心节点。如果这里的防火墙限制入站连接，需由管理员允许来自家庭网络的 TCP %s 和 UDP 5353。卸载：%s
+For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	要在 tmux 中复制粘贴，请在 ~/.tmux.conf 中加入这一行：source-file -q %s/tmux.conf
+Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	下一步：参阅 member/README.md；简而言之，在这里运行 %s pair，并用手机应用扫描二维码。
+Next: run %s pair and scan its QR code with the CBB app on your phone.	下一步：运行 %s pair，并用手机上的 CBB 应用扫描二维码。
+this archive has no install-rootless.sh, so it cannot install without root	此压缩包没有 install-rootless.sh，因此无法在没有 root 的情况下安装
+systemd is required	需要 systemd
+the full member is installed here, and the lite member cannot use its keys; remove it first: %s	这里已安装完整成员，轻量成员无法使用它的密钥；请先卸载它：%s
+the lite member is installed here, and the full member cannot use its keys; remove it first: %s	这里已安装轻量成员，完整成员无法使用它的密钥；请先卸载它：%s
+an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	这里已有名为 cbb 的账户，且不属于本服务（其注释不是“cbb service”）；它会获得群组的密钥。请重命名或删除它，然后再次运行 install.sh。
+a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	这里已有名为 cbb 的用户组，其中有成员（%s），但没有服务账户；这些成员将能访问服务。请重命名或删除该用户组，然后再次运行 install.sh。
+Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	未安装：托盘应用，它需要 GTK 4 和 WebKitGTK 6.0（Debian 和 Ubuntu：%s；Fedora：%s）。安装它们后再次运行即可添加。
+--uinput is for the full member, which runs the desktop connector	--uinput 仅用于运行桌面连接器的完整成员
+could not load the uinput module now; it loads at the next boot	现在无法加载 uinput 模块；它会在下次启动时加载
+100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	在此设备上，100.64.0.0/10 算作家庭网络（--home-cgnat on）。
+New member and admin keys of this device go into its TPM.	此设备新的成员密钥和管理员密钥存放在其 TPM 中。
+CBB uses TCP port %s instead of 8764. If a firewall on the network limits incoming connections, allow TCP %s from the home network.	CBB 使用 TCP 端口 %s，而不是 8764。如果网络上的防火墙限制入站连接，请允许来自家庭网络的 TCP %s。
+the uinput helper did not start; see journalctl -u cbb-uinput	uinput 助手未启动；请查看 journalctl -u cbb-uinput
+the desktop agent of %s did not start again; it starts at their next login	%s 的桌面代理未能重新启动；它会在该用户下次登录时启动
+cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow 失败；服务运行后请执行 sudo cbb global allow。
+CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB 正在 TCP 端口 %s 上运行。卸载：sudo sh %s/uninstall.sh
+Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	下一步：参阅 member/README.md；简而言之，在这里运行 sudo -u cbb %s pair，并用手机应用扫描二维码。
+Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	下一步：运行 sudo %s pair，并用手机上的 CBB 应用扫描二维码；没有应用时，请参阅 docs/guide/without-app.md。
+CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 %s/cbb 中以便重新安装；--purge 会删除它们。
+CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 /var/lib/cbb 中以便重新安装；--purge 会删除它们。
+%s does not run on this Mac	%s 无法在这台 Mac 上运行
+%s was built without cgo, so it cannot link this Mac's clipboard; use a release build, or build it with CGO_ENABLED=1	%s 构建时未启用 cgo，因此无法连接这台 Mac 的剪贴板；请使用发布版本，或用 CGO_ENABLED=1 构建
+--in-place needs a path of letters, digits and / . _ + -, not %s	--in-place 需要由字母、数字和 / . _ + - 组成的路径，而不是 %s
+%s is a link, likely Homebrew's; run this with --in-place %s	%s 是一个链接，可能来自 Homebrew；请带 --in-place %s 运行
+100.64.0.0/10 counts as the home network on this Mac (--home-cgnat on).	在这台 Mac 上，100.64.0.0/10 算作家庭网络（--home-cgnat on）。
+Firewall: the macOS application firewall (on). CBB requires this rule:	防火墙：macOS 应用程序防火墙（已开启）。CBB 需要这条规则：
+Firewall: the macOS application firewall (off). CBB requires this rule:	防火墙：macOS 应用程序防火墙（已关闭）。CBB 需要这条规则：
+  1. Allow incoming connections to %s. Purpose: connections from the group's devices on TCP %s and finding them on UDP 5353 (mDNS). The application firewall allows a program on every port and from every address; CBB itself accepts only the home network.	  1. 允许到 %s 的入站连接。用途：群组设备通过 TCP %s 的连接，以及通过 UDP 5353（mDNS）查找它们。应用程序防火墙会允许程序使用所有端口、接受所有地址；CBB 自身只接受家庭网络。
+With Yes, CBB adds this rule, keeps it current on every update and removes it on uninstall.	选择“是”时，CBB 会添加这条规则，每次更新时保持最新，卸载时移除。
+Add this rule now? [y/N]	现在添加这条规则吗？[y/N]
+Added the rule above%s. CBB manages it from now on.	已添加上述规则%s。今后由 CBB 管理。
+No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	未添加防火墙规则。只有防火墙允许上述规则时 CBB 才能工作。要手动添加，请运行：
+To let CBB add and manage it, run the installer again with --express.	要让 CBB 添加并管理它，请使用 --express 再次运行安装程序。
+CBB is running on TCP port %s, in its group.	CBB 正在 TCP 端口 %s 上运行，已在群组中。
+CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	CBB 正在 TCP 端口 %s 上运行。加入群组：sudo cbb pair，然后用手机扫描二维码，或输入群组的根或管理员上 cbb pair 显示的代码；或创建群组：sudo cbb new。
+CBB is removed, with this Mac's keys; it left its group.	CBB 已移除，连同这台 Mac 的密钥；它已离开群组。
+CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 %s/state 中以便重新安装；--purge 会删除它们。
+this installer is for OpenWrt	此安装程序用于 OpenWrt
+OpenWrt 25.12 or later is required (it installs packages with apk)	需要 OpenWrt 25.12 或更高版本（它用 apk 安装软件包）
+%s does not run on this router; is it built for %s?	%s 无法在这台路由器上运行；它是为 %s 构建的吗？
+CBB is installed; procd is not running here, so it starts at the next boot.	CBB 已安装；这里没有运行 procd，所以它会在下次启动时运行。
+the service did not answer within 40 s: %s	服务在 40 秒内没有响应：%s
+see logread -e cbb	请查看 logread -e cbb
+CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB 正在 lan 区域的 TCP 端口 %s 上运行。卸载：sh /usr/share/cbb/uninstall.sh
+Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	attended sysupgrade（ASU、owut）不会保留 OpenWrt 软件源以外的软件包：升级后请重新安装。
+Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	下一步：运行 su -s /bin/sh cbb -c 'cbb pair -name router'，并用手机上的 CBB 应用扫描二维码。
+Next: run cbb pair and scan its QR code with the CBB app on your phone.	下一步：运行 cbb pair，并用手机上的 CBB 应用扫描二维码。
+CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 /etc/cbb 中以便重新安装；--purge 会删除它们。
+This device is in no group yet, so it starts pairing now (--no-pair skips this).	此设备尚未加入群组，因此现在开始配对（--no-pair 可跳过）。
+could not record how CBB was installed; cbb update takes it as get.sh	无法记录 CBB 的安装方式；cbb update 将视为 get.sh
+automatic updates are on or off, not %s	自动更新应为 on 或 off，而不是 %s
+CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB 可以每天检查一次项目签名的新版本并安装；与任何下载一样，检查时 GitHub 会得知此设备的地址。
+Update automatically? [y/N]	自动更新吗？[y/N]
+No terminal to answer on; not now. Later: %scbb update -auto on	没有可回答的终端；暂不设置。以后可运行：%scbb update -auto on
+could not turn automatic updates %s; run %scbb update -auto %s	无法将自动更新设为 %s；请运行 %scbb update -auto %s
+starting	正在开始
+a key is not P-256	某个密钥不是 P-256
+%s is not a valid release file; not installing	%s 不是有效的版本文件；不安装
+%s is not signed by the project's key; not installing	%s 未由项目密钥签名；不安装
+keys.json holds a key whose use is empty; not installing	keys.json 中有用途为空的密钥；不安装
+checking for administrator rights	检查管理员权限
+run it in a PowerShell opened with "Run as administrator"	请在以“以管理员身份运行”打开的 PowerShell 中运行
+finding the architecture	确定架构
+finding the latest release	查找最新版本
+downloading %s (%s)	下载 %s（%s）
+checking %s against SHA256SUMS	用 SHA256SUMS 校验 %s
+checking the release's signature	检查版本签名
+checking the build attestation of %s	检查 %s 的构建证明
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the build attestation	CBB_ATTESTATION=require 需要已登录的 gh（gh auth login）来检查构建证明
+Not checked: the build attestation of the archive (it needs gh, signed in). SHA256SUMS matched.	未检查：压缩包的构建证明（需要已登录的 gh）。SHA256SUMS 一致。
+unpacking %s	解压 %s
+running install.ps1	运行 install.ps1
+install.ps1 exited with %s	install.ps1 退出，代码 %s
+get.ps1: %s failed: %s	get.ps1：步骤“%s”失败：%s
+For the full error: $env:CBB_ERROR_DETAILS = "1", and run it again.	要查看完整错误：$env:CBB_ERROR_DETAILS = "1"，然后再次运行。
+install.ps1: %s failed: %s	install.ps1：步骤“%s”失败：%s
+Run it again with -Details for the full error.	带 -Details 再次运行可查看完整错误。
+%s %s exited with %s: %s	%s %s 退出，代码 %s：%s
+install.ps1: run it in a PowerShell opened with "Run as administrator".	install.ps1：请在以“以管理员身份运行”打开的 PowerShell 中运行。
+install.ps1: -Port takes a port from 1024 to 65535.	install.ps1：-Port 接受 1024 到 65535 之间的端口。
+checking the binaries	检查程序文件
+cbbw.exe is missing beside %s	%s 旁边缺少 cbbw.exe
+%s is not built for Windows: %s	%s 不是为 Windows 构建的：%s
+finding the signed-in user	查找已登录的用户
+stopping cbb	停止 cbb
+copying the files to %s	复制文件到 %s
+adding cbb to PATH	将 cbb 加入 PATH
+making the %s group	创建 %s 用户组
+adding %s to the %s group	将 %s 加入 %s 用户组
+net localgroup %s %s /add exited with %s: %s	net localgroup %s %s /add 退出，代码 %s：%s
+creating the service	创建服务
+setting the service's path failed with %s	设置服务路径失败：%s
+setting the port	设置端口
+100.64.0.0/10 counts as the home network on this PC (-HomeCgnat on).	在这台电脑上，100.64.0.0/10 算作家庭网络（-HomeCgnat on）。
+narrowing %s	收紧 %s 的权限
+%s was not the administrators' own; it is now %s	%s 不归管理员所有；现在已移到 %s
+allowing cbb in Windows Firewall	在 Windows 防火墙中允许 cbb
+the local subnet	本地子网
+the local subnet and 100.64.0.0/10	本地子网和 100.64.0.0/10
+Firewall: Windows Firewall (on for %s). CBB requires these rules:	防火墙：Windows 防火墙（已为 %s 开启）。CBB 需要以下规则：
+Firewall: Windows Firewall (off). CBB requires these rules:	防火墙：Windows 防火墙（已关闭）。CBB 需要以下规则：
+  1. Allow incoming TCP %s from %s to %s. Purpose: connections from the group's devices.	  1. 允许入站 TCP %s，来源 %s，目标 %s。用途：群组设备的连接。
+  2. Allow incoming UDP 5353 from %s to %s. Purpose: finding the group's devices (mDNS).	  2. 允许从 %s 到 %s 的入站 UDP 5353。用途：查找群组的设备（mDNS）。
+Add these rules now? [y/N]	现在添加这些规则吗？[y/N]
+Add these rules now? [y/N] No console to answer on; taken as No.	现在添加这些规则吗？[y/N] 没有可回答的控制台；按“否”处理。
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run in an administrator PowerShell:	未添加防火墙规则。只有防火墙允许上述规则时 CBB 才能工作。要手动添加，请在管理员 PowerShell 中运行：
+To let CBB add and manage them, run the installer again with -Express ($env:CBB_FIREWALL = "express" for get.ps1).	要让 CBB 添加并管理它们，请使用 -Express 再次运行安装程序（get.ps1 使用 $env:CBB_FIREWALL = "express"）。
+CBB also adds an outbound rule that keeps its service on the home network and, with cbb global on, its group's servers.	CBB 还会添加一条出站规则，把其服务限制在家庭网络内，启用 cbb global on 时还包括其群组的服务器。
+keeping the service on the home network	把服务限制在家庭网络内
+starting the service	启动服务
+starting the agent with every sign-in	设置每次登录时启动代理
+starting the agent for %s	为 %s 启动代理
+starting the tray app for %s	为 %s 启动托盘应用
+The agent did not start now (%s); it starts when %s signs in again.	代理现在未启动（%s）；它会在 %s 再次登录时启动。
+The tray app did not start now (%s); it starts when %s signs in again.	托盘应用现在未启动（%s）；它会在 %s 再次登录时启动。
+starting the tray app with every sign-in	设置每次登录时启动托盘应用
+adding CBB to the Start menu	将 CBB 加入开始菜单
+registering the uninstaller	注册卸载程序
+waiting for the service	等待服务
+the service does not answer; its log is %s	服务没有响应；其日志在 %s
+writing the outbound rule for what the service reaches now	为服务当前访问的地址写入出站规则
+cbb global allow exited with %s	cbb global allow 退出，代码 %s
+recording how CBB was installed	记录 CBB 的安装方式
+Could not record how CBB was installed; cbb update takes it as get.ps1.	无法记录 CBB 的安装方式；cbb update 将视为 get.ps1。
+setting automatic updates	设置自动更新
+Update automatically? [y/N] No console to answer on; not now. Later: cbb update -auto on	自动更新吗？[y/N] 没有可回答的控制台；暂不设置。以后可运行：cbb update -auto on
+Could not turn automatic updates %s; run cbb update -auto %s as administrator.	无法将自动更新设为 %s；请以管理员身份运行 cbb update -auto %s。
+CBB %s is running on TCP port %s; %s may use it.	CBB %s 正在 TCP 端口 %s 上运行；%s 可以使用它。
+It stays in its group.	它仍在原来的群组中。
+Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	下一步，在以管理员身份打开的终端中：cbb pair，然后用手机扫描二维码，或输入群组的根或管理员上 cbb pair 显示的代码；或创建群组：cbb new。
+To remove it: Settings, Apps, CBB, Uninstall.	卸载：设置、应用、CBB、卸载。
+Y	是
+Yes	是的
+y	是
+yes	是的
+uninstall.ps1: %s failed: %s	uninstall.ps1：步骤“%s”失败：%s
+deleting the service	删除服务
+stopping the agents and the tray app	停止代理和托盘应用
+removing the update task and cbb update's folder	移除更新任务和 cbb update 的文件夹
+removing the firewall rules	移除防火墙规则
+removing the sign-in entries, the Start menu shortcut and the uninstaller entry	移除登录启动项、开始菜单快捷方式和卸载程序条目
+removing cbb from PATH	从 PATH 中移除 cbb
+removing %s	移除 %s
+removing %s and the %s group	移除 %s 和 %s 用户组
+CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	CBB 已移除。其密钥保留在 %s 中以便重新安装；-Purge 会删除它们。

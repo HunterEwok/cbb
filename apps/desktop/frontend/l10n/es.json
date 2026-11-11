@@ -247,7 +247,6 @@
   "More": "Más",
   "OK": "Aceptar",
   "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.": "En un teléfono del grupo, toca + y escanea este código. En un ordenador del grupo, toca + y escribe los números. Mantén esta ventana abierta.",
-  "On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.": "En el hub del grupo, ejecuta cbb invite y envía el archivo que crea por un canal de confianza. En el dispositivo nuevo, ejecuta cbb pair -invite con ese archivo.",
   "On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.": "En el dispositivo nuevo, elige Unirse a un grupo: muestra un código QR y seis dígitos. Un teléfono del grupo escanea el código; aquí, escribe los dígitos.",
   "Open a picture of its QR code": "Abrir una imagen de su código QR",
   "Open at sign-in": "Abrir al iniciar sesión",
@@ -265,5 +264,13 @@
   "Turn sync off": "Desactivar la sincronización",
   "Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does.": "Escribe la clave de la hoja, o pega el texto de su código QR. La reclamación espera igual que una toma.",
   "Type the six digits the new device shows.": "Escribe los seis dígitos que muestra el dispositivo nuevo.",
-  "Without a camera": "Sin cámara"
+  "Without a camera": "Sin cámara",
+  "Allow cbb to run as the administrator; the invitation opens on the group's hub next.": "Permite que cbb se ejecute como administrador; después la invitación se abre en el hub del grupo.",
+  "The invitation's QR code": "El código QR de la invitación",
+  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.": "En un teléfono nuevo, abre CBB, toca Unirse con una invitación y escanea el código. En un ordenador, ejecuta cbb pair -invite con su texto. Muéstralo o envíalo solo a quien se une.",
+  "The invitation's text": "El texto de la invitación",
+  "Not this one": "Este no",
+  "The invitation is valid until %s.": "La invitación es válida hasta las %s.",
+  "%s (%s) used the invitation. Admit it only if the device shows the same fingerprint:": "%s (%s) usó la invitación. Admítelo solo si el dispositivo muestra la misma huella:",
+  "The device joined the group; it appears in the list once it connects.": "El dispositivo se unió al grupo; aparece en la lista cuando se conecta."
 }

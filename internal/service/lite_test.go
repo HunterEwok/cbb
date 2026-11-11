@@ -7,6 +7,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
@@ -1108,6 +1110,97 @@ func TestFFIPhoneRoot(t *testing.T) {
 	if got := manage(`{"action":"make_admin","device":"` + admitted + `"}`); !strings.Contains(got, "not connected") {
 		t.Fatalf("making a computer that is not running an admin: %s", got)
 	}
+	// The root's own records, built and signed in the core (cbb_core::root).
+	if got := manage(`{"action":"takeover_delay","delay_ms":3600000}`); got != `{"ok":{}}` {
+		t.Fatalf("setting the takeover delay: %s", got)
+	}
+	if got := manage(`{"action":"takeover_delay","delay_ms":-1}`); !strings.Contains(got, "from 0 to 7 days") {
+		t.Fatalf("a negative takeover delay: %s", got)
+	}
+	if got := manage(`{"action":"key_level","level":"files"}`); got != `{"ok":{"below":[]}}` {
+		t.Fatalf("setting the key level: %s", got)
+	}
+	if got := manage(`{"action":"hand_over","device":"` + admitted + `"}`); !strings.Contains(got, "no admin") {
+		t.Fatalf("handing the group to a computer that is no admin: %s", got)
+	}
+	if got := manage(`{"action":"remove_recovery"}`); !strings.Contains(got, "no recovery key") {
+		t.Fatalf("removing a recovery key the group does not have: %s", got)
+	}
+	var sheet struct {
+		OK struct {
+			QR      string   `json:"qr"`
+			Text    string   `json:"text"`
+			Modules []string `json:"modules"`
+			Admin   []byte   `json:"admin"`
+		} `json:"ok"`
+	}
+	if got := manage(`{"action":"make_recovery"}`); json.Unmarshal([]byte(got), &sheet) != nil ||
+		!strings.HasPrefix(sheet.OK.QR, "cbb://recover?g="+made[1]+"&") || len(sheet.OK.Text) != 69 || len(sheet.OK.Modules) == 0 ||
+		len(sheet.OK.Admin) != 32 {
+		t.Fatalf("making the recovery key: %s", got)
+	}
+	// A YubiKey's key, which never leaves the card: the root issues its admin CA.
+	card, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spki, err := x509.MarshalPKIXPublicKey(&card.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var onCard struct {
+		OK struct {
+			AdminCA []byte `json:"admin_ca"`
+		} `json:"ok"`
+	}
+	got := manage(`{"action":"recovery_for","key":"` + base64.StdEncoding.EncodeToString(spki) + `"}`)
+	if json.Unmarshal([]byte(got), &onCard) != nil {
+		t.Fatalf("the card's recovery key: %s", got)
+	}
+	cardCA, err := x509.ParseCertificate(onCard.OK.AdminCA)
+	if err != nil || !cardCA.IsCA || !card.PublicKey.Equal(cardCA.PublicKey) || cardCA.CheckSignatureFrom(id.GroupCA.Cert) != nil {
+		t.Fatalf("the card's admin CA: %s, %v", got, err)
+	}
+	if got := manage(`{"action":"recovery_for","key":"AAAA"}`); !strings.Contains(got, "no P-256 key") {
+		t.Fatalf("a recovery key that is no key: %s", got)
+	}
+	fmt.Fprintln(in, `CALL {"op":"records"}`)
+	var recs struct {
+		OK struct {
+			Records []struct {
+				Body []byte `json:"body"`
+			} `json:"records"`
+		} `json:"ok"`
+	}
+	if err := json.Unmarshal([]byte(next("ANSWER ")), &recs); err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]bool{}
+	for _, r := range recs.OK.Records {
+		var b struct {
+			Type  string `json:"type"`
+			Delay int64  `json:"takeover_delay_ms"`
+			Level string `json:"key_level"`
+		}
+		if err := json.Unmarshal(r.Body, &b); err != nil {
+			t.Fatal(err)
+		}
+		kinds[b.Type] = true
+		// The key level's settings record keeps the delay set before it.
+		if b.Type == "settings" && b.Level == "files" && b.Delay != 3600000 {
+			t.Fatalf("the key level's settings record dropped the delay: %+v", b)
+		}
+	}
+	if !kinds["settings"] || !kinds["recovery"] {
+		t.Fatalf("the records hold no settings or recovery record: %v", kinds)
+	}
+	fmt.Fprintln(in, `CALL {"op":"root_view"}`)
+	if got := next("ANSWER "); got != `{"ok":{"delay_ms":3600000,"handed_to":null,"key_level":"files","recovery":true}}` {
+		t.Fatalf("the root's settings: %s", got)
+	}
+	if got := manage(`{"action":"remove_recovery"}`); got != `{"ok":{}}` {
+		t.Fatalf("removing the recovery key: %s", got)
+	}
 	// A group made a moment ago stops nothing.
 	fmt.Fprintln(in, `CALL {"op":"alerts"}`)
 	if got := next("ANSWER "); got != `{"ok":{"alerts":[]}}` {
@@ -2037,4 +2130,97 @@ func udpRelay(t *testing.T, to int) *udpRelayPort {
 		}
 	}()
 	return r
+}
+
+// TestFFIPhoneRemoves has the root phone remove a computer it is connected
+// to, as the Android app's GroupTest.a8_renameAndRemove does: the removed
+// computer must hear it was removed, though the phone ends the connection
+// right after the records that remove it, and the other computer stays.
+func TestFFIPhoneRemoves(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
+	if made := strings.Fields(next("Group ")); len(made) != 2 {
+		t.Fatalf("the phone's group: %q", made)
+	}
+	var h hub
+	admit := func(name string) (*testService, string) {
+		s, qr := listeningJoin(t, &h, name)
+		fmt.Fprintln(in, "ADMIT "+qr)
+		admitted := next("ADMITTED ")
+		if got := next("ADMIT DONE "); got != "true" {
+			t.Fatalf("%s did not confirm its join: %q", name, got)
+		}
+		joinedIdentity(t, s, admitted)
+		return s, admitted
+	}
+	pc, _ := admit("pc")
+	second, id := admit("second")
+	call := func(req string) string {
+		fmt.Fprintln(in, "CALL "+req)
+		return next("ANSWER ")
+	}
+	call(`{"op":"found","args":{"key":"pc","addrs":["` + pc.addr() + `"]}}`)
+	call(`{"op":"found","args":{"key":"second","addrs":["` + second.addr() + `"]}}`)
+	waitFor(t, "the phone connected to both", func() bool {
+		return len(pc.status(t).Peers) == 1 && len(second.status(t).Peers) == 1
+	})
+	manage := func(req string) string {
+		fmt.Fprintln(in, "MANAGE "+req)
+		return next("MANAGED ")
+	}
+	if got := manage(`{"action":"rename","device":"` + id + `","name":"bench-second"}`); got != `{"ok":{}}` {
+		t.Fatalf("renaming the computer: %s", got)
+	}
+	waitFor(t, "the second computer has its new name", func() bool {
+		m, err := second.do(t, control.Header{Op: control.OpDevices}, "")
+		if err != nil {
+			return false
+		}
+		for _, d := range m.Devices {
+			if d.ID == id && d.Name == "bench-second" {
+				return true
+			}
+		}
+		return false
+	})
+	if got := manage(`{"action":"remove","device":"` + id + `"}`); got != `{"ok":{}}` {
+		t.Fatalf("removing the computer: %s", got)
+	}
+	waitUpTo(t, 60*time.Second, "the second computer says it was removed", func() bool { return second.status(t).Removed })
+	if pc.status(t).Removed {
+		t.Fatal("the other computer says it was removed")
+	}
+}
+
+// TestFFIPhoneRemovesAway: the root phone removes a computer it never
+// connected to after admitting it; the phone's next connection with the
+// computer carries the records that remove it, and the computer says so.
+func TestFFIPhoneRemovesAway(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
+	if made := strings.Fields(next("Group ")); len(made) != 2 {
+		t.Fatalf("the phone's group: %q", made)
+	}
+	var h hub
+	second, qr := listeningJoin(t, &h, "second")
+	fmt.Fprintln(in, "ADMIT "+qr)
+	id := next("ADMITTED ")
+	if got := next("ADMIT DONE "); got != "true" {
+		t.Fatalf("the computer did not confirm its join: %q", got)
+	}
+	joinedIdentity(t, second, id)
+	fmt.Fprintln(in, "MANAGE "+`{"action":"remove","device":"`+id+`"}`)
+	if got := next("MANAGED "); got != `{"ok":{}}` {
+		t.Fatalf("removing the computer: %s", got)
+	}
+	fmt.Fprintln(in, `CALL {"op":"found","args":{"key":"second","addrs":["`+second.addr()+`"]}}`)
+	next("ANSWER ")
+	waitUpTo(t, 30*time.Second, "the computer says it was removed", func() bool { return second.status(t).Removed })
+	waitFor(t, "the removed computer keeps no connection", func() bool { return len(second.status(t).Peers) == 0 })
 }

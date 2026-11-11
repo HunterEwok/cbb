@@ -61,8 +61,10 @@ func TestXHTTPPathKept(t *testing.T) {
 		t.Errorf("the key file after the path: %v", err)
 	}
 	stderr.Reset()
-	args := []string{"-key", key, "-state", "none", "-vless-site", "www.example.com", "-vless-xhttp", "cbb.tools"}
-	if code := Command(args, &stdout, &stderr, ""); code != 2 || !strings.Contains(stderr.String(), "not both") {
-		t.Errorf("both transports: %d, %q", code, stderr.String())
+	// REALITY is gone: an old command line stops rather than running
+	// without the VLESS it asked for.
+	args := []string{"-key", key, "-state", "none", "-vless-site", "www.example.com"}
+	if code := Command(args, &stdout, &stderr, ""); code != 2 || !strings.Contains(stderr.String(), "vless-site") {
+		t.Errorf("-vless-site: %d, %q", code, stderr.String())
 	}
 }

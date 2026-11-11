@@ -350,7 +350,7 @@ class PhoneGroupTest {
         assertFailsWith<PhoneGroup.BelowKeyLevel> { g.makeAdmin(pi, adminKey, root, t1, keyStore = Records.FILE, allowFileKey = true) }
         // The root's own key is not proven, so the level proven is out of its reach.
         assertFailsWith<PhoneGroup.BelowKeyLevel> { g.setKeyLevel(Records.PROVEN, root, t1) }
-        assertEquals(PhoneGroup.INVALID_KEY_LEVEL, assertFailsWith<PhoneGroup.Failure> { g.setKeyLevel("any", root, t1) }.message)
+        assertEquals(INVALID_KEY_LEVEL, assertFailsWith<PhoneGroup.Failure> { g.setKeyLevel("any", root, t1) }.message)
         g.setTakeoverDelay(3_600_000, root, t1)
         g.setKeyLevel(Records.LEVEL_FILES, root, t1)
         assertEquals(Records.LEVEL_FILES, g.keyLevel)

@@ -798,33 +798,41 @@ func TestRouteObfuscated(t *testing.T) {
 	expect("the other client's data to B", other, obfuscate(oB, data(200)), hubB)
 }
 
-func TestThroughVLESS(t *testing.T) {
+// TestThroughXHTTP checks VLESS over XHTTP behind the web server of the
+// forwarder's site, with and without AmneziaWG's obfuscation: the hub
+// learns the transport, the site's name, the web server's port and the
+// path, and a client gets through with them.
+func TestThroughXHTTP(t *testing.T) {
 	for _, obfuscated := range []bool{false, true} {
 		t.Run(fmt.Sprintf("obfuscated=%v", obfuscated), func(t *testing.T) {
 			// A forwarder of its own, so that the first case's hub and
 			// Xray are gone before the second.
-			var rk [32]byte
-			rand.Read(rk[:])
-			f, pin := startForwarderWith(t, Config{VLESS: &VLESSConfig{Listen: "127.0.0.1:0", Site: vlesstest.Site, Dest: vlesstest.Decoy(t), Key: rk}})
-			// A client that comes before the forwarder has learned the
-			// site waits for it, and its handshakes with it.
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-			defer cancel()
-			if err := f.Ready(ctx); err != nil {
+			path, err := tunnel.NewVLESSPath()
+			if err != nil {
 				t.Fatal(err)
 			}
+			var back atomic.Value
+			back.Store("127.0.0.1:9")
+			web, cert := vlesstest.WebServer(t, path, func() string { return back.Load().(string) })
+			vless.TrustForTests(cert)
+			f, pin := startForwarderWith(t, Config{VLESS: &VLESSConfig{Listen: "127.0.0.1:0",
+				XHTTP: &XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+			back.Store(net.JoinHostPort("127.0.0.1", strconv.Itoa(int(f.vless.Port()))))
 			var obf *tunnel.Obfuscation
 			if obfuscated {
 				obf = newObfuscation(t)
 			}
-			id, err := tunnel.NewVLESSID()
-			if err != nil {
-				t.Fatal(err)
-			}
+			id, _ := tunnel.NewVLESSID()
 			key, peer := newClient(t)
 			hs := startHubWith(t, f, pin, []tunnel.Peer{peer}, HubConfig{Obfuscation: obf, VLESSID: id})
-			if hs.vless == nil || hs.vless.ID != id || hs.vless.Endpoint.Port() != f.vless.Port() {
-				t.Fatalf("the hub learned %+v", hs.vless)
+			// The group's packets come under a path of its own below the path.
+			group, ok := strings.CutPrefix(hs.vless.Path, path+"/")
+			if !ok || tunnel.CheckGroupPath(group) != nil {
+				t.Fatalf("the hub learned the path %q", hs.vless.Path)
+			}
+			want := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: hs.vless.Path, ID: id}
+			if !hs.vless.Equal(&want) {
+				t.Fatalf("the hub learned %+v, want %+v", hs.vless, want)
 			}
 			vc, err := vless.Dial(*hs.vless)
 			if err != nil {
@@ -835,43 +843,6 @@ func TestThroughVLESS(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
-	}
-}
-
-// TestThroughXHTTP checks VLESS over XHTTP behind the web server of the
-// forwarder's site: the hub learns the transport, the site's name, the
-// web server's port and the path, and a client gets through with them.
-func TestThroughXHTTP(t *testing.T) {
-	path, err := tunnel.NewVLESSPath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var back atomic.Value
-	back.Store("127.0.0.1:9")
-	web, cert := vlesstest.WebServer(t, path, func() string { return back.Load().(string) })
-	vless.TrustForTests(cert)
-	f, pin := startForwarderWith(t, Config{VLESS: &VLESSConfig{Listen: "127.0.0.1:0",
-		XHTTP: &XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
-	back.Store(net.JoinHostPort("127.0.0.1", strconv.Itoa(int(f.vless.Port()))))
-	id, _ := tunnel.NewVLESSID()
-	key, peer := newClient(t)
-	hs := startHubWith(t, f, pin, []tunnel.Peer{peer}, HubConfig{VLESSID: id})
-	// The group's packets come under a path of its own below the path.
-	group, ok := strings.CutPrefix(hs.vless.Path, path+"/")
-	if !ok || tunnel.CheckGroupPath(group) != nil {
-		t.Fatalf("the hub learned the path %q", hs.vless.Path)
-	}
-	want := tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: web, ServerName: vlesstest.WebName, Path: hs.vless.Path, ID: id}
-	if !hs.vless.Equal(&want) {
-		t.Fatalf("the hub learned %+v, want %+v", hs.vless, want)
-	}
-	vc, err := vless.Dial(*hs.vless)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer vc.Close()
-	if err := roundTripTo(t, vc.Addr(), hs, key, peer); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -927,7 +898,12 @@ func TestHubOverXHTTP(t *testing.T) {
 // The registrations' user ID reaches nothing but the registrations, and
 // no group may take it as its own.
 func TestRegistrationIDIsNoGroups(t *testing.T) {
-	f, pin := startForwarderWith(t, Config{VLESS: &VLESSConfig{Listen: "127.0.0.1:0", Site: vlesstest.Site, Dest: "127.0.0.1:9"}})
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, pin := startForwarderWith(t, Config{VLESS: &VLESSConfig{Listen: "127.0.0.1:0",
+		XHTTP: &XHTTPConfig{Host: vlesstest.WebName, Port: 443, Path: path}}})
 	cert, _, ca := member(t)
 	key, _ := tunnel.NewPrivateKey()
 	reports := make(chan Report, 4)
@@ -1284,7 +1260,7 @@ func TestVLESSScansApart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, err := Listen(Config{Listen: "127.0.0.1:0", Cert: cert, VLESS: &VLESSConfig{Listen: "127.0.0.1:0", Site: "example.com", Dest: "127.0.0.1:1"}})
+	f, err := Listen(Config{Listen: "127.0.0.1:0", Cert: cert, VLESS: &VLESSConfig{Listen: "127.0.0.1:0", XHTTP: testXHTTP()}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1411,4 +1387,10 @@ func TestHubRegistersAgainWhenNoHelloComes(t *testing.T) {
 			t.Fatal("the hub never registered again")
 		}
 	}
+}
+
+// testXHTTP is a web server in front of the forwarder's XHTTP for tests
+// that need VLESS on but send nothing through it.
+func testXHTTP() *XHTTPConfig {
+	return &XHTTPConfig{Host: "example.com", Port: 443, Path: "/test-xhttp-path"}
 }

@@ -125,8 +125,8 @@ interface HubTunnel {
     fun setProjectWays(ways: String)
     /** The forwarder's report as JSON. */
     fun status(): String
-    /** Opens a remote invitation's guest tunnel. */
-    fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int): HubGuest
+    /** Opens a remote invitation's guest tunnel; vless is the hub's way over VLESS as JSON, "" without. */
+    fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int, vless: String): HubGuest
     fun close()
 }
 
@@ -169,8 +169,8 @@ object CoreHubTunnels : HubTunnels {
             override fun setRecords(records: String) = h.setRecords(records)
             override fun setProjectWays(ways: String) = h.setProjectWays(ways)
             override fun status(): String = h.status()
-            override fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int): HubGuest {
-                val g = h.invite(group, endpoints, lifetimeS, guestPort)
+            override fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int, vless: String): HubGuest {
+                val g = h.invite(group, endpoints, lifetimeS, guestPort, vless)
                 return object : HubGuest {
                     override val text: String = g.text
                     override val secret: ByteArray = g.secret
@@ -449,12 +449,14 @@ class HubOnPhone(
     /**
      * Opens a remote invitation's guest tunnel to the window on guestPort
      * (docs/protocol.md, section 12), with the forwarder as the hub's
-     * address away from home; throws while the hub does not run.
+     * address away from home, and the hub's way over VLESS when its offers
+     * carry one, for a device whose network lets no UDP through; throws
+     * while the hub does not run.
      */
     fun invite(group: String, lifetimeS: Int, guestPort: Int): HubGuest {
-        val (t, fw) = synchronized(lock) { tunnel to state?.forwarder }
+        val (t, fw, h) = synchronized(lock) { Triple(tunnel, state?.forwarder, hub) }
         if (t == null || fw == null) throw NotRunning()
-        return t.invite(group, JsonArray(listOf(JsonPrimitive(fw.endpoint))).toString(), lifetimeS, guestPort)
+        return t.invite(group, JsonArray(listOf(JsonPrimitive(fw.endpoint))).toString(), lifetimeS, guestPort, invitationVLESS(h?.vless))
     }
 
     /** The hub does not run: an invitation needs its tunnel and forwarder. */
@@ -482,6 +484,15 @@ class HubOnPhone(
     private fun recordsJson(rs: List<Member.Record>): String = JsonArray(rs.map { it.toJson() }).toString()
 
     companion object {
+        /** The way over VLESS as an invitation carries it (docs/protocol.md, section 12): XHTTP only, with its five fields; "" without one. */
+        fun invitationVLESS(vless: String?): String {
+            val o = vless?.let { runCatching { kotlinx.serialization.json.Json.parseToJsonElement(it) as? kotlinx.serialization.json.JsonObject }.getOrNull() } ?: return ""
+            fun f(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
+            if (f("transport") != "xhttp") return ""
+            val keep = listOf("transport", "endpoint", "server_name", "path", "id").associateWith { JsonPrimitive(f(it) ?: return "") }
+            return kotlinx.serialization.json.JsonObject(keep).toString()
+        }
+
         /**
          * A network as the hub remembers it: its gateway's address and the
          * network of the phone's address on it, as "192.168.0.1 192.168.0.0/24".

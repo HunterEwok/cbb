@@ -3,14 +3,16 @@
 import SwiftUI
 
 /// No group yet: settings and the language at the top, the name, and the
-/// three ways in: Create a group (this phone becomes its root and adds a
-/// device at once), Join a group (this phone shows its QR code and six
-/// digits), and the recovery key, small (docs/apps.md, Start).
+/// ways in: Create a group (this phone becomes its root and adds a device
+/// at once), Join a group (this phone shows its QR code and six digits),
+/// Join with an invitation (from afar: its QR code, file or text, accepted
+/// or declined first), and the recovery key, small (docs/apps.md, Start).
 struct StartView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
     @State private var adding = false
     @State private var restoring = false
+    @State private var invited = false
     @State private var settings = false
     @AppStorage(LanguageChoice.key) private var language = LanguageChoice.system
 
@@ -52,6 +54,8 @@ struct StartView: View {
                 .buttonStyle(AccentButtonStyle())
             Button { model.startJoining() } label: { Text("Join a group") }
                 .buttonStyle(GlassButtonStyle())
+            Button { invited = true } label: { Text("Join with an invitation") }
+                .buttonStyle(GlassButtonStyle())
             Button { restoring = true } label: { Text("Restore with the recovery key") }
                 .font(.footnote)
                 .foregroundStyle(palette.textDim)
@@ -60,6 +64,8 @@ struct StartView: View {
         .task { model.prepare() }
         .sheet(isPresented: $adding) { AddDeviceView() }
         .sheet(isPresented: $restoring) { AddDeviceView(restore: true) }
+        .sheet(isPresented: $invited) { InvitationView() }
+        .sheet(item: $model.pendingInvite) { p in InvitationAnswerView(invite: p) }
         .sheet(isPresented: $settings) {
             NavigationStack {
                 SettingsView()
