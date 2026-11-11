@@ -321,4 +321,40 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertNil(e(#"{"type":"from the future"}"#))
         guard case .log? = e("not json") else { return XCTFail() }
     }
+
+    /// The member's small calls: muting the phone and lifting it, a lost
+    /// member, no credentials to send; a peer's mute as the app shows it.
+    func testSmallCalls() async throws {
+        let t = try CoreGroup(test: self)
+        let (root, b) = (t.root, t.phones[1])
+        try await t.connect(1, to: 0)
+        try b.member.setMute(untilMS: Records.ms(Date()) + 60_000)
+        try b.member.setMute(untilMS: 0)
+        try b.member.setMute(untilMS: nil)
+        try b.member.lost("phone 0")
+        XCTAssertEqual(try root.member.sendCredentials([]), [])
+
+        let at = Date(timeIntervalSince1970: 1)
+        XCTAssertEqual(CoreMember.Peer(device: b.device, muted: true, mutedForMS: 1000).mutedUntilMS(now: at), 2000)
+        XCTAssertEqual(CoreMember.Peer(device: b.device, muted: true).mutedUntilMS(now: at), 0, "until an admin lifts it")
+        XCTAssertNil(CoreMember.Peer(device: b.device).mutedUntilMS(now: at))
+        XCTAssertFalse(CoreMember.Peer(device: b.device).servesMedia)
+        let c = CoreMember.Copy(id: "i", origin: b.device, text: "t")
+        XCTAssertEqual([c.text, c.key], ["t", ""])
+        XCTAssertFalse(c.unread)
+    }
+
+    /// An invitation needs the key of the CA the phone issues with and a
+    /// hub to open its guest tunnel on: a group of phones has none.
+    func testInvitingRefuses() async throws {
+        let t = try CoreGroup(test: self)
+        try await t.connect(1, to: 0)
+        let ca = t.ca
+        XCTAssertThrowsError(try CorePairing.Inviting(member: t.root.member, publicKey: SoftwareSigner().publicKeyDER, adminCA: nil,
+                                                      expires: 600) { try ca.signature(digest: $0) })
+        XCTAssertThrowsError(try CorePairing.Inviting(member: t.root.member, publicKey: ca.publicKeyDER, adminCA: nil,
+                                                      expires: 600) { try ca.signature(digest: $0) })
+        XCTAssertThrowsError(try CorePairing.Inviting(member: t.root.member, publicKey: ca.publicKeyDER, adminCA: nil, expires: 600,
+                                                      hub: "not a device") { try ca.signature(digest: $0) })
+    }
 }
