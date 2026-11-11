@@ -2088,6 +2088,8 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Builds use Go 1.27.4, which fixes a crash of an HTTP/1 server in the standard library
+  (GO-2026-6859), and rustix 1.1.6 (RUSTSEC-2026-0486).
 - The Mac app's Settings fit their width: the language menu, sized to fit with its label,
   widened every row to some 600 points in a 460-point window and cut the rows' ends off on
   both sides. A build's long version is one line cut in the middle, whole on hover; the tray
