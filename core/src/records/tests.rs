@@ -350,10 +350,10 @@ fn an_admin_never_widens_a_device() {
     let admin_key = g.device(&a, &x, "x", |d| d.admin = Some(k("x admin").key.clone()));
     let watch = g.device(&a, &y, "y", |d| d.role = ROLE_WATCH);
     // Secrets only when the admin's own device has them; a's has not.
-    let secrets = g.device(&a, &z, "z", |d| d.rights |= RIGHT_SECRETS);
+    let wider = g.device(&a, &z, "z", |d| d.rights |= RIGHT_SECRETS);
     let s = g.state();
-    for r in [&hub, &admin_key, &watch, &secrets] {
-        assert!(!s.counting.contains(&r.id()), "{:?}", r.body().kind);
+    for (n, r) in [&hub, &admin_key, &watch, &wider].into_iter().enumerate() {
+        assert!(!s.counting.contains(&r.id()), "record {n}");
     }
     assert!(s.devices.iter().all(|d| d.name == "admin"));
     // Manage narrows a device an admin admitted, and cannot widen it again.
