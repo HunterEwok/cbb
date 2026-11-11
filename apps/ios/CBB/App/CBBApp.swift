@@ -23,8 +23,13 @@ struct CBBApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environmentObject(model)
+            // TEMPORARY: the restore link's variants for one test run.
+            if ProcessInfo.processInfo.arguments.contains("-restoreLinkExperiment") {
+                RestoreLinkExperiment()
+            } else {
+                RootView()
+                    .environmentObject(model)
+            }
         }
         // The phone is the group's hub while the app is open (D-64).
         .onChange(of: scenePhase, initial: true) { _, phase in
