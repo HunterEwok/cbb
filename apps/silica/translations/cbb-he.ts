@@ -1533,4 +1533,51 @@
         <translation>לנסות שוב</translation>
     </message>
 </context>
+<context>
+    <name>DeviceTile</name>
+    <message>
+        <source>Turn sync on</source>
+        <translation>הפעלת הסנכרון</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>כיבוי הסנכרון</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>ביטול השתקה</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>השתקה עד ביטול</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>כיבוי ל־15 דקות</translation>
+    </message>
+    <message>
+        <source>Mute for 15 minutes</source>
+        <translation>השתקה ל־15 דקות</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>כיבוי לשעה</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>השתקה לשעה</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>כיבוי ל־8 שעות</translation>
+    </message>
+    <message>
+        <source>Mute for 8 hours</source>
+        <translation>השתקה ל־8 שעות</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>כיבוי עד שאפעיל</translation>
+    </message>
+</context>
 </TS>

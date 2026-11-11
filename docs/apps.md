@@ -103,7 +103,8 @@ they look, so both apps are built to the same plan.
    computer) picks the time, as the house does. Muted, the button fills with the warning
    colour and the tile's line turns dashed; the tile shows the new state at once and goes
    back, with the error, only when the change is refused, so it never blinks or leaves the
-   list while the command goes out. The Mac, the tray app and Android have the same button.
+   list while the command goes out. The Mac, the tray app, Android and Aurora have the same
+   button (Aurora knows another device's mute while it is connected).
 
    **Images and files** (docs/design.md, "Images and files"): the button sends an image on
    the clipboard as PNG or JPEG (HEIC and other formats are converted) and fetches a

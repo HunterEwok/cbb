@@ -1533,4 +1533,51 @@
         <translation>फिर से कोशिश करें</translation>
     </message>
 </context>
+<context>
+    <name>DeviceTile</name>
+    <message>
+        <source>Turn sync on</source>
+        <translation>सिंक चालू करें</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>सिंक बंद करें</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>म्यूट हटाएँ</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>म्यूट हटाने तक म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>15 मिनट के लिए बंद</translation>
+    </message>
+    <message>
+        <source>Mute for 15 minutes</source>
+        <translation>15 मिनट के लिए म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>एक घंटे के लिए बंद</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>एक घंटे के लिए म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>8 घंटे के लिए बंद</translation>
+    </message>
+    <message>
+        <source>Mute for 8 hours</source>
+        <translation>8 घंटे के लिए म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>जब तक मैं चालू न करूँ, बंद</translation>
+    </message>
+</context>
 </TS>

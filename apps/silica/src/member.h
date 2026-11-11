@@ -163,6 +163,9 @@ private:
     cbb_member *m_member = nullptr;
     QTimer m_peerTimer;
     QStringList m_peers;
+    // The connected devices whose hello says an admin muted them, by ID:
+    // pollDevices marks them muted for their tiles.
+    QStringList m_mutedPeers;
     QVariantList m_devices;
     QVariantList m_alerts;
     QVariantMap m_rootView;

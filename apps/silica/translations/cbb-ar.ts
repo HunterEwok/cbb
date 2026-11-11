@@ -1533,4 +1533,51 @@
         <translation>حاول مرة أخرى</translation>
     </message>
 </context>
+<context>
+    <name>DeviceTile</name>
+    <message>
+        <source>Turn sync on</source>
+        <translation>تشغيل المزامنة</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>إيقاف المزامنة</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>إلغاء الكتم</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>كتم حتى الإلغاء</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>إيقاف لمدة 15 دقيقة</translation>
+    </message>
+    <message>
+        <source>Mute for 15 minutes</source>
+        <translation>كتم لمدة 15 دقيقة</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>إيقاف لمدة ساعة</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>كتم لمدة ساعة</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>إيقاف لمدة 8 ساعات</translation>
+    </message>
+    <message>
+        <source>Mute for 8 hours</source>
+        <translation>كتم لمدة 8 ساعات</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>إيقاف حتى أشغّلها</translation>
+    </message>
+</context>
 </TS>
