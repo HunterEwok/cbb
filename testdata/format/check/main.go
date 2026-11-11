@@ -383,24 +383,44 @@ func main() {
 		} `json:"refuse"`
 	}
 	load(dir, "grants.json", &g)
-	grant := func(msg []byte) error {
+	type leafState struct {
+		guarded       bool
+		rootC, adminC uint64
+		commanders    map[string][]byte // key hash in hex to point
+	}
+	rootHash := mustHashOf("root", keys.Keys)
+	// grant reads message grant for a leaf that keeps st (nil before its
+	// first grant) and returns what the leaf keeps after taking it.
+	grant := func(msg []byte, st *leafState) (*leafState, error) {
 		v, err := strict(msg)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		m := v.(map[any]any)
 		ge, ok := m[uint64(2)]
 		if !ok {
-			return errors.New("grants/shape")
+			return nil, errors.New("grants/shape")
 		}
 		envb, err := em.Marshal(ge)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		rootHash := mustHashOf("root", keys.Keys)
-		admin := func(body map[any]any) ([]byte, error) {
-			if h, _ := body[uint64(3)].([]byte); hex.EncodeToString(h) == rootHash {
+		byRoot := false
+		signerKey := func(body map[any]any) ([]byte, error) {
+			h, _ := body[uint64(3)].([]byte)
+			if hex.EncodeToString(h) == rootHash {
+				byRoot = true
 				return byHash[rootHash], nil
+			}
+			if _, g := body[uint64(15)]; g || (st != nil && st.guarded) {
+				return nil, errors.New("grants/guarded")
+			}
+			if st != nil {
+				pub, ok := st.commanders[hex.EncodeToString(h)]
+				if !ok {
+					return nil, errors.New("grants/signer")
+				}
+				return pub, nil
 			}
 			rec, ok := m[uint64(3)]
 			if !ok {
@@ -415,7 +435,7 @@ func main() {
 				return nil, errors.New("grants/admin")
 			}
 			kh, pub, err := keyHash(r[uint64(20)])
-			if err != nil || !bytes.Equal(kh, body[uint64(3)].([]byte)) {
+			if err != nil || !bytes.Equal(kh, h) {
 				return nil, errors.New("grants/admin")
 			}
 			if p, _ := r[uint64(21)].(uint64); p&1 != 1 {
@@ -423,22 +443,78 @@ func main() {
 			}
 			return pub, nil
 		}
-		_, _, err = envelope(envb, "cbb grant v1", admin)
-		return err
+		body, _, err := envelope(envb, "cbb grant v1", signerKey)
+		if err != nil {
+			return nil, err
+		}
+		counter, _ := body[uint64(4)].(uint64)
+		_, guarded := body[uint64(15)]
+		next := &leafState{guarded: guarded, commanders: map[string][]byte{}}
+		if st != nil {
+			next.guarded = next.guarded || st.guarded
+			next.rootC, next.adminC = st.rootC, st.adminC
+			if st.guarded && !guarded {
+				return nil, errors.New("grants/guarded")
+			}
+			if byRoot && counter <= st.rootC || !byRoot && counter <= st.adminC {
+				return nil, errors.New("grants/counter")
+			}
+		}
+		if byRoot {
+			next.rootC = counter
+		} else {
+			next.adminC = counter
+		}
+		cs, _ := body[uint64(12)].([]any)
+		for _, k := range cs {
+			h, pub, err := keyHash(k)
+			if err != nil {
+				return nil, err
+			}
+			next.commanders[hex.EncodeToString(h)] = pub
+		}
+		return next, nil
 	}
 	for _, t := range g.Take {
-		if err := grant(unhex(t.Message)); err != nil {
+		if _, err := grant(unhex(t.Message), nil); err != nil {
 			fail("grants %s: %v", t.Name, err)
 		}
 	}
 	checkedRefuse := 0
 	for _, r := range g.Refuse {
-		if !strings.HasPrefix(r.Rule, "sig/") && r.Rule != "grants/shape" && r.Rule != "grants/admin" {
+		if !strings.HasPrefix(r.Rule, "sig/") && r.Rule != "grants/shape" && r.Rule != "grants/admin" &&
+			r.Rule != "grants/guarded" {
 			continue
 		}
 		checkedRefuse++
-		if grant(unhex(r.Message)) == nil {
+		if _, err := grant(unhex(r.Message), nil); err == nil {
 			fail("grants %s: taken", r.Name)
+		}
+	}
+	var gq struct {
+		Sequences []struct {
+			Name  string `json:"name"`
+			Steps []struct {
+				Name    string `json:"name"`
+				Message string `json:"message"`
+				Verdict string `json:"verdict"`
+				Rule    string `json:"rule"`
+			} `json:"steps"`
+		} `json:"sequences"`
+	}
+	load(dir, "grants.json", &gq)
+	for _, q := range gq.Sequences {
+		var st *leafState
+		for _, t := range q.Steps {
+			next, err := grant(unhex(t.Message), st)
+			switch {
+			case err == nil && t.Verdict == "take":
+				st = next
+			case err != nil && t.Verdict == "refuse" && err.Error() == t.Rule:
+			default:
+				fail("grants %s, %s: %v", q.Name, t.Name, err)
+			}
+			checkedRefuse++
 		}
 	}
 	// who may send a leaf copies: an ordinary leaf its readers, a guarded

@@ -28,7 +28,8 @@ pub fn one_form(data: &[u8]) {
             assert_eq!(k.encode(), data, "took a key that does not encode back");
         }
         let _ = copy::Copy::from_value(&v).map(|c| c.verify(&[0x04; 65]));
-        let _ = grant::read(&v, &[0x04; 65]);
+        let _ = grant::read(&v, &[0x04; 65], None);
+        let _ = grant::read(&v, &[0x04; 65], Some(&grant::Kept::default()));
         let _ = grant::copy_sender(&v, &super::DeviceId([0; 16]));
     }
     if let Ok(m) = frame::message(data) {

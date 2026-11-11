@@ -225,7 +225,7 @@ fn grants() {
     for t in g["take"].as_array().unwrap() {
         let msg = unhex(s(t, "message"));
         let v = cbor::decode(&msg).unwrap();
-        let got = grant::read(&v, &root).unwrap_or_else(|r| panic!("{}: {r}", s(t, "name")));
+        let got = grant::read(&v, &root, None).unwrap_or_else(|r| panic!("{}: {r}", s(t, "name")));
         assert_eq!(got.guarded, s(t, "name").contains("guarded"));
         assert_eq!(got.admin.is_some(), s(t, "name").contains("admin"));
         assert_eq!(hex(got.grant.body), s(t, "grant"));
@@ -234,13 +234,28 @@ fn grants() {
         let fb = unhex(s(t, "frame"));
         let f = frame::read(&fb, frame::LIMIT_LEAF).unwrap();
         assert_eq!(f.t, 20);
-        grant::read(&f.map, &root).unwrap();
+        grant::read(&f.map, &root, None).unwrap();
     }
     for t in g["refuse"].as_array().unwrap() {
         let mb = unhex(s(t, "message"));
         let v = cbor::decode(&mb).unwrap();
-        let got = grant::read(&v, &root);
+        let got = grant::read(&v, &root, None);
         assert_eq!(got.err().map(Rule::name), Some(s(t, "rule")), "{}", s(t, "name"));
+    }
+    for q in g["sequences"].as_array().unwrap() {
+        let mut kept: Option<grant::Kept> = None;
+        for t in q["steps"].as_array().unwrap() {
+            let name = format!("{}: {}", s(q, "name"), s(t, "name"));
+            let mb = unhex(s(t, "message"));
+            let v = cbor::decode(&mb).unwrap();
+            match grant::read(&v, &root, kept.as_ref()) {
+                Ok(got) => {
+                    assert_eq!(s(t, "verdict"), "take", "{name}");
+                    kept = Some(got.keep(kept.as_ref()));
+                }
+                Err(r) => assert_eq!(Some(r.name()), t["rule"].as_str(), "{name}"),
+            }
+        }
     }
     for t in g["copy_senders"].as_array().unwrap() {
         let gb = unhex(s(t, "grant"));
