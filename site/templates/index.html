@@ -33,19 +33,31 @@
 
 {{define "content"}}
 <section class="hero">
-  <div class="wrap">
-    <h1>{{t "Copy on one device,"}} <span>{{t "paste on another."}}</span></h1>
-    <p class="lead">{{t "Copy on a phone or a computer, paste on any other: iPhone, Android, Mac, Windows or Linux. Every copy is encrypted end to end, and the devices talk directly over your home network, with no cloud and no accounts. Away from home it works through your own WireGuard tunnel."}}</p>
-    <!-- A school board in a walnut frame, the picture drawn on it in chalk:
-         the computer and the phone joined through the key. -->
-    <div class="frame hero-board">{{template "rails"}}<div class="surface">
-      <svg viewBox="0 0 640 330" aria-hidden="true"><g class="chalk">{{template "chalk-hero"}}</g><path class="pulse p1" pathLength="1" d="M164 110 H268"/><path class="pulse p2" pathLength="1" d="M372 110 H538"/>{{template "words" (list (list 95 228 (t "Computer") false) (list 455 292 "TLS 1.3" true) (list 576 228 (t "Phone") false))}}</svg>
-    </div></div>
-    <p class="platforms" dir="ltr">Android · iPhone · Windows · Mac · Linux</p>
-    <p class="actions">
-      <a class="button accent go" href="download.html" data-goatcounter-click="hero-download">{{t "Download for free"}}</a>
-      <a class="button" href="#how">{{t "How it works"}}</a>
-    </p>
+  <div class="wrap hero-grid">
+    <div class="hero-text">
+      <p class="label">{{t "Sheet 1 · General view"}}</p>
+      <h1>{{t "Copy here,"}} <span>{{t "paste on any of your devices."}}</span></h1>
+      <p class="lead">{{t "One encrypted clipboard for all your devices, with no cloud and no accounts. At home they talk to each other directly, and away from home they still find each other."}}</p>
+      <p class="actions">
+        <a class="button accent go" href="download.html" data-goatcounter-click="hero-download">{{t "Download for free"}}</a>
+        <a class="button" href="#how">{{t "How it works"}}</a>
+      </p>
+      <p class="platforms" dir="ltr">Android · iPhone · Aurora · Windows · Mac · Linux</p>
+      <!-- The ten looks of the app, as small swatches of their accent colours. -->
+      <p class="themes"><span>{{t "Ten looks in the app"}}</span><i style="--c: var(--accent)"></i><i style="--c: #3DFF8A"></i><i style="--c: #ECEEF5"></i><i style="--c: #A99BFF"></i><i style="--c: #FF3B4E"></i><i style="--c: #FFB000"></i><i style="--c: #D4AF37"></i><i style="--c: #FF7EC8"></i><i style="--c: #2E8A55"></i><i style="--c: #00D7D7"></i></p>
+    </div>
+    <!-- Figure 1: the computer and the phone joined through the key, with
+         three numbered callouts explained in the list under it. -->
+    <figure class="hero-fig">
+      <div class="frame hero-board">{{template "corners"}}<div class="surface">
+        <svg viewBox="0 0 640 330" aria-hidden="true"><g class="chalk">{{template "chalk-hero"}}</g><path class="pulse p1" pathLength="1" d="M164 110 H268"/><path class="pulse p2" pathLength="1" d="M372 110 H538"/>{{template "words" (list (list 95 228 (t "Computer") false) (list 455 292 "TLS 1.3" true) (list 576 228 (t "Phone") false))}}<g class="callout"><path d="M612 34 H598 V40"/><circle cx="624" cy="34" r="11"/><text x="624" y="38.5">1</text><path d="M320 41 V60"/><circle cx="320" cy="30" r="11"/><text x="320" y="34.5">2</text><path d="M120 34 H95 V66"/><circle cx="132" cy="34" r="11"/><text x="132" y="38.5">3</text></g></svg>
+      </div></div>
+      <figcaption><ol class="callouts">
+        <li>{{t "The group's key stays in your phone's security chip."}}</li>
+        <li>{{t "Each copy is encrypted for your own devices and no one else."}}</li>
+        <li>{{t "No cloud, no accounts and no ads."}}</li>
+      </ol></figcaption>
+    </figure>
   </div>
 </section>
 
@@ -58,58 +70,44 @@
 
 <section class="wrap reveal">
   <h2>{{t "Works where you do"}}</h2>
-  <div class="cards four">
+  <div class="cards three">
     <div class="card"><h3>Android</h3><p>{{t "Receives copies by itself, and sends them with the accessibility service or one tap."}}</p></div>
     <div class="card"><h3>iPhone</h3><p>{{t "One press of the Action button or a double tap on the back, then paste. The app comes with TestFlight."}}</p></div>
-    <div class="card"><h3>{{t "Windows, Mac and Linux"}}</h3><p>{{t "Computers sync by themselves, both ways. On Linux it works with X11 and Wayland desktops, and without one in tmux."}}</p></div>
+    <div class="card"><h3>{{t "Aurora and Sailfish"}}</h3><p>{{t "The same app as on the other phones: it syncs, adds devices and works away from home."}}</p></div>
+    <div class="card"><h3>Mac</h3><p>{{t "A menu bar app, signed and notarized by Apple. Copies go both ways by themselves."}}</p></div>
+    <div class="card"><h3>{{t "Windows and Linux"}}</h3><p>{{t "A tray app and a service that sync by themselves. On Linux it works with X11 and Wayland desktops, and without one in tmux."}}</p></div>
     <div class="card"><h3>{{t "Raspberry Pi, router, NAS"}}</h3><p>{{t "A small member that only syncs, or a Docker image that is always on."}}</p></div>
   </div>
   <p class="dim">{{t "iOS does not let apps read the clipboard in the background, so the iPhone needs one gesture."}}</p>
 </section>
 
-<section class="wrap reveal">
-  <h2>{{t "Why not just send it to yourself?"}}</h2>
-  <p>{{t "A message to yourself works, but it takes several steps every time, and your text stays on someone else's server. A clipboard built into one system works only within it."}}</p>
-  <div class="frame board-table">{{template "rails"}}<div class="surface">
-  <table class="chalk-table compare">
-    <thead><tr><td></td><th scope="col">{{t "Just copy and paste"}}</th><th scope="col">{{t "Text stays on your devices"}}</th><th scope="col">{{t "Between any systems"}}</th></tr></thead>
-    <tbody>
-    <tr class="us"><th scope="row">Copy Beyond Borders</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
-    <tr><th scope="row">{{t "A message to yourself"}}</th><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
-    <tr><th scope="row">{{t "A cloud clipboard app"}}</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
-    <tr><th scope="row">{{t "The clipboard of one system"}}</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td></tr>
-    </tbody>
-  </table>
-  </div></div>
-</section>
-
 <section class="wrap reveal" id="compare">
-  <h2>{{t "Compared with popular apps"}}</h2>
+  <h2>{{t "Compared with what you may use now"}}</h2>
   <p>{{t "Each of these does part of the job well. Here is what each one covers."}}</p>
-  <div class="frame board-table">{{template "rails"}}<div class="surface">
+  <div class="frame board-table">{{template "corners"}}<div class="surface">
   <table class="chalk-table compare apps">
     <colgroup><col class="name"><col span="7"></colgroup>
-    <thead><tr><td></td><th scope="col">iPhone</th><th scope="col">Android</th><th scope="col">{{t "Computers"}}</th><th scope="col">{{t "No cloud, no account"}}</th><th scope="col">{{t "Away from home"}}</th><th scope="col">{{t "Open source"}}</th><th scope="col">{{t "Free"}}</th></tr></thead>
+    <thead><tr><td></td><th scope="col">{{t "Just copy and paste"}}</th><th scope="col">iPhone</th><th scope="col">Android</th><th scope="col">{{t "Computers"}}</th><th scope="col">{{t "Away from home"}}</th><th scope="col">{{t "No cloud, no account"}}</th><th scope="col">{{t "Open source"}}</th></tr></thead>
     <tbody>
-    <tr class="us"><th scope="row">Copy Beyond Borders</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Windows<br>Mac<br>Linux</td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
-    <tr><th scope="row">{{t "Apple Universal Clipboard"}}</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="systems">Mac</td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
-    <tr><th scope="row">{{t "Windows clipboard sync"}}</th><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Windows</td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
-    <tr><th scope="row">KDE Connect</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Linux<br>Windows</td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
-    <tr><th scope="row">Pushbullet</th><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Windows</td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td></tr>
+    <tr class="us"><th scope="row">Copy Beyond Borders</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Windows<br>Mac<br>Linux</td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
+    <tr><th scope="row">{{t "Apple Universal Clipboard"}}</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="systems">Mac</td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td></tr>
+    <tr><th scope="row">{{t "Windows clipboard sync"}}</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Windows</td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td></tr>
+    <tr><th scope="row">KDE Connect</th><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Linux<br>Windows</td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td></tr>
+    <tr><th scope="row">{{t "A message to yourself"}}</th><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="systems">Windows<br>Mac<br>Linux</td><td><svg class="mark yes" aria-hidden="true"><use href="#yes"/></svg><span class="sr">{{t "yes"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td><td class="no"><svg class="mark no" aria-hidden="true"><use href="#no"/></svg><span class="sr">{{t "no"}}</span></td></tr>
     </tbody>
   </table>
   </div></div>
-  <p class="dim">{{t "As of October 2026, from each maker's own pages. Universal Clipboard joins Apple devices near each other, signed in to one Apple Account. Windows syncs the clipboard through a Microsoft account, with other Windows PCs and, with SwiftKey, Android phones. Pushbullet's universal copy and paste, between Android and Windows, is part of Pushbullet Pro. KDE Connect runs on any Linux desktop (on GNOME as GSConnect) and on Windows; for the Mac there are only test builds. The names are trademarks of their owners."}}</p>
+  <p class="dim">{{t "As of November 2026, from each maker's own pages. Universal Clipboard joins Apple devices near each other, signed in to one Apple Account. Windows syncs the clipboard through a Microsoft account, with other Windows PCs and, with SwiftKey, Android phones. KDE Connect runs on any Linux desktop (on GNOME as GSConnect) and on Windows; for the Mac there are only test builds. A message to yourself goes through the messenger's servers and takes several steps every time. The names are trademarks of their owners."}}</p>
 </section>
 
 <section class="wrap reveal" id="how">
   <h2>{{t "Set up in three steps"}}</h2>
   <ol class="steps boards">
-    <li><div class="frame">{{template "rails"}}<div class="surface"><svg viewBox="0 0 200 150" aria-hidden="true"><g class="chalk">{{template "chalk-step1"}}</g></svg></div></div>
+    <li><div class="frame">{{template "corners"}}<div class="surface"><svg viewBox="0 0 200 150" aria-hidden="true"><g class="chalk">{{template "chalk-step1"}}</g></svg></div></div>
       <strong>{{t "Install the app on your phone."}}</strong> {{t "Android: the APK from the latest release. iPhone: the app comes with TestFlight, which is not open yet."}}</li>
-    <li><div class="frame">{{template "rails"}}<div class="surface"><svg viewBox="0 0 200 150" aria-hidden="true"><g class="chalk">{{template "chalk-step2"}}</g></svg></div></div>
+    <li><div class="frame">{{template "corners"}}<div class="surface"><svg viewBox="0 0 200 150" aria-hidden="true"><g class="chalk">{{template "chalk-step2"}}</g></svg></div></div>
       <strong>{{t "Install Copy Beyond Borders on a computer."}}</strong> {{t "One command on Linux, Mac or Windows: see %s." (link "download.html" (t "Download"))}}</li>
-    <li><div class="frame">{{template "rails"}}<div class="surface"><svg viewBox="0 0 200 150" aria-hidden="true"><g class="chalk">{{template "chalk-step3"}}</g></svg></div></div>
+    <li><div class="frame">{{template "corners"}}<div class="surface"><svg viewBox="0 0 200 150" aria-hidden="true"><g class="chalk">{{template "chalk-step3"}}</g></svg></div></div>
       <strong>{{t "Add the computer."}}</strong> {{t "Run %s on the computer and scan its QR code in the app. That's your group." (code "sudo cbb pair")}}</li>
   </ol>
   <p>{{t "No computer? Make the group in the app, then open the app on each other phone and join from its start screen."}}
@@ -122,26 +120,26 @@
   <div class="cards two groups">
     <article class="card">
       <header><p class="badge">{{t "Recommended"}}</p><h3>{{t "With a computer"}}</h3></header>
-      <div class="frame">{{template "rails"}}<div class="surface"><svg viewBox="0 0 420 310" aria-hidden="true"><g class="chalk">{{template "chalk-computer"}}</g>{{template "words" (list (list 210 202 (t "Computer") true) (list 66 118 (t "Phone") false) (list 354 112 (t "Laptop") false) (list 66 304 (t "Phone") false) (list 354 304 (t "Mac") false))}}</svg></div></div>
+      <div class="frame">{{template "corners"}}<div class="surface"><svg viewBox="0 0 420 310" aria-hidden="true"><g class="chalk">{{template "chalk-computer"}}</g>{{template "words" (list (list 210 202 (t "Computer") true) (list 66 118 (t "Phone") false) (list 354 112 (t "Laptop") false) (list 66 304 (t "Phone") false) (list 354 304 (t "Mac") false))}}</svg></div></div>
       <ul>
-        <li>{{t "A Linux or Windows computer that is often on, such as a desktop, a Raspberry Pi or a home server, keeps the group going."}}</li>
-        <li>{{t "Away from home, your phone and laptop sync through it at any time: it is the group's hub."}}</li>
-        <li>{{t "The phone can still hold the group's key in its security chip and admit every device."}}</li>
+        <li>{{t "A computer that is often on, such as a desktop, a Mac mini, a Raspberry Pi or a home server, keeps the group going."}}</li>
+        <li>{{t "Away from home, your phone and laptop sync through it at any time: it is the group's base."}}</li>
+        <li>{{t "The phone can still hold the group's key in its security chip and add every device."}}</li>
         <li>{{t "No app needed: a computer can hold the group by itself."}}</li>
       </ul>
     </article>
     <article class="card">
       <header><h3>{{t "Phones only"}}</h3></header>
-      <div class="frame">{{template "rails"}}<div class="surface"><svg viewBox="0 0 420 310" aria-hidden="true"><g class="chalk">{{template "chalk-phones"}}</g>{{template "words" (list (list 210 230 (t "Phone") true) (list 66 110 (t "Computer") false) (list 354 112 (t "TV") false) (list 66 304 (t "Tablet") false) (list 354 304 (t "Phone") false))}}</svg></div></div>
+      <div class="frame">{{template "corners"}}<div class="surface"><svg viewBox="0 0 420 310" aria-hidden="true"><g class="chalk">{{template "chalk-phones"}}</g>{{template "words" (list (list 210 230 (t "Phone") true) (list 66 110 (t "Computer") false) (list 354 112 (t "TV") false) (list 66 304 (t "Tablet") false) (list 354 304 (t "Phone") false))}}</svg></div></div>
       <ul>
         <li>{{t "No computer needed: the phone makes the group, keeps its key in its security chip and adds the other devices by QR code."}}</li>
         <li>{{t "At home every device syncs directly with the others."}}</li>
-        <li>{{t "Away from home the phone is the group's hub while its app is open; on Android it can keep running in the background."}}</li>
-        <li>{{t "Or the devices meet at a blind relay that cannot read what you copy: your own, or the project's at cbb.tools once it opens."}}</li>
+        <li>{{t "Away from home the phone is the group's base while its app is open; on Android it can keep running in the background."}}</li>
+        <li>{{t "Or the devices meet at a backup server that cannot read what you copy: your own, or the project's at cbb.tools."}}</li>
       </ul>
     </article>
   </div>
-  <p class="note">{{t "Why we recommend a computer: it is on far more often than a phone app is open, so sync away from home just works, and the iPhone gives an app little time in the background. When a computer that is always on joins a group of phones, the app offers to make it the hub."}}</p>
+  <p class="note">{{t "Why we recommend a computer: it is on far more often than a phone app is open, so sync away from home just works, and the iPhone gives an app little time in the background. When a computer that is always on joins a group of phones, the app offers to make it the base."}}</p>
 </section>
 
 <section class="wrap reveal">
@@ -154,18 +152,37 @@
   </div>
 </section>
 
+<section class="wrap reveal" id="more">
+  <h2>{{t "It can also"}}</h2>
+  <div class="cards three">
+    <div class="card"><h3>{{t "Pictures and files"}}</h3><p>{{t "Copy a picture or a file on one device and paste it on another, as you would text."}}</p></div>
+    <div class="card"><h3>{{t "Paste on another device"}}</h3><p>{{t "Send a text from your phone straight into the app open on your computer, as if you typed it."}}</p></div>
+    <div class="card"><h3>{{t "Pause sync"}}</h3><p>{{t "One tap keeps your copies on this device: for a while, or until you turn sync back on."}}</p></div>
+    <div class="card"><h3>{{t "Quick actions"}}</h3><p>{{t "Lock a computer of your group or put it to sleep from your phone."}}</p></div>
+    <div class="card"><h3>{{t "Why it does not sync"}}</h3><p>{{t "If copies stop arriving, the app tells you why in one line and what to do."}}</p></div>
+    <div class="card"><h3>{{t "Strict networks"}}</h3><p>{{t "Away from home it works on hotel, office and campus Wi-Fi too."}}</p></div>
+  </div>
+</section>
+
 <section class="wrap reveal">
   <h2>{{t "Principles"}}</h2>
   <div class="cards three">
-    <div class="card"><h3>{{t "Encrypted end to end"}}</h3><p>{{t "Each copy is sealed on the device that makes it, for your own devices alone, and signed. A hub, a forwarder or a relay passes it on and can neither read it, change it nor forge one."}}</p></div>
-    <div class="card"><h3>{{t "Your network only"}}</h3><p>{{t "At home the devices talk to each other directly. Away from home they reach your group through its own encrypted tunnel. Nothing goes through a cloud."}}</p></div>
+    <div class="card"><h3>{{t "Encrypted end to end"}}</h3><p>{{t "Each copy is sealed on the device that makes it, for your own devices alone, and signed. A base or a server passes it on and can neither read it, change it nor forge one."}}</p></div>
+    <div class="card"><h3>{{t "Your network only"}}</h3><p>{{t "At home the devices talk to each other directly. Away from home they meet through your base or a backup server that cannot read what you copy. Nothing goes through a cloud."}}</p></div>
     <div class="card"><h3>{{t "Paired, then encrypted"}}</h3><p>{{t "A device joins your group once, by a QR code or a six-digit code. The devices talk only to the devices of the group, and only over TLS."}}</p></div>
     <div class="card"><h3>{{t "Keys in the chip"}}</h3><p>{{t "In a group made on a phone, the phone holds the group's key in its security chip, and each signature with it asks for your face, fingerprint or passcode."}}</p></div>
     <div class="card"><h3>{{t "Passwords stay put"}}</h3><p>{{t "What password managers mark as secret is not synced automatically."}}</p></div>
-    <div class="card"><h3>{{t "Small"}}</h3><p>{{t "One file per platform and no dependencies. It runs even on a Raspberry Pi Zero."}}</p></div>
     <div class="card"><h3>{{t "Open"}}</h3><p>{{t "Free software: every line is on GitHub, and every release is built there in the open."}}</p></div>
   </div>
   <p class="note">{{t "What each server along the way can and cannot see: %s. How we test the security from the outside, as an attacker would: %s." (link "privacy.html" (t "Security and privacy")) (link "https://github.com/HunterEwok/cbb/blob/main/docs/security-audit.md" (t "the security audit"))}}</p>
+</section>
+
+<section class="wrap reveal" id="about">
+  <h2>{{t "Who makes it"}}</h2>
+  <p>{{t "Copy Beyond Borders is made by one developer, %s, in the United Kingdom. There is no company behind it, no investors and no ads." (link "https://github.com/HunterEwok" "HunterEwok")}}
+     {{t "The developer accounts that publish and sign the apps are registered in the United Kingdom too."}}</p>
+  <p class="note"><strong>{{t "A promise: Copy Beyond Borders will always be free and open source."}}</strong>
+     {{t "If the project ever stops, your group keeps working at home, and anyone can run the servers it uses away from home: the code and the instructions are public."}}</p>
 </section>
 
 <section class="wrap reveal" id="faq">

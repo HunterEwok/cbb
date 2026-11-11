@@ -1569,6 +1569,10 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
+  three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
+  also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on
+  a page of their own, [the lab](docs/guide/lab.md): experiments, not what 1.0 promises.
 - Away from home, the computers that are the group's root or admins come before the phones in
   the order of hubs (D-96): a Mac or PC no longer keeps reaching for a phone whose app is
   closed while a computer could serve.
