@@ -290,6 +290,26 @@ struct Local {
     media: Option<Manifest>,
 }
 
+impl Drop for Local {
+    /// A secret's text does not outlive its place in memory.
+    fn drop(&mut self) {
+        if self.kind == Kind::Secret {
+            zeroize::Zeroize::zeroize(&mut self.text);
+        }
+    }
+}
+
+/// Makes ev the group's current event, wiping a secret's text it replaces.
+fn set_current(st: &mut Inner, ev: Event) {
+    let mut old = core::mem::replace(&mut st.current, ev);
+    if old.kind == Kind::Secret {
+        zeroize::Zeroize::zeroize(&mut old.text);
+    }
+    if let Some(k) = old.key.as_mut() {
+        zeroize::Zeroize::zeroize(k);
+    }
+}
+
 impl Local {
     /// What tells the clipboard's content apart, as Go's localText.key.
     fn key(&self) -> Vec<u8> {
@@ -489,7 +509,7 @@ impl Engine {
         if id.is_empty() || st.current.id != id {
             return false;
         }
-        st.current = Event::default();
+        set_current(&mut st, Event::default());
         st.copied_at = Duration::ZERO;
         true
     }
@@ -730,7 +750,7 @@ impl Engine {
             ev.sealed = Some(seal(&ev).map_err(|e| e.context("seal the copy"))?);
         }
         add_seen(st, &ev.id);
-        st.current = ev.clone();
+        set_current(st, ev.clone());
         st.copied_at = now;
         st.local = if st.takes_media {
             Local { text: ev.text.clone(), kind: Kind::Media, at: now, media: ev.media.clone() }
@@ -754,7 +774,7 @@ impl Engine {
             ev.sealed = Some(seal(&ev).map_err(|e| e.context("seal the copy"))?);
         }
         add_seen(st, &ev.id);
-        st.current = ev.clone();
+        set_current(st, ev.clone());
         st.copied_at = now;
         st.local = Local { text: text.to_string(), kind, at: now, media: None };
         if kind == Kind::Secret {
@@ -849,7 +869,7 @@ impl Engine {
                     add_secret(st, self.sum(&ev.text), now);
                 }
                 st.copied_at = now.saturating_sub(age);
-                st.current = ev.clone();
+                set_current(st, ev.clone());
                 return self.decide_write(st, Outcome { forward: Some(ev), ..Default::default() }, now);
             }
             return Outcome::default();
@@ -863,7 +883,7 @@ impl Engine {
         if !st.current.id.is_empty() && !ev.later(&st.current) {
             return out;
         }
-        st.current = ev;
+        set_current(st, ev);
         st.copied_at = now.saturating_sub(age);
         self.decide_write(st, out, now)
     }

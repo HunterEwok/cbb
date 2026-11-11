@@ -271,6 +271,13 @@ pub struct Joiner {
     admin: Option<Arc<dyn ExternalKey>>,
 }
 
+impl Drop for Joiner {
+    /// The new device key does not outlive the joiner in memory.
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(&mut self.key);
+    }
+}
+
 impl Joiner {
     /// A joiner with a new device ID and key; name is shown in the devices
     /// list.

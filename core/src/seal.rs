@@ -144,7 +144,10 @@ mod tests {
     fn the_drafts_vector() {
         let v: Value = serde_json::from_slice(&std::fs::read(dir().join("xwing-hpke-pq.json")).unwrap()).unwrap();
         let s = |k: &str| unhex(v[k].as_str().unwrap());
-        assert_eq!((v["kem_id"].as_u64(), v["kdf_id"].as_u64(), v["aead_id"].as_u64()), (Some(0x647a), Some(1), Some(3)));
+        assert_eq!(
+            (v["kem_id"].as_u64(), v["kdf_id"].as_u64(), v["aead_id"].as_u64()),
+            (Some(0x647a), Some(1), Some(3))
+        );
         let (sk, pk) = XWing::derive_keypair(&s("ikmR"));
         assert_eq!(sk.to_bytes().to_vec(), s("skRm"));
         assert_eq!(pk.to_bytes().to_vec(), s("pkRm"));

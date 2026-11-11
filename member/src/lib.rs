@@ -882,6 +882,9 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
         }
         sys::run_as(&u)?;
     }
+    // After the user: a change of user resets what a process lets others
+    // read of it.
+    sys::no_dumps();
     #[cfg(windows)]
     {
         // Under the service manager, which gives it no standard error, the
