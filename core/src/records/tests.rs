@@ -285,11 +285,47 @@ fn ordinary_and_guarded_leaves() {
     let s = g.state();
     assert!(!s.counting.contains(&clear.id()) && !s.counting.contains(&cleared.id()));
     assert!(s.device(&kettle.key.device_id()).unwrap().guarded);
+    // The root's later record without the guard counts, and the leaf stays
+    // guarded: a reset leaf has a new key, so it is a new device.
+    let renamed = g.device(&k("root"), &kettle, "kettle 2", leaf);
+    let s = g.state();
+    assert!(s.counting.contains(&renamed.id()));
+    let d = s.device(&kettle.key.device_id()).unwrap();
+    assert!(d.guarded && d.name == "kettle 2");
     // The guard is a leaf's only.
     let mut d = Device::new(k("pc").key.clone(), "pc", ROLE_MEMBER);
     d.guarded = true;
     let body = g.body(&k("root"), Kind::Device(d));
     assert!(body.check().unwrap_err().is("records/device/guarded"));
+}
+
+/// A root's later record never makes a leaf of another device, nor another
+/// device of a leaf: it does not count.
+#[test]
+fn a_root_keeps_a_devices_kind() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pc, lamp) = (k("pc"), k("lamp"));
+    g.device(&root, &pc, "pc", |_| {});
+    let lamp_first = g.device(&root, &lamp, "lamp", |d| d.role = ROLE_LEAF);
+    let pc_leaf = g.device(&root, &pc, "pc", |d| d.role = ROLE_LEAF);
+    let lamp_pc = g.device(&root, &lamp, "lamp", |_| {});
+    let phone = g.device(&root, &pc, "pc 2", |d| d.role = ROLE_PHONE);
+    for order in 0..2 {
+        let mut recs = g.recs.clone();
+        if order == 1 {
+            recs.reverse();
+        }
+        let s = state_of(&g.root.key, &recs, &BTreeMap::new());
+        for r in [&pc_leaf, &lamp_pc] {
+            assert!(!s.counting.contains(&r.id()));
+            assert!(s.ignored.iter().any(|x| x.record == r.id() && x.why == Why::Role));
+        }
+        assert!(s.counting.contains(&lamp_first.id()) && s.counting.contains(&phone.id()));
+        let d = s.device(&pc.key.device_id()).unwrap();
+        assert_eq!((d.name.as_str(), d.role), ("pc 2", ROLE_PHONE));
+        assert_eq!(s.device(&lamp.key.device_id()).unwrap().role, ROLE_LEAF);
+    }
 }
 
 #[test]
@@ -299,14 +335,14 @@ fn an_admin_never_widens_a_device() {
     let (w, x, y, z) = (k("w"), k("x"), k("y"), k("z"));
     g.admin(&pa, &a, POWER_ADMIT);
     g.admin(&pm, &m, POWER_MANAGE);
-    // Past base rights: a hub, commands it takes, a watch, an admin key.
+    // Past base rights: a hub, an admin key, a watch.
     let hub = g.device(&a, &w, "w", |d| d.rights |= RIGHT_HUB);
-    let accepts = g.device(&a, &x, "x", |d| d.accepts = vec![(a.hash, CLASS_SAFE)]);
+    let admin_key = g.device(&a, &x, "x", |d| d.admin = Some(k("x admin").key.clone()));
     let watch = g.device(&a, &y, "y", |d| d.role = ROLE_WATCH);
     // Secrets only when the admin's own device has them; a's has not.
     let secrets = g.device(&a, &z, "z", |d| d.rights |= RIGHT_SECRETS);
     let s = g.state();
-    for r in [&hub, &accepts, &watch, &secrets] {
+    for r in [&hub, &admin_key, &watch, &secrets] {
         assert!(!s.counting.contains(&r.id()), "{:?}", r.body().kind);
     }
     assert!(s.devices.iter().all(|d| d.name == "admin"));

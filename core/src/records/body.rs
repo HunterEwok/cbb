@@ -38,12 +38,6 @@ pub const RIGHT_SEND: u64 = 2;
 pub const RIGHT_HUB: u64 = 4;
 pub const RIGHT_SECRETS: u64 = 8;
 
-/// Command classes of `accepts` and of a grant's commanders.
-pub const CLASS_SAFE: u64 = 1;
-pub const CLASS_NORMAL: u64 = 2;
-pub const CLASS_DANGEROUS: u64 = 4;
-pub const CLASS_COPIES: u64 = 8;
-
 /// Caps bits (only with role member).
 pub const CAP_ADMIN: u64 = 1;
 pub const CAP_DIALS: u64 = 2;
@@ -78,9 +72,6 @@ pub const MAX_DELAY_MS: u64 = 604_800_000;
 pub const DEFAULT_ADMIN_LIMIT: u64 = 128;
 pub const MIN_INCOMING_MS: u64 = 5_000;
 pub const MAX_INCOMING_MS: u64 = 3_600_000;
-
-/// The most elements of the record fields' arrays.
-pub const MAX_ACCEPTS: usize = 16;
 pub const MAX_KEYS: usize = 256;
 pub const MAX_HUBS: usize = 16;
 pub const MAX_SERVERS: usize = 16;
@@ -175,7 +166,6 @@ pub struct Device {
     pub role: u64,
     pub rights: u64,
     pub skip: u64,
-    pub accepts: Vec<(KeyHash, u64)>,
     pub caps: u64,
     pub os: u64,
     pub store: u64,
@@ -185,9 +175,9 @@ pub struct Device {
     pub commands: u64,
     pub holds_root: bool,
     pub replaces: Option<KeyHash>,
-    /// A guarded leaf (a lock, a door): only a root's record for it counts,
-    /// and only the devices a root names command it. Field 25 here until
-    /// the format names it.
+    /// A guarded leaf (a lock, a door), field 25: only a root's record for
+    /// it counts, and once a root set it, it stays for the device's ID (a
+    /// reset leaf has a new key).
     pub guarded: bool,
 }
 
@@ -200,7 +190,6 @@ impl Device {
             role,
             rights: 0,
             skip: 0,
-            accepts: Vec::new(),
             caps: 0,
             os: 0,
             store: STORE_FILE,
@@ -459,12 +448,6 @@ fn check_device(d: &Device) -> Result<bool, Rule> {
     if !(ROLE_MEMBER..=ROLE_LEAF).contains(&d.role) {
         return Err(field(t, "role"));
     }
-    if d.accepts.len() > MAX_ACCEPTS
-        || !strictly_sorted(&d.accepts.iter().map(|a| a.0).collect::<Vec<_>>())
-        || d.accepts.iter().any(|a| a.1 == 0 || a.1 > (CLASS_SAFE | CLASS_NORMAL | CLASS_DANGEROUS | CLASS_COPIES))
-    {
-        return Err(field(t, "accepts"));
-    }
     if d.caps != 0 && d.role != ROLE_MEMBER || d.caps > (CAP_ADMIN | CAP_DIALS | CAP_HUB) {
         return Err(field(t, "caps"));
     }
@@ -515,9 +498,6 @@ fn encode_device(m: &mut Map, d: &Device) {
     }
     if d.proof != 0 {
         m.put(19, cbor::uint(d.proof));
-    }
-    if !d.accepts.is_empty() {
-        m.put(15, cbor::array(d.accepts.iter().map(|(k, c)| cbor::array([cbor::bytes(&k.0), cbor::uint(*c)]))));
     }
     if let Some(a) = &d.admin {
         m.put(20, a.encode());

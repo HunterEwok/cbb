@@ -17,8 +17,8 @@ use alloc::vec::Vec;
 
 use super::body::{
     self, Body, Device, Head, Kind, POWER_ADMIT, POWER_FREEZE, POWER_HUB, POWER_MANAGE, POWER_REMOVE,
-    POWER_REMOVE_ADMINS, POWER_TAKEOVER, POWER_THAW, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_WATCH,
-    Removal, Seen, Settings,
+    POWER_REMOVE_ADMINS, POWER_TAKEOVER, POWER_THAW, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF,
+    ROLE_WATCH, Removal, Seen, Settings,
 };
 use super::key::{DeviceId, GroupId, Key, KeyHash, RecordId};
 use super::{
@@ -63,6 +63,9 @@ pub enum Why {
     Undecided,
     /// Two keys with one device ID: neither counts.
     IdConflict,
+    /// A root's record that makes a leaf of another device, or another
+    /// device of a leaf.
+    Role,
 }
 
 impl Why {
@@ -79,6 +82,7 @@ impl Why {
             Why::Removed => "removed",
             Why::Undecided => "undecided",
             Why::IdConflict => "id-conflict",
+            Why::Role => "role",
         }
     }
 }
@@ -154,7 +158,6 @@ pub struct DeviceState {
     pub role: u64,
     pub rights: u64,
     pub skip: u64,
-    pub accepts: Vec<(KeyHash, u64)>,
     pub caps: u64,
     pub os: u64,
     pub store: u64,
@@ -1006,12 +1009,11 @@ impl<'e, 'a> Epoch<'e, 'a> {
     }
 
     /// Reports whether device record i keeps within what admin a may sign
-    /// for any device: base rights, no accepts, no admin key, nothing a
+    /// for any device: base rights, no admin key, nothing a
     /// root alone gives. An admin may admit an ordinary leaf, never a
     /// watch or a guarded leaf (owner, 11.11).
     fn admin_device_ok(&self, a: &KeyHash, d: &Device) -> bool {
         d.rights & !self.base_rights(a) == 0
-            && d.accepts.is_empty()
             && d.admin.is_none()
             && d.powers == 0
             && d.commands == 0
@@ -1596,8 +1598,11 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// by the counting manage records (rights intersected, skips joined),
     /// with the name of the newest of them.
     fn device(&self, id: &DeviceId, rs: &[usize]) -> Option<DeviceState> {
-        let counting = self.counting_of(rs);
+        let off = self.role_off(rs);
+        let counting: Vec<usize> = self.counting_of(rs).into_iter().filter(|i| !off.contains(i)).collect();
         let roots: Vec<usize> = counting.iter().copied().filter(|&i| !self.r(i).admin()).collect();
+        // Once a root's record guards the leaf, it stays guarded.
+        let guarded = roots.iter().any(|&i| self.r(i).dev().is_some_and(|d| d.guarded));
         let (top, rights, skip) = if let Some(&first) = roots.first() {
             let top = roots.iter().copied().fold(first, |b, i| if self.newer(i, b) { i } else { b });
             let d = self.r(top).dev()?;
@@ -1632,7 +1637,6 @@ impl<'e, 'a> Epoch<'e, 'a> {
             role: n.role,
             rights,
             skip,
-            accepts: n.accepts.clone(),
             caps: n.caps,
             os: n.os,
             store: n.store,
@@ -1642,7 +1646,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             commands: 0,
             frozen: false,
             replaces: n.replaces,
-            guarded: n.guarded && by_root,
+            guarded,
             by_root,
         };
         if let Some(a) = n.admin.as_ref().map(Key::hash)
@@ -1656,6 +1660,17 @@ impl<'e, 'a> Epoch<'e, 'a> {
             d.frozen = self.frozen.contains(&a);
         }
         Some(d)
+    }
+
+    /// A device's root records that make it a leaf when its oldest root
+    /// record does not, or the other way: they do not count, so a leaf
+    /// stays a leaf and a computer or a phone never becomes one.
+    fn role_off(&self, rs: &[usize]) -> BTreeSet<usize> {
+        let roots: Vec<usize> = rs.iter().copied().filter(|&i| self.root_record(i)).collect();
+        let Some(&first) = roots.first() else { return BTreeSet::new() };
+        let oldest = roots.iter().copied().fold(first, |b, i| if self.newer(b, i) { i } else { b });
+        let leaf = |i: usize| self.r(i).dev().is_some_and(|d| d.role == ROLE_LEAF);
+        roots.into_iter().filter(|&i| leaf(i) != leaf(oldest)).collect()
     }
 
     /// The devices with two keys for one ID: neither counts (owner, 11.11).
@@ -1755,7 +1770,10 @@ impl<'e, 'a> Epoch<'e, 'a> {
         } else {
             Stop::None
         };
-        let conflicted: BTreeSet<usize> = id_conflicts.values().flatten().copied().collect();
+        let mut conflicted: BTreeSet<usize> = id_conflicts.values().flatten().copied().collect();
+        for rs in self.e.devices.values() {
+            conflicted.extend(self.role_off(rs));
+        }
         for i in self.all() {
             let claim_effective =
                 self.claims.iter().any(|c| c.record == self.r(i).id && c.state == ClaimState::Effective);
@@ -1773,6 +1791,12 @@ impl<'e, 'a> Epoch<'e, 'a> {
             return None;
         } else if conflicted.contains(&r.id) {
             Why::IdConflict
+        } else if self
+            .r(i)
+            .device
+            .is_some_and(|d| self.e.devices.get(&d).is_some_and(|rs| self.role_off(rs).contains(&i)))
+        {
+            Why::Role
         } else if self.capped[i] {
             Why::Limit
         } else if !self.counted[i] {
