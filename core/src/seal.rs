@@ -136,6 +136,52 @@ mod tests {
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop")
     }
 
+    /// The vector of the standard's draft for this suite, from outside the
+    /// project (testdata/interop/xwing-hpke-pq.json): the key derived from
+    /// its seed, its public key, and every message and exported value
+    /// opened from its encapsulated key. Go's seal checks the same file.
+    #[test]
+    fn the_drafts_vector() {
+        let v: Value = serde_json::from_slice(&std::fs::read(dir().join("xwing-hpke-pq.json")).unwrap()).unwrap();
+        let s = |k: &str| unhex(v[k].as_str().unwrap());
+        assert_eq!((v["kem_id"].as_u64(), v["kdf_id"].as_u64(), v["aead_id"].as_u64()), (Some(0x647a), Some(1), Some(3)));
+        let (sk, pk) = XWing::derive_keypair(&s("ikmR"));
+        assert_eq!(sk.to_bytes().to_vec(), s("skRm"));
+        assert_eq!(pk.to_bytes().to_vec(), s("pkRm"));
+        assert_eq!(public_key(&s("skRm")).unwrap(), s("pkRm"));
+        let enc = EncappedKey::from_bytes(&s("enc")).unwrap();
+        let mut ctx =
+            hpke::setup_receiver::<ChaCha20Poly1305, HkdfSha256, XWing>(&OpModeR::Base, &sk, &enc, &s("info")).unwrap();
+        let encryptions = v["encryptions"].as_array().unwrap();
+        assert!(!encryptions.is_empty());
+        for e in encryptions {
+            let h = |k: &str| unhex(e[k].as_str().unwrap());
+            assert_eq!(ctx.open(&h("ct"), &h("aad")).unwrap(), h("pt"));
+        }
+        for e in v["exports"].as_array().unwrap() {
+            let mut out = alloc::vec![0u8; e["L"].as_u64().unwrap() as usize];
+            ctx.export(&unhex(e["exporter_context"].as_str().unwrap()), &mut out).unwrap();
+            assert_eq!(hex(&out), e["exported_value"].as_str().unwrap());
+        }
+        // The first message as this module opens one sealed with the
+        // draft's info string.
+        let first = &encryptions[0];
+        let mut sealed = s("enc");
+        sealed.extend_from_slice(&unhex(first["ct"].as_str().unwrap()));
+        let k = private_key(&s("skRm")).unwrap();
+        let (enc, ct) = sealed.split_at(ENC_SIZE);
+        let pt = hpke::single_shot_open::<ChaCha20Poly1305, HkdfSha256, XWing>(
+            &OpModeR::Base,
+            &k,
+            &EncappedKey::from_bytes(enc).unwrap(),
+            &s("info"),
+            ct,
+            &unhex(first["aad"].as_str().unwrap()),
+        )
+        .unwrap();
+        assert_eq!(pt, unhex(first["pt"].as_str().unwrap()));
+    }
+
     #[test]
     fn round_trip() {
         let secret = generate_secret().unwrap();

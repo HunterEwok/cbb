@@ -51,6 +51,8 @@ watch's state, content hashes, join QR codes and a CPace exchange.
   Go; the Kotlin kit writes the same files, so Go checks both phones against one set.
 - A Go test fails when a committed vector is out of date, and names the command that
   writes it again.
+- `xwing-hpke-pq.json` is the vector of draft-ietf-hpke-pq-05 for the sealing suite, copied
+  from the draft; Go and the Rust core open its messages, and no test writes it.
 
 A change to the wire format changes the vectors in the same pull request, together with
 [the protocol](protocol.md) and every implementation.
