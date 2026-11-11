@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -1617,13 +1618,30 @@ func startRust(t *testing.T, bin string, s *testService) *testService {
 
 // testClock moves a service's wall clock through the file
 // CBB_TEST_AHEAD_FILE names, which the service reads each time, so that a
-// test can move it while the service runs.
+// test can move it while the service runs. Only a cbb built with the
+// feature testclock reads the file, never a release's.
 type testClock struct {
 	file string
 }
 
+// testClockBuilt tells, once, whether the Rust cbb under test reads the
+// test clock's file: its version names the feature testclock.
+var testClockBuilt = sync.OnceValues(func() (bool, error) {
+	out, err := exec.Command(rustService(), "version").Output()
+	if err != nil {
+		return false, err
+	}
+	first, _, _ := strings.Cut(string(out), "\n")
+	return strings.Contains(first, "testclock"), nil
+})
+
 func newTestClock(t *testing.T, ahead time.Duration) *testClock {
 	t.Helper()
+	if ok, err := testClockBuilt(); err != nil {
+		t.Fatalf("cbb version: %v", err)
+	} else if !ok {
+		t.Fatal("this test moves the service's clock: build cbb with cargo build --release -p cbb-member --features testclock")
+	}
 	c := &testClock{file: filepath.Join(t.TempDir(), "clock")}
 	c.set(t, ahead)
 	return c

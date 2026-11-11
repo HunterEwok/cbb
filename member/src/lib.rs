@@ -96,6 +96,7 @@ mod signed;
 pub mod sync;
 mod sys;
 pub mod takeover;
+pub mod testbuild;
 pub mod tls;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
@@ -337,10 +338,17 @@ pub fn main() {
                 "forward" | "relay" => servers::run(&g, cmd, rest),
                 "install" => servers::install(rest),
                 "version" | "-version" | "--version" => {
-                    // Never to be mistaken for a release: its certificates
-                    // last minutes.
+                    // A build for tests only is never to be mistaken for a
+                    // release: the time-scaled one's certificates last
+                    // minutes, and the test clock moves at a file's word.
                     let scaled = if cbb_core::benchtime::ENABLED { " (time-scaled bench build)" } else { "" };
-                    println!("cbb {} ({}/{}){scaled}", service::VERSION, std::env::consts::OS, std::env::consts::ARCH);
+                    println!(
+                        "cbb {} ({}/{}){scaled}{}",
+                        service::VERSION,
+                        std::env::consts::OS,
+                        std::env::consts::ARCH,
+                        testbuild::version_note()
+                    );
                     println!("{}", core_version());
                     Ok(())
                 }

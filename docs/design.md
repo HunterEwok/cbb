@@ -2247,10 +2247,10 @@ docs/protocol.md, section 16.
 - Each release gets `release.json`: the version, the date, the channel, the lowest version
   that may update to it directly, and the SHA-256 and size of every file, with the hashes of
   the binaries inside each archive and the Docker image's digest. A small `stable.json`
-  names the current release of the channel with a sequence number and an expiry of 30 days,
+  names the current release of the channel with a sequence number and an expiry of 14 days,
   so a mirror cannot freeze a device on an old release. GitHub releases are immutable, so it
   lives with the current `keys.json` in the repository's branch `channel`. A **channel key**
-  on cbb.tools, which `keys.json` certifies for channel files only, signs it again every
+  on cbb.tools, which `keys.json` certifies for channel files only, signs it again twice a
   week with the same release, and a scheduled workflow checks it and commits it to the
   branch: GitHub holds no key and cbb.tools no GitHub token. A stolen channel key can only
   hold the channel on a release the project signed; the next `keys.json` drops it.

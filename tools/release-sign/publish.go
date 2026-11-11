@@ -42,9 +42,15 @@ var (
 // carry it on; a shorter one is signed again by a root.
 const keysMargin = 45 * 24 * time.Hour
 
-// channelLife is how long a channel file the release key signs is valid;
-// the channel key on cbb.tools renews it every week after.
-const channelLife = 30 * 24 * time.Hour
+// channelLife is how long a channel file is valid, whether the release key
+// or the channel key signs it: the channel key on cbb.tools renews it twice
+// a week, so a device that is kept from the newest file can be shown an
+// old one for two weeks at most, and a missed renewal does not stop updates.
+const channelLife = 14 * 24 * time.Hour
+
+// entriesLife is how long a list of entry points is valid; cbb.tools
+// renews it with the channel file.
+const entriesLife = 30 * 24 * time.Hour
 
 const defaultRepo = "HunterEwok/cbb"
 
@@ -379,7 +385,7 @@ func putChannel(repo string, cur map[string]branchFile, files map[string]release
 func makeBranch(repo string) error {
 	readme := "# The release channel\n\nThe current signed `keys.json` and `stable.json` of CBB's releases\n" +
 		"(docs/protocol.md, section 16, on the main branch). `release-sign publish` writes them, and\n" +
-		"the channel workflow takes `stable.json` as cbb.tools renews it every week.\n"
+		"the channel workflow takes `stable.json` as cbb.tools renews it twice a week.\n"
 	call := func(v, body any, method, path string) error {
 		in, err := os.CreateTemp("", "cbb-gh-")
 		if err != nil {

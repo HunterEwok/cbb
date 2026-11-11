@@ -17,7 +17,7 @@ use crate::authority::Record;
 use crate::error::{Error, Result};
 use crate::group::ClaimTime;
 use crate::identity::Identity;
-use crate::pair::{self, Exchange, Failure, Joiner, MAX_FRAME, Refusal};
+use crate::pair::{self, Exchange, Failure, Joiner, MAX_FRAME};
 use crate::tls::{self, Clock, Exporter, Session};
 use crate::wire;
 
@@ -191,7 +191,7 @@ impl Attempt {
                         if let Some(f) = send {
                             let _ = self.session.write(&f);
                         }
-                        let wrong_code = error.details().contains(Refusal::WrongCode.message());
+                        let wrong_code = pair::is_wrong_code(&error);
                         return Ok(Outcome::Failed { error, wrong_code });
                     }
                 },

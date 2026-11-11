@@ -84,6 +84,8 @@ jobs:
       - name: cbb, the Rust program (member/packaging/build.sh), with its crates' notices
         env:
           CBB_SOURCE: ${{ github.sha }}
+          # A build for tests only does not compile with it (member/src/testbuild.rs).
+          CBB_RELEASE_BUILD: "1"
         run: |
           rustup toolchain install stable --profile minimal
           dir=$(CBB_VERSION="${GITHUB_REF_NAME#v}" sh member/packaging/build.sh "$GOOS/$GOARCH${GOARM:+/$GOARM}")
@@ -96,6 +98,15 @@ jobs:
             cp "$dir/cbb" "$RUNNER_TEMP/"
           fi
           sh member/packaging/notices.sh "$(basename "$(dirname "$dir")")" >"$RUNNER_TEMP/rust-notices"
+          # The second guard: a build for tests only carries this text
+          # (member/src/testbuild.rs), a release's never.
+          for f in "$dir"/cbb "$dir"/cbb.exe "$dir"/cbbw.exe "$dir"/cbb-relay "$dir"/cbb-relay.exe; do
+            [ -f "$f" ] || continue
+            if grep -aqF cbb-test-build-not-for-release "$f"; then
+              echo "::error::$f is a build for tests only" >&2
+              exit 1
+            fi
+          done
       - name: cbb-helper and cbb-forward, the Go programs beside cbb
         run: |
           ldflags="-s -w -X github.com/HunterEwok/cbb/internal/version.Version=$GITHUB_REF_NAME"
@@ -115,6 +126,11 @@ jobs:
               go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/$p$exe" "./cmd/$p"
               # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.
               grep -aqF -- "$GITHUB_REF_NAME" "$RUNNER_TEMP/$p$exe"
+              # Never the bench's time-scaled build (internal/benchtime).
+              if go version -m "$RUNNER_TEMP/$p$exe" | grep -qE -- '-tags=.*benchtime'; then
+                echo "::error::$p is the time-scaled build for tests only" >&2
+                exit 1
+              fi
             done
             ;;
           esac

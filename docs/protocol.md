@@ -1143,7 +1143,10 @@ the QR code dials the computer, and nothing is announced:
 
 - A device that does not know the code gets the joiner's refusal and nothing to test
   guesses with, so a failed attempt never spends the code: the joiner takes further
-  attempts, one at a time, and gives up after the third wrong code or the 5 minutes.
+  attempts, one at a time, and gives up after the third wrong code or the 5 minutes. It
+  counts a wrong code by the refusal itself (frame 3's or the member's `wrong-code`), never by
+  the words of an error, and refuses for the rest of the window the connections of an address
+  whose attempts failed three times for any reason.
 - On the member the window counts attempts as above. It is not announced (`p` stays unset)
   and takes no pairing connections on the member port, so the code is good only against the
   device whose certificate `fp` names.

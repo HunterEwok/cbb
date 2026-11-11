@@ -299,7 +299,7 @@ func keys(args []string) error {
 func channel(args []string) error {
 	fs := flag.NewFlagSet("channel", flag.ExitOnError)
 	seq := fs.Uint64("seq", 0, "the sequence number, above the channel's last")
-	days := fs.Int("days", 30, "days until it expires")
+	days := fs.Int("days", int(channelLife.Hours()/24), "days until it expires")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
 		return errors.New("channel needs the signed release.json")
