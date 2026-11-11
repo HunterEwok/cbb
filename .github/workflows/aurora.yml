@@ -37,6 +37,11 @@ jobs:
         with:
           path: ${{ runner.temp }}/psdk/dl
           key: aurora-psdk-${{ matrix.arch }}-${{ hashFiles('apps/silica/psdk.sh') }}
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt
+        with:
+          packages: p7zip-full imagemagick gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+          cache: silica
       - name: the RPM, signed (apps/silica/ci.sh)
         env:
           ARCH: ${{ matrix.arch }}
@@ -52,8 +57,6 @@ jobs:
           (umask 077 && printf '%s' "$KEY_BASE64" | base64 -d >"$SIGN_KEY_FILE")
           printf '%s' "$CERT_BASE64" | base64 -d >"$SIGN_CERT_FILE"
           trap 'rm -f "$SIGN_KEY_FILE"' EXIT
-          sudo apt-get update -q
-          sudo apt-get install -y -q p7zip-full imagemagick gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
           rustup toolchain install stable --profile minimal
           rustup default stable
           apps/silica/ci.sh "$RUNNER_TEMP/psdk" "$ARCH" "$RUNNER_TEMP/rpm"
