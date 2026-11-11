@@ -34,6 +34,9 @@
 //!    a root, and the device comes back only by a new admission with a new
 //!    key. A root's resolve may void an admin's revoke; the device then
 //!    counts again with its key and ID.
+//! 10. A takeover cuts the old root at the claim's `seen`: what that root
+//!     signs after it, removals included, does not count once the claim
+//!     does; a live root cancels the claim within the delay instead.
 //!
 //! The format's codec (`crate::format`) is built beside this module; until
 //! it is in the tree, `cbor` and `key` hold the little of it the rules

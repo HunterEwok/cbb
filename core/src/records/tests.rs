@@ -1103,6 +1103,29 @@ fn the_root_voids_an_admins_removal() {
     assert!(s.counting.contains(&d.id()) && s.device(&k("d").key.device_id()).is_some());
 }
 
+/// An old root's removal after a claim's seen does not survive the
+/// takeover: a root that does not cancel the claim within the delay loses
+/// what it signed after the seen, and the device counts again under the
+/// new root.
+#[test]
+fn an_old_roots_late_removal_ends_with_the_takeover() {
+    let mut g = G::new();
+    let (pa, a, laptop, n) = (k("phone a"), k("admin a"), k("laptop"), k("new root"));
+    g.admin(&pa, &a, POWER_TAKEOVER);
+    let ld = g.device(&k("root"), &laptop, "laptop", |_| {});
+    let seen = g.seen();
+    let c = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    let rv = g.root_rec(Kind::Revoke(removal(&[laptop.hash], g.seen())));
+    let s = g.state();
+    assert_eq!(s.claims[0].state, ClaimState::Pending);
+    assert!(s.revoked.contains(&laptop.hash));
+    let held = BTreeMap::from([(c.id(), DEFAULT_DELAY_MS)]);
+    let s = state_of(&g.root.key, &g.recs, &held);
+    assert_eq!(s.roots, vec![g.root.hash, n.hash]);
+    assert!(!s.counting.contains(&rv.id()) && !s.revoked.contains(&laptop.hash));
+    assert!(s.counting.contains(&ld.id()) && s.device(&laptop.key.device_id()).is_some());
+}
+
 /// What a command's receiver asks of the state: a key with two histories,
 /// a removed or frozen admin, and every admin during a full stop sign no
 /// command; the root does.
