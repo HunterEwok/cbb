@@ -143,8 +143,12 @@ pub fn read(frame: &[u8], limit: usize) -> Result<Message<'_>, Rule> {
     message(body)
 }
 
-/// Reads a message of a frame whose length was already checked.
+/// Reads the message of a frame: b is on the grid, a map with its type in
+/// field 0, padded as the one form has it. The limit is the caller's.
 pub fn message(b: &[u8]) -> Result<Message<'_>, Rule> {
+    if !on_grid(b.len()) {
+        return Err(Rule::FRAME_GRID);
+    }
     let map = cbor::decode(b)?;
     let entries = map.as_map().ok_or(Rule::FRAME_MESSAGE)?;
     let t = map.get(FIELD_T).and_then(Value::as_uint).ok_or(Rule::FRAME_MESSAGE)?;

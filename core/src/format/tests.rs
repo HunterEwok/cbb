@@ -416,3 +416,117 @@ fn key_container() {
     trailing.push(0);
     assert!(container::read(&trailing).is_err());
 }
+
+/// Every vector's bytes, for the mutations below.
+fn corpus() -> Vec<Vec<u8>> {
+    let mut out = Vec::new();
+    for t in load("profile.json")["vectors"].as_array().unwrap() {
+        out.push(unhex(s(t, "hex")));
+    }
+    for file in ["records.json", "statements.json", "commands.json", "credentials.json"] {
+        let f = load(file);
+        for t in f["take"].as_array().unwrap().iter().chain(f["refuse"].as_array().unwrap()) {
+            let e = unhex(s(t, "envelope"));
+            if let Ok(env) = Envelope::parse(&e) {
+                out.push(env.body.to_vec());
+            }
+            out.push(e);
+        }
+    }
+    for t in load("frames.json")["take"].as_array().unwrap() {
+        let f = unhex(s(t, "frame"));
+        out.push(f[4..].to_vec());
+        out.push(f);
+    }
+    let c = load("copy.json");
+    for k in ["copy", "reduced_copy_for_board", "content_plaintext", "hdr"] {
+        out.push(unhex(s(&c, k)));
+    }
+    out.push(unhex(s(&load("container.json"), "example_cert")));
+    for t in load("grants.json")["take"].as_array().unwrap() {
+        out.push(unhex(s(t, "message")));
+    }
+    out
+}
+
+#[test]
+fn the_vectors_keep_their_one_form() {
+    for b in corpus() {
+        super::fuzz::one_form(&b);
+    }
+}
+
+/// An owned value for the property tests.
+#[derive(Clone, Debug)]
+enum Tree {
+    Uint(u64),
+    Bytes(Vec<u8>),
+    Text(String),
+    Array(Vec<Tree>),
+    Map(std::collections::BTreeMap<u16, Tree>),
+}
+
+impl Tree {
+    fn value(&self) -> Value<'_> {
+        match self {
+            Tree::Uint(n) => Value::Uint(*n),
+            Tree::Bytes(b) => Value::Bytes(b),
+            Tree::Text(t) => Value::Text(t),
+            Tree::Array(a) => Value::Array(a.iter().map(Tree::value).collect()),
+            Tree::Map(m) => Value::Map(m.iter().map(|(k, v)| (*k, v.value())).collect()),
+        }
+    }
+}
+
+fn tree() -> impl proptest::strategy::Strategy<Value = Tree> {
+    use proptest::prelude::*;
+    let leaf = prop_oneof![
+        prop_oneof![0..30u64, 0..70_000u64, 0..=super::cbor::MAX_INT].prop_map(Tree::Uint),
+        proptest::collection::vec(any::<u8>(), 0..300).prop_map(Tree::Bytes),
+        ".{0,40}".prop_map(Tree::Text),
+    ];
+    leaf.prop_recursive(7, 64, 8, |inner| {
+        prop_oneof![
+            proptest::collection::vec(inner.clone(), 0..30).prop_map(Tree::Array),
+            proptest::collection::btree_map(prop_oneof![0..30u16, any::<u16>()], inner, 0..30).prop_map(Tree::Map),
+        ]
+    })
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(2000))]
+
+    /// Any value of the profile written and read back is itself, and its
+    /// encoding is the only one taken.
+    #[test]
+    fn values_round_trip(t in tree()) {
+        let v = t.value();
+        let b = v.encode();
+        let back = cbor::decode(&b).unwrap();
+        proptest::prop_assert_eq!(&back, &v);
+        super::fuzz::one_form(&b);
+    }
+
+    /// Random bytes never panic a reader, and whatever is taken has one form.
+    #[test]
+    fn random_bytes(b in proptest::collection::vec(proptest::prelude::any::<u8>(), 0..512)) {
+        super::fuzz::one_form(&b);
+    }
+
+    /// The vectors with a byte changed, cut or added: whatever a reader
+    /// still takes has one form.
+    #[test]
+    fn mutated_vectors(i in 0usize..1000, at in 0usize..100_000, byte in proptest::prelude::any::<u8>(), how in 0u8..4) {
+        let c = corpus();
+        let mut b = c[i % c.len()].clone();
+        if b.is_empty() { return Ok(()); }
+        let at = at % b.len();
+        match how {
+            0 => b[at] = byte,
+            1 => b[at] ^= 1 << (byte % 8),
+            2 => b.truncate(at),
+            _ => b.insert(at, byte),
+        }
+        super::fuzz::one_form(&b);
+    }
+}

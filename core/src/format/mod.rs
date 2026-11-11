@@ -20,6 +20,9 @@ pub mod container;
 pub mod copy;
 pub mod envelope;
 pub mod frame;
+#[cfg(any(test, feature = "fuzzing"))]
+#[allow(clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
+pub mod fuzz;
 pub mod grant;
 pub mod key;
 pub mod print;

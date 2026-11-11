@@ -69,9 +69,9 @@
   },
   {
    "name": "text utf-8",
-   "hex": "6ad0bad0bed0bfd0b8d18f",
+   "hex": "69636166c3a920e29c93",
    "valid": true,
-   "diag": "\"копия\""
+   "diag": "\"café ✓\""
   },
   {
    "name": "empty array",

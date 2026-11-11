@@ -1,10 +1,17 @@
-// Command check reads the draft vectors of format-0.6-bytes.md with a second,
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+
+// Command check reads the vectors of the 0.6 format (testdata/format) with a second,
 // independent implementation: fxamacker/cbor for the bytes, Go's crypto for the
 // signatures and the container. It checks the format level only (the profile,
 // envelopes, signatures, IDs, frames, the copy's signature, the container);
 // field rules are left to the implementations.
 //
-// Run: go run . DIR
+// It is its own Go module, so that the reader it uses (fxamacker/cbor) is
+// not one of cbb's dependencies, and the Rust core's tests are checked
+// against a reader that shares no code with them.
+//
+// Run: cd testdata/format/check && go run . ..
 package main
 
 import (
@@ -445,7 +452,7 @@ func main() {
 
 	// frames
 	var fr struct {
-		Take   []struct{ Name, Frame string } `json:"take"`
+		Take   []struct{ Name, Frame string }       `json:"take"`
 		Refuse []struct{ Name, Rule, Frame string } `json:"refuse"`
 	}
 	load(dir, "frames.json", &fr)
@@ -477,6 +484,16 @@ func main() {
 			if !ok || bytes.ContainsFunc(pb, func(r rune) bool { return r != 0 }) {
 				return errors.New("frame/pad")
 			}
+		}
+		// The one padding: the message without `pad`, padded by trying
+		// every length, gives these bytes.
+		delete(m, uint64(1))
+		again, err := padded(m, onGridSize)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(again, b[4:]) {
+			return errors.New("frame/pad: not the one padding")
 		}
 		return nil
 	}
@@ -538,8 +555,15 @@ func main() {
 	}
 	checkCopy("full", unhex(c["copy"]))
 	checkCopy("reduced", unhex(c["reduced_copy_for_board"]))
-	if _, err := strict(unhex(c["content_plaintext"])); err != nil || len(c["content_plaintext"]) != 2048 {
+	if cv, err := strict(unhex(c["content_plaintext"])); err != nil || len(c["content_plaintext"]) != 2048 {
 		fail("copy content: %v", err)
+	} else {
+		cm := cv.(map[any]any)
+		delete(cm, uint64(1))
+		again, err := padded(cm, contentStep)
+		if err != nil || !bytes.Equal(again, unhex(c["content_plaintext"])) {
+			fail("copy content: not the one padding (%v)", err)
+		}
 	}
 	if err := frame(unhex(c["frame"])); err != nil {
 		fail("copy frame: %v", err)
@@ -607,4 +631,42 @@ func mustHashOf(name string, rows []keyRow) string {
 		}
 	}
 	panic(name)
+}
+
+func onGridSize(l int) bool {
+	return l == 64 || l == 256 || l == 1024 || l == 4096 || l == 16384 || (l > 16384 && l%16384 == 0)
+}
+
+func contentStep(l int) bool {
+	for _, s := range []int{1 << 10, 4 << 10, 16 << 10, 64 << 10, 256 << 10, 1 << 20, 2 << 20, 3 << 20, 4 << 20} {
+		if l == s {
+			return true
+		}
+	}
+	return false
+}
+
+// padded encodes m as it is when its size is allowed, else with the
+// shortest run of zeros in field 1 that makes it an allowed size, found by
+// trying every length (format section 9.1).
+func padded(m map[any]any, allowed func(int) bool) ([]byte, error) {
+	base, err := em.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	if allowed(len(base)) {
+		return base, nil
+	}
+	for plen := 0; plen < 8<<20; plen++ {
+		m[uint64(1)] = make([]byte, plen)
+		b, err := em.Marshal(m)
+		if err != nil {
+			return nil, err
+		}
+		if allowed(len(b)) {
+			delete(m, uint64(1))
+			return b, nil
+		}
+	}
+	return nil, errors.New("no padding reaches an allowed size")
 }

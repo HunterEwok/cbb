@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-# Draft test vectors for the 0.6 wire format (format-0.6-bytes.md).
-# Run: python3 -I gen.py OUTDIR
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+#
+# The test vectors of the 0.6 wire format (testdata/format), from the byte
+# layout the owner agreed on 2026-11-11. The Rust core (core/src/format)
+# and the Go reader in check/ read them.
+# Run: python3 -I gen.py testdata/format
 # Deterministic: the keys come from fixed labels, ECDSA uses RFC 6979.
 # The wraps and sealed parts are placeholder bytes of the right size:
 # these vectors test the format (bytes, fields, signatures), not X-Wing.
@@ -275,7 +280,7 @@ def profile_vectors():
     ok("empty bytes", b"")
     ok("bytes", b"\x01\x02\x03")
     ok("text", "cbb")
-    ok("text utf-8", "копия")
+    ok("text utf-8", "café ✓")
     ok("empty array", [])
     ok("empty map", {})
     ok("map in key order", {1: 1, 2: 2, 24: 3, 256: 4, 65535: 5})
@@ -878,7 +883,7 @@ def container_vector():
     assert len(t) == 195 and len(c) == 221 and i == 130 and t[10:26] == serial(LAPTOP.pub)
     # TBS 192 bytes after its header; the key at offset 133 of the container (130 of the TBS)
     return {
-        "source": "research-0.6/key-container (task 2), matched %d of its vectors" % matched,
+        "source": "the template task 2 tested on five TLS stacks (research-0.6/key-container); gen.py checks its valid vectors byte for byte when that file is beside it",
         "tbs_template_hex": t[:10].hex() + "<16-byte serial>" + t[26:i].hex() + "<65-byte key>" + t[i + 65:].hex(),
         "key_offset_in_tbs": i,
         "tbs_length": len(t),
