@@ -28,6 +28,8 @@ pub const MAX_BYTES: usize = 16 * 1024;
 
 pub const RULE_SHAPE: Rule = Rule::field("intro/shape");
 pub const RULE_SIZE: Rule = Rule::field("intro/size");
+/// A record of the intro that does not read (`Record::decode`).
+pub const RULE_RECORD: Rule = Rule::field("intro/record");
 
 /// Why an intro is refused; the connection closes.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -138,6 +140,14 @@ impl Intro {
             return Err(RULE_SIZE);
         }
         Ok((envs, v.get(3).map(Value::encode)))
+    }
+
+    /// Reads an intro message: its envelopes, each record read with the
+    /// records' reader (the signatures are checked by [`Intro::check`]).
+    pub fn read(msg: &[u8]) -> Result<Intro, Rule> {
+        let (envs, keys) = Intro::envelopes(msg)?;
+        let records = envs.iter().map(|e| Record::decode(e).map_err(|_| RULE_RECORD)).collect::<Result<Vec<_>, _>>()?;
+        Ok(Intro { records, keys })
     }
 
     /// Checks an intro from the peer with key `peer` against the set the

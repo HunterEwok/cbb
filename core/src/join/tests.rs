@@ -339,6 +339,8 @@ fn the_joiner_checks_its_welcome() {
     assert!(w.check(&group, &point(&k("phone")), &point(&tab)).is_ok());
     assert_eq!(w.check(&group, &point(&k("laptop")), &point(&tab)).err(), Some(welcome::Refusal::NotAdmitter));
 
+    // The encoding reads back.
+    assert_eq!(Welcome::decode(&w.encode()).unwrap(), w);
     // The encoding's parts read back.
     let (root, envs, ages, time) = Welcome::parts(&w.encode()).unwrap();
     assert_eq!(root, g.root.key.public);
@@ -390,6 +392,8 @@ fn an_intro_proves_a_new_device() {
     now.insert_all(g.recs.iter().cloned());
     assert_eq!(intro.check(&now, &BTreeMap::new(), &me, &point(&tv)), Err(intro::Refusal::NotMember));
 
+    // The message reads back.
+    assert_eq!(Intro::read(&intro.message()).unwrap(), intro);
     // The message's envelopes read back.
     let (envs, keys) = Intro::envelopes(&intro.message()).unwrap();
     assert_eq!(envs.len(), 2);

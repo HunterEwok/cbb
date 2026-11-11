@@ -31,6 +31,8 @@ pub const RECORDS_BUDGET: usize = 56 * 1024;
 
 pub const RULE_SHAPE: Rule = Rule::field("welcome/shape");
 pub const RULE_ROOT: Rule = Rule::field("welcome/root");
+/// A record of the Welcome that does not read (`Record::decode`).
+pub const RULE_RECORD: Rule = Rule::field("welcome/record");
 
 /// The Welcome.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
@@ -168,6 +170,26 @@ impl Welcome {
         }
         let time = v.get(5).and_then(Value::as_uint).ok_or(RULE_SHAPE)?;
         Ok((root.public.to_vec(), envs, ages, time))
+    }
+
+    /// Reads a Welcome: its fields, each record read with the records'
+    /// reader (signatures are checked by [`Welcome::check`]).
+    pub fn decode(b: &[u8]) -> Result<Welcome, Rule> {
+        let (root, envs, claim_ages, time_ms) = Welcome::parts(b)?;
+        let records = envs.iter().map(|e| Record::decode(e).map_err(|_| RULE_RECORD)).collect::<Result<Vec<_>, _>>()?;
+        let v = cbor::decode(b)?;
+        let list = |k: u16| -> Result<Vec<Vec<u8>>, Rule> {
+            match v.get(k) {
+                None => Ok(Vec::new()),
+                Some(a) => Ok(a.as_array().ok_or(RULE_SHAPE)?.iter().map(Value::encode).collect()),
+            }
+        };
+        let grant = match v.get(6) {
+            None => None,
+            Some(g) if g.as_map().is_some() => Some(g.encode()),
+            Some(_) => return Err(RULE_SHAPE),
+        };
+        Ok(Welcome { root, records, claim_ages, keys: list(4)?, time_ms, grant, credentials: list(7)? })
     }
 
     /// The joiner's checks. `group` is the group ID the code exchange gave
