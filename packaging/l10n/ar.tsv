@@ -1,0 +1,261 @@
+  1. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  1. السماح بـ TCP %s الوارد من %s. الغرض: اتصالات أجهزة المجموعة.
+  2. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  2. السماح بـ UDP 5353 الوارد من %s. الغرض: العثور على أجهزة المجموعة (mDNS).
+%s: removed the CBB rules.	%s: أُزيلت قواعد CBB.
+Firewall: closed the hub's UDP port %s.	جدار الحماية: أُغلق منفذ UDP %s الخاص بالمحور.
+  In Firewall > Rules, on each interface of the home network (LAN and the others):	  في Firewall > Rules، على كل واجهة من واجهات الشبكة المنزلية (LAN وغيرها):
+    Pass, protocol TCP, source %s, destination This Firewall, port %s	    Pass، البروتوكول TCP، المصدر %s، الوجهة This Firewall، المنفذ %s
+    Pass, protocol UDP, the same sources, destination This Firewall, port 5353	    Pass، البروتوكول UDP، المصادر نفسها، الوجهة This Firewall، المنفذ 5353
+  Add to /etc/pf.conf, before the rules that block, and run pfctl -f /etc/pf.conf:	  أضف إلى /etc/pf.conf قبل قواعد الحظر، ثم شغّل pfctl -f /etc/pf.conf:
+  and the same lines in the script that firewall_script in rc.conf names, to keep them.	  والأسطر نفسها في السكربت الذي يسمّيه firewall_script في rc.conf، كي تبقى.
+  In Firewall > Rules on WAN: Pass, protocol UDP, source any, destination WAN address, port %s	  في Firewall > Rules على WAN: Pass، البروتوكول UDP، المصدر any، الوجهة WAN address، المنفذ %s
+%s [y/N]	%s [y/N]
+No terminal to answer on; taken as No.	لا توجد طرفية للإجابة؛ اعتُبرت الإجابة لا.
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand:	لم تُضف أي قواعد لجدار الحماية. لا يعمل CBB إلا ما دام جدار الحماية يسمح بالقواعد أعلاه. لإضافتها يدويًا:
+Firewall: no active firewall was found; no firewall rules are needed. If pf or ipfw is turned on later, run the installer again.	جدار الحماية: لم يُعثر على جدار حماية مفعّل؛ لا حاجة إلى قواعد. إذا فُعّل pf أو ipfw لاحقًا، شغّل المثبّت مرة أخرى.
+Firewall: %s (active). CBB requires these rules:	جدار الحماية: %s (مفعّل). يحتاج CBB إلى هذه القواعد:
+CBB does not change pfSense's rules, and runs there unsupported. Add them by hand:	لا يغيّر CBB قواعد pfSense، ويعمل هناك دون دعم. أضفها يدويًا:
+ (express installation)	 (تثبيت سريع)
+ (as answered before)	 (حسب الإجابة السابقة)
+With Yes, CBB keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both.	عند الإجابة بنعم، يحفظ CBB هذه القواعد في مرساة pf خاصة به، تضيفها إضافته إلى قواعد OPNsense؛ وإلغاء التثبيت يزيل الاثنين.
+With Yes, CBB keeps these rules in its own pf anchor and adds the lines that load it at the end of %s; uninstalling removes both.	عند الإجابة بنعم، يحفظ CBB هذه القواعد في مرساة pf خاصة به ويضيف الأسطر التي تحمّلها في نهاية %s؛ وإلغاء التثبيت يزيل الاثنين.
+With Yes, CBB adds these rules to ipfw's set %s at every start, and removes them on uninstall.	عند الإجابة بنعم، يضيف CBB هذه القواعد إلى مجموعة ipfw رقم %s عند كل تشغيل، ويزيلها عند إلغاء التثبيت.
+Add these rules now?	هل تُضاف هذه القواعد الآن؟
+To let CBB add and manage them, run the installer again with --express.	ليضيفها CBB ويديرها، شغّل المثبّت مرة أخرى مع --express.
+Added the rules above%s. CBB manages them from now on.	أُضيفت القواعد أعلاه%s. يديرها CBB من الآن.
+run it as root	شغّله بصلاحيات root
+neither pf nor ipfw is active; nothing was added.	لا pf ولا ipfw مفعّل؛ لم يُضف شيء.
+failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again.	فشل (رمز الخروج %s). لرؤية كل أمر نفّذه: CBB_ERROR_DETAILS=1، ثم شغّله مرة أخرى.
+CBB_HOME_CGNAT is 1 or 0, not %s	قيمة CBB_HOME_CGNAT هي 1 أو 0، وليست %s
+--port takes a port from 1024 to 65535	يقبل --port منفذًا من 1024 إلى 65535
+CBB_FIREWALL is ask, express or no, not %s	قيمة CBB_FIREWALL هي ask أو express أو no، وليست %s
+run it as root (sudo or doas)	شغّله بصلاحيات root (sudo أو doas)
+this installer is for FreeBSD	هذا المثبّت مخصّص لـ FreeBSD
+%s does not run on this machine; is it built for %s?	لا يعمل %s على هذا الجهاز؛ هل بُني لـ %s؟
+an account named cbb exists here and is not this service's (its comment is not "CBB"); it would get the group's keys. Rename or remove it, then run install.sh again.	يوجد هنا حساب باسم cbb لا يخص هذه الخدمة (تعليقه ليس "CBB")؛ وسيحصل على مفاتيح المجموعة. أعد تسميته أو احذفه، ثم شغّل install.sh مرة أخرى.
+a group named cbb exists here with members, and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	توجد هنا مجموعة مستخدمين باسم cbb فيها أعضاء، ولا يوجد حساب للخدمة؛ وسيصل أعضاؤها إلى الخدمة. أعد تسمية المجموعة أو احذفها، ثم شغّل install.sh مرة أخرى.
+Added %s to the cbb group; log in again to use cbb copy and paste.	أُضيف %s إلى مجموعة cbb؛ سجّل الدخول مرة أخرى لاستخدام cbb copy وpaste.
+CBB uses TCP port %s instead of 8764.	يستخدم CBB منفذ TCP %s بدلًا من 8764.
+the service did not answer within 10 s: %s	لم تستجب الخدمة خلال 10 ثوانٍ: %s
+CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	يعمل CBB على منفذ TCP %s. لإزالته: sh /usr/local/share/cbb/uninstall.sh
+OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense: يظهر في System > Diagnostics > Services، وتبقى قواعده بعد كل إعادة تحميل للمرشّح.
+pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	pfSense غير مدعوم: قد يزيل تحديث pfSense برنامج CBB؛ شغّل هذا المثبّت مرة أخرى بعد التحديث.
+Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	التالي: شغّل cbb pair بصلاحيات root وامسح رمز QR بتطبيق CBB على هاتفك؛ وبدون التطبيق، راجع docs/guide/without-app.md.
+CBB is removed, with this device's keys; it left its group.	أُزيل CBB مع مفاتيح هذا الجهاز؛ وقد غادر مجموعته.
+CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	أُزيل CBB. تبقى مفاتيحه في /var/db/cbb لإعادة التثبيت؛ ويحذفها --purge.
+--port needs a port number	يحتاج --port إلى رقم منفذ
+--home-cgnat needs on or off	يحتاج --home-cgnat إلى on أو off
+--auto-update needs on or off	يحتاج --auto-update إلى on أو off
+unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	خيار غير معروف %s (المعروفة: --lite، --no-pair، --rootless، --console، --uinput، --port N، --home-cgnat on|off، --auto-update on|off، --express، --no-firewall)
+--rootless installs for your own user: run it without sudo: %s	يثبّت --rootless لمستخدمك أنت: شغّله دون sudo: %s
+--rootless is for Linux computers	--rootless مخصّص لحواسيب Linux
+run it with sudo: %s	شغّله باستخدام sudo: %s
+no release for this MIPS system: it is not OpenWrt, which names its byte order	لا يوجد إصدار لنظام MIPS هذا: ليس OpenWrt الذي يذكر ترتيب البايتات
+no release for the architecture %s	لا يوجد إصدار للمعمارية %s
+the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	العضو الخفيف لـ MIPS لا يدعم المزامنة خارج المنزل بعد (البند 37 من خارطة الطريق)؛ والعضو الكامل يدعمها.
+--console is not for a router	--console ليس للموجّه
+--uinput is not for a router	--uinput ليس للموجّه
+--home-cgnat is not for a router	--home-cgnat ليس للموجّه
+--lite is for Linux; a Mac runs the full member	--lite مخصّص لـ Linux؛ يعمل على Mac العضو الكامل
+--console is for Linux	--console مخصّص لـ Linux
+--uinput is for Linux	--uinput مخصّص لـ Linux
+--lite is for Linux; FreeBSD runs the full member	--lite مخصّص لـ Linux؛ يعمل على FreeBSD العضو الكامل
+this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	هذا المثبّت مخصّص لـ Linux وmacOS وFreeBSD؛ على Windows استخدم get.ps1
+tar is required	يلزم tar
+sha256sum or shasum is required	يلزم sha256sum أو shasum
+curl or wget is required	يلزم curl أو wget
+CBB_VERSION must look like v1.2.3	يجب أن تكون CBB_VERSION بصيغة v1.2.3
+the signed %s file is not in the strict form of signed bodies; not installing	ملف %s الموقّع ليس بالصيغة الصارمة للمحتويات الموقّعة؛ لن يُثبَّت
+Not checked: the release's signature (CBB_VERIFY=skip).	لم يُتحقق: توقيع الإصدار (CBB_VERIFY=skip).
+openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)	يلزم openssl للتحقق من توقيع الإصدار (أو CBB_VERIFY=skip لتثبيته دون تحقق)
+%s has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)	لا توجد ملفات إصدار موقّعة لـ %s؛ لن يُثبَّت (CBB_VERIFY=skip يثبّته دون تحقق)
+keys.json is not signed by the project's root key; not installing	keys.json غير موقّع بمفتاح الجذر للمشروع؛ لن يُثبَّت
+keys.json has expired; check the clock, or try again later	انتهت صلاحية keys.json؛ تحقق من الساعة أو حاول لاحقًا
+keys.json is not valid; not installing	keys.json غير صالح؛ لن يُثبَّت
+keys.json holds a key that is not valid	يحتوي keys.json على مفتاح غير صالح
+keys.json holds no release key	لا يحتوي keys.json على مفتاح إصدار
+release.json is not signed by a release key; not installing	release.json غير موقّع بمفتاح إصدار؛ لن يُثبَّت
+stable.json is not signed by a release or channel key; not installing	stable.json غير موقّع بمفتاح إصدار أو قناة؛ لن يُثبَّت
+stable.json is not the stable channel's	stable.json لا يخص القناة المستقرة
+stable.json has expired; check the clock, or try again later	انتهت صلاحية stable.json؛ تحقق من الساعة أو حاول لاحقًا
+release.json is not the release stable.json names; not installing	release.json ليس الإصدار الذي يسمّيه stable.json؛ لن يُثبَّت
+release.json is for %s, not %s	release.json يخص %s، وليس %s
+release.json does not list %s	لا يذكر release.json الملف %s
+%s does not match the signed release.json; not installing it	لا يطابق %s ملف release.json الموقّع؛ لن يُثبَّت
+The release's signature checks out (%s).	توقيع الإصدار صحيح (%s).
+could not download %s	تعذّر تنزيل %s
+stable.json names no release	لا يسمّي stable.json أي إصدار
+Downloading %s (%s)...	جارٍ تنزيل %s (%s)...
+SHA256SUMS does not list %s	لا يذكر SHA256SUMS الملف %s
+%s does not match SHA256SUMS; not installing it	لا يطابق %s ملف SHA256SUMS؛ لن يُثبَّت
+%s does not have this repository's build attestation; not installing it	لا يحمل %s شهادة البناء الخاصة بهذا المستودع؛ لن يُثبَّت
+The archive's build attestation checks out.	شهادة بناء الأرشيف صحيحة.
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the archive's build attestation	يحتاج CBB_ATTESTATION=require إلى gh مع تسجيل الدخول (gh auth login) للتحقق من شهادة بناء الأرشيف
+Not checked: the archive's build attestation (it needs gh, signed in). SHA256SUMS matched.	لم يُتحقق: شهادة بناء الأرشيف (تحتاج إلى gh مع تسجيل الدخول). تطابق SHA256SUMS.
+  %s. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  %s. السماح بـ TCP %s الوارد من %s. الغرض: اتصالات أجهزة المجموعة.
+  %s. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  %s. السماح بـ UDP 5353 الوارد من %s. الغرض: العثور على أجهزة المجموعة (mDNS).
+ufw: removed the CBB rules.	ufw: أُزيلت قواعد CBB.
+firewalld: removed the CBB rules and service.	firewalld: أُزيلت قواعد CBB وخدمته.
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run:	لم تُضف أي قواعد لجدار الحماية. لا يعمل CBB إلا ما دام جدار الحماية يسمح بالقواعد أعلاه. لإضافتها يدويًا، شغّل:
+Then make them permanent the way this system keeps its %s rules.	ثم اجعلها دائمة بالطريقة التي يحفظ بها هذا النظام قواعد %s.
+Firewall: no active firewall was found; no firewall rules are needed. If a firewall is turned on later, run the installer again.	جدار الحماية: لم يُعثر على جدار حماية مفعّل؛ لا حاجة إلى قواعد. إذا فُعّل جدار حماية لاحقًا، شغّل المثبّت مرة أخرى.
+cbb does not manage %s rules: rules added at run time do not survive a restart.	لا يدير cbb قواعد %s: القواعد المضافة أثناء التشغيل لا تبقى بعد إعادة التشغيل.
+ (kept from an earlier installation)	 (محفوظة من تثبيت سابق)
+With Yes, CBB adds these rules, keeps them current on every update and removes them on uninstall.	عند الإجابة بنعم، يضيف CBB هذه القواعد ويحدّثها مع كل تحديث ويزيلها عند إلغاء التثبيت.
+run it with sudo	شغّله باستخدام sudo
+no ufw or firewalld is active; nothing was added.	لا ufw ولا firewalld مفعّل؛ لم يُضف شيء.
+%s needs root; a rootless install has no console or uinput helper	يحتاج %s إلى root؛ التثبيت دون root لا يتضمن مساعدَي console وuinput
+--rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	يثبّت --rootless لمستخدمك أنت: شغّله دون sudo. ومع sudo، يثبّت install.sh دون --rootless خدمة النظام، وهذا أكثر أمانًا.
+a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	يعمل التثبيت دون root كوحدة مستخدم في systemd، وهذه الجلسة لا تملك مدير مستخدم لـ systemd؛ سجّل الدخول إلى سطح مكتب أو عبر ssh وشغّله مرة أخرى
+--home-cgnat is for the full member	--home-cgnat مخصّص للعضو الكامل
+CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	CBB مثبّت هنا للنظام كله (%s)، والجهاز الواحد يشغّل خدمة واحدة؛ أزله أولًا أو أبقِ عليه
+the desktop agent did not start; it starts at your next login	لم يبدأ وكيل سطح المكتب؛ سيبدأ عند تسجيل دخولك التالي
+CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	يعمل CBB ما دمت مسجّل الدخول. ليستمر بعد تسجيل الخروج، يشغّل المسؤول: sudo loginctl enable-linger %s
+CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	يعمل CBB للمستخدم %s على منفذ TCP %s، مثبّتًا دون root: لا يمكنه أبدًا أن يكون جذر المجموعة أو مسؤولًا أو المحور. إذا كان جدار الحماية هنا يقيّد الاتصالات الواردة، يسمح المسؤول بـ TCP %s وUDP 5353 من الشبكة المنزلية. لإزالته: %s
+For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	للنسخ واللصق في tmux، أضف هذا السطر إلى ~/.tmux.conf: source-file -q %s/tmux.conf
+Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	التالي: راجع member/README.md؛ باختصار، %s pair هنا، وامسح رمز QR بتطبيق الهاتف.
+Next: run %s pair and scan its QR code with the CBB app on your phone.	التالي: شغّل %s pair وامسح رمز QR بتطبيق CBB على هاتفك.
+this archive has no install-rootless.sh, so it cannot install without root	لا يحتوي هذا الأرشيف على install-rootless.sh، لذا لا يمكنه التثبيت دون root
+systemd is required	يلزم systemd
+the full member is installed here, and the lite member cannot use its keys; remove it first: %s	العضو الكامل مثبّت هنا، ولا يستطيع العضو الخفيف استخدام مفاتيحه؛ أزله أولًا: %s
+the lite member is installed here, and the full member cannot use its keys; remove it first: %s	العضو الخفيف مثبّت هنا، ولا يستطيع العضو الكامل استخدام مفاتيحه؛ أزله أولًا: %s
+an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	يوجد هنا حساب باسم cbb لا يخص هذه الخدمة (تعليقه ليس "cbb service")؛ وسيحصل على مفاتيح المجموعة. أعد تسميته أو احذفه، ثم شغّل install.sh مرة أخرى.
+a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	توجد هنا مجموعة مستخدمين باسم cbb فيها أعضاء (%s)، ولا يوجد حساب للخدمة؛ وسيصل أعضاؤها إلى الخدمة. أعد تسمية المجموعة أو احذفها، ثم شغّل install.sh مرة أخرى.
+Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	لم يُثبَّت: تطبيق شريط النظام، الذي يحتاج إلى GTK 4 وWebKitGTK 6.0 (Debian وUbuntu: %s؛ Fedora: %s). ثبّتها وشغّل هذا مرة أخرى لإضافته.
+--uinput is for the full member, which runs the desktop connector	--uinput مخصّص للعضو الكامل، الذي يشغّل موصل سطح المكتب
+could not load the uinput module now; it loads at the next boot	تعذّر تحميل وحدة uinput الآن؛ ستُحمَّل عند الإقلاع التالي
+100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	يُعدّ 100.64.0.0/10 شبكة منزلية على هذا الجهاز (--home-cgnat on).
+New member and admin keys of this device go into its TPM.	تُحفظ مفاتيح العضو والمسؤول الجديدة لهذا الجهاز في TPM الخاص به.
+CBB uses TCP port %s instead of 8764. If a firewall on the network limits incoming connections, allow TCP %s from the home network.	يستخدم CBB منفذ TCP %s بدلًا من 8764. إذا كان جدار حماية في الشبكة يقيّد الاتصالات الواردة، اسمح بـ TCP %s من الشبكة المنزلية.
+the uinput helper did not start; see journalctl -u cbb-uinput	لم يبدأ مساعد uinput؛ راجع journalctl -u cbb-uinput
+the desktop agent of %s did not start again; it starts at their next login	لم يُعِد وكيل سطح المكتب الخاص بـ %s التشغيل؛ سيبدأ عند تسجيل دخوله التالي
+cbb global allow failed; run sudo cbb global allow once the service runs.	فشل cbb global allow؛ شغّل sudo cbb global allow بعد أن تعمل الخدمة.
+CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	يعمل CBB على منفذ TCP %s. لإزالته: sudo sh %s/uninstall.sh
+Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	التالي: راجع member/README.md؛ باختصار، sudo -u cbb %s pair هنا، وامسح رمز QR بتطبيق الهاتف.
+Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	التالي: شغّل sudo %s pair وامسح رمز QR بتطبيق CBB على هاتفك؛ وبدون التطبيق، راجع docs/guide/without-app.md.
+CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	أُزيل CBB. تبقى مفاتيحه في %s/cbb لإعادة التثبيت؛ ويحذفها --purge.
+CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	أُزيل CBB. تبقى مفاتيحه في /var/lib/cbb لإعادة التثبيت؛ ويحذفها --purge.
+%s does not run on this Mac	لا يعمل %s على جهاز Mac هذا
+%s was built without cgo, so it cannot link this Mac's clipboard; use a release build, or build it with CGO_ENABLED=1	بُني %s دون cgo، لذا لا يمكنه ربط حافظة جهاز Mac هذا؛ استخدم نسخة من إصدار، أو ابنِه مع CGO_ENABLED=1
+--in-place needs a path of letters, digits and / . _ + -, not %s	يحتاج --in-place إلى مسار من الحروف والأرقام و / . _ + -، وليس %s
+%s is a link, likely Homebrew's; run this with --in-place %s	%s رابط، غالبًا من Homebrew؛ شغّل هذا مع --in-place %s
+100.64.0.0/10 counts as the home network on this Mac (--home-cgnat on).	يُعدّ 100.64.0.0/10 شبكة منزلية على جهاز Mac هذا (--home-cgnat on).
+Firewall: the macOS application firewall (on). CBB requires this rule:	جدار الحماية: جدار حماية التطبيقات في macOS (مفعّل). يحتاج CBB إلى هذه القاعدة:
+Firewall: the macOS application firewall (off). CBB requires this rule:	جدار الحماية: جدار حماية التطبيقات في macOS (معطّل). يحتاج CBB إلى هذه القاعدة:
+  1. Allow incoming connections to %s. Purpose: connections from the group's devices on TCP %s and finding them on UDP 5353 (mDNS). The application firewall allows a program on every port and from every address; CBB itself accepts only the home network.	  1. السماح بالاتصالات الواردة إلى %s. الغرض: اتصالات أجهزة المجموعة عبر TCP %s والعثور عليها عبر UDP 5353 (mDNS). يسمح جدار حماية التطبيقات للبرنامج بكل المنافذ ومن كل العناوين؛ أما CBB نفسه فلا يقبل إلا الشبكة المنزلية.
+With Yes, CBB adds this rule, keeps it current on every update and removes it on uninstall.	عند الإجابة بنعم، يضيف CBB هذه القاعدة ويحدّثها مع كل تحديث ويزيلها عند إلغاء التثبيت.
+Add this rule now? [y/N]	هل تُضاف هذه القاعدة الآن؟ [y/N]
+Added the rule above%s. CBB manages it from now on.	أُضيفت القاعدة أعلاه%s. يديرها CBB من الآن.
+No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	لم تُضف قاعدة لجدار الحماية. لا يعمل CBB إلا ما دام جدار الحماية يسمح بالقاعدة أعلاه. لإضافتها يدويًا، شغّل:
+To let CBB add and manage it, run the installer again with --express.	ليضيفها CBB ويديرها، شغّل المثبّت مرة أخرى مع --express.
+CBB is running on TCP port %s, in its group.	يعمل CBB على منفذ TCP %s، ضمن مجموعته.
+CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	يعمل CBB على منفذ TCP %s. للانضمام إلى مجموعة: sudo cbb pair، ثم امسح رمز QR بالهاتف أو اكتب الرمز من cbb pair على جذر المجموعة أو على مسؤول؛ أو لإنشاء مجموعة: sudo cbb new.
+CBB is removed, with this Mac's keys; it left its group.	أُزيل CBB مع مفاتيح جهاز Mac هذا؛ وقد غادر مجموعته.
+CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	أُزيل CBB. تبقى مفاتيحه في %s/state لإعادة التثبيت؛ ويحذفها --purge.
+this installer is for OpenWrt	هذا المثبّت مخصّص لـ OpenWrt
+OpenWrt 25.12 or later is required (it installs packages with apk)	يلزم OpenWrt 25.12 أو أحدث (فهو يثبّت الحزم باستخدام apk)
+%s does not run on this router; is it built for %s?	لا يعمل %s على هذا الموجّه؛ هل بُني لـ %s؟
+CBB is installed; procd is not running here, so it starts at the next boot.	ثُبّت CBB؛ لا يعمل procd هنا، لذا سيبدأ عند الإقلاع التالي.
+the service did not answer within 40 s: %s	لم تستجب الخدمة خلال 40 ثانية: %s
+see logread -e cbb	راجع logread -e cbb
+CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	يعمل CBB على منفذ TCP %s، في منطقة lan. لإزالته: sh /usr/share/cbb/uninstall.sh
+Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	الترقية المُساعَدة (ASU، owut) تستبعد الحزم التي ليست من مستودعات OpenWrt: ثبّته مرة أخرى بعد الترقية.
+Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	التالي: شغّل su -s /bin/sh cbb -c 'cbb pair -name router' وامسح رمز QR بتطبيق CBB على هاتفك.
+Next: run cbb pair and scan its QR code with the CBB app on your phone.	التالي: شغّل cbb pair وامسح رمز QR بتطبيق CBB على هاتفك.
+CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	أُزيل CBB. تبقى مفاتيحه في /etc/cbb لإعادة التثبيت؛ ويحذفها --purge.
+This device is in no group yet, so it starts pairing now (--no-pair skips this).	هذا الجهاز ليس في أي مجموعة بعد، لذا يبدأ الاقتران الآن (--no-pair يتخطّى ذلك).
+could not record how CBB was installed; cbb update takes it as get.sh	تعذّر تسجيل طريقة تثبيت CBB؛ سيعدّها cbb update تثبيتًا عبر get.sh
+automatic updates are on or off, not %s	التحديثات التلقائية on أو off، وليست %s
+CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	يمكن لـ CBB أن يبحث مرة يوميًا عن إصدار وقّعه المشروع ويثبّته؛ ويُطلع البحث GitHub على عنوان هذا الجهاز، كما يفعل أي تنزيل.
+Update automatically? [y/N]	هل يُحدَّث تلقائيًا؟ [y/N]
+No terminal to answer on; not now. Later: %scbb update -auto on	لا توجد طرفية للإجابة؛ ليس الآن. لاحقًا: %scbb update -auto on
+could not turn automatic updates %s; run %scbb update -auto %s	تعذّر ضبط التحديثات التلقائية على %s؛ شغّل %scbb update -auto %s
+starting	البدء
+a key is not P-256	أحد المفاتيح ليس P-256
+%s is not a valid release file; not installing	%s ليس ملف إصدار صالحًا؛ لن يُثبَّت
+%s is not signed by the project's key; not installing	%s غير موقّع بمفتاح المشروع؛ لن يُثبَّت
+keys.json holds a key whose use is empty; not installing	يحتوي keys.json على مفتاح استخدامه فارغ؛ لن يُثبَّت
+checking for administrator rights	التحقق من صلاحيات المسؤول
+run it in a PowerShell opened with "Run as administrator"	شغّله في PowerShell مفتوح عبر "تشغيل كمسؤول"
+finding the architecture	تحديد المعمارية
+finding the latest release	البحث عن أحدث إصدار
+downloading %s (%s)	تنزيل %s (%s)
+checking %s against SHA256SUMS	مطابقة %s مع SHA256SUMS
+checking the release's signature	التحقق من توقيع الإصدار
+checking the build attestation of %s	التحقق من شهادة بناء %s
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the build attestation	يحتاج CBB_ATTESTATION=require إلى gh مع تسجيل الدخول (gh auth login) للتحقق من شهادة البناء
+Not checked: the build attestation of the archive (it needs gh, signed in). SHA256SUMS matched.	لم يُتحقق: شهادة بناء الأرشيف (تحتاج إلى gh مع تسجيل الدخول). تطابق SHA256SUMS.
+unpacking %s	فك ضغط %s
+running install.ps1	تشغيل install.ps1
+install.ps1 exited with %s	انتهى install.ps1 بالرمز %s
+get.ps1: %s failed: %s	get.ps1: فشلت خطوة "%s": %s
+For the full error: $env:CBB_ERROR_DETAILS = "1", and run it again.	لرؤية الخطأ كاملًا: $env:CBB_ERROR_DETAILS = "1"، ثم شغّله مرة أخرى.
+install.ps1: %s failed: %s	install.ps1: فشلت خطوة "%s": %s
+Run it again with -Details for the full error.	شغّله مرة أخرى مع -Details لرؤية الخطأ كاملًا.
+%s %s exited with %s: %s	انتهى %s %s بالرمز %s: %s
+install.ps1: run it in a PowerShell opened with "Run as administrator".	install.ps1: شغّله في PowerShell مفتوح عبر "تشغيل كمسؤول".
+install.ps1: -Port takes a port from 1024 to 65535.	install.ps1: يقبل -Port منفذًا من 1024 إلى 65535.
+checking the binaries	فحص البرامج
+cbbw.exe is missing beside %s	الملف cbbw.exe غير موجود بجانب %s
+%s is not built for Windows: %s	%s غير مبني لـ Windows: %s
+finding the signed-in user	البحث عن المستخدم المسجّل دخوله
+stopping cbb	إيقاف cbb
+copying the files to %s	نسخ الملفات إلى %s
+adding cbb to PATH	إضافة cbb إلى PATH
+making the %s group	إنشاء مجموعة %s
+adding %s to the %s group	إضافة %s إلى مجموعة %s
+net localgroup %s %s /add exited with %s: %s	انتهى net localgroup %s %s /add بالرمز %s: %s
+creating the service	إنشاء الخدمة
+setting the service's path failed with %s	فشل ضبط مسار الخدمة: %s
+setting the port	ضبط المنفذ
+100.64.0.0/10 counts as the home network on this PC (-HomeCgnat on).	يُعدّ 100.64.0.0/10 شبكة منزلية على هذا الحاسوب (-HomeCgnat on).
+narrowing %s	تقييد صلاحيات %s
+%s was not the administrators' own; it is now %s	لم يكن %s ملكًا للمسؤولين؛ وهو الآن %s
+allowing cbb in Windows Firewall	السماح لـ cbb في جدار حماية Windows
+the local subnet	الشبكة الفرعية المحلية
+the local subnet and 100.64.0.0/10	الشبكة الفرعية المحلية و100.64.0.0/10
+Firewall: Windows Firewall (on for %s). CBB requires these rules:	جدار الحماية: جدار حماية Windows (مفعّل لـ %s). يحتاج CBB إلى هذه القواعد:
+Firewall: Windows Firewall (off). CBB requires these rules:	جدار الحماية: جدار حماية Windows (معطّل). يحتاج CBB إلى هذه القواعد:
+  1. Allow incoming TCP %s from %s to %s. Purpose: connections from the group's devices.	  1. السماح بـ TCP %s الوارد من %s إلى %s. الغرض: اتصالات أجهزة المجموعة.
+  2. Allow incoming UDP 5353 from %s to %s. Purpose: finding the group's devices (mDNS).	  2. السماح بـ UDP 5353 الوارد من %s إلى %s. الغرض: العثور على أجهزة المجموعة (mDNS).
+Add these rules now? [y/N]	هل تُضاف هذه القواعد الآن؟ [y/N]
+Add these rules now? [y/N] No console to answer on; taken as No.	هل تُضاف هذه القواعد الآن؟ [y/N] لا توجد وحدة تحكم للإجابة؛ اعتُبرت الإجابة لا.
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run in an administrator PowerShell:	لم تُضف أي قواعد لجدار الحماية. لا يعمل CBB إلا ما دام جدار الحماية يسمح بالقواعد أعلاه. لإضافتها يدويًا، شغّل في PowerShell بصلاحيات المسؤول:
+To let CBB add and manage them, run the installer again with -Express ($env:CBB_FIREWALL = "express" for get.ps1).	ليضيفها CBB ويديرها، شغّل المثبّت مرة أخرى مع -Express ($env:CBB_FIREWALL = "express" لـ get.ps1).
+CBB also adds an outbound rule that keeps its service on the home network and, with cbb global on, its group's servers.	يضيف CBB أيضًا قاعدة صادرة تحصر خدمته في الشبكة المنزلية، ومع cbb global on في خوادم مجموعته أيضًا.
+keeping the service on the home network	حصر الخدمة في الشبكة المنزلية
+starting the service	تشغيل الخدمة
+starting the agent with every sign-in	تشغيل الوكيل عند كل تسجيل دخول
+starting the agent for %s	تشغيل الوكيل لـ %s
+starting the tray app for %s	تشغيل تطبيق شريط النظام لـ %s
+The agent did not start now (%s); it starts when %s signs in again.	لم يبدأ الوكيل الآن (%s)؛ سيبدأ عندما يسجّل %s الدخول مرة أخرى.
+The tray app did not start now (%s); it starts when %s signs in again.	لم يبدأ تطبيق شريط النظام الآن (%s)؛ سيبدأ عندما يسجّل %s الدخول مرة أخرى.
+starting the tray app with every sign-in	تشغيل تطبيق شريط النظام عند كل تسجيل دخول
+adding CBB to the Start menu	إضافة CBB إلى قائمة ابدأ
+registering the uninstaller	تسجيل برنامج إلغاء التثبيت
+waiting for the service	انتظار الخدمة
+the service does not answer; its log is %s	الخدمة لا تستجيب؛ سجلّها في %s
+writing the outbound rule for what the service reaches now	كتابة القاعدة الصادرة لما تصل إليه الخدمة الآن
+cbb global allow exited with %s	انتهى cbb global allow بالرمز %s
+recording how CBB was installed	تسجيل طريقة تثبيت CBB
+Could not record how CBB was installed; cbb update takes it as get.ps1.	تعذّر تسجيل طريقة تثبيت CBB؛ سيعدّها cbb update تثبيتًا عبر get.ps1.
+setting automatic updates	ضبط التحديثات التلقائية
+Update automatically? [y/N] No console to answer on; not now. Later: cbb update -auto on	هل يُحدَّث تلقائيًا؟ [y/N] لا توجد وحدة تحكم للإجابة؛ ليس الآن. لاحقًا: cbb update -auto on
+Could not turn automatic updates %s; run cbb update -auto %s as administrator.	تعذّر ضبط التحديثات التلقائية على %s؛ شغّل cbb update -auto %s كمسؤول.
+CBB %s is running on TCP port %s; %s may use it.	يعمل CBB %s على منفذ TCP %s؛ ويمكن لـ %s استخدامه.
+It stays in its group.	يبقى في مجموعته.
+Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	التالي، في طرفية مفتوحة كمسؤول: cbb pair، ثم امسح رمز QR بالهاتف أو اكتب الرمز من cbb pair على جذر المجموعة أو على مسؤول؛ أو أنشئ مجموعة: cbb new.
+To remove it: Settings, Apps, CBB, Uninstall.	لإزالته: الإعدادات، التطبيقات، CBB، إلغاء التثبيت.
+Y	ن
+Yes	نعم
+y	ن
+yes	نعم
+uninstall.ps1: %s failed: %s	uninstall.ps1: فشلت خطوة "%s": %s
+deleting the service	حذف الخدمة
+stopping the agents and the tray app	إيقاف الوكلاء وتطبيق شريط النظام
+removing the update task and cbb update's folder	إزالة مهمة التحديث ومجلد cbb update
+removing the firewall rules	إزالة قواعد جدار الحماية
+removing the sign-in entries, the Start menu shortcut and the uninstaller entry	إزالة إدخالات تسجيل الدخول واختصار قائمة ابدأ وإدخال برنامج إلغاء التثبيت
+removing cbb from PATH	إزالة cbb من PATH
+removing %s	إزالة %s
+removing %s and the %s group	إزالة %s ومجموعة %s
+CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	أُزيل CBB. تبقى مفاتيحه في %s لإعادة التثبيت؛ ويحذفها -Purge.
