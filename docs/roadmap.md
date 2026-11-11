@@ -1198,14 +1198,16 @@ format land in `main` together, from one shared branch, since between them nothi
    core, a command of `cbb` that prints any of them as text; a number for the algorithm of
    every key and signature; room for a second signature; frames padded to a grid. Done when
    the vectors pass in Rust, Go, Swift and Kotlin and fuzzing finds one form for each value.
-3. **The records (D-101, D-102, D-103, D-104).** A record is its signed body and nothing
+3. **The records (D-101, D-102, D-103, D-104, D-113, D-114, D-115).** A record is its signed body and nothing
    else, kept by the hash of that body and checked before it is kept. A device is its key.
    An admin admits a device and never widens its rights. What a member keeps depends on the
    set of records alone, not on the order they came in. No rule reads a clock: the wait of a
    takeover is the time a device itself held the claim. Fields in two zones, so that a later
    version adds to the format and an older one still applies every removal. A device's
-   rights as a list: what it reads, what it makes, whose commands it takes. Done when any
-   order of one set of records gives one state, in a property test and in the model.
+   rights as a list: what it reads and what it makes. Only the format's ceilings bound a
+   set, and a claim pays for the space of its new root. The apps write one of three sets
+   of an admin's powers, kept in the core. Done when any order of one set of records gives
+   one state, in a property test and in the model.
 4. **Members without certificates (D-105, D-106).** TLS proves the key, the key's hash is
    the device, and the records say whether it is in the group; certificates, their chains,
    their renewal and the admins' CAs go. No server name is sent. A forwarder and a relay
@@ -1216,11 +1218,13 @@ format land in `main` together, from one shared branch, since between them nothi
    data, so that a later type passes through an older device; a secret of any type; the
    key a device's copies are sealed to in the device's own signed statement, changed every
    week; one interface to a key store; commands as the only way to run anything on a
-   device, in classes, the dangerous ones with a one-time number and a person's consent.
-6. **The session in the core and the small device (D-107).** The member's session without
+   device; a guarded device takes each one only with its own one-time number and a
+   person's consent (D-112).
+6. **The session in the core and the small device (D-107, D-112).** The member's session without
    I/O moves from the service into the core, so the service, the phones and a board run one
-   code. A small device keeps the root's key and a short grant from the root in place of
-   the records. Done when a real board in a real group took a command and a copy, sent its
+   code. A small device keeps the root's key and a short grant in place of the records:
+   an ordinary one is admitted by any admin and obeys the admins, a guarded one is the
+   root's alone. Done when a real board in a real group took a command and a copy, sent its
    state and took a new grant, and its size is a threshold in CI. About 512 KB for the part
    of cbb is the aim, not a limit.
 7. **The freeze.** [protocol.md](protocol.md) written again from the core, with no
