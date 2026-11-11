@@ -2156,6 +2156,8 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Builds use Go 1.27.4, which fixes a crash of an HTTP/1 server in the standard library
+  (GO-2026-6859), and rustix 1.1.6 (RUSTSEC-2026-0486).
 - Muting or unmuting a device, and turning sync away from home on or off or making a device a
   hub, no longer drops its connections, so the device no longer vanishes from the others for
   a moment: it tells its peers in a new `presence` message (docs/protocol.md, section 4,
