@@ -104,7 +104,7 @@ func TestRecovery(t *testing.T) {
 	pairWith(t, pi, b)
 	noClaimWait(t, pi, a, b)
 	level := pi.status(t).KeyLevel
-	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, sheetText(newRecoveryKey(t, pi))); err == nil || !strings.Contains(err.Error(), "no recovery key") {
+	if _, err := b.do(t, control.Header{Op: control.OpRecover}, sheetText(newRecoveryKey(t, pi))); err == nil || !strings.Contains(err.Error(), "no recovery key") {
 		t.Errorf("recovery in a group without a recovery key: %v", err)
 	}
 	pi.stop()
@@ -118,19 +118,19 @@ func TestRecovery(t *testing.T) {
 		recs, err := group.LoadRecords(b.dir, id.GroupCA.Cert)
 		return err == nil && recs.State().Recovery != nil
 	})
-	if _, err := pi.do(t, control.Header{Op: control.OpRecovery}, sheetText(sheet)); err == nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRecover}, sheetText(sheet)); err == nil {
 		t.Error("the root claimed its own group")
 	}
-	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, "a typo"); err == nil || !strings.Contains(err.Error(), "not a cbb recovery sheet") {
+	if _, err := b.do(t, control.Header{Op: control.OpRecover}, "a typo"); err == nil || !strings.Contains(err.Error(), "not a cbb recovery sheet") {
 		t.Errorf("a refused text: %v", err)
 	}
 	other := *sheet
 	other.Group = "0123456789abcdef"
-	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, sheetText(&other)); err == nil || !strings.Contains(err.Error(), "another group") {
+	if _, err := b.do(t, control.Header{Op: control.OpRecover}, sheetText(&other)); err == nil || !strings.Contains(err.Error(), "another group") {
 		t.Errorf("a sheet of another group: %v", err)
 	}
 	pi.stop()
-	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, sheetText(sheet)); err != nil {
+	if _, err := b.do(t, control.Header{Op: control.OpRecover}, sheetText(sheet)); err != nil {
 		t.Fatalf("recovery: %v", err)
 	}
 	waitFor(t, "b is the root", func() bool {
@@ -141,7 +141,7 @@ func TestRecovery(t *testing.T) {
 		id, err := group.Load(a.dir)
 		return err == nil && len(id.Roots) == 1
 	})
-	if _, err := b.do(t, control.Header{Op: control.OpRecovery}, sheetText(sheet)); err == nil {
+	if _, err := b.do(t, control.Header{Op: control.OpRecover}, sheetText(sheet)); err == nil {
 		t.Error("the new root claimed the group again")
 	}
 
@@ -150,13 +150,13 @@ func TestRecovery(t *testing.T) {
 	// The new root signs the old root's settings again, the key level too.
 	waitFor(t, "b keeps the group's key level", func() bool { return b.status(t).KeyLevel == level })
 	makeAdmin(t, b, a)
-	if _, err := b.do(t, control.Header{Op: control.OpHandover, Name: "pi"}, ""); err == nil {
+	if _, err := b.do(t, control.Header{Op: control.OpHandOver, Device: "pi"}, ""); err == nil {
 		t.Error("handed the group to a device that is no admin")
 	}
-	if _, err := a.do(t, control.Header{Op: control.OpHandover, Name: "b"}, ""); err == nil {
+	if _, err := a.do(t, control.Header{Op: control.OpHandOver, Device: "b"}, ""); err == nil {
 		t.Error("an admin that is no root handed the group over")
 	}
-	if m, err := b.do(t, control.Header{Op: control.OpHandover, Name: "a"}, ""); err != nil || m.Name != "a" {
+	if m, err := b.do(t, control.Header{Op: control.OpHandOver, Device: "a"}, ""); err != nil || m.Name != "a" {
 		t.Fatalf("handover: %+v, %v", m, err)
 	}
 	waitFor(t, "a holds the handover", func() bool {
@@ -176,7 +176,7 @@ func TestRecovery(t *testing.T) {
 		return false
 	})
 	b.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpTakeover, Name: "b"}, ""); err != nil {
+	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Device: "b"}, ""); err != nil {
 		t.Fatalf("takeover after the handover: %v", err)
 	}
 	waitFor(t, "a is the root at once", func() bool {

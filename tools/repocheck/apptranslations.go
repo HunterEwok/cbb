@@ -73,8 +73,8 @@ func checkAppTranslations(contents map[string][]byte) []string {
 	return problems
 }
 
-// catalog is the part of a String Catalog the check reads.
-type catalog struct {
+// stringCatalog is the part of a String Catalog the check reads.
+type stringCatalog struct {
 	SourceLanguage string `json:"sourceLanguage"`
 	Strings        map[string]struct {
 		ShouldTranslate *bool                       `json:"shouldTranslate"`
@@ -105,7 +105,7 @@ func (l catalogLocalized) units(where string, out map[string]string, states map[
 }
 
 func checkCatalog(name string, data []byte) []string {
-	var c catalog
+	var c stringCatalog
 	if err := json.Unmarshal(data, &c); err != nil {
 		return []string{fmt.Sprintf("%s: %v", name, err)}
 	}

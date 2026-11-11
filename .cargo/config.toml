@@ -28,8 +28,3 @@ rustflags = ["--cfg", 'getrandom_backend="custom"']
 
 [target.xtensa-esp32s3-none-elf]
 rustflags = ["--cfg", 'getrandom_backend="custom"']
-
-# The core as WebAssembly for Go's wazero (wasm/): the host supplies
-# getrandom's randomness.
-[target.wasm32-unknown-unknown]
-rustflags = ["--cfg", 'getrandom_backend="custom"']

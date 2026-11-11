@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The cross-implementation test vectors in testdata/interop, which the Go
-//! tests write and the phone kit reads too: a lite member must decode,
+//! tests write and the phone kit reads too: a member in Rust must decode,
 //! encode and decide what they say as the Go member does.
 
 use std::path::PathBuf;
@@ -160,7 +160,7 @@ fn pairing() {
     assert_eq!(certs::hex(&crate::pair::channel_id(&member, &joiner)), v["channel_id"].as_str().unwrap());
     assert_eq!(certs::fingerprint(&joiner), v["fingerprint"].as_str().unwrap());
     let frames = v["frames"].as_array().unwrap();
-    // The joiner's first frame, as a lite member writes it, differs only in
+    // The joiner's first frame, as the core writes it, differs only in
     // its role; the member's frames decode.
     crate::pair::check_frames_for_tests(frames);
 }
@@ -817,7 +817,7 @@ fn go_watch() {
     }
 }
 
-/// The strict form of signed bodies (strict.json): the lite member takes
+/// The strict form of signed bodies (strict.json): the core takes
 /// exactly the commands and manifests the Go member does.
 #[test]
 fn strict() {
@@ -844,7 +844,7 @@ fn strict() {
 }
 
 /// The vectors the tables of docs/protocol.md give (strict-generated-*.json,
-/// as Go's TestStrictGenerated writes them): the lite member takes exactly
+/// as Go's TestStrictGenerated writes them): the core takes exactly
 /// the bodies the tables take, and says which row it reads otherwise.
 #[test]
 fn strict_generated() {
@@ -887,7 +887,7 @@ fn strict_mutants() {
 }
 
 /// strict_wrong returns the vectors of a file in the form of
-/// strict-generated-*.json that the lite member reads otherwise.
+/// strict-generated-*.json that the core reads otherwise.
 fn strict_wrong(v: &Value) -> Vec<String> {
     let mut wrong = Vec::new();
     for kind in ["records", "commands", "manifests"] {
@@ -975,7 +975,7 @@ fn hlc_ahead() {
 }
 
 /// The names of media-names.json, as Go's TestNameVectors writes them:
-/// the lite core takes the names Go takes in a manifest, and writes the
+/// the core takes the names Go takes in a manifest, and writes the
 /// device names of Windows under the names Go gives them.
 #[test]
 fn media_names() {

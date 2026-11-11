@@ -1,98 +1,6 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "The computers did not fetch it within a minute. Try again, or send fewer files.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لم تجلبه الحواسيب خلال دقيقة. حاول مرة أخرى، أو أرسل ملفات أقل."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los ordenadores no lo obtuvieron en un minuto. Vuelve a intentarlo o envía menos archivos."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המחשבים לא הביאו את זה בתוך דקה. נסו שוב, או שלחו פחות קבצים."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "कंप्यूटरों ने इसे एक मिनट में नहीं लाया। दोबारा कोशिश करें, या कम फ़ाइलें भेजें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Компьютеры не забрали это за минуту. Повторите или отправьте меньше файлов."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kompyuta hazikuileta ndani ya dakika moja. Jaribu tena, au tuma faili chache."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电脑在一分钟内未获取。请重试，或少发送一些文件。"
-          }
-        }
-      }
-    },
-    "What you shared is larger than 50 MB, more than Share can carry. Send less at a time.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ما شاركته أكبر من 50 ميغابايت، أكثر مما تستطيع المشاركة حمله. أرسل أقل في كل مرة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lo que compartiste ocupa más de 50 MB, más de lo que Compartir puede llevar. Envía menos cada vez."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "מה ששיתפתם גדול מ-50MB, יותר ממה ששיתוף יכול לשאת. שלחו פחות בכל פעם."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "आपने जो साझा किया वह 50 MB से बड़ा है, साझा करें जितना ले जा सकता है उससे ज़्यादा। एक बार में कम भेजें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Это больше 50 МБ, столько «Поделиться» не унесёт. Отправьте меньше за раз."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ulichoshiriki ni kikubwa kuliko MB 50, zaidi ya kile Shiriki inachoweza kubeba. Tuma kidogo kwa wakati mmoja."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "你分享的内容超过 50 MB，超出了“分享”能携带的大小。请每次少发送一些。"
-          }
-        }
-      }
-    },
     "Done": {
       "localizations": {
         "ar": {
@@ -369,6 +277,52 @@
         }
       }
     },
+    "The computers did not fetch it within a minute. Try again, or send fewer files.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تجلبه الحواسيب خلال دقيقة. حاول مرة أخرى، أو أرسل ملفات أقل."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los ordenadores no lo obtuvieron en un minuto. Vuelve a intentarlo o envía menos archivos."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המחשבים לא הביאו את זה בתוך דקה. נסו שוב, או שלחו פחות קבצים."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कंप्यूटरों ने इसे एक मिनट में नहीं लाया। दोबारा कोशिश करें, या कम फ़ाइलें भेजें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компьютеры не забрали это за минуту. Повторите или отправьте меньше файлов."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kompyuta hazikuileta ndani ya dakika moja. Jaribu tena, au tuma faili chache."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电脑在一分钟内未获取。请重试，或少发送一些文件。"
+          }
+        }
+      }
+    },
     "There is no text to send.": {
       "localizations": {
         "ar": {
@@ -457,6 +411,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "这部手机还不在任何群组中：打开 CBB 创建或加入群组。"
+          }
+        }
+      }
+    },
+    "What you shared is larger than 50 MB, more than Share can carry. Send less at a time.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما شاركته أكبر من 50 ميغابايت، أكثر مما تستطيع المشاركة حمله. أرسل أقل في كل مرة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que compartiste ocupa más de 50 MB, más de lo que Compartir puede llevar. Envía menos cada vez."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מה ששיתפתם גדול מ-50MB, יותר ממה ששיתוף יכול לשאת. שלחו פחות בכל פעם."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपने जो साझा किया वह 50 MB से बड़ा है, साझा करें जितना ले जा सकता है उससे ज़्यादा। एक बार में कम भेजें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это больше 50 МБ, столько «Поделиться» не унесёт. Отправьте меньше за раз."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ulichoshiriki ni kikubwa kuliko MB 50, zaidi ya kile Shiriki inachoweza kubeba. Tuma kidogo kwa wakati mmoja."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你分享的内容超过 50 MB，超出了“分享”能携带的大小。请每次少发送一些。"
           }
         }
       }

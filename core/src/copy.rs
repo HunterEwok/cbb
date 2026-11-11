@@ -6,7 +6,7 @@
 //! copies and signs it, so the members that pass it on, a hub among them,
 //! neither read nor change it. This module seals, checks and opens a copy
 //! and its blob of images and files; the member's engine (crate::clip on
-//! the lite member, the kits on the phones, Go's package clip) decides what
+//! cbb, the kits on the phones, Go's package clip) decides what
 //! to do with it.
 
 use alloc::format;
@@ -520,7 +520,7 @@ pub fn new_key() -> [u8; KEY_SIZE] {
 }
 
 /// The devices a copy is sealed to by the records: those with a key that
-/// stands, a key for sealed messages, the role full, phone or lite, not
+/// stands, a key for sealed messages, the role member or phone, not
 /// frozen, and not only passing copies on; with secret, none that the
 /// records keep secrets from. Each as its device ID and seal key, sorted.
 pub fn readers(records: &Records, secret: bool) -> Vec<(String, Vec<u8>)> {

@@ -663,7 +663,7 @@ impl Pi {
             };
             return;
         }
-        // The lite member's frames (member/README.md): a text, and a copy
+        // cbb's frames (member/README.md): a text, and a copy
         // that answers CBBGO, takes its bytes raw, then says CBBOK.
         let words: Vec<&str> = cmd.split_whitespace().filter(|w| *w != "-debug").collect();
         if words.len() >= 3 && words[0] == "cbb" && words[1] == "next" {

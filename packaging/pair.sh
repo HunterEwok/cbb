@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Sourced by the install.sh of Linux and OpenWrt: the lite member starts
+# Sourced by the install.sh of Linux and OpenWrt: cbb without its helper starts
 # pairing as soon as it is installed, since the small devices it runs on
 # often have no keyboard and the user installs it to pair it at once. Its
 # messages go through packaging/l10n.sh, which the installer sourced.
 
 # pair_now CBB USER [ARGS] runs CBB pair ARGS, as USER when one is given,
-# when the lite member it installed is in no group, so that its QR code
+# when the cbb it installed is in no group, so that its QR code
 # shows right away. Joining still needs the code shown here: the phone
 # scans it, or the code is typed. It returns 0 when the device joined or
 # was in a group already (an update or a reinstall), and 1 when it did not

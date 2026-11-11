@@ -1,4 +1,4 @@
-# The lite member's network code on embassy-net
+# The ESP32 member's network code on embassy-net
 
 The part of the [Nano ESP32 firmware](../esp32) that needs a network and nothing of the
 chip: joining a group by the phone (`src/pair.rs`), on

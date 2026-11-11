@@ -6,84 +6,20 @@
 package actions
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
-
-	"github.com/godbus/dbus/v5"
 
 	"github.com/HunterEwok/cbb/internal/atomicfile"
 )
 
-// On Linux the service asks logind over the system bus, and a polkit rule
-// that cbb action enable writes, with the user's consent, lets the
+// On Linux the Rust service asks logind over the system bus, and a polkit
+// rule that cbb action enable writes, with the user's consent, lets the
 // service's user do exactly the presets that are on: the unit's
 // NoNewPrivileges keeps sudo out (design.md, "Quick actions").
-
-// System returns the runner of this system: logind.
-func System() Runner { return logind{} }
-
-type logind struct{}
-
-const (
-	login1     = "org.freedesktop.login1"
-	login1Path = "/org/freedesktop/login1"
-	manager    = "org.freedesktop.login1.Manager."
-)
-
-func (logind) Run(ctx context.Context, name string) error {
-	conn, err := dbus.ConnectSystemBus(dbus.WithContext(ctx))
-	if err != nil {
-		return fmt.Errorf("cannot reach the system bus for logind: %w", err)
-	}
-	defer conn.Close()
-	obj := conn.Object(login1, login1Path)
-	at := uint64(time.Now().Add(ScheduleDelay).UnixMicro())
-	var call *dbus.Call
-	switch name {
-	case Lock:
-		call = obj.CallWithContext(ctx, manager+"LockSessions", 0)
-	case Sleep:
-		call = obj.CallWithContext(ctx, manager+"Suspend", 0, false)
-	case Reboot:
-		call = obj.CallWithContext(ctx, manager+"ScheduleShutdown", 0, "reboot", at)
-	case Shutdown:
-		call = obj.CallWithContext(ctx, manager+"ScheduleShutdown", 0, "poweroff", at)
-	case Cancel:
-		var cancelled bool
-		if err := obj.CallWithContext(ctx, manager+"CancelScheduledShutdown", 0).Store(&cancelled); err != nil {
-			return logindError(name, err)
-		}
-		if !cancelled {
-			return &Refusal{Reason: "no reboot or shutdown is pending here"}
-		}
-		return nil
-	default:
-		return &Refusal{Reason: fmt.Sprintf("this device has no action %q", name)}
-	}
-	return logindError(name, call.Err)
-}
-
-// logindError makes a refusal of polkit's no, which the device's user
-// fixes there, and keeps other errors as failures.
-func logindError(name string, err error) error {
-	var de dbus.Error
-	if err == nil {
-		return nil
-	}
-	if errors.As(err, &de) {
-		switch de.Name {
-		case "org.freedesktop.DBus.Error.AccessDenied", "org.freedesktop.DBus.Error.InteractiveAuthorizationRequired":
-			return &Refusal{Reason: fmt.Sprintf("this device's user has not given CBB the right to %s; they run sudo cbb action enable %s there", name, name)}
-		}
-	}
-	return fmt.Errorf("logind: %w", err)
-}
 
 // serviceUser is the service's user, which the polkit rule lets act.
 const serviceUser = "cbb"

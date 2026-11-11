@@ -97,14 +97,14 @@ func (cg credentialGroup) names(t *testing.T, ks []KeyHash) []string {
 }
 
 // TestCredentialLists checks what a phone group's credentials list: the
-// hubs in their order, the phones first and the root's own first among
-// them; the admins other than the root, without the one whose admin CA was
+// hubs in their order, the admin computers first, then the phones with
+// the root's own first among them; the admins other than the root, without the one whose admin CA was
 // removed; and every device that was not removed.
 func TestCredentialLists(t *testing.T) {
 	cg := newCredentialGroup(t)
 	l := cg.set(t).CredentialLists()
 	hubs := cg.names(t, l.Hubs)
-	if len(hubs) != 4 || hubs[0] != "root" || hubs[1] != "phone" || !slices.Contains(hubs, "one") || !slices.Contains(hubs, "two") {
+	if len(hubs) != 4 || hubs[2] != "root" || hubs[3] != "phone" || !slices.Contains(hubs[:2], "one") || !slices.Contains(hubs[:2], "two") {
 		t.Errorf("hubs = %v", hubs)
 	}
 	admins := cg.names(t, l.Admins)

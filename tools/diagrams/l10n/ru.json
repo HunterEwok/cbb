@@ -18,7 +18,7 @@
   "Laptop": "Ноутбук",
   "Desktop": "Настольный ПК",
   "Raspberry Pi": "Raspberry Pi",
-  "lite member": "лёгкий участник",
+  "small device": "малое устройство",
   "with the app": "с приложением",
   "direct, encrypted connections, found by mDNS": "прямые зашифрованные соединения, устройства находят друг друга по mDNS",
   "No server in the middle: any device can be off, and the others go on syncing.": "Сервера посередине нет: любое устройство может быть выключено, остальные продолжают синхронизироваться.",

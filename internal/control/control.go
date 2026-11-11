@@ -38,21 +38,27 @@ const (
 	OpPair        = "pair"           // client → service: open a pairing window; answers follow
 	OpJoin        = "join"           // client → service: join a group with a code
 	OpDevices     = "devices"        // client → service: list the group's devices
-	OpRevoke      = "revoke"         // client → service: remove the device Name names (a name or a device ID)
-	OpRename      = "rename"         // client → service: give the device Name names the name NewName
-	OpFreeze      = "freeze"         // client → service: freeze the admin computer Name names
-	OpThaw        = "thaw"           // client → service: on the root, unfreeze the admin computer Name names
+	OpRemove      = "remove"         // client → service: remove the device Device names (a name or a device ID)
+	OpRename      = "rename"         // client → service: give the device Device names the name Name
+	OpFreeze      = "freeze"         // client → service: freeze the admin computer Device names
+	OpThaw        = "thaw"           // client → service: on the root, unfreeze the admin computer Device names
 	OpResolve     = "resolve"        // client → service: on the root, void both histories of every key that signed two; Name answers whose
 	OpAway        = "away"           // client → service: Name "on", "off", "hub", "hub-off", "move" (to Device) or "relay": sync away from home
-	OpSync        = "sync"           // client → service: Name "on" or "off" (for ForMS, 0 for until turned on): sync this device's clipboard with the group, or with Device as an admin (no ForMS)
+	OpSync        = "sync"           // client → service: On true or false (for ForMS, 0 for until turned on): sync this device's clipboard with the group, or with Device as an admin (no ForMS); answer: SyncOff, SyncOffMS, Muted, MutedMS
+	OpMuted       = "muted"          // client → service: where sync and an admin's mute stand, as sync answers
+	OpBug         = "bug"            // client → service: the bug report of the panic before the last restart, as the core made it (empty when none waits)
+	OpBugAllow    = "bug_allow"      // client → service: the user allowed it (payload {"always"}), and it goes
+	OpBugCancel   = "bug_cancel"     // client → service: the user cancelled it: nothing goes
+	OpView        = "view"           // client → service: the tiles to draw (docs/apps.md, "What the member shows")
+	OpArrange     = "arrange"        // client → service: the user's change of the tiles' order (Header.Arrange), answered as view
 	OpNetwork     = "network"        // client → service: take the networks this device is on now as known
-	OpAdmin       = "admin"          // client → service: on the root, make the device Name names an admin
-	OpTakeover    = "takeover"       // client → service: on an admin, take the group over from the lost root Name names
-	OpDelay       = "takeover-delay" // client → service: on the root, set how long a claim waits to Value, a duration
-	OpKeyLevel    = "key-level"      // client → service: on the root, set the group's key level to Value (proven, hardware or files); answer: Below
+	OpMakeAdmin   = "make_admin"     // client → service: on the root, make the device Device names an admin (AllowFileKey: even with its keys in a file)
+	OpTakeOver    = "take_over"      // client → service: on an admin, take the group over from the lost root Device names
+	OpDelay       = "takeover_delay" // client → service: on the root, set how long a claim waits to Value, a duration
+	OpKeyLevel    = "key_level"      // client → service: on the root, set the group's key level to Value (proven, hardware or files); answer: Below
 	OpIncoming    = "incoming"       // client → service: on the root or an admin, set how long a copy from another device stays live to Value, a duration
-	OpRecovery    = "recovery"       // client → service: claim the group with its recovery key, the payload the sheet's text or QR code, or with Name RecoveryCard the YubiKey's PIN
-	OpHandover    = "handover"       // client → service: on the root, hand the group to the admin Name names, whose claim then takes effect at once
+	OpRecover     = "recover"        // client → service: claim the group with its recovery key, the payload the sheet's text or QR code, or with Name RecoveryCard the YubiKey's PIN
+	OpHandOver    = "hand_over"      // client → service: on the root, hand the group to the admin Device names, whose claim then takes effect at once
 	OpHubs        = "hubs"           // client → service: on the root or an admin with hub, sign the table of main hubs Hubs (names or device IDs)
 	OpLeave       = "leave"          // client → service: leave the group: delete its keys and files, keep the settings, restart in no group
 	OpInvite      = "invite"         // client → service: make a remote invitation on the hub; answers and a question follow
@@ -61,31 +67,31 @@ const (
 	OpCopied      = "copied"         // watcher → service: the clipboard changed
 	OpClipboard   = "clipboard"      // watcher → service: what the clipboard holds, without a change
 	OpWrite       = "write"          // service → watcher: put this text into the clipboard; with Kind media, the images paste-media gives
-	OpPasteOn     = "paste-on"       // client → service: as an admin, have the member Device put the payload where its focus is
-	OpReceive     = "paste-receive"  // client → service: Name "on" or "off": remote paste on this device, or off on Device or All
+	OpPasteOn     = "paste_on"       // client → service: as an admin, have the member Device put the payload where its focus is
+	OpReceive     = "paste_receive"  // client → service: Name "on" or "off": remote paste on this device, or off on Device or All
 	OpInject      = "inject"         // service → watcher: put the payload where the focus is, a remote paste
 	OpInjected    = "injected"       // watcher → service: how the inject with Seq ended: Error empty, or why not
-	OpActionSet   = "action-set"     // client → service: set this device's quick action Actions[0]: on or off, and for whom
-	OpActionOn    = "action-on"      // client → service: as an admin, have the member Device run its action Name
-	OpActionOff   = "actions-off"    // client → service: as an admin, turn every quick action off on Device or All
-	OpActionDel   = "action-remove"  // client → service: remove this device's own action Name
+	OpActionSet   = "action_set"     // client → service: set this device's quick action Actions[0]: on or off, and for whom
+	OpActionOn    = "action_on"      // client → service: as an admin, have the member Device run its action Name
+	OpActionOff   = "actions_off"    // client → service: as an admin, turn every quick action off on Device or All
+	OpActionDel   = "action_remove"  // client → service: remove this device's own action Name
 	OpAct         = "act"            // service → watcher: run the quick action Name in the watcher's session
 	OpActed       = "acted"          // watcher → service: how the act with Seq ended: Error empty, or why not
 	OpReply       = "reply"          // service → client: the answer to a request
-	OpCopyMedia   = "copy-media"     // client → service: copy images or files, the payload their plain-text alternative; part and data messages follow
+	OpCopyMedia   = "copy_media"     // client → service: copy images or files, the payload their plain-text alternative; part and data messages follow
 	OpPart        = "part"           // client → service in copy-media, or a reply in paste-media: the next part (Part), its bytes in data messages; Done ends the parts
 	OpData        = "data"           // client → service in copy-media, or a reply in paste-media: the next bytes of the part
-	OpPasteMedia  = "paste-media"    // client → service: ask for the images or files of the member's own clipboard; parts follow
-	OpCopiedMedia = "copied-media"   // watcher → service: the clipboard changed to an image, as copy-media carries it
+	OpPasteMedia  = "paste_media"    // client → service: ask for the images or files of the member's own clipboard; parts follow
+	OpCopiedMedia = "copied_media"   // watcher → service: the clipboard changed to an image, as copy-media carries it
 	OpConfig      = "config"         // client → service: show the settings, or set the setting Name to Value
 	OpRelease     = "release"        // client → service: the payload a Release in JSON, a signed release cbb update fetched, for the group
-	OpReleaseFile = "release-file"   // client → service: an archive of the held release that cbb update installed, Value its SHA-256 and Part its size, its bytes in data messages
-	OpReleaseGet  = "release-get"    // client → service: the archive of the held release whose SHA-256 is Value, from this device or its peers; a reply with Part, its bytes, then Done
-	OpReleaseHeld = "release-held"   // client → service: the signed release this device holds, a Release in JSON, for cbb update when no update server answers
+	OpReleaseFile = "release_file"   // client → service: an archive of the held release that cbb update installed, Value its SHA-256 and Part its size, its bytes in data messages
+	OpReleaseGet  = "release_get"    // client → service: the archive of the held release whose SHA-256 is Value, from this device or its peers; a reply with Part, its bytes, then Done
+	OpReleaseHeld = "release_held"   // client → service: the signed release this device holds, a Release in JSON, for cbb update when no update server answers
 	OpEntries     = "entries"        // client → service: the signed entry points, keys.json and entries.json in JSON ({keys, entries}), from cbb update or a string, for the group
-	OpEntriesGet  = "entries-get"    // client → service: the signed entry points this device holds, in the same JSON
-	OpUpdateWay   = "update-way"     // client → service: the VLESS settings, a tunnel.VLESS in JSON, by which cbb update reaches the mirror on the hub's forwarder; empty without VLESS
-	OpReleaseWant = "release-want"   // client → service: on a hub, the names of the held release's archives the group's members update from and it does not hold, in JSON, for cbb update to download
+	OpEntriesGet  = "entries_get"    // client → service: the signed entry points this device holds, in the same JSON
+	OpUpdateWay   = "update_way"     // client → service: the VLESS settings, a tunnel.VLESS in JSON, by which cbb update reaches the mirror on the hub's forwarder; empty without VLESS
+	OpReleaseWant = "release_want"   // client → service: on a hub, the names of the held release's archives the group's members update from and it does not hold, in JSON, for cbb update to download
 	OpKeyboard    = "keyboard"       // client → service: Name "on" (Keyboard the settings), "off", "pair", "type" (the payload) or "" (status): this computer as a Bluetooth keyboard
 	OpKeys        = "keys"           // uinput helper (root) → service: may it press Name ("paste" or "enter") for the user Value, under the grant Keys of an inject
 	OpMute        = "mute"           // client → service: as an admin, mute Device for ForMS, 0 for until unmute: its copies then stay its own
@@ -93,7 +99,10 @@ const (
 	OpRemote      = "remote"         // client → service: Name "add" (Address, Value the kind, NewName, Consent), "code" (Code), "cancel", "remove", "pastes" (Value on or off), "type" (the payload), for the TV Device, or "" (status): this device as a TV's remote
 )
 
-// RecoveryCard is OpRecovery's Name when the recovery key is on a YubiKey.
+// Bool returns a pointer to b, for Header.On.
+func Bool(b bool) *bool { return &b }
+
+// RecoveryCard is OpRecover's Name when the recovery key is on a YubiKey.
 const RecoveryCard = "yubikey"
 
 // Kinds and the ways a text came, as Header.Kind and Header.Via carry them.
@@ -170,24 +179,29 @@ type Header struct {
 	Listen       bool     `json:"listen,omitempty"`      // join: wait for a member to dial this device
 	Admins       bool     `json:"admins,omitempty"`      // pair: the window may make a phone an admin (on the root)
 	Name         string   `json:"name,omitempty"`        // a device name
-	NewName      string   `json:"new_name,omitempty"`    // rename: the device's new name
-	Device       string   `json:"device,omitempty"`      // mode: the device, by name or ID, whose mode an admin sets, this device if empty; away move: the new hub
+	NewName      string   `json:"new_name,omitempty"`    // remote add: the TV's name
+	Device       string   `json:"device,omitempty"`      // remove, rename, freeze, thaw, make_admin, take_over, hand_over, sync: the device, by name or ID, whose mode an admin sets, this device if empty; away move: the new hub
 	Expires      int      `json:"expires,omitempty"`     // seconds a pairing window stays open; for a listening join, seconds to wait
 	Port         int      `json:"port,omitempty"`        // away hub: the UDP port; 0 for the default
 	Forwarder    string   `json:"forwarder,omitempty"`   // away hub: the forwarder's address, with its key in ForwarderKey
 	ForwarderKey string   `json:"forwarder_key,omitempty"`
 	Relay        string   `json:"relay,omitempty"` // away relay: the relay's address, with its key in RelayKey
 	RelayKey     string   `json:"relay_key,omitempty"`
-	Obfuscate    bool     `json:"obfuscate,omitempty"`    // away hub: speak AmneziaWG instead of plain WireGuard
-	VLESS        bool     `json:"vless,omitempty"`        // away hub: the clients come only over VLESS to the forwarder
-	Keep         bool     `json:"keep,omitempty"`         // away hub: keep the hub's addresses, port and forwarder where the message gives none
-	ForwardOnly  bool     `json:"forward_only,omitempty"` // away hub with a device: make it a hub that only passes copies on, reading none
-	Consent      bool     `json:"consent,omitempty"`      // away on, join with an invitation, admin of a device with file keys: the user agreed to what the warning says; answer: yes
-	Force        bool     `json:"force,omitempty"`        // away hub-off: stop the hub even though the group has no other one
-	Invite       string   `json:"invite,omitempty"`       // the text of a remote invitation: made by invite, used by join
-	Joining      *Joining `json:"joining,omitempty"`      // invite: a device to confirm, before it is admitted
+	ObfuscateOff bool     `json:"obfuscate_off,omitempty"` // away hub: plain WireGuard, without the AmneziaWG a hub offers by default
+	VLESSOff     bool     `json:"vless_off,omitempty"`     // away hub: no VLESS at the forwarder, which a hub with one asks for by default
+	Keep         bool     `json:"keep,omitempty"`          // away hub: keep the hub's addresses, port and forwarder where the message gives none
+	ForwardOnly  bool     `json:"forward_only,omitempty"`  // away hub with a device: make it a hub that only passes copies on, reading none
+	Consent      bool     `json:"consent,omitempty"`       // away on, join with an invitation, admin of a device with file keys: the user agreed to what the warning says; answer: yes
+	Force        bool     `json:"force,omitempty"`         // away hub-off: stop the hub even though the group has no other one
+	Invite       string   `json:"invite,omitempty"`        // the text of a remote invitation: made by invite, used by join
+	Joining      *Joining `json:"joining,omitempty"`       // invite: a device to confirm, before it is admitted
 	Status       *Status  `json:"status,omitempty"`
 	Devices      []Device `json:"devices,omitempty"`
+	// View is the answer to view and arrange: the tiles to draw, as the
+	// member builds them (docs/apps.md, "What the member shows").
+	View json.RawMessage `json:"view,omitempty"`
+	// Arrange is the user's change in an arrange (cbb_core::arrange::Op).
+	Arrange json.RawMessage `json:"arrange,omitempty"`
 
 	// Images and files: in a part message, the part whose bytes follow;
 	// Value, in config, the setting's new value. Images, Files and HTML,
@@ -196,10 +210,21 @@ type Header struct {
 	Part  *Part  `json:"part,omitempty"`
 	Value string `json:"value,omitempty"`
 	// ForMS, in mute, is how long, 0 for until unmute.
-	ForMS  int64 `json:"for_ms,omitempty"`
-	Images bool  `json:"images,omitempty"`
-	Files  bool  `json:"files,omitempty"`
-	HTML   bool  `json:"html,omitempty"`
+	ForMS int64 `json:"for_ms,omitempty"`
+	// On is sync's on or off; AllowFileKey lets make_admin take an admin
+	// key in a file after the warning.
+	On           *bool `json:"on,omitempty"`
+	AllowFileKey bool  `json:"allow_file_key,omitempty"`
+	// SyncOff, SyncOffMS, Muted and MutedMS answer sync and muted: where
+	// sync and an admin's mute stand, how long each lasts, 0 for until
+	// it is lifted.
+	SyncOff   bool  `json:"sync_off,omitempty"`
+	SyncOffMS int64 `json:"sync_off_ms,omitempty"`
+	Muted     bool  `json:"muted,omitempty"`
+	MutedMS   int64 `json:"muted_ms,omitempty"`
+	Images    bool  `json:"images,omitempty"`
+	Files     bool  `json:"files,omitempty"`
+	HTML      bool  `json:"html,omitempty"`
 }
 
 // Part is a part of a copy of images or files, as copy-media and
@@ -247,6 +272,19 @@ type Conflict struct {
 }
 
 // Status describes the service for cbb status.
+// WhyReason is one reason why a device does not sync, as the core gives
+// it: a stable code the apps say in their words, its level (stop, warn or
+// info) and its parameters.
+type WhyReason struct {
+	Code    string   `json:"code"`
+	Level   string   `json:"level"`
+	UntilMS int64    `json:"until_ms,omitempty"`
+	Device  string   `json:"device,omitempty"`
+	Devices []string `json:"devices,omitempty"`
+	Value   string   `json:"value,omitempty"`
+	Detail  string   `json:"detail,omitempty"`
+}
+
 type Status struct {
 	Device string `json:"device"`
 	Group  string `json:"group,omitempty"` // the group tag; empty when in no group
@@ -300,6 +338,9 @@ type Status struct {
 	// itself, in Unix milliseconds; 0 for until it is turned on.
 	Mode        string `json:"mode,omitempty"`
 	SyncUntilMS int64  `json:"sync_until_ms,omitempty"`
+	// Bug says that a panic before the last restart waits for the user to
+	// allow or cancel its bug report (OpBug, OpBugAllow, OpBugCancel).
+	Bug bool `json:"bug,omitempty"`
 	// Muted says that an admin muted this device, its copies its own,
 	// until MutedUntilMS in Unix milliseconds, 0 for until an admin
 	// unmutes it.
@@ -314,7 +355,11 @@ type Status struct {
 	// Quiet lists the interfaces on networks this device has not met its
 	// group on: it does not publish itself or take connections there.
 	Quiet []string `json:"quiet,omitempty"`
-	Away  *Away    `json:"away,omitempty"` // sync away from home; nil while it is off
+	// Why says why this device does not sync, the reason that stops the
+	// most first (cbb_core::why, docs/apps.md "Why it does not sync");
+	// empty when everything syncs.
+	Why  []WhyReason `json:"why,omitempty"`
+	Away *Away       `json:"away,omitempty"` // sync away from home; nil while it is off
 	// Paste is remote paste on this device; nil when in no group.
 	Paste *Paste `json:"paste,omitempty"`
 	// Keyboard is this computer as a Bluetooth keyboard; nil where there
@@ -502,13 +547,98 @@ type Message struct {
 	Payload []byte
 }
 
+// answerFields stand beside an answer's ok, not in it.
+var answerFields = []string{"error", "detail", "details", "done", "len", "seq"}
+
+// requestFields stand beside a request's or a message's args: its
+// payload's length and the sequence number that its answer repeats.
+var requestFields = []string{"len", "seq"}
+
+// marshalEnvelope writes h as it goes on the wire: a request or a watcher's
+// message as {"op", "args", "len", "seq"}, an answer as {"ok", "len",
+// "seq", "done"} or {"error", "detail", "seq", "done"}, the envelope of cbb_member_call
+// (docs/core-api.md, "Operations").
+func marshalEnvelope(h Header) ([]byte, error) {
+	flat, err := json.Marshal(h)
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(flat, &fields); err != nil {
+		return nil, err
+	}
+	op := h.Op
+	delete(fields, "op")
+	out := map[string]any{}
+	if op == "" || op == OpReply {
+		for _, k := range answerFields {
+			if v, ok := fields[k]; ok {
+				out[k] = v
+				delete(fields, k)
+			}
+		}
+		if _, failed := out["error"]; !failed {
+			out["ok"] = fields
+		}
+	} else {
+		for _, k := range requestFields {
+			if v, ok := fields[k]; ok {
+				out[k] = v
+				delete(fields, k)
+			}
+		}
+		out["op"] = op
+		out["args"] = fields
+	}
+	return json.Marshal(out)
+}
+
+// unmarshalEnvelope reads into h the header that line carries: a
+// request's or a message's args, or an answer's ok, with the fields
+// beside them.
+func unmarshalEnvelope(line []byte, h *Header) error {
+	var outer map[string]json.RawMessage
+	if err := json.Unmarshal(line, &outer); err != nil {
+		return err
+	}
+	inner := []byte("{}")
+	op := json.RawMessage(`"` + OpReply + `"`)
+	if v, ok := outer["op"]; ok {
+		op = v
+		if a, ok := outer["args"]; ok && string(a) != "null" {
+			inner = a
+		}
+	} else if v, ok := outer["ok"]; ok && string(v) != "null" {
+		inner = v
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(inner, &fields); err != nil {
+		return errors.New("args or ok is not an object")
+	}
+	if fields == nil {
+		fields = map[string]json.RawMessage{}
+	}
+	fields["op"] = op
+	for _, k := range answerFields {
+		if v, ok := outer[k]; ok {
+			fields[k] = v
+		}
+	}
+	flat, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
+	*h = Header{}
+	return json.Unmarshal(flat, h)
+}
+
 // Write sends a message.
 func Write(w io.Writer, m *Message) error {
 	m.Len = len(m.Payload)
 	if m.Len > maxPayload {
 		return errors.New("control: the text is larger than 1 MiB")
 	}
-	line, err := json.Marshal(m.Header)
+	line, err := marshalEnvelope(m.Header)
 	if err != nil {
 		return err
 	}
@@ -549,7 +679,7 @@ func (r *Reader) Read() (*Message, error) {
 		}
 	}
 	var m Message
-	if err := json.Unmarshal(line, &m.Header); err != nil {
+	if err := unmarshalEnvelope(line, &m.Header); err != nil {
 		return nil, fmt.Errorf("control: bad header: %w", err)
 	}
 	if m.Len < 0 || m.Len > maxPayload {
