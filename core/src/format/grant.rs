@@ -18,7 +18,7 @@
 
 use alloc::vec::Vec;
 
-use super::cbor::Value;
+use super::cbor::{Value, is_set};
 use super::envelope::Envelope;
 use super::key::{Alg, DeviceId, Key, KeyHash};
 use super::{Rule, sig};
@@ -49,6 +49,12 @@ pub const FIELD_ROOT_COUNTER: u16 = 17;
 pub const MAX_READERS: usize = 4;
 /// The most commanders of a leaf.
 pub const MAX_COMMANDERS: usize = 8;
+/// The grant's field of the only peers the leaf connects with.
+pub const FIELD_NEIGHBORS: u16 = 14;
+/// The most neighbours of a leaf.
+pub const MAX_NEIGHBORS: usize = 8;
+/// More than eight neighbours, or neighbours that are not a set.
+pub const RULE_NEIGHBORS: Rule = Rule::field("grants/neighbors");
 
 /// A guarded leaf's grant that a root did not sign, or a grant without
 /// `guarded` for a leaf that is guarded.
@@ -58,7 +64,7 @@ pub const RULE_GUARDED: Rule = Rule::field("grants/guarded");
 pub const RULE_COMMANDERS: Rule = Rule::field("grants/commanders");
 /// A lifetime in an ordinary leaf's grant.
 pub const RULE_LIFE: Rule = Rule::field("grants/life");
-/// More than four readers.
+/// More than four readers, or readers that are not a set.
 pub const RULE_READERS: Rule = Rule::field("grants/readers");
 /// An admin's first grant without the root's record of that admin key, or
 /// with one that does not make it an admin that admits.
@@ -240,8 +246,12 @@ pub fn read<'a>(msg: &Value<'a>, root: &[u8], kept: Option<&Kept>) -> Result<Gra
         return Err(RULE_LIFE);
     }
     let commanders = commanders(map)?;
-    if map.get(FIELD_READERS).and_then(Value::as_array).is_some_and(|r| r.len() > MAX_READERS) {
+    let set = |field, max| map.get(field).and_then(Value::as_array).is_some_and(|r| r.len() > max || !is_set(r));
+    if set(FIELD_READERS, MAX_READERS) {
         return Err(RULE_READERS);
+    }
+    if set(FIELD_NEIGHBORS, MAX_NEIGHBORS) {
+        return Err(RULE_NEIGHBORS);
     }
     Ok(Granted { grant, admin, by_root, guarded, counter, commanders })
 }
