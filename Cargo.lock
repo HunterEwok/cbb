@@ -193,6 +193,7 @@ dependencies = [
  "crypto-bigint",
  "der",
  "getrandom 0.4.3",
+ "hkdf",
  "hmac 0.13.0",
  "hpke",
  "p256",
