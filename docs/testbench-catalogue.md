@@ -327,7 +327,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W1 | `cbb global on` with its warnings (consent for keys in files); `off` forgets the keys and asks first on a device that reaches the hub only through the tunnel; `-yes` [P11, P22] | real | |
 | W2 | The system's limit: the systemd drop-in, the Windows rule `cbb-home-only`, the program's own limit on macOS; `cbb global allow` after the hub's addresses change; `cbb global` and `cbb status` say when the limit lags | real | |
 | W3 | Fail closed: the service reaches only the home network and the group's servers; with the tunnel broken nothing goes elsewhere [S9] | real, fleet | |
-| W4 | `cbb global hub` with addresses, `-port`, `-firewall ask/yes/no` (the port closed again when no longer needed), `-obfuscate`, `-forwarder -forwarder-key`, `-vless`; a name looked up once; the router as the hub through its init script | real, fleet | |
+| W4 | `cbb global hub` with addresses, `-port`, `-firewall ask/yes/no` (the port closed again when no longer needed), AmneziaWG and VLESS by default and `-no-obfuscate`, `-no-vless`, `-forwarder -forwarder-key`; a name looked up once; the router as the hub through its init script | real, fleet | |
 | W5 | `cbb global` and the apps say where it stands: waiting for the hub's offer, at home, connecting, connected through the tunnel, and what went wrong | real, ui | |
 
 ### 10.2 Hubs

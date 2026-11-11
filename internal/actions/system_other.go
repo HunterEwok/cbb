@@ -5,12 +5,6 @@
 
 package actions
 
-// System returns the runner of this system, or nil where the presets run in
-// the signed-in user's session, through the agent (Session): on a Mac and
-// on Windows the service's own user has no right to lock, sleep or shut
-// down.
-func System() Runner { return nil }
-
 // Rights lists what the presets in on need on this system beyond what the
 // signed-in user has: nothing here.
 func Rights(on []string) []string { return nil }

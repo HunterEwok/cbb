@@ -7,7 +7,7 @@
 //! it finds (docs/protocol.md, section 3), by mDNS or as its app hands them
 //! in; while the app is in the front it may also listen as the group's hub
 //! at home (`listen`), and in the background it pauses. Away from home it
-//! reaches the group's hub through the same tunnel as the lite member
+//! reaches the group's hub through the same tunnel as cbb
 //! (`crate::away`, in a build with the feature `tunnel`), once the user
 //! turns sync away from home on.
 
@@ -127,6 +127,8 @@ pub struct Member {
     away: Arc<Away>,
     /// The admins given a new admin CA, by device, with the root it is from.
     admin_cas: Mutex<std::collections::BTreeMap<String, crate::takeover::AdminCaSent>>,
+    /// The user's order of the tiles (crate::view).
+    tiles: crate::view::Tiles,
 }
 
 /// What a member port a phone opens is for.
@@ -242,12 +244,26 @@ impl Member {
             listeners: Mutex::new(HashMap::new()),
             own: Own::default(),
             log,
-            state_dir,
             others,
             tunnels,
             away,
             admin_cas: Mutex::new(std::collections::BTreeMap::new()),
+            tiles: crate::view::Tiles::new(&state_dir),
+            state_dir,
         })
+    }
+
+    /// The tiles to draw for devices, the group's devices as the app's
+    /// devices call lists them, with the user's change op first (crate::view),
+    /// and why this device does not sync, with away the app's own tunnel.
+    pub fn view(
+        &self,
+        devices: Vec<crate::control::Device>,
+        op: Option<&cbb_core::arrange::Op>,
+        away: Option<cbb_core::why::AwayFacts>,
+    ) -> Result<crate::view::View> {
+        let view = self.tiles.view(&self.node.identity().tag(), devices, op)?;
+        Ok(crate::view::View { warnings: self.why(away), ..view })
     }
 
     /// Turns sync away from home on (docs/protocol.md, section 11): new
@@ -274,7 +290,7 @@ impl Member {
     }
 
     /// Sync away from home as the app shows it, as `cbb global` shows it on
-    /// the lite member; None while it is off.
+    /// cbb; None while it is off.
     pub fn away_status(&self) -> Option<serde_json::Value> {
         self.away.status(&self.node).and_then(|a| serde_json::to_value(a).ok())
     }
@@ -290,13 +306,8 @@ impl Member {
 
     /// How long sync stays off and how long an admin's mute lasts, in
     /// milliseconds: 0 for until it is lifted, None for neither.
-    pub fn muted(&self) -> (Option<i64>, Option<i64>) {
-        let off = match self.node.engine.sync() {
-            (true, _) => None,
-            (false, 0) => Some(0),
-            (false, u) => Some(u.saturating_sub(uptime::wall_ms()).max(1)),
-        };
-        (off, self.node.engine.mute_left())
+    pub fn muted(&self) -> crate::sync::Standing {
+        crate::sync::standing(&self.node.engine)
     }
 
     /// Sends a text the user handed to the app; board says it came from
@@ -486,7 +497,7 @@ impl Member {
             Some(t) => self.node.engine.set_mute(t),
             None => self.node.engine.unmute(),
         }
-        self.node.reconnect();
+        self.node.announce(false);
     }
 
     /// Sends a command the app's admin key signed and waits for its result.
@@ -664,6 +675,60 @@ impl Member {
         let r = admit::device_record(&records.lock().unwrap(), admitter, a, uptime::wall_ms())?;
         self.node.add_own_records(&[r]);
         Ok(())
+    }
+
+    /// Why the phone does not sync (cbb_core::why), from the same status
+    /// a computer's control socket gives: its sync and mute, the group's
+    /// records, the members connected and sync away from home. An app
+    /// whose tunnel runs outside the member (the iPhone's and Android's)
+    /// hands in away, where its tunnel stands; None takes the member's own.
+    pub fn why(&self, away: Option<cbb_core::why::AwayFacts>) -> Vec<cbb_core::why::Reason> {
+        let n = &self.node;
+        let standing = self.muted();
+        let now = uptime::wall_ms();
+        let st = crate::control::Status {
+            device: n.identity().id.to_string(),
+            group: n.identity().tag(),
+            mode: if standing.sync_off { "own" } else { "shared" }.into(),
+            sync_until_ms: if standing.sync_off && standing.sync_off_ms > 0 { now + standing.sync_off_ms } else { 0 },
+            muted: standing.muted,
+            muted_until_ms: if standing.muted && standing.muted_ms > 0 { now + standing.muted_ms } else { 0 },
+            peers: n
+                .peers()
+                .into_iter()
+                .map(|p| crate::control::Device { id: p.id.to_string(), ..Default::default() })
+                .collect(),
+            away: self.away.status(n),
+            stop: n.stop(),
+            cert_ends_ms: n.identity().cert.not_after.saturating_mul(1000),
+            ..crate::why::group_status(n)
+        };
+        let removed = n.removed() && !st.frozen && st.taken_over_by.is_empty();
+        let st = crate::control::Status { removed, ..st };
+        let devs: Vec<crate::control::Device> = self
+            .device_views()
+            .into_iter()
+            .map(|d| crate::control::Device {
+                mode: match d.sync.as_str() {
+                    "off" => "own".into(),
+                    _ => String::new(),
+                },
+                id: d.id,
+                name: d.name,
+                online: d.online,
+                this: d.this,
+                ..Default::default()
+            })
+            .collect();
+        let mut facts = crate::why::facts(&st, &devs);
+        if let Some(mut a) = away {
+            // The app names the hub by its device ID.
+            if let Some(d) = devs.iter().find(|d| d.id == a.hub_device && !d.name.is_empty()) {
+                a.hub_device.clone_from(&d.name);
+            }
+            facts.away = Some(a);
+        }
+        cbb_core::why::diagnose(&facts, now)
     }
 
     /// Makes a remote invitation as an admin of the group, with admitter's
@@ -932,9 +997,8 @@ impl Commands {
     }
 
     /// Mutes the phone until `until` (0 for until an admin lifts it), or
-    /// ends its mute, saves it, tells the app, and connects to the members
-    /// again once the result had a moment to go back, so that their hellos
-    /// show it.
+    /// ends its mute, saves it, tells the app, and tells the members
+    /// connected in a presence message, without connecting again.
     fn set_muted(&self, node: &Arc<Node>, on: bool, until: i64, by: &str) -> Result<()> {
         if on {
             node.engine.set_mute(until);
@@ -948,11 +1012,7 @@ impl Commands {
             (true, _) => format!("cbb: {by} muted this device for {} s", (until - uptime::wall_ms()) / 1000),
         });
         (self.on_mute)(on.then_some(until), by);
-        let node = node.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            node.reconnect();
-        });
+        node.announce(false);
         Ok(())
     }
 }

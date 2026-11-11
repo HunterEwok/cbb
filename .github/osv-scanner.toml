@@ -17,7 +17,7 @@ reason = "unsafe-libyaml is unmaintained; esp-config's build scripts read YAML w
 
 # block-buffer before 0.12.1 can be left with a bad cursor when the compression
 # callback panics and the caller catches the panic and uses the buffer again.
-# Nothing here can catch one: the lite member's release build aborts on a panic
+# Nothing here can catch one: cbb's release build aborts on a panic
 # (Cargo.toml), and the firmware has no unwinding at all. The 0.10 line
 # comes with digest 0.10, through GotaTun (blake2, hmac) and esp-hal; it goes
 # when they move to digest 0.11, which carries 0.12.

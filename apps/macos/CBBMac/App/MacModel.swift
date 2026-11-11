@@ -12,12 +12,12 @@ private let log = Logger(subsystem: "tools.cbb.mac", category: "app")
 @MainActor
 final class MacModel: ObservableObject {
     @Published private(set) var status: Control.Status?
-    @Published private(set) var devices: [Control.Device] = [] {
-        didSet { loadArrangement() }
-    }
-    /// The user's order of the tiles and their collections (docs/apps.md,
-    /// "Collections and the order of the tiles"); nil outside a group.
-    @Published private(set) var arrangement: Arrangement?
+    @Published private(set) var devices: [Control.Device] = []
+    /// The devices and collections, this Mac among them, in the user's
+    /// order as the service keeps it (docs/apps.md, "What the member
+    /// shows"), and whether the user changed it.
+    @Published private(set) var arranged: [Arranged] = []
+    @Published private(set) var customOrder = false
     /// Why the service cannot be reached; nil while it answers.
     @Published private(set) var problem: String?
     /// The outcome of the last action, for a line under it.
@@ -34,6 +34,9 @@ final class MacModel: ObservableObject {
     @Published var settingsShown = false
     private var joinFile: URL?
     private var joinCancelled = false
+    /// The bug report the window asks about (BugSheet), in release mode.
+    @Published private(set) var bug: BugOffer?
+    private var askingBug = false
     /// Whether a remote invitation is open (InviteSheet), and its state
     /// once cbb wrote it.
     @Published private(set) var inviting = false
@@ -84,21 +87,100 @@ final class MacModel: ObservableObject {
         pasteAllowed = Injector.allowed
         do {
             let (answer, _) = try await client.request(.init(op: "status"))
-            var list: [Control.Device] = []
+            var view = Control.View()
             if let st = answer.status, st.group?.isEmpty == false, st.removed != true {
-                list = try await client.request(.init(op: "devices")).0.devices ?? []
+                view = try await client.request(.init(op: "view")).0.view ?? Control.View()
             }
-            show(status: answer.status, devices: list)
+            show(status: answer.status, view: view)
             problem = nil
+            if answer.status?.bug == true, bug == nil, !askingBug { await askBug() }
         } catch {
             problem = Self.describe(error)
         }
     }
 
-    /// Shows what the service said: its status, then the group's devices.
-    func show(status: Control.Status?, devices: [Control.Device]) {
+    /// The service's bug report as the window shows it: the report as
+    /// "Technical details" shows it, whether to offer "Always allow", and
+    /// the version that fixes this break.
+    struct BugOffer: Identifiable, Equatable {
+        var report: String
+        var offerAlways: Bool
+        var fixedIn: String
+        var id: String { report }
+    }
+
+    /// Reads the bug report of the service's panic before its last start
+    /// (docs/core-api.md, "Bug reports"): in debug mode the message shows
+    /// what broke and nothing is asked; in release mode the window asks,
+    /// unless the core says to send or skip it.
+    func askBug() async {
+        askingBug = true
+        defer { askingBug = false }
+        guard let answer = try? await client.request(.init(op: "bug")), !answer.1.isEmpty,
+              let offer = Self.bugOffer(answer.1) else { return }
+        log.error("the service broke and started again: \(offer.details, privacy: .public)")
+        if Self.showsErrorDetails || offer.action != "ask" {
+            if Self.showsErrorDetails {
+                message = String(localized: "Something in CBB broke. It started again.") + "\n\n" + offer.details
+            }
+            await cancelBug()
+            return
+        }
+        bug = BugOffer(report: offer.report, offerAlways: offer.offerAlways, fixedIn: offer.fixedIn)
+    }
+
+    /// What the service's bug answer holds: what the app does, the report
+    /// as readable text, its details, "Always allow" and fixed_in.
+    nonisolated static func bugOffer(_ data: Data) -> (action: String, report: String, details: String, offerAlways: Bool, fixedIn: String)? {
+        guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let report = o["report"] as? [String: Any] else { return nil }
+        let text = (try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]))
+            .map { String(decoding: $0, as: UTF8.self) } ?? ""
+        return (o["action"] as? String ?? "", text, report["details"] as? String ?? "", o["offer_always"] as? Bool ?? false, o["fixed_in"] as? String ?? "")
+    }
+
+    /// The user allowed the report, and maybe always: the service sends it.
+    func allowBug(always: Bool) async {
+        bug = nil
+        let payload = (try? JSONSerialization.data(withJSONObject: ["always": always])) ?? Data()
+        do {
+            _ = try await client.request(.init(op: "bug_allow"), payload: payload)
+        } catch {
+            message = Self.describe(error)
+        }
+    }
+
+    /// The user did not allow the report: the service forgets it.
+    func cancelBug() async {
+        bug = nil
+        do {
+            _ = try await client.request(.init(op: "bug_cancel"))
+        } catch {
+            message = Self.describe(error)
+        }
+    }
+
+    /// Shows what the service said: its status, then the group's tiles.
+    func show(status: Control.Status?, view: Control.View) {
         self.status = status
-        self.devices = devices
+        show(view: view)
+    }
+
+    /// Shows the member's tiles, and the devices in them.
+    func show(view: Control.View) {
+        var all: [Control.Device] = []
+        arranged = (view.tiles ?? []).compactMap { t in
+            if let d = t.device {
+                all.append(d)
+                return .device(d)
+            }
+            guard let c = t.collection else { return nil }
+            let ds = c.devices ?? []
+            all += ds
+            return .collection(Arrangement.Collection(id: c.id, name: c.name, devices: ds.map(\.id)), ds)
+        }
+        devices = all
+        customOrder = view.custom ?? false
     }
 
     /// A tile below this Mac's: a device, or a collection with its devices
@@ -118,21 +200,6 @@ final class MacModel: ObservableObject {
             switch self {
             case .device(let d): .device(d.id)
             case .collection(let c, _): .collection(c.id)
-            }
-        }
-    }
-
-    static let arrangementKey = "deviceArrangement"
-
-    /// The devices and collections, this Mac among them, in the user's
-    /// order: the group's order, this Mac first, until the user changes it.
-    var arranged: [Arranged] {
-        guard let a = arrangement else { return ((this.map { [$0] } ?? []) + others).map { .device($0) } }
-        let byID = Dictionary(devices.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        return a.view(devices: devices.map(\.id), self: this?.id).compactMap { item in
-            switch item {
-            case .device(let id): byID[id].map { .device($0) }
-            case .collection(let c): .collection(c, c.devices.compactMap { byID[$0] })
             }
         }
     }
@@ -157,38 +224,23 @@ final class MacModel: ObservableObject {
         return nil
     }
 
-    /// Reads the group's arrangement once its tag is known, and drops the
-    /// devices that left once the list is whole: the group loaded, this Mac
-    /// in it. Until the user changes something nothing is stored.
-    private func loadArrangement() {
-        guard inGroup, let tag = status?.group else {
-            if arrangement != nil { arrangement = nil }
-            return
+    /// Sends a change of the tiles to the service, which keeps it; one
+    /// that does not fit leaves them as they were and says so.
+    func arrange(_ op: Arrangement.Op) {
+        guard let change = try? JSONDecoder().decode(Control.Change.self, from: op.data) else { return }
+        var h = Control.Header(op: "arrange")
+        h.arrange = change
+        Task {
+            do {
+                let view = try await client.request(h).0.view ?? Control.View()
+                show(view: view)
+            } catch {
+                let (_, detail) = Self.summary(error)
+                log.error("arrange: \(detail, privacy: .public)")
+                let text = String(localized: "The tiles stay as they were: that change does not fit.")
+                message = Self.showsErrorDetails ? text + "\n\n" + detail : text
+            }
         }
-        var a = Arrangement.decode(defaults.data(forKey: Self.arrangementKey), group: tag)
-        if let current = arrangement, current.group == tag { a = current }
-        if this != nil, defaults.data(forKey: Self.arrangementKey) != nil {
-            let before = a
-            a.prune(devices: devices.map(\.id))
-            if a != before { defaults.set(a.encoded(), forKey: Self.arrangementKey) }
-        }
-        if a != arrangement { arrangement = a }
-    }
-
-    /// Makes a change to the arrangement and keeps it; one that does not
-    /// fit leaves it as it was and says so.
-    @discardableResult
-    func arrange(_ op: Arrangement.Op) -> Bool {
-        guard var a = arrangement else { return false }
-        do {
-            try a.apply(op, devices: devices.map(\.id), self: this?.id)
-        } catch {
-            message = Self.describe(error)
-            return false
-        }
-        defaults.set(a.encoded(), forKey: Self.arrangementKey)
-        arrangement = a
-        return true
     }
 
     /// Asks macOS to let the app press keys for remote paste.
@@ -255,21 +307,20 @@ final class MacModel: ObservableObject {
         let args = d.isSelf ? ["global", "hub", "off", "-yes"] : ["global", "hub", "off", "-on", d.id, "-yes"]
         await admin(args, done: String(localized: "It is no hub any more."))
     }
+    /// Takes the networks this Mac is on now as ones where the group is, as
+    /// cbb network does with administrator privileges.
+    func homeNetwork() async {
+        await admin(["network"], done: String(localized: "This network counts as home now."))
+    }
     /// Whether the group has a hub other than d that this Mac knows of.
     func otherHub(than d: Control.Device) -> Bool {
         devices.contains { $0.id != d.id && $0.hub }
     }
-    /// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
+    /// How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS over
+    /// it, which the two switches of strict networks set.
     enum HubTunnel: String, CaseIterable, Identifiable {
         case plain, obfuscate, vless
         var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .plain: "WireGuard"
-            case .obfuscate: "AmneziaWG"
-            case .vless: "VLESS"
-            }
-        }
     }
 
     /// How this Mac's tunnel hides while it is a hub.
@@ -278,14 +329,16 @@ final class MacModel: ObservableObject {
         return a.vless == true ? .vless : a.obfuscated == true ? .obfuscate : .plain
     }
 
-    /// Sets how this hub's tunnel hides and, with forwarder, its forwarder
-    /// ("default" for the project's), keeping its addresses and port.
+    /// Sets how this hub's tunnel hides (VLESS, which a hub with a
+    /// forwarder offers by default, AmneziaWG alone or plain WireGuard) and,
+    /// with forwarder, its forwarder ("default" for the project's), keeping
+    /// its addresses and port.
     func setHub(_ tunnel: HubTunnel, forwarder: String? = nil, key: String? = nil) async {
         var args = ["global", "hub", "-keep", "-firewall", "no"]
         switch tunnel {
-        case .plain: break
-        case .obfuscate: args.append("-obfuscate")
-        case .vless: args.append("-vless")
+        case .plain: args += ["-no-obfuscate", "-no-vless"]
+        case .obfuscate: args.append("-no-vless")
+        case .vless: break
         }
         if let forwarder, !forwarder.isEmpty {
             args += ["-forwarder", forwarder]
@@ -330,7 +383,8 @@ final class MacModel: ObservableObject {
     /// turned on again: the clipboard is then this Mac's own. Any user of
     /// the Mac may, over the plain socket.
     func turnSync(_ on: Bool, forMS: Int64 = 0) async {
-        var h = Control.Header(op: "sync", name: on ? "on" : "off")
+        var h = Control.Header(op: "sync")
+        h.on = on
         if !on, forMS > 0 { h.forMS = forMS }
         await act {
             _ = try await self.client.request(h)
@@ -623,8 +677,6 @@ final class MacModel: ObservableObject {
             return (String(localized: "cbb is not installed in /usr/local/bin or /opt/homebrew/bin."), String(reflecting: error))
         case Admin.Failure.failed(let text, let detail):
             return (text, detail)
-        case is Arrangement.Refused:
-            return (String(localized: "The tiles stay as they were: that change does not fit."), String(reflecting: error))
         default:
             return (String(localized: "The service answered something unexpected."), String(reflecting: error))
         }

@@ -534,7 +534,7 @@ pub fn hello(
         mode: mode.to_string(),
         muted: mute.is_some(),
         muted_for_ms: mute.unwrap_or(0),
-        // The lite member keeps its keys in a file, or in the ESP32's
+        // cbb keeps its keys in a file, or in the ESP32's
         // flash: "file", or "rootless" for a rootless install (D-79); a
         // phone's app that runs it, in its secure hardware: "hardware".
         key_store: key_store.into(),
@@ -745,7 +745,7 @@ mod tests {
     /// packaging/archive.sh names them, as Go's archivePattern.
     #[test]
     fn archive_names() {
-        for ok in ["cbb-linux-arm64.tar.gz", "cbb-windows-amd64.zip", "cbb-lite-linux-mipsle.tar.gz"] {
+        for ok in ["cbb-linux-arm64.tar.gz", "cbb-windows-amd64.zip", "cbb-linux-mipsle.tar.gz"] {
             assert!(archive_name_valid(ok), "{ok}");
         }
         for bad in [

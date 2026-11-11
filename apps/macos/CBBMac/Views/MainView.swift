@@ -100,11 +100,11 @@ struct MainView: View {
                     Menu {
                         Button { arrange.on.toggle() } label: { arrange.on ? Text("Done arranging") : Text("Arrange devices") }
                             .disabled(searching)
-                        if model.arrangement?.items.isEmpty == false {
+                        if model.customOrder {
                             Button { model.arrange(.reset) } label: { Text("Back to the group's order") }
                         }
                     } label: { Label("Arrange devices", systemImage: "square.grid.3x3.square") }
-                    .disabled(model.arrangement == nil)
+                    .disabled(!model.inGroup)
                 }
                 ToolbarItem {
                     Button { adding = true } label: { Label("Add a device", systemImage: "plus") }
@@ -119,6 +119,9 @@ struct MainView: View {
         .sheet(isPresented: Binding(get: { model.inviting }, set: { if !$0 { model.cancelInvite() } })) { InviteSheet().modifier(Themed()) }
         .sheet(isPresented: $recovering) { RecoverySheet().modifier(Themed()) }
         .sheet(isPresented: $model.settingsShown) { SettingsView().environmentObject(model).modifier(Themed()) }
+        .sheet(item: Binding(get: { model.bug }, set: { if $0 == nil, model.bug != nil { Task { await model.cancelBug() } } })) {
+            BugSheet(offer: $0).modifier(Themed())
+        }
         .modifier(ArrangePrompts())
         .environmentObject(arrange)
         // Arrange mode is off while a search or a filter is on.

@@ -57,21 +57,6 @@ func Set(away bool, dests []netip.Addr) {
 	current.Store(l)
 }
 
-// Away reports whether sync away from home is on.
-func Away() bool {
-	l := current.Load()
-	return l != nil && l.away
-}
-
-// Destinations returns the addresses beyond the home network that the
-// service may reach now.
-func Destinations() []netip.Addr {
-	if l := current.Load(); l != nil {
-		return slices.Clone(l.dests)
-	}
-	return nil
-}
-
 // ErrOutside is a connection to an address outside the home network that
 // is none of the group's servers.
 var ErrOutside = errors.New("the address is outside the home network and is none of the group's hub, forwarder and relay")

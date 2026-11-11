@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The local control socket (docs/protocol.md, section 8): a JSON header on
-//! one line, then exactly len bytes of payload. The lite member serves the
+//! one line, then exactly len bytes of payload. cbb serves the
 //! operations a member without CA keys has: copy, paste, status, devices
 //! and watch, so the Go command line and connectors can talk to it too.
 
@@ -53,6 +53,12 @@ pub struct Header {
     pub status: Option<Status>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub devices: Vec<Device>,
+    /// view and arrange (docs/apps.md, "What the member shows"): the
+    /// tiles to draw in the answer, and the user's change in an arrange.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arrange: Option<serde_json::Value>,
     /// Remote paste (docs/protocol.md, section 8): in an inject, paste or
     /// type, and Enter after the text; in paste-receive, the switches.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -101,6 +107,16 @@ pub struct Header {
     /// In copy-media and paste-media, the next part of the copy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub part: Option<Part>,
+    /// In make_admin: the device's admin key may be in a file, which the
+    /// user agreed to after the warning.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allow_file_key: bool,
+    /// In sync: on or off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on: Option<bool>,
+    /// The answer to sync and muted: where sync and the mute stand.
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub standing: Option<crate::sync::Standing>,
     /// In rename, the device's new name.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub new_name: String,
@@ -142,10 +158,14 @@ pub struct Header {
     pub relay: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub relay_key: String,
+    /// away hub: plain WireGuard, without AmneziaWG, which a hub offers by
+    /// default; it goes with vless_off where there is a forwarder.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub obfuscate: bool,
+    pub obfuscate_off: bool,
+    /// away hub: no VLESS at the forwarder, which a hub with one asks for
+    /// by default.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub vless: bool,
+    pub vless_off: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub keep: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -250,6 +270,10 @@ pub struct Status {
     pub mode: String,
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub sync_until_ms: i64,
+    /// A panic before the last restart waits for the user to allow or
+    /// cancel its bug report (ops `bug`, `bug_allow`, `bug_cancel`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bug: bool,
     /// Whether an admin muted this device, until muted_until_ms in Unix
     /// milliseconds, 0 for until an admin unmutes it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -324,6 +348,11 @@ pub struct Status {
     /// The member port, as Go's Port; 0 when this device does not listen.
     #[serde(default, skip_serializing_if = "is_zero_i")]
     pub port: i64,
+    /// Why this device does not sync, the reason that stops the most first
+    /// (cbb_core::why; docs/apps.md, "Why it does not sync"); empty when
+    /// everything syncs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub why: Vec<cbb_core::why::Reason>,
 }
 
 /// A claim to take the group over, as Go's control.Claim: who claims it
@@ -556,7 +585,7 @@ pub fn write(w: &mut impl Write, m: &Message) -> Result<()> {
     }
     let mut h = m.header.clone();
     h.len = m.payload.len();
-    let mut buf = serde_json::to_vec(&h).context("cannot encode a message")?;
+    let mut buf = serde_json::to_vec(&envelope(&h)?).context("cannot encode a message")?;
     if buf.len() > MAX_HEADER {
         return Err(Error::msg("the header is too long"));
     }
@@ -564,6 +593,79 @@ pub fn write(w: &mut impl Write, m: &Message) -> Result<()> {
     buf.extend_from_slice(&m.payload);
     w.write_all(&buf).context("the connection to the service broke")?;
     w.flush().context("the connection to the service broke")
+}
+
+/// The fields of an answer that stand beside its `ok`, not in it.
+const ANSWER_FIELDS: [&str; 6] = ["error", "detail", "details", "done", "len", "seq"];
+/// The fields of a request or a message that stand beside its `args`:
+/// its payload's length and the sequence number that its answer repeats.
+const REQUEST_FIELDS: [&str; 2] = ["len", "seq"];
+
+/// What goes on the wire for h: a request or a watcher's message as
+/// `{"op", "args", "len", "seq"}`, an answer as `{"ok", "len", "seq",
+/// "done"}` or `{"error", "detail", "seq", "done"}`, the envelope of cbb_member_call
+/// (docs/core-api.md, "Operations").
+fn envelope(h: &Header) -> Result<serde_json::Value> {
+    let serde_json::Value::Object(mut fields) = serde_json::to_value(h).context("cannot encode a message")? else {
+        return Err(Error::msg("cannot encode a message"));
+    };
+    let op = fields.remove("op").and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
+    let mut out = serde_json::Map::new();
+    if op.is_empty() || op == "reply" {
+        for k in ANSWER_FIELDS {
+            if let Some(v) = fields.remove(k) {
+                out.insert(k.to_string(), v);
+            }
+        }
+        if !out.contains_key("error") {
+            out.insert("ok".to_string(), serde_json::Value::Object(fields));
+        }
+    } else {
+        for k in REQUEST_FIELDS {
+            if let Some(v) = fields.remove(k) {
+                out.insert(k.to_string(), v);
+            }
+        }
+        out.insert("op".to_string(), serde_json::Value::String(op));
+        out.insert("args".to_string(), serde_json::Value::Object(fields));
+    }
+    Ok(serde_json::Value::Object(out))
+}
+
+/// The header that the envelope v carries: a request's or a message's
+/// args, or an answer's ok, with the fields beside them.
+fn unwrap_envelope(v: serde_json::Value) -> Result<Header> {
+    let serde_json::Value::Object(mut outer) = v else {
+        return Err(Error::msg("a bad header: not an object"));
+    };
+    let inner = match outer.remove("op") {
+        Some(op) => {
+            let args = outer.remove("args").unwrap_or_default();
+            let mut fields = match args {
+                serde_json::Value::Object(m) => m,
+                serde_json::Value::Null => serde_json::Map::new(),
+                _ => return Err(Error::msg("a bad header: args is not an object")),
+            };
+            fields.insert("op".to_string(), op);
+            fields
+        }
+        None => {
+            let mut fields = match outer.remove("ok") {
+                Some(serde_json::Value::Object(m)) => m,
+                None | Some(serde_json::Value::Null) => serde_json::Map::new(),
+                Some(_) => return Err(Error::msg("a bad header: ok is not an object")),
+            };
+            fields.insert("op".to_string(), serde_json::Value::String("reply".into()));
+            fields
+        }
+    };
+    let mut fields = inner;
+    for (k, v) in outer {
+        if ANSWER_FIELDS.contains(&k.as_str()) {
+            fields.insert(k, v);
+        }
+    }
+    serde_json::from_value(serde_json::Value::Object(fields)).context("a bad header")
 }
 
 /// Reads messages from a connection.
@@ -587,7 +689,7 @@ impl<R: Read> Reader<R> {
         if line.last() != Some(&b'\n') {
             return Err(Error::msg("the header is too long"));
         }
-        let header: Header = serde_json::from_slice(&line).context("a bad header")?;
+        let header = unwrap_envelope(serde_json::from_slice(&line).context("a bad header")?)?;
         if header.len > MAX_PAYLOAD {
             return Err(Error::msg(format!("a bad payload length {}", header.len)));
         }
@@ -618,6 +720,20 @@ pub fn failure(e: &Error) -> Message {
     reply(Header { error: e.message().to_string(), details: e.details(), ..Default::default() }, Vec::new())
 }
 
+/// The names of the operations that the service dispatches on and that
+/// the user confirms each time on the control socket (confirm.rs): one
+/// list for both, so that a renamed operation cannot fall out of its tier.
+pub mod op {
+    pub const NEW: &str = "new";
+    pub const LEAVE: &str = "leave";
+    pub const TAKE_OVER: &str = "take_over";
+    pub const RECOVER: &str = "recover";
+    pub const HAND_OVER: &str = "hand_over";
+    pub const KEY_LEVEL: &str = "key_level";
+    pub const TAKEOVER_DELAY: &str = "takeover_delay";
+    pub const MAKE_ADMIN: &str = "make_admin";
+}
+
 /// Whether an operation changes the group or this device's place in it, so
 /// that the service takes it only on the admin socket, which only root and
 /// the service's own user reach, as on a full member.
@@ -626,15 +742,18 @@ pub fn is_admin(op: &str) -> bool {
         op,
         "copy"
             | "paste"
-            | "copy-media"
-            | "copied-media"
-            | "paste-media"
+            | "copy_media"
+            | "copied_media"
+            | "paste_media"
             | "part"
             | "data"
             | "config"
             | "status"
             | "version"
             | "devices"
+            | "view"
+            | "arrange"
+            | "muted"
             | "watch"
             | "copied"
             | "clipboard"
@@ -648,15 +767,19 @@ pub fn is_admin(op: &str) -> bool {
             // The signed release cbb update fetched, for the group, and the
             // one held.
             | "release"
-            | "release-get"
-            | "release-held"
+            | "release_get"
+            | "release_held"
             | "entries"
-            | "entries-get"
+            | "entries_get"
             // The challenge that confirms an admin action (confirm.rs).
             | "confirm"
             // The uinput helper, as root, through the socket's group; the
             // service checks that it is root.
             | "keys"
+            // The user's answer to a bug report (src/bugs.rs).
+            | "bug"
+            | "bug_allow"
+            | "bug_cancel"
     )
 }
 
@@ -685,6 +808,45 @@ pub fn admin_socket(socket: &std::path::Path) -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A request goes as {"op", "args", "len", "seq"}, an answer as {"ok"}
+    /// or {"error", "detail"}, as Go's control.TestEnvelope checks, and
+    /// both read back.
+    #[test]
+    fn envelope() {
+        let cases = [
+            (
+                Message::new(
+                    Header { op: "mute".into(), device: "pi".into(), for_ms: 5, ..Default::default() },
+                    vec![],
+                ),
+                r#"{"args":{"device":"pi","for_ms":5},"op":"mute"}"#,
+            ),
+            (
+                Message::new(
+                    Header { op: "inject".into(), seq: 7, method: "type".into(), ..Default::default() },
+                    b"hi".to_vec(),
+                ),
+                r#"{"args":{"method":"type"},"len":2,"op":"inject","seq":7}"#,
+            ),
+            (reply(Header { name: "pi".into(), ..Default::default() }, vec![]), r#"{"done":true,"ok":{"name":"pi"}}"#),
+            (failure(&Error::msg("no")), r#"{"done":true,"error":"no"}"#),
+        ];
+        for (m, want) in cases {
+            let mut buf = Vec::new();
+            write(&mut buf, &m).unwrap();
+            let line = String::from_utf8(buf.clone()).unwrap();
+            assert_eq!(line.split('\n').next().unwrap(), want);
+            let got = Reader::new(&buf[..]).read().unwrap().unwrap();
+            assert_eq!(
+                (got.header.op, got.header.name, got.header.seq, got.payload),
+                (m.header.op, m.header.name, m.header.seq, m.payload)
+            );
+        }
+        for bad in [&b"[]\n"[..], b"{\"op\":\"copy\",\"args\":[]}\n", b"{\"ok\":1}\n"] {
+            assert!(Reader::new(bad).read().is_err(), "{}", String::from_utf8_lossy(bad));
+        }
+    }
 
     fn json(h: &Header) -> serde_json::Value {
         serde_json::to_value(h).unwrap()
@@ -719,25 +881,25 @@ mod tests {
         let over = Message::new(Header::default(), vec![b'x'; MAX_PAYLOAD + 1]);
         assert!(write(&mut Vec::new(), &over).is_err());
 
-        // A header of MAX_HEADER bytes, its newline aside, is taken; one
-        // byte more is not.
+        // A header of MAX_HEADER bytes on the wire, its newline aside, is
+        // taken; one byte more is not.
+        let wire = |h: &Header| serde_json::to_vec(&super::envelope(h).unwrap()).unwrap();
         let at = |n: usize| {
-            let empty = serde_json::to_vec(&Header { name: String::new(), op: "x".into(), ..Default::default() });
-            let fill = n - empty.unwrap().len() - r#","name":"""#.len();
-            Message::new(Header { op: "x".into(), name: "n".repeat(fill), ..Default::default() }, Vec::new())
+            let one = wire(&Header { op: "x".into(), name: "n".into(), ..Default::default() }).len();
+            Message::new(Header { op: "x".into(), name: "n".repeat(n - one + 1), ..Default::default() }, Vec::new())
         };
         let m = at(MAX_HEADER);
-        assert_eq!(serde_json::to_vec(&m.header).unwrap().len(), MAX_HEADER);
+        assert_eq!(wire(&m.header).len(), MAX_HEADER);
         assert_eq!(round_trip(&m).unwrap().unwrap().header.name, m.header.name);
         assert!(write(&mut Vec::new(), &at(MAX_HEADER + 1)).is_err());
-        let mut line = serde_json::to_vec(&at(MAX_HEADER + 1).header).unwrap();
+        let mut line = wire(&at(MAX_HEADER + 1).header);
         line.push(b'\n');
         assert!(Reader::new(&line[..]).read().is_err(), "a header longer than MAX_HEADER");
 
         // A header that promises more than MAX_PAYLOAD is refused before
         // its payload.
         let promise = |n: usize| {
-            let mut b = serde_json::to_vec(&Header { len: n, ..Default::default() }).unwrap();
+            let mut b = wire(&Header { op: "copy".into(), len: n, ..Default::default() });
             b.push(b'\n');
             b.extend(std::iter::repeat_n(b'x', n.min(MAX_PAYLOAD)));
             b

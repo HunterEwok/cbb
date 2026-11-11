@@ -20,7 +20,7 @@
 // FreeBSD keeps the administrator's way.
 #![cfg_attr(not(any(target_os = "macos", target_os = "linux", windows)), allow(dead_code))]
 
-use crate::control::Header;
+use crate::control::{Header, op};
 use crate::error::{Error, Result};
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
 use crate::sys::UnixStream;
@@ -48,11 +48,48 @@ pub const RIGHT_KEPT: &str = "tools.cbb.admin";
 /// The right that is asked for each time.
 pub const RIGHT_EACH: &str = "tools.cbb.admin.each";
 
-/// Whether op is confirmed each time: making a group, leaving it, taking it
-/// over or handing it on, recovering its root, and the settings that decide
-/// who may hold it.
+/// The operations confirmed each time: making a group, leaving it, taking
+/// it over or handing it on, recovering its root, making a device an admin,
+/// and the settings that decide who may hold the group.
+pub const EACH_TIME: [&str; 8] =
+    [op::NEW, op::LEAVE, op::TAKE_OVER, op::RECOVER, op::HAND_OVER, op::KEY_LEVEL, op::TAKEOVER_DELAY, op::MAKE_ADMIN];
+
+/// The group's everyday changes, which one confirmation covers for five
+/// minutes. Every other operation, also one added later and not listed
+/// here, is confirmed each time.
+pub const KEPT: [&str; 26] = [
+    "sync",
+    "mute",
+    "unmute",
+    "rename",
+    "remove",
+    "freeze",
+    "thaw",
+    "resolve",
+    "incoming",
+    "pair",
+    "join",
+    "invite",
+    "network",
+    "away",
+    "hubs",
+    "paste_on",
+    "paste_receive",
+    "keyboard",
+    "remote",
+    "action_set",
+    "action_remove",
+    "action_on",
+    "actions_off",
+    "release_file",
+    "release_want",
+    "update_way",
+];
+
+/// Whether op is confirmed each time: those of EACH_TIME, and every
+/// operation but the everyday ones of KEPT.
 pub fn each_time(op: &str) -> bool {
-    matches!(op, "new" | "leave" | "takeover" | "recovery" | "handover" | "key-level" | "takeover-delay")
+    EACH_TIME.contains(&op) || !KEPT.contains(&op)
 }
 
 /// The right op takes.
@@ -125,7 +162,7 @@ pub fn check(conn: &UnixStream, h: &Header) -> Result<()> {
 pub const OP_CHALLENGE: &str = "confirm";
 /// The administrator's registration of a user's Windows Hello key, on the
 /// admin socket.
-pub const OP_REGISTER: &str = "confirm-key";
+pub const OP_REGISTER: &str = "confirm_key";
 
 /// The service's answer to a confirm request on conn (OP_CHALLENGE), or to
 /// a registration on the admin socket (OP_REGISTER).
@@ -885,11 +922,78 @@ mod tests {
 
     #[test]
     fn tiers() {
-        assert_eq!(right("revoke"), RIGHT_KEPT);
-        assert_eq!(right("pair"), RIGHT_KEPT);
-        assert_eq!(right("mute"), RIGHT_KEPT);
-        for op in ["new", "leave", "takeover", "recovery", "handover", "key-level", "takeover-delay"] {
+        for op in KEPT {
+            assert_eq!(right(op), RIGHT_KEPT, "{op}");
+            assert!(!EACH_TIME.contains(&op), "{op} is in both tiers");
+        }
+        for op in EACH_TIME {
             assert_eq!(right(op), RIGHT_EACH, "{op}");
+        }
+        // Fail closed: what is not listed is confirmed each time.
+        for op in ["", "takeover", "revoke", "an_operation_added_later", OP_REGISTER] {
+            assert_eq!(right(op), RIGHT_EACH, "{op}");
+        }
+    }
+
+    /// Every operation of the computers' control socket (docs/core-api.md,
+    /// "The member's operations", and the arms the service dispatches on)
+    /// is one the socket takes without the admin, or one in a tier; every
+    /// name in a tier is an operation; and those that make, leave, take
+    /// over, hand on or recover the group, make an admin or set who may
+    /// hold the group are confirmed each time.
+    #[test]
+    fn every_operation_has_a_tier() {
+        let doc = include_str!("../../docs/core-api.md");
+        let start = doc.find("### The member's operations").expect("the operations' table");
+        let mut ops: Vec<String> = Vec::new();
+        for line in doc[start..].lines().skip_while(|l| !l.starts_with("| `")) {
+            if !line.starts_with('|') {
+                break;
+            }
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            // The header row names the columns, `op` and where.
+            if cells.len() > 2
+                && cells[2] != "phone"
+                && cells[2] != "where"
+                && let Some(op) = cells[1].strip_prefix('`').and_then(|c| c.strip_suffix('`'))
+            {
+                ops.push(op.to_string());
+            }
+        }
+        let service = include_str!("service.rs");
+        let body = &service[service.find("fn request(&self").expect("the service's dispatch")..];
+        // Up to the next method: the arms of its match, not of others.
+        let body = &body[..body[1..].find("\n    fn ").map_or(body.len(), |i| i + 1)];
+        for line in body.lines() {
+            let arm = line.trim_start();
+            if !line.starts_with("            \"") || !arm.contains("=>") {
+                continue;
+            }
+            let pattern = &arm[..arm.find("=>").unwrap()];
+            // A guard follows the names.
+            let pattern = pattern.split(" if ").next().unwrap_or(pattern);
+            for name in pattern.split('|') {
+                let name = name.trim().trim_matches('"');
+                if !ops.iter().any(|o| o == name) {
+                    ops.push(name.to_string());
+                }
+            }
+        }
+        assert!(ops.len() > 40, "read only {} operations", ops.len());
+        for op in &ops {
+            if crate::control::is_admin(op) {
+                assert!(
+                    KEPT.contains(&op.as_str()) || EACH_TIME.contains(&op.as_str()) || op == OP_REGISTER,
+                    "{op} needs the admin but is in no confirmation tier"
+                );
+            }
+        }
+        for op in KEPT.iter().chain(EACH_TIME.iter()) {
+            assert!(ops.iter().any(|o| o == op), "{op} is in a tier but is no operation");
+            assert!(crate::control::is_admin(op), "{op} is in a tier but needs no admin");
+        }
+        for op in ["new", "leave", "take_over", "recover", "hand_over", "key_level", "takeover_delay", "make_admin"] {
+            assert!(EACH_TIME.contains(&op) && each_time(op), "{op} is not confirmed each time");
         }
     }
 

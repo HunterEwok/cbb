@@ -109,7 +109,7 @@ if [ -f "$share/firewall.sh" ]; then
 	sh "$share/firewall.sh" hub-close
 fi
 rm -f /etc/systemd/system/cbb.service.d/away.conf /etc/systemd/system/cbb.service.d/cgnat.conf \
-	/etc/systemd/system/cbb.service.d/tpm.conf
+	/etc/systemd/system/cbb.service.d/tpm.conf /etc/systemd/system/cbb.service.d/small.conf
 rmdir /etc/systemd/system/cbb.service.d 2>/dev/null || true
 rm -f /etc/systemd/system/cbb.service /etc/systemd/system/cbb-console.service \
 	/etc/systemd/system/cbb-uinput.service /etc/modules-load.d/cbb-uinput.conf \

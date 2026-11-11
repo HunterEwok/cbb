@@ -32,6 +32,7 @@ func TestMute(t *testing.T) {
 	}
 	// The root mutes beta for an hour: beta's copies stay its own, and a
 	// deliberate one is refused.
+	conns := len(b.linesWith("cbb: connected to "))
 	if _, err := a.do(t, control.Header{Op: control.OpMute, Device: "beta", ForMS: time.Hour.Milliseconds()}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +43,7 @@ func TestMute(t *testing.T) {
 	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "noise"); err == nil || !strings.Contains(err.Error(), "muted") {
 		t.Fatalf("a muted device sent a copy: %v", err)
 	}
-	// Its hello says so once it connected again, to both others.
+	// It tells both others in a presence message, without connecting again.
 	betaMuted := func(s *testService, muted bool) bool {
 		for _, d := range s.devices(t) {
 			if d.Name == "beta" {
@@ -52,6 +53,9 @@ func TestMute(t *testing.T) {
 		return false
 	}
 	waitFor(t, "alpha and gamma list beta as muted", func() bool { return betaMuted(a, true) && betaMuted(c, true) })
+	if n := len(b.linesWith("cbb: connected to ")); n != conns {
+		t.Errorf("beta connected again %d times for its mute: %q", n-conns, b.linesWith("cbb: connected to "))
+	}
 	// Copies from the others still reach beta.
 	waitFor(t, "connected again", func() bool { return len(b.status(t).Peers) == 2 && len(a.status(t).Peers) == 2 })
 	if _, err := a.do(t, control.Header{Op: control.OpCopy}, "from alpha"); err != nil {
@@ -75,7 +79,7 @@ func TestMute(t *testing.T) {
 	if b.status(t).Muted {
 		t.Fatal("beta is still muted after the admin's unmute")
 	}
-	// beta connects again after the unmute, so that its hello shows it.
+	// The others learn the unmute from a presence message too.
 	waitFor(t, "alpha and gamma list beta as unmuted", func() bool { return betaMuted(a, false) && betaMuted(c, false) })
 	// Without a connection a member lists beta as unmuted too, so the
 	// links themselves are waited for: beta's to both others by device ID.
@@ -89,7 +93,7 @@ func TestMute(t *testing.T) {
 
 	// gamma turns sync off for an hour: the group's copies stay out of
 	// its clipboard and its own stay home.
-	if _, err := c.do(t, control.Header{Op: control.OpSync, Name: "off", ForMS: time.Hour.Milliseconds()}, ""); err != nil {
+	if _, err := c.do(t, control.Header{Op: control.OpSync, On: control.Bool(false), ForMS: time.Hour.Milliseconds()}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if st := c.status(t); st.Mode != "own" || st.SyncUntilMS == 0 || st.Muted {
@@ -99,7 +103,7 @@ func TestMute(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "alpha has beta's text", func() bool { return a.paste(t) == "beta again" })
-	if _, err := c.do(t, control.Header{Op: control.OpSync, Name: "on"}, ""); err != nil {
+	if _, err := c.do(t, control.Header{Op: control.OpSync, On: control.Bool(true)}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "beta heard"); err != nil {

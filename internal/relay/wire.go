@@ -1,25 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Package relay is the blind relay: a meeting point for a group that has no
-// computer to be its hub, on a server the user runs (docs/design.md, "Blind
-// relay"). It holds none of the group's keys. Each member registers with
-// its member certificate and proves its WireGuard key, and gets a tunnel to
-// the relay; inside the tunnels the relay joins two members' connections
-// end to end, so the member protocol's TLS runs between the two members
-// and the relay passes only its ciphertext. It is still a star: members
-// reach only the relay, and the relay decides which two connections to
-// join, only within one group. The wire format is in docs/protocol.md,
-// section 14.
+// Package relay is a device's side of the blind relay, in Go, for the tests:
+// it registers a device with a relay and joins it to the others of its
+// group there, and it starts the relay itself, the Rust cbb-relay
+// (member/src/relayd), for them (docs/design.md, "Blind relay"). The
+// devices' own side is the Rust member's (member/src/relay.rs). A member
+// registers with its member certificate and proves its WireGuard key, and
+// gets a tunnel to the relay; inside the tunnels the relay joins two
+// members' connections end to end, so the member protocol's TLS runs
+// between the two members and the relay passes only its ciphertext. The
+// wire format is in docs/protocol.md, section 14.
 package relay
 
 import (
-	"github.com/HunterEwok/cbb/internal/frame"
-	"github.com/HunterEwok/cbb/internal/group"
-
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/tls"
 	"net"
 	"net/netip"
 	"time"
+
+	"github.com/HunterEwok/cbb/internal/frame"
+	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // Protocol is the ALPN protocol of a member's registration.
@@ -87,6 +90,38 @@ type (
 
 // maxLine bounds a request or a note.
 const maxLine = 64 << 10
+
+// The relay's limits a device keeps to as well: the devices of one group
+// on the relay at once, the calls one device answers at once, and the
+// records a claim carries (member/src/relayd).
+const (
+	maxMembers      = 64
+	maxCalls        = 16
+	maxClaimRecords = 1024
+)
+
+// setupTimeout bounds a registration and a connection's setup in the
+// tunnel, callTimeout the wait for the called device to answer, and
+// noteTimeout a note.
+const (
+	setupTimeout = 15 * time.Second
+	callTimeout  = 10 * time.Second
+	noteTimeout  = 10 * time.Second
+)
+
+// proof is what a device sends to prove it holds its WireGuard key: an
+// HMAC, under the X25519 secret of its key and the relay's ephemeral one,
+// of a key from this TLS session, so it proves nothing on another
+// connection.
+func proof(shared []byte, cs tls.ConnectionState) ([]byte, error) {
+	k, err := cs.ExportKeyingMaterial(proofLabel, nil, 32)
+	if err != nil {
+		return nil, err
+	}
+	m := hmac.New(sha256.New, shared)
+	m.Write(k)
+	return m.Sum(nil), nil
+}
 
 // writeLine sends v as one frame (internal/frame), within d.
 func writeLine(c net.Conn, v any, d time.Duration) error {

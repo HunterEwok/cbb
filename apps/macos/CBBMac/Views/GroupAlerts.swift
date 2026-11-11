@@ -64,7 +64,7 @@ struct GroupAlerts: View {
         case "full":
             out.append(Line(text: String(localized: "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.")))
         case "secrets":
-            out.append(Line(text: String(localized: "The group sends no secrets until its root decides.")))
+            out.append(Line(text: String(localized: "The group sends no secrets until its owner decides.")))
         default:
             break
         }

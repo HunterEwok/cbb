@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The lite member's service: the control socket, the identity, the sync
+//! cbb's service: the control socket, the identity, the sync
 //! engine and the connections to the other members.
 
 use crate::sys::{UnixListener, UnixStream};
@@ -53,8 +53,8 @@ const WATCH_QUEUE: usize = 16;
 const RESTART_AFTER: Duration = Duration::from_millis(500);
 
 /// The targets a watcher offers for remote paste, as its watch request
-/// names them (docs/protocol.md, section 8). The lite member has no desktop
-/// of its own, but a full member's desktop connector may watch it.
+/// names them (docs/protocol.md, section 8). cbb has no desktop
+/// connector of its own, but a full member's desktop connector may watch it.
 pub(crate) const DESKTOP: &str = "desktop";
 pub(crate) const TMUX: &str = "tmux";
 pub(crate) const CONSOLE: &str = "console";
@@ -176,7 +176,7 @@ pub struct Config {
     pub peers: Vec<SocketAddr>,
     /// Find the members with mDNS, and publish this one.
     pub mdns: bool,
-    /// The member port, where phones and other lite members dial
+    /// The member port, where phones and other members dial
     /// this one; None listens nowhere.
     pub port: Option<u16>,
     /// Where the tunnel sends its packets instead of the hub's addresses: a
@@ -245,6 +245,9 @@ struct Service {
     pairing: Mutex<Option<Pairing>>,
     /// The member port, for the address a pairing window shows.
     port: Mutex<Option<u16>>,
+    /// The bug report of a panic before the last restart (src/bugs.rs).
+    bugs: crate::bugs::Bugs,
+    tiles: crate::view::Tiles,
 }
 
 /// A pairing that runs on this device.
@@ -297,6 +300,7 @@ pub(crate) fn request_stop() {
 /// Logs to the service's log file where it has one (crate::logfile), else
 /// to standard error, which systemd or procd keeps.
 pub fn log_line(s: &str) {
+    crate::bugs::remember(s);
     if !crate::logfile::line(s) {
         eprintln!("{s}");
     }
@@ -317,6 +321,9 @@ pub fn run(cfg: Config) -> Result<()> {
     }
     std::fs::create_dir_all(&cfg.state_dir).context(format!("cannot create {}", cfg.state_dir.display()))?;
     let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(log_line);
+    // A panic ends the service (panic = "abort"); the hook keeps what broke
+    // for the bug report after the restart (src/bugs.rs).
+    crate::bugs::install(&cfg.state_dir);
     let left_old = crate::records::leave_version1_group(&cfg.state_dir)?;
     if left_old {
         log(&format!(
@@ -354,6 +361,8 @@ pub fn run(cfg: Config) -> Result<()> {
         joined_at: Mutex::new(None),
         pairing: Mutex::new(None),
         port: Mutex::new(None),
+        bugs: crate::bugs::Bugs::new(&cfg.state_dir),
+        tiles: crate::view::Tiles::new(&cfg.state_dir),
     });
     {
         // The helper puts a keyboard that is on back on BlueZ.
@@ -568,6 +577,12 @@ pub fn run(cfg: Config) -> Result<()> {
     }
     *svc.node.write().unwrap() = Some(node.clone());
     {
+        // A panic before this start: sent by itself when the user allowed
+        // always, else asked about by the apps (status `bug`).
+        let (svc, names) = (svc.clone(), device_names(&node));
+        std::thread::spawn(move || svc.bugs.start(&names, &*svc.log));
+    }
+    {
         // The claims to take the group over: one takes effect when its
         // delay ends, without a new record, and this admin's own makes it
         // the root then. A root also renews the admin CAs of the admins
@@ -776,7 +791,7 @@ fn listen(path: &Path, admin: bool) -> Result<UnixListener> {
         std::fs::create_dir_all(dir).context(format!("cannot create {}", dir.display()))?;
     }
     if UnixStream::connect(path).is_ok() {
-        return Err(Error::msg(format!("another lite member service runs at {}", path.display())));
+        return Err(Error::msg(format!("another cbb service runs at {}", path.display())));
     }
     let _ = std::fs::remove_file(path);
     // The socket is made in a new directory that only the service can enter,
@@ -864,8 +879,8 @@ impl Service {
         }
     }
 
-    /// cbb global: shows sync away from home, or turns it on or off. The
-    /// lite member keeps its keys in files, so turning it on needs the
+    /// cbb global: shows sync away from home, or turns it on or off. Without
+    /// the helper cbb keeps its keys in files, so turning it on needs the
     /// user's consent.
     fn global(&self, h: &Header) -> Result<Message> {
         let (node, away) = (self.node()?, self.away()?);
@@ -894,9 +909,9 @@ impl Service {
                 crate::admin::may_be_hub(&self.state_dir, &node)?;
                 node.set_tunnel_key(Some(away.make_hub(h)?));
                 away.serve_if_first(&node);
-                // The members connect again, so their hellos carry the key
-                // and get the hub's offer.
-                node.reconnect();
+                // The members connected get the hub's offer without
+                // connecting again (docs/protocol.md, section 4, "Presence").
+                node.announce(true);
             }
             "hub-off" => away.stop_hub(&node, h.force)?,
             "relay" => node.set_tunnel_key(Some(away.meet_at(&node, h)?)),
@@ -907,10 +922,8 @@ impl Service {
     }
 
     /// Mutes this member at the admin `by`'s order until `until` (0 for
-    /// until an admin lifts it), or ends
-    /// its mute, saves it, and connects to the members again once a
-    /// command's result had a moment to go back, so that their hellos show
-    /// it.
+    /// until an admin lifts it), or ends its mute, saves it, and tells the
+    /// members connected in a presence message, without connecting again.
     fn set_muted(&self, node: &Arc<Node>, on: bool, until: i64, by: &str) -> Result<()> {
         if on {
             node.engine.set_mute(until);
@@ -923,11 +936,7 @@ impl Service {
             (true, 0) => format!("cbb: {by} muted this device until an admin unmutes it"),
             (true, _) => format!("cbb: {by} muted this device for {} s", (until - uptime::wall_ms()) / 1000),
         });
-        let node = node.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            node.reconnect();
-        });
+        node.announce(false);
         Ok(())
     }
 
@@ -964,6 +973,12 @@ impl Service {
         crate::admin::find_device(&node, &h.device).is_ok_and(|d| d.id == node.identity().id.to_string())
     }
 
+    /// The answer to sync and muted, as the phone's member gives it.
+    fn standing(&self) -> Result<Message> {
+        let standing = crate::sync::standing(&self.node()?.engine);
+        Ok(control::reply(Header { standing: Some(standing), done: true, ..Default::default() }, Vec::new()))
+    }
+
     /// Turns sync on, or off for ms milliseconds (0 for until it is
     /// turned on), and saves it.
     fn set_sync(&self, on: bool, ms: i64) -> Result<()> {
@@ -975,7 +990,7 @@ impl Service {
 
     /// Carries out a command a member sent (docs/protocol.md, section 15):
     /// one that an admin signed for this device in its group, that has not
-    /// expired and was not carried out before. The lite member takes mode,
+    /// expired and was not carried out before. cbb takes mode,
     /// paste, action and the commands that turn things off; it is never the
     /// group's hub, so it refuses hub commands.
     fn command(&self, peer: &crate::certs::DeviceId, c: &crate::records::Record) -> wire::CommandResult {
@@ -1074,8 +1089,8 @@ impl Service {
                 match self.away().and_then(|a| a.turn_off()) {
                     Ok(()) => {
                         (self.log)(&format!("cbb: {} turned sync away from home off here", body.by));
-                        // The members connect again once the result has gone
-                        // back on the connection that brought the command.
+                        // The members learn it once the result has gone back
+                        // on the connection that brought the command.
                         let node = node.clone();
                         std::thread::spawn(move || {
                             std::thread::sleep(std::time::Duration::from_millis(500));
@@ -1765,6 +1780,92 @@ impl Service {
         res
     }
 
+    /// The status op's answer, with why this device does not sync
+    /// (crate::why), which the view carries too.
+    fn status(&self) -> Result<Status> {
+        let peripherals = self.peripherals.status();
+        // A device in no group still answers, with what needs no
+        // group: its version, a TV's remote and the keyboard.
+        let node = match self.node() {
+            Ok(node) => node,
+            Err(_) if !matches!(Identity::load(&self.state_dir), Ok(Some(_))) => {
+                let status = Status {
+                    version: VERSION.into(),
+                    os: crate::admin::os_name().into(),
+                    keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
+                    tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
+                    left_old_group: self.left_old,
+                    port: self.port.lock().unwrap().map_or(0, i64::from),
+                    ..Default::default()
+                };
+                let status = Status { why: crate::why::reasons(&status, &[], uptime::wall_ms()), ..status };
+                return Ok(status);
+            }
+            Err(e) => return Err(e),
+        };
+        let id = node.identity();
+        let skews = node.engine.skews();
+        let peers = node
+            .peers()
+            .into_iter()
+            .map(|p| Device {
+                skew_ms: skews.get(p.id.as_str()).copied().unwrap_or(0),
+                id: p.id.to_string(),
+                name: p.name,
+                role: p.role,
+                os: p.os,
+                ..Default::default()
+            })
+            .collect();
+        // Read apart: a guard in the literal would live through it,
+        // and group_status takes the records too.
+        let (key_level, incoming_ms) = {
+            let records = node.records();
+            let st = records.lock().unwrap().state();
+            (st.key_level, st.incoming_ms)
+        };
+        let group = crate::why::group_status(&node);
+        let status = Status {
+            device: id.id.to_string(),
+            group: id.tag(),
+            role: node.role().into(),
+            os: node.os().into(),
+            peers,
+            version: VERSION.into(),
+            left_old_group: false,
+            mode: node.engine.mode().name().into(),
+            muted: node.engine.mute_left().is_some(),
+            muted_until_ms: node.engine.mute_left().filter(|l| *l > 0).map_or(0, |l| uptime::wall_ms() + l),
+            sync_until_ms: node.engine.sync().1,
+            away: self.away()?.status(&node),
+            paste: self.paste_status(),
+            keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
+            tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
+            release: node.releases().version(uptime::wall_ms()).unwrap_or_default(),
+            update: node
+                .releases()
+                .version(uptime::wall_ms())
+                .filter(|v| crate::releases::offered(v))
+                .unwrap_or_default(),
+            actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
+            stop: node.stop(),
+            removed: node.removed() && !group.frozen && group.taken_over_by.is_empty(),
+            media: Some(self.media_status()),
+            key_level: if key_level.is_empty() { "hardware".into() } else { key_level },
+            key_problem: String::new(),
+            incoming_ms: incoming_ms.unwrap_or(cbb_core::authority::DEFAULT_INCOMING),
+            unreached: node.unreached(),
+            port: self.port.lock().unwrap().map_or(0, i64::from),
+            quiet: node.networks().map(|n| n.unknown()).unwrap_or_default(),
+            cert_ends_ms: id.cert.not_after * 1000,
+            bug: self.bugs.waiting(),
+            ..group
+        };
+        let status =
+            Status { why: crate::why::reasons(&status, &crate::why::devices(&node), uptime::wall_ms()), ..status };
+        Ok(status)
+    }
+
     /// Remote paste here, for the status: the switches and the targets that
     /// run.
     fn paste_status(&self) -> Option<control::Paste> {
@@ -1784,8 +1885,8 @@ impl Service {
     }
 
     /// cbb paste-receive on or off: only this device's own user turns
-    /// remote paste on here; the lite member is never an admin, so it turns
-    /// it off on no other device.
+    /// remote paste on here; it turns it off on no
+    /// other device.
     fn set_receive(&self, h: &Header) -> Result<Message> {
         match h.name.as_str() {
             "on" | "off" => {}
@@ -2018,8 +2119,17 @@ impl Service {
         }
         // Confirming itself (confirm.rs): the challenge to sign, and on the
         // admin socket a user's key.
-        if m.header.op == crate::confirm::OP_CHALLENGE || (admin && m.header.op == crate::confirm::OP_REGISTER) {
-            let answer = crate::confirm::answer(&out, &m.header).unwrap_or_else(|e| control::failure(&e));
+        if m.header.op == crate::confirm::OP_CHALLENGE || m.header.op == crate::confirm::OP_REGISTER {
+            // A user's key is registered only on the admin socket: no
+            // confirmation stands in for it.
+            let answer = if admin || m.header.op == crate::confirm::OP_CHALLENGE {
+                crate::confirm::answer(&out, &m.header).unwrap_or_else(|e| control::failure(&e))
+            } else {
+                control::failure(&Error::msg(format!(
+                    "{:?} is taken only on the admin socket, which only the administrator reaches",
+                    m.header.op
+                )))
+            };
             let _ = control::write(&mut out, &answer);
             return;
         }
@@ -2043,7 +2153,7 @@ impl Service {
             }
         }
         let broken = self.broken.lock().unwrap().clone();
-        if let Some(detail) = broken.filter(|_| m.header.op != "leave") {
+        if let Some(detail) = broken.filter(|_| m.header.op != control::op::LEAVE) {
             let h = Header { error: BROKEN.to_string(), detail, done: true, ..Default::default() };
             let _ = control::write(&mut out, &control::reply(h, Vec::new()));
             return;
@@ -2052,7 +2162,7 @@ impl Service {
             self.watch(m, r, out);
             return;
         }
-        if m.header.op == "copy-media" || m.header.op == "copied-media" {
+        if m.header.op == "copy_media" || m.header.op == "copied_media" {
             let answer = match self.copy_media(&m, &mut r) {
                 Ok(()) => control::reply(Header::default(), Vec::new()),
                 Err(e) => {
@@ -2119,7 +2229,7 @@ impl Service {
             }
             return;
         }
-        if m.header.op == "release-file" {
+        if m.header.op == "release_file" {
             let answer = match self.receive_release_file(&m, &mut r) {
                 Ok(()) => control::reply(Header::default(), Vec::new()),
                 Err(e) => {
@@ -2134,14 +2244,14 @@ impl Service {
             let _ = control::write(&mut out, &answer);
             return;
         }
-        if m.header.op == "release-get" {
+        if m.header.op == "release_get" {
             if let Err(e) = self.send_release_file(&m.header.value, &mut out) {
                 (self.log)(&format!("cbb: release-get: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));
             }
             return;
         }
-        if m.header.op == "paste-media" {
+        if m.header.op == "paste_media" {
             if let Err(e) = self.paste_media(&mut out, &m.header.value) {
                 let _ = control::write(&mut out, &control::failure(&e));
             }
@@ -2166,7 +2276,7 @@ impl Service {
         let limit = self.limits.lock().unwrap().home;
         let mut got = copies::receive(r, &m.payload, limit, &self.tmp_dir()?)?;
         let parts = std::mem::take(&mut got.parts);
-        let ev = if m.header.op == "copied-media" {
+        let ev = if m.header.op == "copied_media" {
             node.copied_media(&got.text, parts, Via::Copy)?
         } else {
             Some(node.send_media(&got.text, parts, Via::Copy)?)
@@ -2371,89 +2481,28 @@ impl Service {
                 },
                 Vec::new(),
             )),
-            "status" => {
-                let peripherals = self.peripherals.status();
-                // A device in no group still answers, with what needs no
-                // group: its version, a TV's remote and the keyboard.
-                let node = match self.node() {
-                    Ok(node) => node,
-                    Err(_) if !matches!(Identity::load(&self.state_dir), Ok(Some(_))) => {
-                        let status = Status {
-                            version: VERSION.into(),
-                            os: crate::admin::os_name().into(),
-                            keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
-                            tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
-                            left_old_group: self.left_old,
-                            port: self.port.lock().unwrap().map_or(0, i64::from),
-                            ..Default::default()
-                        };
-                        return Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()));
-                    }
-                    Err(e) => return Err(e),
-                };
-                let id = node.identity();
-                let skews = node.engine.skews();
-                let peers = node
-                    .peers()
-                    .into_iter()
-                    .map(|p| Device {
-                        skew_ms: skews.get(p.id.as_str()).copied().unwrap_or(0),
-                        id: p.id.to_string(),
-                        name: p.name,
-                        role: p.role,
-                        os: p.os,
-                        ..Default::default()
-                    })
-                    .collect();
-                // Read apart: a guard in the literal would live through it,
-                // and group_status takes the records too.
-                let (key_level, incoming_ms) = {
-                    let records = node.records();
-                    let st = records.lock().unwrap().state();
-                    (st.key_level, st.incoming_ms)
-                };
-                let group = group_status(&node);
-                let status = Status {
-                    device: id.id.to_string(),
-                    group: id.tag(),
-                    role: node.role().into(),
-                    os: node.os().into(),
-                    peers,
-                    version: VERSION.into(),
-                    left_old_group: false,
-                    mode: node.engine.mode().name().into(),
-                    muted: node.engine.mute_left().is_some(),
-                    muted_until_ms: node.engine.mute_left().filter(|l| *l > 0).map_or(0, |l| uptime::wall_ms() + l),
-                    sync_until_ms: node.engine.sync().1,
-                    away: self.away()?.status(&node),
-                    paste: self.paste_status(),
-                    keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
-                    tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
-                    release: node.releases().version(uptime::wall_ms()).unwrap_or_default(),
-                    update: node
-                        .releases()
-                        .version(uptime::wall_ms())
-                        .filter(|v| crate::releases::offered(v))
-                        .unwrap_or_default(),
-                    actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
-                    stop: node.stop(),
-                    removed: node.removed() && !group.frozen && group.taken_over_by.is_empty(),
-                    media: Some(self.media_status()),
-                    key_level: if key_level.is_empty() { "hardware".into() } else { key_level },
-                    key_problem: String::new(),
-                    incoming_ms: incoming_ms.unwrap_or(cbb_core::authority::DEFAULT_INCOMING),
-                    unreached: node.unreached(),
-                    port: self.port.lock().unwrap().map_or(0, i64::from),
-                    quiet: node.networks().map(|n| n.unknown()).unwrap_or_default(),
-                    cert_ends_ms: id.cert.not_after * 1000,
-                    ..group
-                };
-                Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
-            }
+            "status" => Ok(control::reply(Header { status: Some(self.status()?), ..Default::default() }, Vec::new())),
             "devices" => {
                 let node = self.node()?;
                 let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
                 Ok(control::reply(Header { devices: devices(&node, &hubs), ..Default::default() }, Vec::new()))
+            }
+            // The tiles to draw, and the user's change of their order.
+            "view" | "arrange" => {
+                let node = self.node()?;
+                let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
+                let op = match (&*h.op, &h.arrange) {
+                    ("arrange", Some(v)) => Some(
+                        serde_json::from_value::<cbb_core::arrange::Op>(v.clone())
+                            .map_err(|e| Error::msg(format!("arrange: the change does not read: {e}")))?,
+                    ),
+                    ("arrange", None) => return Err(Error::msg("arrange: which change?")),
+                    _ => None,
+                };
+                let view = self.tiles.view(&node.identity().tag(), devices(&node, &hubs), op.as_ref())?;
+                let view = crate::view::View { warnings: self.status().map(|s| s.why).unwrap_or_default(), ..view };
+                let view = serde_json::to_value(view).context("cannot encode the view")?;
+                Ok(control::reply(Header { view: Some(view), ..Default::default() }, Vec::new()))
             }
             "away" => self.global(h),
             // The networks this device is on now are known: the user says
@@ -2479,7 +2528,7 @@ impl Service {
                 self.node()?.put_entries(&set)?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
             }
-            "entries-get" => {
+            "entries_get" => {
                 let set = self
                     .node()?
                     .entries()
@@ -2498,11 +2547,11 @@ impl Service {
                 self.node()?.put_release(&set)?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
             }
-            "release-want" => {
+            "release_want" => {
                 let data = serde_json::to_vec(&self.wanted_release_files()?).context("cannot encode the files")?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, data))
             }
-            "release-held" => {
+            "release_held" => {
                 let set = self
                     .node()?
                     .releases()
@@ -2511,7 +2560,7 @@ impl Service {
                 let data = serde_json::to_vec(&set).context("cannot encode the release")?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, data))
             }
-            "update-way" => {
+            "update_way" => {
                 let node = self.node()?;
                 let data = match self.away()?.update_way(&node) {
                     Some(v) => serde_json::to_vec(&v).context("cannot encode the way")?,
@@ -2519,7 +2568,7 @@ impl Service {
                 };
                 Ok(control::reply(Header { done: true, ..Default::default() }, data))
             }
-            "paste-receive" => self.set_receive(h),
+            "paste_receive" => self.set_receive(h),
             "keyboard" | "remote" => {
                 let p = self.peripherals.serve(&h.op, h, &m.payload)?;
                 // With the paste targets, which a TV that pastes joins, as
@@ -2528,8 +2577,8 @@ impl Service {
                     Status { keyboard: p.keyboard, tvs: p.tvs, paste: self.paste_status(), ..Default::default() };
                 Ok(control::reply(Header { status: Some(status), done: true, ..Default::default() }, Vec::new()))
             }
-            "action-set" => self.set_action(h),
-            "actions-off" => {
+            "action_set" => self.set_action(h),
+            "actions_off" => {
                 let node = self.node()?;
                 let off_here = || {
                     self.all_actions_off(&node)?;
@@ -2543,18 +2592,18 @@ impl Service {
                 }
                 Ok(self.action_reply(&actions::load(&self.state_dir)?))
             }
-            "action-on" => {
+            "action_on" => {
                 self.admin(|a| a.action_on(&h.device, &h.name))?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
             }
-            "action-remove" => self.remove_action(h),
-            "paste-on" => self.paste_on(h, &m.payload),
+            "action_remove" => self.remove_action(h),
+            "paste_on" => self.paste_on(h, &m.payload),
             "mute" | "unmute" => {
                 self.mute_op(h)?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
             "sync" => {
-                let on = crate::sync::parse(&h.name)?;
+                let on = h.on.ok_or_else(|| Error::msg("sync needs on, true or false"))?;
                 if !h.device.is_empty() {
                     if h.for_ms != 0 {
                         return Err(Error::msg("-on turns another device's sync on or off with no time"));
@@ -2567,37 +2616,59 @@ impl Service {
                     return Err(Error::msg("a time goes only with cbb sync off"));
                 }
                 self.set_sync(on, h.for_ms)?;
-                // The answer carries the status, as Go's.
-                let status =
-                    Message { header: Header { op: "status".into(), ..Default::default() }, payload: Vec::new() };
-                self.request(&status)
+                self.standing()
             }
-            "new" => self.new_group(),
-            "revoke" => {
-                let name = self.admin(|a| a.revoke(&h.name))?;
+            "muted" => self.standing(),
+            // The bug report of the panic before the last restart
+            // (docs/core-api.md, "Bug reports"): what the core made of it,
+            // the user's Allow (payload `{"always"}`) or Cancel.
+            "bug" => {
+                let names = self.node().map(|n| device_names(&n)).unwrap_or_default();
+                let data = match self.bugs.offer(&names)? {
+                    Some(o) => serde_json::to_vec(&o).context("cannot encode the report")?,
+                    None => Vec::new(),
+                };
+                Ok(control::reply(Header { done: true, ..Default::default() }, data))
+            }
+            "bug_allow" => {
+                let always = serde_json::from_slice::<serde_json::Value>(&m.payload)
+                    .ok()
+                    .and_then(|v| v.get("always").and_then(serde_json::Value::as_bool))
+                    .unwrap_or(false);
+                let names = self.node().map(|n| device_names(&n)).unwrap_or_default();
+                self.bugs.allow(always, &names)?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
+            "bug_cancel" => {
+                self.bugs.cancel();
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+            }
+            control::op::NEW => self.new_group(),
+            "remove" => {
+                let name = self.admin(|a| a.revoke(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "rename" => {
-                let name = self.admin(|a| a.rename(&h.name, &h.new_name))?;
+                let name = self.admin(|a| a.rename(&h.device, &h.name))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "freeze" | "thaw" => {
-                let name = self.admin(|a| a.freeze(&h.name, h.op == "freeze"))?;
+                let name = self.admin(|a| a.freeze(&h.device, h.op == "freeze"))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "resolve" => {
                 let who = self.admin(|a| a.resolve())?;
                 Ok(control::reply(Header { name: who.join(", "), done: true, ..Default::default() }, Vec::new()))
             }
-            "admin" => {
-                let name = self.admin(|a| a.make_admin(&h.name, h.consent))?;
+            control::op::MAKE_ADMIN => {
+                let name = self.admin(|a| a.make_admin(&h.device, h.allow_file_key))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "key-level" => {
+            control::op::KEY_LEVEL => {
                 let below = self.admin(|a| a.set_key_level(&h.value))?;
                 Ok(control::reply(Header { below, done: true, ..Default::default() }, Vec::new()))
             }
-            "takeover-delay" => {
+            control::op::TAKEOVER_DELAY => {
                 self.admin(|a| a.set_takeover_delay(&h.value))?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
@@ -2605,11 +2676,11 @@ impl Service {
                 self.admin(|a| a.set_incoming(&h.value))?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
-            "takeover" => {
-                let name = self.admin(|a| a.take_over(&h.name))?;
+            control::op::TAKE_OVER => {
+                let name = self.admin(|a| a.take_over(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "recovery" => {
+            control::op::RECOVER => {
                 let text = String::from_utf8_lossy(&m.payload).to_string();
                 if h.name == "yubikey" {
                     self.admin(|a| a.recover_with_card(&text))?;
@@ -2618,8 +2689,8 @@ impl Service {
                 }
                 Ok(control::reply(Header::default(), Vec::new()))
             }
-            "handover" => {
-                let name = self.admin(|a| a.hand_over(&h.name))?;
+            control::op::HAND_OVER => {
+                let name = self.admin(|a| a.hand_over(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "pair" => {
@@ -2647,7 +2718,7 @@ impl Service {
                 };
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "leave" => {
+            control::op::LEAVE => {
                 // The node stops first, so nothing writes the group's files
                 // again; the service then restarts in no group.
                 let node = self.node.read().unwrap().clone();
@@ -3205,48 +3276,9 @@ impl Drop for PairingSlot<'_> {
     }
 }
 
-/// The claims, conflicts and newer records of the group's state for
-/// status, as Go's groupStatus.
-fn group_status(node: &Node) -> Status {
-    let ident = node.identity();
-    let own: Vec<cbb_core::certs::Cert> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
-    let records = node.records();
-    let rs = records.lock().unwrap();
-    let st = rs.state();
-    // An old root that an admin took the group over from, or a frozen
-    // admin, is refused but not removed, as Go's statusWithRemoved says.
-    let taken = rs.taken_over(&own);
-    let refused = matches!(rs.refused(&own), Some(cbb_core::group::Refusal::Refused(_)));
-    let frozen = taken.is_none() && refused && own.iter().any(|c| rs.frozen(&c.key_hash()));
-    // A signer's device for the user, as Go's SignerName.
-    let name = |k: &cbb_core::authority::Hash| -> String {
-        st.devices
-            .iter()
-            .find(|d| d.admin.as_ref() == Some(k))
-            .or_else(
-                || if st.roots.contains(k) { st.devices.iter().find(|d| d.device == st.root_device) } else { None },
-            )
-            .map_or_else(|| k.text(), |d| d.name.clone())
-    };
-    Status {
-        claims: st
-            .claims
-            .iter()
-            .filter(|c| matches!(c.state, "pending" | "competing" | "disputed"))
-            .map(|c| control::Claim { by: name(&c.claimant), state: c.state.into(), left_ms: c.left_ms })
-            .collect(),
-        conflicts: st
-            .conflicts
-            .iter()
-            .map(|c| control::Conflict { kind: c.kind.into(), devices: c.signers.iter().map(name).collect() })
-            .collect(),
-        newer: st.newer.len(),
-        frozen,
-        taken_over_by: taken
-            .map(|(dev, _)| st.devices.iter().find(|d| d.device == dev).map_or(dev, |d| d.name.clone()))
-            .unwrap_or_default(),
-        ..Default::default()
-    }
+/// The names of the group's devices, which a bug report replaces.
+fn device_names(node: &Node) -> Vec<String> {
+    node.devices().into_iter().map(|d| d.name).filter(|n| !n.is_empty()).collect()
 }
 
 /// Keeps a member connection up to the member that admitted this device at

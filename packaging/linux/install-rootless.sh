@@ -2,22 +2,23 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Installs cbb's full member or lite member for the user who
+# Installs cbb, with its helper when the archive has one, for the user who
 # runs it, without root (a rootless install, D-79; docs/design.md,
 # "Rootless installs"):
 #
-#   sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] [--no-pair] path/to/cbb
+#   sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] [--no-helper] [--no-pair] path/to/cbb
 #
 # install.sh runs this script for --rootless. It puts the binary in
-# ~/.local/bin, the service (and the full member's desktop agent) in the
+# ~/.local/bin, the service (and, with the helper, the desktop agent) in the
 # user's systemd user units, the tmux configuration in
 # ~/.local/share/cbb, the settings in ~/.config/cbb
 # and the state in ~/.local/state/cbb, and starts the service.
 # Every program of the user can read the device's keys, so the device is
 # never the group's root, an admin or a hub. It has no firewall rules, no
 # TPM, no uinput or console helper and no polkit rule, and it runs while
-# the user is logged in unless the user may linger. uninstall.sh, run as
-# the same user, removes it again.
+# the user is logged in unless the user may linger. --no-helper leaves
+# cbb-helper out, and a device installed without it stays so on later runs
+# and updates. uninstall.sh, run as the same user, removes it again.
 set -eu
 
 if [ "${CBB_ERROR_DETAILS:-}" = 1 ]; then
@@ -38,16 +39,18 @@ cbb_l10n=$(cd "$(dirname "$0")" && pwd)/../l10n
 export LC_ALL=C
 
 usage() {
-	echo "usage: sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] [--no-pair] path/to/cbb" >&2
+	echo "usage: sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] [--no-helper] [--no-pair] path/to/cbb" >&2
 	exit 2
 }
 port=
 cgnat=${CBB_HOME_CGNAT:-}
 auto=
+nohelper=no
 while [ $# -gt 1 ]; do
 	case $1 in
 	--rootless) ;;
 	--no-pair) CBB_PAIR=no ;;
+	--no-helper) nohelper=yes ;;
 	--port)
 		port=$2
 		shift
@@ -112,14 +115,6 @@ if ! "$bin" version >/dev/null 2>&1; then
 	note install.sh "%s does not run on this machine; is it built for %s?" "$bin" "$(uname -m)"
 	exit 1
 fi
-kind=full
-if "$bin" version 2>/dev/null | grep -q 'lite member'; then
-	kind=lite
-fi
-if [ "$kind" = lite ] && [ "$cgnat" = 1 ]; then
-	note install.sh "--home-cgnat is for the full member"
-	exit 2
-fi
 for f in /usr/local/bin/cbb /opt/cbb/bin/cbb /etc/systemd/system/cbb.service; do
 	if [ -e "$f" ]; then
 		note install.sh "CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it" "$f"
@@ -136,6 +131,15 @@ config=${XDG_CONFIG_HOME:-$home/.config}
 units=$config/systemd/user
 state=${XDG_STATE_HOME:-$home/.local/state}/cbb
 env=$config/cbb/cbb.env
+# cbb runs with its helper when the archive has one, unless --no-helper
+# says otherwise or cbb runs here without it already; then it stays so.
+helper=no
+if [ -f "$(dirname "$bin")/cbb-helper" ] && [ "$nohelper" = no ]; then
+	helper=yes
+	if [ -x "$cbb" ] && [ ! -f "${cbb%/*}/cbb-helper" ]; then
+		helper=no
+	fi
+fi
 
 # place FILE DEST installs FILE, a unit or the autostart entry, with the
 # binary's path here.
@@ -148,9 +152,11 @@ install -d -m 0755 "${cbb%/*}" "$share" "$units"
 install -d -m 0700 "$state" "${env%/*}"
 install -m 0755 "$bin" "$cbb.new"
 mv "$cbb.new" "$cbb"
-if [ -f "$(dirname "$bin")/cbb-helper" ]; then
+if [ "$helper" = yes ]; then
 	install -m 0755 "$(dirname "$bin")/cbb-helper" "${cbb%/*}/cbb-helper.new"
 	mv "${cbb%/*}/cbb-helper.new" "${cbb%/*}/cbb-helper"
+else
+	rm -f "${cbb%/*}/cbb-helper"
 fi
 install -m 0644 "$here/uninstall.sh" "$share/uninstall.sh"
 # uninstall.sh speaks the user's language too.
@@ -159,8 +165,8 @@ rm -rf "$share/l10n"
 cp -R "$here/../l10n" "$share/l10n"
 install -m 0644 "$here/../tmux/cbb.conf" "$share/tmux.conf"
 place "$here/cbb-rootless.service" "$units/cbb.service"
-# The lite member has no desktop clipboard, so no agent.
-if [ "$kind" = full ]; then
+# The desktop agent is the helper's.
+if [ "$helper" = yes ]; then
 	install -d -m 0755 "$config/autostart"
 	place "$here/cbb-agent.service" "$units/cbb-agent.service"
 	place "$here/cbb-desktop.desktop" "$config/autostart/cbb-desktop.desktop"
@@ -195,7 +201,7 @@ systemctl --user daemon-reload
 systemctl --user enable cbb.service
 systemctl --user reset-failed cbb.service >/dev/null 2>&1 || true
 systemctl --user restart cbb.service
-if [ "$kind" = full ]; then
+if [ "$helper" = yes ]; then
 	systemctl --user enable cbb-agent.service >/dev/null 2>&1 || true
 	if systemctl --user is-active -q graphical-session.target 2>/dev/null; then
 		systemctl --user restart cbb-agent.service >/dev/null 2>&1 ||
@@ -233,7 +239,7 @@ case ":$PATH:" in
 *) run=$cbb ;;
 esac
 say "For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf" "$share"
-if [ "$kind" = lite ]; then
+if [ "$helper" = no ]; then
 	# shellcheck source=packaging/pair.sh
 	. "$here/../pair.sh"
 	if ! pair_now "$cbb" ""; then

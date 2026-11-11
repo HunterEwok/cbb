@@ -82,7 +82,7 @@ struct AlertsCard: View {
         case .stopped:
             return String(localized: "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.", bundle: .app)
         case .secretsStopped:
-            return String(localized: "The group sends no secrets until its root decides.", bundle: .app)
+            return String(localized: "The group sends no secrets until its owner decides.", bundle: .app)
         case .twoHistories:
             return String(localized: "\(who) signed two histories with one key, as a stolen key or a restore from a backup would.", bundle: .app)
         case .admins:

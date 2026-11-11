@@ -57,6 +57,10 @@ object Core {
         fun cbb_call(request: ByteArray?, len: SizeT, answerLen: Pointer): Pointer?
 
         fun cbb_free(answer: Pointer?, len: SizeT)
+
+        fun cbb_test_panic(answerLen: Pointer): Pointer?
+
+        fun cbb_last_panic(answerLen: Pointer): Pointer?
     }
 
     /** C's size_t: 64 bits on arm64-v8a, x86_64 and the JVM tests, 32 on armeabi-v7a. */
@@ -87,6 +91,41 @@ object Core {
         } finally {
             lib.cbb_free(answer, SizeT(n))
         }
+    }
+
+    /** The refusal in an answer the library gave, freed after; a panic's answer (docs/core-api.md, "Panics"). */
+    private fun refusalOf(answer: Pointer, count: Memory): Refusal {
+        val n = if (Native.SIZE_T_SIZE == 8) count.getLong(0) else count.getInt(0).toLong() and 0xffffffffL
+        try {
+            val e = Json.parseToJsonElement(answer.getByteArray(0, n.toInt()).decodeToString()).jsonObject["error"] as? JsonObject
+                ?: throw Mismatch("a panic's answer has no error")
+            return Refusal(
+                e.getValue("code").jsonPrimitive.int,
+                e.getValue("name").jsonPrimitive.content,
+                e.getValue("message").jsonPrimitive.content,
+                (e["details"] as? JsonPrimitive)?.content,
+            )
+        } finally {
+            lib.cbb_free(answer, SizeT(n))
+        }
+    }
+
+    /**
+     * Makes the core's library panic on purpose and returns the refusal it
+     * answers, code 5 `panic`: the tests check that a panic is an answer and
+     * the app goes on.
+     */
+    fun testPanic(): Refusal {
+        val count = Memory(Native.SIZE_T_SIZE.toLong()).also { it.clear() }
+        val answer = lib.cbb_test_panic(count) ?: throw Mismatch("the core gave no answer")
+        return refusalOf(answer, count)
+    }
+
+    /** The refusal of the last panic the core's library caught, for a call that could answer only null; null when none. */
+    fun lastPanic(): Refusal? {
+        val count = Memory(Native.SIZE_T_SIZE.toLong()).also { it.clear() }
+        val answer = lib.cbb_last_panic(count) ?: return null
+        return refusalOf(answer, count)
     }
 
     /**

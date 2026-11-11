@@ -11,13 +11,13 @@ final class CBBMacTests: XCTestCase {
     func testEncode() throws {
         let data = try Control.encode(.init(op: "copy"), payload: Data("hi".utf8))
         let text = String(decoding: data, as: UTF8.self)
-        XCTAssertEqual(text, "{\"len\":2,\"op\":\"copy\"}\nhi")
+        XCTAssertEqual(text, "{\"args\":{},\"len\":2,\"op\":\"copy\"}\nhi")
     }
 
     /// An answer is read only once all of it has come, and its devices
     /// keep what the service leaves out as false.
     func testDecode() throws {
-        let line = #"{"op":"reply","len":3,"devices":[{"id":"ab12","name":"deck","role":"member","caps":["admin","dials","hub"],"os":"linux","online":true,"self":true,"os_version":"Ubuntu 24.04","last_seen_ms":5,"mode":"own"},{"id":"cd34"}]}"#
+        let line = #"{"len":3,"ok":{"devices":[{"id":"ab12","name":"deck","role":"member","caps":["admin","dials","hub"],"os":"linux","online":true,"self":true,"os_version":"Ubuntu 24.04","last_seen_ms":5,"mode":"own"},{"id":"cd34"}]}}"#
         let whole = Data((line + "\nxyz").utf8)
         XCTAssertNil(try Control.decode(whole.prefix(10)))
         XCTAssertNil(try Control.decode(whole.dropLast()))
@@ -37,14 +37,34 @@ final class CBBMacTests: XCTestCase {
         XCTAssertEqual(devices[0].systemWithVersion, "Ubuntu 24.04")
     }
 
+    /// The status's reasons why the Mac does not sync read back with their
+    /// parameters, and each code the core gives has words of its own.
+    func testWhy() throws {
+        let json = #"{"device":"me","group":"g","role":"member","version":"dev","why":[{"code":"tunnel_blocked","level":"stop","device":"pi","detail":"no answer"},{"code":"muted","level":"warn","until_ms":1700000000000}]}"#
+        let st = try JSONDecoder().decode(Control.Status.self, from: Data(json.utf8))
+        let why = try XCTUnwrap(st.why)
+        XCTAssertEqual(why.map(\.code), ["tunnel_blocked", "muted"])
+        XCTAssertEqual(why[0].device, "pi")
+        XCTAssertNotNil(why[1].until)
+        var url = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { url.deleteLastPathComponent() }
+        let data = try Data(contentsOf: url.appendingPathComponent("testdata/why/vectors.json"))
+        struct Case: Decodable { var want: [WhyReason] }
+        for c in try JSONDecoder().decode([Case].self, from: data) {
+            for r in c.want {
+                XCTAssertNotEqual(WhyList.title(r), Text(verbatim: r.code), r.code)
+            }
+        }
+    }
+
     /// A mute goes out with its time as the service reads it, and a muted
     /// device, this Mac's mute and its sync turned off read back; the mute shows an
     /// alert that an admin ends.
     func testMute() throws {
         var h = Control.Header(op: "mute")
         h.forMS = 900_000
-        XCTAssertEqual(String(decoding: try Control.encode(h), as: UTF8.self), "{\"for_ms\":900000,\"len\":0,\"op\":\"mute\"}\n")
-        let line = #"{"op":"reply","status":{"device":"me","role":"member","version":"dev","group":"g","mode":"own","sync_until_ms":1700000000000,"muted":true,"muted_until_ms":0},"devices":[{"id":"ab12","muted":true,"muted_until_ms":1700000000000},{"id":"cd34"}]}"#
+        XCTAssertEqual(String(decoding: try Control.encode(h), as: UTF8.self), "{\"args\":{\"for_ms\":900000},\"len\":0,\"op\":\"mute\"}\n")
+        let line = #"{"ok":{"status":{"device":"me","role":"member","version":"dev","group":"g","mode":"own","sync_until_ms":1700000000000,"muted":true,"muted_until_ms":0},"devices":[{"id":"ab12","muted":true,"muted_until_ms":1700000000000},{"id":"cd34"}]}}"#
         let (header, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
         let st = try XCTUnwrap(header.status)
         XCTAssertEqual(st.muted, true)
@@ -79,6 +99,22 @@ final class CBBMacTests: XCTestCase {
         XCTAssertEqual(code.digits, "123 456")
         let image = try XCTUnwrap(JoinSheet.qrImage(code.qr))
         XCTAssertGreaterThan(image.size.width, 20)
+    }
+
+    /// The status says a bug report waits, and the service's answer to bug
+    /// reads as the sheet shows it.
+    func testBugOffer() throws {
+        let line = #"{"ok":{"status":{"device":"me","role":"member","version":"dev","bug":true}}}"#
+        let (header, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
+        XCTAssertEqual(header.status?.bug, true)
+        let body = #"{"report":{"v":1,"details":"panic: boom at member/src/x.rs:1:2","where":"member/src/x.rs:1:2"},"fingerprint":"f","post":"","url":"https://bug.cbb.tools/","action":"ask","offer_always":true,"fixed_in":"0.6.1"}"#
+        let o = try XCTUnwrap(MacModel.bugOffer(Data(body.utf8)))
+        XCTAssertEqual(o.action, "ask")
+        XCTAssertTrue(o.offerAlways)
+        XCTAssertEqual(o.fixedIn, "0.6.1")
+        XCTAssertEqual(o.details, "panic: boom at member/src/x.rs:1:2")
+        XCTAssertTrue(o.report.contains("\"where\" : \"member/src/x.rs:1:2\""), o.report)
+        XCTAssertNil(MacModel.bugOffer(Data("{}".utf8)))
     }
 
     func testBadHeader() {
@@ -120,7 +156,7 @@ final class CBBMacTests: XCTestCase {
 
     /// The update the group passed around reads from the status.
     func testUpdate() throws {
-        let line = #"{"op":"reply","status":{"device":"me","role":"member","version":"0.5.0","group":"g","update":"0.6.0"}}"#
+        let line = #"{"ok":{"status":{"device":"me","role":"member","version":"0.5.0","group":"g","update":"0.6.0"}}}"#
         let (header, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
         XCTAssertEqual(header.status?.update, "0.6.0")
     }
@@ -172,8 +208,8 @@ final class CBBMacTests: XCTestCase {
         h.inject = "desktop"
         h.pasteOnly = true
         let text = String(decoding: try Control.encode(h), as: UTF8.self)
-        XCTAssertEqual(text, "{\"inject\":\"desktop\",\"len\":0,\"op\":\"watch\",\"paste_only\":true}\n")
-        let line = #"{"op":"inject","seq":7,"method":"type","enter":true,"kind":"secret","name":"pi"}"#
+        XCTAssertEqual(text, "{\"args\":{\"inject\":\"desktop\",\"paste_only\":true},\"len\":0,\"op\":\"watch\"}\n")
+        let line = #"{"op":"inject","seq":7,"args":{"method":"type","enter":true,"kind":"secret","name":"pi"}}"#
         let (m, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
         XCTAssertEqual(m.seq, 7)
         XCTAssertEqual(m.method, "type")
@@ -192,38 +228,25 @@ final class CBBMacTests: XCTestCase {
         XCTAssertTrue(Injector.strokes(for: "").isEmpty)
     }
 
-    /// The window's arrangement: the group's order, this Mac first, until
-    /// the user changes it, kept for the group's tag, pruned once the list is whole, and a
-    /// change that does not fit says so.
+    /// The window draws the member's view: its tiles in order, the
+    /// devices in them, and whether the user changed the order; a change
+    /// goes out as arrange takes it.
     @MainActor
-    func testArrangement() throws {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "cbb-mac-arrange-test"))
-        defaults.removePersistentDomain(forName: "cbb-mac-arrange-test")
-        let model = MacModel(defaults: defaults)
-        // CBB's Control, not Carbon's.
-        func device(_ id: String, me: Bool = false) -> CBB.Control.Device {
-            var d = Control.Device(id: id, name: id, role: "member")
-            d.isSelf = me
-            return d
-        }
-        let status = Control.Status(device: "me", group: "g1", role: "member", version: "dev")
-        model.show(status: status, devices: [device("me", me: true), device("a"), device("b"), device("c")])
-        XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a", "d:b", "d:c"])
-        XCTAssertNil(defaults.data(forKey: MacModel.arrangementKey))
-        XCTAssertTrue(model.arrange(.new(name: "Office", devices: ["b", "c"])))
+    func testView() throws {
+        let line = #"{"ok":{"view":{"tiles":[{"device":{"id":"me","self":true}},{"device":{"id":"a","online":true}},{"collection":{"id":"c1","name":"Office","devices":[{"id":"b"},{"id":"c"}]}}],"online":1,"others":3,"custom":true}}}"#
+        let (header, _, _) = try XCTUnwrap(try Control.decode(Data((line + "\n").utf8)))
+        let model = MacModel(defaults: try XCTUnwrap(UserDefaults(suiteName: "cbb-mac-view-test")))
+        model.show(status: Control.Status(device: "me", group: "g1", role: "member", version: "dev"), view: try XCTUnwrap(header.view))
         XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a", "c:c1"])
+        XCTAssertEqual(model.devices.map(\.id), ["me", "a", "b", "c"])
         XCTAssertEqual(model.collection(holding: "c")?.name, "Office")
-        XCTAssertFalse(model.arrange(.rename(collection: "c1", name: String(repeating: "x", count: 65))))
-        XCTAssertNotNil(model.message)
-        // b leaves the group: the stored arrangement drops it.
-        model.show(status: status, devices: [device("me", me: true), device("a"), device("c")])
-        XCTAssertEqual(model.collection("c1")?.0.devices, ["c"])
-        let stored = Arrangement.decode(defaults.data(forKey: MacModel.arrangementKey), group: "g1")
-        XCTAssertEqual(stored.items.count, 3)
-        // Another group starts afresh.
-        model.show(status: Control.Status(device: "me", group: "g2", role: "member", version: "dev"), devices: [device("me", me: true), device("a")])
-        XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a"])
-        defaults.removePersistentDomain(forName: "cbb-mac-arrange-test")
+        XCTAssertTrue(model.customOrder)
+        XCTAssertEqual(model.others.count, 3)
+
+        var h = Control.Header(op: "arrange")
+        h.arrange = try JSONDecoder().decode(Control.Change.self, from: Arrangement.Op.move(.device("a"), before: .collection("c1")).data)
+        let text = String(decoding: try Control.encode(h), as: UTF8.self)
+        XCTAssertEqual(text, #"{"args":{"arrange":{"before":{"collection":"c1"},"item":{"device":"a"},"op":"move"}},"len":0,"op":"arrange"}"# + "\n")
     }
 
     /// Settings fit their sheet: no row reaches past its edges (the language
