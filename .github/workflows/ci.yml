@@ -2383,6 +2383,9 @@ jobs:
       - name: Go calls the Rust core through cgo and gets each vector's state
         run: |
           cargo build --locked --release -p cbb-ffi
+          # Go 1.27.4 refuses a cgo archive with LLVM bitcode sections,
+          # which the standard library's objects bring in.
+          objcopy --remove-section=.llvmbc --remove-section=.llvmcmd target/release/libcbb_ffi.a
           go test -race -tags cbbcore ./internal/core -v
       - name: Go reads commands, server credentials and release files through the Rust core, and takes the same bodies
         run: go test -race -tags cbbcore ./internal/release ./internal/group -run 'Strict|Command|Credential|Watch|Release'
