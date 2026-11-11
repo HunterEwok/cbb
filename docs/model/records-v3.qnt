@@ -44,7 +44,8 @@
 // switches keep its code before that one step away, and break promise 1 or 2 when flipped:
 // ROOT_REMOVALS_FIRST (a root's removals and resolves first in its order when a set is cut,
 // standing for their chain) and SKIP_RECUT_WITHIN_ROOM (the set cuts back only past a ceiling
-// or the room). TAKEOVER_CUTS_REMOVALS marks a question still before the owner.
+// or the room). A takeover cuts off the old root's records past the claim's seen, its
+// removals with them (owner, 11.11): a live root cancels the claim within the delay.
 //
 // Run it:
 //
@@ -122,9 +123,6 @@ module records_v3 {
   pure val MAXREC = 16
   pure val MAXPATH = 3
 
-  // A takeover cuts off the old root's records past the claim's seen, its removals with them:
-  // the owner's question, pending.
-  pure val TAKEOVER_CUTS_REMOVALS = true
   pure val NOCUT: Cut = { level: TOP, marks: Map(), future: Map() }
   pure val NONE = 10000000
 
@@ -570,13 +568,13 @@ module records_v3 {
   })
 
   // 2. A key a root removed stays removed, unless a takeover cut the removal off: the new root
-  // takes the old root's records up to what the claim had seen (TAKEOVER_CUTS_REMOVALS).
+  // takes the old root's records up to what the claim had seen, and no further.
   pure def cutOff(v: View, r: Record): bool = v.cuts.keys().contains(r.signer) and r.seq > v.cuts.get(r.signer)
   val removedStayOut = MEMBERS.forall(m => {
     val v = views.get(m)
     val removals = recsOf(st.get(m).got, db).filter(r => r.kind == "revoke" and ROOT_KEYS.contains(r.signer))
     gone.get(m).forall(k =>
-      (TAKEOVER_CUTS_REMOVALS and removals.filter(r => r.target == k).forall(r => cutOff(v, r)))
+      removals.filter(r => r.target == k).forall(r => cutOff(v, r))
         or (v.revoked.contains(k) and not(v.admins.keys().contains(k)) and not(v.devices.contains(k))))
   })
 
