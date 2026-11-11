@@ -6,6 +6,10 @@
 # The cache key names the job's packages, the runner image and a hash of the .deb files, so a new
 # cache is saved only when the packages change. A pull request restores the
 # caches its own branch saved and those of main.
+#
+# The workflows call it as ./.github/actions/apt, the path every checkout of
+# this repository has, with zizmor's self-repository rule ignored on that line
+# as release.yml does for its own workflow.
 name: apt packages
 description: Installs Debian packages with apt, with the downloaded files kept in the Actions cache.
 inputs:

@@ -132,7 +132,7 @@ jobs:
           cache: false # nothing to download; leaves the shared cache key to the check job
       - name: apt packages for the next step
         if: runner.os == 'Linux'
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: swtpm
           cache: swtpm
@@ -189,7 +189,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: apt packages for the next step
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: swtpm
           cache: swtpm
@@ -234,7 +234,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: swtpm, sway, Xvfb and the clipboard tools
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: swtpm sway wl-clipboard xvfb xclip xterm foot
           cache: desktop-tests
@@ -443,7 +443,7 @@ jobs:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
       - name: qemu for mips programs
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: qemu-user qemu-user-binfmt
           cache: qemu-user
@@ -614,7 +614,7 @@ jobs:
       - name: the apk feed, signed with a test key, installs and removes it
         run: sh tools/e2e/openwrt.sh feed "$RUNNER_TEMP/release"
       - name: apt packages for the next step
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: qemu-system-x86 sshpass
           cache: openwrt-vm
@@ -737,7 +737,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: install sway, Xvfb, xterm, foot and the clipboard tools
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: sway wl-clipboard xvfb xclip xterm foot
           cache: desktop-clipboards
@@ -857,7 +857,7 @@ jobs:
             exit 1
           fi
       - name: apt packages for the next step
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: desktop-file-utils
           cache: desktop-entry
@@ -2188,7 +2188,7 @@ jobs:
           key: qemu-${{ env.QEMU }}-mips-linux-user-${{ runner.os }}-${{ env.ImageOS }}
       - name: apt packages for the next step
         if: steps.qemu.outputs.cache-hit != 'true'
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: ninja-build libglib2.0-dev python3-venv
           cache: qemu-build
@@ -2257,7 +2257,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: apt packages for the next step
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: swtpm xvfb xclip
           cache: rust-service
@@ -2320,7 +2320,7 @@ jobs:
         with:
           persist-credentials: false
       - name: apt packages for the next step
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: gcc-aarch64-linux-gnu libc6-dev-arm64-cross swtpm xvfb xclip
           cache: lite
@@ -2591,7 +2591,7 @@ jobs:
           cargo +esp clippy --locked --release --no-default-features --features qemu -- -D warnings
           cargo +esp build --locked --release
       - name: apt packages for the next step
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: libslirp0 libsdl2-2.0-0 libpixman-1-0
           cache: esp-qemu
@@ -2631,7 +2631,7 @@ jobs:
           key: z88dk-${{ env.Z88DK }}-zxn-${{ runner.os }}
       - name: apt packages for the next step
         if: steps.z88dk.outputs.cache-hit != 'true'
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: flex libxml2-dev libgmp-dev libboost-dev texinfo dos2unix
           cache: z88dk
@@ -2713,7 +2713,7 @@ jobs:
           path: ${{ runner.temp }}/psdk/dl
           key: psdk-${{ matrix.system }}-${{ hashFiles('apps/silica/psdk.sh') }}
       - name: apt packages for the next step
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: p7zip-full imagemagick gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
           cache: silica

@@ -38,7 +38,7 @@ jobs:
           path: ${{ runner.temp }}/psdk/dl
           key: aurora-psdk-${{ matrix.arch }}-${{ hashFiles('apps/silica/psdk.sh') }}
       - name: apt packages for the next step
-        uses: ./.github/actions/apt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
           packages: p7zip-full imagemagick gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
           cache: silica
