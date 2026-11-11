@@ -234,3 +234,30 @@ fn the_records_judge() {
     shuttle(&mut c, &mut s);
     assert!(!s.is_handshaking(), "an unknown key gets through to send its intro");
 }
+
+#[test]
+fn the_tunnel_key_comes_from_the_connection_with_each_hub() {
+    use crate::hubkey;
+    let (dev, hub, hub2) = (own(), own(), own());
+    let id = |k: &OwnKey| Key::new(Alg::Es256, k.point()).device_id();
+    let psk_with = |h: &OwnKey| {
+        let (c, cx) = exporting_client(client(&dev, None, any_key(), MEMBER_PROTOCOL, &clock()).unwrap());
+        let (s, sx) = exporting_server(server(h, any_key(), MEMBER_PROTOCOL, &clock()).unwrap());
+        let mut c = Session::client(Arc::new(c), unsent_name()).unwrap();
+        let mut s = Session::server(Arc::new(s)).unwrap();
+        shuttle(&mut c, &mut s);
+        let ctx = hubkey::context(&id(h), &id(&dev));
+        let (mut a, mut b) = ([0u8; 32], [0u8; 32]);
+        cx.export(hubkey::EXPORTER_LABEL, &ctx, &mut a).unwrap();
+        sx.export(hubkey::EXPORTER_LABEL, &ctx, &mut b).unwrap();
+        assert_eq!(a, b, "both ends export one secret");
+        hubkey::psk(&a)
+    };
+    let (p1, p1_again, p2) = (psk_with(&hub), psk_with(&hub), psk_with(&hub2));
+    assert_ne!(p1, p1_again, "a new connection, a new key");
+    assert_ne!(p1, p2, "each hub its own");
+
+    let (_, public) = hubkey::new_key();
+    assert_eq!(hubkey::read(&hubkey::message(&public)), Ok(public));
+    assert!(hubkey::read(&hubkey::message(&[0; 32])).is_err());
+}

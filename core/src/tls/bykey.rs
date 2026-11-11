@@ -269,6 +269,23 @@ pub fn server(own: &OwnKey, judge: Judge, alpn: &[u8], clock: &Clock) -> Result<
     Ok(cfg)
 }
 
+/// Lets a configuration export keying material: the exporter of the
+/// connection it makes (RFC 8446 section 7.5), for the tunnel's pre-shared
+/// key (`crate::hubkey`) and the admin key's proof. Use a new configuration
+/// for each connection.
+pub fn exporting_client(mut cfg: rustls::ClientConfig) -> (rustls::ClientConfig, Arc<super::Exporter>) {
+    let x = Arc::new(super::Exporter::default());
+    cfg.key_log = x.clone();
+    (cfg, x)
+}
+
+/// The server's side of [`exporting_client`].
+pub fn exporting_server(mut cfg: rustls::ServerConfig) -> (rustls::ServerConfig, Arc<super::Exporter>) {
+    let x = Arc::new(super::Exporter::default());
+    cfg.key_log = x.clone();
+    (cfg, x)
+}
+
 /// A judge that takes every well-formed key: for pairing, where CPace bound
 /// to both keys authenticates the peer, and for a server's own client
 /// checks.
