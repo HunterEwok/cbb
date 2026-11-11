@@ -18,8 +18,7 @@ import (
 //   - a relative link in a Markdown file names a file or directory of the
 //     repository, and its #anchor, if any, a heading of that file;
 //   - the project's old names do not come back, in any file (oldName);
-//   - every command of cbb, the full and the lite member, is in docs/reference/cli.md,
-//     the lite member's in its section;
+//   - every command of cbb is in docs/reference/cli.md;
 //   - every subcommand of the full member that has flags of its own, and each
 //     of those flags, is in docs/reference/cli.md, the flags in a line that
 //     names the command;
@@ -44,6 +43,12 @@ var (
 	// oldName matches the project's old names in every spelling, written
 	// in pieces so that this file does not hold them either.
 	oldName = regexp.MustCompile(`(?i)clip(?:` + `board)?[ _.-]?` + `bridge`)
+	// goneName matches the names of what the project removed for good: the
+	// Rust core as WebAssembly in the Go programs and its build tags (D-93)
+	// and the phones' tunnel in Go (D-87), written in pieces too, and the Go
+	// packages whose work the Rust cbb took over (D-88).
+	goneName = regexp.MustCompile(`\b(?:cbb` + `wasm|cbb` + `core|wa` + `zero|go` + `mobile|cbb` + `tun)\b|` +
+		`\binternal/(?:` + `core|update|piv|tmuxpaste|consolepaste|sysinfo|uptime|steamos)\b`)
 	// rsArm is an arm of cbb's commands in member/src/lib.rs: the names it
 	// takes and, when it calls one, the function that runs the command.
 	rsArm  = regexp.MustCompile(`(?m)^\s*((?:"[a-z][a-z-]*"(?: \| )?)+)(?: if [^=]+)? => (?:std::process::exit\()?([\w:]+\()?`)
@@ -81,6 +86,29 @@ const configRef = "docs/reference/config.md"
 
 // checkDocs checks the rules above in one file; files maps every checked
 // path to its content.
+
+// historyFiles tell what the project once had, and may name what is gone.
+var historyFiles = map[string]bool{
+	"CHANGELOG.md":                      true,
+	"docs/decisions.md":                 true,
+	"tools/repocheck/removed-tests.txt": true,
+}
+
+// checkGoneName reports each line of a file outside the history that names
+// something the project removed for good: no legacy, aliases or "formerly".
+func checkGoneName(name string, data []byte) []string {
+	if historyFiles[name] {
+		return nil
+	}
+	var problems []string
+	for i, line := range strings.Split(string(data), "\n") {
+		if m := goneName.FindString(line); m != "" {
+			problems = append(problems, fmt.Sprintf("%s:%d: %s is gone from the project; name what replaced it", name, i+1, m))
+		}
+	}
+	return problems
+}
+
 // checkOldName reports each line of a file that holds one of the
 // project's old names: the project is Copy Beyond Borders (CBB), and its
 // command and every technical name are cbb, in code, docs and the
@@ -200,7 +228,6 @@ func slug(heading string) string {
 	return b.String()
 }
 
-// liteSection is the heading of the lite member's commands in docs/reference/cli.md.
 // rsCommands are cbb's commands, from the match that runs them in
 // member/src/lib.rs (between "let res = match cmd {" and its end), each with
 // the function it calls ("" for one that runs in place).
@@ -492,16 +519,18 @@ func checkPorts(files map[string][]byte) []string {
 }
 
 // controlOp is an operation of the control socket in internal/control.
-var controlOp = regexp.MustCompile(`(?m)^\tOp\w+\s+= "([a-z-]+)"`)
+var controlOp = regexp.MustCompile(`(?m)^\tOp\w+\s+= "([a-z_-]+)"`)
 
-// checkOps reports the operations of the control socket that section 8 of
-// docs/protocol.md, "Local control socket", does not name and no table row
-// of the protocol starts with.
+// checkOps reports the operations of the control socket that no row of
+// the members' one list of operations in docs/core-api.md, "The member's
+// operations", starts with, and the header fields that neither that list
+// nor section 8 of docs/protocol.md, "Local control socket", names.
 func checkOps(files map[string][]byte) []string {
-	const src, ref = "internal/control/control.go", "docs/protocol.md"
+	const src, ref, list = "internal/control/control.go", "docs/protocol.md", "docs/core-api.md"
 	code, ok1 := files[src]
 	doc, ok2 := files[ref]
-	if !ok1 || !ok2 {
+	api, ok3 := files[list]
+	if !ok1 || !ok2 || !ok3 {
 		return nil
 	}
 	section := string(doc)
@@ -513,16 +542,25 @@ func checkOps(files map[string][]byte) []string {
 	if end := strings.Index(section, "\n## "); end >= 0 {
 		section = section[:end]
 	}
+	ops := string(api)
+	start = strings.Index(ops, "\n### The member's operations\n")
+	if start < 0 {
+		return []string{list + ":1: the members' operations are missing"}
+	}
+	ops = ops[start+1:]
+	if end := strings.Index(ops, "\n#"); end >= 0 {
+		ops = ops[:end]
+	}
 	var problems []string
 	for _, f := range headerFields(string(code)) {
-		if !strings.Contains(section, "`"+f+"`") {
-			problems = append(problems, fmt.Sprintf("%s:1: the control header field %s (%s) is not described in section 8", ref, f, src))
+		if !strings.Contains(section, "`"+f+"`") && !strings.Contains(ops, "`"+f+"`") {
+			problems = append(problems, fmt.Sprintf("%s:1: the control header field %s (%s) is described neither in section 8 nor in %s", ref, f, src, list))
 		}
 	}
 	for _, m := range controlOp.FindAllSubmatch(code, -1) {
 		op := string(m[1])
-		if !strings.Contains(section, "`"+op+"`") && !strings.Contains(string(doc), "\n| `"+op+"` |") {
-			problems = append(problems, fmt.Sprintf("%s:1: the control operation %s (%s) is not described in section 8", ref, op, src))
+		if !strings.Contains(ops, "\n| `"+op+"` |") && !strings.Contains(section, "`"+op+"`") {
+			problems = append(problems, fmt.Sprintf("%s:1: the control operation %s (%s) is not in the members' operations", list, op, src))
 		}
 	}
 	return problems

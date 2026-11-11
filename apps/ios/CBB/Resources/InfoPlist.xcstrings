@@ -4,6 +4,52 @@
     "CFBundleDisplayName": {
       "shouldTranslate": false
     },
+    "NFCReaderUsageDescription": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يضع CBB مفتاح استرداد مجموعتك على YubiKey، ويستعيد المجموعة به."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB guarda la clave de recuperación de tu grupo en una YubiKey y restaura el grupo con ella."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB שומר את מפתח השחזור של הקבוצה שלכם ב-YubiKey, ומשחזר איתו את הקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB आपके समूह की रिकवरी कुंजी को YubiKey पर रखता है, और उससे समूह को बहाल करता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB записывает ключ восстановления вашей группы на YubiKey и восстанавливает группу с ним."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB huweka ufunguo wa urejeshaji wa kikundi chako kwenye YubiKey, na hurejesha kikundi kwa ufunguo huo."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CBB 将群组的恢复密钥存入 YubiKey，并用它恢复群组。"
+          }
+        }
+      }
+    },
     "NSCameraUsageDescription": {
       "localizations": {
         "ar": {
@@ -96,52 +142,6 @@
         }
       }
     },
-    "NSPhotoLibraryAddUsageDescription": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CBB добавляет в «Фото» изображение или видео, которое прислал ваш компьютер."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CBB añade a Fotos una imagen o un vídeo que te envió tu ordenador."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CBB 将你的电脑发送的图片或视频添加到“照片”。"
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يضيف CBB إلى الصور صورة أو فيديو أرسله حاسوبك."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CBB מוסיף לתמונות תמונה או סרטון שהמחשב שלכם שלח."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CBB आपके कंप्यूटर से भेजी गई छवि या वीडियो को फ़ोटो में जोड़ता है।"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CBB huongeza kwenye Picha picha au video ambayo kompyuta yako ilituma."
-          }
-        }
-      }
-    },
     "NSLocalNetworkUsageDescription": {
       "localizations": {
         "ar": {
@@ -188,48 +188,48 @@
         }
       }
     },
-    "NFCReaderUsageDescription": {
+    "NSPhotoLibraryAddUsageDescription": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يضع CBB مفتاح استرداد مجموعتك على YubiKey، ويستعيد المجموعة به."
+            "value": "يضيف CBB إلى الصور صورة أو فيديو أرسله حاسوبك."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "CBB guarda la clave de recuperación de tu grupo en una YubiKey y restaura el grupo con ella."
+            "value": "CBB añade a Fotos una imagen o un vídeo que te envió tu ordenador."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "CBB שומר את מפתח השחזור של הקבוצה שלכם ב-YubiKey, ומשחזר איתו את הקבוצה."
+            "value": "CBB מוסיף לתמונות תמונה או סרטון שהמחשב שלכם שלח."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "CBB आपके समूह की रिकवरी कुंजी को YubiKey पर रखता है, और उससे समूह को बहाल करता है।"
+            "value": "CBB आपके कंप्यूटर से भेजी गई छवि या वीडियो को फ़ोटो में जोड़ता है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "CBB записывает ключ восстановления вашей группы на YubiKey и восстанавливает группу с ним."
+            "value": "CBB добавляет в «Фото» изображение или видео, которое прислал ваш компьютер."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "CBB huweka ufunguo wa urejeshaji wa kikundi chako kwenye YubiKey, na hurejesha kikundi kwa ufunguo huo."
+            "value": "CBB huongeza kwenye Picha picha au video ambayo kompyuta yako ilituma."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "CBB 将群组的恢复密钥存入 YubiKey，并用它恢复群组。"
+            "value": "CBB 将你的电脑发送的图片或视频添加到“照片”。"
           }
         }
       }

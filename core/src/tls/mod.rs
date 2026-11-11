@@ -384,7 +384,7 @@ impl ClientCertVerifier for MemberClientVerifier {
 }
 
 /// The server configuration for members that dial this one (phones, Macs
-/// and lite members with a lower device ID): TLS 1.3 only, ALPN
+/// and other members with a lower device ID): TLS 1.3 only, ALPN
 /// cbb/3, this member's certificate with its issuer, a client
 /// certificate of the group required, no session tickets.
 pub fn member_server(id: &Identity, refused: Refused, clock: &Clock) -> Result<rustls::ServerConfig> {

@@ -28,9 +28,11 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 (Shift+Insert и Enter) для того, кто работает за экраном, но никогда не на экране входа или
 блокировки.
 
-Небольшим устройствам, которым нужно только синхронизироваться, например роутеру или
-Raspberry Pi Zero, подойдёт более лёгкий [лёгкий участник](../../member/README.md):
-`... | sudo sh -s -- --lite`.
+Небольшие устройства, которым нужно только синхронизироваться, например роутер или
+Raspberry Pi Zero, ставятся тем же установщиком и могут обойтись без `cbb-helper`, который
+хранит ключи в TPM и работает с буфером, клавишами рабочего стола и Bluetooth:
+`... | sudo sh -s -- --no-helper` ([cbb на небольших устройствах](../../member/README.md)).
+В архиве для роутеров (MIPS) помощника и так нет.
 
 ### Без sudo (rootless)
 
@@ -47,9 +49,9 @@ curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | s
 группы, администратором или хабом ([как это работает](how-it-works.md#rootless-members)), и у
 него нет правил брандмауэра, TPM, `--console` и `--uinput`. Чтобы он продолжал работать после
 выхода из системы, администратор один раз выполняет `sudo loginctl enable-linger YOUR-USER`.
-Чтобы удалить: `sh ~/.local/share/cbb/uninstall.sh`. Лёгкий участник тоже
-устанавливается так, с `--lite --rootless`
-([лёгкий участник](../../member/README.md#without-sudo-rootless)).
+Чтобы удалить: `sh ~/.local/share/cbb/uninstall.sh`. `--no-helper --rootless`
+оставляет без помощника и здесь
+([без sudo](../../member/README.md#without-sudo-rootless)).
 
 ### SteamOS (Steam Deck)
 

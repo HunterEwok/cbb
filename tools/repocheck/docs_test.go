@@ -137,7 +137,7 @@ fn cmd_copy(g: &Global, args: &[String]) -> Result<()> {
 func TestCheckCommands(t *testing.T) {
 	files := map[string][]byte{
 		"member/src/lib.rs":     []byte(libRs),
-		"docs/reference/cli.md": []byte("`cbb copy` sends. `cbb freeze` freezes.\n\n## The lite member\n\n`cbb version` prints.\n"),
+		"docs/reference/cli.md": []byte("`cbb copy` sends. `cbb freeze` freezes.\n\n## Installers\n\n`cbb version` prints.\n"),
 	}
 	got := checkCommands(files)
 	want := []string{"cbb pair", "cbb unfreeze"}
@@ -240,8 +240,9 @@ func TestCheckPorts(t *testing.T) {
 
 func TestCheckOps(t *testing.T) {
 	files := map[string][]byte{
-		"internal/control/control.go": []byte("const (\n\tOpCopy       = \"copy\" // a copy\n\tOpPasteOn = \"paste-on\"\n\tOpNew = \"new\"\n\tOpThaw = \"thaw\"\n)\n"),
-		"docs/protocol.md":            []byte("# P\n\n## 7. Before\n\n`new`\n\n## 8. Local control socket\n\n| `copy` | |\n\n- `paste-on`: a paste\n\n## 9. After\n\n| `thaw` | |\n"),
+		"internal/control/control.go": []byte("const (\n\tOpCopy       = \"copy\" // a copy\n\tOpPasteOn = \"paste_on\"\n\tOpNew = \"new\"\n\tOpThaw = \"thaw\"\n\tOpPart = \"part\"\n)\n"),
+		"docs/protocol.md":            []byte("# P\n\n## 7. Before\n\n`new`\n\n## 8. Local control socket\n\nparts as `part` messages\n\n## 9. After\n\n| `new` | |\n"),
+		"docs/core-api.md":            []byte("# C\n\n### The member's operations\n\n| `op` | where |\n|---|---|\n| `copy` | both |\n| `paste_on` | computer |\n| `thaw` | computer |\n\n## Operations\n\n| `new` | |\n"),
 	}
 	got := checkOps(files)
 	if len(got) != 1 || !strings.Contains(got[0], "operation new ") {
@@ -269,10 +270,34 @@ func TestCheckStyle(t *testing.T) {
 func TestCheckOpsHeader(t *testing.T) {
 	files := map[string][]byte{
 		"internal/control/control.go": []byte("type Header struct {\n\tOp string `json:\"op\"`\n\tLen int `json:\"len,omitempty\"` // the length\n\tRelayKey string `json:\"relay_key,omitempty\"`\n}\n\ntype Other struct {\n\tX int `json:\"x\"`\n}\n"),
-		"docs/protocol.md":            []byte("# P\n\n## 8. Local control socket\n\n| `op` | string |\n| `relay`, `relay_key` | strings |\n\n## 9. After\n\n`len`\n"),
+		"docs/protocol.md":            []byte("# P\n\n## 8. Local control socket\n\n| `op` | string |\n\n## 9. After\n\n`len`\n"),
+		"docs/core-api.md":            []byte("# C\n\n### The member's operations\n\n| `away` | computer | `relay`, `relay_key` | |\n\n## After\n\n`len`\n"),
 	}
 	got := checkOps(files)
 	if len(got) != 1 || !strings.Contains(got[0], "header field len ") {
 		t.Fatalf("checkOps() = %q, want one problem naming len", got)
+	}
+}
+
+// TestCheckGoneName finds the names of what the project removed, outside
+// the files that tell its history, and leaves today's names alone.
+func TestCheckGoneName(t *testing.T) {
+	tag, tunnel, dir := "cbb"+"wasm", "go"+"mobile", "internal/"+"core"
+	for _, c := range []struct {
+		file, content string
+		want          int
+	}{
+		{"a.go", "//go:build " + tag + "\n", 1},
+		{"docs/a.md", "The phones bind Go with " + tunnel + ".\n", 1},
+		{"a.go", "import \"github.com/HunterEwok/cbb/" + dir + "\"\n", 1},
+		{"CHANGELOG.md", dir + " is gone.\n", 0},
+		{"docs/decisions.md", "| D-1 | " + tunnel + " |\n", 0},
+		{"a.swift", "import CCbbCore\n", 0},
+		{"a.go", "the Rust core in " + dir + "s and internal/coreapi\n", 0},
+	} {
+		got := checkGoneName(c.file, []byte(c.content))
+		if len(got) != c.want {
+			t.Errorf("checkGoneName(%q, %q) = %q, want %d problems", c.file, c.content, got, c.want)
+		}
 	}
 }

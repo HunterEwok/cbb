@@ -75,12 +75,12 @@ rootfs)
 		sh /usr/share/cbb/uninstall.sh --purge
 		$removed
 		echo 'rootfs: installed and removed'
-		CBB_VERIFY=skip CBB_RELEASE_DIR=/rel sh /rel/get.sh --lite --port 9000
+		CBB_VERIFY=skip CBB_RELEASE_DIR=/rel sh /rel/get.sh --no-helper --port 9000
 		$installed
-		cbb version | grep -q 'lite member'
+		test ! -e /usr/bin/cbb-helper
 		sh /usr/share/cbb/uninstall.sh --purge
 		$removed
-		echo 'rootfs: the lite member installed and removed'
+		echo 'rootfs: get.sh --no-helper installed it, and it was removed'
 	"
 	;;
 feed)
@@ -187,17 +187,25 @@ vm)
 		echo "vm: the hub rule came and went with the service data"
 
 		# After a boot the service waits for NTP; ntpd itself stays out of it.
-		# The old process may take a moment to exit, and NTP events that
-		# ntpd sent before it stopped may still bring the flag back, more than
-		# once; then the start proves nothing and is tried again. Only a
-		# service that runs without the flag fails, and the wait must be seen
-		# without the flag at least once.
+		# The old process may take a moment to exit, and the reloads of the
+		# hub port above may still be restarting it (procd stops the old
+		# process, then starts the new one), so the service counts as stopped
+		# only after no process was seen for three seconds in a row. NTP
+		# events that ntpd sent before it stopped may still bring the flag
+		# back, more than once; then the start proves nothing and is tried
+		# again. Only a service that runs without the flag fails, and the
+		# wait must be seen without the flag at least once.
 		/etc/init.d/sysntpd stop
 		waited=
 		for try in 1 2 3 4 5; do
 			/etc/init.d/cbb stop
-			for i in $(seq 20); do pgrep -f "cbb service" >/dev/null || break; sleep 1; done
-			if pgrep -f "cbb service" >/dev/null; then echo "it did not stop" >&2; exit 1; fi
+			quiet=0
+			for i in $(seq 30); do
+				if pgrep -f "cbb service" >/dev/null; then quiet=0; else quiet=$((quiet + 1)); fi
+				[ "$quiet" -ge 3 ] && break
+				sleep 1
+			done
+			if [ "$quiet" -lt 3 ]; then echo "it did not stop" >&2; exit 1; fi
 			rm -f /var/state/cbb.time
 			/etc/init.d/cbb start
 			sleep 2
@@ -248,12 +256,12 @@ vm)
 	run "$removed"
 	echo "vm: installed, checked and removed"
 
-	# The lite member, from the same init script.
-	run 'CBB_VERIFY=skip CBB_RELEASE_DIR=/tmp/rel sh /tmp/rel/get.sh --lite --port 9000'
+	# get.sh --no-helper, from the same init script.
+	run 'CBB_VERIFY=skip CBB_RELEASE_DIR=/tmp/rel sh /tmp/rel/get.sh --no-helper --port 9000'
 	run "$installed"
 	run '
 		set -ex
-		cbb version | grep -q "lite member"
+		test ! -e /usr/bin/cbb-helper
 		ubus call service list "{\"name\":\"cbb\"}" | grep -q "\"running\": true"
 		for i in $(seq 30); do logread -e cbb | grep -q "work only on br-lan" && break; sleep 1; done
 		logread -e cbb | grep -q "work only on br-lan"
@@ -262,7 +270,7 @@ vm)
 		sh /usr/share/cbb/uninstall.sh --purge
 	'
 	run "$removed"
-	echo "vm: the lite member installed, checked and removed"
+	echo "vm: get.sh --no-helper installed it, checked and removed"
 	;;
 *)
 	echo "usage: sh tools/e2e/openwrt.sh rootfs|vm|feed RELEASE_DIR" >&2

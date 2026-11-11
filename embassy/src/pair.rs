@@ -4,7 +4,7 @@
 //! Joining a group by the phone: the device shows a QR code with a pairing
 //! code and its address, listens on the member port for the phone that
 //! scanned it, and runs the TLS connection around the exchange of
-//! cbb_core::pair, as the lite member's cbb pair does. The phone confirms
+//! cbb_core::pair, as cbb pair does. The phone confirms
 //! the code first, so a device that does not know it learns nothing; three
 //! wrong codes end the attempt.
 
@@ -157,7 +157,7 @@ fn home_address(a: IpAddress) -> bool {
     match a {
         IpAddress::Ipv4(a) => a.is_private() || a.is_link_local(),
         // IPv6 is on only when another crate of the workspace turns it on
-        // in smoltcp (the lite member's tunnel); the phone dials over IPv4.
+        // in smoltcp (cbb's tunnel); the phone dials over IPv4.
         #[allow(unreachable_patterns)]
         _ => false,
     }

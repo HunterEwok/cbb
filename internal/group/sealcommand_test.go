@@ -56,7 +56,7 @@ func signRawCommand(t *testing.T, ca *CA, data string) Record {
 // testdata/interop/go-sealed-commands.json: commands with their orders
 // sealed to the receiver (docs/protocol.md, section 15, "Sealed
 // commands"), which ones the receiver takes as signed, and which of those
-// open with its secret, for the lite member and the phone kits to agree
+// open with its secret, for the Rust core and the phone kits to agree
 // with.
 func TestSealedCommandVectors(t *testing.T) {
 	path := filepath.Join("..", "..", "testdata", "interop", "go-sealed-commands.json")

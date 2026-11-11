@@ -18,7 +18,7 @@
   "Laptop": "מחשב נייד",
   "Desktop": "מחשב שולחני",
   "Raspberry Pi": "Raspberry Pi",
-  "lite member": "חבר קל",
+  "small device": "מכשיר קטן",
   "with the app": "עם האפליקציה",
   "direct, encrypted connections, found by mDNS": "חיבורים ישירים ומוצפנים, שנמצאים באמצעות mDNS",
   "No server in the middle: any device can be off, and the others go on syncing.": "אין שרת באמצע: אפשר לכבות כל מכשיר, והאחרים ממשיכים להסתנכרן.",

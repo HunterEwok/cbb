@@ -26,7 +26,7 @@ type aheadVectors struct {
 // TestAheadVectors writes (with -update) and checks
 // testdata/interop/hlc-ahead.json: the timestamps a clock took do not move
 // how far ahead it takes the next one (docs/protocol.md, section 5), for
-// the lite member and the phone kits to agree with.
+// the Rust core and the phone kits to agree with.
 func TestAheadVectors(t *testing.T) {
 	path := filepath.Join("..", "..", "testdata", "interop", "hlc-ahead.json")
 	if *update {

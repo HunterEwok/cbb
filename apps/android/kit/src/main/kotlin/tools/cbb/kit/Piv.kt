@@ -22,8 +22,8 @@ fun interface SmartCard {
  * application (docs/protocol.md, section 10, "The recovery key", "On a
  * hardware key"): the root phone has the card make a P-256 key in a free
  * retired slot (82 to 95), where it never leaves the card, and stores the
- * key's admin CA as the slot's certificate; a new phone, as Go's
- * internal/piv on a computer, finds the slot by that certificate and has
+ * key's admin CA as the slot's certificate; a new phone, as cbb on a
+ * computer (member/src/piv.rs), finds the slot by that certificate and has
  * the card sign. Nothing else on the card is changed: it may be in use for
  * other things. The same as the Swift kit's Piv.
  */

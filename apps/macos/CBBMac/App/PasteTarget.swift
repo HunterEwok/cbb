@@ -91,7 +91,7 @@ extension PasteTarget {
     private func fetch(_ id: String) throws -> FetchedCopy {
         let fd = try client.connect(timeout: 30)
         defer { close(fd) }
-        var req = Control.Header(op: "paste-media")
+        var req = Control.Header(op: "paste_media")
         req.value = id
         try ControlClient.send(fd, Control.encode(req))
         var data = Data()

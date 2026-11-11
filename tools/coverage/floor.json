@@ -2,7 +2,7 @@
   "go": 72.0,
   "go-core": 90.0,
   "rust-core": 82.5,
-  "rust-lite": 32.0,
+  "rust-member": 32.0,
   "rust-service": 79.0,
   "swift-kit": 85.0,
   "kotlin-kit": 92.0
