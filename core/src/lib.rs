@@ -65,6 +65,7 @@ pub mod media;
 pub mod pair;
 #[cfg(feature = "tls")]
 pub mod pair_session;
+pub mod records;
 pub mod recovery;
 pub mod release;
 pub mod root;
