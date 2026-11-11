@@ -16,6 +16,9 @@
 //! 3. An admin with `admit` signs only the first record of a device, with
 //!    base rights (read, send; secrets only when its own device has them);
 //!    later records need `manage` and never widen. Only a root widens.
+//!    The root's first record for a device fixes whether it is a leaf (an
+//!    admin's earlier record does not bind the root), and a guarded leaf
+//!    stays guarded for its ID.
 //! 4. The sealing key is in the device's own keys statement (`statement`).
 //! 5. Unknown critical fields hold a record (kept, passed on, not applied);
 //!    `min_rules` in the settings stops older devices from secrets.

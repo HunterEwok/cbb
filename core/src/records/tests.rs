@@ -326,6 +326,16 @@ fn a_root_keeps_a_devices_kind() {
         assert_eq!((d.name.as_str(), d.role), ("pc 2", ROLE_PHONE));
         assert_eq!(s.device(&lamp.key.device_id()).unwrap().role, ROLE_LEAF);
     }
+    // An admin's earlier record does not bind the root: the root's first
+    // record for a device an admin admitted fixes its kind.
+    let (pa, a, board) = (k("phone a"), k("admin a"), k("board"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    g.device(&a, &board, "board", |_| {});
+    let as_leaf = g.device(&root, &board, "board", |d| d.role = ROLE_LEAF);
+    let s = g.state();
+    assert!(s.counting.contains(&as_leaf.id()));
+    let d = s.device(&board.key.device_id()).unwrap();
+    assert!(d.role == ROLE_LEAF && d.by_root);
 }
 
 #[test]
