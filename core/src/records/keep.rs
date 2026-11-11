@@ -12,8 +12,9 @@
 //!
 //! Each key's records are taken in its own order: its checkpoints first,
 //! the newest first, so that a key at its ceiling can still checkpoint and
-//! free room; then the rest by seq, then ID (records of one seq with other
-//! IDs count against the same ceiling). At level s a
+//! free room; then a root's removals and resolves, by seq, so that a full
+//! set never drops them; then the rest by seq, then ID (records of one seq
+//! with other IDs count against the same ceiling). At level s a
 //! key keeps the longest start of that order within min(s, its ceiling)
 //! units. A key's demand at s is min(s, its ceiling, all its units); s is
 //! the highest level at which the demands fit in 4096 units. So a key whose
@@ -59,18 +60,28 @@ pub struct Item {
     pub units: u64,
     /// A checkpoint: it comes first in its key's order.
     pub checkpoint: bool,
+    /// A root's revoke, freeze or resolve: it comes after the checkpoints,
+    /// before the rest.
+    pub early: bool,
     /// A claim: the root it names.
     pub names: Option<KeyHash>,
 }
 
 /// A record's place in its key's order.
-pub type Pos = (bool, u64, RecordId);
+pub type Pos = (u8, u64, RecordId);
 
 impl Item {
     /// Its place in its key's order: checkpoints first, the newest first;
-    /// then the rest by seq and ID.
+    /// then a root's removals and resolves by seq; then the rest by seq
+    /// and ID.
     pub fn pos(&self) -> Pos {
-        if self.checkpoint { (false, u64::MAX.saturating_sub(self.seq), self.id) } else { (true, self.seq, self.id) }
+        if self.checkpoint {
+            (0, u64::MAX.saturating_sub(self.seq), self.id)
+        } else if self.early {
+            (1, self.seq, self.id)
+        } else {
+            (2, self.seq, self.id)
+        }
     }
 }
 
@@ -265,6 +276,7 @@ mod tests {
             id: RecordId(id),
             units: units(size, false),
             checkpoint: false,
+            early: false,
             names: None,
         }
     }

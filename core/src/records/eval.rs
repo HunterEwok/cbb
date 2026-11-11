@@ -403,9 +403,11 @@ pub(crate) fn order_key(b: &Body, id: &RecordId) -> (u64, KeyHash, RecordId) {
 }
 
 /// The record as the keeping sees it (`keep`).
-pub(crate) fn item(r: &Record) -> super::keep::Item {
+pub(crate) fn item(r: &Record, role: Role) -> super::keep::Item {
     let claim = matches!(r.body().kind, Kind::Claim { .. });
+    let early = role == Role::Root && matches!(r.body().kind, Kind::Revoke(_) | Kind::Freeze(_) | Kind::Resolve(_));
     super::keep::Item {
+        early,
         signer: r.body().signer,
         seq: r.body().seq,
         id: r.id(),
@@ -429,7 +431,7 @@ pub(crate) fn kept_of(
 ) -> BTreeSet<RecordId> {
     let admins: BTreeSet<KeyHash> =
         checked.iter().filter(|c| c.role == Role::Admin).map(|c| c.r.body().signer).collect();
-    let items: Vec<super::keep::Item> = checked.iter().map(|c| item(c.r)).collect();
+    let items: Vec<super::keep::Item> = checked.iter().map(|c| item(c.r, c.role)).collect();
     super::keep::keep(&items, |k| ceiling_of(group_root, promoted, &admins, k))
 }
 
@@ -544,6 +546,11 @@ impl Rec<'_> {
     }
     fn admin(&self) -> bool {
         self.role == Role::Admin
+    }
+    /// A root's revoke, freeze or resolve: it comes early in its key's
+    /// order (`keep`).
+    fn early(&self) -> bool {
+        item(self.r, self.role).early
     }
     fn dev(&self) -> Option<&Device> {
         match &self.b().kind {
@@ -675,6 +682,8 @@ impl<'a> Evaluation<'a> {
 
     /// The records of rs (one signer's, by_id their IDs) whose prev chain
     /// down to seq 1, or to an anchor, is held, each step one seq lower.
+    /// A root's revoke, freeze or resolve whose prev the set does not hold
+    /// is whole too: a full set keeps it before its key's other records.
     fn wholes(&self, rs: &[usize], by_id: &BTreeMap<RecordId, usize>, skip: &[bool]) -> BTreeSet<usize> {
         let step = |i: usize| -> Result<bool, usize> {
             let Some(r) = self.recs.get(i) else { return Ok(false) };
@@ -687,7 +696,7 @@ impl<'a> Evaluation<'a> {
             // A checkpoint's anchor stands for its chain even when the set
             // no longer holds it (a full key keeps its checkpoint first).
             let Some(&p) = r.b().prev.as_ref().and_then(|p| by_id.get(p)) else {
-                return Ok(r.b().prev.as_ref().is_some_and(|p| self.anchors.contains(p)));
+                return Ok(r.early() || r.b().prev.as_ref().is_some_and(|p| self.anchors.contains(p)));
             };
             let Some(prev) = self.recs.get(p) else { return Ok(false) };
             if Some(prev.b().seq) != r.b().seq.checked_sub(1) {
@@ -845,7 +854,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         let roots: Vec<KeyHash> = self.on_path.keys().copied().collect();
         for k in roots {
             let mut rs = self.of(&k).to_vec();
-            rs.sort_by_key(|&i| item(self.r(i).r).pos());
+            rs.sort_by_key(|&i| item(self.r(i).r, self.r(i).role).pos());
             for i in rs.into_iter().skip(MAX_ROOT_RECORDS) {
                 self.capped[i] = true;
             }

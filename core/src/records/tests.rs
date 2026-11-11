@@ -898,7 +898,7 @@ fn limits_hold_for_any_signer() {
             set.ids()
                 .filter_map(|id| set.get(id))
                 .filter(|r| f(&r.body().signer))
-                .map(|r| super::eval::item(r).units)
+                .map(|r| super::eval::item(r, super::eval::Role::Admin).units)
                 .sum()
         };
         let roots: Vec<KeyHash> = (0..4).map(|i| k(&format!("x root {i}")).hash).collect();
@@ -1282,6 +1282,43 @@ fn only_a_phone_admin_or_the_recovery_key_takes_over() {
 
 /// A pool of records that touches every rule: admins, devices, removals,
 /// a freeze and a thaw, two histories, claims, held records, settings.
+/// A full set never drops a root's removal or resolve: 16 admin keys fill
+/// their 256 units each, the root signs some 300 records after them, and
+/// its removal and its resolve at the end still count.
+#[test]
+fn a_full_set_keeps_the_roots_removals() {
+    let mut g = G::new();
+    let root = k("root");
+    let d = k("d");
+    g.device(&root, &d, "d", |_| {});
+    let admins: Vec<K> = (0..16).map(|i| k(&format!("a{i}"))).collect();
+    for (i, a) in admins.iter().enumerate() {
+        g.admin(&k(&format!("p{i}")), a, POWER_ADMIT | POWER_REMOVE);
+    }
+    let e = g.device(&admins[0], &k("e"), "e", |_| {});
+    let rv_e = g.rec(&admins[0], Kind::Revoke(removal(&[k("e").hash], g.seen())));
+    for a in &admins {
+        for i in g.heads.get(&a.hash).map_or(0, |h| h.0)..300 {
+            g.rec(a, Kind::Copies { incoming_ms: 5_000 + i });
+        }
+    }
+    let below: Vec<Record> = (0..300).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i })).collect();
+    let rv_d = g.root_rec(Kind::Revoke(removal(&[d.hash], g.seen())));
+    let resolve = g.root_rec(Kind::Resolve(vec![rv_e.id()]));
+    let mut set = RecordSet::new(g.root.key.clone());
+    set.insert_all(g.recs.clone());
+    assert!(set.len() < g.recs.len());
+    assert!(set.contains(&rv_d.id()) && set.contains(&resolve.id()));
+    // The root's records right under them are dropped: the removal stands
+    // for its chain.
+    assert!(!set.contains(&below[299].id()));
+    for s in [set.state(&BTreeMap::new()), g.state()] {
+        assert!(s.revoked.contains(&d.hash), "the root's removal counts");
+        assert!(s.counting.contains(&rv_d.id()) && s.counting.contains(&resolve.id()));
+        assert!(!s.revoked.contains(&k("e").hash) && s.counting.contains(&e.id()), "the root's resolve counts");
+    }
+}
+
 /// The same records in an order of seed.
 fn shuffled(recs: &[Record], seed: u64) -> Vec<Record> {
     let mut out = recs.to_vec();
