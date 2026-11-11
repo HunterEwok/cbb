@@ -26,6 +26,12 @@
 # added and nothing else, so open first closes, and a changed port leaves
 # no old rule behind. install.sh and uninstall.sh run it.
 set -eu
+# The messages in the user's language (packaging/l10n.sh, beside this file
+# where install.sh put it, or in the archive), read before LC_ALL=C below.
+cbb_l10n=$(cd "$(dirname "$0")" && pwd)/l10n
+[ -f "$cbb_l10n.sh" ] || cbb_l10n=${cbb_l10n%/l10n}/../l10n
+# shellcheck source=packaging/l10n.sh
+. "$cbb_l10n.sh"
 # The firewall tools answer in the user's language; what this reads is English.
 export LC_ALL=C
 
@@ -88,10 +94,10 @@ rules() {
 	shift
 	n=1
 	for p in "$@"; do
-		echo "  $n. Allow incoming TCP $p from $from. Purpose: connections from the group's devices."
+		say "  %s. Allow incoming TCP %s from %s. Purpose: connections from the group's devices." "$n" "$p" "$from"
 		n=$((n + 1))
 	done
-	echo "  $n. Allow incoming UDP 5353 from $from. Purpose: finding the group's devices (mDNS)."
+	say "  %s. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS)." "$n" "$from"
 }
 
 # commands prints the commands that add the rules by hand for the firewall
@@ -180,7 +186,7 @@ close() {
 				ufw --force delete "$n" >/dev/null
 			done
 			if [ -n "$ours" ]; then
-				echo "ufw: removed the CBB rules."
+				say "ufw: removed the CBB rules."
 			fi
 		fi
 		;;
@@ -191,7 +197,7 @@ close() {
 			done
 			rm -f /etc/firewalld/services/cbb.xml
 			firewall-cmd --reload >/dev/null 2>&1 || true
-			echo "firewalld: removed the CBB rules and service."
+			say "firewalld: removed the CBB rules and service."
 		fi
 		;;
 	esac
@@ -272,7 +278,7 @@ hub_close() {
 		;;
 	esac
 	rm -f "$hubstate"
-	echo "Firewall: closed the hub's UDP port $p."
+	say "Firewall: closed the hub's UDP port %s." "$p"
 }
 
 hub_open() {
@@ -318,30 +324,27 @@ hub_commands() {
 
 # ask reads yes or no from the terminal, no by default and without one.
 ask() {
-	printf '%s [y/N] ' "$1"
+	t "%s [y/N]" "$1"
+	printf ' '
 	reply=
 	if (: </dev/tty) 2>/dev/null; then
 		read -r reply </dev/tty || reply=
 	else
 		echo
-		echo "No terminal to answer on; taken as No."
+		say "No terminal to answer on; taken as No."
 		return 2
 	fi
-	case $reply in
-	y | Y | yes | Yes | YES) return 0 ;;
-	*) return 1 ;;
-	esac
+	is_yes "$reply"
 }
 
 # manual says what to run when cbb does not manage the rules.
 manual() {
 	k=$1
 	shift
-	echo "No firewall rules were added. CBB works only while the firewall allows the rules above."
-	echo "To add them by hand, run:"
+	say "No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run:"
 	commands "$k" "$@"
 	case $k in
-	nftables | iptables) echo "Then make them permanent the way this system keeps its $k rules." ;;
+	nftables | iptables) say "Then make them permanent the way this system keeps its %s rules." "$k" ;;
 	esac
 }
 
@@ -359,16 +362,15 @@ setup() {
 	k=$(kind)
 	if [ "$k" = none ]; then
 		close
-		echo "Firewall: no active firewall was found; no firewall rules are needed."
-		echo "If a firewall is turned on later, run the installer again."
+		say "Firewall: no active firewall was found; no firewall rules are needed. If a firewall is turned on later, run the installer again."
 		return
 	fi
-	echo "Firewall: $k (active). CBB requires these rules:"
+	say "Firewall: %s (active). CBB requires these rules:" "$k"
 	rules "$k" "$@"
 	case $k in
 	nftables | iptables | fw4)
 		close
-		echo "cbb does not manage $k rules: rules added at run time do not survive a restart."
+		say "cbb does not manage %s rules: rules added at run time do not survive a restart." "$k"
 		manual "$k" "$@"
 		return
 		;;
@@ -377,26 +379,26 @@ setup() {
 	kept=$(cat "$answer" 2>/dev/null || true)
 	how=
 	case $mode in
-	express) yes=yes how=" (express installation)" ;;
+	express) yes=yes how=$(t " (express installation)") ;;
 	no) yes=no ;;
 	*)
 		case $kept in
-		yes | no) yes=$kept how=" (as answered before)" ;;
+		yes | no) yes=$kept how=$(t " (as answered before)") ;;
 		*)
 			# An installation from before the question added its rules
 			# without one: they count as a Yes, kept from now on, so that an
 			# update never removes rules without an answer.
 			if present; then
-				yes=yes how=" (kept from an earlier installation)"
+				yes=yes how=$(t " (kept from an earlier installation)")
 			else
-				echo "With Yes, CBB adds these rules, keeps them current on every update and removes them on uninstall."
-				if ask "Add these rules now?"; then
+				say "With Yes, CBB adds these rules, keeps them current on every update and removes them on uninstall."
+				if ask "$(t "Add these rules now?")"; then
 					yes=yes
 				elif [ $? -eq 2 ]; then
 					# Not an answer: nothing is added or removed, and the next run
 					# with a terminal asks again.
 					manual "$k" "$@"
-					echo "To let CBB add and manage them, run the installer again with --express."
+					say "To let CBB add and manage them, run the installer again with --express."
 					return
 				else
 					yes=no
@@ -410,11 +412,11 @@ setup() {
 	chmod 0644 "$answer"
 	if [ "$yes" = yes ]; then
 		open "$@"
-		echo "Added the rules above$how. CBB manages them from now on."
+		say "Added the rules above%s. CBB manages them from now on." "$how"
 	else
 		close
 		manual "$k" "$@"
-		echo "To let CBB add and manage them, run the installer again with --express."
+		say "To let CBB add and manage them, run the installer again with --express."
 	fi
 }
 
@@ -447,7 +449,7 @@ hub-commands)
 	;;
 esac
 if [ "$(id -u)" -ne 0 ]; then
-	echo "firewall.sh: run it with sudo" >&2
+	note firewall.sh "run it with sudo"
 	exit 1
 fi
 case $cmd in
@@ -458,7 +460,7 @@ setup)
 	;;
 open)
 	[ $# -ge 1 ] || usage
-	open "$@" || echo "firewall.sh: no ufw or firewalld is active; nothing was added." >&2
+	open "$@" || note firewall.sh "no ufw or firewalld is active; nothing was added."
 	;;
 close)
 	[ $# -eq 0 ] || usage

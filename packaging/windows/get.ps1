@@ -34,8 +34,38 @@
 	$ErrorActionPreference = 'Stop'
 	$ProgressPreference = 'SilentlyContinue'
 	$repo = 'https://github.com/HunterEwok/cbb'
-	$step = 'starting'
 	$details = $env:CBB_ERROR_DETAILS -eq '1'
+
+	# l10n begin
+	# The messages in the user's language: l10n.ps1 from beside get.ps1 in a
+	# checkout, else English; the release puts l10n.ps1 and the translations
+	# here (packaging/l10n-embed.sh).
+	# A call with two values names -Text, as PSScriptAnalyzer flags three
+	# positional arguments.
+	if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot 'l10n.ps1'))) {
+		. (Join-Path $PSScriptRoot 'l10n.ps1') (Join-Path $PSScriptRoot '..\l10n')
+	} else {
+		function T([string]$Text) {
+			$n = 0
+			$out = New-Object Text.StringBuilder
+			for ($k = 0; $k -lt $Text.Length; $k++) {
+				if ($Text[$k] -eq '%' -and $k + 1 -lt $Text.Length -and $Text[$k + 1] -in @('s', '%')) {
+					if ($Text[$k + 1] -eq 's') {
+						if ($n -lt $args.Count) { [void]$out.Append([string]$args[$n]) }
+						$n++
+					} else {
+						[void]$out.Append('%')
+					}
+					$k++
+					continue
+				}
+				[void]$out.Append($Text[$k])
+			}
+			$out.ToString()
+		}
+	}
+	# l10n end
+	$step = T 'starting'
 
 	# The project's release root keys (docs/protocol.md, section 16), base64
 	# SubjectPublicKeyInfos, which sign keys.json: two YubiKeys, as
@@ -81,7 +111,7 @@
 	function Get-P256Key([byte[]]$spki) {
 		$prefix = [Convert]::FromBase64String('MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE')
 		if ($spki.Length -ne 91 -or -not (Test-ByteEqual $spki[0..26] $prefix)) {
-			throw 'a key is not P-256'
+			throw (T 'a key is not P-256')
 		}
 		$p = New-Object Security.Cryptography.ECParameters
 		$p.Curve = [Security.Cryptography.ECCurve]::CreateFromFriendlyName('nistP256')
@@ -145,13 +175,13 @@
 		foreach ($k in $keys) {
 			if ($sig -and (Get-P256Key $k).VerifyData($body, $sig, [Security.Cryptography.HashAlgorithmName]::SHA256)) {
 				$text = [Text.Encoding]::UTF8.GetString($body)
-				if (-not (Test-StrictBody $text)) { throw "$(Split-Path $path -Leaf) is not a valid release file; not installing" }
+				if (-not (Test-StrictBody $text)) { throw (T '%s is not a valid release file; not installing' (Split-Path $path -Leaf)) }
 				$b = $text | ConvertFrom-Json
 				if ($b.type -cne $type -or $b.v -ne 1 -or -not $b.PSObject.Properties['time_ms']) { break }
 				return @{ Bytes = $body; Value = $b }
 			}
 		}
-		throw "$(Split-Path $path -Leaf) is not signed by the project's key; not installing"
+		throw (T '%s is not signed by the project''s key; not installing' (Split-Path $path -Leaf))
 	}
 
 	# Test-Release checks keys.json against the root keys, release.json and,
@@ -160,7 +190,7 @@
 	# skips it.
 	function Test-Release($base, $version, $named, $archive, $got, $tmp) {
 		if ($env:CBB_VERIFY -eq 'skip') {
-			Write-Host "Not checked: the release's signature (CBB_VERIFY=skip)."
+			Write-Host (T 'Not checked: the release''s signature (CBB_VERIFY=skip).')
 			return
 		}
 		if (-not $verifying) { return }
@@ -168,17 +198,17 @@
 			Get-ReleaseFile "$channelFiles/keys.json" (Join-Path $tmp 'keys.json')
 			Get-ReleaseFile "$base/release.json" (Join-Path $tmp 'release.json')
 		} catch {
-			throw "$version has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)"
+			throw (T '%s has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)' $version)
 		}
 		$nowMS = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 		$keys = Open-ReleaseFile -path (Join-Path $tmp 'keys.json') -type 'keys' -keys @($roots | ForEach-Object { , [Convert]::FromBase64String($_) })
-		if ([long]$keys.Value.expires_ms -le $nowMS) { throw 'keys.json has expired; check the clock, or try again later' }
+		if ([long]$keys.Value.expires_ms -le $nowMS) { throw (T 'keys.json has expired; check the clock, or try again later') }
 		# A release key (no use) signs release.json and stable.json, a channel
 		# key only stable.json, a key of another use neither.
 		# Under strict mode a key without use has no such property to read. A
 		# use is never written empty.
 		if (@($keys.Value.keys | Where-Object { $u = $_.PSObject.Properties['use']; $u -and $u.Value -ceq '' }).Count -gt 0) {
-			throw "keys.json holds a key whose use is empty; not installing"
+			throw (T 'keys.json holds a key whose use is empty; not installing')
 		}
 		$releaseKeys = @($keys.Value.keys | Where-Object { $u = $_.PSObject.Properties['use']; -not $u -or $u.Value -ceq 'release' } |
 			ForEach-Object { , [Convert]::FromBase64String($_.key) })
@@ -187,32 +217,32 @@
 		$rel = Open-ReleaseFile -path (Join-Path $tmp 'release.json') -type 'release' -keys $releaseKeys
 		if ($named) {
 			$ch = Open-ReleaseFile -path (Join-Path $tmp 'stable.json') -type 'channel' -keys ($releaseKeys + $channelKeys)
-			if ($ch.Value.channel -cne 'stable') { throw "stable.json is not the stable channel's" }
-			if ([long]$ch.Value.expires_ms -le $nowMS) { throw 'stable.json has expired; check the clock, or try again later' }
+			if ($ch.Value.channel -cne 'stable') { throw (T 'stable.json is not the stable channel''s') }
+			if ([long]$ch.Value.expires_ms -le $nowMS) { throw (T 'stable.json has expired; check the clock, or try again later') }
 			$sum = -join ([Security.Cryptography.SHA256]::Create().ComputeHash($rel.Bytes) | ForEach-Object { $_.ToString('x2') })
 			# The release must be one for this channel, as cbb update checks.
 			if ($ch.Value.release_sha256 -cne $sum -or $ch.Value.release -cne $rel.Value.version -or $rel.Value.channel -cne $ch.Value.channel) {
-				throw 'release.json is not the release stable.json names; not installing'
+				throw (T 'release.json is not the release stable.json names; not installing')
 			}
 		} elseif ("v$($rel.Value.version)" -cne $version) {
-			throw "release.json is for $($rel.Value.version), not $version"
+			throw (T -Text 'release.json is for %s, not %s' ($rel.Value.version) $version)
 		}
 		$entry = $rel.Value.files | Where-Object { $_.name -ceq $archive } | Select-Object -First 1
-		if (-not $entry) { throw "release.json does not list $archive" }
+		if (-not $entry) { throw (T 'release.json does not list %s' $archive) }
 		if ($entry.sha256 -cne $got -or -not $entry.PSObject.Properties['size'] -or [long]$entry.size -ne (Get-Item (Join-Path $tmp $archive)).Length) {
-			throw "$archive does not match the signed release.json; not installing it"
+			throw (T '%s does not match the signed release.json; not installing it' $archive)
 		}
-		Write-Host "The release's signature checks out ($($rel.Value.version))."
+		Write-Host (T 'The release''s signature checks out (%s).' ($rel.Value.version))
 	}
 
 	try {
-		$step = 'checking for administrator rights'
+		$step = T 'checking for administrator rights'
 		$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 		if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-			throw 'run it in a PowerShell opened with "Run as administrator"'
+			throw (T 'run it in a PowerShell opened with "Run as administrator"')
 		}
 
-		$step = 'finding the architecture'
+		$step = T 'finding the architecture'
 		# A 32-bit PowerShell on 64-bit Windows sees its own architecture; the
 		# machine's is in PROCESSOR_ARCHITEW6432.
 		$machine = $env:PROCESSOR_ARCHITEW6432
@@ -222,7 +252,7 @@
 		switch ($machine) {
 			'AMD64' { $arch = 'amd64' }
 			'ARM64' { $arch = 'arm64' }
-			default { throw "no release for the architecture $machine" }
+			default { throw (T 'no release for the architecture %s' $machine) }
 		}
 
 		$version = $env:CBB_VERSION
@@ -234,7 +264,7 @@
 		} elseif ($version -match '^v\d') {
 			$base = "$repo/releases/download/$version"
 		} else {
-			throw 'CBB_VERSION must look like v1.2.3'
+			throw (T 'CBB_VERSION must look like v1.2.3')
 		}
 		$archive = "cbb-windows-$arch.zip"
 		$tmp = Join-Path ([IO.Path]::GetTempPath()) ("cbb-" + [Guid]::NewGuid())
@@ -245,16 +275,16 @@
 			# after a release.
 			$named = $null
 			if ($version -eq 'latest' -and $verifying) {
-				$step = 'finding the latest release'
+				$step = T 'finding the latest release'
 				Get-ReleaseFile "$channelFiles/stable.json" (Join-Path $tmp 'stable.json')
 				$named = ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String((Get-Content -Raw (Join-Path $tmp 'stable.json') |
 								ConvertFrom-Json).body)) | ConvertFrom-Json).release
-				if ($named -notmatch '^\d+\.\d+\.\d+(-rc\.\d+)?$') { throw 'stable.json names no release' }
+				if ($named -notmatch '^\d+\.\d+\.\d+(-rc\.\d+)?$') { throw (T 'stable.json names no release') }
 				$version = "v$named"
 				if (-not $env:CBB_RELEASE_DIR) { $base = "$repo/releases/download/$version" }
 			}
-			$step = "downloading $archive ($version)"
-			Write-Host "Downloading $archive ($version)..."
+			$step = T -Text 'downloading %s (%s)' $archive $version
+			Write-Host (T -Text 'Downloading %s (%s)...' $archive $version)
 			foreach ($f in @($archive, 'SHA256SUMS')) {
 				if ($env:CBB_RELEASE_DIR) {
 					Copy-Item (Join-Path $env:CBB_RELEASE_DIR $f) (Join-Path $tmp $f)
@@ -264,7 +294,7 @@
 				}
 			}
 
-			$step = "checking $archive against SHA256SUMS"
+			$step = T 'checking %s against SHA256SUMS' $archive
 			$want = $null
 			foreach ($line in Get-Content (Join-Path $tmp 'SHA256SUMS')) {
 				$fields = $line -split '\s+'
@@ -273,22 +303,22 @@
 				}
 			}
 			if (-not $want) {
-				throw "SHA256SUMS does not list $archive"
+				throw (T 'SHA256SUMS does not list %s' $archive)
 			}
 			$got = (Get-FileHash -Algorithm SHA256 (Join-Path $tmp $archive)).Hash.ToLowerInvariant()
 			if ($got -ne $want) {
-				throw "$archive does not match SHA256SUMS; not installing it"
+				throw (T '%s does not match SHA256SUMS; not installing it' $archive)
 			}
 
 			# SHA256SUMS comes from the same release, so it shows only that
 			# the download is whole. The signed release files show that the
 			# project signed this release (docs/protocol.md, section 16).
-			$step = "checking the release's signature"
+			$step = T 'checking the release''s signature'
 			Test-Release -base $base -version $version -named $named -archive $archive -got $got -tmp $tmp
 
 			# The attestation shows that this repository's release workflow
 			# built the archive.
-			$step = "checking the build attestation of $archive"
+			$step = T 'checking the build attestation of %s' $archive
 			$attestation = if ($env:CBB_ATTESTATION) { $env:CBB_ATTESTATION } else { 'check' }
 			$gh = Get-Command gh -ErrorAction SilentlyContinue
 			$signedIn = $false
@@ -298,37 +328,37 @@
 			if ($env:CBB_RELEASE_DIR -or $attestation -eq 'skip') {
 			} elseif ($signedIn) {
 				if ((Invoke-Quietly -program $gh.Source -arguments 'attestation', 'verify', (Join-Path $tmp $archive), '--repo', 'HunterEwok/cbb') -ne 0) {
-					throw "$archive does not have this repository's build attestation; not installing it"
+					throw (T '%s does not have this repository''s build attestation; not installing it' $archive)
 				}
-				Write-Host "The archive's build attestation checks out."
+				Write-Host (T 'The archive''s build attestation checks out.')
 			} elseif ($attestation -eq 'require') {
-				throw 'CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the build attestation'
+				throw (T 'CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the build attestation')
 			} else {
-				Write-Host 'Not checked: the build attestation of the archive (it needs gh, signed in). SHA256SUMS matched.'
+				Write-Host (T 'Not checked: the build attestation of the archive (it needs gh, signed in). SHA256SUMS matched.')
 			}
 
-			$step = "unpacking $archive"
+			$step = T 'unpacking %s' $archive
 			Expand-Archive -Path (Join-Path $tmp $archive) -DestinationPath $tmp
 
-			$step = 'running install.ps1'
+			$step = T 'running install.ps1'
 			$arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $tmp 'cbb\packaging\windows\install.ps1'))
 			if ($env:CBB_PORT) {
 				$arguments += @('-Port', $env:CBB_PORT)
 			}
 			& powershell.exe @arguments
 			if ($LASTEXITCODE -ne 0) {
-				throw "install.ps1 exited with $LASTEXITCODE"
+				throw (T 'install.ps1 exited with %s' $LASTEXITCODE)
 			}
 		} finally {
 			Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 		}
 	} catch {
-		Write-Host "get.ps1: $step failed: $($_.Exception.Message)" -ForegroundColor Red
+		Write-Host (T -Text 'get.ps1: %s failed: %s' $step ($_.Exception.Message)) -ForegroundColor Red
 		if ($details) {
 			$_ | Format-List * -Force | Out-String | Write-Host
 			Write-Host $_.ScriptStackTrace
 		} else {
-			Write-Host 'For the full error: $env:CBB_ERROR_DETAILS = "1", and run it again.'
+			Write-Host (T 'For the full error: $env:CBB_ERROR_DETAILS = "1", and run it again.')
 		}
 	}
 }

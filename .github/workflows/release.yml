@@ -624,7 +624,10 @@ jobs:
           go run ./tools/sbom swift -o dist/sbom-ios-kit.cdx.json -version "$GITHUB_REF_NAME" apps/ios/CBBKit/Package.resolved
       - name: checksums
         run: |
-          cp packaging/get.sh packaging/windows/get.ps1 dist/
+          # get.sh and get.ps1 run alone, so they carry their messages'
+          # translations (packaging/l10n-embed.sh).
+          sh packaging/l10n-embed.sh packaging/get.sh >dist/get.sh
+          sh packaging/l10n-embed.sh packaging/windows/get.ps1 >dist/get.ps1
           cd dist
           set -- *.tar.gz *.zip get.sh get.ps1 *.cdx.json
           for f in *.apk *.pkg; do [ -e "$f" ] && set -- "$@" "$f"; done

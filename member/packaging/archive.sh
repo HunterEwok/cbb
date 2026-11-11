@@ -37,6 +37,7 @@ cp "$root/packaging/linux/install.sh" "$root/packaging/linux/install-rootless.sh
 	"$root/packaging/linux/firewall.sh" "$root/packaging/linux/cbb.sysusers" \
 	"$root/packaging/linux/cbb-console.service" "$root/member/packaging/cbb.service" \
 	"$root/member/packaging/cbb-rootless.service" "$dir/packaging/linux/"
-cp -R "$root/packaging/tmux" "$root/packaging/openwrt" "$root/packaging/update.sh" "$root/packaging/pair.sh" "$dir/packaging/"
+cp -R "$root/packaging/tmux" "$root/packaging/openwrt" "$root/packaging/update.sh" "$root/packaging/pair.sh" \
+	"$root/packaging/l10n.sh" "$root/packaging/l10n" "$dir/packaging/"
 tar -czf "$out/cbb-lite-linux-$name.tar.gz" -C "$work" cbb-lite
 echo "$out/cbb-lite-linux-$name.tar.gz"

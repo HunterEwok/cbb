@@ -246,7 +246,6 @@
   "More": "और",
   "OK": "ठीक है",
   "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.": "समूह के किसी फ़ोन पर, + टैप करें और यह कोड स्कैन करें। समूह के किसी कंप्यूटर पर, + टैप करें और अंक लिखें। यह विंडो खुली रखें।",
-  "On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.": "समूह के हब पर cbb invite चलाएँ और वह जो फ़ाइल बनाए उसे किसी भरोसेमंद माध्यम से भेजें। नए डिवाइस पर उस फ़ाइल के साथ cbb pair -invite चलाएँ।",
   "On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.": "नए डिवाइस पर समूह से जुड़ें चुनें: वह एक QR कोड और छह अंक दिखाता है। समूह का कोई फ़ोन कोड स्कैन करता है; यहाँ अंक लिखें।",
   "Open a picture of its QR code": "उसके QR कोड का चित्र खोलें",
   "Open at sign-in": "साइन इन पर खोलें",
@@ -264,5 +263,13 @@
   "Turn sync off": "सिंक बंद करें",
   "Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does.": "शीट से कुंजी लिखें, या उसके QR कोड का टेक्स्ट पेस्ट करें। दावा टेकओवर की तरह प्रतीक्षा करता है।",
   "Type the six digits the new device shows.": "नए डिवाइस पर दिखने वाले छह अंक लिखें।",
-  "Without a camera": "बिना कैमरे के"
+  "Without a camera": "बिना कैमरे के",
+  "Allow cbb to run as the administrator; the invitation opens on the group's hub next.": "cbb को व्यवस्थापक के रूप में चलने दें; इसके बाद निमंत्रण समूह के हब पर खुलता है।",
+  "The invitation's QR code": "निमंत्रण का QR कोड",
+  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.": "नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर इसके पाठ के साथ cbb pair -invite चलाएँ। इसे केवल जुड़ने वाले व्यक्ति को दिखाएँ या भेजें।",
+  "The invitation's text": "निमंत्रण का पाठ",
+  "Not this one": "यह नहीं",
+  "The invitation is valid until %s.": "निमंत्रण %s तक मान्य है।",
+  "%s (%s) used the invitation. Admit it only if the device shows the same fingerprint:": "%s (%s) ने निमंत्रण का उपयोग किया। केवल तभी शामिल करें जब डिवाइस वही फ़िंगरप्रिंट दिखाए:",
+  "The device joined the group; it appears in the list once it connects.": "डिवाइस समूह में जुड़ गया; जुड़ने पर यह सूची में दिखेगा।"
 }

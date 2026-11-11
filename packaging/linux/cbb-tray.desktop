@@ -4,6 +4,13 @@
 Type=Application
 Name=CBB
 Comment=The CBB tray item, which opens its window
+Comment[ar]=أيقونة CBB في شريط النظام، تفتح نافذته
+Comment[es]=El icono de CBB en la bandeja, que abre su ventana
+Comment[he]=סמל CBB במגש המערכת, שפותח את החלון שלו
+Comment[hi]=CBB का ट्रे आइटम, जो उसकी विंडो खोलता है
+Comment[ru]=Значок CBB в трее, открывающий его окно
+Comment[sw]=Kipengee cha CBB kwenye trei, kinachofungua dirisha lake
+Comment[zh]=CBB 托盘图标，用于打开其窗口
 Exec=/usr/local/bin/cbb-desktop
 Icon=/usr/local/share/cbb/cbb.png
 NoDisplay=true

@@ -7,6 +7,10 @@
 //! functions give, and passes each connection's bytes through
 //! cbb_core::pair_session, which runs the pairing inside the core's TLS and
 //! asks the app's callback for each signature. The app does the sockets.
+//! With a remote invitation in place of the QR code (docs/protocol.md,
+//! section 12), the joiner starts the invitation's guest tunnel, the app
+//! dials its loopback port, and the attempt proves the invitation's secret
+//! to the hub's admin.
 
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -82,6 +86,11 @@ pub struct Join {
     code: String,
     clock: Clock,
     attempt: Option<Attempt>,
+    /// A remote invitation's secret, in place of the code.
+    secret: Option<Vec<u8>>,
+    /// The invitation's guest tunnel, whose loopback port the app dials.
+    #[cfg(feature = "tunnel")]
+    guest: Option<cbb_lite::phone::GuestTunnel>,
     /// The mDNS announcement while the app listens (`announce`).
     #[cfg(feature = "member")]
     announced: Option<cbb_lite::discovery::Announcement>,
@@ -102,10 +111,15 @@ struct NewArgs {
     #[serde(with = "certs::b64", default)]
     seal: Vec<u8>,
     /// The addresses for the QR code, host:port.
+    #[serde(default)]
     addrs: Vec<String>,
     /// The six-digit code, or a new one when absent.
     #[serde(default)]
     code: String,
+    /// A remote invitation's text, cbb://invite#..., to join by in place
+    /// of a QR code.
+    #[serde(default)]
+    invite: String,
 }
 
 #[derive(Serialize)]
@@ -116,6 +130,14 @@ struct NewAnswer {
     /// The QR code's text and its modules, a row of '1' and '0' each.
     qr: String,
     modules: Vec<String>,
+    /// With an invitation: the loopback port of its guest tunnel, which the
+    /// app dials for each attempt.
+    #[serde(skip_serializing_if = "is_zero")]
+    port: u16,
+}
+
+fn is_zero(n: &u16) -> bool {
+    *n == 0
 }
 
 #[derive(Serialize)]
@@ -152,7 +174,7 @@ struct JoinedAnswer {
     admin_ca: Option<Vec<u8>>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub(crate) struct ErrorAnswer {
     message: String,
     details: String,
@@ -192,6 +214,9 @@ impl Join {
                 _ => return Err(Error::msg("the admin key needs both its public key and its callback")),
             }
             joiner.seal = a.seal;
+            if !a.invite.is_empty() {
+                return Join::invited(joiner, &a.invite);
+            }
             let code = if a.code.is_empty() { pair::new_code() } else { pair::normalize_code(&a.code)? };
             let qr = pair::join_qr(&code, &a.addrs, &joiner.fingerprint());
             let modules = modules(&qr)?;
@@ -201,6 +226,7 @@ impl Join {
                 fingerprint: joiner.fingerprint(),
                 qr,
                 modules,
+                port: 0,
             };
             Ok((
                 Join {
@@ -208,6 +234,9 @@ impl Join {
                     code,
                     clock: clock(),
                     attempt: None,
+                    secret: None,
+                    #[cfg(feature = "tunnel")]
+                    guest: None,
                     #[cfg(feature = "member")]
                     announced: None,
                 },
@@ -218,6 +247,41 @@ impl Join {
             Ok((j, ans)) => (Some(j), answer(Ok(ans))),
             Err(e) => (None, answer::<()>(Err(e))),
         }
+    }
+
+    /// A joiner by the remote invitation text: its guest tunnel starts
+    /// now, and the answer names its loopback port.
+    #[cfg(feature = "tunnel")]
+    fn invited(joiner: Joiner, text: &str) -> Result<(Join, NewAnswer)> {
+        let inv = cbb_core::invite::parse(text).map_err(|r| Error::msg(r.message()))?;
+        if inv.expired(wall_ms() / 1000) {
+            return Err(Error::msg("the invitation has expired; ask for a new one"));
+        }
+        let guest = cbb_lite::phone::GuestTunnel::start(&inv, Arc::new(|_: &str| {}))?;
+        let ans = NewAnswer {
+            device: joiner.id.to_string(),
+            code: String::new(),
+            fingerprint: joiner.fingerprint(),
+            qr: String::new(),
+            modules: Vec::new(),
+            port: guest.port(),
+        };
+        let j = Join {
+            joiner,
+            code: String::new(),
+            clock: clock(),
+            attempt: None,
+            secret: Some(inv.secret.clone()),
+            guest: Some(guest),
+            #[cfg(feature = "member")]
+            announced: None,
+        };
+        Ok((j, ans))
+    }
+
+    #[cfg(not(feature = "tunnel"))]
+    fn invited(_joiner: Joiner, _text: &str) -> Result<(Join, NewAnswer)> {
+        Err(Error::msg("this build has no tunnel: it cannot join by an invitation"))
     }
 
     /// Announces the joiner by mDNS while the app listens on port, so that
@@ -231,13 +295,34 @@ impl Join {
     }
 
     /// Starts an attempt for a connection the app accepted, ending the one
-    /// before.
+    /// before; with an invitation, for a connection the app dialed to the
+    /// guest tunnel's port, and the answer's send is the TLS client hello.
     pub fn accept(&mut self) -> Vec<u8> {
-        let made = Attempt::listening(&self.joiner, &self.code, &self.clock);
-        answer(made.map(|a| {
+        #[derive(Serialize)]
+        struct Started {
+            #[serde(with = "certs::b64")]
+            send: Vec<u8>,
+        }
+        let made = match &self.secret {
+            Some(secret) => Attempt::dialing_secret(&self.joiner, secret, &self.clock),
+            None => Attempt::listening(&self.joiner, &self.code, &self.clock),
+        };
+        answer(made.map(|mut a| {
+            let send = if self.secret.is_some() { a.feed(&[], wall_ms()).send } else { Vec::new() };
             self.attempt = Some(a);
-            serde_json::json!({})
+            Started { send }
         }))
+    }
+
+    /// Whether the invitation's hub has answered through the guest tunnel,
+    /// for the app's message when an attempt fails: a hub that never
+    /// answered is off, or its port cannot be reached.
+    pub fn answered(&self) -> bool {
+        #[cfg(feature = "tunnel")]
+        if let Some(g) = &self.guest {
+            return g.answered();
+        }
+        false
     }
 
     /// Takes what arrived on the attempt's connection.

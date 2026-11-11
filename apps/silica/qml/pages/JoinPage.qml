@@ -6,12 +6,23 @@ import Sailfish.Silica 1.0
 
 // The phone's QR code, which the group's phone or computer scans to admit
 // it (docs/protocol.md, section 6, "The joiner listens"). With admin, the
-// phone asks to be an admin, which only the group's root admits.
+// phone asks to be an admin, which only the group's root admits. With
+// invite, an invitation the user accepted (section 12): the phone dials
+// the invitation's hub and shows the words the inviting admin compares.
 Page {
     id: page
     property bool admin: false
+    property string invite: ""
+    readonly property bool byInvite: invite !== ""
 
-    Component.onCompleted: app.startJoin(admin)
+    function start() {
+        if (byInvite)
+            app.startJoinByInvite(invite)
+        else
+            app.startJoin(admin)
+    }
+
+    Component.onCompleted: start()
     Component.onDestruction: if (app.join.state !== "joined") app.join.stop()
 
     SilicaFlickable {
@@ -23,7 +34,7 @@ Page {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            PageHeader { title: page.admin ? qsTr("Join as an admin") : qsTr("Join a group") }
+            PageHeader { title: page.byInvite ? qsTr("Join with an invitation") : page.admin ? qsTr("Join as an admin") : qsTr("Join a group") }
 
             Label {
                 x: Theme.horizontalPageMargin
@@ -31,16 +42,35 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.highlightColor
                 text: app.join.state === "joined" ? qsTr("The phone is in the group now.")
-                    : app.join.state === "joining" ? qsTr("Joining…")
+                    : app.join.state === "joining" && !page.byInvite ? qsTr("Joining…")
                     : app.join.state === "failed" ? ""
+                    : page.byInvite ? qsTr("Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.")
                     : app.busy ? qsTr("Making the admin key…")
                     : page.admin ? qsTr("On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.")
                     : qsTr("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.")
             }
 
+            Label {
+                visible: page.byInvite && app.join.fingerprint !== "" && (app.join.state === "dialing" || app.join.state === "joining")
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                horizontalAlignment: Text.AlignHCenter
+                text: app.join.fingerprint
+                font.pixelSize: Theme.fontSizeExtraLarge
+                font.bold: true
+                wrapMode: Text.Wrap
+            }
+
+            Label {
+                visible: page.byInvite && app.join.state === "dialing"
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Connecting to the group's hub…")
+                color: Theme.secondaryHighlightColor
+            }
+
             // The QR code on white, with the quiet zone the scanners need.
             Rectangle {
-                visible: app.join.state === "listening" || app.join.state === "joining"
+                visible: !page.byInvite && (app.join.state === "listening" || app.join.state === "joining")
                 anchors.horizontalCenter: parent.horizontalCenter
                 color: "white"
                 property int count: app.join.modules.length
@@ -75,7 +105,7 @@ Page {
 
             BusyIndicator {
                 anchors.horizontalCenter: parent.horizontalCenter
-                running: app.join.state === "joining" || app.busy
+                running: app.join.state === "joining" || app.join.state === "dialing" || app.busy
                 visible: running
                 size: BusyIndicatorSize.Medium
             }
@@ -93,7 +123,7 @@ Page {
                 visible: app.join.state === "failed"
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qsTr("Try again")
-                onClicked: app.startJoin(page.admin)
+                onClicked: page.start()
             }
         }
         VerticalScrollDecorator {}
