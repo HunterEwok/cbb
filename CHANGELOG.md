@@ -2212,7 +2212,10 @@ All notable changes to cbb are documented in this file. The format follows
   the theme's text colour, for contrast on every theme, and VoiceOver reads a notice by its title.
 - The iPhone app's Start screen scrolls at the largest text sizes and in the longer languages
   instead of cutting off its name, tagline and buttons, and "Restore with the recovery key" is
-  44 points tall and the screen's width to touch. Settings put as many colour swatches in a
+  44 points tall and the screen's width to touch, in the other buttons' medium weight, at
+  which its Hindi line is no longer reported as clipped. "Copy Beyond Borders" under the name
+  is bold at the title 3 size, large text, whose contrast over the background's glow is
+  enough. Settings put as many colour swatches in a
   row as their names fit at the text size, so a long colour name breaks between words instead
   of being cut off. On an iPad, Settings opened from the Start screen cover the whole
   screen instead of a sheet whose lower edge cut the list's rows in view.

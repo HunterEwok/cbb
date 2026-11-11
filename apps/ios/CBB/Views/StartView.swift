@@ -79,9 +79,12 @@ struct StartView: View {
                 .foregroundStyle(palette.accent)
                 // WCAG's large text, for ReadersUITests' contrast (3:1).
                 .accessibilityIdentifier("largeText")
+            // Bold at title 3 (20 points), WCAG's large text, as the
+            // accent stays at 3:1 over the background's glow, not at 4.5:1.
             Text(verbatim: "Copy Beyond Borders")
-                .font(.system(.headline, design: .monospaced))
+                .font(.system(.title3, design: .monospaced).weight(.bold))
                 .foregroundStyle(palette.accent)
+                .accessibilityIdentifier("largeText")
             Text("One clipboard for this phone and your computers.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(palette.textDim)
@@ -103,9 +106,12 @@ struct StartView: View {
                     .contentShape(Rectangle())
             }
             // Plain, as the other buttons have styles of their own, so that
-            // its label is laid out as plain text in every script.
+            // its label is laid out as plain text in every script. Medium,
+            // as the other buttons' labels: at the regular weight Xcode's
+            // clipped text check flags Hindi's line in any text style, at
+            // the medium weight in none.
             .buttonStyle(.plain)
-            .font(.footnote)
+            .font(.footnote.weight(.medium))
             .foregroundStyle(palette.textDim)
         }
     }
