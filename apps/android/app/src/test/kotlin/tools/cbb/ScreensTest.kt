@@ -114,7 +114,7 @@ class ScreensTest {
 
     /**
      * The mute button in a tile's corner: on this phone's own tile always,
-     * on another device's only on an admin; with sync off, it says so.
+     * on another device's on an admin; with sync off, it says so.
      */
     @Test
     fun tileCorner() {
@@ -130,9 +130,10 @@ class ScreensTest {
             }
         }
         compose.onNodeWithContentDescription("${str(R.string.sync_off)}, Pixel").assertExists()
-        // This phone is no admin: another device's tile has no button.
-        compose.onNodeWithContentDescription("${str(R.string.mute)}, MacBook").assertDoesNotExist()
-        assertTrue(!model.mayMute(mac) && model.shownMuted(phone) && !model.shownMuted(mac))
+        // Before a group the phone counts as its admin (it would make it):
+        // another device's tile has the button, unmuted.
+        compose.onNodeWithContentDescription("${str(R.string.mute)}, MacBook").assertExists()
+        assertTrue(model.isAdmin && model.mayMute(mac) && model.shownMuted(phone) && !model.shownMuted(mac))
     }
 
     /** A9: in Russian the Start screen is Russian. */
