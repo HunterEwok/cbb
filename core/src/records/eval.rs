@@ -682,8 +682,10 @@ impl<'a> Evaluation<'a> {
 
     /// The records of rs (one signer's, by_id their IDs) whose prev chain
     /// down to seq 1, or to an anchor, is held, each step one seq lower.
-    /// A root's revoke, freeze or resolve whose prev the set does not hold
-    /// is whole too: a full set keeps it before its key's other records.
+    /// A root's revoke, freeze or resolve counts by itself, without its
+    /// chain (a full set keeps it before its key's other records); it does
+    /// not make the records above it whole, since it states nothing about
+    /// those below it.
     fn wholes(&self, rs: &[usize], by_id: &BTreeMap<RecordId, usize>, skip: &[bool]) -> BTreeSet<usize> {
         let step = |i: usize| -> Result<bool, usize> {
             let Some(r) = self.recs.get(i) else { return Ok(false) };
@@ -696,7 +698,7 @@ impl<'a> Evaluation<'a> {
             // A checkpoint's anchor stands for its chain even when the set
             // no longer holds it (a full key keeps its checkpoint first).
             let Some(&p) = r.b().prev.as_ref().and_then(|p| by_id.get(p)) else {
-                return Ok(r.early() || r.b().prev.as_ref().is_some_and(|p| self.anchors.contains(p)));
+                return Ok(r.b().prev.as_ref().is_some_and(|p| self.anchors.contains(p)));
             };
             let Some(prev) = self.recs.get(p) else { return Ok(false) };
             if Some(prev.b().seq) != r.b().seq.checked_sub(1) {
@@ -705,7 +707,8 @@ impl<'a> Evaluation<'a> {
             Err(p)
         };
         let mut memo = BTreeMap::new();
-        rs.iter().copied().filter(|&i| walk(&mut memo, i, step)).collect()
+        let early = |i: usize| !skip.get(i).copied().unwrap_or(false) && self.recs.get(i).is_some_and(|r| r.early());
+        rs.iter().copied().filter(|&i| early(i) || walk(&mut memo, i, step)).collect()
     }
 
     /// Turns the evaluation into its last epoch, with the claims of the

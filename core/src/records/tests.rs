@@ -1319,6 +1319,32 @@ fn a_full_set_keeps_the_roots_removals() {
     }
 }
 
+/// A root's removal counts without the records under it, but an ordinary
+/// root record above a gap waits for the gap to fill.
+#[test]
+fn a_roots_removal_counts_by_itself_and_nothing_above_it() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("d"), "d", |_| {});
+    g.device(&root, &k("x"), "x", |_| {});
+    let third = g.device(&root, &k("y"), "y", |_| {});
+    g.root_rec(Kind::Copies { incoming_ms: 6_000 });
+    let rv = g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    let sixth = g.device(&root, &k("z"), "z", |_| {});
+    let held = BTreeMap::new();
+    let without: Vec<Record> = g.recs.iter().filter(|r| r.id() != third.id()).cloned().collect();
+    let s = state_of(&g.root.key, &without, &held);
+    assert!(s.revoked.contains(&k("d").hash) && s.counting.contains(&rv.id()));
+    assert!(!s.counting.contains(&sixth.id()) && s.device(&k("z").key.device_id()).is_none());
+    let want = g.state();
+    assert!(want.counting.contains(&sixth.id()) && want.revoked.contains(&k("d").hash));
+    for seed in 1..6 {
+        let mut set = RecordSet::new(g.root.key.clone());
+        set.insert_all(shuffled(&g.recs, seed));
+        assert_eq!(set.state(&held), want, "order {seed}");
+    }
+}
+
 /// The same records in an order of seed.
 fn shuffled(recs: &[Record], seed: u64) -> Vec<Record> {
     let mut out = recs.to_vec();
