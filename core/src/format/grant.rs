@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 
 use super::cbor::Value;
 use super::envelope::Envelope;
-use super::key::{Alg, Key, KeyHash};
+use super::key::{Alg, DeviceId, Key, KeyHash};
 use super::{Rule, sha256, sig};
 
 /// The most grants in one batch.
@@ -201,4 +201,24 @@ pub fn read<'a>(msg: &Value<'a>, root: &[u8]) -> Result<Granted<'a>, Rule> {
         return Err(RULE_READERS);
     }
     Ok(Granted { batch, admin, grant, map, guarded })
+}
+
+/// A copy to a leaf from a device its grant does not let send it copies.
+pub const RULE_COPY_SENDER: Rule = Rule::field("copy/leaf-sender");
+
+/// Whether a leaf takes a copy whose header names origin, by the grant it
+/// keeps (owner, 2026-11-11): an ordinary leaf takes copies from its readers
+/// (field 13, `[device ID, Key]`), the same devices it seals to; a guarded
+/// leaf only from its commanders (field 12, Keys), whose device IDs are
+/// their keys' IDs.
+pub fn copy_sender(grant: &Value<'_>, origin: &DeviceId) -> Result<(), Rule> {
+    let list = |field| grant.get(field).and_then(Value::as_array).unwrap_or(&[]);
+    let named = if grant.get(FIELD_GUARDED).is_some() {
+        list(FIELD_COMMANDERS).iter().any(|k| Key::from_value(k).is_ok_and(|k| k.device_id() == *origin))
+    } else {
+        list(FIELD_READERS)
+            .iter()
+            .any(|r| r.as_array().and_then(|a| a.first()).and_then(Value::as_bytes) == Some(origin.0.as_slice()))
+    };
+    if named { Ok(()) } else { Err(RULE_COPY_SENDER) }
 }

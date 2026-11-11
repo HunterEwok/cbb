@@ -448,7 +448,46 @@ func main() {
 			fail("grants %s: taken", r.Name)
 		}
 	}
-	fmt.Printf("%-18s %d checked\n", "grants.json", len(g.Take)+2)
+	// who may send a leaf copies: an ordinary leaf its readers, a guarded
+	// leaf only its commanders
+	var gs struct {
+		Senders []struct {
+			Name    string `json:"name"`
+			Grant   string `json:"grant"`
+			Origin  string `json:"origin"`
+			Verdict string `json:"verdict"`
+			Rule    string `json:"rule"`
+		} `json:"copy_senders"`
+	}
+	load(dir, "grants.json", &gs)
+	for _, t := range gs.Senders {
+		v, err := strict(unhex(t.Grant))
+		must(err)
+		m := v.(map[any]any)
+		origin := unhex(t.Origin)
+		named := false
+		if _, guarded := m[uint64(15)]; guarded {
+			cs, _ := m[uint64(12)].([]any)
+			for _, k := range cs {
+				if h, _, err := keyHash(k); err == nil && bytes.Equal(h[:16], origin) {
+					named = true
+				}
+			}
+		} else {
+			rs, _ := m[uint64(13)].([]any)
+			for _, r := range rs {
+				if a, ok := r.([]any); ok && len(a) == 2 {
+					if id, ok := a[0].([]byte); ok && bytes.Equal(id, origin) {
+						named = true
+					}
+				}
+			}
+		}
+		if named != (t.Verdict == "take") || (!named && t.Rule != "copy/leaf-sender") {
+			fail("grants copy sender %s: named %v", t.Name, named)
+		}
+	}
+	fmt.Printf("%-18s %d checked\n", "grants.json", len(g.Take)+2+len(gs.Senders))
 
 	// frames
 	var fr struct {

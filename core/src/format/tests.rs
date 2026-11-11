@@ -14,7 +14,7 @@ use serde_json::Value as Json;
 use super::cbor::{self, Value};
 use super::envelope::{self, Envelope};
 use super::frame;
-use super::key::{Alg, Key};
+use super::key::{Alg, DeviceId, Key};
 use super::print::{self, Kind};
 use super::{Rule, container, copy, grant, sig};
 
@@ -241,6 +241,14 @@ fn grants() {
         let v = cbor::decode(&mb).unwrap();
         let got = grant::read(&v, &root);
         assert_eq!(got.err().map(Rule::name), Some(s(t, "rule")), "{}", s(t, "name"));
+    }
+    for t in g["copy_senders"].as_array().unwrap() {
+        let gb = unhex(s(t, "grant"));
+        let map = cbor::decode(&gb).unwrap();
+        let origin = DeviceId(unhex(s(t, "origin")).try_into().unwrap());
+        let got = grant::copy_sender(&map, &origin).err().map(Rule::name);
+        let want = (s(t, "verdict") == "refuse").then(|| s(t, "rule"));
+        assert_eq!(got, want, "{}", s(t, "name"));
     }
 }
 

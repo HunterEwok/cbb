@@ -232,6 +232,7 @@ PHONE = Signer("phone member key")
 LAPTOP = Signer("laptop member key")
 BOARD = Signer("board member key")
 LOCK = Signer("lock member key")
+TABLET = Signer("tablet member key")
 STRANGER = Signer("stranger")
 PERIOD = Signer("period key")
 SRVKEY = Signer("laptop server key")
@@ -685,8 +686,8 @@ def grant_vectors(admin_record):
     g, gbody, benv, idx, path, msg = ok("guarded lock, grant signed by the root", {
         1: 1, 2: GROUP, 4: 3, 10: LOCK.id16,
         12: sorted([PHONE.key, LAPTOP.key], key=lambda k: sha(enc(k))),
-        13: [[LAPTOP.id16, LAPTOP.key]], 14: sorted([LAPTOP.hash, PHONE.hash]),
-        15: 1, 16: T0 + 9000}, ROOT, 12)
+        13: sorted([[LAPTOP.id16, LAPTOP.key], [TABLET.id16, TABLET.key]], key=lambda a: a[0]),
+        14: sorted([LAPTOP.hash, PHONE.hash]), 15: 1, 16: T0 + 9000}, ROOT, 12)
     bad = dict(msg)
     bad[4] = path[:-1]
     refuse.append({"name": "path one hash short", "rule": "grants/batch", "verdict": "refuse",
@@ -715,7 +716,23 @@ def grant_vectors(admin_record):
     _, benv6, _, idx6, path6 = batch_of(ADMIN, 3, others[0], others[1:], 3)
     refuse.append({"name": "admin's batch without the root's record", "rule": "grants/admin", "verdict": "refuse",
                    "message": enc(message(benv6, others[0], idx6, path6)).hex()})
-    return take, refuse
+    # Who may send a leaf copies (owner 2026-11-11): an ordinary leaf takes
+    # them from its readers, a guarded leaf only from its commanders.
+    kettle, lock = take[0]["grant"], take[1]["grant"]
+    senders = []
+    for name, gb, origin, rule in [
+        ("ordinary kettle, copy from its reader", kettle, LAPTOP, None),
+        ("ordinary kettle, copy from a neighbour that is not a reader", kettle, PHONE, "copy/leaf-sender"),
+        ("guarded lock, copy from its commander", lock, PHONE, None),
+        ("guarded lock, copy from a commander that is also a reader", lock, LAPTOP, None),
+        ("guarded lock, copy from a reader that is not a commander", lock, TABLET, "copy/leaf-sender"),
+        ("guarded lock, copy from a stranger", lock, BOARD, "copy/leaf-sender"),
+    ]:
+        row = {"name": name, "grant": gb, "origin": origin.id16.hex(), "verdict": "refuse" if rule else "take"}
+        if rule:
+            row["rule"] = rule
+        senders.append(row)
+    return take, refuse, senders
 
 
 def credential_vectors():
@@ -997,7 +1014,7 @@ def main():
     rt, rr = record_vectors()
     st, sr = statement_vectors()
     ct, cr = command_vectors()
-    gt, gr = grant_vectors(bytes.fromhex(rt[0]["envelope"]))
+    gt, gr, gs = grant_vectors(bytes.fromhex(rt[0]["envelope"]))
     kt, kr = credential_vectors()
     mv, mb, digest = message_vectors(rt)
     files = {
@@ -1006,7 +1023,7 @@ def main():
         "records.json": {"label": LABELS["record"], "take": rt, "refuse": rr},
         "statements.json": {"label": LABELS["keys"], "take": st, "refuse": sr},
         "commands.json": {"label": LABELS["command"], "take": ct, "refuse": cr},
-        "grants.json": {"label": LABELS["grant"], "take": gt, "refuse": gr},
+        "grants.json": {"label": LABELS["grant"], "take": gt, "refuse": gr, "copy_senders": gs},
         "credentials.json": {"label": LABELS["credential"], "take": kt, "refuse": kr},
         "frames.json": {"grid": "64, 256, 1024, 4096, 16384, then multiples of 16384",
                         "take": mv, "refuse": mb, "set_digest_of_records_take": digest},
