@@ -185,6 +185,30 @@ final class ReadersUITests: XCTestCase {
         }
     }
 
+    /// TEMPORARY: which variants of the restore link the clipped text
+    /// check flags in Hindi and in English, each issue listed by the
+    /// variant's identifier. Removed once it has run.
+    func testRestoreLinkVariants() {
+        for language in ["hi", "en"] {
+            let app = launch(language: language, extra: ["-restoreLinkExperiment"])
+            XCTAssertTrue(app.buttons["v00-current"].waitForExistence(timeout: 30))
+            picture("failed-variants-\(language)")
+            var flagged: [String] = []
+            try? app.performAccessibilityAudit(for: [.textClipped]) { issue in
+                let id = issue.element?.identifier ?? "none"
+                flagged.append(id)
+                print("variant \(language) \(id) flagged: \(issue.compactDescription) at \(issue.element?.frame ?? .zero) hittable \(issue.element?.isHittable ?? false)")
+                return true
+            }
+            var rows: [String] = []
+            for e in app.descendants(matching: .any).allElementsBoundByIndex where e.identifier.hasPrefix("v") {
+                rows.append("\(e.identifier) \(Int(e.frame.minY))+\(Int(e.frame.height)) \(e.isHittable ? "" : "unhittable ")\(flagged.contains(e.identifier) ? "FLAGGED" : "ok")")
+            }
+            XCTFail("variants in \(language): flagged \(flagged.sorted()); all: \(rows.joined(separator: ", "))")
+            app.terminate()
+        }
+    }
+
     /// U16: at the largest accessibility text size, in English, in
     /// Swahili, among the longest of the eight, and in Hindi, the tallest
     /// script, no text is clipped and the screens follow Dynamic Type.
