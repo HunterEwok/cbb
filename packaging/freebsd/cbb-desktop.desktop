@@ -4,6 +4,13 @@
 Type=Application
 Name=CBB
 Comment=Share this desktop's clipboard with the CBB group
+Comment[ar]=مشاركة حافظة سطح المكتب هذا مع مجموعة CBB
+Comment[es]=Comparte el portapapeles de este escritorio con el grupo de CBB
+Comment[he]=שיתוף לוח הגזירים של שולחן העבודה הזה עם קבוצת CBB
+Comment[hi]=इस डेस्कटॉप का क्लिपबोर्ड CBB समूह के साथ साझा करें
+Comment[ru]=Делится буфером обмена этого рабочего стола с группой CBB
+Comment[sw]=Shiriki ubao wa kunakili wa eneo-kazi hili na kikundi cha CBB
+Comment[zh]=与 CBB 群组共享此桌面的剪贴板
 Exec=/usr/local/bin/cbb agent
 NoDisplay=true
 X-GNOME-Autostart-enabled=true

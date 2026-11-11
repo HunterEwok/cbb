@@ -12,6 +12,12 @@ All notable changes to cbb are documented in this file. The format follows
   second token of the app in the TEE, whose PIN the user chooses (at least four digits) and
   the TEE checks; seven wrong PINs lock it for good. The member key stays where it was, so
   sync needs no PIN. Settings change the PIN.
+- The installers and uninstallers (`get.sh`, `get.ps1`, Linux, rootless, macOS, FreeBSD,
+  OpenWrt and Windows) speak the user's language: Arabic, Chinese, English, Hebrew, Hindi,
+  Russian, Spanish or Swahili, from the system's locale (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`,
+  `LANG`, a Mac's preferred languages, Windows' display language), or `CBB_LANG`. The
+  release's `get.sh` and `get.ps1` carry their translations. The desktop entries have their
+  comments in these languages too.
 - Remote invitations on every device: any admin makes one, on the group's hub or through a
   hub it is connected to, which lets the guest in and passes the pairing to the admin's
   window (`guest` messages, docs/protocol.md, section 12, "Through the hub"). The invitation
