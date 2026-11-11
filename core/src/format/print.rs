@@ -88,8 +88,6 @@ pub enum Kind {
     Statement,
     /// A command's body (section 6).
     Command,
-    /// A grant batch's body (section 7).
-    GrantBatch,
     /// A grant's body (section 7).
     Grant,
     /// A server credential's body (section 8).
@@ -176,7 +174,10 @@ fn record_field(typ: u64, k: u16) -> Option<&'static str> {
         2 | 3 => ["keys", "seen"].get(i).copied(),
         4 | 6 => ["records"].get(i).copied(),
         5 => ["root", "seen"].get(i).copied(),
-        7 => ["takeover_delay_ms", "key_level", "min_rules", "admin_limit", "shared", "servers"].get(i).copied(),
+        7 => ["takeover_delay_ms", "key_level", "min_rules", "", "shared", "servers"]
+            .get(i)
+            .copied()
+            .filter(|n| !n.is_empty()),
         8 => ["incoming_ms"].get(i).copied(),
         9 => ["heads", "keep"].get(i).copied(),
         10 => ["hubs"].get(i).copied(),
@@ -207,15 +208,10 @@ pub fn field_name(kind: Kind, typ: u64, k: u16) -> Option<&'static str> {
             10 | 11 | 13..=15 => ["to", "id", "", "nonce", "epoch", "sealed"].get(ki.wrapping_sub(10)).copied(),
             _ => common(),
         },
-        Kind::GrantBatch => match k {
-            4 => Some("n"),
-            10 => Some("merkle"),
-            11 => Some("count"),
-            _ => common(),
-        },
         Kind::Grant => match k {
             1 => Some("type"),
             2 => Some("group"),
+            3 => Some("signer"),
             4 => Some("counter"),
             10..=15 => {
                 ["leaf", "life_ms", "commanders", "readers", "neighbors", "guarded"].get(ki.wrapping_sub(10)).copied()
@@ -263,7 +259,8 @@ pub fn field_name(kind: Kind, typ: u64, k: u16) -> Option<&'static str> {
             (2, 8) => Some("records"),
             (3, 8) => Some("keys"),
             (2, 9) => Some("command"),
-            (2..=6, 20) => ["batch", "grant", "path", "index", "admin"].get(ki.wrapping_sub(2)).copied(),
+            (2, 20) => Some("grant"),
+            (3, 20) => Some("admin"),
             _ => None,
         },
         Kind::Copy => {

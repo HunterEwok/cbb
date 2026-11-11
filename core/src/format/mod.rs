@@ -3,8 +3,8 @@
 
 //! The 0.6 wire format: one strict CBOR profile for every message, record,
 //! statement, command, grant, credential and copy header, and the pieces
-//! every kind shares (keys, the signed envelope, padded frames, the grant
-//! batch, the copy's signature, the TLS key container).
+//! every kind shares (keys, the signed envelope, padded frames, the copy's
+//! signature, the TLS key container).
 //!
 //! This is the format level only: the bytes, their one encoding, the
 //! envelope's shape and the signatures. What each field of each kind means
@@ -102,8 +102,9 @@ impl Rule {
     /// A message that is not a map with its type in field 0.
     pub const FRAME_MESSAGE: Rule = Rule("frame/message");
 
-    /// A grant whose path does not lead to its batch's root.
-    pub const GRANTS_BATCH: Rule = Rule("grants/batch");
+    /// A message `grant` without its grant envelope, or a grant without its
+    /// signer's key hash.
+    pub const GRANTS_SHAPE: Rule = Rule("grants/shape");
     /// A key container that is not the template with its key.
     pub const CONTAINER: Rule = Rule("container/template");
 

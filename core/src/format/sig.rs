@@ -18,7 +18,7 @@ pub const LABEL_RECORD: &str = "cbb record v3";
 pub const LABEL_KEYS: &str = "cbb keys v1";
 /// Commands, and the associated data of their sealed orders.
 pub const LABEL_COMMAND: &str = "cbb command v3";
-/// Grant batches.
+/// Grants.
 pub const LABEL_GRANT: &str = "cbb grant v1";
 /// Server credentials.
 pub const LABEL_CREDENTIAL: &str = "cbb credential v2";

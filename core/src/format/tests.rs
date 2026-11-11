@@ -228,9 +228,9 @@ fn grants() {
         let got = grant::read(&v, &root).unwrap_or_else(|r| panic!("{}: {r}", s(t, "name")));
         assert_eq!(got.guarded, s(t, "name").contains("guarded"));
         assert_eq!(got.admin.is_some(), s(t, "name").contains("admin"));
-        assert_eq!(hex(got.grant), s(t, "grant"));
-        assert_eq!(hex(got.batch.body), s(t, "batch"));
-        assert_eq!(print::diag(&got.map), s(t, "grant_diag"));
+        assert_eq!(hex(got.grant.body), s(t, "grant"));
+        assert_eq!(print::diag(&got.grant.map), s(t, "grant_diag"));
+        assert!(print::describe(Kind::Grant, &got.grant.map).contains("signer(3)"));
         let fb = unhex(s(t, "frame"));
         let f = frame::read(&fb, frame::LIMIT_LEAF).unwrap();
         assert_eq!(f.t, 20);
@@ -249,23 +249,6 @@ fn grants() {
         let got = grant::copy_sender(&map, &origin).err().map(Rule::name);
         let want = (s(t, "verdict") == "refuse").then(|| s(t, "rule"));
         assert_eq!(got, want, "{}", s(t, "name"));
-    }
-}
-
-#[test]
-fn merkle_paths_for_every_size() {
-    for n in 1..=40usize {
-        let leaves: Vec<[u8; 32]> = (0..n).map(|i| grant::leaf(&[i as u8])).collect();
-        let (root, paths) = grant::tree(&leaves);
-        for (i, path) in paths.iter().enumerate() {
-            assert_eq!(grant::root_of(leaves[i], i as u64, n as u64, path), Ok(root), "{n} {i}");
-            if !path.is_empty() {
-                assert!(grant::root_of(leaves[i], i as u64, n as u64, &path[1..]).is_err());
-            }
-            let mut longer = path.clone();
-            longer.push([0; 32]);
-            assert!(grant::root_of(leaves[i], i as u64, n as u64, &longer).is_err());
-        }
     }
 }
 

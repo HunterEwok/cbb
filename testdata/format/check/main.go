@@ -369,7 +369,8 @@ func main() {
 	checkSigned(dir, "commands.json", bySignerHash)
 	checkSigned(dir, "credentials.json", bySignerKey)
 
-	// grants: batch signature and membership
+	// grants: one signed envelope, by the root, or by an admin whose key
+	// the root's record in field 3 makes an admin with admit
 	var g struct {
 		Take []struct {
 			Name    string `json:"name"`
@@ -388,63 +389,55 @@ func main() {
 			return err
 		}
 		m := v.(map[any]any)
-		envb, err := em.Marshal(m[uint64(2)])
+		ge, ok := m[uint64(2)]
+		if !ok {
+			return errors.New("grants/shape")
+		}
+		envb, err := em.Marshal(ge)
 		if err != nil {
 			return err
 		}
-		batch, _, err := envelope(envb, "cbb grant v1", bySignerHash)
-		if err != nil {
-			return err
-		}
-		gb := m[uint64(3)].([]byte)
-		if _, err := strict(gb); err != nil {
-			return err
-		}
-		var path [][]byte
-		if p, ok := m[uint64(4)].([]any); ok {
-			for _, x := range p {
-				path = append(path, x.([]byte))
+		rootHash := mustHashOf("root", keys.Keys)
+		admin := func(body map[any]any) ([]byte, error) {
+			if h, _ := body[uint64(3)].([]byte); hex.EncodeToString(h) == rootHash {
+				return byHash[rootHash], nil
 			}
-		}
-		idx, _ := m[uint64(5)].(uint64)
-		count := batch[uint64(11)].(uint64)
-		root := batch[uint64(10)].([]byte)
-		leaf := sha256.Sum256(append([]byte{0}, gb...))
-		h := leaf[:]
-		if idx >= count {
-			return errors.New("grants/batch")
-		}
-		k := 0
-		for n := count; n > 1; n = (n + 1) / 2 {
-			if !(idx == n-1 && n%2 == 1) {
-				if k >= len(path) {
-					return errors.New("grants/batch")
-				}
-				var in []byte
-				if idx%2 == 0 {
-					in = append(append([]byte{1}, h...), path[k]...)
-				} else {
-					in = append(append([]byte{1}, path[k]...), h...)
-				}
-				s := sha256.Sum256(in)
-				h = s[:]
-				k++
+			rec, ok := m[uint64(3)]
+			if !ok {
+				return nil, errors.New("grants/admin")
 			}
-			idx /= 2
+			rb, err := em.Marshal(rec)
+			if err != nil {
+				return nil, err
+			}
+			r, _, err := envelope(rb, "cbb record v3", bySignerHash)
+			if err != nil || hex.EncodeToString(r[uint64(3)].([]byte)) != rootHash {
+				return nil, errors.New("grants/admin")
+			}
+			kh, pub, err := keyHash(r[uint64(20)])
+			if err != nil || !bytes.Equal(kh, body[uint64(3)].([]byte)) {
+				return nil, errors.New("grants/admin")
+			}
+			if p, _ := r[uint64(21)].(uint64); p&1 != 1 {
+				return nil, errors.New("grants/admin")
+			}
+			return pub, nil
 		}
-		if k != len(path) || !bytes.Equal(h, root) {
-			return errors.New("grants/batch")
-		}
-		return nil
+		_, _, err = envelope(envb, "cbb grant v1", admin)
+		return err
 	}
 	for _, t := range g.Take {
 		if err := grant(unhex(t.Message)); err != nil {
 			fail("grants %s: %v", t.Name, err)
 		}
 	}
+	checkedRefuse := 0
 	for _, r := range g.Refuse {
-		err := grant(unhex(r.Message))
-		if r.Rule == "grants/batch" && err == nil {
+		if !strings.HasPrefix(r.Rule, "sig/") && r.Rule != "grants/shape" && r.Rule != "grants/admin" {
+			continue
+		}
+		checkedRefuse++
+		if grant(unhex(r.Message)) == nil {
 			fail("grants %s: taken", r.Name)
 		}
 	}
@@ -487,7 +480,7 @@ func main() {
 			fail("grants copy sender %s: named %v", t.Name, named)
 		}
 	}
-	fmt.Printf("%-18s %d checked\n", "grants.json", len(g.Take)+2+len(gs.Senders))
+	fmt.Printf("%-18s %d checked\n", "grants.json", len(g.Take)+checkedRefuse+len(gs.Senders))
 
 	// frames
 	var fr struct {
