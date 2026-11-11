@@ -1013,6 +1013,26 @@ def main():
         "copy.json": copy_vector(),
         "container.json": container_vector(),
     }
+    # Each signature has one form: the high-S twin of a valid signature
+    # (the same r, n - s) is refused for every kind.
+    def twin(sig):
+        s_ = int.from_bytes(sig[32:], "big")
+        return sig[:32] + (N - s_).to_bytes(32, "big")
+
+    for fname in ["statements.json", "commands.json", "credentials.json"]:
+        t = files[fname]["take"][0]
+        env = dec(bytes.fromhex(t["envelope"]))
+        files[fname]["refuse"].append({
+            "name": "high-S twin of " + t["name"], "rule": "sig/low-s", "verdict": "refuse",
+            "envelope": enc([env[0], twin(env[1])]).hex()})
+    g = dec(bytes.fromhex(files["grants.json"]["take"][1]["message"]))
+    g[2] = [g[2][0], twin(g[2][1])]
+    files["grants.json"]["refuse"].append({"name": "high-S twin of the root's batch", "rule": "sig/low-s",
+                                           "verdict": "refuse", "message": enc(g).hex()})
+    c = dec(bytes.fromhex(files["copy.json"]["copy"]))
+    c[6] = twin(c[6])
+    files["copy.json"]["copy_high_s_twin"] = enc(c).hex()
+
     # self-check: every signed vector marked take or hold verifies and reads
     for fname in ["records.json", "statements.json", "credentials.json", "commands.json"]:
         for t in files[fname]["take"]:

@@ -359,6 +359,9 @@ fn copies() {
         assert!(print::describe(Kind::Copy, &v).contains("hdr(1)"));
         assert!(print::describe(Kind::CopyHeader, &cp.header).contains("origin(2)"));
     }
+    let twin = unhex(s(&c, "copy_high_s_twin"));
+    let tv = cbor::decode(&twin).unwrap();
+    assert_eq!(copy::Copy::from_value(&tv).unwrap().verify(&laptop), Err(Rule::SIG_LOW_S));
     let content = unhex(s(&c, "content_plaintext"));
     let v = copy::read_content(&content).unwrap();
     let without: Vec<(u16, Value<'_>)> = v.as_map().unwrap().iter().filter(|(k, _)| *k != 1).cloned().collect();
@@ -535,5 +538,61 @@ proptest::proptest! {
             _ => b.insert(at, byte),
         }
         super::fuzz::one_form(&b);
+    }
+}
+
+/// The high-S twin of a signature: the same r with n − s.
+fn high_s_twin(sig: &[u8]) -> Vec<u8> {
+    const N: [u8; 32] = [
+        0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xbc, 0xe6,
+        0xfa, 0xad, 0xa7, 0x17, 0x9e, 0x84, 0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51,
+    ];
+    let mut out = sig[..32].to_vec();
+    let mut borrow = 0i16;
+    let mut low = [0u8; 32];
+    for i in (0..32).rev() {
+        let d = i16::from(N[i]) - i16::from(sig[32 + i]) - borrow;
+        borrow = i16::from(d < 0);
+        low[i] = (d + 256 * borrow) as u8;
+    }
+    out.extend_from_slice(&low);
+    out
+}
+
+#[test]
+fn every_signature_has_one_form() {
+    // For every signed vector taken, the twin (r, n − s) of its signature
+    // also verifies mathematically, and is refused for its high s.
+    let keys = keys();
+    for (file, by_key) in
+        [("records.json", false), ("statements.json", false), ("commands.json", false), ("credentials.json", true)]
+    {
+        let f = load(file);
+        let label = s(&f, "label");
+        for t in f["take"].as_array().unwrap() {
+            let b = unhex(s(t, "envelope"));
+            let e = Envelope::parse(&b).unwrap();
+            let point = if by_key {
+                Key::from_value(e.signer().unwrap()).unwrap().public.to_vec()
+            } else {
+                keys[&hex(e.signer().unwrap().as_bytes().unwrap())].clone()
+            };
+            let twin = high_s_twin(e.sig);
+            assert_eq!(
+                sig::verify_es256(&point, label, e.body, &twin),
+                Err(Rule::SIG_LOW_S),
+                "{file} {}",
+                s(t, "name")
+            );
+            // The twin is the signature p256 itself would also accept.
+            let full = p256::ecdsa::Signature::from_slice(&twin).unwrap();
+            use p256::ecdsa::signature::Verifier;
+            assert!(
+                p256::ecdsa::VerifyingKey::from_sec1_bytes(&point)
+                    .unwrap()
+                    .verify(&sig::message(label, e.body), &full)
+                    .is_ok()
+            );
+        }
     }
 }
