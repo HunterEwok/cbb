@@ -108,6 +108,26 @@ impl Default for Cut {
 }
 
 impl Cut {
+    /// Reports whether the set dropped nothing yet.
+    pub fn is_empty(&self) -> bool {
+        self.marks.is_empty() && self.future.is_empty()
+    }
+
+    /// The level the shares stand at.
+    pub fn level(&self) -> u64 {
+        self.level.min(TOP)
+    }
+
+    /// The units key dropped, when it dropped any.
+    pub fn dropped(&self, key: &KeyHash) -> Option<u64> {
+        self.marks.get(key).map(|(_, u)| *u)
+    }
+
+    /// The keys that dropped records, with their units.
+    pub fn dropped_all(&self) -> impl Iterator<Item = (&KeyHash, u64)> {
+        self.marks.iter().map(|(k, (_, u))| (k, *u))
+    }
+
     /// Reports whether a record comes at or after the first record its key
     /// dropped: it is not kept.
     pub fn past(&self, it: &Item) -> bool {

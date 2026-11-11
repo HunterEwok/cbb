@@ -1233,6 +1233,45 @@ fn only_a_phone_admin_or_the_recovery_key_takes_over() {
 
 /// A pool of records that touches every rule: admins, devices, removals,
 /// a freeze and a thaw, two histories, claims, held records, settings.
+/// The same records in an order of seed.
+fn shuffled(recs: &[Record], seed: u64) -> Vec<Record> {
+    let mut out = recs.to_vec();
+    let mut s = seed;
+    for i in (1..out.len()).rev() {
+        s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        out.swap(i, (s >> 33) as usize % (i + 1));
+    }
+    out
+}
+
+/// More keys than the set has room for, each up to its ceiling: what the
+/// set keeps is the same whatever order the records come in, also while
+/// the units it stores fit.
+#[test]
+fn a_full_set_keeps_the_same_records_in_any_order() {
+    let mut g = G::new();
+    let admins: Vec<K> = (0..18).map(|i| k(&format!("a{i}"))).collect();
+    for (i, a) in admins.iter().enumerate() {
+        g.admin(&k(&format!("p{i}")), a, POWER_ADMIT);
+    }
+    for (i, a) in admins.iter().enumerate() {
+        for j in 0..(200 + 10 * i) {
+            g.rec(a, Kind::Copies { incoming_ms: 5_000 + j as u64 });
+        }
+    }
+    let mut want = RecordSet::new(g.root.key.clone());
+    want.insert_all(g.recs.clone());
+    assert!(want.len() < g.recs.len());
+    for seed in 1..3 {
+        let mut set = RecordSet::new(g.root.key.clone());
+        set.insert_all(shuffled(&g.recs, seed));
+        assert_eq!(set.digest(), want.digest(), "order {seed}");
+    }
+    // And it is what the evaluation of all the records keeps.
+    let strip = |s: &State| State { ignored: Vec::new(), ..s.clone() };
+    assert_eq!(strip(&want.state(&BTreeMap::new())), strip(&g.state()));
+}
+
 fn pool() -> (Key, Vec<Record>) {
     let mut g = G::new();
     let root = k("root");
