@@ -4,7 +4,7 @@
 //! A TLS connection without I/O, over rustls's unbuffered API, which needs
 //! no standard library. The caller moves the bytes: it feeds what the
 //! socket received, sends what the session queued, and reads and writes
-//! the plaintext. The lite member drives it over a blocking socket; a
+//! the plaintext. cbb drives it over a blocking socket; a
 //! microcontroller drives it over its own network stack.
 
 use alloc::sync::Arc;

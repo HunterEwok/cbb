@@ -27,7 +27,7 @@ let package = Package(
             .product(name: "_CryptoExtras", package: "swift-crypto"),
         ], linkerSettings: [
             .linkedLibrary("cbb_ffi"),
-            // The lite member's smart card signer (member/src/piv.rs) on a
+            // The Rust cbb's smart card signer (member/src/piv.rs) on a
             // Mac, in the host's library that swift test links; a static
             // library does not carry its frameworks, so the link names it.
             .linkedFramework("PCSC", .when(platforms: [.macOS])),

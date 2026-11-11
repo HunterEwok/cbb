@@ -2,6 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 #include "app.h"
+#include "core.h"
 #include "platform/shell.h"
 
 #include <QFileInfo>
@@ -15,8 +16,22 @@
 #include <QTranslator>
 #include <QUrl>
 
+#include <cstdio>
+#include <cstring>
+
 int main(int argc, char *argv[])
 {
+    // --test-panic: the wrapper's check (docs/core-api.md, "Panics") that a
+    // panic in the core is the answer code 5 and the app goes on; the core
+    // is asked again after it.
+    if (argc == 2 && std::strcmp(argv[1], "--test-panic") == 0) {
+        Failure f;
+        const int code = Core::testPanic(&f).toInt();
+        Failure after;
+        const QString line = Core::versionLine(&after);
+        std::printf("code %d\n%s\n%s\n", code, qPrintable(f.details), qPrintable(line));
+        return code == 5 && f.details.contains(QStringLiteral("cbb_test_panic")) && after.isNull() ? 0 : 1;
+    }
     QScopedPointer<QGuiApplication> application(Shell::application(argc, argv));
     application->setOrganizationName(QStringLiteral("tools.cbb"));
     application->setApplicationName(QStringLiteral(CBB_APP_NAME));
@@ -42,6 +57,7 @@ int main(int argc, char *argv[])
     qmlRegisterUncreatableType<BleKeyboard>("tools.cbb", 1, 0, "BleKeyboard", QStringLiteral("the app makes it"));
     qmlRegisterUncreatableType<PasteReceiver>("tools.cbb", 1, 0, "PasteReceiver", QStringLiteral("the app makes it"));
     qmlRegisterUncreatableType<Events>("tools.cbb", 1, 0, "Events", QStringLiteral("the app makes it"));
+    qmlRegisterUncreatableType<Bugs>("tools.cbb", 1, 0, "Bugs", QStringLiteral("the app makes it"));
     App app;
     QScopedPointer<QQuickView> view(Shell::view());
     view->rootContext()->setContextProperty(QStringLiteral("app"), &app);

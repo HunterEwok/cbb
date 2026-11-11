@@ -11,15 +11,17 @@
 # cbb needs without asking and says what it added, --no-firewall
 # adds none and prints the commands that would, --port N moves the member
 # port from 8764 to N, --home-cgnat on counts 100.64.0.0/10 as the home
-# network too (a home network on the carrier-grade NAT range); on Linux, --lite installs the lite member for small devices instead of the full
-# member, --console also starts tmux after a login on the text console, and
-# --uinput adds the full member's uinput helper for remote paste on desktops
-# without another way to press keys. The lite member starts pairing as
-# soon as it runs in no group and shows its QR code; --no-pair, for a
-# scripted install, leaves that for later.
-# --rootless, run without sudo (curl ... | sh -s -- --rootless), installs the
-# full member, or with --lite the lite member, for the user who runs it, on
-# Linux only (D-79).
+# network too (a home network on the carrier-grade NAT range); on Linux,
+# --no-helper leaves out cbb-helper, the Go helper beside cbb (keys in the
+# TPM, the desktop's clipboard and keys, Bluetooth), for a small device that
+# needs none of it, --console also starts tmux after a login on the text
+# console, and --uinput adds the uinput helper for remote paste on desktops
+# without another way to press keys. The archive of each system decides the
+# rest: a router's (MIPS) has no helper. cbb without its helper starts
+# pairing as soon as it runs in no group and shows its QR code; --no-pair,
+# for a scripted install, leaves that for later.
+# --rootless, run without sudo (curl ... | sh -s -- --rootless), installs cbb
+# for the user who runs it, on Linux only (D-79).
 # CBB_ATTESTATION=require refuses to install unless GitHub's build
 # provenance attestation of the archive checks out (it needs gh, signed in);
 # CBB_ATTESTATION=skip does not check it. CBB_VERSION=v1.2.3 picks a
@@ -84,7 +86,7 @@ port=
 cgnat=
 auto=
 firewall=${CBB_FIREWALL:-ask}
-lite=no
+nohelper=
 nopair=
 rootless=
 while [ $# -gt 0 ]; do
@@ -119,11 +121,11 @@ while [ $# -gt 0 ]; do
 		;;
 	--express) firewall=express ;;
 	--no-firewall) firewall=no ;;
-	--lite) lite=yes ;;
+	--no-helper) nohelper=--no-helper ;;
 	--no-pair) nopair=--no-pair ;;
 	--rootless) rootless=--rootless ;;
 	*)
-		note get.sh "unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)" "$1"
+		note get.sh "unknown option %s (known: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)" "$1"
 		exit 2
 		;;
 	esac
@@ -165,8 +167,8 @@ Linux)
 	esac
 	if [ -f /etc/openwrt_release ]; then
 		os=openwrt
-		if [ "$lite-${arch%le}" = yes-mips ]; then
-			note get.sh "the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it."
+		if [ "${arch%le}" = mips ]; then
+			note get.sh "cbb for MIPS has no sync away from home yet (roadmap item 37)."
 		fi
 		[ -z "$console" ] || fail "--console is not for a router"
 		[ -z "$uinput" ] || fail "--uinput is not for a router"
@@ -175,7 +177,7 @@ Linux)
 	;;
 Darwin)
 	os=darwin
-	[ "$lite" = no ] || fail "--lite is for Linux; a Mac runs the full member"
+	[ -z "$nohelper" ] || fail "--no-helper is for Linux"
 	[ -z "$console" ] || fail "--console is for Linux"
 	[ -z "$uinput" ] || fail "--uinput is for Linux"
 	# A shell under Rosetta reports x86_64 on an Apple chip.
@@ -187,7 +189,7 @@ Darwin)
 	;;
 FreeBSD)
 	os=freebsd
-	[ "$lite" = no ] || fail "--lite is for Linux; FreeBSD runs the full member"
+	[ -z "$nohelper" ] || fail "--no-helper is for Linux"
 	[ -z "$console" ] || fail "--console is for Linux"
 	[ -z "$uinput" ] || fail "--uinput is for Linux"
 	case $(uname -m) in
@@ -235,12 +237,6 @@ esac
 archive=cbb-$os-$arch.tar.gz
 [ "$os" != openwrt ] || archive=cbb-linux-$arch.tar.gz
 dir=cbb
-if [ "$lite" = yes ]; then
-	# The lite member's ARMv6 build runs on ARMv7 too.
-	[ "$arch" = armv7 ] && arch=armv6
-	archive=cbb-lite-linux-$arch.tar.gz
-	dir=cbb-lite
-fi
 
 # The project's release root keys (docs/protocol.md, section 16), which sign
 # keys.json: two YubiKeys, as internal/release/roots/roots.pem.
@@ -423,10 +419,10 @@ elif [ "$os" = freebsd ]; then
 	# shellcheck disable=SC2086 # $port, $cgnat and $auto are words or none
 	CBB_FIREWALL=$firewall sh "$tmp/$dir/packaging/freebsd/install.sh" $port $cgnat $auto "$tmp/$dir/cbb"
 elif [ "$os" = openwrt ]; then
-	# shellcheck disable=SC2086 # $port, $auto and $nopair are words or none
-	sh "$tmp/$dir/packaging/openwrt/install.sh" $port $auto $nopair "$tmp/$dir/cbb"
+	# shellcheck disable=SC2086 # $port, $auto, $nohelper and $nopair are words or none
+	sh "$tmp/$dir/packaging/openwrt/install.sh" $port $auto $nohelper $nopair "$tmp/$dir/cbb"
 else
-	# shellcheck disable=SC2086 # $rootless, $console, $uinput, $port, $cgnat, $auto and $nopair are words or none
-	CBB_FIREWALL=$firewall sh "$tmp/$dir/packaging/linux/install.sh" $rootless $console $uinput $port $cgnat $auto $nopair "$tmp/$dir/cbb"
+	# shellcheck disable=SC2086 # $rootless, $console, $uinput, $port, $cgnat, $auto, $nohelper and $nopair are words or none
+	CBB_FIREWALL=$firewall sh "$tmp/$dir/packaging/linux/install.sh" $rootless $console $uinput $port $cgnat $auto $nohelper $nopair "$tmp/$dir/cbb"
 fi
 

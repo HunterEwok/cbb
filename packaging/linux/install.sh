@@ -4,18 +4,18 @@
 
 # Installs cbb on a Linux machine with systemd:
 #
-#   sudo sh install.sh [--console] [--uinput] [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] [--no-pair] path/to/cbb
+#   sudo sh install.sh [--console] [--uinput] [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] [--no-helper] [--no-pair] path/to/cbb
 #
-# The full member's archive and the lite member's
-# (cbb-lite-linux-*) both carry this script, each with its own systemd unit beside it; cbb version
-# tells the two apart. It installs the binary to /usr/local/bin, the service
-# user, the systemd unit, for the full member the desktop autostart entry and user unit,
+# The Linux archive of each architecture carries this script, and cbb's Go
+# helper (cbb-helper) where the release builds one: everywhere but MIPS.
+# It installs the binary and its helper to /usr/local/bin, the service
+# user, the systemd unit, with the helper the desktop autostart entry and user unit,
 # the tray app when the archive has it and the machine has GTK 4 and WebKitGTK
 # 6.0 (with its autostart and menu entries), and the tmux configuration, adds the user
 # who ran sudo to the cbb group, and starts or restarts the service.
 # --console also starts tmux after a login on the text console and the
-# console helper for remote paste there. --uinput, for the
-# full member, adds the uinput helper, which presses the keys of a remote
+# console helper for remote paste there. --uinput, with cbb's
+# helper, adds the uinput helper, which presses the keys of a remote
 # paste on desktops without another way (GNOME and KDE without the portal's
 # dialog), and loads the uinput module at boot. --port moves
 # the member port from 8764 to N, kept in /etc/cbb/cbb.env
@@ -29,13 +29,16 @@
 # 100.64.0.0/10, the carrier-grade NAT range, as the home network too, for a
 # home network that uses it: the service (CBB_HOME_CGNAT=1 in the same file), the systemd
 # unit's address limit and the firewall rules; --home-cgnat off goes back.
-# The full member only. --auto-update on|off (or CBB_AUTO_UPDATE) answers
-# whether the full member updates itself once a day to a signed release,
+# --auto-update on|off (or CBB_AUTO_UPDATE) answers
+# whether cbb updates itself once a day to a signed release,
 # which it asks otherwise and keeps (packaging/update.sh, cbb update -auto).
-# The lite member, once running and in no group, starts pairing and shows
-# its QR code at once (packaging/pair.sh); --no-pair (CBB_PAIR=no), for a
-# scripted install, leaves that for later.
-# uninstall.sh removes it all again. --rootless installs the full member for
+# --no-helper leaves cbb-helper out, for a small device that needs none of
+# what it does (keys in the TPM, the desktop's clipboard and keys,
+# Bluetooth); a device installed without it stays so on later runs and
+# updates. Without its helper, cbb, once running and in no group, starts
+# pairing and shows its QR code at once (packaging/pair.sh); --no-pair
+# (CBB_PAIR=no), for a scripted install, leaves that for later.
+# uninstall.sh removes it all again. --rootless installs cbb for
 # the user who runs it, without sudo (install-rootless.sh, D-79).
 #
 # On SteamOS, whose / is read-only and replaced by each system update, the
@@ -76,8 +79,8 @@ for a in "$@"; do
 done
 
 usage() {
-	echo "usage: sudo sh install.sh [--console] [--uinput] [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] [--no-pair] path/to/cbb" >&2
-	echo "   or: sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] [--no-pair] path/to/cbb" >&2
+	echo "usage: sudo sh install.sh [--console] [--uinput] [--port N] [--home-cgnat on|off] [--auto-update on|off] [--express | --no-firewall] [--no-helper] [--no-pair] path/to/cbb" >&2
+	echo "   or: sh install.sh --rootless [--port N] [--home-cgnat on|off] [--auto-update on|off] [--no-helper] [--no-pair] path/to/cbb" >&2
 	exit 2
 }
 console=no
@@ -86,6 +89,7 @@ port=
 cgnat=${CBB_HOME_CGNAT:-}
 firewall=${CBB_FIREWALL:-ask}
 auto=
+nohelper=no
 while [ $# -gt 1 ]; do
 	case $1 in
 	--console) console=yes ;;
@@ -93,6 +97,7 @@ while [ $# -gt 1 ]; do
 	--express) firewall=express ;;
 	--no-firewall) firewall=no ;;
 	--no-pair) CBB_PAIR=no ;;
+	--no-helper) nohelper=yes ;;
 	--port)
 		port=$2
 		shift
@@ -176,23 +181,20 @@ if ! "$bin" version >/dev/null 2>&1; then
 	exit 1
 fi
 
-# The full member and the lite member share the command, the paths and the
-# service, but neither can use the other's keys: switching is a new device.
-kind_of() {
-	if "$1" version 2>/dev/null | grep -q 'lite member'; then echo lite; else echo full; fi
-}
-kind=$(kind_of "$bin")
-if [ -x "$cbb" ] && [ "$(kind_of "$cbb")" != "$kind" ]; then
-	if [ "$kind" = lite ]; then
-		note install.sh "the full member is installed here, and the lite member cannot use its keys; remove it first: %s" "sudo sh $share/uninstall.sh --purge"
-	else
-		note install.sh "the lite member is installed here, and the full member cannot use its keys; remove it first: %s" "sudo sh $share/uninstall.sh --purge"
+# cbb runs with its helper when the archive has one, unless --no-helper
+# says otherwise or cbb runs here without it already; then it stays so.
+# The helper may hold the keys (the TPM), so cbb installed with it cannot
+# go on without it: that is a new device.
+helper=no
+if [ -f "$(dirname "$bin")/cbb-helper" ] && [ "$nohelper" = no ]; then
+	helper=yes
+	if [ -x "$cbb" ] && [ ! -f "${cbb%/*}/cbb-helper" ]; then
+		helper=no
 	fi
-	exit 1
 fi
-if [ "$kind" = lite ] && [ "$cgnat" = 1 ]; then
-	note install.sh "--home-cgnat is for the full member"
-	exit 2
+if [ "$helper" = no ] && [ -f "${cbb%/*}/cbb-helper" ]; then
+	note install.sh "cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s" "sudo sh $share/uninstall.sh --purge"
+	exit 1
 fi
 
 # The account cbb gets the group's keys, the quick actions' polkit rights
@@ -211,9 +213,9 @@ fi
 
 install -d -m 0755 "${cbb%/*}"
 install -m 0755 "$bin" "$cbb"
-# cbb-helper, when the archive has it, goes beside cbb, where cbb looks for
-# it; root owns both, as cbb requires of its helper's program and folder.
-if [ -f "$(dirname "$bin")/cbb-helper" ]; then
+# cbb-helper goes beside cbb, where cbb looks for it; root owns both, as
+# cbb requires of its helper's program and folder.
+if [ "$helper" = yes ]; then
 	install -m 0755 "$(dirname "$bin")/cbb-helper" "${cbb%/*}/cbb-helper"
 fi
 # The servers, which cbb forward and cbb relay run, and their systemd units
@@ -245,8 +247,25 @@ chmod 0644 "$sysusers.new"
 mv "$sysusers.new" "$sysusers"
 systemd-sysusers "$sysusers"
 place 0644 "$here/cbb.service" /etc/systemd/system/cbb.service
-# Desktop sessions start the connector with the session; the lite member has
-# none.
+# Without its helper, cbb runs on small devices, where the BPF maps of the
+# unit's address limit can fail (the Pi Zero): a drop-in lifts the limit,
+# and the member port itself takes only home network addresses.
+smallconf=/etc/systemd/system/cbb.service.d/small.conf
+if [ "$helper" = no ]; then
+	install -d -m 0755 "${smallconf%/*}"
+	{
+		echo "# Written by cbb's install.sh: cbb without its helper, on a small device."
+		echo "[Service]"
+		echo "IPAddressDeny="
+		echo "IPAddressAllow="
+	} >"$smallconf"
+	chmod 0644 "$smallconf"
+else
+	rm -f "$smallconf"
+	rmdir "${smallconf%/*}" 2>/dev/null || true
+fi
+# Desktop sessions start the connector, which the helper runs, with the
+# session.
 # Desktops with graphical-session.target start it as a user unit, which the
 # installer restarts after an update (below); others from the autostart entry.
 # made records a path install.sh is about to create, which was not there,
@@ -256,7 +275,7 @@ install -d -m 0755 "$share"
 made() {
 	[ -e "$1" ] || grep -qsxF "$1" "$share/created" || echo "$1" >>"$share/created"
 }
-if [ "$kind" = full ]; then
+if [ "$helper" = yes ]; then
 	made /etc/xdg/autostart
 	made /etc/systemd/user
 	install -d -m 0755 /etc/xdg/autostart /etc/systemd/user
@@ -270,7 +289,7 @@ fi
 # the service and the agent. It starts with each desktop session and is in
 # the applications menu.
 traybin=$(dirname "$bin")/cbb-desktop
-if [ "$kind" = full ] && [ -f "$traybin" ]; then
+if [ "$helper" = yes ] && [ -f "$traybin" ]; then
 	if ! command -v ldd >/dev/null 2>&1 || ldd "$traybin" 2>&1 | grep -q 'not found'; then
 		say "Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it." "libgtk-4-1 libwebkitgtk-6.0-4" "gtk4 webkitgtk6.0"
 	else
@@ -302,8 +321,8 @@ if [ "$console" = yes ]; then
 	place 0644 "$here/cbb-console.service" /etc/systemd/system/cbb-console.service
 fi
 if [ "$uinput" = yes ]; then
-	if [ "$kind" != full ]; then
-		note install.sh "--uinput is for the full member, which runs the desktop connector"
+	if [ "$helper" = no ]; then
+		note install.sh "--uinput needs cbb's helper, which runs the desktop connector"
 		exit 2
 	fi
 	echo uinput >/etc/modules-load.d/cbb-uinput.conf
@@ -402,7 +421,7 @@ fi
 # resource manager, which the group tss may use. CBB_TPM=off in the
 # environment file keeps new keys in the file.
 tpmconf=/etc/systemd/system/cbb.service.d/tpm.conf
-if [ "$kind" = full ] && [ -c /dev/tpmrm0 ] && getent group tss >/dev/null 2>&1; then
+if [ "$helper" = yes ] && [ -c /dev/tpmrm0 ] && getent group tss >/dev/null 2>&1; then
 	install -d -m 0755 "${tpmconf%/*}"
 	{
 		echo "# Written by cbb's install.sh: the member and admin keys live in the TPM."
@@ -476,7 +495,7 @@ answers "$cbb" || true
 # them, and start the user unit again in each session that has one, so the
 # clipboard links again without logging out and in. A desktop without
 # graphical-session.target starts the agent again at its next login.
-if [ "$kind" = full ]; then
+if [ "$helper" = yes ]; then
 	if command -v pkill >/dev/null 2>&1; then
 		pkill -x -f "$cbb agent" >/dev/null 2>&1 || true
 	fi
@@ -492,7 +511,7 @@ if [ "$kind" = full ]; then
 fi
 # A limit that cbb global wrote is brought in line with what the service
 # asks for now, once it answers.
-if [ "$kind" = full ] && [ -f /etc/systemd/system/cbb.service.d/away.conf ]; then
+if [ -f /etc/systemd/system/cbb.service.d/away.conf ]; then
 	if ! "$cbb" global allow; then
 		note install.sh "cbb global allow failed; run sudo cbb global allow once the service runs."
 	fi
@@ -507,7 +526,7 @@ run=cbb
 if [ "$steamos" = yes ]; then
 	run=$cbb
 fi
-if [ "$kind" = lite ]; then
+if [ "$helper" = no ]; then
 	# shellcheck source=packaging/pair.sh
 	. "$here/../pair.sh"
 	if ! pair_now "$cbb" cbb; then

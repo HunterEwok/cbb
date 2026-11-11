@@ -91,7 +91,7 @@ class RecordsTest {
     /**
      * Runs the cases of testdata/interop/v2-records.json whose names start
      * with one of the prefixes (all of them for null) through the set: the
-     * core gives each case's state, the same as Go, the lite member and the
+     * core gives each case's state, the same as Go, the Rust cbb and the
      * Swift kit. Answers how many cases ran.
      */
     private fun v2Cases(prefixes: List<String>? = null, check: ((String, RecordSet) -> Unit)? = null): Int {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The frames between the Next's driver and the lite member on the Pi's UART
+//! The frames between the Next's driver and cbb on the Pi's UART
 //! (docs/roadmap.md, "The Next's network in the background"). A frame is the
 //! start byte 0x7E, a type, a length (0 to 255), that many bytes and a sum of
 //! the type, the length and the bytes, modulo 256. Inside a frame every 0x7E

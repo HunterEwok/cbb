@@ -81,7 +81,7 @@ final class CPaceTests: XCTestCase {
     }
 
     /// The scalar_mult_vfy vectors of draft-irtf-cfrg-cpace-21, Appendix
-    /// B.1.10, as Go's TestLowOrder and the lite member run them: u0 to u5
+    /// B.1.10, as Go's TestLowOrder and the Rust core run them: u0 to u5
     /// and u7 encode low order points, non-canonical ones included, and a
     /// party that receives one aborts; it takes the others.
     func testLowOrderVectors() throws {

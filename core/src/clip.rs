@@ -3,7 +3,7 @@
 
 //! The sync engine: the group's current event on this member and what goes
 //! into the member's own clipboard (docs/protocol.md, section 5). It follows
-//! Go's package clip, so a lite member behaves as the others do; it only
+//! Go's package clip, so a member in Rust behaves as the others do; it only
 //! decides, and the caller does the networking.
 
 use alloc::boxed::Box;
@@ -49,7 +49,7 @@ pub enum Kind {
     Text,
     Secret,
     /// Images or files: a manifest, and maybe a plain-text alternative,
-    /// which is all a lite member takes of them.
+    /// which is all this engine takes of them.
     Media,
 }
 
@@ -565,7 +565,7 @@ impl Engine {
     pub fn copied(&self, text: &str, kind: Kind, via: Via) -> Result<Option<Event>> {
         check_text(text)?;
         if kind == Kind::Media {
-            return Err(Error::msg("a lite member makes no media events"));
+            return Err(Error::msg("this member makes no media events"));
         }
         let mut st = self.inner.lock();
         let now = self.now();
@@ -598,7 +598,7 @@ impl Engine {
     pub fn send(&self, text: &str, mut kind: Kind, via: Via) -> Result<(Event, Outcome)> {
         check_text(text)?;
         if kind == Kind::Media {
-            return Err(Error::msg("a lite member makes no media events"));
+            return Err(Error::msg("this member makes no media events"));
         }
         let mut st = self.inner.lock();
         if self.muted(&mut st) {
@@ -1139,7 +1139,7 @@ mod tests {
         assert!(b.copied_media("", manifest(7), Via::Copy, [5; 32], blob()).is_err());
     }
 
-    /// A media event becomes the group's current one; a lite member takes
+    /// A media event becomes the group's current one; this engine takes
     /// only its text, as a text, and keeps its clipboard when it has none.
     #[test]
     fn media_events() {

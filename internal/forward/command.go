@@ -97,7 +97,7 @@ func Command(args []string, stdout, stderr io.Writer, defaultKey string) int {
 	}
 	logf("cbb forward: listening on UDP and TCP port %d; its key, for cbb global hub -forwarder-key: %s", f.Addr().Port(), pin)
 	if v := cfg.VLESS; v != nil {
-		logf("cbb forward: VLESS over XHTTP on %s, behind the web server of %s on TCP port %d, which passes the path %s to it; hubs ask for it with cbb global hub -vless", *vlessListen, v.XHTTP.Host, v.XHTTP.Port, v.XHTTP.Path)
+		logf("cbb forward: VLESS over XHTTP on %s, behind the web server of %s on TCP port %d, which passes the path %s to it; hubs ask for it unless they run with -no-vless", *vlessListen, v.XHTTP.Host, v.XHTTP.Port, v.XHTTP.Path)
 	}
 	if *vlessMirror != "" {
 		logf("cbb forward: the clients of registered hubs reach the mirror at %s over VLESS", *vlessMirror)

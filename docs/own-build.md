@@ -48,11 +48,10 @@ Then sign your releases with `tools/release-sign` and your keys as maintaining.m
 
 ## Your own addresses
 
-`internal/update/source.go` holds them for the Go program: `GitHub`, `Mirror` and
-`ChannelFiles`, and the hosts `allowedHost` lets the updater reach. Their copies, which
-`internal/update/project_test.go` (`TestProjectAddresses`) compares with them:
+`member/src/update.rs` holds them: `GITHUB`, `MIRROR` and `CHANNEL_FILES`, and the hosts
+`allowed` lets the updater reach. Their copies, which `internal/release/project_test.go`
+(`TestProjectAddresses`) compares with them:
 
-- `member/src/update.rs`: `GITHUB`, `MIRROR`, `CHANNEL_FILES`, and the hosts in `allowed`;
 - `apps/android/app/.../ApkUpdate.kt`: `GITHUB`, `MIRROR`, `CHANNEL_FILES`, and its hosts;
 - `packaging/get.sh` and `packaging/windows/get.ps1`: `repo`, `channel_files` and the
   `--repo` of `gh attestation verify`;
@@ -66,7 +65,7 @@ Not checked by the test, and to change by hand:
   `dockerRE`, the tap in `published.yml`, the issue's assignee in `channel.yml`;
 - the links to the project's page in the apps' settings and in `packaging/`.
 
-`go test ./internal/release ./internal/update` then tells whether a copy was left behind.
+`go test ./internal/release` then tells whether a copy was left behind.
 
 ## The other servers
 

@@ -7,7 +7,7 @@
 # (.github/workflows/nightly.yml):
 #   cargo +nightly fuzz run control -- -max_total_time=60
 [package]
-name = "cbb-lite-fuzz"
+name = "cbb-member-fuzz"
 version = "0.0.0"
 edition = "2024"
 license = "AGPL-3.0-only"
@@ -18,7 +18,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-cbb-lite = { path = "..", default-features = false, features = ["fuzzing"] }
+cbb-member = { path = "..", default-features = false, features = ["fuzzing"] }
 
 # Not a member of the top workspace.
 [workspace]

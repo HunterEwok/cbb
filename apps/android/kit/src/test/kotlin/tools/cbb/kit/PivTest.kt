@@ -19,7 +19,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Plays a YubiKey's PIV application, as Go's internal/piv/pivtest does:
+ * Plays a YubiKey's PIV application, as member/src/piv.rs's tests do:
  * the commands the kit sends, with the default management key (AES-192 as
  * firmware 5.7 has it; alg 0x03 names 3DES, as before, which the kit
  * refuses before it gets so far), answers in parts of 100 bytes and command

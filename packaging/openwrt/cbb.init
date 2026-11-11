@@ -3,7 +3,7 @@
 # Copyright (C) 2026 HunterEwok
 
 # The CBB service on OpenWrt (/etc/init.d/cbb).
-# procd runs cbb service, the full or the lite member, as the user
+# procd runs cbb service as the user
 # cbb, with no capabilities
 # and no_new_privs, and starts it again when it stops. The settings are in
 # /etc/config/cbb; the keys in /etc/cbb/state,
@@ -83,11 +83,10 @@ hub_rule() {
 }
 
 start_service() {
-	local port wait_ntp memlimit zones devices dev hub
+	local port wait_ntp zones devices dev hub
 	config_load cbb
 	config_get port main port 8764
 	config_get wait_ntp main wait_ntp 1
-	config_get memlimit main memlimit 64MiB
 	zones=
 	config_list_foreach main zone add_zone
 	[ -n "$zones" ] || zones=lan
@@ -114,20 +113,15 @@ start_service() {
 	chmod 0750 "$RUNDIR"
 	chmod 0700 "$STATEDIR"
 
-	# The lite member's cbb pair reads the list here; it is not started by
+	# cbb pair reads the list here; it is not started by
 	# procd.
 	echo "$devices" >"$RUNDIR/interfaces"
 	chmod 0644 "$RUNDIR/interfaces"
 
 	procd_open_instance
-	if "$PROG" version 2>/dev/null | grep -q "lite member"; then
-		procd_set_param command "$PROG" service
-		procd_set_param env CBB_PORT="$port" CBB_INTERFACES="$devices" \
-			CBB_STATE="$STATEDIR" CBB_SOCKET="$RUNDIR/control.sock"
-	else
-		procd_set_param command "$PROG" service -state "$STATEDIR" -socket "$RUNDIR/control.sock"
-		procd_set_param env CBB_PORT="$port" CBB_INTERFACES="$devices" GOMEMLIMIT="$memlimit"
-	fi
+	procd_set_param command "$PROG" service
+	procd_set_param env CBB_PORT="$port" CBB_INTERFACES="$devices" \
+		CBB_STATE="$STATEDIR" CBB_SOCKET="$RUNDIR/control.sock"
 	procd_set_param user cbb
 	procd_set_param group cbb
 	procd_set_param no_new_privs 1

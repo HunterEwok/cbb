@@ -56,7 +56,7 @@ func smallAway(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) 
 		return
 	}
 	if r.Do(p+"obfuscated-at-home", func() error {
-		if _, err := Run(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-obfuscate"), ""); err != nil {
+		if _, err := Run(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-no-vless"), ""); err != nil {
 			return err
 		}
 		// At home it gets the hub's new offer, with AmneziaWG's settings.

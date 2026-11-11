@@ -58,10 +58,10 @@ func TestLeave(t *testing.T) {
 	if err := actions.Save(deck.dir, set); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := deck.do(t, control.Header{Op: control.OpSync, Name: "off"}, ""); err != nil {
+	if _, err := deck.do(t, control.Header{Op: control.OpSync, On: control.Bool(false)}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Device: "deck"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the deck sees it was removed", func() bool { return deck.status(t).Removed })
@@ -90,7 +90,7 @@ func TestLeave(t *testing.T) {
 	waitFor(t, "the deck is back", func() bool { return listed(pi.devices(t)) == "deck pi" && !deck.status(t).Removed })
 
 	// Alone, the root leaves, and the group is gone.
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Device: "deck"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the pi is alone", func() bool { return listed(pi.devices(t)) == "pi" })
@@ -123,29 +123,29 @@ func TestLeaveDamaged(t *testing.T) {
 	}
 }
 
-// TestLiteLeave: a lite member the group removed leaves through its
+// TestAloneLeave: a small device the group removed leaves through its
 // service, which then stops to be started again; with the service stopped,
-// cbb leave looks at the files itself and finds no group. CBB_LITE names
-// the lite member's binary (cargo build at the top).
-func TestLiteLeave(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+// cbb leave looks at the files itself and finds no group. CBB_TEST_ALONE names
+// the small device's binary (cargo build at the top).
+func TestAloneLeave(t *testing.T) {
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
-	dir := joinLite(t, bin, pi)
-	lite := startLite(t, bin, dir, "-no-mdns", "-peer", pi.addr())
-	waitFor(t, "the lite member connects", func() bool { return len(pi.status(t).Peers) == 1 })
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "lite"}, ""); err != nil {
+	dir := joinAlone(t, bin, pi)
+	small := startAlone(t, bin, dir, "-no-mdns", "-peer", pi.addr())
+	waitFor(t, "the small device connects", func() bool { return len(pi.status(t).Peers) == 1 })
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Device: "small"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member sees it was removed", func() bool {
-		m, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+	waitFor(t, "the small device sees it was removed", func() bool {
+		m, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && m.Status != nil && m.Status.Removed
 	})
 	leave := func() string {
-		out, err := exec.Command(bin, "-state", dir, "-socket", lite.socket, "leave", "-yes").CombinedOutput()
+		out, err := exec.Command(bin, "-state", dir, "-socket", small.socket, "leave", "-yes").CombinedOutput()
 		if err != nil {
 			t.Fatalf("cbb leave: %v; %s", err, out)
 		}
@@ -155,17 +155,17 @@ func TestLiteLeave(t *testing.T) {
 		t.Errorf("cbb leave through the service: %s", out)
 	}
 	select {
-	case <-lite.done:
-		lite.cancel = nil
+	case <-small.done:
+		small.cancel = nil
 	case <-time.After(10 * time.Second):
-		t.Fatal("the lite member did not restart after leave")
+		t.Fatal("the small device did not restart after leave")
 	}
 	for _, name := range []string{"identity.json", "records.json", "seal.json"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
 			t.Errorf("%s is left", name)
 		}
 	}
-	if out, err := exec.Command(bin, "-state", dir, "-socket", lite.socket, "leave", "-yes").CombinedOutput(); err == nil || !strings.Contains(string(out), "nothing to leave") {
+	if out, err := exec.Command(bin, "-state", dir, "-socket", small.socket, "leave", "-yes").CombinedOutput(); err == nil || !strings.Contains(string(out), "nothing to leave") {
 		t.Errorf("leave in no group: %v; %s", err, out)
 	}
 }
@@ -183,7 +183,7 @@ func TestRemovedWhileAway(t *testing.T) {
 	pairWith(t, pi, laptop)
 	waitFor(t, "the deck connected to both others", func() bool { return len(deck.status(t).Peers) == 2 })
 	deck.stop()
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "deck"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Device: "deck"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the laptop has the removal", func() bool { return listed(laptop.devices(t)) == "laptop pi" })

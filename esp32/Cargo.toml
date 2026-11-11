@@ -6,7 +6,7 @@ name = "cbb-esp32"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-only"
-description = "The lite member's firmware for the ESP32-S3 (the Arduino Nano ESP32)"
+description = "The member's firmware for the ESP32-S3 (the Arduino Nano ESP32)"
 publish = false
 
 # Its own workspace: it builds only for the chip, with the Xtensa toolchain.

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="470" viewBox="0 0 900 470" role="img" aria-label="The containers: the programs of a computer, a phone, a lite member and the hub, and how they talk">
-<title>The containers: the programs of a computer, a phone, a lite member and the hub, and how they talk</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="470" viewBox="0 0 900 470" role="img" aria-label="The containers: the programs of a computer, a phone, a small device and the hub, and how they talk">
+<title>The containers: the programs of a computer, a phone, a small device and the hub, and how they talk</title>
 <style>
   .bg { fill: none; }
   .zone { fill: #f6f8fa; stroke: #d0d7de; stroke-width: 1; }
@@ -66,7 +66,7 @@
 <path class="e-home" d="M735.0,255.0 L735.0,141.0"/>
 <path class="a-home" d="M735.0,141.0 L730.6,149.0 L739.4,149.0z"/>
 <path class="a-home" d="M735.0,255.0 L739.4,247.0 L730.6,247.0z"/>
-<g class=""><rect class="card " x="25.0" y="378.0" width="250" height="64" rx="10"/><g transform="translate(37.0,396)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="75.0" y="406">Lite member (Rust)</text><text class="s" x="75.0" y="424">Linux, OpenWrt, ESP32</text></g>
+<g class=""><rect class="card " x="25.0" y="378.0" width="250" height="64" rx="10"/><g transform="translate(37.0,396)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="75.0" y="406">Small device (Rust)</text><text class="s" x="75.0" y="424">Linux, OpenWrt, ESP32</text></g>
 <path class="e-pair" d="M150,300 L150.0,378.0"/>
 <path class="a-pair" d="M150.0,378.0 L154.4,370.0 L145.6,370.0z"/>
 <path class="a-pair" d="M150,300 L145.6,308.0 L154.4,308.0z"/>
