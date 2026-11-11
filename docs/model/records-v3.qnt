@@ -10,12 +10,14 @@
 //     and with whatever it dropped on the way, keeps what a member given the whole set at once
 //     keeps, and evaluates it to the same state.
 //  2. A device or admin a root removed never returns: once a root's removal of a key counts on
-//     a member, the key stays removed there and nothing it signs counts.
+//     a member, the key stays removed there, whatever else comes (a resolve, a full set, a new
+//     record for it). A removal by an admin is not final: the root may void it.
 //  3. One root: two members that keep the same records have the same root, or one of them is
 //     still waiting out a claim the other already counts (its path of roots is a start of the
 //     other's).
 //  4. A claim never counts before the member itself has held it for the takeover delay.
-//  5. During a full stop only the root's records count.
+//  5. During a full stop only the current root's commands run, and its records still count
+//     (members exchange records only; admins' records still count in the state).
 //  6. No key takes another key's room: every key keeps at least its fair share of the set (or
 //     all it made, or its ceiling), a claimed root keeps at most what its claim paid ahead, and
 //     the set never holds more than its room.
@@ -38,10 +40,11 @@
 // two histories of one key, freezes and thaws, checkpoints, handovers, settings, leaves and
 // watches, two keys with one device ID.
 //
-// Two switches state what the owner has still to decide or the core to change:
-// RESOLVE_ROOT_REVOKES (whether a root's resolve may name a root's removal) and
-// SKIP_RECUT_WITHIN_ROOM (the core's set as it cuts back today). Promises 1, 2 and 5 do not all
-// hold with the switches as they are; each promise is also an invariant of its own.
+// The rules here are those the owner settled on 11.11; #513 builds the last of them. Two
+// switches keep its code before that one step away, and break promise 1 or 2 when flipped:
+// ROOT_REMOVALS_FIRST (a root's removals and resolves first in its order when a set is cut,
+// standing for their chain) and SKIP_RECUT_WITHIN_ROOM (the set cuts back only past a ceiling
+// or the room). TAKEOVER_CUTS_REMOVALS marks a question still before the owner.
 //
 // Run it:
 //
@@ -94,6 +97,9 @@ module records_v3 {
     stop: bool,
     claims: Id -> str,
     devices: Set[Key],
+    commanders: Set[Key],
+    rootsCount: bool, // every record of the current root with a whole chain counts
+    cuts: Key -> int, // the seq up to which each earlier root's records count
   }
 
   pure val ROOT = "R"
@@ -115,8 +121,12 @@ module records_v3 {
   pure val DELAY = 2
   pure val MAXREC = 16
   pure val MAXPATH = 3
+
+  // A takeover cuts off the old root's records past the claim's seen, its removals with them:
+  // the owner's question, pending.
+  pure val TAKEOVER_CUTS_REMOVALS = true
   pure val NOCUT: Cut = { level: TOP, marks: Map(), future: Map() }
-  pure val NONE = 1000000
+  pure val NONE = 10000000
 
   // The powers of the three sets the apps write (core AdminKind::grants), and the recovery
   // key's.
@@ -145,8 +155,15 @@ module records_v3 {
 
   // --- Keeping (core records::keep) ------------------------------------------------------
 
-  // A record's place in its key's order: by seq, then ID.
-  pure def pos(r: Record): int = r.seq * 100 + r.id
+  // A record's place in its key's order: by seq, then ID; a root's removals and resolves come
+  // before its other records (as its checkpoints do in the core), so that a full set never
+  // drops one while it keeps any of the root's records (owner, 11.11). With
+  // ROOT_REMOVALS_FIRST false, the order of #513 before that.
+  pure val ROOT_REMOVALS_FIRST = true
+  pure val ROOT_KEYS = Set(ROOT, "NA", "NK")
+  pure def pos(r: Record): int =
+    if (ROOT_REMOVALS_FIRST and ROOT_KEYS.contains(r.signer) and (r.kind == "revoke" or r.kind == "resolve")) r.seq * 100 + r.id
+    else 100000 + r.seq * 100 + r.id
   pure def minPos(rs: Set[Record]): int = rs.fold(NONE, (m, r) => min2(m, pos(r)))
   // The units of a key's records up to r, r included.
   pure def prefix(rs: Set[Record], r: Record): int = sumUnits(rs.filter(x => pos(x) <= pos(r)))
@@ -214,9 +231,9 @@ module records_v3 {
     { ...s, recs: res._1, cut: res._2, roots: roots }
   }
 
-  // The core's set cuts back only when the stored units pass a ceiling or the room; with
-  // false, it cuts back after every record it takes.
-  pure val SKIP_RECUT_WITHIN_ROOM = true
+  // The set cuts back after every record it takes. With true, as #513 does today: only when
+  // the stored units pass a ceiling or the room, which forgets the units the cut remembers.
+  pure val SKIP_RECUT_WITHIN_ROOM = false
 
   // A record offered to the set: refused when its signer is unknown, not kept when its key
   // dropped a record before it; else stored, its keys learned, and the set cut back when a
@@ -261,9 +278,15 @@ module records_v3 {
   pure def epoch(rs: Set[Record], adminKeys: Set[Key], held: Id -> int, path: List[Key], cuts: Key -> int): Epoch = {
     val cur = last(path)
     pure def isAdmin(r: Record): bool = adminKeys.contains(r.signer)
-    // A whole chain: the signer's records from seq 1 up to it are db here.
-    pure def whole(r: Record): bool = 1.to(r.seq).forall(q => rs.exists(x => x.signer == r.signer and x.seq == q))
+    // A whole chain: the signer's records from seq 1 up to it are all here.
+    // With ROOT_REMOVALS_FIRST, a root's removal or resolve stands for its chain, as a
+    // checkpoint's anchors do in the core: the set may have dropped records below it.
+    pure def whole(r: Record): bool =
+      (ROOT_REMOVALS_FIRST and not(isAdmin(r)) and (r.kind == "revoke" or r.kind == "resolve"))
+        or 1.to(r.seq).forall(q => rs.exists(x => x.signer == r.signer and x.seq == q))
+    // A root's removal is final: no resolve voids it (owner, 11.11).
     val voids = rs.filter(r => r.signer == cur and not(isAdmin(r)) and r.kind == "resolve" and whole(r)).map(r => r.targetRec)
+      .filter(i => not(rs.exists(x => x.id == i and x.kind == "revoke" and not(isAdmin(x)))))
     pure def counted(r: Record): bool = whole(r) and not(voids.contains(r.id))
     pure def rootRec(r: Record): bool =
       not(isAdmin(r)) and counted(r) and onList(path, r.signer)
@@ -374,6 +397,10 @@ module records_v3 {
         stop: adminConflict or competing or disputes != Set(),
         claims: claims,
         devices: devices,
+        commanders: adm.keys().union(Set(cur)).filter(k => not(revoked.contains(k))
+          and (k == cur or not(adminConflict or competing or disputes != Set()))),
+        rootsCount: rs.filter(r => rootRec(r) and r.signer == cur).forall(r => counts(r)),
+        cuts: cuts,
       },
       next: effective.fold("", (k, c) => c.target),
       cut: effective.fold(0, (n, c) => seenOf(c, cur)),
@@ -428,8 +455,6 @@ module records_v3 {
   var views: str -> View
   // The keys a root's removal took, as each member saw it: history for promise 2.
   var gone: str -> Set[Key]
-  // The records of admins that changed a member's state while it was stopped: promise 5.
-  var changedInStop: Set[Id]
 
   pure val EMPTY: Store = {
     recs: Set(), got: Set(), cut: NOCUT, promoted: Set(), admins: Set(), roots: Set(ROOT), held: Map(),
@@ -438,22 +463,15 @@ module records_v3 {
   pure def rootRemoved(v: View, db: Id -> Record): Set[Key] =
     recsOf(v.counting, db).filter(r => r.kind == "revoke" and onList(v.path, r.signer)).map(r => r.target)
 
-  // What a state does to the group: its devices, admins, removed keys and roots.
-  pure def effect(v: View): (Set[Key], Key -> str, Set[Key], List[Key]) = (v.devices, v.admins, v.revoked, v.path)
-
   // Member m's set becomes s2 (by record r, or by none when r is 0).
   action commit(db2: Id -> Record, n2: int, m: str, s2: Store, r: Id): bool = {
-    val old = views.get(m)
     val v2 = storeView(s2, db2)
-    val byAdmin = r != 0 and not(onList(v2.path, db2.get(r).signer)) and not(onList(old.path, db2.get(r).signer))
     all {
       db' = db2,
       nextId' = n2,
       st' = st.put(m, s2),
       views' = views.put(m, v2),
       gone' = gone.put(m, gone.get(m).union(rootRemoved(v2, db2))),
-      changedInStop' =
-        if (old.stop and byAdmin and effect(old) != effect(v2)) changedInStop.union(Set(r)) else changedInStop,
     }
   }
 
@@ -475,7 +493,6 @@ module records_v3 {
     st' = MEMBERS.mapBy(m => STARTSTORE),
     views' = MEMBERS.mapBy(m => storeView(STARTSTORE, START)),
     gone' = MEMBERS.mapBy(m => Set()),
-    changedInStop' = Set(),
   }
 
   // k signs a record; its own device stores it at once. seen is what that device holds, or,
@@ -503,13 +520,9 @@ module records_v3 {
     nondet kit = Set("phone", "computer").oneOf() sign(k, "admin", a, kit, 0, false, 1)
   action signRevoke = nondet k = SIGNERS.oneOf() nondet t = Set(PHONE, COMPUTER, RECOVERY, DEVICE).oneOf()
     nondet p = Set(true, false).oneOf() sign(k, "revoke", t, "", 0, p, 1)
-  // A root voids a record: a claim, an admin's removal, any record but a root's removal (whether
-  // a root may void a root's removal is the owner's question; see RESOLVE_ROOT_REVOKES).
-  pure val RESOLVE_ROOT_REVOKES = false
-  action signResolve = nondet k = Set(ROOT, "NA", "NK").oneOf() nondet i = db.keys().oneOf() all {
-    RESOLVE_ROOT_REVOKES or not(db.get(i).kind == "revoke" and Set(ROOT, "NA", "NK").contains(db.get(i).signer)),
-    sign(k, "resolve", "", "", i, false, 1),
-  }
+  // A root voids a record: a claim, an admin's removal, or any other.
+  action signResolve = nondet k = Set(ROOT, "NA", "NK").oneOf() nondet i = db.keys().oneOf()
+    sign(k, "resolve", "", "", i, false, 1)
   action signClaim = nondet k = Set(PHONE, COMPUTER, RECOVERY).oneOf() nondet t = Set("NA", "NK", COMPUTER).oneOf()
     nondet p = Set(true, false).oneOf() sign(k, "claim", t, "", 0, p, CLAIMU)
   action signCopies = nondet k = SIGNERS.oneOf() nondet u = Set(1, 2).oneOf() sign(k, "copies", "", "", 0, false, u)
@@ -556,10 +569,15 @@ module records_v3 {
     saturated(m) implies (s.recs == pureKept(s.got, s.promoted, db) and views.get(m) == pureView(s.got, s.promoted, s.held, db))
   })
 
-  // 2. A key a root removed stays removed.
+  // 2. A key a root removed stays removed, unless a takeover cut the removal off: the new root
+  // takes the old root's records up to what the claim had seen (TAKEOVER_CUTS_REMOVALS).
+  pure def cutOff(v: View, r: Record): bool = v.cuts.keys().contains(r.signer) and r.seq > v.cuts.get(r.signer)
   val removedStayOut = MEMBERS.forall(m => {
     val v = views.get(m)
-    gone.get(m).forall(k => v.revoked.contains(k) and not(v.admins.keys().contains(k)) and not(v.devices.contains(k)))
+    val removals = recsOf(st.get(m).got, db).filter(r => r.kind == "revoke" and ROOT_KEYS.contains(r.signer))
+    gone.get(m).forall(k =>
+      (TAKEOVER_CUTS_REMOVALS and removals.filter(r => r.target == k).forall(r => cutOff(v, r)))
+        or (v.revoked.contains(k) and not(v.admins.keys().contains(k)) and not(v.devices.contains(k))))
   })
 
   // 3. Members that keep the same records have one root, or one waits out a claim.
@@ -576,9 +594,13 @@ module records_v3 {
     v.claims.keys().forall(i => v.claims.get(i) == "effective" implies (held.keys().contains(i) and held.get(i) >= DELAY))
   })
 
-  // 5. During a full stop only the root's records count: no admin's record changes what a
-  // stopped member does with the group (its devices, admins, removed keys and roots).
-  val stopRootOnly = changedInStop == Set()
+  // 5. During a full stop only the current root's commands run (members exchange records
+  // only; copies, commands of admins and admissions stop), and the root's records still count.
+  // Admins' records still count in the state (owner, 11.11: the stop stays as it is).
+  val stopRootOnly = MEMBERS.forall(m => {
+    val v = views.get(m)
+    v.rootsCount and (v.stop implies v.commanders.forall(k => k == last(v.path)))
+  })
 
   // 6. No key takes another key's room.
   val fairRoom = MEMBERS.forall(m => {
@@ -688,4 +710,22 @@ module records_v3 {
       .then(compactAt("m"))
       .then(give("m", 6))
       .expect(views.get("m").path == [ROOT, "NK"] and st.get("m").recs.contains(6) and views.get("m").devices.contains(DEVICE))
+
+  // A removal by an admin is not final: the root's resolve voids it, and the device counts
+  // again under its old key. A removal by the root is final: its resolve changes nothing.
+  run removalsByAdminAndRootTest =
+    init
+      .then(sign(COMPUTER, "device", DEVICE, "", 0, false, 1))
+      .then(sign(COMPUTER, "revoke", DEVICE, "", 0, false, 1))
+      .then(give("m", 4))
+      .then(give("m", 5))
+      .expect(not(views.get("m").devices.contains(DEVICE)) and views.get("m").revoked.contains(DEVICE))
+      .then(sign(ROOT, "resolve", "", "", 5, false, 1))
+      .then(give("m", 6))
+      .expect(views.get("m").devices.contains(DEVICE) and not(views.get("m").revoked.contains(DEVICE)))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, 1))
+      .then(give("m", 7))
+      .then(sign(ROOT, "resolve", "", "", 7, false, 1))
+      .then(give("m", 8))
+      .expect(not(views.get("m").devices.contains(DEVICE)) and views.get("m").revoked.contains(DEVICE) and promises)
 }

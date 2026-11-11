@@ -258,3 +258,24 @@ fn any_order_gives_one_state() {
         assert_eq!(s.state(&h), sets[0].state(&h));
     }
 }
+
+/// removalsByAdminAndRootTest: the root's resolve voids an admin's removal,
+/// and the device counts again under its old key and ID; a root's removal is
+/// final, and its resolve changes nothing.
+#[test]
+fn an_admins_removal_is_not_final_a_roots_is() {
+    let mut g = Group::new();
+    g.device("C");
+    let rm = g.revoke("C", "D");
+    let s = g.member(&g.recs.iter().collect::<Vec<_>>()).state(&BTreeMap::new());
+    assert!(s.device_by_key(&k("D").hash).is_none() && s.revoked.contains(&k("D").hash));
+    g.sign("R", Kind::Resolve(vec![rm.id()]));
+    let s = g.member(&g.recs.iter().collect::<Vec<_>>()).state(&BTreeMap::new());
+    let d = s.device_by_key(&k("D").hash).expect("the device counts again");
+    assert_eq!(d.id, k("D").key.device_id());
+    assert!(!s.revoked.contains(&k("D").hash) && !s.counting.contains(&rm.id()));
+    let root_rm = g.revoke("R", "D");
+    g.sign("R", Kind::Resolve(vec![root_rm.id()]));
+    let s = g.member(&g.recs.iter().collect::<Vec<_>>()).state(&BTreeMap::new());
+    assert!(s.device_by_key(&k("D").hash).is_none() && s.revoked.contains(&k("D").hash));
+}
