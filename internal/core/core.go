@@ -7,7 +7,11 @@
 // tag cbbcore, after building the library:
 //
 //	cargo build --locked --release -p cbb-ffi
+//	objcopy --remove-section=.llvmbc --remove-section=.llvmcmd target/release/libcbb_ffi.a
 //	go test -tags cbbcore ./internal/core
+//
+// The objcopy is needed since Go 1.27.4, which refuses an archive in #cgo
+// LDFLAGS that carries LLVM bitcode, as the Rust standard library's objects do.
 //
 // The builds for Windows, macOS and FreeBSD run the same core as
 // WebAssembly under wazero instead, under the tag cbbwasm, with the module
