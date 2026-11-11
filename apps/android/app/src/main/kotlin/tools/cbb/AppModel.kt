@@ -123,7 +123,7 @@ class AppModel(private val app: Context) {
     var alerts by mutableStateOf<List<GroupAlert>>(emptyList())
         private set
 
-    var color by mutableStateOf(settings.color)
+    var theme by mutableStateOf(settings.theme)
         private set
     var appearance by mutableStateOf(settings.appearance)
         private set
@@ -252,9 +252,9 @@ class AppModel(private val app: Context) {
     private var answer: CompletableDeferred<Boolean>? = null
     private val main = Handler(Looper.getMainLooper())
 
-    fun choose(color: String) {
-        settings.color = color
-        this.color = color
+    fun choose(theme: String) {
+        settings.theme = theme
+        this.theme = theme
         WatchLink.update(app, this)
     }
 

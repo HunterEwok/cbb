@@ -437,7 +437,7 @@ struct DeviceRow: View {
         }
         .padding(.horizontal, Tokens.spacingMedium)
         .frame(minHeight: 60)
-        .glassTile(cornerRadius: Tokens.radiusCard)
+        .glassTile(.card)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityValue(device.online ? Text("online") : Text("offline"))

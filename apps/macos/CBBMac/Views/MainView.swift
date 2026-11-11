@@ -177,7 +177,7 @@ struct MainView: View {
                                 .buttonStyle(.plain)
                         }
                     }
-                    .glassTile(cornerRadius: Tokens.radiusCard)
+                    .glassTile(.card)
                 }
             case .orbit:
                 OrbitView(devices: list, me: model.this, selected: selected) { selected = $0 }
@@ -218,6 +218,7 @@ struct DeviceTile: View {
     let device: Control.Device
     let selected: Bool
     @Environment(\.palette) private var palette
+    @Environment(\.themeStyle) private var style
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
@@ -239,7 +240,7 @@ struct DeviceTile: View {
         .padding(Tokens.spacingMedium)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassTile()
-        .overlay(RoundedRectangle(cornerRadius: Tokens.radiusTile, style: .continuous).stroke(selected ? palette.accent : .clear, lineWidth: 2))
+        .overlay(RoundedRectangle(cornerRadius: style.radiusTile, style: .continuous).stroke(selected ? palette.accent : .clear, lineWidth: 2))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }

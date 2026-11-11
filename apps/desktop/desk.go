@@ -95,7 +95,7 @@ type State struct {
 // Settings are the window's choices, kept in the user's configuration
 // folder.
 type Settings struct {
-	Color      string `json:"color"`
+	Theme      string `json:"theme"`      // a name in tokens.js; "" for the default theme, the first there
 	Appearance string `json:"appearance"` // system, dark or light
 	Layout     string `json:"layout"`     // tiles, list or orbit
 	// Details shows the error underneath each message; nil follows the
@@ -112,7 +112,7 @@ type Settings struct {
 // NewDesk reads the settings and the language; it reaches the service only
 // when asked.
 func NewDesk() *Desk {
-	d := &Desk{socket: control.SocketPath(), settings: Settings{Color: "terminal", Appearance: "system", Layout: "tiles"}}
+	d := &Desk{socket: control.SocketPath(), settings: Settings{Appearance: "system", Layout: "tiles"}}
 	if dir, err := os.UserConfigDir(); err == nil {
 		d.settingsPath = filepath.Join(dir, "cbb", "desktop.json")
 		if data, err := os.ReadFile(d.settingsPath); err == nil {

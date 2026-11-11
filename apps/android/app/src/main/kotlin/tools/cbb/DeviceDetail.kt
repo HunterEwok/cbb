@@ -263,7 +263,7 @@ private fun IconRow(model: AppModel, d: LiveGroup.Device) {
 private fun IconLabel(symbol: String, title: String, onClick: () -> Unit) {
     val palette = LocalPalette.current
     Column(
-        Modifier.width(80.dp).clip(RoundedCornerShape(Tokens.radiusCard)).focusRing().clickable(role = Role.Button, onClick = onClick)
+        Modifier.width(80.dp).clip(RoundedCornerShape(LocalStyle.current.radiusCard)).focusRing().clickable(role = Role.Button, onClick = onClick)
             .padding(vertical = Tokens.spacingSmall).semantics(mergeDescendants = true) {},
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),

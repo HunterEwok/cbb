@@ -81,17 +81,17 @@ class ScreensTest {
             assertEquals(a, model.settings.appearance)
             compose.onNodeWithContentDescription(str(a.title)).assertIsSelected()
         }
-        val names = ColorChoice.offered
-        assertTrue("Settings offers ${names.size} colours", names.size >= 10)
+        val names = ThemeChoice.offered
+        assertTrue("Settings offers ${names.size} themes", names.size >= 10)
         for (name in names) {
-            compose.onNodeWithText(str(ColorChoice.title(name))).performScrollTo().performClick()
+            compose.onNodeWithText(str(ThemeChoice.title(name))).performScrollTo().performClick()
             compose.waitForIdle()
-            assertEquals(name, model.settings.color)
-            compose.onNodeWithText(str(ColorChoice.title(name))).assertIsSelected()
-            for (other in names) if (other != name) compose.onNodeWithText(str(ColorChoice.title(other))).assertIsNotSelected()
+            assertEquals(name, model.settings.theme)
+            compose.onNodeWithText(str(ThemeChoice.title(name))).assertIsSelected()
+            for (other in names) if (other != name) compose.onNodeWithText(str(ThemeChoice.title(other))).assertIsNotSelected()
         }
         // Kept for the next launch.
-        assertEquals(names.last(), Settings(context).color)
+        assertEquals(names.last(), Settings(context).theme)
     }
 
     /** U12: seven taps on the version show the error details switch, which sets the setting. */

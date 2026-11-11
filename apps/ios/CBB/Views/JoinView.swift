@@ -11,6 +11,7 @@ import SwiftUI
 struct JoinView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @Environment(\.themeStyle) private var style
 
     var body: some View {
         VStack(spacing: Tokens.spacingLarge) {
@@ -39,7 +40,7 @@ struct JoinView: View {
                     .scaledToFit()
                     .frame(maxWidth: 260)
                     .padding(Tokens.spacingMedium)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: Tokens.radiusCard, style: .continuous))
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: style.radiusCard, style: .continuous))
                     .accessibilityLabel(Text("QR code to join the group"))
                 Text(verbatim: code.grouped)
                     .font(.system(.largeTitle, design: .monospaced).weight(.bold))

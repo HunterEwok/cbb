@@ -199,16 +199,16 @@
     <string name="reason_rename">Rename a device</string>
     <string name="widget_description">One tap sends what this phone copied to your computers.</string>
     <string name="cbb_name" translatable="false">CBB</string>
-    <string name="color_terminal">Terminal</string>
-    <string name="color_midnight">Midnight</string>
-    <string name="color_amber">Amber</string>
-    <string name="color_ocean">Ocean</string>
-    <string name="color_teal">Teal</string>
-    <string name="color_coral">Coral</string>
-    <string name="color_rose">Rose</string>
-    <string name="color_lime">Lime</string>
-    <string name="color_graphite">Graphite</string>
-    <string name="color_ruby">Ruby</string>
+    <string name="theme_blueprint">Blueprint</string>
+    <string name="theme_precise">Precise</string>
+    <string name="theme_glass">Glass</string>
+    <string name="theme_soft">Soft</string>
+    <string name="theme_swiss">Swiss</string>
+    <string name="theme_hardware">Hardware</string>
+    <string name="theme_deco">Art Deco</string>
+    <string name="theme_liquid">Liquid Glass</string>
+    <string name="theme_terminal">Terminal</string>
+    <string name="theme_retro">Retro</string>
     <string name="theme_dark">Dark</string>
     <string name="layout_tiles">Tiles</string>
     <string name="layout_list">List</string>

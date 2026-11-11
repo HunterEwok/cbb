@@ -157,7 +157,7 @@ they look, so both apps are built to the same plan.
    after which only the device's own user turns them on again. A phone that is not an admin shows the list without
    actions and says which phones are admins.
 5. **Settings**, the same on the iPhone, Android and Aurora: first the basic ones, the theme
-   (System, Dark or Light) as icons with the language in a row and the ten colours, without
+   (System, Dark or Light) as icons with the language in a row and the ten themes, without
    a heading, the notifications, the watch, the recovery key on the root, the switch
    "Advanced settings", leaving the group, and about (seven taps on the version show the
    switch "Show error details", which puts the error itself under each error message; it is
@@ -484,7 +484,7 @@ service and its clipboard agent keep syncing without it.
   in the same three states, single-colour: on Windows a black and a white ICO, which the
   system switches with the taskbar's theme; on Linux a white PNG, black when the desktop
   portal says the user prefers a light look (`color-scheme`), read once at start.
-- **Settings**: the appearance and the language as icons and a list, the ten colours
+- **Settings**: the appearance and the language as icons and a list, the ten themes
   (`frontend/tokens.js`, which `go run ./tools/tokens` writes with the Swift and Kotlin
   tokens), "Open at sign-in" (on Linux an entry `cbb-tray.desktop` with `Hidden=true` in the
   user's autostart folder, on Windows the user's `StartupApproved\Run` value, as the Task
@@ -972,19 +972,31 @@ the app on real devices.
 
 ## Themes
 
-- Colours, type, spacing and corner radii are design tokens, defined once in
-  `apps/design/tokens.json` and generated into Swift and Kotlin, so both apps match.
-- One style, **Glass**, in ten colours: Terminal (the default, green), Midnight, Amber,
-  Ocean, Teal, Coral, Rose, Lime, Graphite and Ruby. Each colour has a dark and a light
-  palette; the theme is System (the system's light or dark mode), Dark or Light.
-- `tokens.json` holds each colour's accent for dark and light and the two neutral bases; the
-  generator mixes a little of the accent into the background and the surfaces, so adding a
-  colour is one line of data.
+- Ten themes, each a full set of design tokens defined once in `apps/design/tokens.json` and
+  generated into Swift, Kotlin and JavaScript, so every app matches: **Blueprint** (the
+  default: a drawing sheet, blue lines on white or a blueprint in the dark, IBM Plex),
+  **Precise**, **Glass** (the look of the first versions: a deep background, a glow of the
+  accent, glass tiles), **Soft**, **Swiss**, **Hardware**, **Art Deco**, **Liquid Glass**,
+  **Terminal** and **Retro**.
+- A theme is its style (the faces, the corners of buttons, cards, tiles and chips, the width
+  of its lines, its material: flat, glass, liquid or metal, whether large surfaces show a
+  grid, whether something off or waiting is dashed, whether small labels are in capitals)
+  and a palette for the dark and the light appearance. The appearance is System (the
+  system's light or dark mode), Dark or Light.
+- `tokens.json` names the default theme in one field, `default`; the generated files list it
+  first and every app starts with it, so changing the default is one word.
+- A theme draws only the app's own surfaces: the background, the tiles, the cards, the
+  lines, the type and the accent. The system's controls (switches, menus, sheets, the
+  keyboard, dialogs, Face ID) keep the system's look in every theme.
+- Glass and Liquid Glass use Liquid Glass from iOS 26 on Apple's systems; the flat themes
+  draw their surface with their line instead. Android has no Liquid Glass: its glass tiles
+  are the palette's glass colour with a hairline, over the same glow of the accent.
 - On Android 12 and later a further choice, **Wallpaper** (Material You), takes the colours
-  from the wallpaper through dynamic colour, in place of one of the ten.
-- Android has no Liquid Glass: its tiles and cards are the palette's glass colour with a
-  hairline, as the iPhone app draws them before iOS 26, over the same glow of the accent.
-- Contrast meets WCAG AA for text in every palette; the generator checks it.
+  from the wallpaper through dynamic colour, in the Precise theme's shape.
+- The watches and the Live Activity take only the theme's dark colours.
+- Contrast meets WCAG AA for text in every palette, 4.5:1 on the background and on a
+  surface, the dim text, the danger colour and the accent (badges and links) included; the
+  generator checks it.
 
 ## Layout of the repository
 

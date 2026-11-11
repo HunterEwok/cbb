@@ -5,7 +5,7 @@
 // state every few seconds; every action goes through the Go side too.
 
 import { Call } from "/wails/runtime.js";
-import { colors, radius, spacing } from "./tokens.js";
+import { themes, spacing } from "./tokens.js";
 
 const call = (method, ...args) => Call.ByName("main.Desk." + method, ...args);
 const $ = (id) => document.getElementById(id);
@@ -55,18 +55,20 @@ async function loadLanguage(l) {
   }
 }
 
-// The colours: the chosen accent on the dark or light base, as the phones.
+// The colours and the shape of the chosen theme, dark or light, as the phones.
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
 
 function applyTheme() {
   const s = state?.settings ?? {};
-  const pair = colors.find((c) => c.name === s.color) ?? colors[0];
+  const theme = themes.find((th) => th.name === s.theme) ?? themes[0];
   const dark = s.appearance === "dark" || (s.appearance !== "light" && darkQuery.matches);
-  const p = dark ? pair.dark : pair.light;
+  const p = dark ? theme.dark : theme.light;
+  const st = theme.style;
   const root = document.documentElement.style;
   const alpha = (hex, a) => hex + Math.round(a * 255).toString(16).padStart(2, "0");
   root.setProperty("--background", p.background);
   root.setProperty("--surface", p.surface);
+  root.setProperty("--grid", p.grid);
   root.setProperty("--text", p.text);
   root.setProperty("--text-dim", p.textDim);
   root.setProperty("--accent", p.accent);
@@ -74,9 +76,13 @@ function applyTheme() {
   root.setProperty("--danger", p.danger);
   root.setProperty("--glass", dark ? alpha(p.surface, 0.78) : "#FFFFFFDB");
   root.setProperty("--soft", alpha(p.accent, dark ? 0.16 : 0.1));
-  root.setProperty("--line", alpha(p.text, dark ? 0.12 : 0.1));
+  root.setProperty("--line", p.line);
   root.setProperty("color-scheme", dark ? "dark" : "light");
-  for (const [k, v] of Object.entries(radius)) root.setProperty(`--radius-${k}`, v + "px");
+  for (const k of ["button", "card", "tile", "chip"]) root.setProperty(`--radius-${k}`, st["radius" + k[0].toUpperCase() + k.slice(1)] + "px");
+  root.setProperty("--stroke", st.stroke + "px");
+  root.setProperty("--off-style", st.dashedOff ? "dashed" : "solid");
+  document.documentElement.dataset.material = st.material;
+  document.documentElement.dataset.grid = String(st.grid);
   for (const [k, v] of Object.entries(spacing)) root.setProperty(`--spacing-${k}`, v + "px");
 }
 darkQuery.addEventListener("change", applyTheme);
@@ -913,12 +919,21 @@ function languageName(l) {
   }
 }
 
+// The themes' names in Settings, as the phones have them.
+const themeTitles = {
+  blueprint: "Blueprint", precise: "Precise", glass: "Glass", soft: "Soft", swiss: "Swiss",
+  hardware: "Hardware", deco: "Art Deco", liquid: "Liquid Glass", terminal: "Terminal", retro: "Retro",
+};
+
 function renderSettings() {
   const s = state.settings;
-  $("swatches").innerHTML = colors.map((c) => {
-    const dark = s.appearance === "dark" || (s.appearance !== "light" && darkQuery.matches);
-    return `<button type="button" data-color="${c.name}" aria-checked="${c.name === s.color}" style="background:${(dark ? c.dark : c.light).accent}" ` +
-      `title="${esc(t(c.name[0].toUpperCase() + c.name.slice(1)))}"></button>`;
+  const dark = s.appearance === "dark" || (s.appearance !== "light" && darkQuery.matches);
+  const current = themes.some((th) => th.name === s.theme) ? s.theme : themes[0].name;
+  $("swatches").innerHTML = themes.map((th) => {
+    const p = dark ? th.dark : th.light;
+    return `<button type="button" role="radio" data-theme="${th.name}" aria-checked="${th.name === current}" ` +
+      `style="background:linear-gradient(135deg, ${p.background} 50%, ${p.accent} 50%)" ` +
+      `title="${esc(t(themeTitles[th.name] ?? th.name))}" aria-label="${esc(t(themeTitles[th.name] ?? th.name))}"></button>`;
   }).join("");
   for (const b of document.querySelectorAll("[data-appearance]")) b.setAttribute("aria-checked", String(b.dataset.appearance === s.appearance));
   $("language").innerHTML = `<option value="">${esc(t("System language"))}</option>` +
@@ -1120,7 +1135,7 @@ document.addEventListener("click", async (e) => {
   const el = e.target.closest("button, input");
   if (!el || !state) return;
   if (el.dataset.layout) return saveSettings({ layout: el.dataset.layout });
-  if (el.dataset.color) return saveSettings({ color: el.dataset.color });
+  if (el.dataset.theme) return saveSettings({ theme: el.dataset.theme });
   if (el.dataset.appearance) return saveSettings({ appearance: el.dataset.appearance });
   if (el.dataset.action) return deviceAction(el.dataset.action);
   if (el.dataset.menu) return openMenu(el.dataset.menu, el.dataset.level);

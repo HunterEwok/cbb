@@ -200,7 +200,7 @@ struct DeviceDetailView: View {
             .tint(palette.accent)
             .disabled(!mayTurn || model.busy)
             .padding(Tokens.spacingMedium)
-            .glassTile(cornerRadius: Tokens.radiusCard)
+            .glassTile(.card)
         }
     }
 
@@ -282,7 +282,7 @@ struct DeviceDetailView: View {
             Divider().overlay(palette.line)
             row(Text("Device ID"), Text(verbatim: d.id).monospaced())
         }
-        .glassTile(cornerRadius: Tokens.radiusCard)
+        .glassTile(.card)
     }
 
     private func row(_ label: Text, _ value: Text) -> some View {
@@ -387,7 +387,7 @@ private struct IconLabel: View {
         }
         .frame(maxWidth: .infinity, minHeight: 64)
         .padding(.vertical, Tokens.spacingSmall)
-        .glassTile(cornerRadius: Tokens.radiusCard)
+        .glassTile(.card)
         .contentShape(Rectangle())
     }
 }

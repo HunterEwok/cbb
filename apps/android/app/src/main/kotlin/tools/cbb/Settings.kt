@@ -51,10 +51,10 @@ class Settings(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
     private val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
 
-    /** A name of Tokens.colors, or ColorChoice.MATERIAL. */
-    var color: String
-        get() = prefs.getString("color", null) ?: "terminal"
-        set(v) = prefs.edit().putString("color", v).apply()
+    /** A name of Tokens.themes, or ThemeChoice.MATERIAL. */
+    var theme: String
+        get() = prefs.getString("theme", null) ?: Tokens.themes.first().name
+        set(v) = prefs.edit().putString("theme", v).apply()
 
     var appearance: Appearance
         get() = Appearance.of(prefs.getString("appearance", null))

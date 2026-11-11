@@ -133,7 +133,7 @@ object WatchLink {
         sync = (model.syncOff == null).takeIf { model.phase == AppModel.Phase.HOME },
         events = model.notifier.recent,
         // The wallpaper's colours are the phone's own; the watch takes the default.
-        color = model.color.takeIf { c -> Tokens.colors.any { it.name == c } } ?: Tokens.colors.first().name,
+        theme = model.theme.takeIf { n -> Tokens.themes.any { it.name == n } } ?: Tokens.themes.first().name,
         details = model.settings.showsErrorDetails,
     )
 }

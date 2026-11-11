@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Ten themes in every app, each a full set of tokens (faces, corners, lines, material, grid,
+  colours for dark and light) from `apps/design/tokens.json`: Blueprint, the new default,
+  Precise, Glass (the look until now), Soft, Swiss, Hardware, Art Deco, Liquid Glass,
+  Terminal and Retro. They replace the ten accent colours; the default is one field of the
+  tokens. A theme draws only the app's own surfaces, the system's controls stay the
+  system's. The setting is `theme` (it was `color`), and the watches get the theme's name.
 - The installers and uninstallers (`get.sh`, `get.ps1`, Linux, rootless, macOS, FreeBSD,
   OpenWrt and Windows) speak the user's language: Arabic, Chinese, English, Hebrew, Hindi,
   Russian, Spanish or Swahili, from the system's locale (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`,
