@@ -11,6 +11,7 @@
 //! does not reach.
 
 use std::collections::HashMap;
+use std::io::Write as _;
 use std::net::{IpAddr, SocketAddr, SocketAddrV6, TcpListener};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -22,6 +23,53 @@ use crate::node::Node;
 use crate::pair::home_address;
 
 const SERVICE: &str = "_cbb._tcp.local.";
+
+/// The file CBB_MDNS_TRACE names, for the tests: every event browsing
+/// sees and mdns-sd's own debug log (the packets it sends and takes, its
+/// cache), with the time, so that a member that does not find another on
+/// CI can be told from what mDNS did.
+fn trace_file() -> Option<&'static Mutex<std::fs::File>> {
+    static FILE: std::sync::OnceLock<Option<Mutex<std::fs::File>>> = std::sync::OnceLock::new();
+    FILE.get_or_init(|| {
+        let path = std::env::var_os("CBB_MDNS_TRACE")?;
+        let f = std::fs::OpenOptions::new().create(true).append(true).open(path).ok()?;
+        Some(Mutex::new(f))
+    })
+    .as_ref()
+}
+
+/// Writes a line to the trace, after the time of day in UTC.
+fn trace(line: &str) {
+    let Some(f) = trace_file() else { return };
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    let (s, ms) = (now.as_secs() % 86400, now.subsec_millis());
+    let mut f = f.lock().unwrap_or_else(|e| e.into_inner());
+    let _ = writeln!(f, "{:02}:{:02}:{:02}.{ms:03} {line}", s / 3600, s / 60 % 60, s % 60);
+}
+
+/// Hands mdns-sd's debug log to the trace.
+struct TraceLog;
+
+impl log::Log for TraceLog {
+    fn enabled(&self, m: &log::Metadata) -> bool {
+        m.level() <= log::Level::Debug && m.target().starts_with("mdns_sd")
+    }
+
+    fn log(&self, r: &log::Record) {
+        if self.enabled(r.metadata()) {
+            trace(&format!("mdns-sd {}: {}", r.level(), r.args()));
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+/// Starts the trace when CBB_MDNS_TRACE names a file.
+fn start_trace() {
+    if trace_file().is_some() && log::set_logger(&TraceLog).is_ok() {
+        log::set_max_level(log::LevelFilter::Debug);
+    }
+}
 
 /// Announces a device that listens to join (docs/protocol.md section 3,
 /// TXT `j=1` and `f`, its certificate's fingerprint), so that a computer of
@@ -93,6 +141,14 @@ pub fn find_joiners(wait: Duration) -> crate::error::Result<Vec<(Vec<SocketAddr>
     Ok(waiting.into_values().collect())
 }
 
+/// The addresses of the members of the group tag that browsing finds, one
+/// list for each member, for a new phone that restores the group with its
+/// recovery key: browsed for up to wait, then a moment more for the others.
+pub fn find_group(tag: &str, wait: Duration) -> crate::error::Result<Vec<Vec<SocketAddr>>> {
+    let found = browse_txt(wait, |info| (info.get_property_val_str("g") == Some(tag)).then_some(()))?;
+    Ok(found.into_values().map(|(a, ())| a).collect())
+}
+
 /// Browses for up to wait for the members whose TXT pick takes, then a
 /// moment more for the others; by instance name, their addresses and what
 /// pick made of them.
@@ -108,12 +164,14 @@ fn browse_txt<T>(
         let _ = daemon.disable_interface(mdns_sd::IfKind::All);
         let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
     }
+    start_trace();
     let rx = daemon.browse(SERVICE).map_err(|e| Error::with("cannot browse with mDNS", e))?;
     let mut found = std::collections::BTreeMap::new();
     let mut deadline = std::time::Instant::now() + wait;
     let mut settled = false;
     while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
         let Ok(ev) = rx.recv_timeout(left) else { break };
+        trace(&format!("pairing browse: {ev:?}"));
         let mdns_sd::ServiceEvent::ServiceResolved(info) = ev else { continue };
         let Some(v) = pick(&info) else { continue };
         let addrs = order(dial_addrs(&info).into_iter());
@@ -184,6 +242,22 @@ const REPUBLISH_GAP: Duration = Duration::from_millis(1500);
 
 /// The addresses of a found member; None once it is gone.
 type Addrs = Arc<Mutex<Option<Vec<SocketAddr>>>>;
+
+/// Keeps the addresses of a member the app found: a member found again
+/// takes the new ones, and a new one is kept while fewer than MAX_FOUND
+/// are, and returned to be dialed. A member past MAX_FOUND is not dialed.
+fn remember(found: &mut HashMap<String, Addrs>, key: String, addrs: Vec<SocketAddr>) -> Option<Addrs> {
+    if let Some(a) = found.get(&key) {
+        *a.lock().unwrap() = Some(addrs);
+        return None;
+    }
+    if found.len() >= MAX_FOUND {
+        return None;
+    }
+    let a: Addrs = Arc::new(Mutex::new(Some(addrs)));
+    found.insert(key, a.clone());
+    Some(a)
+}
 
 /// Dials the member at addrs again and again: at once after this member
 /// ended the connection to connect again (a new hello), a second after a
@@ -428,16 +502,11 @@ impl Dialers {
         let mut addrs: Vec<SocketAddr> = addrs.into_iter().filter(|a| home_address(a.ip())).collect();
         addrs.sort_by_key(|a| (a.ip().is_ipv6(), a.ip().is_loopback()));
         addrs.dedup();
-        let mut found = self.found.lock().unwrap();
-        if let Some(a) = found.get(key) {
-            *a.lock().unwrap() = Some(addrs);
-        } else if found.len() < MAX_FOUND {
-            let a: Addrs = Arc::new(Mutex::new(Some(addrs)));
-            found.insert(key.to_string(), a.clone());
+        let a = remember(&mut self.found.lock().unwrap(), key.to_string(), addrs);
+        if let Some(a) = a {
             let node = node.clone();
             std::thread::spawn(move || dial_loop(node, a, peer));
         }
-        drop(found);
         node.kick();
     }
 
@@ -518,11 +587,13 @@ fn browse(
         let _ = daemon.disable_interface(mdns_sd::IfKind::All);
         let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
     }
+    start_trace();
     let me = node.identity().id.clone();
     if let Ok(events) = daemon.monitor() {
         let n = node.clone();
         std::thread::spawn(move || {
             while let Ok(ev) = events.recv() {
+                trace(&format!("daemon: {ev:?}"));
                 if let mdns_sd::DaemonEvent::NameChange(c) = ev {
                     n.logf(&format!(
                         "cbb: mDNS renamed {} to {}: another device answers for the name",
@@ -645,6 +716,7 @@ fn browse(
             }
             continue;
         };
+        trace(&format!("{me}: {ev:?}"));
         match ev {
             mdns_sd::ServiceEvent::ServiceResolved(info) => {
                 let Some(id) = instance_id(&info.fullname) else { continue };
@@ -671,7 +743,7 @@ fn browse(
                 if !as_phone && !dials {
                     continue;
                 }
-                let later = !as_phone && !listens_only(r) && id < me;
+                let later = dials_later(as_phone, port.is_some(), r, &id, &me);
                 let addrs = order(dial_addrs(&info).into_iter());
                 if addrs.is_empty() {
                     log(&format!(
@@ -730,6 +802,15 @@ fn browse(
 /// Reports whether a TXT `r` value names a member that does not dial,
 /// which every other member dials; keys and values are compared without
 /// regard to case.
+/// Reports whether a member dials one it found with the TXT `r` and the
+/// device ID `id` only after FALLBACK: when that one also dials and has the
+/// lower ID, so that it is the one to dial. A phone dials everyone at once,
+/// and so does a member that does not listen (-no-listen), which no one
+/// else can reach.
+fn dials_later(as_phone: bool, listening: bool, r: Option<&str>, id: &DeviceId, me: &DeviceId) -> bool {
+    !as_phone && listening && !listens_only(r) && id < me
+}
+
 fn listens_only(r: Option<&str>) -> bool {
     r.is_some_and(|v| v.eq_ignore_ascii_case("listen"))
 }
@@ -818,6 +899,24 @@ mod tests {
         assert_eq!(instance_id(&format!("{id}.{SERVICE}")), want);
     }
 
+    /// The members the app finds and dials are bounded: past MAX_FOUND a
+    /// new one is not dialed, while one found again takes its new addresses.
+    #[test]
+    fn dials_at_most_max_found() {
+        use super::{MAX_FOUND, remember};
+        let addr = |i: usize| vec![std::net::SocketAddr::from(([192, 168, 0, (i % 250) as u8], 7000))];
+        let mut found = std::collections::HashMap::new();
+        for i in 0..MAX_FOUND {
+            assert!(remember(&mut found, i.to_string(), addr(i)).is_some(), "member {i}");
+        }
+        assert!(remember(&mut found, MAX_FOUND.to_string(), addr(1)).is_none());
+        assert_eq!(found.len(), MAX_FOUND);
+        assert!(remember(&mut found, "3".into(), addr(9)).is_none());
+        assert_eq!(*found["3"].lock().unwrap(), Some(addr(9)));
+        found.remove("0");
+        assert!(remember(&mut found, MAX_FOUND.to_string(), addr(1)).is_some());
+    }
+
     /// A connection this member ended to send a new hello (a mode, a tunnel
     /// key) is dialed again at once, one that came up and ended after a
     /// second, and failures back off from 1 s to 30 s: a phone whose mode
@@ -846,6 +945,20 @@ mod tests {
         assert_eq!(instance_id(&format!("{id}._cbb._tcp.local.")).unwrap().as_str(), id);
         assert!(instance_id("printer._cbb._tcp.local.").is_none());
         assert!(instance_id(&format!("{id}._http._tcp.local.")).is_none());
+    }
+
+    #[test]
+    fn who_dials_later() {
+        let low = DeviceId::parse("00000000000000000000000000000001").unwrap();
+        let high = DeviceId::parse("fffffffffffffffffffffffffffffffe").unwrap();
+        // Of two that dial, the higher ID waits for the lower one.
+        assert!(dials_later(false, true, None, &low, &high));
+        assert!(!dials_later(false, true, None, &high, &low));
+        // Not for one that never dials, nor as a phone.
+        assert!(!dials_later(false, true, Some("listen"), &low, &high));
+        assert!(!dials_later(true, true, None, &low, &high));
+        // A member that does not listen cannot be dialed: it dials at once.
+        assert!(!dials_later(false, false, None, &low, &high));
     }
 
     #[test]

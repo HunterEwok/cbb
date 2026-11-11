@@ -228,6 +228,14 @@ class GroupTest {
         runBlocking { model.rename(id, "bench-second") }
         assertEquals("renaming says ${model.message}", R.string.renamed, model.message?.text)
         until(30, "the new name on ${Bench.PC}") { Bench.run(Bench.PC, "cbb status").contains("bench-second") }
+        // Only a connected device gets the record that removes it (docs/protocol.md, section 10,
+        // revocation): afterwards every member refuses it. The phone's first dial to a
+        // computer that just joined can fail, so the removal waits for the connection.
+        until(60, "the phone connected to $second") {
+            runBlocking { model.refresh() }
+            model.group.devices.any { it.id == id && it.online }
+        }
+        until(30, "the new name on $second") { Bench.run(second, "cbb status").contains("bench-second") }
         // A6: with the switch for devices off, the removal notifies of nothing.
         model.notifier.set(GroupEvent.Kind.DEVICES, false)
         try {

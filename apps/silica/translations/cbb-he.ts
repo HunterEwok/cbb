@@ -145,6 +145,62 @@
         <source>The phone could not delete its key.</source>
         <translation>הטלפון לא הצליח למחוק את המפתח שלו.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>הרכזת של הקבוצה לא ענתה. ודאו שההזמנה עדיין בתוקף ושהרכזת פועלת, ונסו שוב.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>לא ניתן היה להצטרף לקבוצה. נסו שוב.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>רק מנהל יוצר הזמנה: טלפון מנהל כאן, או cbb invite במחשב מנהל.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>הטלפון הזה כבר בקבוצה. צאו ממנה קודם כדי להצטרף לאחרת.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>זו לא הזמנה של CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>תוקף ההזמנה פג. בקשו הזמנה חדשה.</translation>
+    </message>
+    <message>
+        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
+        <translation>סרקו את קוד ה-QR בדף השחזור: בטלפון חדש המפתח המוקלד לא מספיק.</translation>
+    </message>
+    <message>
+        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
+        <translation>זה כבר לא מפתח השחזור של הקבוצה: השורש הסיר אותו או יצר חדש.</translation>
+    </message>
+    <message>
+        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
+        <translation>לא נמצא אף מכשיר של הקבוצה ברשת הזו. הפעילו טלפון או מחשב של הקבוצה ונסו שוב.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB recovery sheet.</source>
+        <translation>זה לא דף שחזור של CBB.</translation>
+    </message>
+    <message>
+        <source>The phone could not restore the group.</source>
+        <translation>הטלפון לא הצליח לשחזר את הקבוצה.</translation>
+    </message>
+    <message>
+        <source>This is not the QR code of a CBB recovery sheet.</source>
+        <translation>זה לא קוד ה-QR של דף שחזור של CBB.</translation>
+    </message>
+    <message>
+        <source>The group's root cancelled the claim to restore the group.</source>
+        <translation>השורש של הקבוצה ביטל את הבקשה לשחזר את הקבוצה.</translation>
+    </message>
+    <message>
+        <source>The claim to restore the group became void.</source>
+        <translation>הבקשה לשחזר את הקבוצה בוטלה.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -179,6 +235,18 @@
     <message>
         <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
         <translation>במחשב השורש של הקבוצה, קבלו את הטלפון הזה כמנהל עם הקוד הזה: באפליקציית CBB הוסיפו מכשיר ובחרו לקבל אותו כמנהל, או הריצו cbb pair -qr -admin. השאירו את המסך הזה פתוח.</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>הצטרפות בהזמנה</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>מי שהזמין אתכם רואה את המילים האלה במכשיר שלו ומאשר את הטלפון אם הן תואמות. השאירו את המסך הזה פתוח.</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>מתחבר לרכזת של הקבוצה…</translation>
     </message>
 </context>
 <context>
@@ -331,6 +399,18 @@
         <source>Off until I turn it on</source>
         <translation>כיבוי עד שאפעיל</translation>
     </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>הצטרפות בהזמנה</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>שליחת הזמנה</translation>
+    </message>
+    <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>שחזור עם דף שחזור</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -437,6 +517,22 @@
     <message>
         <source>Device ID</source>
         <translation>מזהה מכשיר</translation>
+    </message>
+    <message>
+        <source>Hand the group over</source>
+        <translation>להעביר את הקבוצה</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>מעביר את הקבוצה אל %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>הקבוצה הועברה</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>הבקשה שלו משתלטת על הקבוצה מיד</translation>
     </message>
 </context>
 <context>
@@ -568,6 +664,62 @@
     <message>
         <source>Device</source>
         <translation>מכשיר</translation>
+    </message>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>בקשה להשתלט על הקבוצה ממתינה</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>ללא המתנה</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>שעה אחת</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>יום אחד</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 ימים</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 ימים</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>מפתחות שמנהל רשאי לשמור</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>לחלק מהמנהלים יש מפתחות חלשים יותר; הם נשארים עד שיוסרו</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>חומרה מאומתת בלבד</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>חומרה</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>חומרה או קובץ</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>מפתח שחזור</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>נוצר</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>אין</translation>
     </message>
 </context>
 <context>
@@ -1199,6 +1351,186 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>כשהטלפון אינו ברשת הביתית, הוא מסתנכרן דרך מנהרת ה-WireGuard של הרכזת שלך, מחשב בקבוצה שהוגדר עם cbb global hub; הפורט שלו נגיש מהאינטרנט, אבל רק דרך WireGuard עם מפתחות הקבוצה. הרכזת עונה לטלפון הזה בפעם הבאה שהוא מתחבר בבית. שום דבר לא הולך לשום מקום אחר, ובלי המנהרה אין חיבור. כיבוי גורם לטלפון לשכוח את מפתח המנהרה שלו.</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>הצטרפות בהזמנה</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>הוזמנתם לקבוצה</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>כוונו את המצלמה לקוד ה-QR של ההזמנה.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>המצלמה לא מופעלת: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>או הדביקו את טקסט ההזמנה, cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>קבוצה</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>רכזת</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>בתוקף עד</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>הצטרפו רק אם ביקשתם את ההזמנה הזו. מי שיצר אותה מאשר את הטלפון כשהוא רואה את המילים שהוא מציג.</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>הצטרפות</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>דחייה</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>שליחת הזמנה</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>פותח את ההזמנה ברכזת של הקבוצה…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite עם הטקסט שלה. היא פועלת פעם אחת, עד %1.</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>%1 הצטרף לקבוצה; הוא יופיע ברשימה כשיתחבר.</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>הציגו או שלחו את הקוד רק למי שמצטרף: כל מי שיש לו אותו יכול לבקש להצטרף.</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>העתקת טקסט ההזמנה</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>לאשר את %1 (%2)? אשרו רק אם המכשיר מציג את אותן מילים:</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>אישור</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>לא זה</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>נסו שוב</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>הזמנת מכשיר נוסף</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>הסרת מפתח השחזור</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>מסיר את מפתח השחזור</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>יצירת מפתח שחזור חדש</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>יצירת מפתח שחזור</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>מחליף את מפתח השחזור</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>מפתח שחזור</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>רשמו את המפתח או הדפיסו את הדף ושמרו אותו במקום בטוח. הוא מוצג פעם אחת בלבד.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>לקבוצה יש מפתח שחזור. בעזרתו מחשב של הקבוצה או טלפון חדש משתלטים על הקבוצה אם הטלפון הזה אובד.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>מפתח שחזור מאפשר למחשב של הקבוצה או לטלפון חדש להשתלט על הקבוצה אם הטלפון הזה אובד. משכו למטה כדי ליצור אחד.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>רשמתי אותו</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>שחזור הקבוצה</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>הטלפון הזה הוא עכשיו השורש של הקבוצה.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>מחפש טלפון או מחשב של הקבוצה ברשת הזו…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>מבקש את הקבוצה…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>הקבוצה שוחזרה בטלפון הזה. הוא יהפוך לשורש הקבוצה כשזמן ההמתנה יסתיים, בעוד %1 שעות, אלא אם השורש יבטל את הבקשה.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>הקבוצה שוחזרה בטלפון הזה. הוא יהפוך לשורש הקבוצה כשזמן ההמתנה של הקבוצה יסתיים, אלא אם השורש יבטל את הבקשה.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>כוונו את המצלמה לקוד ה-QR בדף השחזור של הקבוצה. השאירו טלפון או מחשב של הקבוצה דולק וברשת הזו.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>המצלמה לא מופעלת: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>או הדביקו את טקסט הקוד, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>לנסות שוב</translation>
     </message>
 </context>
 </TS>

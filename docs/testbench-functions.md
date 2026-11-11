@@ -75,6 +75,8 @@ line here with every new function, and a case for it in the catalogue.
 | I.56 | mips and mipsle builds | I23 |
 | I.57 | Authenticode on Windows | I24 |
 | I.58 | `CBB_ERROR_DETAILS` and the installers' errors | I25 |
+| I.59 | The one-time move from 0.5: the old group left, settings kept, said in status | I26 |
+| I.60 | A device of version N in one group with N-1, from 0.6 on | I27 |
 
 ## G. Groups, pairing and roles
 
@@ -151,6 +153,8 @@ line here with every new function, and a case for it in the catalogue.
 | G.70 | Every pair of joiner, admitter and path | G41 |
 | G.71 | Leaving and joining again | G42 |
 | G.72 | Groups side by side on one network | G43, S13 |
+| G.73 | A device that shows a code, typed on a computer of the group (mDNS `j=1`, `cbb pair -qr` with six digits) | G44 |
+| G.74 | Taking the group over from a phone through the core (iPhone, Android, Aurora) | G26, A1, A19 |
 
 ## K. Certificates and keys
 
@@ -192,7 +196,7 @@ line here with every new function, and a case for it in the catalogue.
 | D.5 | The lower ID dials | D2 |
 | D.6 | The 30 s fallback dial | D2 |
 | D.7 | One connection per pair | D2 |
-| D.8 | Full members dial lite members | D3 |
+| D.8 | Who dials: a member without `dials` (`r=listen`) is dialed; of two that dial, the lower device ID first, the other after 30 s | D3, D17 |
 | D.9 | Phones dial; a phone hub listens | D3 |
 | D.13 | Known networks and quiet interfaces | D6 |
 | D.14 | `cbb network` | D6 |
@@ -208,6 +212,7 @@ line here with every new function, and a case for it in the catalogue.
 | D.24 | ALPN and client certificates required | D15 |
 | D.25 | A new address; roaming | D16 |
 | D.26 | TXT fields, announcements and goodbyes | D17 |
+| D.27 | Capabilities: `admin`, `dials`, `hub` in the hello, records and pairing | D18, D3 |
 
 ## Y. Sync of text
 
@@ -301,6 +306,8 @@ line here with every new function, and a case for it in the catalogue.
 | O.31 | Progress shown | O13 |
 | O.32 | A copy passed on by a router's small memory | O14 |
 | O.33 | Fetch limits and padding | O15 |
+| O.34 | GIF images, animated too | O16 |
+| O.35 | Received images and videos in the phones' gallery | O17 |
 
 ## T. Remote paste
 
@@ -337,6 +344,7 @@ line here with every new function, and a case for it in the catalogue.
 | T.29 | Bluetooth keyboards | T18 |
 | T.30 | Apple TV, Samsung, LG, Roku | T19 |
 | T.31 | Keyboard layouts and the Nano's console | T20 |
+| T.32 | Remote paste of images and files | T21 |
 
 ## Q. Quick actions
 
@@ -397,7 +405,7 @@ line here with every new function, and a case for it in the catalogue.
 | W.33 | The forwarder restarted or down | W31 |
 | W.34 | The forwarder's limits | W32 |
 | W.35 | Groups apart on one forwarder | W33 |
-| W.36 | `-vless-site`, `-vless-listen` | W34 |
+| W.36 | `-vless-xhttp`, `-vless-listen` | W34, W46 |
 | W.37 | `cbb relay -group`, `-open` | W36 |
 | W.38 | `cbb global relay` and its consent | W36 |
 | W.39 | Relay credentials and pseudonyms | W37 |
@@ -466,6 +474,7 @@ line here with every new function, and a case for it in the catalogue.
 | H.19 | Android TV | H13 |
 | H.20 | The Steam Deck's Game Mode | H14 |
 | H.21 | The iPad and big screens | H15 |
+| H.22 | The ZX Next's latest image, its line speeds and checked install | H16 |
 
 ## A. The apps
 
@@ -496,6 +505,8 @@ line here with every new function, and a case for it in the catalogue.
 | A.23 | Plain-language paths | A16 |
 | A.24 | Add a device: camera and six digits | A1, G3 |
 | A.25 | The Aurora OS app: join by QR, sync in front, leave | A17 |
+| A.26 | Two buttons: sync and away from home on every app | A18 |
+| A.27 | The Aurora app's takeover, collections, keyboard, pastes and gallery | A19 |
 
 ## S. Security
 
@@ -529,3 +540,4 @@ line here with every new function, and a case for it in the catalogue.
 | E.8 | A blocked member port | E8 |
 | E.9 | Restarts at random | E9 |
 | E.10 | Days of running | E10 |
+| E.11 | The small devices' budgets | E12 |

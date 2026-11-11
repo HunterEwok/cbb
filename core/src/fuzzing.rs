@@ -70,3 +70,44 @@ pub fn api(data: &[u8]) {
     }
     assert_eq!(crate::api::call(data), answer, "the same request got another answer");
 }
+
+/// VLESS and XHTTP's answers from the forwarder (src/vless.rs), in pieces
+/// whose sizes the first byte picks: an HTTP head, a chunked body, the
+/// framed download and a stream's. Whatever the pieces, the framed packets
+/// read back are those that the framing of the same packets gives in one go.
+pub fn vless(data: &[u8]) {
+    use crate::vless::{Chunked, Down, frame, parse_head};
+    let Some((&step, data)) = data.split_first() else { return };
+    let step = usize::from(step).max(1);
+    let _ = parse_head(data);
+    let mut chunked = Chunked::default();
+    let mut body = Vec::new();
+    let (mut down, mut whole, mut stream) = (Down::default(), Down::default(), Down::stream());
+    let mut got = Vec::new();
+    let mut broke = false;
+    for piece in data.chunks(step) {
+        let _ = chunked.push(piece, &mut body);
+        let _ = stream.push(piece);
+        match down.push(piece) {
+            Ok(p) => got.extend(p),
+            Err(_) => {
+                broke = true;
+                break;
+            }
+        }
+    }
+    // The same bytes at once give the same packets, unless the pieces
+    // broke the reader first (a packet held past its limit).
+    if !broke && let Ok(all) = whole.push(data) {
+        assert_eq!(got, all, "the packets depend on how the bytes came");
+    }
+    // Packets framed and read back are themselves.
+    let packets: Vec<&[u8]> = data.chunks(step.saturating_mul(3)).collect();
+    let mut wire = alloc::vec![0u8, 0u8];
+    for p in &packets {
+        wire.extend(frame(p).expect("a piece under 64 KiB"));
+    }
+    let mut back = Down::default();
+    let read: Vec<Vec<u8>> = wire.chunks(step).flat_map(|c| back.push(c).expect("framed packets read")).collect();
+    assert_eq!(read, packets, "framed packets did not read back");
+}

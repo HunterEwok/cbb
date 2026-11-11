@@ -164,13 +164,18 @@ func soak(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 			return err
 		}
 		var errs []error
+		most := 0
 		for _, m := range ms {
+			for _, x := range samples[m] {
+				most = max(most, x.rss)
+			}
 			msg, err := soakFlat(samples[m])
 			r.Note(p+"flat", m.Name+": "+msg)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", m.Name, err))
 			}
 		}
+		r.Metric("E10/rss-most", "KiB", float64(most))
 		return errors.Join(errs...)
 	})
 }

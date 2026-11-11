@@ -96,12 +96,10 @@ type (
 		Seen  string       `json:"seen,omitempty"`  // where the hub's WireGuard port is reached
 	}
 	vlessAnswer struct {
-		Transport  string `json:"transport,omitempty"`  // "" for REALITY, or "xhttp"
-		Port       uint16 `json:"port"`                 // the TCP port, at the forwarder's address
-		PublicKey  []byte `json:"public_key,omitempty"` // REALITY: the key
-		ShortID    string `json:"short_id,omitempty"`   // REALITY: the short ID
-		ServerName string `json:"server_name"`          // the site the handshakes name
-		Path       string `json:"path,omitempty"`       // XHTTP: the path the web server passes
+		Transport  string `json:"transport"`   // "xhttp"
+		Port       uint16 `json:"port"`        // the web server's TCP port, at the forwarder's address
+		ServerName string `json:"server_name"` // the site the handshakes name
+		Path       string `json:"path"`        // the path the web server passes
 	}
 )
 
@@ -387,7 +385,7 @@ func (f *Forwarder) register(raw net.Conn) (*reg, error) {
 	}
 	if c.VLESS != "" {
 		if f.vless == nil {
-			return refuse("this forwarder has no VLESS; run cbb forward with -vless-site or -vless-xhttp")
+			return refuse("this forwarder has no VLESS; run cbb forward with -vless-xhttp")
 		}
 		if err := tunnel.CheckVLESSID(c.VLESS); err != nil || c.VLESS == vless.RegistrationID {
 			return refuse("the VLESS user ID is not usable")
@@ -444,18 +442,12 @@ func (f *Forwarder) register(raw net.Conn) (*reg, error) {
 		}
 	}
 	var vlessAns *vlessAnswer
-	if v := f.vlessCfg; r.vlessID != "" && v.XHTTP != nil {
+	if v := f.vlessCfg; r.vlessID != "" {
 		// The group's packets come under a path of its own, the same at
 		// each registration: v.XHTTP.Path, which every build may carry,
 		// takes only registrations.
 		r.vlessPath = f.groupPath(tag)
 		vlessAns = &vlessAnswer{Transport: tunnel.TransportXHTTP, Port: v.XHTTP.Port, ServerName: v.XHTTP.Host, Path: v.XHTTP.Path + "/" + r.vlessPath}
-	} else if r.vlessID != "" {
-		pub, err := vless.PublicKey(v.Key)
-		if err != nil {
-			return nil, err
-		}
-		vlessAns = &vlessAnswer{Port: f.vless.Port(), PublicKey: pub, ShortID: vless.ShortID(v.Key), ServerName: v.Site}
 	}
 	f.mu.Lock()
 	if o := f.regs[tag]; o != old {
