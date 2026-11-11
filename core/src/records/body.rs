@@ -238,6 +238,8 @@ pub struct Device {
     pub rights: u64,
     pub skip: u64,
     pub caps: u64,
+    /// The device's system; numbers of later versions are kept as they
+    /// are.
     pub os: u64,
     pub store: u64,
     pub proof: u64,
@@ -521,9 +523,8 @@ fn check_device(d: &Device) -> Result<bool, Rule> {
     if d.caps != 0 && d.role != ROLE_MEMBER || d.caps > (CAP_ADMIN | CAP_DIALS | CAP_HUB) {
         return Err(field(t, "caps"));
     }
-    if d.os > 10 {
-        return Err(field(t, "os"));
-    }
+    // os: any number is taken as it is; one this version does not name
+    // is shown as unknown.
     if !(STORE_FILE..=STORE_PROVEN).contains(&d.store) {
         return Err(field(t, "store"));
     }

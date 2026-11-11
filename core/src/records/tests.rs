@@ -1126,6 +1126,18 @@ fn an_old_roots_late_removal_ends_with_the_takeover() {
     assert!(s.counting.contains(&ld.id()) && s.device(&laptop.key.device_id()).is_some());
 }
 
+/// Any os number is taken: 11 (harmonyos) and a later version's 12 are
+/// kept and count, never refused or held.
+#[test]
+fn any_os_number_is_taken() {
+    let mut g = G::new();
+    for (i, os) in [11u64, 12, 9_999].into_iter().enumerate() {
+        let r = g.device(&k("root"), &k(&format!("o{i}")), "o", |d| d.os = os);
+        let s = g.state();
+        assert!(s.counting.contains(&r.id()), "os {os}");
+    }
+}
+
 /// What a command's receiver asks of the state: a key with two histories,
 /// a removed or frozen admin, and every admin during a full stop sign no
 /// command; the root does.
