@@ -4,7 +4,6 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
 	"net"
 	"testing"
@@ -13,6 +12,14 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/release"
+)
+
+// The project's open relay as cbb names it (member/src/away/meet.rs):
+// projectRelay stands for its address and key in a relay request, and
+// projectRelayHost is the name keys.json and entries.json give it.
+const (
+	projectRelay     = "default"
+	projectRelayHost = "cbb.tools:8765"
 )
 
 // signRelayKeys signs entry points under a keys.json at keysSeq that
@@ -39,14 +46,14 @@ func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, 
 		if err := json.Unmarshal(set.Entries.Body, &e); err != nil {
 			t.Fatal(err)
 		}
-		e.Relays = []release.EntryRelay{{Name: relay.ProjectHost, Endpoints: endpoints}}
+		e.Relays = []release.EntryRelay{{Name: projectRelayHost, Endpoints: endpoints}}
 		var err error
 		if set.Entries, err = release.Sign(e, s.key); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, r := range relays {
-		k.Keys = append(k.Keys, release.Key{Key: r.Cert.Leaf.RawSubjectPublicKeyInfo, Name: relay.ProjectHost, Use: release.UseRelay})
+		k.Keys = append(k.Keys, release.Key{Key: r.Cert.Leaf.RawSubjectPublicKeyInfo, Name: projectRelayHost, Use: release.UseRelay})
 	}
 	var err error
 	if set.Keys, err = release.Sign(k, s.root); err != nil {
@@ -70,21 +77,8 @@ func TestProjectRelayNewKey(t *testing.T) {
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	group := pi.status(t).Group
-	serve := func(keys relay.Keys, at string) (*relay.Relay, func()) {
-		r, err := relay.Listen(relay.Config{Listen: at, Keys: keys, Groups: []string{group}, Logf: t.Logf})
-		if err != nil {
-			t.Fatal(err)
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		served := make(chan struct{})
-		go func() {
-			defer close(served)
-			r.Serve(ctx)
-		}()
-		return r, func() {
-			cancel()
-			<-served
-		}
+	serve := func(keys relay.Keys, at string) (*relay.Process, func()) {
+		return runRelay(t, keys, at, group)
 	}
 	oldKeys, err := relay.NewKeys()
 	if err != nil {
@@ -100,7 +94,7 @@ func TestProjectRelayNewKey(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 1, oldKeys)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: at, RelayKey: relay.Project, Consent: true}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: at, RelayKey: projectRelay, Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
 	connected := func() bool {

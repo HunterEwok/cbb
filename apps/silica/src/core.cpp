@@ -72,6 +72,26 @@ QString versionLine(Failure *failure)
         .arg(source.isEmpty() ? QStringLiteral("unknown") : source);
 }
 
+QJsonValue testPanic(Failure *failure)
+{
+    size_t len = 0;
+    uint8_t *answer = cbb_test_panic(&len);
+    const QJsonObject a = QJsonDocument::fromJson(QByteArray(reinterpret_cast<const char *>(answer), int(len))).object();
+    if (answer)
+        cbb_free(answer, len);
+    const QJsonObject e = a.value(QStringLiteral("error")).toObject();
+    if (e.isEmpty()) {
+        *failure = {QCoreApplication::translate("Errors", "This build of CBB is broken."), QStringLiteral("core: cbb_test_panic did not answer an error")};
+        return QJsonValue();
+    }
+    *failure = {e.value(QStringLiteral("message")).toString(),
+                QStringLiteral("core: test_panic (%1, code %2)\n%3")
+                    .arg(e.value(QStringLiteral("name")).toString())
+                    .arg(e.value(QStringLiteral("code")).toInt())
+                    .arg(e.value(QStringLiteral("details")).toString())};
+    return QJsonValue(e.value(QStringLiteral("code")).toInt());
+}
+
 QJsonObject take(uint8_t *answer, size_t len, const QString &what, Failure *failure)
 {
     if (!answer) {

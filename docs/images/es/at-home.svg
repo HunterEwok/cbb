@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->
-<svg xmlns="http://www.w3.org/2000/svg" lang="es" width="738" height="250" viewBox="0 0 738 250" role="img" aria-label="En casa, cada dispositivo habla directamente con todos los demás">
+<svg xmlns="http://www.w3.org/2000/svg" lang="es" width="764" height="250" viewBox="0 0 764 250" role="img" aria-label="En casa, cada dispositivo habla directamente con todos los demás">
 <title>En casa, cada dispositivo habla directamente con todos los demás</title>
 <style>
   .bg { fill: none; }
@@ -42,18 +42,18 @@
     .lbl-bg { fill: #0d1117; stroke: #3d444d; }
   }
 </style>
-<rect class="zone" x="10" y="10" width="718" height="200" rx="14"/>
+<rect class="zone" x="10" y="10" width="744" height="200" rx="14"/>
 <text class="zone-t" x="26" y="34">Red doméstica</text>
-<g class="key"><rect class="card key" x="29.75" y="50.0" width="150" height="64" rx="10"/><g transform="translate(41.75,68)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="79.75" y="78">Teléfono</text><text class="s" x="79.75" y="96">con la app</text><rect class="badge" x="138.15" y="41.0" width="33.6" height="18" rx="9"/><text class="badge-t" x="154.95" y="54.0" text-anchor="middle">RAÍZ</text></g>
-<path class="e-home" d="M104.75,114.0 L104.75,150"/>
-<g class=""><rect class="card " x="203.75" y="56.0" width="150" height="52" rx="10"/><g transform="translate(215.75,68)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="253.75" y="87">Portátil</text></g>
-<path class="e-home" d="M278.75,108.0 L278.75,150"/>
-<g class=""><rect class="card " x="377.75" y="56.0" width="150" height="52" rx="10"/><g transform="translate(389.75,68)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="427.75" y="87">Sobremesa</text></g>
-<path class="e-home" d="M452.75,108.0 L452.75,150"/>
-<g class=""><rect class="card " x="551.75" y="50.0" width="156.5" height="64" rx="10"/><g transform="translate(563.75,68)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="601.75" y="78">Raspberry Pi</text><text class="s" x="601.75" y="96">miembro ligero</text></g>
-<path class="e-home" d="M630.0,114.0 L630.0,150"/>
-<path class="e-home" d="M104.75,150 L630.0,150"/>
-<text class="note" x="369.0" y="236" text-anchor="middle">Sin servidor en medio: cualquier dispositivo puede estar apagado y los demás siguen sincronizando.</text>
-<rect class="lbl-bg" x="206.7" y="161.0" width="324.7" height="22" rx="11.0"/>
-<text class="lbl home" x="369.0" y="176.0" text-anchor="middle">conexiones directas y cifradas, halladas por mDNS</text>
+<g class="key"><rect class="card key" x="30.149999999999977" y="50.0" width="150" height="64" rx="10"/><g transform="translate(42.14999999999998,68)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="80.14999999999998" y="78">Teléfono</text><text class="s" x="80.14999999999998" y="96">con la app</text><rect class="badge" x="138.54999999999998" y="41.0" width="33.6" height="18" rx="9"/><text class="badge-t" x="155.34999999999997" y="54.0" text-anchor="middle">RAÍZ</text></g>
+<path class="e-home" d="M105.14999999999998,114.0 L105.14999999999998,150"/>
+<g class=""><rect class="card " x="204.14999999999998" y="56.0" width="150" height="52" rx="10"/><g transform="translate(216.14999999999998,68)" class="ic"><rect x="5" y="6" width="18" height="12" rx="1.5"/><path d="M2 22h24l-2 -3H4z"/></g><text class="t" x="254.14999999999998" y="87">Portátil</text></g>
+<path class="e-home" d="M279.15,108.0 L279.15,150"/>
+<g class=""><rect class="card " x="378.15" y="56.0" width="150" height="52" rx="10"/><g transform="translate(390.15,68)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="428.15" y="87">Sobremesa</text></g>
+<path class="e-home" d="M453.15,108.0 L453.15,150"/>
+<g class=""><rect class="card " x="552.15" y="50.0" width="181.7" height="64" rx="10"/><g transform="translate(564.15,68)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="602.15" y="78">Raspberry Pi</text><text class="s" x="602.15" y="96">dispositivo pequeño</text></g>
+<path class="e-home" d="M643.0,114.0 L643.0,150"/>
+<path class="e-home" d="M105.14999999999998,150 L643.0,150"/>
+<text class="note" x="382.0" y="236" text-anchor="middle">Sin servidor en medio: cualquier dispositivo puede estar apagado y los demás siguen sincronizando.</text>
+<rect class="lbl-bg" x="219.7" y="161.0" width="324.7" height="22" rx="11.0"/>
+<text class="lbl home" x="382.0" y="176.0" text-anchor="middle">conexiones directas y cifradas, halladas por mDNS</text>
 </svg>

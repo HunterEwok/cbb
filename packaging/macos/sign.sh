@@ -22,9 +22,8 @@
 # signing, is signed from the inside out: its nested code first, then the
 # bundle, which keeps the identifier of its Info.plist.
 #
-# cbb and cbb-helper are signed with cbb.entitlements beside this script:
-# the Rust core, which wazero compiles at run time, needs executable memory
-# that no signature covers. CBB.app runs no such code and asks for nothing.
+# Nothing asks the hardened runtime for an entitlement: no program compiles
+# code at run time.
 set -eu
 
 if [ $# -ne 2 ]; then
@@ -33,7 +32,6 @@ if [ $# -ne 2 ]; then
 fi
 identity=$1
 bin=$2
-entitlements=$(cd "$(dirname "$0")" && pwd)/cbb.entitlements
 
 # sign PATH [codesign flags] signs one piece of code.
 sign() {
@@ -65,16 +63,16 @@ case $bin in
 */cbb-forward | cbb-forward) identifier=tools.cbb.forward ;;
 */cbb-relay | cbb-relay) identifier=tools.cbb.relay ;;
 esac
-sign "$bin" --identifier "$identifier" --entitlements "$entitlements"
+sign "$bin" --identifier "$identifier"
 codesign --verify --strict --verbose=2 "$bin"
 # The runtime flag is what notarization and the checks below rely on.
 codesign --display --verbose=2 "$bin" 2>&1 | grep -q 'flags=.*runtime'
-# Without the entitlement a Mac that enforces it kills cbb as it loads the
-# core, though a runner that does not would still pass the run below.
-codesign --display --entitlements - --xml "$bin" 2>/dev/null |
-	grep -q 'com.apple.security.cs.allow-unsigned-executable-memory'
-# The group's rules come from the Rust core, which wazero compiles to
-# machine code at run time; it must still load under the hardened runtime.
+# No entitlement weakens the hardened runtime.
+if codesign --display --entitlements - --xml "$bin" 2>/dev/null | grep -q 'com.apple.security'; then
+	echo "sign.sh: $bin carries an entitlement" >&2
+	exit 1
+fi
+# The program must still start under the hardened runtime.
 # An Intel build runs on an Apple silicon runner only through Rosetta.
 if [ "$(lipo -archs "$bin")" != "$(uname -m)" ] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
 	echo "sign.sh: $(lipo -archs "$bin") does not run here (no Rosetta); not run" >&2

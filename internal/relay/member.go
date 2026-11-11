@@ -41,14 +41,6 @@ func (l Link) same(o Link) bool {
 	return l.Endpoint == o.Endpoint && l.Pin == o.Pin && slices.Equal(l.Also, o.Also)
 }
 
-// CheckPin tells whether s looks like a relay's key as cbb relay prints it.
-func CheckPin(s string) error {
-	if forward.CheckPin(s) != nil {
-		return fmt.Errorf("%q is not a relay's key; cbb relay prints it, 44 characters of base64", s)
-	}
-	return nil
-}
-
 // MemberConfig configures a member's link to its relay.
 type MemberConfig struct {
 	Link Link

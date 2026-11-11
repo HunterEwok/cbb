@@ -46,7 +46,7 @@ func WebServerNaming(t testing.TB, path string, back func() string, client netip
 // WebServerCA is WebServer with a certificate as a public site has one: an
 // RSA certificate for WebName from a CA of its own, whose certificate in
 // PEM it returns, for clients that check the chain to a root, such as the
-// lite member with SSL_CERT_FILE.
+// Rust cbb with SSL_CERT_FILE.
 func WebServerCA(t testing.TB, path string, back func() string) (netip.AddrPort, []byte) {
 	t.Helper()
 	caKey, err := rsa.GenerateKey(rand.Reader, 2048)

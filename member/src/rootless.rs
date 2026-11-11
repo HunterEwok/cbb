@@ -4,8 +4,8 @@
 //! Whether this is a rootless install (docs/design.md, "Rootless installs",
 //! D-79), as the full member's internal/rootless tells it: the service runs
 //! as the user's own systemd user unit, with its files in the user's home,
-//! so every program of the user can read its keys. The lite member is never
-//! the group's root, an admin or a hub anyway; a rootless one says so in its
+//! so every program of the user can read its keys. A rootless member is never
+//! the group's root, an admin or a hub; it says so in its
 //! hello, and it has no console helper and no polkit rule.
 
 use std::path::PathBuf;

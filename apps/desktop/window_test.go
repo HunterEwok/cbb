@@ -143,6 +143,10 @@ func (w *window) open(lang string) *Desk {
 		settings:     Settings{Color: "terminal", Appearance: "system", Layout: "tiles"},
 		settingsPath: filepath.Join(w.t.TempDir(), "desktop.json")}
 	w.desk.Store(d)
+	// Each window starts from the group's order, as a fresh member would.
+	w.svc.mu.Lock()
+	w.svc.arrangement = Arrangement{}
+	w.svc.mu.Unlock()
 	w.page.call(w.t, "Page.navigate", map[string]any{"url": w.url}, nil)
 	w.wait(`document.readyState === "complete" && $h() !== ""`)
 	return d
@@ -265,12 +269,26 @@ func (w *window) waitSettings(d *Desk, ok func(Settings) bool) {
 	w.t.Fatalf("desktop.json holds %+v", s)
 }
 
+// waitArranged waits until the arrangement the member keeps passes ok.
+func (w *window) waitArranged(ok func(string) bool) {
+	w.t.Helper()
+	var b []byte
+	for range 50 {
+		b, _ = json.Marshal(w.svc.arranged())
+		if ok(string(b)) {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	w.t.Fatalf("the member keeps %s", b)
+}
+
 // collections (A8): a new collection from a device's menu, another device
 // moved in, its page, a rename, the keyboard's move, Ungroup, Back to the
 // group's order; the search and the filters with more than 12 devices.
 func (w *window) collections(t *testing.T) {
 	w.t = t
-	d := w.open("en")
+	w.open("en")
 	w.wait(`$all("#devices .tile").length === 14 && $all(".cell[draggable]").length === 14`)
 	// This computer comes first, and moves as the others do.
 	w.wait(`$order()[0] === "d:self" && $q('.cell[data-ref="d:self"] .tile').textContent.includes("This computer")`)
@@ -288,12 +306,8 @@ func (w *window) collections(t *testing.T) {
 	w.wait(`$q("#tile-menu").open`)
 	w.eval(`$clickText("#tile-menu-items button", "Move to Work")`, nil)
 	w.wait(`$q('[data-open]')?.textContent.includes("1 of 2 online")`)
-	w.waitSettings(d, func(s Settings) bool {
-		if s.Arrangement == nil {
-			return false
-		}
-		b, _ := json.Marshal(s.Arrangement)
-		return strings.Contains(string(b), `"Work"`) && strings.Contains(string(b), `"mac"`) && strings.Contains(string(b), `"win"`)
+	w.waitArranged(func(b string) bool {
+		return strings.Contains(b, `"Work"`) && strings.Contains(b, `"mac"`) && strings.Contains(b, `"win"`)
 	})
 
 	// Alt and an arrow key move the focused tile.
@@ -519,7 +533,9 @@ func (w *window) admin(t *testing.T) {
 	if !strings.Contains(page, "This is the group's hub") {
 		t.Errorf("the hub's page does not say it is the hub:\n%s", page)
 	}
+	// Making a device the hub is in the advanced settings, off by default.
 	w.eval(`$click('.tile[data-id="mac"]')`, nil)
+	w.eval(`(() => { const a = $q("#advanced"); a.checked = true; a.dispatchEvent(new Event("change")); })()`, nil)
 	w.wait(`$q('[data-action="hub"]')`)
 	w.eval(`$click('[data-action="hub"]')`, nil)
 	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("must be on there already")`)
@@ -540,12 +556,14 @@ func (w *window) admin(t *testing.T) {
 		w.svc.mu.Unlock()
 	}()
 	w.eval(`$click('.tile[data-id="self"]')`, nil)
-	w.wait(`$q('[data-tunnel="obfuscate"]') && $q('[data-tunnel="plain"]').getAttribute("aria-checked") === "true"`)
-	w.eval(`$click('[data-tunnel="obfuscate"]')`, nil)
+	// Strict networks: a plain hub has both switches off, and the one for
+	// networks that let only the web through waits for the other.
+	w.wait(`$q('[data-strict="vpn"]') && !$q('[data-strict="vpn"]').checked && $q('[data-strict="web"]').disabled`)
+	w.eval(`$click('[data-strict="vpn"]')`, nil)
 	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("next time they meet this hub at home")`)
 	w.eval(`$click("#confirm-ok")`, nil)
 	w.wait(`$q("#message").textContent === "The hub's settings are saved."`)
-	if r := ran(); !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-obfuscate"}}) {
+	if r := ran(); !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-no-vless"}}) {
 		t.Errorf("the disguise ran %q", r)
 	}
 	w.wait(`$q('[data-action="forwarder"]') && !$q('[data-action="forwarder"]').disabled`)
@@ -557,9 +575,50 @@ func (w *window) admin(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 		r = ran()
 	}
-	if !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-forwarder", "203.0.113.9:8764", "-forwarder-key", "KEY"}}) {
+	if !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no", "-no-obfuscate", "-no-vless", "-forwarder", "203.0.113.9:8764", "-forwarder-key", "KEY"}}) {
 		t.Errorf("the forwarder ran %q", r)
 	}
+
+	// A hub with AmneziaWG turns VLESS on with the second switch.
+	w.svc.mu.Lock()
+	w.svc.status.Away = &control.Away{Hub: true, Obfuscated: true, Forwarder: &control.Forwarder{Endpoint: "198.51.100.20:8764", Registered: true}}
+	w.svc.mu.Unlock()
+	w.wait(`$q('[data-strict="vpn"]').checked && !$q('[data-strict="web"]').disabled && !$q('[data-strict="web"]').checked`)
+	w.eval(`$click('[data-strict="web"]')`, nil)
+	w.wait(`$q("#confirm").open && $q("#confirm-text").textContent.includes("over VLESS")`)
+	w.eval(`$click("#confirm-ok")`, nil)
+	// The message is still the one of the switch above, so wait for the run.
+	r = nil
+	for deadline := time.Now().Add(10 * time.Second); len(r) == 0 && time.Now().Before(deadline); {
+		time.Sleep(50 * time.Millisecond)
+		r = ran()
+	}
+	if !reflect.DeepEqual(r, [][]string{{"global", "hub", "-keep", "-firewall", "no"}}) {
+		t.Errorf("VLESS on ran %q", r)
+	}
+
+	// A network where this computer has not met its group: the user names
+	// it home from the window, as cbb network does, without a terminal.
+	w.svc.mu.Lock()
+	w.svc.status.Away = nil
+	w.svc.status.Why = []control.WhyReason{{Code: "new_network", Level: "stop", Devices: []string{"mac"}}}
+	w.svc.mu.Unlock()
+	defer func() {
+		w.svc.mu.Lock()
+		w.svc.status.Why = nil
+		w.svc.mu.Unlock()
+	}()
+	// The window refreshes only with no dialog open: the hub's card going
+	// away shows it has read the new status.
+	w.wait(`!$q('[data-strict="vpn"]')`)
+	w.eval(`$click("#advanced-why")`, nil)
+	w.wait(`$q("[data-home-network]") && !$q("[data-home-network]").disabled && !$q("#why-list").textContent.includes("sudo")`)
+	w.eval(`$click("[data-home-network]")`, nil)
+	w.wait(`$q("#message").textContent === "This network counts as home now."`)
+	if r := ran(); !reflect.DeepEqual(r, [][]string{{"network"}}) {
+		t.Errorf("this is my home network ran %q", r)
+	}
+	w.eval(`$q("#why-dialog").close(); true`, nil)
 }
 
 // joinGroup joins a group from a computer in none, from the start window:
@@ -653,7 +712,7 @@ func (w *window) switches(t *testing.T) {
 	// ends, and the window takes one action at a time.
 	w.eval(`$click("#sync")`, nil)
 	w.wait(`$q("#sync").getAttribute("aria-pressed") === "false" && $q("#away").disabled && $q("#message").textContent.startsWith("Sync is off here")`)
-	if h := w.svc.lastSync(); h.Name != "off" || h.ForMS != 0 {
+	if h := w.svc.lastSync(); h.On == nil || *h.On || h.ForMS != 0 {
 		t.Errorf("the house sent %+v", h)
 	}
 	w.eval(`$click("#sync")`, nil)
@@ -663,7 +722,7 @@ func (w *window) switches(t *testing.T) {
 	w.wait(`$q("#mute-dialog").open`)
 	w.eval(`$clickText("#mute-dialog .menu-items button", "For an hour")`, nil)
 	w.wait(`$q("#sync").getAttribute("aria-pressed") === "false" && $q("#message").textContent.startsWith("Sync is off here")`)
-	if h := w.svc.lastSync(); h.Name != "off" || h.ForMS != 3600000 {
+	if h := w.svc.lastSync(); h.On == nil || *h.On || h.ForMS != 3600000 {
 		t.Errorf("an hour sent %+v", h)
 	}
 	w.eval(`$click("#sync")`, nil)
@@ -728,6 +787,63 @@ type fakeService struct {
 	ln      net.Listener
 	// sync is the last sync request.
 	sync control.Header
+	// arrangement is the user's order of the tiles, as the member keeps it.
+	arrangement Arrangement
+}
+
+// arranged is the stand-in's stored arrangement.
+func (s *fakeService) arranged() Arrangement {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return arrangeFor(s.arrangement, s.status.Group)
+}
+
+// view answers view and arrange as the member does (member/src/view.rs):
+// the tiles in the user's order, each with its device.
+func (s *fakeService) view(op *ArrangeOp) (json.RawMessage, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a := arrangeFor(s.arrangement, s.status.Group)
+	var ids []string
+	self := ""
+	byID := map[string]control.Device{}
+	for _, d := range s.devices {
+		ids = append(ids, d.ID)
+		byID[d.ID] = d
+		if d.Self {
+			self = d.ID
+		}
+	}
+	a.Prune(ids)
+	if op != nil {
+		if err := a.Apply(*op, ids, self); err != nil {
+			return nil, err
+		}
+	}
+	s.arrangement = a
+	type coll struct {
+		ID      string           `json:"id"`
+		Name    string           `json:"name"`
+		Devices []control.Device `json:"devices"`
+	}
+	type tile struct {
+		Device     *control.Device `json:"device,omitempty"`
+		Collection *coll           `json:"collection,omitempty"`
+	}
+	var tiles []tile
+	for _, it := range a.View(ids, self) {
+		if it.Collection == nil {
+			d := byID[it.Device]
+			tiles = append(tiles, tile{Device: &d})
+			continue
+		}
+		c := &coll{ID: it.Collection.ID, Name: it.Collection.Name, Devices: []control.Device{}}
+		for _, id := range it.Collection.Devices {
+			c.Devices = append(c.Devices, byID[id])
+		}
+		tiles = append(tiles, tile{Collection: c})
+	}
+	return json.Marshal(map[string]any{"tiles": tiles, "custom": len(a.Items) > 0})
 }
 
 func (s *fakeService) lastSync() control.Header {
@@ -824,11 +940,26 @@ func (s *fakeService) serve(c net.Conn) {
 		a.Status = &st
 	case control.OpDevices:
 		a.Devices = s.devices
+	case control.OpView, control.OpArrange:
+		var op *ArrangeOp
+		if m.Op == control.OpArrange {
+			op = new(ArrangeOp)
+			if err := json.Unmarshal(m.Arrange, op); err != nil {
+				a.Error = err.Error()
+				break
+			}
+		}
+		v, err := s.view(op)
+		if err != nil {
+			a.Error = err.Error()
+			break
+		}
+		a.View = v
 	case control.OpSync:
 		s.mu.Lock()
 		s.sync = m.Header
 		s.status.Mode, s.status.SyncUntilMS = "shared", 0
-		if m.Name == "off" {
+		if m.On != nil && !*m.On {
 			s.status.Mode = "own"
 			if m.ForMS > 0 {
 				s.status.SyncUntilMS = time.Now().UnixMilli() + m.ForMS

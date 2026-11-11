@@ -182,7 +182,7 @@ pub struct Seen {
     pub channel_seq: u64,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub version: String,
-    /// The revocation list's, which the lite member does not take but keeps.
+    /// The revocation list's, which the member does not take but keeps.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub status_seq: u64,
     /// The keys.json seq under which channel_seq and status_seq hold, as

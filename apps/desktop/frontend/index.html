@@ -49,6 +49,14 @@
     </form>
   </dialog>
 
+  <dialog id="why-dialog">
+    <form method="dialog">
+      <h2 data-t>Why it does not sync</h2>
+      <div id="why-list"></div>
+      <menu><button value="ok" class="accent" data-t>Done</button></menu>
+    </form>
+  </dialog>
+
   <dialog id="mute-dialog">
     <form method="dialog">
       <h2 id="mute-title"></h2>
@@ -60,6 +68,23 @@
         <button value="0" class="glass" id="mute-forever"></button>
       </div>
       <menu><button value="cancel" class="glass" data-t>Cancel</button></menu>
+    </form>
+  </dialog>
+
+  <dialog id="bug-dialog">
+    <form method="dialog">
+      <h2 data-t>Oops, something broke</h2>
+      <p class="dim" data-t>Sorry! Allow us to send a short report so that we can fix it? It holds only what broke, the versions of CBB and the system, the device's model and CBB's own records. Your texts, files, keys, device names and addresses are not in it. The report is anonymous.</p>
+      <p id="bug-fixed" hidden></p>
+      <label id="bug-always-row" hidden><input type="checkbox" id="bug-always"> <span data-t>Always allow</span></label>
+      <details>
+        <summary class="small" data-t>Technical details</summary>
+        <pre id="bug-report" class="small"></pre>
+      </details>
+      <menu>
+        <button value="cancel" class="glass" data-t>Cancel</button>
+        <button value="allow" class="accent" data-t>Allow</button>
+      </menu>
     </form>
   </dialog>
 
@@ -151,6 +176,7 @@
       <div id="advanced-box" hidden>
         <h3 data-t>Advanced</h3>
         <div class="menu-items">
+          <button type="button" class="glass" id="advanced-why" data-t>Why it does not sync</button>
           <button type="button" class="glass" id="advanced-away" data-t>Away from home: hub and tunnel</button>
           <button type="button" class="glass" id="advanced-recovery" data-t>Claim the group with its recovery key</button>
         </div>

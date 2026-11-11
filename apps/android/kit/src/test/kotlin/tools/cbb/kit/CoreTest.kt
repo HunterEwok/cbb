@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class CoreTest {
@@ -32,6 +33,20 @@ class CoreTest {
     }
 
     /** Asks the version, and sees a refusal come back as a Refusal. */
+    /** A panic in the core's library is an answer, code 5 with what broke and where, and the core answers again after it. */
+    @Test
+    fun panicIsAnAnswer() {
+        val e = Core.testPanic()
+        assertEquals(5, e.code)
+        assertEquals("panic", e.name)
+        assertTrue(e.details.orEmpty().contains("cbb_test_panic"), e.toString())
+        assertNotNull(Core.lastPanic())
+        assertEquals(Core.ABI, Core.version().abi)
+        // A panic in one of the member's threads is an event the app restarts the member on.
+        val ev = CoreMember.decode("""{"type":"panic","details":"panic: boom at member/src/x.rs:1:2"}""".toByteArray())
+        assertEquals("panic: boom at member/src/x.rs:1:2", (ev as CoreMember.Event.Panic).details)
+    }
+
     @Test
     fun run() {
         val v = Core.version()

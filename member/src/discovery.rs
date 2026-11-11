@@ -966,7 +966,7 @@ mod tests {
         assert!(
             listens_only(Some("listen"))
                 && listens_only(Some("LISTEN"))
-                && !listens_only(Some("lite"))
+                && !listens_only(Some("dial"))
                 && !listens_only(None)
         );
         assert!(phone(Some("phone")) && phone(Some("Phone")) && !phone(Some("listen")) && !phone(None));

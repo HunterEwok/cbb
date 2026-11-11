@@ -3,4 +3,4 @@
 
 #![no_main]
 
-libfuzzer_sys::fuzz_target!(|data: &[u8]| cbb_lite::fuzzing::next_frames(data));
+libfuzzer_sys::fuzz_target!(|data: &[u8]| cbb_member::fuzzing::next_frames(data));

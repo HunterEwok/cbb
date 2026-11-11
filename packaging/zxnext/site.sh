@@ -7,8 +7,8 @@
 #
 #   sh packaging/zxnext/site.sh BUILD PI_CBB OUTDIR
 #
-# BUILD is apps/zxnext/build (CBB, CBB.OVL, CBB.DRV, CBBPI.GZ), PI_CBB the lite
-# member for the Pi Zero (arm-unknown-linux-musleabihf), the one CBB was
+# BUILD is apps/zxnext/build (CBB, CBB.OVL, CBB.DRV, CBBPI.GZ), PI_CBB cbb
+# for the Pi Zero (arm-unknown-linux-musleabihf), the one CBB was
 # built with (make PI_CBB=...). OUTDIR gets
 #
 #   zxnext/CBB, zxnext/CBB.OVL, zxnext/CBB.DRV, zxnext/cbb

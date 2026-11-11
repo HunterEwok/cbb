@@ -8,5 +8,5 @@
 #![windows_subsystem = "windows"]
 
 fn main() {
-    cbb_lite::main();
+    cbb_member::main();
 }

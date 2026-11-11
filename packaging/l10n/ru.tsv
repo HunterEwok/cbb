@@ -45,20 +45,17 @@ CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes th
 --port needs a port number	--port требует номер порта
 --home-cgnat needs on or off	--home-cgnat требует on или off
 --auto-update needs on or off	--auto-update требует on или off
-unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	неизвестный параметр %s (известны: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
+unknown option %s (known: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	неизвестный параметр %s (известны: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
 --rootless installs for your own user: run it without sudo: %s	--rootless устанавливает для вашего пользователя: запустите без sudo: %s
 --rootless is for Linux computers	--rootless только для компьютеров с Linux
 run it with sudo: %s	запустите через sudo: %s
 no release for this MIPS system: it is not OpenWrt, which names its byte order	для этой системы MIPS нет выпуска: это не OpenWrt, который сообщает порядок байтов
 no release for the architecture %s	нет выпуска для архитектуры %s
-the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	у лёгкого участника для MIPS пока нет синхронизации вне дома (пункт 37 плана); у полного участника она есть.
 --console is not for a router	--console не для роутера
 --uinput is not for a router	--uinput не для роутера
 --home-cgnat is not for a router	--home-cgnat не для роутера
---lite is for Linux; a Mac runs the full member	--lite только для Linux; на Mac работает полный участник
 --console is for Linux	--console только для Linux
 --uinput is for Linux	--uinput только для Linux
---lite is for Linux; FreeBSD runs the full member	--lite только для Linux; на FreeBSD работает полный участник
 this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	этот установщик для Linux, macOS и FreeBSD; на Windows используйте get.ps1
 tar is required	нужен tar
 sha256sum or shasum is required	нужен sha256sum или shasum
@@ -106,7 +103,6 @@ no ufw or firewalld is active; nothing was added.	ни ufw, ни firewalld не 
 %s needs root; a rootless install has no console or uinput helper	%s требует root; у установки без root нет помощников console и uinput
 --rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless устанавливает для вашего пользователя: запустите без sudo. С sudo install.sh без --rootless устанавливает системную службу, и так безопаснее.
 a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	установка без root работает как пользовательский юнит systemd, а в этом сеансе нет пользовательского менеджера systemd; войдите в рабочий стол или по ssh и запустите ещё раз
---home-cgnat is for the full member	--home-cgnat только для полного участника
 CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	CBB уже установлен здесь для всей системы (%s), а на одном устройстве работает одна служба; сначала удалите его или оставьте как есть
 the desktop agent did not start; it starts at your next login	агент рабочего стола не запустился; он запустится при следующем входе
 CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB работает, пока вы в системе. Чтобы он работал и после выхода, администратор выполняет: sudo loginctl enable-linger %s
@@ -116,12 +112,9 @@ Next: see member/README.md; in short, %s pair here, and scan its QR code with th
 Next: run %s pair and scan its QR code with the CBB app on your phone.	Дальше: запустите %s pair и отсканируйте QR-код приложением CBB на телефоне.
 this archive has no install-rootless.sh, so it cannot install without root	в этом архиве нет install-rootless.sh, поэтому установить без root нельзя
 systemd is required	нужен systemd
-the full member is installed here, and the lite member cannot use its keys; remove it first: %s	здесь установлен полный участник, а лёгкий участник не может пользоваться его ключами; сначала удалите его: %s
-the lite member is installed here, and the full member cannot use its keys; remove it first: %s	здесь установлен лёгкий участник, а полный участник не может пользоваться его ключами; сначала удалите его: %s
 an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	здесь есть учётная запись cbb, и она не принадлежит службе (её комментарий не «cbb service»); она получила бы ключи группы. Переименуйте или удалите её и запустите install.sh ещё раз.
 a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	здесь есть группа cbb с участниками (%s), но нет учётной записи службы; эти участники получили бы доступ к службе. Переименуйте или удалите группу и запустите install.sh ещё раз.
 Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	Не установлено: приложение в трее, ему нужны GTK 4 и WebKitGTK 6.0 (Debian и Ubuntu: %s; Fedora: %s). Установите их и запустите это ещё раз, чтобы добавить его.
---uinput is for the full member, which runs the desktop connector	--uinput только для полного участника, в котором работает коннектор рабочего стола
 could not load the uinput module now; it loads at the next boot	не удалось загрузить модуль uinput сейчас; он загрузится при следующей загрузке системы
 100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	На этом устройстве 100.64.0.0/10 считается домашней сетью (--home-cgnat on).
 New member and admin keys of this device go into its TPM.	Новые ключи участника и администратора этого устройства хранятся в его TPM.
@@ -160,7 +153,6 @@ see logread -e cbb	см. logread -e cbb
 CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB работает на TCP-порту %s, в зоне lan. Удалить: sh /usr/share/cbb/uninstall.sh
 Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	Attended sysupgrade (ASU, owut) не переносит пакеты не из лент OpenWrt: после такого обновления установите CBB ещё раз.
 Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	Дальше: выполните su -s /bin/sh cbb -c 'cbb pair -name router' и отсканируйте QR-код приложением CBB на телефоне.
-Next: run cbb pair and scan its QR code with the CBB app on your phone.	Дальше: запустите cbb pair и отсканируйте QR-код приложением CBB на телефоне.
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB удалён. Его ключи остаются в /etc/cbb для переустановки; --purge удаляет и их.
 This device is in no group yet, so it starts pairing now (--no-pair skips this).	Это устройство пока не в группе, поэтому сейчас начнётся сопряжение (--no-pair пропускает его).
 could not record how CBB was installed; cbb update takes it as get.sh	не удалось записать, как установлен CBB; cbb update будет считать, что через get.sh
@@ -259,3 +251,7 @@ removing cbb from PATH	удаление cbb из PATH
 removing %s	удаление %s
 removing %s and the %s group	удаление %s и группы %s
 CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	CBB удалён. Его ключи остаются в %s для переустановки; -Purge удаляет и их.
+cbb for MIPS has no sync away from home yet (roadmap item 37).	у cbb для MIPS пока нет синхронизации вне дома (пункт 37 плана).
+--no-helper is for Linux	--no-helper только для Linux
+cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	здесь cbb работает со своим помощником, который может хранить его ключи; без помощника cbb не сможет ими пользоваться. Сначала удалите его: %s
+--uinput needs cbb's helper, which runs the desktop connector	--uinput требует помощника cbb, в котором работает коннектор рабочего стола
