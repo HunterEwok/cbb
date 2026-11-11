@@ -6,9 +6,16 @@ import SwiftUI
 /// The app's settings, as the tray app's: the look (light or dark, the
 /// colour, the language) as icons in a row, opening at sign-in, the advanced
 /// ones behind a switch (remote paste, the recovery key), and about, where
-/// seven clicks on the version show the switch for error details.
+/// seven clicks on the version show the switch for error details. A sheet
+/// on the window, as the tray app's dialog, so that they belong to the app
+/// rather than float on their own; every row fits its width, a long
+/// version cut in the middle.
 struct SettingsView: View {
+    /// The sheet's width; its rows never ask for more.
+    static let width: CGFloat = 460
+
     @EnvironmentObject private var model: MacModel
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @AppStorage(AccentChoice.key) private var color = Tokens.colors[0].name
     @AppStorage(Appearance.key) private var appearance = Appearance.system.rawValue
@@ -21,6 +28,22 @@ struct SettingsView: View {
     @State private var recovering = false
 
     var body: some View {
+        VStack(spacing: 0) {
+            form
+            HStack {
+                Spacer()
+                Button { dismiss() } label: { Text("Done") }
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("settingsDone")
+            }
+            .padding([.horizontal, .bottom], Tokens.spacingLarge)
+        }
+        .frame(width: Self.width)
+        .fixedSize(horizontal: false, vertical: true)
+        .sheet(isPresented: $recovering) { RecoverySheet().environmentObject(model).modifier(Themed()) }
+    }
+
+    private var form: some View {
         Form {
             Section {
                 HStack(spacing: Tokens.spacingMedium) {
@@ -33,11 +56,16 @@ struct SettingsView: View {
                         .labelsHidden()
                         .fixedSize()
                     Spacer()
+                    // The globe beside the menu rather than as its label: a
+                    // labelled picker sized to fit takes the form's label
+                    // column too, which widened every row past the sheet.
+                    Image(systemName: "globe").foregroundStyle(palette.textDim).accessibilityHidden(true)
                     Picker(selection: Binding(get: { language }, set: { language = $0; AppLanguage.choose($0) })) {
                         Text("System language").tag("")
                         ForEach(AppLanguage.available, id: \.self) { l in Text(verbatim: AppLanguage.name(l)).tag(l) }
-                    } label: { Image(systemName: "globe").accessibilityLabel(Text("Language")) }
-                        .fixedSize()
+                    } label: { Text("Language") }
+                        .labelsHidden()
+                        .frame(maxWidth: 200)
                         .help(Text("Language"))
                 }
                 HStack(spacing: Tokens.spacingSmall) {
@@ -54,7 +82,10 @@ struct SettingsView: View {
                 if language != AppLanguage.running {
                     LabeledContent {
                         Button { AppLanguage.reopen() } label: { Text("Reopen CBB") }
-                    } label: { Text("The new language shows once CBB opens again.").foregroundStyle(palette.textDim) }
+                    } label: {
+                        Text("The new language shows once CBB opens again.").foregroundStyle(palette.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
             Section {
@@ -62,7 +93,10 @@ struct SettingsView: View {
                     loginError = LoginItem.set(on)
                     atLogin = LoginItem.isOn
                 })) { Text("Open at sign-in") }
-                if let loginError { Text(verbatim: loginError).foregroundStyle(palette.danger) }
+                if let loginError {
+                    Text(verbatim: loginError).foregroundStyle(palette.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Toggle(isOn: $advanced) { Text("Advanced settings") }
             }
             if advanced {
@@ -85,8 +119,15 @@ struct SettingsView: View {
             Section {
                 // The whole row takes the clicks, so that a short version
                 // is as easy to hit as a long one.
+                // A build's version is long (a pseudo-version and the
+                // system): one line, cut in the middle, the whole of it on
+                // hover.
                 LabeledContent {
-                    Text(verbatim: model.status?.version ?? "–").monospaced()
+                    let version = model.status?.version ?? "–"
+                    Text(verbatim: version).monospaced()
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(Text(verbatim: version))
                 } label: { Text("Version") }
                     .contentShape(Rectangle())
                     .onTapGesture { versionClicks += 1 }
@@ -105,9 +146,7 @@ struct SettingsView: View {
             } header: { Text("About") }
         }
         .formStyle(.grouped)
-        .frame(width: 460)
-        .fixedSize(horizontal: false, vertical: true)
-        .sheet(isPresented: $recovering) { RecoverySheet().environmentObject(model).modifier(Themed()) }
+        .frame(width: Self.width)
     }
 }
 
@@ -211,7 +250,8 @@ struct MenuContent: View {
         Divider()
         Button { open() } label: { Text("Open CBB") }
             .keyboardShortcut("o")
-        SettingsLink { Text("Settings…") }.keyboardShortcut(",")
+        Button { open(); model.settingsShown = true } label: { Text("Settings…") }
+            .keyboardShortcut(",")
         if model.problem == nil, let version = model.status?.update, !version.isEmpty {
             Button { Task { await model.update() } } label: { Text("Update to \(version)") }
                 .disabled(model.busy)

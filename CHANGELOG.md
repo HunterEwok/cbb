@@ -1545,6 +1545,12 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The Mac app's Settings are a sheet on its window, as the tray app's dialog, instead of a
+  window of their own; "Settings…" in the menu bar item and Command-comma open the window
+  with them.
+- The bench's fleet checks whom the members dial by D-89: one that publishes `r=listen` at
+  once, though its device ID is the lowest, and one with the lowest that dials only after the
+  fallback, in place of the old check that no one dials a member with `r=lite` (D3).
 - The bench's fleet runs its small devices with the same `cbb` as its computers, as the
   service alone (`-cbb-lite` is gone, `-coverdir` takes the Rust `cbb`'s coverage too), and its
   D3 case checks whom the members dial by D-89: one with a higher device ID at once, one with
@@ -2093,6 +2099,10 @@ All notable changes to cbb are documented in this file. The format follows
 ### Fixed
 - Builds use Go 1.27.4, which fixes a crash of an HTTP/1 server in the standard library
   (GO-2026-6859), and rustix 1.1.6 (RUSTSEC-2026-0486).
+- The Mac app's Settings fit their width: the language menu, sized to fit with its label,
+  widened every row to some 600 points in a 460-point window and cut the rows' ends off on
+  both sides. A build's long version is one line cut in the middle, whole on hover; the tray
+  app's wraps instead of reaching past its dialog.
 - A tunnel's loopback port on Linux takes a client on a dual-stack socket, as Java's on a system
   with IPv6: its user is looked up in the kernel's IPv6 table too, by its IPv4-mapped address,
   where before it was refused at once.

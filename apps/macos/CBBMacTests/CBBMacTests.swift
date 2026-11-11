@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import Carbon.HIToolbox
+import SwiftUI
 import XCTest
 @testable import CBB
 
@@ -223,5 +224,39 @@ final class CBBMacTests: XCTestCase {
         model.show(status: Control.Status(device: "me", group: "g2", role: "member", version: "dev"), devices: [device("me", me: true), device("a")])
         XCTAssertEqual(model.arranged.map(\.id), ["d:me", "d:a"])
         defaults.removePersistentDomain(forName: "cbb-mac-arrange-test")
+    }
+
+    /// Settings fit their sheet: no row reaches past its edges (the language
+    /// menu, sized to fit with its label, once widened every row to 608
+    /// points and cut the rows' ends off). Laid out with a build's long
+    /// version in a window that is never shown.
+    @MainActor
+    func testSettingsFit() throws {
+        let model = MacModel(defaults: try XCTUnwrap(UserDefaults(suiteName: "cbb-mac-settings-test")))
+        let version = "cbb v0.5.1-0.20261109114050-97499ee40fb3 darwin/arm64 with a longer tail"
+        model.show(status: Control.Status(device: "me", group: "g1", role: "member", version: version), devices: [])
+        let host = NSHostingView(rootView: SettingsView().environmentObject(model).modifier(Themed()))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 900), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        host.frame = NSRect(origin: .zero, size: host.fittingSize)
+        host.layoutSubtreeIfNeeded()
+        // Lists lay their rows out a turn later.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        host.layoutSubtreeIfNeeded()
+        XCTAssertLessThanOrEqual(host.fittingSize.width, 460.5)
+        var views: [NSView] = [host]
+        var checked = 0
+        while let v = views.popLast() {
+            views += v.subviews
+            guard !v.isHidden, v !== host, v.frame.width > 0 else { continue }
+            let f = v.convert(v.bounds, to: host)
+            XCTAssertGreaterThanOrEqual(f.minX, -0.5, "\(type(of: v)) starts left of Settings at \(f)")
+            XCTAssertLessThanOrEqual(f.maxX, host.bounds.width + 0.5, "\(type(of: v)) ends right of Settings at \(f)")
+            checked += 1
+        }
+        XCTAssertGreaterThan(checked, 3, "Settings laid out no views")
+        window.contentView = nil
+        window.close()
     }
 }
