@@ -479,8 +479,8 @@ func TestGoTakeoverVectors(t *testing.T) {
 // TestSwiftCommand checks the commands a phone kit signed
 // (swift-command.json, which the kits' tests write) with the records it
 // signed: mode commands with the root's key and with an admin CA's, a hub, a
-// paste, a paste-off, an action, an actions-off, a mute and an unmute
-// command are taken, for the device they name.
+// paste, a paste-off, an action, an actions-off, a mute, an unmute and a
+// paste of images or files are taken, for the device they name.
 func TestSwiftCommand(t *testing.T) {
 	dir := os.Getenv("CBB_INTEROP_OUT")
 	if dir == "" {
@@ -514,9 +514,10 @@ func TestSwiftCommand(t *testing.T) {
 	// root with one client, a typed paste by the admin, paste-off by the
 	// root, lock by the admin, actions-off by the root, and a paste by the
 	// admin sealed to the key of go-sealed-commands.json, then a mute for an
-	// hour by the admin and an unmute by the root.
-	if len(v.Commands) != 10 {
-		t.Fatalf("%d commands, want 10", len(v.Commands))
+	// hour by the admin, an unmute by the root, and a paste of the copy
+	// of images or files 0011…eeff by the admin.
+	if len(v.Commands) != 11 {
+		t.Fatalf("%d commands, want 11", len(v.Commands))
 	}
 	var sealed sealedVectors
 	data, err = os.ReadFile(filepath.Join("..", "..", "testdata", "interop", "go-sealed-commands.json"))
@@ -559,6 +560,10 @@ func TestSwiftCommand(t *testing.T) {
 		}
 		if i == 9 && got.Type != CommandUnmute {
 			t.Errorf("the unmute command: %+v", got)
+		}
+		if i == 10 && (got.Type != CommandPaste || got.Mode != PasteByClipboard || got.Kind != PasteMedia ||
+			got.Text != "00112233445566778899aabbccddeeff") {
+			t.Errorf("the paste of images or files: %+v", got)
 		}
 		if i == 7 {
 			if got.V != sealedCommandVersion || got.Text != "" {

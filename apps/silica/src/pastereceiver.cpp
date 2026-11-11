@@ -109,6 +109,9 @@ void PasteReceiver::carryOut(const QJsonObject &checked)
     bool refused = true;
     if (!on()) {
         reason = QStringLiteral("remote paste is off on this device; its user turns it on in the app's settings");
+    } else if (body.value(QStringLiteral("kind")).toString() == QStringLiteral("media")) {
+        // Its text is the event ID of a copy, which the keyboard must not type.
+        reason = QStringLiteral("this phone pastes text only: its Bluetooth keyboard cannot paste images or files");
     } else if (withEnter && !enter()) {
         reason = QStringLiteral("this device takes pastes without Enter only; its user allows Enter in the app's settings");
     } else if (!allow(sender, QDateTime::currentMSecsSinceEpoch())) {

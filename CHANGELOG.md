@@ -2082,6 +2082,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- An admin phone pastes pictures and files on a device again: the iPhone and Android kits
+  sign the paste command of kind `media` that names the group's copy, which they refused to
+  build before. The Aurora app refuses such a paste, which its keyboard cannot carry out,
+  instead of typing the copy's ID.
 - Builds use Go 1.27.4, which fixes a crash of an HTTP/1 server in the standard library
   (GO-2026-6859), and rustix 1.1.6 (RUSTSEC-2026-0486).
 - A tunnel's loopback port on Linux takes a client on a dual-stack socket, as Java's on a system
