@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The CI measures what each part of the core costs in a small device's flash (`tools/size`,
+  for the ESP32-C6's RISC-V): X.509 and P-256, JSON, the group's records, sealing, a copy,
+  pairing, the member TLS and the core's whole entry point, each against today's baseline,
+  failing when the whole grows more than 10% (docs/testing.md, "Firmware size").
+- Sealing is checked against the vector of draft-ietf-hpke-pq-05 for X-Wing with
+  HKDF-SHA256 and ChaCha20-Poly1305, in Go and the Rust core.
 - "Why it does not sync" in the advanced settings of the iPhone, Android, Aurora, Mac and tray
   apps: one sentence on why this device does not sync and what to do, then the other reasons.
   The Rust core decides them (`cbb_core::why`, the core's call `why`, the phone member's `why`,
@@ -1569,6 +1575,19 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- A member does not write to its clipboard a copy made before it last started, whatever its
+  age: the rule of incoming copies takes the clock mark saved before the start.
+- The core wipes device keys, a secret's text and a copy's key from memory once it is done
+  with them, and the service writes no core dump; on Linux other processes of its user cannot
+  read its memory.
+- Pairing codes are drawn with every code equally likely, and a device that listens for a
+  join stops taking an address's connections after three failed attempts from it.
+- Channel files (`stable.json`) are signed for 14 days instead of 30, and cbb.tools renews
+  them twice a week; the reminders and the monitor warn 5 days before the end.
+- Builds for tests only never ship: the test clock of Go's service tests is read only by a
+  `cbb` built with the feature `testclock`, a test build does not compile in the release
+  workflow, names itself in `cbb version` and is refused by the release workflow, as is a Go
+  program built with the tag `benchtime` (docs/maintaining.md, "Releases").
 - Away from home, the computers that are the group's root or admins come before the phones in
   the order of hubs (D-96): a Mac or PC no longer keeps reaching for a phone whose app is
   closed while a computer could serve.
