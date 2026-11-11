@@ -14,15 +14,15 @@ import (
 // Incoming is what the member knows of the group's current copy when it
 // decides whether the copy goes into its clipboard.
 type Incoming struct {
-	Receives    bool  `json:"receives"`
-	Kind        Kind  `json:"kind"`
-	Mark        bool  `json:"mark"`
-	Unread      bool  `json:"unread"`
-	HasText     bool  `json:"has_text"`
-	HasMedia    bool  `json:"has_media"`
-	TakesMedia  bool  `json:"takes_media"`
-	Held        bool  `json:"held"`
-	AgeMS       int64 `json:"age_ms"`
+	Receives   bool  `json:"receives"`
+	Kind       Kind  `json:"kind"`
+	Mark       bool  `json:"mark"`
+	Unread     bool  `json:"unread"`
+	HasText    bool  `json:"has_text"`
+	HasMedia   bool  `json:"has_media"`
+	TakesMedia bool  `json:"takes_media"`
+	Held       bool  `json:"held"`
+	AgeMS      int64 `json:"age_ms"`
 	// BeforeStart: the copy's time is not after the clock mark the member
 	// saved before it last started, so its age alone (not signed) could
 	// pass an old copy off as new.
