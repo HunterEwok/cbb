@@ -55,6 +55,62 @@ pub const POWER_HUB: u64 = 128;
 pub const POWER_PERIODS: u64 = 256;
 const POWERS_ALL: u64 = 511;
 
+/// Command types (format section 6); a device record's `commands` has bit
+/// (type − 1) for each type the admin may sign.
+pub const COMMAND_MODE: u64 = 1;
+pub const COMMAND_HUB: u64 = 2;
+pub const COMMAND_PASTE: u64 = 3;
+pub const COMMAND_PASTE_OFF: u64 = 4;
+pub const COMMAND_ACTION: u64 = 5;
+pub const COMMAND_ACTIONS_OFF: u64 = 6;
+pub const COMMAND_AWAY_OFF: u64 = 7;
+pub const COMMAND_MUTE: u64 = 8;
+pub const COMMAND_UNMUTE: u64 = 9;
+pub const COMMAND_DEVICE: u64 = 10;
+
+/// The `commands` bit of a command type.
+pub const fn command_bit(t: u64) -> u64 {
+    match 1u64.checked_shl(t.saturating_sub(1) as u32) {
+        Some(b) if t != 0 => b,
+        _ => 0,
+    }
+}
+
+/// The kind of device a root makes an admin, which fixes its powers and
+/// commands. The rules evaluate any powers and commands; the writers only
+/// ever give one of these three sets, so that every client gives the same.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AdminKind {
+    /// A watch: removes and freezes, turns things off, runs an action;
+    /// admits nobody.
+    Watch,
+    /// A computer: admits, manages, removes, freezes, sets the hubs; all
+    /// commands.
+    Computer,
+    /// A phone: all of a computer's, and removes admins, thaws and takes
+    /// the group over.
+    Phone,
+}
+
+impl AdminKind {
+    /// The powers and the commands of a device record for this kind.
+    pub const fn grants(self) -> (u64, u64) {
+        const ALL_COMMANDS: u64 = (1 << COMMAND_DEVICE) - 1;
+        const ADMIN: u64 = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_FREEZE | POWER_HUB;
+        match self {
+            AdminKind::Watch => (
+                POWER_REMOVE | POWER_FREEZE,
+                command_bit(COMMAND_PASTE_OFF)
+                    | command_bit(COMMAND_ACTIONS_OFF)
+                    | command_bit(COMMAND_AWAY_OFF)
+                    | command_bit(COMMAND_ACTION),
+            ),
+            AdminKind::Computer => (ADMIN, ALL_COMMANDS),
+            AdminKind::Phone => (ADMIN | POWER_REMOVE_ADMINS | POWER_THAW | POWER_TAKEOVER, ALL_COMMANDS),
+        }
+    }
+}
+
 /// Store kinds; `proof` only with STORE_PROVEN.
 pub const STORE_FILE: u64 = 1;
 pub const STORE_HARDWARE: u64 = 2;

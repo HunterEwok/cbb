@@ -1159,6 +1159,55 @@ fn a_removed_devices_id_stays_taken() {
     assert!(set.state(&BTreeMap::new()).id_taken(&old.key.device_id()));
 }
 
+/// The three kinds of admin give fixed powers and commands, and the rules
+/// hold each to them.
+#[test]
+fn the_three_kinds_of_admin() {
+    use AdminKind::*;
+    let bits = |ts: &[u64]| ts.iter().fold(0, |b, &t| b | command_bit(t));
+    let all = bits(&(COMMAND_MODE..=COMMAND_DEVICE).collect::<Vec<_>>());
+    assert_eq!(
+        Watch.grants(),
+        (
+            POWER_REMOVE | POWER_FREEZE,
+            bits(&[COMMAND_PASTE_OFF, COMMAND_ACTIONS_OFF, COMMAND_AWAY_OFF, COMMAND_ACTION])
+        )
+    );
+    assert_eq!(Computer.grants(), (POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_FREEZE | POWER_HUB, all));
+    assert_eq!(Phone.grants().0, Computer.grants().0 | POWER_REMOVE_ADMINS | POWER_THAW | POWER_TAKEOVER);
+    assert_eq!(Phone.grants().1, all);
+    assert_eq!(all, 0x3ff);
+    for kind in [Watch, Computer, Phone] {
+        assert_eq!(kind.grants().0 & POWER_PERIODS, 0);
+    }
+    let mut g = G::new();
+    let root = k("root");
+    let admin = |g: &mut G, who: &str, kind: AdminKind| {
+        let (p, a) = (k(&format!("phone {who}")), k(&format!("admin {who}")));
+        g.device(&root, &p, who, |d| {
+            d.admin = Some(a.key.clone());
+            (d.powers, d.commands) = kind.grants();
+            if kind == Watch {
+                d.role = ROLE_WATCH;
+            }
+        });
+        a
+    };
+    let (h, a, s_) = (admin(&mut g, "h", Watch), admin(&mut g, "a", Computer), admin(&mut g, "s", Phone));
+    let laptop = k("laptop");
+    g.device(&root, &laptop, "laptop", |_| {});
+    let by_helper = g.device(&h, &k("w1"), "w1", |_| {});
+    let by_admin = g.device(&a, &k("w2"), "w2", |_| {});
+    let seen = g.seen();
+    let removal = g.rec(&h, Kind::Revoke(removal(&[laptop.hash], seen.clone())));
+    let claim_a = g.rec(&a, Kind::Claim { root: k("na").key.clone(), seen: seen.clone() });
+    let claim_s = g.rec(&s_, Kind::Claim { root: k("ns").key.clone(), seen });
+    let st = g.state();
+    assert!(!st.counting.contains(&by_helper.id()) && st.counting.contains(&by_admin.id()));
+    assert!(st.counting.contains(&removal.id()));
+    assert!(!st.counting.contains(&claim_a.id()) && st.claims.iter().any(|c| c.record == claim_s.id()));
+}
+
 /// A pool of records that touches every rule: admins, devices, removals,
 /// a freeze and a thaw, two histories, claims, held records, settings.
 fn pool() -> (Key, Vec<Record>) {
