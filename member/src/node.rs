@@ -168,8 +168,8 @@ pub type OnGuest = Box<dyn Fn(&Node, &DeviceId, &[Cert], wire::Guest) + Send + S
 /// from home is off.
 type TunnelKeys = Option<(Vec<u8>, Vec<u8>)>;
 
-/// The lite member's set of connections.
-/// How the member presents itself in its hellos: the lite member, or a
+/// The member's set of connections.
+/// How the member presents itself in its hellos: cbb, or a
 /// phone's app that runs it (crate::phone).
 #[derive(Clone)]
 pub struct Presence {
@@ -257,7 +257,7 @@ pub struct Node {
     /// sets them.
     evidence: RwLock<Vec<serde_json::Value>>,
     /// The sealed blobs of copies with images or files, for a phone's app,
-    /// which makes, fetches and serves them; None on the lite member.
+    /// which makes, fetches and serves them; None without the helper.
     content: Option<Arc<Store>>,
     /// Gets each copy that becomes the group's current one from a peer,
     /// for a phone's app, which shows it and fetches images or files.
@@ -531,19 +531,92 @@ impl Node {
         self
     }
 
-    /// Sets the tunnel key and preshared key the hellos offer from now on,
-    /// and connects to the members again, so that the group's hubs get
-    /// them.
+    /// Sets the tunnel key and preshared key the hellos offer from now on
+    /// and tells the members, so that the group's hubs get them. Without a
+    /// key, sync away from home is off: the connections through a tunnel's
+    /// or relay's loopback port, and those that came through this hub's
+    /// tunnel, close, since their way is gone.
     pub fn set_tunnel_key(&self, key: TunnelKeys) {
+        let off = key.is_none();
         *self.tunnel_key.write().unwrap() = key;
-        self.reconnects.fetch_add(1, Ordering::SeqCst);
-        // Every member and phone connects again, as Go's Reconnect after
-        // SetTunnelKey: a hub is a computer or a phone, and its offer
-        // answers the hello that carries the key.
-        for c in self.conns.lock().unwrap().values() {
-            if c.peer.lock().unwrap().is_some() {
-                c.close(true);
+        if off {
+            for c in self.conns.lock().unwrap().values() {
+                if c.tunneled || c.addr.ip().to_canonical().is_loopback() {
+                    c.close(true);
+                }
             }
+        }
+        // The peers take the key from a presence message, without
+        // connecting again: a hub answers it with its offer as it answers
+        // a hello, and this member sends its own offers if it is a hub now.
+        self.announce(true);
+    }
+
+    /// Tells every connected peer what this member's hello would say now
+    /// about its sync, its mute and its tunnel key, in a `presence`
+    /// message (docs/protocol.md, section 4, "Presence"), so that a change
+    /// shows without connecting again. With offers it also runs what a
+    /// hello runs here for each peer once more (on_hello), as a device
+    /// that just became a hub does to send its offer to the members
+    /// already connected.
+    pub fn announce(&self, offers: bool) {
+        let m = self.presence_message();
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().filter(|c| !c.records_only).cloned().collect();
+        for c in conns {
+            self.enqueue(&c, Out::Message(m.clone()));
+            let peer = c.peer.lock().unwrap().clone();
+            if offers
+                && let Some(peer) = peer
+                && let Some(f) = self.on_hello.read().unwrap().as_ref()
+            {
+                for out in f(&c.id, &peer, &c.chain) {
+                    self.enqueue(&c, Out::Message(out));
+                }
+            }
+        }
+    }
+
+    /// The presence message for this member now.
+    fn presence_message(&self) -> Message {
+        let key = self.tunnel_key.read().unwrap().clone();
+        let mute = self.engine.mute_left();
+        let body = wire::HelloBody {
+            mode: self.engine.mode().name().to_string(),
+            muted: mute.is_some(),
+            muted_for_ms: mute.unwrap_or(0),
+            tunnel_psk: key.as_ref().map(|(_, p)| p.clone()),
+            tunnel_key: key.map(|(k, _)| k),
+            ..Default::default()
+        };
+        Message { kind: "presence".into(), hello: serde_json::to_value(&body).ok(), ..Default::default() }
+    }
+
+    /// Takes a peer's presence message: its sync, mute and tunnel key
+    /// replace what its hello said, and a new tunnel key runs what a hello
+    /// runs (on_hello), so that a hub admits it as its hello would have.
+    fn take_presence(&self, c: &Arc<Conn>, v: Option<&serde_json::Value>) {
+        let Some(body) =
+            v.filter(|v| v.is_object()).and_then(|v| serde_json::from_value::<wire::HelloBody>(v.clone()).ok())
+        else {
+            self.logf(&format!("cbb: dropped a presence message from {} that does not decode", c.id));
+            return;
+        };
+        let fresh = peer_of(&c.id, "", &body, false);
+        let (peer, rekeyed) = {
+            let mut cur = c.peer.lock().unwrap();
+            let Some(p) = cur.as_mut() else { return };
+            let rekeyed = p.tunnel_key != fresh.tunnel_key;
+            (p.mode, p.muted, p.muted_for_ms, p.tunnel_key) =
+                (fresh.mode, fresh.muted, fresh.muted_for_ms, fresh.tunnel_key);
+            (p.clone(), rekeyed)
+        };
+        if rekeyed && let Some(f) = self.on_hello.read().unwrap().as_ref() {
+            for out in f(&c.id, &peer, &c.chain) {
+                self.enqueue(c, Out::Message(out));
+            }
+        }
+        if let Some(f) = self.on_peer.read().unwrap().as_ref() {
+            f(&peer);
         }
     }
 
@@ -1581,7 +1654,7 @@ impl Node {
         Ok(Dialed { up, again: up && self.reconnects.load(Ordering::SeqCst) != before })
     }
 
-    /// Runs a connection that a member (a phone or a lite member)
+    /// Runs a connection that a member (a phone or another member)
     /// opened to this one until it ends. It replaces an older connection
     /// to the same device. handshaken is called once the handshake is over,
     /// whether it worked or not.
@@ -1997,6 +2070,7 @@ impl Node {
                     }
                 }
                 "records" if !m.records.is_empty() => self.add_records(&m.records, &c.id),
+                "presence" => self.take_presence(c, m.hello.as_ref()),
                 "entries" if m.entries.is_some() => self.add_entries(m.entries.as_ref().unwrap(), &c.id),
                 "release" if m.release.is_some() && self.presence.role != "phone" => {
                     self.add_release(m.release.as_ref().unwrap(), &c.id)
@@ -2018,7 +2092,7 @@ impl Node {
                 "command" if m.command.is_some() => {
                     let cmd = m.command.unwrap();
                     // A phone passes a command for another device on
-                    // (docs/protocol.md, section 15); the lite member
+                    // (docs/protocol.md, section 15); cbb
                     // refuses it for itself.
                     if self.presence.role == "phone"
                         && let Some(head) = CommandHead::of(&cmd)
@@ -2291,6 +2365,13 @@ impl Node {
         for c in self.conns.lock().unwrap().values() {
             if let Some(Refusal::Refused(why) | Refusal::Removed(why)) = st.refused_peer(&c.chain) {
                 self.logf(&format!("cbb: closing the connection to {}: {why}", c.id));
+                // The records go first, so that it hears why, as in
+                // add_records.
+                if c.peer.lock().unwrap().is_some() {
+                    for chunk in chunk_records(st.all()) {
+                        self.enqueue(c, Out::Records(chunk));
+                    }
+                }
                 c.close(true);
             }
         }
@@ -2318,11 +2399,6 @@ impl Node {
             fresh
         };
         self.apply_copy_rules();
-        {
-            let (m, cv) = &self.changed;
-            *m.lock().unwrap() += 1;
-            cv.notify_all();
-        }
         // A thaw lets in devices refused until now, and a claim, a resolve,
         // a settings, a checkpoint or a recovery record may, as Go's
         // updateRecords.
@@ -2371,6 +2447,13 @@ impl Node {
                 }
             }
         }
+        drop(st);
+        // Only now are those waiting for a change woken: the service's
+        // loop may settle at once, and a connection it closes must have the
+        // records that refuse it queued first.
+        let (m, cv) = &self.changed;
+        *m.lock().unwrap() += 1;
+        cv.notify_all();
     }
 }
 

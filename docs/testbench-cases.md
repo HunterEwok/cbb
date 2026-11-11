@@ -388,7 +388,7 @@ Pass: members find and reach each other over IPv6.
 **P20. UDP blocked.** Runs: manual.
 1. On the away computer drop outgoing UDP to the hub and forwarder (`iptables -I OUTPUT -p udp
    -d ADDR -j DROP`, with a revert timer).
-Pass: `cbb global` shows a clear error; nothing goes another way (S9); with `-vless` the TCP
+Pass: `cbb global` shows a clear error; nothing goes another way (S9); with VLESS (the default at a forwarder) the TCP
 transport works. Remove the rule.
 
 **P21. Invitations refused.** Runs: manual (run on the bench, see S7).

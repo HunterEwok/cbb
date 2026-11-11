@@ -15,7 +15,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class KeyboardTest {
-    /** testdata/interop/keyboard.json, from the lite member's keyboard tests: the Nano and the phone type alike. */
+    /** testdata/interop/keyboard.json, from the Rust core's keyboard tests: the Nano and the phone type alike. */
     @Test
     fun vectors() {
         val v = Interop.read("keyboard.json").jsonObject

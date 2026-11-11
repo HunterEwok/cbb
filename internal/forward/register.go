@@ -384,10 +384,12 @@ func (f *Forwarder) register(raw net.Conn) (*reg, error) {
 			return refuse("the obfuscation settings are not usable")
 		}
 	}
+	if c.VLESS != "" && f.vless == nil {
+		// A hub asks for VLESS by default; without it here, the hub is
+		// registered for UDP alone, and the answer carries no VLESS.
+		c.VLESS = ""
+	}
 	if c.VLESS != "" {
-		if f.vless == nil {
-			return refuse("this forwarder has no VLESS; run cbb forward with -vless-xhttp")
-		}
 		if err := tunnel.CheckVLESSID(c.VLESS); err != nil || c.VLESS == vless.RegistrationID {
 			return refuse("the VLESS user ID is not usable")
 		}

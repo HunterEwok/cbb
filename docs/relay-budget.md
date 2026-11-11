@@ -204,8 +204,8 @@ Reports go to `abuse@cbb.tools` (the [terms](https://cbb.tools/terms.html), "Rep
 changes"). The servers see no content, keep no logs and hold no names, so the one answer
 decided in advance is to refuse the group the report names, by its tag, and nothing broader:
 
-- `cbb forward` and `cbb relay` read a list of refused groups, `refused-groups` next to
-  their key (or the file of `-refused`; `-refused none` reads none), one group tag of 16 hex
+- `cbb forward` reads a list of refused groups (the relay in Rust does not yet), `refused-groups` next to
+  its key (or the file of `-refused`; `-refused none` reads none), one group tag of 16 hex
   characters a line, as `cbb status` shows it; `#` begins a comment, and anything after a
   tag on its line is skipped, such as the date of the report. A line `period TAG` names a
   period's tag, for a group that registers with credentials (protocol.md, section 18).
@@ -222,7 +222,7 @@ decided in advance is to refuse the group the report names, by its tag, and noth
   groups that ask for that.
 - The tags on the list and the reports stay with the maintainer, never in the repository.
 
-Tested by `TestRefusedGroups` (forwarder), `TestRefusedGroupsList` (relay) and the
+Tested by `TestRefusedGroups` (forwarder) and the
 package's own tests (`internal/refused`).
 
 ## Tests

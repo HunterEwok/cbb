@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! Errors with a message for the user and the cause behind it (see
-//! cbb_core::error), and where the lite member takes debug mode from.
+//! cbb_core::error), and where cbb takes debug mode from.
 
 pub use cbb_core::error::*;
 

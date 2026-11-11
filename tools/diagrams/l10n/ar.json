@@ -18,7 +18,7 @@
   "Laptop": "حاسوب محمول",
   "Desktop": "حاسوب مكتبي",
   "Raspberry Pi": "Raspberry Pi",
-  "lite member": "عضو خفيف",
+  "small device": "جهاز صغير",
   "with the app": "مع التطبيق",
   "direct, encrypted connections, found by mDNS": "اتصالات مباشرة مشفّرة، تكتشفها mDNS",
   "No server in the middle: any device can be off, and the others go on syncing.": "لا خادم في الوسط: يمكن إيقاف أي جهاز وتستمر الأجهزة الأخرى في التزامن.",

@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Installs cbb, the full member or the lite one, on OpenWrt
+# Installs cbb, without its helper (cbb-helper), on OpenWrt
 # 25.12 or later, as root:
 #
-#   sh install.sh [--port N] [--auto-update on|off] [--no-pair] path/to/cbb
+#   sh install.sh [--port N] [--auto-update on|off] [--no-helper] [--no-pair] path/to/cbb
 #
 # It installs the binary to /usr/bin, the user and group cbb,
 # the procd init script, the settings in /etc/config/cbb (kept
@@ -16,9 +16,9 @@
 # zone; list other zones in /etc/config/cbb. Its firewall rules
 # come and go with the service (the init script); /etc/config/firewall is
 # not touched. --auto-update on|off (or CBB_AUTO_UPDATE) answers whether the
-# full member updates itself once a day to a signed release, from cron,
-# which it asks otherwise and keeps (packaging/update.sh). The lite member,
-# once running and in no group, starts pairing and shows its QR code at once
+# service updates itself once a day to a signed release, from cron,
+# which it asks otherwise and keeps (packaging/update.sh). cbb, once
+# running and in no group, starts pairing and shows its QR code at once
 # (packaging/pair.sh); --no-pair (CBB_PAIR=no) leaves that for later. uninstall.sh
 # removes it all again.
 set -eu
@@ -39,7 +39,7 @@ cbb_l10n=$(cd "$(dirname "$0")" && pwd)/../l10n
 . "$cbb_l10n.sh"
 
 usage() {
-	echo "usage: sh install.sh [--port N] [--auto-update on|off] [--no-pair] path/to/cbb" >&2
+	echo "usage: sh install.sh [--port N] [--auto-update on|off] [--no-helper] [--no-pair] path/to/cbb" >&2
 	exit 2
 }
 port=
@@ -57,8 +57,9 @@ while [ $# -gt 1 ]; do
 		esac
 		shift
 		;;
-	# get.sh passes the firewall choice; the rules here are the service's own.
-	--express | --no-firewall) ;;
+	# get.sh passes the firewall choice; the rules here are the service's
+	# own. A router runs cbb without its helper anyway.
+	--express | --no-firewall | --no-helper) ;;
 	--no-pair) CBB_PAIR=no ;;
 	*) usage ;;
 	esac
@@ -175,12 +176,8 @@ answers() { # cbb
 answers /usr/bin/cbb || true
 say "CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh" "$port"
 say "Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one."
-if /usr/bin/cbb version 2>/dev/null | grep -q "lite member"; then
-	# shellcheck source=packaging/pair.sh
-	. "$here/../pair.sh"
-	if ! CBB_SOCKET=/var/run/cbb/control.sock pair_now /usr/bin/cbb cbb -name router; then
-		say "Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone."
-	fi
-else
-	say "Next: run cbb pair and scan its QR code with the CBB app on your phone."
+# shellcheck source=packaging/pair.sh
+. "$here/../pair.sh"
+if ! CBB_SOCKET=/var/run/cbb/control.sock pair_now /usr/bin/cbb cbb -name router; then
+	say "Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone."
 fi

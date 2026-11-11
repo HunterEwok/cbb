@@ -148,9 +148,10 @@ environment secret**.
   without signing;
 - **Android app**: the Kotlin kit's tests and its cross tests with the Go code, and the app
   built, unit-tested and linted;
-- **lite member (Rust)**: `cargo fmt`, `clippy` and the tests of the Rust workspace, the ARM64 and
-  ARMv6 builds, and the e2e test of the lite member among Go members;
-- **lite core on the ESP32**: the lite protocol core with its TLS built for the ESP32-C6 (RISC-V) and the
+- **cbb (Rust)**: `cargo fmt`, `clippy` and the tests of the Rust workspace, the ARM64 and
+  ARMv6 builds, the installers without the helper (`get.sh --no-helper`, rootless) and
+  `cbb update` there, and the tests of cbb without its helper among other members;
+- **the core on the ESP32**: the protocol core with its TLS built for the ESP32-C6 (RISC-V) and the
   ESP32-S3 (Xtensa), and the Nano ESP32 firmware (`esp32/`) built, its console and
   flash settings tested and its self-test run in Espressif's QEMU (both downloaded by hash);
 - **ZX Spectrum Next**: the tests of the `.cbb` frame parser on the host, and the dot commands `.cbb`
@@ -193,9 +194,9 @@ Rules for workflows:
 - The archives are `cbb-<os>-<arch>.tar.gz` without the version, so that
   `releases/latest/download/` has fixed names for `get.sh`; each holds `cbb/` with the
   binary, `LICENSE`, `THIRD_PARTY_NOTICES` (the licenses of the Go modules, the copied code
-  and Go itself, written by `packaging/archive.sh`) and `packaging/`. The
-  `cbb-lite-linux-*` archives hold `cbb-lite/` in the same way (`member/packaging/archive.sh`), with the crates'
-  licenses (`member/packaging/notices.sh`), the same Linux installer and the lite member's unit.
+  and Go itself, written by `packaging/archive.sh`, after the crates' licenses from
+  `member/packaging/notices.sh`) and `packaging/`, with `cbb-helper` beside `cbb` on every
+  architecture but MIPS.
 - Published with `SHA256SUMS` and a build provenance attestation
   (`actions/attest-build-provenance`), which users can check with `gh attestation verify`.
 - What a release is built from: a software bill of materials in CycloneDX 1.6 JSON for each
@@ -203,7 +204,7 @@ Rules for workflows:
   other files:
   - `sbom-go.cdx.json`: the Go modules of every program in the archives (`cbb` and the tray
     app), read from the programs' own build information, and Go's standard library;
-  - `sbom-lite.cdx.json`: the crates the lite member is built with on its targets, without the
+  - `sbom-member.cdx.json`: the crates cbb is built with on its targets, without the
     ones only tests and build scripts use, with their checksums from `Cargo.lock`;
   - `sbom-phone-core.cdx.json`: the same for the Rust core both phone apps link (`ffi/`);
   - `sbom-ios-kit.cdx.json`: the Swift packages of the iPhone kit (`Package.resolved`);
@@ -350,15 +351,16 @@ maintainer's private runbook, outside the repository.
 
 A report to `abuse@cbb.tools` about the forwarder or the relay gets the answer decided in
 advance ([the servers' budget](relay-budget.md#abuse-reports)): when it carries the tag of a
-group, add the tag with the date to `refused-groups` next to each server's key on cbb.tools,
-readable by the service, and both servers drop the group within ten seconds:
+group, add the tag with the date to `refused-groups` next to the forwarder's key on cbb.tools,
+readable by the service, and the forwarder drops the group within ten seconds (the relay in
+Rust does not read the list yet):
 
 ```sh
-echo "TAG  # 2026-11-09, report of DATE" | sudo tee -a /var/lib/cbb-forward/refused-groups /var/lib/cbb-relay/refused-groups
+echo "TAG  # 2026-11-09, report of DATE" | sudo tee -a /var/lib/cbb-forward/refused-groups
 ```
 
 A line that is not a tag keeps the list as it was and is logged
-(`journalctl -u cbb-forward -u cbb-relay`); taking the line out lets the group back. Answer the reporter that the group is refused; the servers have nothing else to
+(`journalctl -u cbb-forward`); taking the line out lets the group back. Answer the reporter that the group is refused; the servers have nothing else to
 give, no logs, addresses or content. A report without a tag gets that answer too, with a
 request for the tag. A report about a source that loads the servers on purpose is the
 firewall's, at the level of its network or provider, as the terms say. A vulnerability is
@@ -552,19 +554,15 @@ it installs only programs with the same signer.
 
 ## Signing for macOS
 
-The release workflow signs `cbb` and `cbb-helper` (identifier `tools.cbb.helper`, the same
-entitlement) for macOS with the project's **Developer ID Application**
+The release workflow signs `cbb` and `cbb-helper` (identifier `tools.cbb.helper`) for macOS with the project's **Developer ID Application**
 certificate and the hardened runtime (`packaging/macos/sign.sh`) and has Apple's notary
 service check each (`packaging/macos/notarize.sh`, `notarytool` signed in with the App Store
 Connect API key), so that Gatekeeper opens it without a warning. Without the secrets the
 program is signed ad hoc, as before. The certificates live in a keychain of the run's own
 (`packaging/macos/keychain.sh`), removed when the step ends. CI's build job signs every pull
-request's build ad hoc with the same flags and runs `cbb version`, which loads the Rust core
-under the hardened runtime. `cbb` carries one entitlement,
-`com.apple.security.cs.allow-unsigned-executable-memory` (`packaging/macos/cbb.entitlements`):
-wazero compiles the core to machine code at run time, and a Mac that enforces the hardened
-runtime's memory rules (macOS 27) kills a `cbb` without it as it loads the core. sign.sh
-refuses a signature without it, since a runner that does not enforce them passes the run.
+request's build ad hoc with the same flags and runs `cbb version`
+under the hardened runtime. No program carries an entitlement, since none compiles code at
+run time, and sign.sh refuses a signature with one.
 
 The same secrets make the Mac's installer package, `cbb-X.Y.Z.pkg` (the job "the Mac app
 and the .pkg"): `cbb` for Apple silicon and Intel in one program (`lipo` of the two signed

@@ -110,6 +110,7 @@ go tool actionlint             # GitHub Actions workflows
 pipx run zizmor==1.31.1 --offline --min-severity low .github/workflows   # their security
 go run ./tools/repocheck       # English only, license headers, copied code, no programs or files over 1 MiB, documentation links and names
 go run ./tools/tokens -check   # apps/design/tokens.json -> Swift and Kotlin, WCAG contrast
+go run ./tools/strings -check  # apps/l10n -> the apps' String Catalogs, strings.xml, .ts and tray l10n
 go run ./tools/icon -check     # the apps' icons
 sh .github/shellcheck.sh       # every shell script
 pipx run typos==1.51.1         # spelling of the English text (_typos.toml)
@@ -134,7 +135,7 @@ npx @informalsystems/quint@0.33.1 test --backend=typescript docs/model/claims.qn
 npx @informalsystems/quint@0.33.1 run --backend=typescript --invariant=promises --max-steps=12 --max-samples=20000 docs/model/claims.qnt
 ```
 
-The lite member (Rust, the `lite` job in CI):
+cbb and the Rust workspace (the `rust` job in CI):
 
 The core and the phones' bindings deny panics outside their tests (`core/src/lib.rs`,
 `ffi/src/lib.rs`): read with `get`, add with `checked_` or `saturating_` operations, and
@@ -145,8 +146,8 @@ return an error. Where something truly cannot fail, allow the lint on that item 
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 cargo build -p cbb-core --target riscv32imac-unknown-none-elf   # the core without an OS
 cargo deny --locked check licenses bans sources   # the crates' licenses and sources (deny.toml, CI's advisories job)
-cargo build --release && CBB_LITE=$PWD/target/release/cbb \
-  go test ./internal/service -run TestLiteMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
+cargo build --release && CBB_TEST_ALONE=$PWD/target/release/cbb \
+  go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
 ```
 
 The Nano ESP32's network code on Linux (`embassy/`, root for the TAP interface):
@@ -213,9 +214,10 @@ Sailfish OS 4.6), which `psdk.sh` sets up as root (about 10 GB) for the `SYSTEM`
 environment; CI's `Aurora app` jobs build every package and architecture unsigned
 (`ci.sh`), and the workflow `aurora` signs Aurora 5's with the developer certificate after
 the maintainer approves ([docs/maintaining.md](docs/maintaining.md#signing-for-aurora-os)).
-The translations are `translations/cbb-<language>.ts`, English being the source: a new
-`qsTr` text, or a message passed to `QCoreApplication::translate("Errors", ...)`, gets an
-entry in each.
+The translations are `translations/cbb-<language>.ts`, English being the source, made from
+`apps/l10n` like every app's ([Translations](#translations)): a new `qsTr` text, or a message passed to
+`QCoreApplication::translate("Errors", ...)`, gets an entry there with the place
+`aurora:<context>`.
 Aurora's own interfaces (the sandbox's permissions, the authentication service's client,
 localization, packaging) are documented for 5.1.5, the version the app is built for, at
 [developer.auroraos.ru/doc/5.1.5](https://developer.auroraos.ru/doc/5.1.5/); the pages
@@ -306,3 +308,20 @@ xcodebuild test -project CBBMac.xcodeproj -scheme CBBMac \
   -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 
+
+### Translations
+
+The apps' strings have one source, `apps/l10n/<language>.json` (English and the seven
+languages of the website), and `tools/strings` writes every app's files from it: the String
+Catalogs of the iPhone, Watch and Mac apps, Android's `res/values*/strings.xml`, Aurora's
+`translations/cbb-<language>.ts` and the tray's `frontend/l10n`. Edit only the source:
+`en.json` gives each string's ID (its English text) and the places that show it, such as
+`ios`, `mac`, `tray`, `aurora:MainPage` or `android:settings`
+([tools/strings/catalog](tools/strings/catalog/catalog.go) lists them), and each language's
+file has its translation under that ID. Texts are plain; the tool escapes them for Android
+and Qt. When Xcode adds a new key to a catalog, move it into the source.
+
+```sh
+go run ./tools/strings          # sort the source and write the apps' files
+go run ./tools/strings -check   # what tools/repocheck checks too
+```

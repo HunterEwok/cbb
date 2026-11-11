@@ -90,10 +90,10 @@ pub struct Join {
     secret: Option<Vec<u8>>,
     /// The invitation's guest tunnel, whose loopback port the app dials.
     #[cfg(feature = "tunnel")]
-    guest: Option<cbb_lite::phone::GuestTunnel>,
+    guest: Option<cbb_member::phone::GuestTunnel>,
     /// The mDNS announcement while the app listens (`announce`).
     #[cfg(feature = "member")]
-    announced: Option<cbb_lite::discovery::Announcement>,
+    announced: Option<cbb_member::discovery::Announcement>,
 }
 
 #[derive(Deserialize)]
@@ -257,7 +257,7 @@ impl Join {
         if inv.expired(wall_ms() / 1000) {
             return Err(Error::msg("the invitation has expired; ask for a new one"));
         }
-        let guest = cbb_lite::phone::GuestTunnel::start(&inv, Arc::new(|_: &str| {}))?;
+        let guest = cbb_member::phone::GuestTunnel::start(&inv, Arc::new(|_: &str| {}))?;
         let ans = NewAnswer {
             device: joiner.id.to_string(),
             code: String::new(),
@@ -290,7 +290,7 @@ impl Join {
     /// announcement ends when the joiner is freed.
     #[cfg(feature = "member")]
     pub fn announce(&mut self, port: u16) -> bool {
-        self.announced = cbb_lite::discovery::announce_joiner(&self.joiner.id, port, &self.joiner.fingerprint());
+        self.announced = cbb_member::discovery::announce_joiner(&self.joiner.id, port, &self.joiner.fingerprint());
         self.announced.is_some()
     }
 

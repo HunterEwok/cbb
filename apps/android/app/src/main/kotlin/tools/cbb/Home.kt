@@ -364,12 +364,12 @@ private fun TopBar(model: AppModel, layout: DeviceLayout, layouts: List<DeviceLa
                         choose(next)
                     },
                 )
-                if (model.arrangement != null) {
+                if (model.group.hasGroup) {
                     DropdownMenuItem(text = { Text(stringResource(if (arrange.on) R.string.arrange_done_long else R.string.arrange_devices)) }, leadingIcon = { Text("⇅") }, onClick = {
                         more = false
                         arrange.on = !arrange.on
                     })
-                    if (model.arrangement?.items?.isNotEmpty() == true) {
+                    if (model.customOrder) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.arrange_reset)) }, onClick = {
                             more = false
                             model.arrange(Tiles.Op.Reset)

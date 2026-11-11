@@ -40,7 +40,7 @@ func runControl(path string, cases []string) error {
 			send = []byte("this is no header\n")
 		case name == "long":
 			// A header over 64 KiB with no end of line.
-			send = []byte(`{"op":"status","name":"` + strings.Repeat("x", 70<<10))
+			send = []byte(`{"op":"status","args":{"name":"` + strings.Repeat("x", 70<<10))
 		case name == "big":
 			send = []byte(`{"op":"copy","len":2097152}` + "\n")
 		case name == "negative":
@@ -50,7 +50,7 @@ func runControl(path string, cases []string) error {
 		case name == "admin":
 			// An operation that changes the group, on the socket for
 			// everyone.
-			send = []byte(`{"op":"revoke","name":"nobody"}` + "\n")
+			send = []byte(`{"op":"remove","args":{"device":"nobody"}}` + "\n")
 		case name == "short":
 			// A payload shorter than its header says, then the end.
 			send = []byte(`{"op":"copy","len":100}` + "\n" + "only ten b")

@@ -16,7 +16,7 @@ option, so it is set by hand, and the installers and `cbb update` keep that line
 | `/etc/cbb/cbb.env` | Linux, macOS, the lite member | the installers (`--port`, `--home-cgnat`); `CBB_INTERFACES` by hand | `CBB_PORT`, `CBB_HOME_CGNAT`, `CBB_INTERFACES`, one `NAME=value` per line; systemd passes them to the service. A full member's service and `cbb` also read the file themselves; the lite member reads only its environment |
 | `/usr/local/etc/cbb/cbb.env` | FreeBSD, OPNsense | the installer | the same as on Linux; rc.d passes them to the service |
 | `HKLM\SYSTEM\CurrentControlSet\Services\cbb`, the value `Environment` (a multi-string) | Windows | `install.ps1` (`-Port`, `-HomeCgnat`); `CBB_INTERFACES` by hand, which `install.ps1` keeps | the same values as the file on Linux |
-| `/etc/config/cbb` | OpenWrt | the package, then you (UCI) | `port`, the firewall `zone` list the service works in (it becomes `CBB_INTERFACES`), `wait_ntp` (start once NTP has set the clock), `memlimit` (`GOMEMLIMIT`); apply a change with `/etc/init.d/cbb reload` |
+| `/etc/config/cbb` | OpenWrt | the package, then you (UCI) | `port`, the firewall `zone` list the service works in (it becomes `CBB_INTERFACES`), `wait_ntp` (start once NTP has set the clock); apply a change with `/etc/init.d/cbb reload` |
 | `/etc/cbb/forward.env` | a server running `cbb forward` | you | `CBB_FORWARD_FLAGS`, see [running your own servers](../admin/self-hosting.md) |
 | `/etc/cbb/relay.env` | a server running `cbb relay` | you | `CBB_RELAY_FLAGS`, see [running your own servers](../admin/self-hosting.md) |
 
@@ -73,7 +73,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_LANG` | `get.sh`, every `install.sh` and `uninstall.sh`, Windows `get.ps1`, `install.ps1` and `uninstall.ps1` | The language of the installers' messages: `zh`, `en`, `es`, `ru`, `ar`, `sw`, `he` or `hi`. Unset, it is the system's (the locale, as gettext reads it; on a Mac without one, the first of the user's languages; on Windows, the display language), and English where the project has no translation (packaging/l10n.sh). |
 | `CBB_OS_RELEASE` | the Linux `install.sh` | For tests: another `/etc/os-release`, whose `ID=steamos` makes it install as on SteamOS. |
 | `CBB_PF_CONF` | the FreeBSD firewall script | Another `pf.conf` than `/etc/pf.conf`, for tests. |
-| `CBB_IMAGE`, `CBB_PREVIEW` | the lite member's tests | For a look by eye at what the ZX Spectrum Next would show: `cargo test -p cbb-lite preview -- --ignored` reads the PNG or JPEG `CBB_IMAGE` names and writes what `cbb next image` makes of it to the PNG `CBB_PREVIEW` names. |
+| `CBB_IMAGE`, `CBB_PREVIEW` | the lite member's tests | For a look by eye at what the ZX Spectrum Next would show: `cargo test -p cbb-member preview -- --ignored` reads the PNG or JPEG `CBB_IMAGE` names and writes what `cbb next image` makes of it to the PNG `CBB_PREVIEW` names. |
 | `CBB_RELEASE_DIR` | `get.sh`, `get.ps1` | For tests: takes the release's files from this directory instead of downloading them. |
 | `CBB_RELEASE_ROOTS` | `get.sh`, `get.ps1` | For tests, with `CBB_RELEASE_DIR`: a file with the root keys to check the release against instead of the project's own. |
 
@@ -102,11 +102,11 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_SE_TEST` | Go tests on a Mac | `1` lets the tests of `internal/sekey` make keys in the Mac's Secure Enclave; without it no test key goes there. |
 | `CBB_E2E_COVERDIR` | `tools/e2e/e2e.sh` | A directory where a `cbb` built with `-cover` writes its coverage, as `GOCOVERDIR` in every container (CI's coverage, [testing](../testing.md#coverage)). |
 | `CBB_FAKE_HELPER` | the lite member's tests | Makes the test program play `cbb-helper` for the helper channel's tests. |
-| `CBB_LITE` | Go tests with the lite member | The lite member's binary (`cargo build` at the top, `target/`). |
+| `CBB_TEST_ALONE` | Go tests of cbb without its helper | The cbb binary they run alone, without `cbb-helper` beside it (`cargo build` at the top, `target/`). |
 | `CBB_PREVIOUS` | Go tests of the service | The previous release's `cbb` for TestPreviousRelease (a device of version N in one group with N-1), as `tools/e2e/previous.sh` prints it. |
 | `CBB_REPO` | `tools/e2e/previous.sh` | The repository on GitHub whose releases it reads, `HunterEwok/cbb` by default. |
 | `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Limits the weekly fleet run to these scenarios (`-scenario`); all of them when unset. |
-| `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary: the tests of `internal/relay` that check a relay from outside run against it. |
+| `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary, which the tests of `internal/relay`, `internal/tunnel` and `internal/service` run as the blind relay; without it they take the `cbb-relay` beside the `cbb` of `CBB_TEST_ALONE` or `CBB_TEST_RUST_SERVICE`, and skip when there is none. |
 | `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `group_record_bytes`, `record_bytes`); the Go tests set it. |
 | `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |
 | `CBB_TEST_RUST_SERVICE` | Go tests of the service | The Rust service's binary: the tests that start a Linux member with the default configuration run it in place of the Go service, finding their peers by mDNS. |
