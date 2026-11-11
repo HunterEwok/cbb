@@ -1,0 +1,261 @@
+  1. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  1. Разрешить входящие TCP %s из %s. Зачем: подключения устройств группы.
+  2. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  2. Разрешить входящие UDP 5353 из %s. Зачем: поиск устройств группы (mDNS).
+%s: removed the CBB rules.	%s: правила CBB удалены.
+Firewall: closed the hub's UDP port %s.	Брандмауэр: UDP-порт хаба %s закрыт.
+  In Firewall > Rules, on each interface of the home network (LAN and the others):	  В Firewall > Rules, на каждом интерфейсе домашней сети (LAN и остальных):
+    Pass, protocol TCP, source %s, destination This Firewall, port %s	    Pass, протокол TCP, источник %s, назначение This Firewall, порт %s
+    Pass, protocol UDP, the same sources, destination This Firewall, port 5353	    Pass, протокол UDP, те же источники, назначение This Firewall, порт 5353
+  Add to /etc/pf.conf, before the rules that block, and run pfctl -f /etc/pf.conf:	  Добавьте в /etc/pf.conf перед блокирующими правилами и выполните pfctl -f /etc/pf.conf:
+  and the same lines in the script that firewall_script in rc.conf names, to keep them.	  и те же строки в скрипт, который указан в firewall_script в rc.conf, чтобы они сохранились.
+  In Firewall > Rules on WAN: Pass, protocol UDP, source any, destination WAN address, port %s	  В Firewall > Rules на WAN: Pass, протокол UDP, источник any, назначение WAN address, порт %s
+%s [y/N]	%s [д/Н]
+No terminal to answer on; taken as No.	Нет терминала для ответа; считаем, что «нет».
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand:	Правила брандмауэра не добавлены. CBB работает, только пока брандмауэр разрешает правила выше. Чтобы добавить их вручную:
+Firewall: no active firewall was found; no firewall rules are needed. If pf or ipfw is turned on later, run the installer again.	Брандмауэр: активный брандмауэр не найден, правила не нужны. Если позже включите pf или ipfw, запустите установщик ещё раз.
+Firewall: %s (active). CBB requires these rules:	Брандмауэр: %s (включён). CBB нужны такие правила:
+CBB does not change pfSense's rules, and runs there unsupported. Add them by hand:	CBB не меняет правила pfSense и работает там без поддержки. Добавьте их вручную:
+ (express installation)	 (быстрая установка)
+ (as answered before)	 (как ответили раньше)
+With Yes, CBB keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both.	Если ответить «да», CBB держит эти правила в своём якоре pf, который его плагин добавляет в правила OPNsense; удаление CBB убирает и то и другое.
+With Yes, CBB keeps these rules in its own pf anchor and adds the lines that load it at the end of %s; uninstalling removes both.	Если ответить «да», CBB держит эти правила в своём якоре pf и добавляет строки, которые его загружают, в конец %s; удаление CBB убирает и то и другое.
+With Yes, CBB adds these rules to ipfw's set %s at every start, and removes them on uninstall.	Если ответить «да», CBB добавляет эти правила в набор ipfw %s при каждом запуске и убирает их при удалении.
+Add these rules now?	Добавить эти правила сейчас?
+To let CBB add and manage them, run the installer again with --express.	Чтобы CBB добавил их и следил за ними, запустите установщик ещё раз с --express.
+Added the rules above%s. CBB manages them from now on.	Правила выше добавлены%s. Теперь за ними следит CBB.
+run it as root	запустите от root
+neither pf nor ipfw is active; nothing was added.	ни pf, ни ipfw не включены; ничего не добавлено.
+failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again.	ошибка (код выхода %s). Чтобы увидеть каждую выполненную команду, задайте CBB_ERROR_DETAILS=1 и запустите ещё раз.
+CBB_HOME_CGNAT is 1 or 0, not %s	CBB_HOME_CGNAT бывает 1 или 0, а не %s
+--port takes a port from 1024 to 65535	--port принимает порт от 1024 до 65535
+CBB_FIREWALL is ask, express or no, not %s	CBB_FIREWALL бывает ask, express или no, а не %s
+run it as root (sudo or doas)	запустите от root (sudo или doas)
+this installer is for FreeBSD	этот установщик для FreeBSD
+%s does not run on this machine; is it built for %s?	%s не запускается на этой машине; он собран для %s?
+an account named cbb exists here and is not this service's (its comment is not "CBB"); it would get the group's keys. Rename or remove it, then run install.sh again.	здесь есть учётная запись cbb, и она не принадлежит службе (её комментарий не «CBB»); она получила бы ключи группы. Переименуйте или удалите её и запустите install.sh ещё раз.
+a group named cbb exists here with members, and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	здесь есть группа cbb с участниками, но нет учётной записи службы; эти участники получили бы доступ к службе. Переименуйте или удалите группу и запустите install.sh ещё раз.
+Added %s to the cbb group; log in again to use cbb copy and paste.	%s добавлен в группу cbb; войдите в систему заново, чтобы пользоваться cbb copy и paste.
+CBB uses TCP port %s instead of 8764.	CBB использует TCP-порт %s вместо 8764.
+the service did not answer within 10 s: %s	служба не ответила за 10 с: %s
+CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	CBB работает на TCP-порту %s. Удалить: sh /usr/local/share/cbb/uninstall.sh
+OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense: служба видна в System > Diagnostics > Services, а её правила сохраняются при каждой перезагрузке фильтра.
+pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	pfSense не поддерживается: обновление pfSense может удалить CBB; после обновления запустите этот установщик ещё раз.
+Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	Дальше: запустите cbb pair от root и отсканируйте QR-код приложением CBB на телефоне; без приложения см. docs/guide/without-app.md.
+CBB is removed, with this device's keys; it left its group.	CBB удалён вместе с ключами этого устройства; оно вышло из группы.
+CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	CBB удалён. Его ключи остаются в /var/db/cbb для переустановки; --purge удаляет и их.
+--port needs a port number	--port требует номер порта
+--home-cgnat needs on or off	--home-cgnat требует on или off
+--auto-update needs on or off	--auto-update требует on или off
+unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	неизвестный параметр %s (известны: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
+--rootless installs for your own user: run it without sudo: %s	--rootless устанавливает для вашего пользователя: запустите без sudo: %s
+--rootless is for Linux computers	--rootless только для компьютеров с Linux
+run it with sudo: %s	запустите через sudo: %s
+no release for this MIPS system: it is not OpenWrt, which names its byte order	для этой системы MIPS нет выпуска: это не OpenWrt, который сообщает порядок байтов
+no release for the architecture %s	нет выпуска для архитектуры %s
+the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	у лёгкого участника для MIPS пока нет синхронизации вне дома (пункт 37 плана); у полного участника она есть.
+--console is not for a router	--console не для роутера
+--uinput is not for a router	--uinput не для роутера
+--home-cgnat is not for a router	--home-cgnat не для роутера
+--lite is for Linux; a Mac runs the full member	--lite только для Linux; на Mac работает полный участник
+--console is for Linux	--console только для Linux
+--uinput is for Linux	--uinput только для Linux
+--lite is for Linux; FreeBSD runs the full member	--lite только для Linux; на FreeBSD работает полный участник
+this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	этот установщик для Linux, macOS и FreeBSD; на Windows используйте get.ps1
+tar is required	нужен tar
+sha256sum or shasum is required	нужен sha256sum или shasum
+curl or wget is required	нужен curl или wget
+CBB_VERSION must look like v1.2.3	CBB_VERSION должна выглядеть как v1.2.3
+the signed %s file is not in the strict form of signed bodies; not installing	подписанный файл %s не в строгой форме подписанных данных; установка отменена
+Not checked: the release's signature (CBB_VERIFY=skip).	Не проверено: подпись выпуска (CBB_VERIFY=skip).
+openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)	для проверки подписи выпуска нужен openssl (или CBB_VERIFY=skip, чтобы установить без проверки)
+%s has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)	у %s нет подписанных файлов выпуска; установка отменена (CBB_VERIFY=skip устанавливает без проверки)
+keys.json is not signed by the project's root key; not installing	keys.json не подписан корневым ключом проекта; установка отменена
+keys.json has expired; check the clock, or try again later	срок keys.json истёк; проверьте часы или попробуйте позже
+keys.json is not valid; not installing	keys.json неверен; установка отменена
+keys.json holds a key that is not valid	в keys.json неверный ключ
+keys.json holds no release key	в keys.json нет ключа выпуска
+release.json is not signed by a release key; not installing	release.json не подписан ключом выпуска; установка отменена
+stable.json is not signed by a release or channel key; not installing	stable.json не подписан ключом выпуска или канала; установка отменена
+stable.json is not the stable channel's	stable.json не от стабильного канала
+stable.json has expired; check the clock, or try again later	срок stable.json истёк; проверьте часы или попробуйте позже
+release.json is not the release stable.json names; not installing	release.json не от того выпуска, который называет stable.json; установка отменена
+release.json is for %s, not %s	release.json для %s, а не для %s
+release.json does not list %s	в release.json нет %s
+%s does not match the signed release.json; not installing it	%s не совпадает с подписанным release.json; установка отменена
+The release's signature checks out (%s).	Подпись выпуска верна (%s).
+could not download %s	не удалось скачать %s
+stable.json names no release	stable.json не называет выпуск
+Downloading %s (%s)...	Скачивание %s (%s)...
+SHA256SUMS does not list %s	в SHA256SUMS нет %s
+%s does not match SHA256SUMS; not installing it	%s не совпадает с SHA256SUMS; установка отменена
+%s does not have this repository's build attestation; not installing it	у %s нет аттестации сборки этого репозитория; установка отменена
+The archive's build attestation checks out.	Аттестация сборки архива верна.
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the archive's build attestation	CBB_ATTESTATION=require требует gh с выполненным входом (gh auth login), чтобы проверить аттестацию сборки архива
+Not checked: the archive's build attestation (it needs gh, signed in). SHA256SUMS matched.	Не проверено: аттестация сборки архива (нужен gh с выполненным входом). SHA256SUMS совпал.
+  %s. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  %s. Разрешить входящие TCP %s из %s. Зачем: подключения устройств группы.
+  %s. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  %s. Разрешить входящие UDP 5353 из %s. Зачем: поиск устройств группы (mDNS).
+ufw: removed the CBB rules.	ufw: правила CBB удалены.
+firewalld: removed the CBB rules and service.	firewalld: правила и служба CBB удалены.
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run:	Правила брандмауэра не добавлены. CBB работает, только пока брандмауэр разрешает правила выше. Чтобы добавить их вручную, выполните:
+Then make them permanent the way this system keeps its %s rules.	Затем сделайте их постоянными тем способом, каким эта система хранит правила %s.
+Firewall: no active firewall was found; no firewall rules are needed. If a firewall is turned on later, run the installer again.	Брандмауэр: активный брандмауэр не найден, правила не нужны. Если позже включите брандмауэр, запустите установщик ещё раз.
+cbb does not manage %s rules: rules added at run time do not survive a restart.	cbb не управляет правилами %s: правила, добавленные во время работы, не переживают перезагрузку.
+ (kept from an earlier installation)	 (сохранено от прошлой установки)
+With Yes, CBB adds these rules, keeps them current on every update and removes them on uninstall.	Если ответить «да», CBB добавит эти правила, будет обновлять их при каждом обновлении и уберёт при удалении.
+run it with sudo	запустите через sudo
+no ufw or firewalld is active; nothing was added.	ни ufw, ни firewalld не включены; ничего не добавлено.
+%s needs root; a rootless install has no console or uinput helper	%s требует root; у установки без root нет помощников console и uinput
+--rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless устанавливает для вашего пользователя: запустите без sudo. С sudo install.sh без --rootless устанавливает системную службу, и так безопаснее.
+a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	установка без root работает как пользовательский юнит systemd, а в этом сеансе нет пользовательского менеджера systemd; войдите в рабочий стол или по ssh и запустите ещё раз
+--home-cgnat is for the full member	--home-cgnat только для полного участника
+CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	CBB уже установлен здесь для всей системы (%s), а на одном устройстве работает одна служба; сначала удалите его или оставьте как есть
+the desktop agent did not start; it starts at your next login	агент рабочего стола не запустился; он запустится при следующем входе
+CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB работает, пока вы в системе. Чтобы он работал и после выхода, администратор выполняет: sudo loginctl enable-linger %s
+CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	CBB работает для %s на TCP-порту %s, установлен без root: он не может быть корнем группы, администратором или хабом. Если брандмауэр здесь ограничивает входящие подключения, администратор разрешает TCP %s и UDP 5353 из домашней сети. Удалить: %s
+For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	Для копирования и вставки в tmux добавьте в ~/.tmux.conf строку: source-file -q %s/tmux.conf
+Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	Дальше: см. member/README.md; коротко: %s pair здесь, и отсканируйте QR-код приложением на телефоне.
+Next: run %s pair and scan its QR code with the CBB app on your phone.	Дальше: запустите %s pair и отсканируйте QR-код приложением CBB на телефоне.
+this archive has no install-rootless.sh, so it cannot install without root	в этом архиве нет install-rootless.sh, поэтому установить без root нельзя
+systemd is required	нужен systemd
+the full member is installed here, and the lite member cannot use its keys; remove it first: %s	здесь установлен полный участник, а лёгкий участник не может пользоваться его ключами; сначала удалите его: %s
+the lite member is installed here, and the full member cannot use its keys; remove it first: %s	здесь установлен лёгкий участник, а полный участник не может пользоваться его ключами; сначала удалите его: %s
+an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	здесь есть учётная запись cbb, и она не принадлежит службе (её комментарий не «cbb service»); она получила бы ключи группы. Переименуйте или удалите её и запустите install.sh ещё раз.
+a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	здесь есть группа cbb с участниками (%s), но нет учётной записи службы; эти участники получили бы доступ к службе. Переименуйте или удалите группу и запустите install.sh ещё раз.
+Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	Не установлено: приложение в трее, ему нужны GTK 4 и WebKitGTK 6.0 (Debian и Ubuntu: %s; Fedora: %s). Установите их и запустите это ещё раз, чтобы добавить его.
+--uinput is for the full member, which runs the desktop connector	--uinput только для полного участника, в котором работает коннектор рабочего стола
+could not load the uinput module now; it loads at the next boot	не удалось загрузить модуль uinput сейчас; он загрузится при следующей загрузке системы
+100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	На этом устройстве 100.64.0.0/10 считается домашней сетью (--home-cgnat on).
+New member and admin keys of this device go into its TPM.	Новые ключи участника и администратора этого устройства хранятся в его TPM.
+CBB uses TCP port %s instead of 8764. If a firewall on the network limits incoming connections, allow TCP %s from the home network.	CBB использует TCP-порт %s вместо 8764. Если брандмауэр в сети ограничивает входящие подключения, разрешите TCP %s из домашней сети.
+the uinput helper did not start; see journalctl -u cbb-uinput	помощник uinput не запустился; см. journalctl -u cbb-uinput
+the desktop agent of %s did not start again; it starts at their next login	агент рабочего стола %s не перезапустился; он запустится при следующем входе этого пользователя
+cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow не удалось; выполните sudo cbb global allow, когда служба заработает.
+CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB работает на TCP-порту %s. Удалить: sudo sh %s/uninstall.sh
+Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	Дальше: см. member/README.md; коротко: sudo -u cbb %s pair здесь, и отсканируйте QR-код приложением на телефоне.
+Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	Дальше: запустите sudo %s pair и отсканируйте QR-код приложением CBB на телефоне; без приложения см. docs/guide/without-app.md.
+CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	CBB удалён. Его ключи остаются в %s/cbb для переустановки; --purge удаляет и их.
+CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	CBB удалён. Его ключи остаются в /var/lib/cbb для переустановки; --purge удаляет и их.
+%s does not run on this Mac	%s не запускается на этом Mac
+%s was built without cgo, so it cannot link this Mac's clipboard; use a release build, or build it with CGO_ENABLED=1	%s собран без cgo и не может работать с буфером обмена этого Mac; возьмите сборку из выпуска или соберите с CGO_ENABLED=1
+--in-place needs a path of letters, digits and / . _ + -, not %s	--in-place требует путь из букв, цифр и / . _ + -, а не %s
+%s is a link, likely Homebrew's; run this with --in-place %s	%s — ссылка, вероятно от Homebrew; запустите это с --in-place %s
+100.64.0.0/10 counts as the home network on this Mac (--home-cgnat on).	На этом Mac 100.64.0.0/10 считается домашней сетью (--home-cgnat on).
+Firewall: the macOS application firewall (on). CBB requires this rule:	Брандмауэр: брандмауэр приложений macOS (включён). CBB нужно такое правило:
+Firewall: the macOS application firewall (off). CBB requires this rule:	Брандмауэр: брандмауэр приложений macOS (выключен). CBB нужно такое правило:
+  1. Allow incoming connections to %s. Purpose: connections from the group's devices on TCP %s and finding them on UDP 5353 (mDNS). The application firewall allows a program on every port and from every address; CBB itself accepts only the home network.	  1. Разрешить входящие подключения к %s. Зачем: подключения устройств группы по TCP %s и их поиск по UDP 5353 (mDNS). Брандмауэр приложений разрешает программе все порты и все адреса; сам CBB принимает только домашнюю сеть.
+With Yes, CBB adds this rule, keeps it current on every update and removes it on uninstall.	Если ответить «да», CBB добавит это правило, будет обновлять его при каждом обновлении и уберёт при удалении.
+Add this rule now? [y/N]	Добавить это правило сейчас? [д/Н]
+Added the rule above%s. CBB manages it from now on.	Правило выше добавлено%s. Теперь за ним следит CBB.
+No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	Правило брандмауэра не добавлено. CBB работает, только пока брандмауэр разрешает правило выше. Чтобы добавить его вручную, выполните:
+To let CBB add and manage it, run the installer again with --express.	Чтобы CBB добавил его и следил за ним, запустите установщик ещё раз с --express.
+CBB is running on TCP port %s, in its group.	CBB работает на TCP-порту %s, в своей группе.
+CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	CBB работает на TCP-порту %s. Войти в группу: sudo cbb pair, затем отсканируйте QR-код телефоном или введите код из cbb pair на корне группы или администраторе; или создать группу: sudo cbb new.
+CBB is removed, with this Mac's keys; it left its group.	CBB удалён вместе с ключами этого Mac; он вышел из группы.
+CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	CBB удалён. Его ключи остаются в %s/state для переустановки; --purge удаляет и их.
+this installer is for OpenWrt	этот установщик для OpenWrt
+OpenWrt 25.12 or later is required (it installs packages with apk)	нужен OpenWrt 25.12 или новее (он ставит пакеты через apk)
+%s does not run on this router; is it built for %s?	%s не запускается на этом роутере; он собран для %s?
+CBB is installed; procd is not running here, so it starts at the next boot.	CBB установлен; procd здесь не запущен, поэтому CBB запустится при следующей загрузке.
+the service did not answer within 40 s: %s	служба не ответила за 40 с: %s
+see logread -e cbb	см. logread -e cbb
+CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB работает на TCP-порту %s, в зоне lan. Удалить: sh /usr/share/cbb/uninstall.sh
+Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	Attended sysupgrade (ASU, owut) не переносит пакеты не из лент OpenWrt: после такого обновления установите CBB ещё раз.
+Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	Дальше: выполните su -s /bin/sh cbb -c 'cbb pair -name router' и отсканируйте QR-код приложением CBB на телефоне.
+Next: run cbb pair and scan its QR code with the CBB app on your phone.	Дальше: запустите cbb pair и отсканируйте QR-код приложением CBB на телефоне.
+CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB удалён. Его ключи остаются в /etc/cbb для переустановки; --purge удаляет и их.
+This device is in no group yet, so it starts pairing now (--no-pair skips this).	Это устройство пока не в группе, поэтому сейчас начнётся сопряжение (--no-pair пропускает его).
+could not record how CBB was installed; cbb update takes it as get.sh	не удалось записать, как установлен CBB; cbb update будет считать, что через get.sh
+automatic updates are on or off, not %s	автообновления бывают on или off, а не %s
+CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB может раз в день проверять, есть ли подписанный проектом выпуск, и устанавливать его; при проверке GitHub видит адрес этого устройства, как при любом скачивании.
+Update automatically? [y/N]	Обновлять автоматически? [д/Н]
+No terminal to answer on; not now. Later: %scbb update -auto on	Нет терминала для ответа; пока нет. Позже: %scbb update -auto on
+could not turn automatic updates %s; run %scbb update -auto %s	не удалось переключить автообновления в %s; выполните %scbb update -auto %s
+starting	запуск
+a key is not P-256	ключ не P-256
+%s is not a valid release file; not installing	%s — неверный файл выпуска; установка отменена
+%s is not signed by the project's key; not installing	%s не подписан ключом проекта; установка отменена
+keys.json holds a key whose use is empty; not installing	в keys.json ключ с пустым назначением; установка отменена
+checking for administrator rights	проверка прав администратора
+run it in a PowerShell opened with "Run as administrator"	запустите в PowerShell, открытом через «Запуск от имени администратора»
+finding the architecture	определение архитектуры
+finding the latest release	поиск последнего выпуска
+downloading %s (%s)	скачивание %s (%s)
+checking %s against SHA256SUMS	сверка %s с SHA256SUMS
+checking the release's signature	проверка подписи выпуска
+checking the build attestation of %s	проверка аттестации сборки %s
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the build attestation	CBB_ATTESTATION=require требует gh с выполненным входом (gh auth login), чтобы проверить аттестацию сборки
+Not checked: the build attestation of the archive (it needs gh, signed in). SHA256SUMS matched.	Не проверено: аттестация сборки архива (нужен gh с выполненным входом). SHA256SUMS совпал.
+unpacking %s	распаковка %s
+running install.ps1	запуск install.ps1
+install.ps1 exited with %s	install.ps1 завершился с кодом %s
+get.ps1: %s failed: %s	get.ps1: ошибка на шаге «%s»: %s
+For the full error: $env:CBB_ERROR_DETAILS = "1", and run it again.	Чтобы увидеть ошибку целиком: $env:CBB_ERROR_DETAILS = "1" и запустите ещё раз.
+install.ps1: %s failed: %s	install.ps1: ошибка на шаге «%s»: %s
+Run it again with -Details for the full error.	Запустите ещё раз с -Details, чтобы увидеть ошибку целиком.
+%s %s exited with %s: %s	%s %s завершился с кодом %s: %s
+install.ps1: run it in a PowerShell opened with "Run as administrator".	install.ps1: запустите в PowerShell, открытом через «Запуск от имени администратора».
+install.ps1: -Port takes a port from 1024 to 65535.	install.ps1: -Port принимает порт от 1024 до 65535.
+checking the binaries	проверка программ
+cbbw.exe is missing beside %s	рядом с %s нет cbbw.exe
+%s is not built for Windows: %s	%s собран не для Windows: %s
+finding the signed-in user	поиск вошедшего пользователя
+stopping cbb	остановка cbb
+copying the files to %s	копирование файлов в %s
+adding cbb to PATH	добавление cbb в PATH
+making the %s group	создание группы %s
+adding %s to the %s group	добавление %s в группу %s
+net localgroup %s %s /add exited with %s: %s	net localgroup %s %s /add завершился с кодом %s: %s
+creating the service	создание службы
+setting the service's path failed with %s	не удалось задать путь службы: %s
+setting the port	настройка порта
+100.64.0.0/10 counts as the home network on this PC (-HomeCgnat on).	На этом ПК 100.64.0.0/10 считается домашней сетью (-HomeCgnat on).
+narrowing %s	ограничение доступа к %s
+%s was not the administrators' own; it is now %s	%s принадлежала не администраторам; теперь это %s
+allowing cbb in Windows Firewall	разрешение cbb в брандмауэре Windows
+the local subnet	локальной подсети
+the local subnet and 100.64.0.0/10	локальной подсети и 100.64.0.0/10
+Firewall: Windows Firewall (on for %s). CBB requires these rules:	Брандмауэр: брандмауэр Windows (включён для %s). CBB нужны такие правила:
+Firewall: Windows Firewall (off). CBB requires these rules:	Брандмауэр: брандмауэр Windows (выключен). CBB нужны такие правила:
+  1. Allow incoming TCP %s from %s to %s. Purpose: connections from the group's devices.	  1. Разрешить входящие TCP %s из %s к %s. Зачем: подключения устройств группы.
+  2. Allow incoming UDP 5353 from %s to %s. Purpose: finding the group's devices (mDNS).	  2. Разрешить входящие UDP 5353 из %s к %s. Зачем: поиск устройств группы (mDNS).
+Add these rules now? [y/N]	Добавить эти правила сейчас? [д/Н]
+Add these rules now? [y/N] No console to answer on; taken as No.	Добавить эти правила сейчас? [д/Н] Нет консоли для ответа; считаем, что «нет».
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run in an administrator PowerShell:	Правила брандмауэра не добавлены. CBB работает, только пока брандмауэр разрешает правила выше. Чтобы добавить их вручную, выполните в PowerShell администратора:
+To let CBB add and manage them, run the installer again with -Express ($env:CBB_FIREWALL = "express" for get.ps1).	Чтобы CBB добавил их и следил за ними, запустите установщик ещё раз с -Express ($env:CBB_FIREWALL = "express" для get.ps1).
+CBB also adds an outbound rule that keeps its service on the home network and, with cbb global on, its group's servers.	CBB также добавляет исходящее правило, которое ограничивает его службу домашней сетью, а с cbb global on ещё и серверами его группы.
+keeping the service on the home network	ограничение службы домашней сетью
+starting the service	запуск службы
+starting the agent with every sign-in	запуск агента при каждом входе
+starting the agent for %s	запуск агента для %s
+starting the tray app for %s	запуск приложения в трее для %s
+The agent did not start now (%s); it starts when %s signs in again.	Агент сейчас не запустился (%s); он запустится, когда %s снова войдёт в систему.
+The tray app did not start now (%s); it starts when %s signs in again.	Приложение в трее сейчас не запустилось (%s); оно запустится, когда %s снова войдёт в систему.
+starting the tray app with every sign-in	запуск приложения в трее при каждом входе
+adding CBB to the Start menu	добавление CBB в меню «Пуск»
+registering the uninstaller	регистрация программы удаления
+waiting for the service	ожидание службы
+the service does not answer; its log is %s	служба не отвечает; её журнал: %s
+writing the outbound rule for what the service reaches now	запись исходящего правила для адресов, к которым служба обращается сейчас
+cbb global allow exited with %s	cbb global allow завершился с кодом %s
+recording how CBB was installed	запись способа установки CBB
+Could not record how CBB was installed; cbb update takes it as get.ps1.	Не удалось записать, как установлен CBB; cbb update будет считать, что через get.ps1.
+setting automatic updates	настройка автообновлений
+Update automatically? [y/N] No console to answer on; not now. Later: cbb update -auto on	Обновлять автоматически? [д/Н] Нет консоли для ответа; пока нет. Позже: cbb update -auto on
+Could not turn automatic updates %s; run cbb update -auto %s as administrator.	Не удалось переключить автообновления в %s; выполните cbb update -auto %s от имени администратора.
+CBB %s is running on TCP port %s; %s may use it.	CBB %s работает на TCP-порту %s; %s может им пользоваться.
+It stays in its group.	Он остаётся в своей группе.
+Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	Дальше, в терминале, открытом от имени администратора: cbb pair, затем отсканируйте QR-код телефоном или введите код из cbb pair на корне группы или администраторе; или создайте группу: cbb new.
+To remove it: Settings, Apps, CBB, Uninstall.	Удалить: Параметры, Приложения, CBB, Удалить.
+Y	Д
+Yes	Да
+y	д
+yes	да
+uninstall.ps1: %s failed: %s	uninstall.ps1: ошибка на шаге «%s»: %s
+deleting the service	удаление службы
+stopping the agents and the tray app	остановка агентов и приложения в трее
+removing the update task and cbb update's folder	удаление задачи обновления и папки cbb update
+removing the firewall rules	удаление правил брандмауэра
+removing the sign-in entries, the Start menu shortcut and the uninstaller entry	удаление записей автозапуска, ярлыка в меню «Пуск» и записи программы удаления
+removing cbb from PATH	удаление cbb из PATH
+removing %s	удаление %s
+removing %s and the %s group	удаление %s и группы %s
+CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	CBB удалён. Его ключи остаются в %s для переустановки; -Purge удаляет и их.

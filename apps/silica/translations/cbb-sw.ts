@@ -145,6 +145,62 @@
         <source>The phone could not delete its key.</source>
         <translation>Simu haikuweza kufuta ufunguo wake.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>Kitovu cha kikundi hakikujibu. Hakikisha mwaliko bado ni halali na kitovu kimewashwa, kisha jaribu tena.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>Imeshindikana kujiunga na kikundi. Jaribu tena.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>Ni msimamizi pekee anayeunda mwaliko: simu ya msimamizi hapa, au cbb invite kwenye kompyuta ya msimamizi.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>Simu hii tayari iko kwenye kikundi. Ondoka kwanza ili ujiunge na kingine.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>Huu si mwaliko wa CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>Mwaliko umeisha muda. Omba mpya.</translation>
+    </message>
+    <message>
+        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
+        <translation>Changanua msimbo wa QR wa karatasi ya urejeshaji: kwenye simu mpya ufunguo ulioandikwa hautoshi.</translation>
+    </message>
+    <message>
+        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
+        <translation>Huu si ufunguo wa urejeshaji wa kikundi sasa: mzizi uliuondoa au uliunda mpya.</translation>
+    </message>
+    <message>
+        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
+        <translation>Hakuna kifaa cha kikundi kilichopatikana kwenye mtandao huu. Washa simu au kompyuta ya kikundi kisha ujaribu tena.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB recovery sheet.</source>
+        <translation>Hii si karatasi ya urejeshaji ya CBB.</translation>
+    </message>
+    <message>
+        <source>The phone could not restore the group.</source>
+        <translation>Simu haikuweza kurejesha kikundi.</translation>
+    </message>
+    <message>
+        <source>This is not the QR code of a CBB recovery sheet.</source>
+        <translation>Huu si msimbo wa QR wa karatasi ya urejeshaji ya CBB.</translation>
+    </message>
+    <message>
+        <source>The group's root cancelled the claim to restore the group.</source>
+        <translation>Mzizi wa kikundi umeghairi ombi la kurejesha kikundi.</translation>
+    </message>
+    <message>
+        <source>The claim to restore the group became void.</source>
+        <translation>Ombi la kurejesha kikundi limebatilika.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -179,6 +235,18 @@
     <message>
         <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
         <translation>Kwenye kompyuta ya mzizi wa kikundi, ikubali simu hii kama msimamizi kwa msimbo huu: katika programu ya CBB ongeza kifaa na uchague kukikubali kama msimamizi, au endesha cbb pair -qr -admin. Acha skrini hii wazi.</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Jiunge kwa mwaliko</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>Aliyekualika anaona maneno haya kwenye kifaa chake na ataikubali simu hii yakilingana. Acha skrini hii wazi.</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>Inaunganisha na kitovu cha kikundi…</translation>
     </message>
 </context>
 <context>
@@ -331,6 +399,18 @@
         <source>Off until I turn it on</source>
         <translation>Zima hadi niiwashe</translation>
     </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Jiunge kwa mwaliko</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Tuma mwaliko</translation>
+    </message>
+    <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>Rejesha kwa karatasi ya urejeshaji</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -437,6 +517,22 @@
     <message>
         <source>Device ID</source>
         <translation>Kitambulisho cha kifaa</translation>
+    </message>
+    <message>
+        <source>Hand the group over</source>
+        <translation>Kabidhi kikundi</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>Inakabidhi kikundi kwa %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>Kikundi kimekabidhiwa</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>Ombi lake linachukua kikundi mara moja</translation>
     </message>
 </context>
 <context>
@@ -568,6 +664,62 @@
     <message>
         <source>Device</source>
         <translation>Kifaa</translation>
+    </message>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>Ombi la kuchukua kikundi linasubiri</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>Bila kusubiri</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>Saa 1</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>Siku 1</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>Siku 3</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>Siku 7</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>Funguo ambazo msimamizi anaweza kuweka</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>Baadhi ya wasimamizi wana funguo dhaifu zaidi; wanabaki hadi waondolewe</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>Vifaa vilivyothibitishwa tu</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>Vifaa</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>Vifaa au faili</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>Umeundwa</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Hakuna</translation>
     </message>
 </context>
 <context>
@@ -1199,6 +1351,186 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Simu isipokuwa kwenye mtandao wa nyumbani, husawazisha kupitia handaki la WireGuard la kitovu chako mwenyewe, kompyuta ya kikundi iliyowekwa kwa cbb global hub; mlango wake unafikika kutoka intaneti, lakini kupitia WireGuard yenye funguo za kikundi pekee. Kitovu hujibu simu hii itakapounganika nyumbani wakati ujao. Hakuna kinachoenda kwingine, na bila handaki hakuna muunganisho. Kuzima husahaulisha simu hii ufunguo wake wa handaki.</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Jiunge kwa mwaliko</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>Umealikwa kwenye kikundi</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>Elekeza kamera kwenye msimbo wa QR wa mwaliko.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Kamera haianzi: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>Au bandika maandishi ya mwaliko, cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Kikundi</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>Kitovu</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>Halali hadi</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>Jiunge tu ikiwa uliomba mwaliko huu. Aliyeuunda ataikubali simu hii akiona maneno inayoonyesha.</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Jiunge</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>Kataa</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Tuma mwaliko</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>Inafungua mwaliko kwenye kitovu cha kikundi…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite ukitumia maandishi yake. Unafanya kazi mara moja, hadi %1.</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>%1 amejiunga na kikundi; kitaonekana kwenye orodha kikiunganishwa.</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>Onyesha au tuma msimbo kwa anayejiunga pekee: yeyote aliye nao anaweza kuomba kujiunga.</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>Nakili maandishi ya mwaliko</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>Kukubali %1 (%2)? Kikubali tu ikiwa kifaa kinaonyesha maneno yaleyale:</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>Kubali</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>Si hiki</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Jaribu tena</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>Alika kifaa kingine</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>Ondoa ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>Inaondoa ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>Unda ufunguo mpya wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>Unda ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>Inabadilisha ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>Andika ufunguo au chapisha ukurasa huu, na uuhifadhi salama. Unaonyeshwa mara moja tu.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>Kikundi kina ufunguo wa kurejesha. Kwa huo kompyuta ya kikundi au simu mpya huchukua kikundi simu hii ikipotea.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>Ufunguo wa kurejesha huruhusu kompyuta ya kikundi au simu mpya kuchukua kikundi simu hii ikipotea. Vuta chini kuunda mmoja.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>Nimeuandika</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>Rejesha kikundi</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>Simu hii sasa ni mzizi wa kikundi.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>Inatafuta simu au kompyuta ya kikundi kwenye mtandao huu…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>Inaomba kikundi…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>Kikundi kimerejeshwa kwenye simu hii. Inakuwa mzizi wa kikundi muda wa kusubiri ukiisha, baada ya saa %1, isipokuwa mzizi ukighairi ombi.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>Kikundi kimerejeshwa kwenye simu hii. Inakuwa mzizi wa kikundi muda wa kusubiri wa kikundi ukiisha, isipokuwa mzizi ukighairi ombi.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>Elekeza kamera kwenye msimbo wa QR wa karatasi ya urejeshaji ya kikundi. Weka simu au kompyuta ya kikundi ikiwa imewashwa na kwenye mtandao huu.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>Kamera haianzi: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>Au bandika maandishi ya msimbo, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Jaribu tena</translation>
     </message>
 </context>
 </TS>

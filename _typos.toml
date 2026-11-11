@@ -5,6 +5,7 @@ extend-exclude = [
   "*.xcstrings",
   "**/res/values-*/strings.xml",
   "**/l10n/*.json",
+  "**/l10n/*.tsv",
   "apps/silica/translations/*.ts",
   "fastlane/metadata/android/*/",
   "site/docs/*/",
@@ -14,6 +15,10 @@ extend-exclude = [
   "apps/android/gradlew",
   "**/third_party/",
 ]
+
+# The translated keys of desktop entries (Name[es]=..., Comment[ru]=...).
+[default]
+extend-ignore-re = ['(?m)^[A-Za-z]+\[[A-Za-z_@]+\]=.*$']
 
 # Words that are right where they stand: names in the code, registers of the
 # Z80, Qt's and other libraries' names, and test inputs.

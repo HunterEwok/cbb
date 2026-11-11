@@ -246,7 +246,6 @@
   "More": "更多",
   "OK": "好",
   "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.": "在群组的手机上，点按 + 并扫描此代码。在群组的电脑上，点按 + 并输入这些数字。请保持此窗口打开。",
-  "On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.": "在群组的中心节点上运行 cbb invite，并通过你信任的渠道发送它生成的文件。在新设备上用该文件运行 cbb pair -invite。",
   "On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.": "在新设备上选择“加入群组”：它会显示一个二维码和六位数字。群组的手机扫描该代码；在这里输入这些数字。",
   "Open a picture of its QR code": "打开它的二维码图片",
   "Open at sign-in": "登录时打开",
@@ -264,5 +263,13 @@
   "Turn sync off": "关闭同步",
   "Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does.": "输入恢复单上的密钥，或粘贴其二维码的文本。声明会像接管一样等待。",
   "Type the six digits the new device shows.": "输入新设备显示的六位数字。",
-  "Without a camera": "没有相机"
+  "Without a camera": "没有相机",
+  "Allow cbb to run as the administrator; the invitation opens on the group's hub next.": "请允许 cbb 以管理员身份运行；随后邀请会在群组的中心节点上打开。",
+  "The invitation's QR code": "邀请的二维码",
+  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.": "在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上用其文本运行 cbb pair -invite。只向要加入的人出示或发送它。",
+  "The invitation's text": "邀请文本",
+  "Not this one": "不是这个",
+  "The invitation is valid until %s.": "邀请在 %s 之前有效。",
+  "%s (%s) used the invitation. Admit it only if the device shows the same fingerprint:": "%s（%s）使用了邀请。仅当该设备显示相同的指纹时才接纳：",
+  "The device joined the group; it appears in the list once it connects.": "设备已加入群组；连接后会出现在列表中。"
 }

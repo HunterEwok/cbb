@@ -37,10 +37,11 @@ pub fn refused(records: &Arc<Mutex<Records>>) -> Refused {
     // A chain no counting device record names yet, or one the records
     // stop the exchange with, passes here: its connection carries records
     // only (Node::run), as does an old root an admin took the group over
-    // from.
+    // from, and a removed or frozen device's, which gets the records that
+    // say so and is closed.
     Arc::new(move |chain| match records.lock().unwrap().refused_peer(chain) {
         Some(Refusal::Refused(why)) => Some(why.to_string()),
-        Some(Refusal::NotListed | Refusal::Stopped | Refusal::TakenOver) | None => None,
+        Some(Refusal::NotListed | Refusal::Stopped | Refusal::TakenOver | Refusal::Removed(_)) | None => None,
     })
 }
 

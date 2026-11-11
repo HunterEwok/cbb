@@ -435,7 +435,7 @@ Message object:
 
 | Field | Type | In | Meaning |
 |-------|------|----|---------|
-| `t` | string | all | `hello`, `event`, `ping`, `bye`, `cert`, `records`, `admin`, `tunnel` or `hubs` (section 11), `command` or `result` (section 15), `evidence` (section 17), `credentials` (section 18), `release` (section 16), `get` or `missing` ("Content", below) |
+| `t` | string | all | `hello`, `event`, `ping`, `bye`, `cert`, `records`, `admin`, `tunnel` or `hubs` (section 11), `guest` (section 12, "Through the hub"), `command` or `result` (section 15), `evidence` (section 17), `credentials` (section 18), `release` (section 16), `get` or `missing` ("Content", below) |
 | `role` | string | hello | `member` (any device with the service or the firmware) or `phone` (a phone app) |
 | `hello` | object | hello | Hello (below) |
 | `event` | object | event | Event (below) |
@@ -464,7 +464,7 @@ Message object:
 
 1. After the TLS handshake each side MUST send its hello first, without waiting for the other's.
 2. Then events follow, in any number, interleaved with pings, records messages, `admin`,
-   `tunnel`, `hubs`, `credentials` (section 18), `command`, `result` and `reach`
+   `tunnel`, `hubs`, `guest` (section 12), `credentials` (section 18), `command`, `result` and `reach`
    messages, `evidence` (section 17), `release` (section 16), `get`, `missing` and `chunk`
    frames ("Content", below), and at most one `cert`.
 3. A side that has written nothing for 5 s MUST send `ping`. Every frame written resets that
@@ -2136,7 +2136,13 @@ beyond) and check the same bytes.
 - After adding records that refuse a certificate a member first queues the new records for
   its peers, then closes every connection whose peer certificate is now refused
   ("Certificates"), after what is queued for it and a `bye`, and the TLS check refuses it from
-  then on. So a revoked member that is connected gets the record that revokes it. A member
+  then on. So a revoked member that is connected gets the record that revokes it. One that
+  was not connected gets it on its next connection with any member: a peer whose own key
+  (its certificate's) the records revoke or freeze passes the TLS check, and its connection
+  carries records only; the member sends its records when the digests in the hellos differ,
+  takes nothing from the peer, and closes the connection after them and a `bye`. Either side
+  dials such a peer again as after a failure (1 s, doubling to 30 s), so that a removed
+  device costs one handshake now and then. A member
   that learns that its own key is revoked logs that it was removed from the group, and its
   status says so (`removed`); an admin computer whose admin key is frozen says that instead
   (`frozen`); the others refuse it. A member MUST close a connection, and refuse new ones,
@@ -2507,16 +2513,20 @@ carries:
 ## 12. Remote invitations
 
 A device that shares no network with the group joins through the hub's tunnel with a remote
-invitation ([design.md](design.md), "Joining from another network"). Implemented in Go
-(`internal/invite`, `internal/service/invite.go`, `cbb invite`, `cbb pair -invite`) for
-computers, and made and served on a phone that is the group's hub (the Rust tunnel's
-`hub_invite`, the kits' `InvitationWindow`); the phones do not use invitations yet.
+invitation ([design.md](design.md), "Joining from another network"). Implemented in the Rust
+`cbb` (`member/src/inviter.rs`, `member/src/away/invite.rs`, `cbb invite`, `cbb pair -invite`)
+on the computers and the lite member, in the phones' member through ffi (`cbb_invite_*`,
+`cbb_join_*` with `invite`, the tunnel's `guest_start`), and on a phone that is the group's hub
+(the Rust tunnel's `hub_invite`, the kits' `InvitationWindow`). The text is read by the Rust
+core (`cbb_core::invite`) and Go's `internal/invite`.
 
 ### The invitation
 
-Made on the hub, by the control operation `invite` (`cbb invite`), or in the app of a phone
-that is the hub, whose endpoints are its forwarder's; a hub that only passes copies on
-(section 11, "Two kinds of hub") holds no CA key and refuses. Its text is
+Made by the root or any admin that admits devices: on the hub, by the control operation
+`invite` (`cbb invite`) or in the app of a phone that is the hub, whose endpoints are its
+forwarder's; on another admin, through a hub ("Through the hub"). A hub that only passes
+copies on (section 11, "Two kinds of hub") holds no CA key and makes none itself, though it
+opens the guest tunnel of another admin's invitation. Its text is
 `cbb://invite#` followed by standard base64 of this JSON (byte strings
 in it as in the rest of this document):
 
@@ -2532,6 +2542,7 @@ in it as in the rest of this document):
 | `s` | bytes | the pairing secret, at least 16 random bytes (128 bits) |
 | `exp` | number | when it expires, Unix seconds |
 | `o` | object or absent | the hub's obfuscation settings, as in its offer (section 11, "Obfuscation") |
+| `x` | object or absent | the way to the hub's forwarder over VLESS with XHTTP, as in its offer (section 11, "VLESS"): `transport` (`xhttp`), `endpoint`, `server_name`, `path` and `id`, all strings |
 
 The JSON is in the strict form of signed bodies (Conventions), with exactly these fields and
 no other, so that every implementation reads one text alike (Go's `internal/invite`, the
@@ -2550,23 +2561,31 @@ Rust core's `cbb_core::invite`, both checked on `testdata/interop/invites.json`)
 - `o`, when present, has every field of the offer's settings, each within the offer's
   bounds. Each `h1` to `h4` is `min-max`: two decimal numbers of 32 bits, without a sign or
   a leading zero, `min` not above `max`.
+- `x`, when present, has exactly its five fields, each a string: `transport` is `xhttp`,
+  `endpoint` an address as in `ep`, `server_name` a host name, `path` an absolute path and
+  `id` a UUID in lowercase, as the offer's VLESS settings. A hub whose offer has none, or
+  REALITY, which the phones and the lite member do not speak, writes none. A device that
+  cannot reach the hub over UDP dials the guest tunnel through it.
 
 A text refused names one reason, the same in every implementation:
 
 - `not_invitation`: not the prefix.
 - `damaged`: not standard base64, not strict JSON, a field missing, unknown or of another type.
 - `version`: a `v` other than 1.
-- `group`, `hub`, `key`, `endpoints`, `secret`, `expiry` or `obfuscation`: that field's
-  value is refused.
+- `group`, `hub`, `key`, `endpoints`, `secret`, `expiry`, `obfuscation` or `vless`: that
+  field's value is refused.
 
 A device joins only while `exp` is later than its clock. A device that does not know the
 time yet does not join.
 
-It travels as a file of one line (`.cbbinvite`, mode 0600, which `cbb invite` deletes when
-the invitation ends and `cbb pair -invite` deletes once it joined) or, later, a QR code; it
-is never typed. It is a secret until it is used. It serves one device once, for 1 hour
-unless the admin asks for up to 24 hours, and closes after three failed attempts or when
-the admin cancels it.
+It travels as a QR code of its text, the usual way, which a phone scans in Join with an
+invitation, or as its text or a file of one line (`.cbbinvite`, mode 0600, which `cbb invite`
+deletes when the invitation ends and `cbb pair -invite` deletes once it joined), for a
+computer and for whoever got the QR code another way; it is never typed. It is a secret
+until it is used. It serves one device once, for 1 hour unless the admin asks for up to 24
+hours, and closes after three failed attempts or when the admin cancels it. A device asks
+its user before it joins: it shows the group's tag, the hub and when the invitation expires,
+and joins only once the user accepts; declining sends nothing.
 
 ### The guest tunnel
 
@@ -2579,8 +2598,10 @@ the admin cancels it.
   (ALPN `cbb-pair/2`, section 6) of that invitation's window and nothing else,
   except, once the window admitted a device, member TLS from that device alone, for its
   first hello (below). Any other connection MUST be closed.
-- The hub drops the guest peer when the invitation ends without a device, and 2 minutes
-  after it admitted one.
+- The hub drops the guest peer when the invitation ends without a device, and once the
+  admitted device reached it with its own tunnel key (Joining, step 4), or 24 hours after it
+  admitted the device, whichever comes first: a device that starts late, or loses its
+  network after the join, still offers its key through the guest tunnel.
 
 ### Joining
 
@@ -2596,7 +2617,49 @@ the admin cancels it.
    tunnel. Its hello carries its own tunnel key, which the hub admits (section 11) and
    answers with its offer.
 4. With the offer, the device closes the guest tunnel and from then on reaches the hub
-   through the tunnel with its own key, as any member.
+   through the tunnel with its own key, as any member. Until it has the offer, it keeps the
+   invitation (the lite member and the Rust `cbb` in `invite-guest`, mode 0600, the phones in
+   their key store) and tries again through the guest tunnel, after a restart too, for up to
+   24 hours.
+
+### Through the hub
+
+An admin that is not the hub makes the invitation through a hub it is connected to: the
+first of the group's hubs (section 11) that takes it, or the one the admin names (`cbb invite
+-hub`). The admin keeps the window and the CA key; the hub only lets the guest in and passes
+the bytes. They talk in the member connection with `guest` messages (section 4): `{"t":
+"guest", "guest": {...}}`, the object's `op` naming what it does and `key` the guest's
+WireGuard public key, standard base64, which names the invitation:
+
+| `op` | From | Fields | Meaning |
+|------|------|--------|---------|
+| `open` | admin | `psk`, `expires_ms` | let this guest in until `expires_ms` (Unix milliseconds, at most 24 hours and a minute away) |
+| `opened` | hub | `hub_key`, `endpoints`, `obfuscation`, `vless` | the guest is in: the invitation's `hk`, `ep`, `o` and `x` |
+| `refused` | hub | `reason` | a sentence for the user: not a hub, not an admin that admits devices, a lifetime too long, or the key in use |
+| `data` | both | `conn`, `data` | bytes of the guest's connection `conn` (numbered by the hub from 1), at most 16 KiB a message |
+| `end` | both | `conn` | that side closed the connection for writing |
+| `admitted` | admin | `device` | the window admitted this device: the hub keeps the guest for its first hello (Joining, step 3) |
+| `close` | admin | | the invitation ended without a device |
+
+The hub takes `open` only from a peer whose chain and records make it the root or an admin
+that admits devices, and every later message about a guest only from the admin that opened
+it. The guest's connections to TCP 8764 inside the tunnel reach the admin's window through
+`data` messages; once the window admitted a device, its member connection through the guest
+tunnel reaches the hub's member listener, as on the hub's own invitation. A guest
+connection that comes while the admin is not connected is closed, and the device tries
+again; the guest stays until the invitation's expiry. A hub keeps a few such guests at once,
+and fewer for one admin.
+
+### On a phone that joins
+
+The phone joins in its app: Start's Join with an invitation reads the QR code, the text or
+the file, and the invitation waits to be accepted or declined. Accepted, the core starts the
+guest tunnel in the app's process and gives the app its loopback port, which the app dials
+for each attempt (`cbb_join_new` with `invite`, `cbb_join_accept`, `cbb_join_feed`); the
+phone is the TLS client of the pairing and shows the fingerprint the admin compares. Once
+admitted it saves its membership, turns sync away from home on, and offers its own tunnel
+key to the hub through the guest tunnel until the hub answers (the iPhone's and Android's
+`AwayFromHome`, the Aurora app through the member's `joined_by_invite`).
 
 ### On a phone that is the hub
 
@@ -2609,7 +2672,10 @@ secret as the password: the device confirms first, the phone asks its user to co
 device by its name, system and fingerprint, then unlocks its signing key (Face ID or the
 screen lock) and sends the welcome with its own tag. It gives no CA keys and makes no admin.
 It takes one attempt at a time, ends after three failures, and the guest goes at expiry,
-when the user cancels, or 2 minutes after the device was admitted. The invitation's file
+when the user cancels, or as on any hub once the admitted device offered its own key.
+An admin phone that is not the hub makes its invitation through a hub of the group, as
+"Through the hub" says, with the window in its member (`cbb_invite_*`); the invitation shows
+as a QR code. The invitation's file
 goes through the phone's share sheet. Go's `TestSwiftHubAdmitsInvitedGoJoiner` runs `cbb`'s
 joiner against the window of both kits.
 

@@ -49,6 +49,8 @@ pub enum Reason {
     Expiry,
     /// `o` is damaged.
     Obfuscation,
+    /// `x` is damaged.
+    Vless,
 }
 
 impl Reason {
@@ -65,6 +67,7 @@ impl Reason {
             Reason::Secret => "secret",
             Reason::Expiry => "expiry",
             Reason::Obfuscation => "obfuscation",
+            Reason::Vless => "vless",
         }
     }
 
@@ -81,6 +84,7 @@ impl Reason {
             Reason::Secret => "the invitation's secret is too short or too long",
             Reason::Expiry => "the invitation has no expiry",
             Reason::Obfuscation => "the invitation's obfuscation settings are damaged",
+            Reason::Vless => "the invitation's VLESS settings are damaged",
         }
     }
 }
@@ -129,6 +133,74 @@ pub struct Invitation {
     /// When it expires, Unix seconds.
     pub expires: i64,
     pub obfuscation: Option<Obfuscation>,
+    /// The way to the hub's forwarder over VLESS with XHTTP, as the hub's
+    /// offer gives it (docs/protocol.md, section 11, "VLESS"), for a guest
+    /// whose network lets no UDP through.
+    pub vless: Option<Vless>,
+}
+
+/// The VLESS settings of an invitation: those of the hub's offer, with
+/// XHTTP only.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Vless {
+    /// The web server's address, `ip:port`.
+    pub endpoint: String,
+    /// The site's name, which its certificate must carry.
+    pub server_name: String,
+    /// The path the web server passes to the forwarder.
+    pub path: String,
+    /// The group's VLESS user ID, a UUID in lowercase.
+    pub id: String,
+}
+
+impl Vless {
+    /// The settings as a hub's offer carries them, which the tunnels take.
+    pub fn to_json(&self) -> Value {
+        let mut m = Map::new();
+        m.insert("transport".into(), Value::from("xhttp"));
+        m.insert("endpoint".into(), Value::from(self.endpoint.as_str()));
+        m.insert("server_name".into(), Value::from(self.server_name.as_str()));
+        m.insert("path".into(), Value::from(self.path.as_str()));
+        m.insert("id".into(), Value::from(self.id.as_str()));
+        Value::Object(m)
+    }
+}
+
+/// The VLESS settings of a hub's offer for an invitation: None for none or
+/// for REALITY, which a phone or a lite member cannot speak.
+pub fn vless_from_offer(v: &Value) -> Option<Vless> {
+    let o = v.as_object()?;
+    // An offer's REALITY fields come absent or null with XHTTP.
+    let o: Map<String, Value> = o.iter().filter(|(_, v)| !v.is_null()).map(|(k, v)| (k.clone(), v.clone())).collect();
+    vless_fields(&o).ok()
+}
+
+const VLESS_FIELDS: [&str; 5] = ["transport", "endpoint", "server_name", "path", "id"];
+
+/// Reads `x` as Go's decoder does: an unknown field or one of another type
+/// is damage, a missing one makes the settings refused.
+fn vless_fields(o: &Map<String, Value>) -> Result<Vless, Reason> {
+    if o.keys().any(|k| !VLESS_FIELDS.contains(&k.as_str())) {
+        return Err(Reason::Damaged);
+    }
+    if o.values().any(|v| !v.is_string()) {
+        return Err(Reason::Damaged);
+    }
+    let s = |k: &str| o.get(k).and_then(Value::as_str).ok_or(Reason::Vless);
+    let (transport, endpoint, server_name, path, id) =
+        (s("transport")?, s("endpoint")?, s("server_name")?, s("path")?, s("id")?);
+    if transport != "xhttp" || parse_endpoint(endpoint).is_none() {
+        return Err(Reason::Vless);
+    }
+    crate::vless::check_server_name(server_name).map_err(|_| Reason::Vless)?;
+    crate::vless::check_path(path).map_err(|_| Reason::Vless)?;
+    crate::vless::parse_id(id).map_err(|_| Reason::Vless)?;
+    Ok(Vless {
+        endpoint: endpoint.to_string(),
+        server_name: server_name.to_string(),
+        path: path.to_string(),
+        id: id.to_string(),
+    })
 }
 
 impl Invitation {
@@ -154,6 +226,7 @@ impl Invitation {
         m.insert("secret".into(), b64(&self.secret));
         m.insert("expires".into(), Value::from(self.expires));
         m.insert("obfuscation".into(), self.obfuscation.as_ref().map_or(Value::Null, Obfuscation::to_json));
+        m.insert("vless".into(), self.vless.as_ref().map_or(Value::Null, Vless::to_json));
         Value::Object(m)
     }
 }
@@ -195,13 +268,26 @@ impl Invitation {
                 b64(&o.header_protection_key)
             ));
         }
+        if let Some(x) = &self.vless {
+            j.push_str(&alloc::format!(
+                ",\"x\":{{\"transport\":\"xhttp\",\"endpoint\":\"{}\",\"server_name\":\"{}\",\"path\":\"{}\",\"id\":\"{}\"}}",
+                x.endpoint, x.server_name, x.path, x.id
+            ));
+        }
         j.push('}');
         alloc::format!("{PREFIX}{}", STANDARD.encode(j.as_bytes()))
     }
 }
 
+/// The WireGuard public key of a guest's private key (X25519), which the
+/// hub admits as the guest's peer.
+pub fn guest_public(private: &[u8; 32]) -> [u8; 32] {
+    x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(*private)).to_bytes()
+}
+
 impl Obfuscation {
-    fn to_json(&self) -> Value {
+    /// The settings as a hub's offer carries them.
+    pub fn to_json(&self) -> Value {
         let r = |r: Range| Value::from(alloc::format!("{}-{}", r.min, r.max));
         let mut m = Map::new();
         for (k, v) in [("jc", self.jc), ("jmin", self.jmin), ("jmax", self.jmax)] {
@@ -217,7 +303,7 @@ impl Obfuscation {
     }
 }
 
-const FIELDS: [&str; 10] = ["v", "g", "h", "hk", "ep", "k", "psk", "s", "exp", "o"];
+const FIELDS: [&str; 11] = ["v", "g", "h", "hk", "ep", "k", "psk", "s", "exp", "o", "x"];
 const REQUIRED: [&str; 9] = ["v", "g", "h", "hk", "ep", "k", "psk", "s", "exp"];
 
 /// Reads an invitation's text and checks it; spaces, tabs and line breaks
@@ -250,6 +336,11 @@ pub fn parse(text: &str) -> Result<Invitation, Reason> {
         Some(Value::Object(o)) => Some(obfuscation_fields(o)?),
         Some(_) => return Err(Reason::Damaged),
     };
+    let x = match obj.get("x") {
+        None => None,
+        Some(Value::Object(x)) => Some(x),
+        Some(_) => return Err(Reason::Damaged),
+    };
 
     if !is_hex(group, 16) {
         return Err(Reason::Group);
@@ -269,6 +360,7 @@ pub fn parse(text: &str) -> Result<Invitation, Reason> {
         return Err(Reason::Expiry);
     }
     let obfuscation = obf.map(|o| o.read().ok_or(Reason::Obfuscation)).transpose()?;
+    let vless = x.map(vless_fields).transpose()?;
     Ok(Invitation {
         group: group.to_string(),
         hub: hub.to_string(),
@@ -279,6 +371,7 @@ pub fn parse(text: &str) -> Result<Invitation, Reason> {
         secret,
         expires,
         obfuscation,
+        vless,
     })
 }
 

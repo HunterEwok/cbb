@@ -145,6 +145,62 @@
         <source>The phone could not delete its key.</source>
         <translation>El teléfono no pudo borrar su clave.</translation>
     </message>
+    <message>
+        <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
+        <translation>El hub del grupo no respondió. Comprueba que la invitación sigue siendo válida y que el hub está encendido, y vuelve a intentarlo.</translation>
+    </message>
+    <message>
+        <source>The other phone's group could not be joined. Try again.</source>
+        <translation>No se pudo unir al grupo. Vuelve a intentarlo.</translation>
+    </message>
+    <message>
+        <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
+        <translation>Solo un administrador crea invitaciones: un teléfono administrador aquí, o cbb invite en un ordenador administrador.</translation>
+    </message>
+    <message>
+        <source>This phone is in a group already. Leave it first to join another.</source>
+        <translation>Este teléfono ya está en un grupo. Sal de él primero para unirte a otro.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB invitation.</source>
+        <translation>Esto no es una invitación de CBB.</translation>
+    </message>
+    <message>
+        <source>The invitation has expired. Ask for a new one.</source>
+        <translation>La invitación ha caducado. Pide una nueva.</translation>
+    </message>
+    <message>
+        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
+        <translation>Escanea el código QR de la hoja de recuperación: en un teléfono nuevo no basta con la clave escrita.</translation>
+    </message>
+    <message>
+        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
+        <translation>Esta ya no es la clave de recuperación del grupo: la raíz la quitó o creó una nueva.</translation>
+    </message>
+    <message>
+        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
+        <translation>No se encontró ningún dispositivo del grupo en esta red. Enciende un teléfono o un ordenador del grupo e inténtalo de nuevo.</translation>
+    </message>
+    <message>
+        <source>This is not a CBB recovery sheet.</source>
+        <translation>Esto no es una hoja de recuperación de CBB.</translation>
+    </message>
+    <message>
+        <source>The phone could not restore the group.</source>
+        <translation>El teléfono no pudo restaurar el grupo.</translation>
+    </message>
+    <message>
+        <source>This is not the QR code of a CBB recovery sheet.</source>
+        <translation>Este no es el código QR de una hoja de recuperación de CBB.</translation>
+    </message>
+    <message>
+        <source>The group's root cancelled the claim to restore the group.</source>
+        <translation>La raíz del grupo canceló la solicitud para restaurar el grupo.</translation>
+    </message>
+    <message>
+        <source>The claim to restore the group became void.</source>
+        <translation>La solicitud para restaurar el grupo dejó de ser válida.</translation>
+    </message>
 </context>
 <context>
     <name>JoinPage</name>
@@ -179,6 +235,18 @@
     <message>
         <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
         <translation>En el ordenador raíz del grupo, admite este teléfono como administrador con este código: en la app CBB, añade un dispositivo y elige admitirlo como administrador, o ejecuta cbb pair -qr -admin. Mantén esta pantalla abierta.</translation>
+    </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Unirse con una invitación</translation>
+    </message>
+    <message>
+        <source>Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.</source>
+        <translation>Quien te invitó ve estas palabras en su dispositivo y admite este teléfono si coinciden. Mantén esta pantalla abierta.</translation>
+    </message>
+    <message>
+        <source>Connecting to the group's hub…</source>
+        <translation>Conectando con el hub del grupo…</translation>
     </message>
 </context>
 <context>
@@ -331,6 +399,18 @@
         <source>Off until I turn it on</source>
         <translation>Desactivar hasta que la active</translation>
     </message>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Unirse con una invitación</translation>
+    </message>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Enviar una invitación</translation>
+    </message>
+    <message>
+        <source>Restore with a recovery sheet</source>
+        <translation>Restaurar con una hoja de recuperación</translation>
+    </message>
 </context>
 <context>
     <name>DevicePage</name>
@@ -437,6 +517,22 @@
     <message>
         <source>Device ID</source>
         <translation>ID del dispositivo</translation>
+    </message>
+    <message>
+        <source>Hand the group over</source>
+        <translation>Entregar el grupo</translation>
+    </message>
+    <message>
+        <source>Handing the group over to %1</source>
+        <translation>Entregando el grupo a %1</translation>
+    </message>
+    <message>
+        <source>The group is handed over</source>
+        <translation>El grupo está entregado</translation>
+    </message>
+    <message>
+        <source>Its claim takes the group at once</source>
+        <translation>Su solicitud toma el grupo de inmediato</translation>
     </message>
 </context>
 <context>
@@ -568,6 +664,62 @@
     <message>
         <source>Device</source>
         <translation>Dispositivo</translation>
+    </message>
+    <message>
+        <source>A claim to take the group over waits</source>
+        <translation>Una solicitud para tomar el grupo espera</translation>
+    </message>
+    <message>
+        <source>No time</source>
+        <translation>Nada</translation>
+    </message>
+    <message>
+        <source>1 hour</source>
+        <translation>1 hora</translation>
+    </message>
+    <message>
+        <source>1 day</source>
+        <translation>1 día</translation>
+    </message>
+    <message>
+        <source>3 days</source>
+        <translation>3 días</translation>
+    </message>
+    <message>
+        <source>7 days</source>
+        <translation>7 días</translation>
+    </message>
+    <message>
+        <source>Keys an admin may keep</source>
+        <translation>Claves que puede guardar un administrador</translation>
+    </message>
+    <message>
+        <source>Some admins keep weaker keys; they stay until removed</source>
+        <translation>Algunos administradores guardan claves más débiles; siguen hasta que se eliminen</translation>
+    </message>
+    <message>
+        <source>Proven hardware only</source>
+        <translation>Solo hardware verificado</translation>
+    </message>
+    <message>
+        <source>Hardware</source>
+        <translation>Hardware</translation>
+    </message>
+    <message>
+        <source>Hardware or a file</source>
+        <translation>Hardware o un archivo</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Made</source>
+        <translation>Creada</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Ninguna</translation>
     </message>
 </context>
 <context>
@@ -1199,6 +1351,186 @@
     <message>
         <source>When the phone is not on the home network, it syncs through the WireGuard tunnel of your own hub, a computer of the group set up with cbb global hub; its port is reachable from the internet, but only through WireGuard with the group's keys. The hub answers this phone the next time it connects at home. Nothing goes anywhere else, and without the tunnel there is no connection. Turning it off forgets this phone's tunnel key.</source>
         <translation>Cuando el teléfono no está en la red de casa, se sincroniza por el túnel WireGuard de tu propio hub, un ordenador del grupo configurado con cbb global hub; su puerto es accesible desde internet, pero solo por WireGuard con las claves del grupo. El hub responde a este teléfono la próxima vez que se conecte en casa. Nada va a ningún otro sitio y, sin el túnel, no hay conexión. Al desactivarlo, este teléfono olvida su clave del túnel.</translation>
+    </message>
+</context>
+<context>
+    <name>InvitationPage</name>
+    <message>
+        <source>Join with an invitation</source>
+        <translation>Unirse con una invitación</translation>
+    </message>
+    <message>
+        <source>You are invited to a group</source>
+        <translation>Te invitan a un grupo</translation>
+    </message>
+    <message>
+        <source>Point the camera at the invitation's QR code.</source>
+        <translation>Apunta la cámara al código QR de la invitación.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>La cámara no se inicia: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the invitation's text, cbb://invite…</source>
+        <translation>O pega el texto de la invitación, cbb://invite…</translation>
+    </message>
+    <message>
+        <source>Group</source>
+        <translation>Grupo</translation>
+    </message>
+    <message>
+        <source>Hub</source>
+        <translation>Hub</translation>
+    </message>
+    <message>
+        <source>Valid until</source>
+        <translation>Válida hasta</translation>
+    </message>
+    <message>
+        <source>Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</source>
+        <translation>Únete solo si pediste esta invitación. Quien la creó admite este teléfono cuando ve las palabras que muestra.</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Unirse</translation>
+    </message>
+    <message>
+        <source>Decline</source>
+        <translation>Rechazar</translation>
+    </message>
+</context>
+<context>
+    <name>InvitePage</name>
+    <message>
+        <source>Send an invitation</source>
+        <translation>Enviar una invitación</translation>
+    </message>
+    <message>
+        <source>Opening the invitation on the group's hub…</source>
+        <translation>Abriendo la invitación en el hub del grupo…</translation>
+    </message>
+    <message>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
+        <translation>En un teléfono nuevo, abre CBB, toca Unirse con una invitación y escanea el código. En un ordenador, ejecuta cbb pair -invite con su texto. Sirve una vez, hasta las %1.</translation>
+    </message>
+    <message>
+        <source>%1 joined the group; it appears in the list once it connects.</source>
+        <translation>%1 se unió al grupo; aparece en la lista cuando se conecta.</translation>
+    </message>
+    <message>
+        <source>Show or send the code only to the person who joins: anyone who has it can ask to join.</source>
+        <translation>Muestra o envía el código solo a quien se une: cualquiera que lo tenga puede pedir unirse.</translation>
+    </message>
+    <message>
+        <source>Copy the invitation's text</source>
+        <translation>Copiar el texto de la invitación</translation>
+    </message>
+    <message>
+        <source>Admit %1 (%2)? Admit it only if the device shows the same words:</source>
+        <translation>¿Admitir %1 (%2)? Admítelo solo si el dispositivo muestra las mismas palabras:</translation>
+    </message>
+    <message>
+        <source>Admit</source>
+        <translation>Admitir</translation>
+    </message>
+    <message>
+        <source>Not this one</source>
+        <translation>Este no</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Volver a intentarlo</translation>
+    </message>
+    <message>
+        <source>Invite another device</source>
+        <translation>Invitar otro dispositivo</translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryPage</name>
+    <message>
+        <source>Remove the recovery key</source>
+        <translation>Eliminar la clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Removing the recovery key</source>
+        <translation>Eliminando la clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Make a new recovery key</source>
+        <translation>Crear una nueva clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Make a recovery key</source>
+        <translation>Crear una clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Replacing the recovery key</source>
+        <translation>Reemplazando la clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Recovery key</source>
+        <translation>Clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
+        <translation>Anota la clave o imprime esta página y guárdala en un lugar seguro. Solo se muestra una vez.</translation>
+    </message>
+    <message>
+        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
+        <translation>El grupo tiene una clave de recuperación. Con ella, un ordenador del grupo o un teléfono nuevo toma el grupo si se pierde este teléfono.</translation>
+    </message>
+    <message>
+        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
+        <translation>Una clave de recuperación permite que un ordenador del grupo o un teléfono nuevo tome el grupo si se pierde este teléfono. Desliza hacia abajo para crear una.</translation>
+    </message>
+    <message>
+        <source>I wrote it down</source>
+        <translation>Ya la anoté</translation>
+    </message>
+</context>
+<context>
+    <name>RestorePage</name>
+    <message>
+        <source>Restore the group</source>
+        <translation>Restaurar el grupo</translation>
+    </message>
+    <message>
+        <source>This phone is the group's root now.</source>
+        <translation>Este teléfono es ahora la raíz del grupo.</translation>
+    </message>
+    <message>
+        <source>Looking for a phone or a computer of the group on this network…</source>
+        <translation>Buscando un teléfono o un ordenador del grupo en esta red…</translation>
+    </message>
+    <message>
+        <source>Claiming the group…</source>
+        <translation>Solicitando el grupo…</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
+        <translation>El grupo está restaurado en este teléfono. Pasa a ser la raíz del grupo cuando termine el tiempo de espera, dentro de %1 h, salvo que la raíz cancele la solicitud.</translation>
+    </message>
+    <message>
+        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
+        <translation>El grupo está restaurado en este teléfono. Pasa a ser la raíz del grupo cuando termine el tiempo de espera del grupo, salvo que la raíz cancele la solicitud.</translation>
+    </message>
+    <message>
+        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
+        <translation>Apunta la cámara al código QR de la hoja de recuperación del grupo. Mantén encendido un teléfono o un ordenador del grupo en esta red.</translation>
+    </message>
+    <message>
+        <source>The camera does not start: %1</source>
+        <translation>La cámara no se inicia: %1</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://recover…</source>
+        <translation>O pega el texto del código, cbb://recover…</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Intentar de nuevo</translation>
     </message>
 </context>
 </TS>

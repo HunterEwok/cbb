@@ -11,6 +11,7 @@
 //! does not reach.
 
 use std::collections::HashMap;
+use std::io::Write as _;
 use std::net::{IpAddr, SocketAddr, SocketAddrV6, TcpListener};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -22,6 +23,53 @@ use crate::node::Node;
 use crate::pair::home_address;
 
 const SERVICE: &str = "_cbb._tcp.local.";
+
+/// The file CBB_MDNS_TRACE names, for the tests: every event browsing
+/// sees and mdns-sd's own debug log (the packets it sends and takes, its
+/// cache), with the time, so that a member that does not find another on
+/// CI can be told from what mDNS did.
+fn trace_file() -> Option<&'static Mutex<std::fs::File>> {
+    static FILE: std::sync::OnceLock<Option<Mutex<std::fs::File>>> = std::sync::OnceLock::new();
+    FILE.get_or_init(|| {
+        let path = std::env::var_os("CBB_MDNS_TRACE")?;
+        let f = std::fs::OpenOptions::new().create(true).append(true).open(path).ok()?;
+        Some(Mutex::new(f))
+    })
+    .as_ref()
+}
+
+/// Writes a line to the trace, after the time of day in UTC.
+fn trace(line: &str) {
+    let Some(f) = trace_file() else { return };
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    let (s, ms) = (now.as_secs() % 86400, now.subsec_millis());
+    let mut f = f.lock().unwrap_or_else(|e| e.into_inner());
+    let _ = writeln!(f, "{:02}:{:02}:{:02}.{ms:03} {line}", s / 3600, s / 60 % 60, s % 60);
+}
+
+/// Hands mdns-sd's debug log to the trace.
+struct TraceLog;
+
+impl log::Log for TraceLog {
+    fn enabled(&self, m: &log::Metadata) -> bool {
+        m.level() <= log::Level::Debug && m.target().starts_with("mdns_sd")
+    }
+
+    fn log(&self, r: &log::Record) {
+        if self.enabled(r.metadata()) {
+            trace(&format!("mdns-sd {}: {}", r.level(), r.args()));
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+/// Starts the trace when CBB_MDNS_TRACE names a file.
+fn start_trace() {
+    if trace_file().is_some() && log::set_logger(&TraceLog).is_ok() {
+        log::set_max_level(log::LevelFilter::Debug);
+    }
+}
 
 /// Announces a device that listens to join (docs/protocol.md section 3,
 /// TXT `j=1` and `f`, its certificate's fingerprint), so that a computer of
@@ -93,6 +141,14 @@ pub fn find_joiners(wait: Duration) -> crate::error::Result<Vec<(Vec<SocketAddr>
     Ok(waiting.into_values().collect())
 }
 
+/// The addresses of the members of the group tag that browsing finds, one
+/// list for each member, for a new phone that restores the group with its
+/// recovery key: browsed for up to wait, then a moment more for the others.
+pub fn find_group(tag: &str, wait: Duration) -> crate::error::Result<Vec<Vec<SocketAddr>>> {
+    let found = browse_txt(wait, |info| (info.get_property_val_str("g") == Some(tag)).then_some(()))?;
+    Ok(found.into_values().map(|(a, ())| a).collect())
+}
+
 /// Browses for up to wait for the members whose TXT pick takes, then a
 /// moment more for the others; by instance name, their addresses and what
 /// pick made of them.
@@ -108,12 +164,14 @@ fn browse_txt<T>(
         let _ = daemon.disable_interface(mdns_sd::IfKind::All);
         let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
     }
+    start_trace();
     let rx = daemon.browse(SERVICE).map_err(|e| Error::with("cannot browse with mDNS", e))?;
     let mut found = std::collections::BTreeMap::new();
     let mut deadline = std::time::Instant::now() + wait;
     let mut settled = false;
     while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
         let Ok(ev) = rx.recv_timeout(left) else { break };
+        trace(&format!("pairing browse: {ev:?}"));
         let mdns_sd::ServiceEvent::ServiceResolved(info) = ev else { continue };
         let Some(v) = pick(&info) else { continue };
         let addrs = order(dial_addrs(&info).into_iter());
@@ -529,11 +587,13 @@ fn browse(
         let _ = daemon.disable_interface(mdns_sd::IfKind::All);
         let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
     }
+    start_trace();
     let me = node.identity().id.clone();
     if let Ok(events) = daemon.monitor() {
         let n = node.clone();
         std::thread::spawn(move || {
             while let Ok(ev) = events.recv() {
+                trace(&format!("daemon: {ev:?}"));
                 if let mdns_sd::DaemonEvent::NameChange(c) = ev {
                     n.logf(&format!(
                         "cbb: mDNS renamed {} to {}: another device answers for the name",
@@ -656,6 +716,7 @@ fn browse(
             }
             continue;
         };
+        trace(&format!("{me}: {ev:?}"));
         match ev {
             mdns_sd::ServiceEvent::ServiceResolved(info) => {
                 let Some(id) = instance_id(&info.fullname) else { continue };
