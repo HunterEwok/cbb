@@ -94,6 +94,22 @@ impl<'a> Value<'a> {
     }
 }
 
+/// Whether an array is a set as section 1 defines it: sorted bytewise by
+/// each element's encoding (an array element by its first element's), each
+/// value once.
+pub fn is_set(items: &[Value<'_>]) -> bool {
+    fn key(v: &Value<'_>) -> Vec<u8> {
+        match v {
+            Value::Array(a) => a.first().map(Value::encode).unwrap_or_default(),
+            x => x.encode(),
+        }
+    }
+    items.windows(2).all(|w| match w {
+        [a, b] => key(a) < key(b),
+        _ => true,
+    })
+}
+
 /// Reads b as exactly one item of the profile.
 pub fn decode(b: &[u8]) -> Result<Value<'_>, Rule> {
     let mut r = Reader { b, pos: 0 };

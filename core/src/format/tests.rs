@@ -272,6 +272,93 @@ fn grants() {
     }
 }
 
+/// The set fields of a record type (section 1 "Sets"): sorted fields, and
+/// `hubs`, each device once in the user's order.
+fn record_sets(typ: u64) -> (&'static [u16], &'static [u16]) {
+    match typ {
+        2 | 3 => (&[10, 11], &[]),
+        4 | 6 => (&[10], &[]),
+        5 => (&[11], &[]),
+        9 => (&[10, 11], &[]),
+        10 => (&[], &[10]),
+        _ => (&[], &[]),
+    }
+}
+
+/// Whether the sets of a record body keep their order and hold each value
+/// once.
+fn record_sets_hold(m: &Value<'_>) -> bool {
+    let typ = m.get(1).and_then(Value::as_uint).unwrap_or(0);
+    let (sorted, once) = record_sets(typ);
+    let arr = |f: u16| m.get(f).and_then(Value::as_array).unwrap_or(&[]);
+    sorted.iter().all(|f| cbor::is_set(arr(*f)))
+        && once.iter().all(|f| {
+            let a = arr(*f);
+            a.iter().enumerate().all(|(i, x)| !a[..i].contains(x))
+        })
+}
+
+#[test]
+fn sets_keep_their_order() {
+    let r = load("records.json");
+    let mut sorted_twice = 0;
+    for t in r["take"].as_array().unwrap() {
+        let eb = unhex(s(t, "envelope"));
+        let e = Envelope::parse(&eb).unwrap();
+        assert!(record_sets_hold(&e.map), "{}", s(t, "name"));
+        let (sorted, once) = record_sets(e.map.get(1).and_then(Value::as_uint).unwrap_or(0));
+        for f in sorted.iter().chain(once) {
+            if e.map.get(*f).and_then(Value::as_array).is_some_and(|a| a.len() >= 2) {
+                sorted_twice += 1;
+            }
+        }
+    }
+    assert!(sorted_twice >= 6, "sets of two or more in the take vectors: {sorted_twice}");
+    let mut refused = 0;
+    for t in r["refuse"].as_array().unwrap() {
+        let rule = s(t, "rule");
+        let eb = unhex(s(t, "envelope"));
+        let Ok(e) = Envelope::parse(&eb) else { continue };
+        let typ = e.map.get(1).and_then(Value::as_uint).unwrap_or(0);
+        let field = rule.rsplit('/').next().unwrap();
+        let is_set_rule = ["keys", "seen", "records", "heads", "keep", "hubs"].contains(&field)
+            && (typ == 2 || typ == 4 || typ == 9 || typ == 10);
+        if is_set_rule {
+            assert!(!record_sets_hold(&e.map), "{}", s(t, "name"));
+            refused += 1;
+        }
+    }
+    assert_eq!(refused, 9);
+    let fr = load("frames.json");
+    for t in fr["refuse_fields"].as_array().unwrap() {
+        let b = unhex(s(t, "message"));
+        let mut v = cbor::decode(&b).unwrap();
+        for k in t["path"].as_array().unwrap() {
+            v = v.get(k.as_u64().unwrap() as u16).unwrap().clone();
+        }
+        assert!(!cbor::is_set(v.as_array().unwrap()), "{}", s(t, "name"));
+    }
+    for t in fr["take"].as_array().unwrap() {
+        let fb = unhex(s(t, "frame"));
+        let f = frame::read(&fb, frame::LIMIT_MEMBER).unwrap();
+        let set = match f.t {
+            6 | 18 => f.map.get(2),
+            67 => f.map.get(3).and_then(|w| w.get(3)),
+            _ => None,
+        };
+        if let Some(a) = set {
+            let a = a.as_array().unwrap();
+            assert!(a.len() >= 2 && cbor::is_set(a), "{}", s(t, "name"));
+        }
+    }
+    let c = load("copy.json");
+    for t in c["refuse_readers"].as_array().unwrap() {
+        let b = unhex(s(t, "copy"));
+        let v = cbor::decode(&b).unwrap();
+        assert_eq!(copy::Copy::from_value(&v).err().map(Rule::name), Some(s(t, "rule")), "{}", s(t, "name"));
+    }
+}
+
 #[test]
 fn frames() {
     let f = load("frames.json");
