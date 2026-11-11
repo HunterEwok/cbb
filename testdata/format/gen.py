@@ -932,7 +932,11 @@ def message_vectors(records_take):
 def container_vector():
     """The key container (task 2's tested template): a pure function of the point.
     Serial = SHA-256(point)[0..16] with the first byte 0x40 | (b & 0x3f);
-    signature the constant ECDSA r=1, s=1 (pending the owner, section 12)."""
+    writers write the constant ECDSA signature r=1, s=1 (owner, section 12).
+    Readers are tolerant of the signature's value but not of its form: a BIT
+    STRING with no unused bits holding SEQUENCE { INTEGER r, INTEGER s }, each
+    integer 1 to 33 bytes, every length exact, the whole value at most 72
+    bytes; so a later writer may sign for real and old readers still read it."""
     def tlv(tag, body):
         n = len(body)
         if n < 128:
@@ -946,7 +950,11 @@ def container_vector():
     alg = tlv(0x30, tlv(0x06, bytes.fromhex("2a8648ce3d040302")))  # ecdsa-with-SHA256
     name = tlv(0x30, tlv(0x31, tlv(0x30, tlv(0x06, bytes.fromhex("550403")) + tlv(0x0C, b"cbb"))))
     validity = tlv(0x30, tlv(0x17, b"700101000000Z") + tlv(0x18, b"99991231235959Z"))
-    sig = tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01") + tlv(0x02, b"\x01")))
+
+    def sigbits(r, s, unused=b"\x00"):
+        return tlv(0x03, unused + tlv(0x30, tlv(0x02, r) + tlv(0x02, s)))
+
+    sig = sigbits(b"\x01", b"\x01")
 
     def serial(pub):
         h = bytearray(sha(pub)[:16])
@@ -957,22 +965,28 @@ def container_vector():
         return tlv(0x30, tlv(0x30, tlv(0x06, bytes.fromhex("2a8648ce3d0201")) +
                              tlv(0x06, bytes.fromhex("2a8648ce3d030107"))) + tlv(0x03, b"\x00" + pub))
 
-    def tbs(pub, ser=None):
-        return tlv(0x30, tlv(0xA0, tlv(0x02, b"\x02")) + tlv(0x02, ser or serial(pub)) + alg + name +
-                   validity + name + spki(pub))
+    def tbs(pub, ser=None, nm=None, val=None):
+        return tlv(0x30, tlv(0xA0, tlv(0x02, b"\x02")) + tlv(0x02, ser or serial(pub)) + alg + (nm or name) +
+                   (val or validity) + (nm or name) + spki(pub))
 
-    def cont(pub):
-        return tlv(0x30, tbs(pub) + alg + sig)
+    def cont(pub, sg=None, t=None):
+        return tlv(0x30, (t or tbs(pub)) + alg + (sg if sg is not None else sig))
 
-    # task 2's vectors must come out byte for byte
-    task2 = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         "../../research-0.6/key-container/template-vectors.json")
-    matched = 0
-    if os.path.exists(task2):
-        for v in json.load(open(task2))["Vectors"]:
-            if v["Valid"]:
-                assert cont(bytes.fromhex(v["Point"])).hex() == v["Container"], v["Seed"]
-                matched += 1
+    # task 2's valid vectors (research-0.6/key-container/template-vectors.json),
+    # test keys with private scalar = SHA-256(seed) mod n
+    task2 = []
+    for seed in ["cbb template vector 1", "cbb template vector 2", "cbb template vector 3"]:
+        d = int.from_bytes(sha(seed.encode()), "big") % N
+        pub = ec.derive_private_key(d, ec.SECP256R1()).public_key().public_bytes(
+            serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+        task2.append({"name": "task 2: " + seed, "point": pub.hex(), "cert": cont(pub).hex()})
+    known = {
+        "cbb template vector 1": "3081da3081c0a003020102021077818a50cfe1f620aac55d75044e9e81",
+        "cbb template vector 2": "3081da3081c0a0030201020210722f8eea3d334e2524303f826dcbc3e8",
+        "cbb template vector 3": "3081da3081c0a00302010202106e1b0b6babdcd5f857c5610fcaee7396",
+    }
+    for v in task2:
+        assert v["cert"].startswith(known[v["name"][len("task 2: "):]]), v["name"]
     t = tbs(LAPTOP.pub)
     c = cont(LAPTOP.pub)
     from cryptography import x509
@@ -981,20 +995,64 @@ def container_vector():
                                         serialization.PublicFormat.UncompressedPoint) == LAPTOP.pub
     i = t.index(LAPTOP.pub)
     assert len(t) == 195 and len(c) == 221 and i == 130 and t[10:26] == serial(LAPTOP.pub)
-    # TBS 192 bytes after its header; the key at offset 133 of the container (130 of the TBS)
+
+    # A real self-signature, as a later writer may make it (RFC 6979, so the
+    # bytes are fixed); its integers in DER, 32 or 33 bytes each.
+    der = LAPTOP.priv.sign(t, ec.ECDSA(hashes.SHA256(), deterministic_signing=True))
+    real = tlv(0x30, t + alg + tlv(0x03, b"\x00" + der))
+    xr = x509.load_der_x509_certificate(real)
+    LAPTOP.priv.public_key().verify(xr.signature, xr.tbs_certificate_bytes, ec.ECDSA(hashes.SHA256()))
+    big = b"\x00" + b"\xff" * 32
+    take = task2 + [
+        {"name": "the laptop's container", "point": LAPTOP.pub.hex(), "cert": c.hex()},
+        {"name": "a real self-signature", "point": LAPTOP.pub.hex(), "cert": real.hex()},
+        {"name": "integers of 33 bytes (72 in all)", "point": LAPTOP.pub.hex(),
+         "cert": cont(LAPTOP.pub, sigbits(big, big)).hex()},
+        {"name": "integer zero", "point": LAPTOP.pub.hex(),
+         "cert": cont(LAPTOP.pub, sigbits(b"\x00", b"\x01")).hex()},
+    ]
+    other = tlv(0x30, tlv(0x31, tlv(0x30, tlv(0x06, bytes.fromhex("550403")) + tlv(0x0C, b"cbc"))))
+    later = tlv(0x30, tlv(0x17, b"700101000001Z") + tlv(0x18, b"99991231235959Z"))
+    p = LAPTOP.pub
+    flipped = bytearray(c)
+    flipped[60] ^= 0x01
+    refuse = [
+        {"name": "serial not derived from the key", "cert": cont(p, t=tbs(p, serial(BOARD.pub))).hex()},
+        {"name": "key off the curve", "cert": cont(b"\x04" + bytes(64)).hex()},
+        {"name": "another name", "cert": cont(p, t=tbs(p, nm=other)).hex()},
+        {"name": "another date", "cert": cont(p, t=tbs(p, val=later)).hex()},
+        {"name": "a byte of the TBS changed", "cert": bytes(flipped).hex()},
+        {"name": "a byte after the container", "cert": (c + b"\x00").hex()},
+        {"name": "cut short", "cert": c[:-1].hex()},
+        {"name": "outer length not exact", "cert": (b"\x30\x81\xdb" + c[3:] + b"\x00").hex()},
+        {"name": "outer length in a longer form", "cert": (b"\x30\x82\x00\xda" + c[3:]).hex()},
+        {"name": "another signature algorithm",
+         "cert": tlv(0x30, t + tlv(0x30, tlv(0x06, bytes.fromhex("2a8648ce3d040303"))) + sig).hex()},
+        {"name": "unused bits in the signature", "cert": cont(p, sigbits(b"\x01", b"\x01", b"\x01")).hex()},
+        {"name": "signature not a SEQUENCE", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x31, tlv(0x02, b"\x01") + tlv(0x02, b"\x01")))).hex()},
+        {"name": "one integer", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01")))).hex()},
+        {"name": "three integers", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01") * 3))).hex()},
+        {"name": "empty integer", "cert": cont(p, sigbits(b"", b"\x01")).hex()},
+        {"name": "integer of 34 bytes", "cert": cont(p, sigbits(b"\x00" * 2 + b"\xff" * 32, b"\x01")).hex()},
+        {"name": "not an integer", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x04, b"\x01") + tlv(0x02, b"\x01")))).hex()},
+        {"name": "a byte after the integers", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01") + tlv(0x02, b"\x01") + b"\x00"))).hex()},
+        {"name": "a byte after the SEQUENCE", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01") + tlv(0x02, b"\x01")) + b"\x00")).hex()},
+        {"name": "empty signature", "cert": cont(p, b"\x03\x00").hex()},
+        {"name": "an ordinary certificate of the same key", "note": "an extension, a SAN or any other name: the TBS differs from the template"},
+    ]
+    for r in refuse:
+        if "cert" in r:
+            assert r["cert"] != c.hex()
     return {
-        "source": "the template task 2 tested on five TLS stacks (research-0.6/key-container); gen.py checks its valid vectors byte for byte when that file is beside it",
+        "source": "the template task 2 tested on five TLS stacks (research-0.6/key-container/report-ru.md, sections 2 and 7)",
+        "reader": "the TBS byte for byte the template with the point and its serial; the point on the curve; ecdsa-with-SHA256; the signature a BIT STRING with no unused bits holding SEQUENCE { INTEGER, INTEGER }, each integer 1 to 33 bytes, every length exact, at most 72 bytes; its value is not read",
         "tbs_template_hex": t[:10].hex() + "<16-byte serial>" + t[26:i].hex() + "<65-byte key>" + t[i + 65:].hex(),
         "key_offset_in_tbs": i,
         "tbs_length": len(t),
         "example_cert": c.hex(), "example_key_hash": LAPTOP.hash.hex(),
         "example_device_id": LAPTOP.id16.hex(), "example_serial": serial(LAPTOP.pub).hex(),
-        "refuse": [
-            {"name": "serial not derived from the key",
-             "cert": tlv(0x30, tbs(LAPTOP.pub, serial(BOARD.pub)) + alg + sig).hex()},
-            {"name": "key off the curve", "cert": cont(b"\x04" + bytes(64)).hex()},
-            {"name": "any extension", "note": "the template has no extensions field; a certificate with one is refused"},
-        ],
+        "take": take,
+        "refuse": refuse,
     }
 
 

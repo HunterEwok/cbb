@@ -418,20 +418,11 @@ fn key_container() {
             assert_eq!(container::read(&unhex(b)), Err(Rule::CONTAINER), "{}", s(r, "name"));
         }
     }
-    // Another signature of up to 80 bytes is not read; a longer one, or
-    // anything after it, is refused.
-    let tbs = container::tbs(&point);
-    let alg = [0x30, 0x0a, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02];
-    for (n, ok) in [(73usize, true), (80, true), (81, false)] {
-        let mut inner = tbs.to_vec();
-        inner.extend_from_slice(&alg);
-        inner.push(0x03);
-        inner.push(n as u8);
-        inner.extend(std::iter::repeat_n(0u8, n));
-        let mut der = vec![0x30, 0x82];
-        der.extend_from_slice(&(inner.len() as u16).to_be_bytes());
-        der.extend_from_slice(&inner);
-        assert_eq!(container::read(&der).is_ok(), ok, "{n}");
+    // The tolerant reader: any signature value in its form, the constant
+    // one, a real self-signature, the longest integers.
+    for t in c["take"].as_array().unwrap() {
+        let got = container::read(&unhex(s(t, "cert"))).unwrap_or_else(|r| panic!("{}: {r}", s(t, "name")));
+        assert_eq!(hex(&got), s(t, "point"), "{}", s(t, "name"));
     }
     let mut trailing = cert.clone();
     trailing.push(0);

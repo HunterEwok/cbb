@@ -20,6 +20,7 @@ import (
 	"crypto/elliptic"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -740,19 +741,66 @@ func main() {
 	fmt.Printf("%-18s checked\n", "copy.json")
 
 	// container: the TBS byte for byte with the key and its serial, the point on the curve;
-	// the signature's value is not read (section 12)
+	// the signature in its form (SEQUENCE of two INTEGERs of 1 to 33 bytes, at most 72 bytes),
+	// its value not read (section 12)
 	var ct struct {
 		Cert    string `json:"example_cert"`
 		KeyHash string `json:"example_key_hash"`
-		Refuse  []struct {
+		Take    []struct {
+			Name  string `json:"name"`
+			Point string `json:"point"`
+			Cert  string `json:"cert"`
+		} `json:"take"`
+		Refuse []struct {
 			Name string `json:"name"`
 			Cert string `json:"cert"`
 		} `json:"refuse"`
 	}
 	load(dir, "container.json", &ct)
+	sigForm := func(v asn1.BitString) error {
+		if v.BitLength%8 != 0 || len(v.Bytes) > 72 {
+			return errors.New("signature length")
+		}
+		var seq asn1.RawValue
+		rest, err := asn1.Unmarshal(v.Bytes, &seq)
+		if err != nil || len(rest) != 0 || seq.Class != asn1.ClassUniversal || seq.Tag != asn1.TagSequence {
+			return errors.New("signature not a SEQUENCE")
+		}
+		ints, err := elements(seq.Bytes)
+		if err != nil || len(ints) != 2 {
+			return errors.New("signature not two elements")
+		}
+		for _, i := range ints {
+			if i.Class != asn1.ClassUniversal || i.Tag != asn1.TagInteger || len(i.Bytes) < 1 || len(i.Bytes) > 33 {
+				return errors.New("signature integer")
+			}
+		}
+		return nil
+	}
 	container := func(der []byte) ([]byte, error) {
 		cert, err := x509.ParseCertificate(der)
 		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(cert.Raw, der) {
+			return nil, errors.New("bytes after the certificate")
+		}
+		var seq asn1.RawValue
+		if rest, err := asn1.Unmarshal(der, &seq); err != nil || len(rest) != 0 {
+			return nil, errors.New("outer form")
+		}
+		parts, err := elements(seq.Bytes)
+		if err != nil || len(parts) != 3 {
+			return nil, errors.New("outer form")
+		}
+		var sig asn1.BitString
+		if rest, err := asn1.Unmarshal(parts[2].FullBytes, &sig); err != nil || len(rest) != 0 {
+			return nil, errors.New("signature not a BIT STRING")
+		}
+		if !bytes.Equal(parts[1].FullBytes, []byte{0x30, 0x0a, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02}) {
+			return nil, errors.New("signature algorithm")
+		}
+		if err := sigForm(sig); err != nil {
 			return nil, err
 		}
 		pk, ok := cert.PublicKey.(*ecdsa.PublicKey)
@@ -776,6 +824,13 @@ func main() {
 	} else if !bytes.Equal(pub, byHash[ct.KeyHash]) {
 		fail("container key")
 	}
+	for _, t := range ct.Take {
+		if pub, err := container(unhex(t.Cert)); err != nil {
+			fail("container %s: %v", t.Name, err)
+		} else if !bytes.Equal(pub, unhex(t.Point)) {
+			fail("container %s: key", t.Name)
+		}
+	}
 	for _, r := range ct.Refuse {
 		if r.Cert == "" {
 			continue
@@ -791,6 +846,21 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Println("all good")
+}
+
+// elements splits the contents of a SEQUENCE into its elements.
+func elements(b []byte) ([]asn1.RawValue, error) {
+	var out []asn1.RawValue
+	for len(b) > 0 {
+		var v asn1.RawValue
+		rest, err := asn1.Unmarshal(b, &v)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+		b = rest
+	}
+	return out, nil
 }
 
 func mustHashOf(name string, rows []keyRow) string {
