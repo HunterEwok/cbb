@@ -1586,6 +1586,12 @@ All notable changes to cbb are documented in this file. The format follows
   whose BPF maps fail on small boards, and the installer pairs at once, as on OpenWrt, which
   always runs `cbb` alone. `cbb update` takes the system's archive, `cbb version` no longer
   names a kind of member, and the crate is `cbb-member`.
+- The test bench follows the one archive: the inventory has no `linux-lite` any more, a small
+  board is `os = "linux"` (the example's device `small`), and `peer = true` marks a Linux device
+  in another subnet, which the bench tells the hub's address with `-peer` and which joins at the
+  address `cbb pair` prints. Every Linux device joins as the service's user; I1 runs
+  `get.sh --no-helper`; the hub moves and sync away from home skip only a container and a MIPS
+  build, which has no tunnel; the quick reset keeps the installer's drop-ins.
 - The tunnel's disguise on a hub is now "Strict networks", two switches in the tray, Mac,
   iPhone and Android apps: networks that block VPNs (AmneziaWG) and networks that let only the
   web through (VLESS, which needs the first).
