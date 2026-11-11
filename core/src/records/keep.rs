@@ -9,8 +9,10 @@
 //! bytes it starts (2 MiB over 4096 records), and a claim 63 more, since it
 //! brings a new root key. 4096 units hold at most 4096 records and 2 MiB.
 //!
-//! Each key's records are taken in its own order (seq, then ID; records of
-//! one seq with other IDs count against the same ceiling). At level s a
+//! Each key's records are taken in its own order: its checkpoints first,
+//! the newest first, so that a key at its ceiling can still checkpoint and
+//! free room; then the rest by seq, then ID (records of one seq with other
+//! IDs count against the same ceiling). At level s a
 //! key keeps the longest start of that order within min(s, its ceiling)
 //! units. A key's demand at s is min(s, its ceiling, all its units); s is
 //! the highest level at which the demands fit in 4096 units. So a key whose
@@ -47,6 +49,19 @@ pub struct Item {
     pub seq: u64,
     pub id: RecordId,
     pub units: u64,
+    /// A checkpoint: it comes first in its key's order.
+    pub checkpoint: bool,
+}
+
+/// A record's place in its key's order.
+pub type Pos = (bool, u64, RecordId);
+
+impl Item {
+    /// Its place in its key's order: checkpoints first, the newest first;
+    /// then the rest by seq and ID.
+    pub fn pos(&self) -> Pos {
+        if self.checkpoint { (false, u64::MAX.saturating_sub(self.seq), self.id) } else { (true, self.seq, self.id) }
+    }
 }
 
 /// The units of a record of size bytes.
@@ -68,7 +83,7 @@ pub struct Cut {
     /// For each key, the first record of its order it dropped and the
     /// units of the records dropped from there: nothing after it is kept,
     /// and the units still count in the key's demand.
-    marks: BTreeMap<KeyHash, ((u64, RecordId), u64)>,
+    marks: BTreeMap<KeyHash, (Pos, u64)>,
 }
 
 /// The highest level: past it no ceiling binds.
@@ -83,8 +98,8 @@ impl Default for Cut {
 impl Cut {
     /// Reports whether a record comes at or after the first record its key
     /// dropped: it is not kept.
-    pub fn past(&self, signer: &KeyHash, seq: u64, id: &RecordId) -> bool {
-        self.marks.get(signer).is_some_and(|(m, _)| (seq, *id) >= *m)
+    pub fn past(&self, it: &Item) -> bool {
+        self.marks.get(&it.signer).is_some_and(|(m, _)| it.pos() >= *m)
     }
 }
 
@@ -98,7 +113,7 @@ pub fn keep(items: &[Item], ceiling_of: impl Fn(&KeyHash) -> u64) -> BTreeSet<Re
 pub fn keep_after(items: &[Item], ceiling_of: impl Fn(&KeyHash) -> u64, cut: &Cut) -> (BTreeSet<RecordId>, Cut) {
     let mut by_key: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
     for it in items {
-        if !cut.past(&it.signer, it.seq, &it.id) {
+        if !cut.past(it) {
             by_key.entry(it.signer).or_default().push(it);
         }
     }
@@ -112,7 +127,7 @@ pub fn keep_after(items: &[Item], ceiling_of: impl Fn(&KeyHash) -> u64, cut: &Cu
     let keys: Vec<Key> = by_key
         .into_iter()
         .map(|(hash, mut items)| {
-            items.sort_by_key(|it| (it.seq, it.id));
+            items.sort_by_key(|it| it.pos());
             items.dedup_by_key(|it| it.id);
             let dropped = cut.marks.get(&hash).map_or(0, |(_, u)| *u);
             let total = items.iter().fold(dropped, |t, it| t.saturating_add(it.units));
@@ -137,7 +152,7 @@ pub fn keep_after(items: &[Item], ceiling_of: impl Fn(&KeyHash) -> u64, cut: &Cu
     for k in &keys {
         let cap = level.min(k.ceiling);
         let mut used = 0u64;
-        let mut first_out: Option<(u64, RecordId)> = None;
+        let mut first_out: Option<Pos> = None;
         let mut out_units = 0u64;
         for it in &k.items {
             let u = used.saturating_add(it.units);
@@ -145,7 +160,7 @@ pub fn keep_after(items: &[Item], ceiling_of: impl Fn(&KeyHash) -> u64, cut: &Cu
                 used = u;
                 kept.insert(it.id);
             } else {
-                first_out.get_or_insert((it.seq, it.id));
+                first_out.get_or_insert(it.pos());
                 out_units = out_units.saturating_add(it.units);
             }
         }
@@ -179,7 +194,7 @@ mod tests {
         id[5..13].copy_from_slice(&seq.to_be_bytes());
         // One ID is one record: the size is part of it.
         id[13..21].copy_from_slice(&(size as u64).to_be_bytes());
-        Item { signer: KeyHash([signer; 32]), seq, id: RecordId(id), units: units(size, false) }
+        Item { signer: KeyHash([signer; 32]), seq, id: RecordId(id), units: units(size, false), checkpoint: false }
     }
 
     /// Key 0 plays the group's first root.
@@ -248,12 +263,41 @@ mod tests {
         assert_eq!(keep(&items, ceil).len(), 4);
     }
 
+    /// A key at its ceiling still keeps its newest checkpoint.
+    #[test]
+    fn a_full_key_keeps_its_checkpoint() {
+        let mut items: Vec<Item> = (1..=300).map(|s| item(0, s, 0, 100)).collect();
+        let mut cp = item(0, 301, 0, 60_000);
+        cp.checkpoint = true;
+        items.push(cp);
+        let mut old = item(0, 150, 1, 60_000);
+        old.checkpoint = true;
+        items.push(old);
+        let kept = keep(&items, ceil);
+        assert!(kept.contains(&cp.id) && kept.contains(&old.id));
+        let (_, cut) = keep_after(&items[..300], ceil, &Cut::default());
+        let (kept, _) = keep_after(&[cp], ceil, &cut);
+        assert!(kept.contains(&cp.id));
+    }
+
     fn arb_items() -> impl Strategy<Value = Vec<Item>> {
         prop::collection::vec(
-            (0u8..8, 1u64..60, 0u32..4, prop::sample::select(vec![200usize, 700, 2_000, 9_000, 60_000])),
+            (0u8..8, 1u64..60, 0u32..4, prop::sample::select(vec![200usize, 700, 2_000, 9_000, 60_000]), 0u8..8),
             0..500,
         )
-        .prop_map(|v| v.into_iter().map(|(k, s, n, b)| item(k, s, n, b)).collect())
+        .prop_map(|v| {
+            v.into_iter()
+                .map(|(k, s, n, b, c)| {
+                    let mut it = item(k, s, n, b);
+                    // A checkpoint is another record: its own ID.
+                    if c == 0 {
+                        it.checkpoint = true;
+                        it.id.0[31] = 1;
+                    }
+                    it
+                })
+                .collect()
+        })
     }
 
     proptest! {

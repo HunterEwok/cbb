@@ -201,6 +201,9 @@ pub struct State {
     pub recovery: Option<KeyHash>,
     /// The records that count.
     pub counting: BTreeSet<RecordId>,
+    /// Every device ID a kept device record names, counting or not, a
+    /// removed device's included: a new device never takes one.
+    pub named: BTreeSet<DeviceId>,
 }
 
 impl State {
@@ -217,6 +220,30 @@ impl State {
     /// stop (rule 8).
     pub fn is_root(&self, k: &KeyHash) -> bool {
         self.roots.last() == Some(k)
+    }
+
+    /// Reports whether key k has two histories.
+    pub fn two_histories(&self, k: &KeyHash) -> bool {
+        self.conflicts.iter().any(|c| c.kind == ConflictKind::TwoHistories && c.signers.contains(k))
+    }
+
+    /// Reports whether a device ID is taken: a kept device record names it.
+    pub fn id_taken(&self, id: &DeviceId) -> bool {
+        self.named.contains(id)
+    }
+
+    /// Reports whether a command signed by key k may be carried out: the
+    /// current root's, unless it has two histories; an admin's that is
+    /// neither removed nor frozen, while the group is not stopped and the
+    /// key has one history. Nothing else signs commands.
+    pub fn may_command(&self, k: &KeyHash) -> bool {
+        if self.two_histories(k) || self.revoked.contains(k) {
+            return false;
+        }
+        if self.is_root(k) {
+            return true;
+        }
+        self.stop != Stop::Full && self.devices.iter().any(|d| d.admin.as_ref() == Some(k) && !d.frozen)
     }
 }
 
@@ -371,6 +398,7 @@ pub(crate) fn item(r: &Record) -> super::keep::Item {
         seq: r.body().seq,
         id: r.id(),
         units: super::keep::units(r.size(), claim),
+        checkpoint: matches!(r.body().kind, Kind::Checkpoint { .. }),
     }
 }
 
@@ -604,7 +632,11 @@ impl<'a> Evaluation<'a> {
             if r.b().seq <= 1 || self.anchors.contains(&r.id) {
                 return Ok(true);
             }
-            let Some(&p) = r.b().prev.as_ref().and_then(|p| by_id.get(p)) else { return Ok(false) };
+            // A checkpoint's anchor stands for its chain even when the set
+            // no longer holds it (a full key keeps its checkpoint first).
+            let Some(&p) = r.b().prev.as_ref().and_then(|p| by_id.get(p)) else {
+                return Ok(r.b().prev.as_ref().is_some_and(|p| self.anchors.contains(p)));
+            };
             let Some(prev) = self.recs.get(p) else { return Ok(false) };
             if Some(prev.b().seq) != r.b().seq.checked_sub(1) {
                 return Ok(false);
@@ -755,10 +787,14 @@ impl<'e, 'a> Epoch<'e, 'a> {
         rs
     }
 
+    /// A root's ceiling, its records taken in the keeping's order: its
+    /// checkpoints first, so that a full root can still checkpoint.
     fn cap_roots(&mut self) {
         let roots: Vec<KeyHash> = self.on_path.keys().copied().collect();
         for k in roots {
-            for i in self.in_order(&k).into_iter().skip(MAX_ROOT_RECORDS) {
+            let mut rs = self.of(&k).to_vec();
+            rs.sort_by_key(|&i| item(self.r(i).r).pos());
+            for i in rs.into_iter().skip(MAX_ROOT_RECORDS) {
                 self.capped[i] = true;
             }
         }
@@ -1083,6 +1119,12 @@ impl<'e, 'a> Epoch<'e, 'a> {
         let r = self.r(i);
         let a = &r.b().signer;
         if r.held || !self.admins.contains_key(a) || self.capped[i] {
+            return false;
+        }
+        // The recovery key signs a claim and nothing else.
+        if self.admins.get(a).is_some_and(|&j| matches!(self.r(j).b().kind, Kind::Recovery { .. }))
+            && !matches!(r.b().kind, Kind::Claim { .. })
+        {
             return false;
         }
         match &r.b().kind {
@@ -1690,6 +1732,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// Builds the state of the last epoch.
     fn state(&self) -> State {
         let mut s = State { roots: self.path.clone(), ..State::default() };
+        s.named = self.e.devices.keys().copied().collect();
         let id_conflicts = self.id_conflicts();
         let forked_admin = self.forked.keys().any(|k| !self.on_path.contains_key(k));
         for (id, rs) in &self.e.devices {
@@ -1734,6 +1777,9 @@ impl<'e, 'a> Epoch<'e, 'a> {
         s.nothing_to.sort();
         s.no_secrets_to.sort();
         s.revoked = self.revoked.iter().copied().collect();
+        // A checkpoint may prune a removed device's record; its removal
+        // still names its key.
+        s.named.extend(self.revoked.iter().map(DeviceId::of));
         s.claims = self.claims.clone();
         s.claims.sort_by_key(|c| c.record);
         s.conflicts.extend(self.conflicts.iter().cloned());

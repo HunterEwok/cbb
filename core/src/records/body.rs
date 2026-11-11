@@ -152,6 +152,22 @@ impl Removal {
     pub fn seen_of(&self, signer: &KeyHash) -> u64 {
         seen_of(&self.seen, signer)
     }
+
+    /// The removal signed again (after a root voided its signer's two
+    /// histories): the keys it names keep what the first one saw of them,
+    /// or less, so that nothing they signed in between counts; the other
+    /// entries are the signer's current ones.
+    pub fn signed_again(&self, current: &[Seen]) -> Removal {
+        let mut seen: Vec<Seen> = current
+            .iter()
+            .filter(|c| self.keys.binary_search(&c.key).is_err())
+            .copied()
+            .chain(self.keys.iter().map(|k| Seen { key: *k, seq: self.seen_of(k).min(seen_of(current, k)) }))
+            .filter(|s| s.seq != 0)
+            .collect();
+        seen.sort_by_key(|s| s.key);
+        Removal { keys: self.keys.clone(), seen }
+    }
 }
 
 pub fn seen_of(seen: &[Seen], signer: &KeyHash) -> u64 {

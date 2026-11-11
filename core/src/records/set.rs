@@ -112,7 +112,7 @@ impl RecordSet {
         let Some((key, role)) = self.keys.signer(&r.body().signer) else { return Err(Refused::UnknownSigner) };
         let held = r.verify(key).map_err(Refused::Broken)?;
         let signer = r.body().signer;
-        if self.cut.past(&signer, r.body().seq, &id) {
+        if self.cut.past(&eval::item(&r)) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
