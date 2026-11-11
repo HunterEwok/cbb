@@ -559,8 +559,8 @@ service and its clipboard agent keep syncing without it.
   dialog shows the QR code cbb writes into the file the app made and its six digits, which a
   computer of the group types, and Cancel removes the file. On Linux the file is written over
   without being created, so root never makes a file in `/tmp`.
-- Languages: English and those of `frontend/l10n/` (keyed by the English text; the Go side
-  reads them for the tray), the system's language unless Settings picks one.
+- Languages: English and those of `frontend/l10n/` (keyed by the English text, made from
+  `apps/l10n` by `tools/strings`; the Go side reads them for the tray), the system's language unless Settings picks one.
 
 CI's `tray app` jobs vet, test and build it on Linux and Windows. The release archives carry
 it: Windows' (`cbb-desktop.exe`, built without cgo beside `cbb.exe` and signed with it), whose
@@ -1018,8 +1018,16 @@ the app on real devices.
 ## Languages
 
 - Every user-facing string comes from the platform's catalog from the first screen on: a
-  String Catalog (`Localizable.xcstrings`) on iOS, `strings.xml` resources on Android. No
-  string literal in views.
+  String Catalog (`Localizable.xcstrings`) on iOS and the Mac, `strings.xml` resources on
+  Android, Qt's `.ts` files on Aurora, `frontend/l10n` in the tray app. No string literal in
+  views.
+- All of them are made from one source, `apps/l10n/<language>.json`, by `tools/strings`:
+  `en.json` lists each string once with the apps that show it (`"in"`), each other language's
+  file its translation under the same ID, so a text the apps share is translated once. A new
+  string goes into `en.json` and every language's file, then `go run ./tools/strings` writes
+  the catalogs; `tools/repocheck` fails when a catalog differs from what it makes, when a
+  translation is missing, or when a translation's format directives (`%@`, `%1$s`, `%1`)
+  are not the English text's.
 - English is the source language, translated into the languages of the website: Chinese
   (Simplified), Spanish, Russian, Arabic, Swahili, Hebrew and Hindi. Plurals, numbers and
   dates use the platform's formatters.

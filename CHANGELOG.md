@@ -1569,6 +1569,11 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The apps' strings have one source, `apps/l10n/<language>.json`, from which `tools/strings`
+  writes the String Catalogs of the iPhone, Watch and Mac apps, Android's `strings.xml`, the
+  Aurora app's Qt translations and the tray's texts; a text the apps share is translated once,
+  and `tools/repocheck` fails when a catalog drifts from the source, a translation is missing
+  or its format directives differ from the English.
 - One archive for each system and architecture: small Linux devices install from
   `cbb-linux-<arch>.tar.gz` like any computer, and `get.sh` and `install.sh` decide what goes in.
   `--no-helper` leaves `cbb-helper` out, for a device that needs none of what it does (keys in
@@ -2167,6 +2172,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
+  Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
+  backslash in the same languages on its pairing screen.
 - Builds use Go 1.27.4, which fixes a crash of an HTTP/1 server in the standard library
   (GO-2026-6859), and rustix 1.1.6 (RUSTSEC-2026-0486).
 - Muting or unmuting a device, and turning sync away from home on or off or making a device a
