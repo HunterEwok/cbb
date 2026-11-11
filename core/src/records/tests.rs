@@ -1054,6 +1054,26 @@ fn a_removal_signed_again_keeps_what_it_saw() {
     assert!(later.iter().all(|r| !s.counting.contains(&r.id())));
 }
 
+/// An admin that removes its own key: nothing that key signs after the
+/// removal counts.
+#[test]
+fn an_admin_removing_its_own_key_signs_nothing_after() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE | POWER_REMOVE_ADMINS);
+    let d = g.device(&a, &k("d"), "d", |_| {});
+    let before = g.state();
+    assert!(before.counting.contains(&d.id()));
+    let own = g.rec(&a, Kind::Revoke(removal(&[a.hash], g.seen())));
+    let late = g.device(&a, &k("late"), "late", |_| {});
+    let rv = g.rec(&a, Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    let s = g.state();
+    assert!(s.revoked.contains(&a.hash) && s.counting.contains(&own.id()));
+    assert!(s.counting.contains(&d.id()) && !s.revoked.contains(&k("d").hash));
+    assert!(!s.counting.contains(&late.id()) && !s.counting.contains(&rv.id()));
+    assert!(s.device(&k("late").key.device_id()).is_none());
+}
+
 /// What a command's receiver asks of the state: a key with two histories,
 /// a removed or frozen admin, and every admin during a full stop sign no
 /// command; the root does.
