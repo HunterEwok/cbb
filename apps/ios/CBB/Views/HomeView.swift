@@ -397,14 +397,19 @@ struct DeviceCollection: View {
 /// where it stands.
 struct DeviceTile: View {
     let device: AppModel.Computer
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @Environment(\.themeStyle) private var style
 
     var body: some View {
+        let muted = model.shownMuted(device)
         VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
-            HStack(alignment: .top) {
+            HStack(alignment: .top, spacing: 6) {
                 DeviceIcon(device: device)
-                Spacer()
                 OnlineDot(online: device.online)
+                Spacer(minLength: 0)
             }
+            .padding(.trailing, model.mayMute(device) ? 28 : 0)
             Text(device.name)
                 .font(.system(.headline, design: .monospaced))
                 .lineLimit(1)
@@ -413,9 +418,77 @@ struct DeviceTile: View {
         .padding(Tokens.spacingMedium)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassTile()
+        // Muted, the tile's line turns dashed in the warning colour.
+        .overlay {
+            if muted {
+                RoundedRectangle(cornerRadius: style.radiusTile, style: .continuous)
+                    .strokeBorder(palette.danger, style: StrokeStyle(lineWidth: max(style.stroke, 1), dash: [5, 4]))
+            }
+        }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityValue(device.online ? Text("online") : Text("offline"))
+        .overlay(alignment: .topTrailing) {
+            if model.mayMute(device) { MuteCorner(device: device) }
+        }
+    }
+}
+
+/// The small button in a tile's corner (docs/apps.md, "Muting from the
+/// tile"): on this phone's own tile it turns sync off or on, on another
+/// device's an admin mutes it for the group or unmutes it. A tap holds
+/// until undone; touch and hold picks a time. The tile shows the new state
+/// at once.
+struct MuteCorner: View {
+    let device: AppModel.Computer
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @Environment(\.themeStyle) private var style
+
+    var body: some View {
+        let muted = model.shownMuted(device)
+        Menu {
+            if !muted {
+                ForEach(PauseTime.allCases) { t in
+                    Button { set(true, forMS: t.ms) } label: {
+                        t == .ever && !device.isSelf ? Text("Until an admin unmutes it") : Text(t.title)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(muted ? palette.onAccent : palette.textDim)
+                .frame(width: 28, height: 28)
+                .background(muted ? palette.danger : Color.clear, in: RoundedRectangle(cornerRadius: style.radiusChip, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: style.radiusChip, style: .continuous)
+                    .strokeBorder(muted ? palette.danger : palette.line, lineWidth: max(style.stroke, 1)))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        } primaryAction: {
+            set(!muted, forMS: 0)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: muted)
+        .accessibilityLabel(label(muted))
+        .accessibilityHint(Text(verbatim: device.name))
+        .accessibilityAddTraits(muted ? .isSelected : [])
+    }
+
+    private func label(_ muted: Bool) -> Text {
+        if device.isSelf {
+            return muted ? Text(verbatim: SyncSwitches.syncOffTitle(until: device.syncOff?.until)) : Text("Sync is on")
+        }
+        return muted ? Text("Unmute") : Text("Mute")
+    }
+
+    private func set(_ on: Bool, forMS: Int64) {
+        if device.isSelf {
+            model.turnSync(!on, forMS: forMS)
+        } else {
+            Task { await model.setMuted(device.id, on, forMS: forMS) }
+        }
     }
 }
 
@@ -475,6 +548,11 @@ struct DeviceSubtitle: View {
             if dots { Text(verbatim: "·") }
             Text(mark == .inUse ? "hub in use" : "hub")
                 .foregroundStyle(mark == .inUse ? palette.accent : palette.textDim)
+        }
+        if device.isSelf, let off = device.syncOff {
+            if dots { Text(verbatim: "·") }
+            Text(verbatim: SyncSwitches.syncOffTitle(until: off.until))
+                .foregroundStyle(palette.danger)
         }
         if device.muted != nil {
             if dots { Text(verbatim: "·") }

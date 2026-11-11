@@ -158,6 +158,9 @@ const icons = {
   // The two switches: sync (a house) and sync away from home (a globe).
   house: '<path d="M3.5 11L12 4l8.5 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5.5h4V20"/>',
   globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.4 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.4-3.6-8.5s1.1-5.9 3.6-8.5z"/>',
+  // The mute button in a tile's corner.
+  speaker: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 9a4 4 0 0 1 0 6"/>',
+  "speaker-off": '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6"/>',
   auto: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/>',
   moon: '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
@@ -520,11 +523,67 @@ function cell(ref, level, name, inner) {
   return `<div class="cell" data-ref="${esc(ref)}" data-level="${esc(level)}" data-name="${esc(name)}" draggable="true">${inner}</div>`;
 }
 
+// The mutes asked for and not yet answered, by device: the tile shows the
+// new state at once and goes back only when the change is refused.
+const pendingMute = new Map();
+
+// shownMuted says whether d's tile shows it muted: the answer still
+// awaited, else its mute; for this computer, its sync turned off.
+function shownMuted(d) {
+  if (pendingMute.has(d.id)) return pendingMute.get(d.id);
+  return d.self ? state.status?.mode === "own" : !!d.muted;
+}
+
+// mayMute says whether this computer mutes d from its tile: its own sync
+// always, another device only as an admin.
+const mayMute = (d) => d.self || !!state.devices.find((x) => x.self)?.admin;
+
+// muteLabel is what the corner button says it is.
+function muteLabel(d, muted) {
+  if (d.self) return !muted ? t("Sync is on") : state.status?.sync_until_ms ? t("Sync off until %s", clock(state.status.sync_until_ms)) : t("Sync off");
+  return muted ? t("Unmute") : t("Mute");
+}
+
+// muteCorner is the small button in a tile's corner (docs/apps.md, "Muting
+// from the tile"): a click holds until undone, a right click or a hold
+// picks a time.
+function muteCorner(d, muted) {
+  const label = muteLabel(d, muted);
+  return `<button class="mute-corner${muted ? " on" : ""}" data-mute="${esc(d.id)}" aria-pressed="${muted}" ` +
+    `aria-label="${esc(label + ", " + d.name)}" title="${esc(label)}"><span>${icon(muted ? "speaker-off" : "speaker", 14)}</span></button>`;
+}
+
+// setMute mutes d, or unmutes it, for ms (0 for until undone): this
+// computer's sync, or another device for the group.
+async function setMute(d, on, ms) {
+  pendingMute.set(d.id, on);
+  try {
+    if (d.self) await act("SetSync", "", !on, ms);
+    else if (on) await act("Mute", d.id, ms);
+    else await act("Unmute", d.id);
+  } finally {
+    pendingMute.delete(d.id);
+    render();
+  }
+}
+
+// muteFor asks for how long, then mutes d.
+async function muteFor(d) {
+  const ms = d.self
+    ? await pickTime(t("Turn sync off?"), t("The clipboard is then this computer's own."), t("Until I turn it on"))
+    : await pickTime(t("Mute %s?", d.name), t("Its copies do not reach the group until then; it still takes the group's copies. Any admin unmutes it."), t("Until an admin unmutes it"));
+  if (ms !== null) await setMute(d, true, ms);
+}
+
 function deviceTile(d, level) {
-  return cell("d:" + d.id, level, d.name, `<button class="tile${d.id === selected ? " selected" : ""}" data-id="${esc(d.id)}">` +
+  const muted = shownMuted(d), corner = mayMute(d);
+  const offText = d.self && muted ? muteLabel(d, true) : null;
+  return cell("d:" + d.id, level, d.name, `<div class="tile-box">` +
+    `<button class="tile${d.id === selected ? " selected" : ""}${muted ? " muted" : ""}${corner ? " cornered" : ""}" data-id="${esc(d.id)}">` +
     `<span class="top">${glyph(d)}${dot(d.online || d.self)}</span><span class="name">${esc(d.name)}</span>` +
-    `<span class="dim small">${esc([systems[d.os], d.muted && t("muted")].filter(Boolean).join(" · "))}</span>` +
-    (d.self ? `<span class="dim small">${esc(t("This computer"))}</span>` : "") + `</button>`);
+    `<span class="dim small">${esc([systems[d.os], d.muted && t("muted")].filter(Boolean).join(" · "))}${offText ? `${systems[d.os] || d.muted ? " · " : ""}<span class="danger-text">${esc(offText)}</span>` : ""}</span>` +
+    (d.self ? `<span class="dim small">${esc(t("This computer"))}</span>` : "") + `</button>` +
+    (corner ? muteCorner(d, muted) : "") + `</div>`);
 }
 
 function deviceRow(d, level, inside) {
@@ -662,6 +721,30 @@ document.addEventListener("drop", async (e) => {
   if (from < 0 || to < 0) return;
   await move(d.ref, from < to ? refs[to + 1] ?? null : target);
 });
+// The corner button: a right click, or a hold, picks how long to mute;
+// it opens no tile menu.
+let muteHold = null, muteHeld = false;
+const cornerDevice = (e) => {
+  const b = e.target.closest?.(".mute-corner");
+  return b ? state.devices.find((x) => x.id === b.dataset.mute) : undefined;
+};
+document.addEventListener("contextmenu", (e) => {
+  const d = cornerDevice(e);
+  if (d === undefined) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  clearTimeout(muteHold);
+  if (!muteHeld && d && !shownMuted(d)) muteFor(d);
+}, true);
+document.addEventListener("pointerdown", (e) => {
+  const d = cornerDevice(e);
+  if (d === undefined) return;
+  e.stopImmediatePropagation();
+  muteHeld = false;
+  if (!d || e.button !== 0 || shownMuted(d)) return;
+  muteHold = setTimeout(() => { muteHeld = true; muteFor(d); }, 600);
+}, true);
+for (const ev of ["pointerup", "pointerleave", "pointercancel"]) document.addEventListener(ev, () => clearTimeout(muteHold), true);
 document.addEventListener("contextmenu", (e) => {
   const c = e.target.closest?.(".cell");
   if (!c) return;
@@ -1137,6 +1220,13 @@ document.addEventListener("click", async (e) => {
   if (el.dataset.layout) return saveSettings({ layout: el.dataset.layout });
   if (el.dataset.theme) return saveSettings({ theme: el.dataset.theme });
   if (el.dataset.appearance) return saveSettings({ appearance: el.dataset.appearance });
+  if (el.dataset.mute !== undefined) {
+    e.stopPropagation();
+    if (muteHeld) { muteHeld = false; return; }
+    const d = state.devices.find((x) => x.id === el.dataset.mute);
+    if (d) return setMute(d, !shownMuted(d), 0);
+    return;
+  }
   if (el.dataset.action) return deviceAction(el.dataset.action);
   if (el.dataset.menu) return openMenu(el.dataset.menu, el.dataset.level);
   if (el.dataset.filter) {

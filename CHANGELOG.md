@@ -13,6 +13,10 @@ All notable changes to cbb are documented in this file. The format follows
   Terminal and Retro. They replace the ten accent colours; the default is one field of the
   tokens. A theme draws only the app's own surfaces, the system's controls stay the
   system's. The setting is `theme` (it was `color`), and the watches get the theme's name.
+- A small mute button in the corner of every device tile on the iPhone, Android, the Mac and
+  the tray app: on the device's own tile it turns sync off or on, on another device's an admin
+  mutes it for the group or unmutes it; a long press or a right click picks the time. The
+  tile shows the new state at once and never leaves the list while the command goes out.
 - The installers and uninstallers (`get.sh`, `get.ps1`, Linux, rootless, macOS, FreeBSD,
   OpenWrt and Windows) speak the user's language: Arabic, Chinese, English, Hebrew, Hindi,
   Russian, Spanish or Swahili, from the system's locale (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`,

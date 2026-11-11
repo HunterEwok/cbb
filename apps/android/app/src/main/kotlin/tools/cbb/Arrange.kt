@@ -301,7 +301,7 @@ private fun Arrangeable(
 }
 
 /** A dashed outline around a tile in Arrange mode. */
-private fun Modifier.dashedOutline(color: Color, radius: Dp): Modifier = drawBehind {
+internal fun Modifier.dashedOutline(color: Color, radius: Dp): Modifier = drawBehind {
     val r = radius.toPx()
     drawRoundRect(
         color,

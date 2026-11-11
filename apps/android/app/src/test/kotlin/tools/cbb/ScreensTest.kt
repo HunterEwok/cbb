@@ -5,6 +5,9 @@ package tools.cbb
 
 import android.content.Context
 import android.content.res.Configuration
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -107,6 +110,29 @@ class ScreensTest {
         compose.onNodeWithText(str(R.string.error_details_switch)).performClick()
         compose.waitForIdle()
         assertEquals(!before, model.settings.showsErrorDetails)
+    }
+
+    /**
+     * The mute button in a tile's corner: on this phone's own tile always,
+     * on another device's only on an admin; with sync off, it says so.
+     */
+    @Test
+    fun tileCorner() {
+        model = AppModel(context)
+        val phone = LiveGroup.Device("self", "Pixel", online = true, role = "phone", os = "android", isSelf = true, syncOff = LiveGroup.Hold(null))
+        val mac = LiveGroup.Device("mac", "MacBook", online = true, os = "macos")
+        compose.setContent {
+            CompositionLocalProvider(LocalModel provides model) {
+                Column {
+                    DeviceTile(phone, Modifier, open = {})
+                    DeviceTile(mac, Modifier, open = {})
+                }
+            }
+        }
+        compose.onNodeWithContentDescription("${str(R.string.sync_off)}, Pixel").assertExists()
+        // This phone is no admin: another device's tile has no button.
+        compose.onNodeWithContentDescription("${str(R.string.mute)}, MacBook").assertDoesNotExist()
+        assertTrue(!model.mayMute(mac) && model.shownMuted(phone) && !model.shownMuted(mac))
     }
 
     /** A9: in Russian the Start screen is Russian. */

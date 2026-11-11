@@ -3,6 +3,10 @@
 
 package tools.cbb
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import android.Manifest
 import android.icu.text.MeasureFormat
 import android.icu.util.Measure
@@ -120,7 +124,7 @@ internal fun HomeScreen(model: AppModel) {
     BackgroundSync()
     val wide = LocalConfiguration.current.screenWidthDp >= 720
     val main = { page = if (collection != null) HomePage.COLLECTION else HomePage.MAIN }
-    CompositionLocalProvider(LocalArrange provides arrange) {
+    CompositionLocalProvider(LocalArrange provides arrange, LocalModel provides model) {
         when (page) {
             HomePage.DEVICE -> {
                 val id = selected
@@ -716,17 +720,90 @@ private fun DeviceCollection(devices: List<LiveGroup.Device>, layout: DeviceLayo
 /** A device as a tile: its icon and live dot, its name, its system and where it stands. */
 @Composable
 internal fun DeviceTile(d: LiveGroup.Device, modifier: Modifier, open: (() -> Unit)?, menu: (() -> Unit)? = null) {
-    Column(
-        modifier.glassTile().focusRing().tap(open, menu).padding(Tokens.spacingMedium).liveState(d),
-        verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall),
-    ) {
-        Row(verticalAlignment = Alignment.Top) {
-            DeviceIcon(d)
-            Spacer(Modifier.weight(1f))
-            OnlineDot(d.online)
+    val model = LocalModel.current
+    val muted = model?.shownMuted(d) == true
+    val corner = model?.mayMute(d) == true
+    Box(modifier) {
+        Column(
+            Modifier.fillMaxWidth().glassTile()
+                .then(if (muted) Modifier.dashedOutline(LocalPalette.current.danger, LocalStyle.current.radiusTile) else Modifier)
+                .focusRing().tap(open, menu).padding(Tokens.spacingMedium).liveState(d),
+            verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall),
+        ) {
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                DeviceIcon(d)
+                OnlineDot(d.online)
+                Spacer(Modifier.weight(1f))
+                if (corner) Spacer(Modifier.width(28.dp))
+            }
+            Text(d.name, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            DeviceSubtitle(d)
         }
-        Text(d.name, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        DeviceSubtitle(d)
+        if (model != null && corner) MuteCorner(model, d, muted, Modifier.align(Alignment.TopEnd))
+    }
+}
+
+/** The app's model for the tiles, which reach it through the composition. */
+internal val LocalModel = staticCompositionLocalOf<AppModel?> { null }
+
+/**
+ * The small button in a tile's corner (docs/apps.md, "Muting from the
+ * tile"): on this phone's own tile it turns sync off or on, on another
+ * device's an admin mutes it for the group or unmutes it. A tap holds until
+ * undone; a long press picks a time. The tile shows the new state at once.
+ */
+@Composable
+private fun MuteCorner(model: AppModel, d: LiveGroup.Device, muted: Boolean, modifier: Modifier) {
+    val palette = LocalPalette.current
+    val style = LocalStyle.current
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    var times by remember { mutableStateOf(false) }
+    val label = when {
+        d.isSelf && muted -> d.syncOff?.until?.let { stringResource(R.string.sync_off_until, shortTime(it)) } ?: stringResource(R.string.sync_off)
+        d.isSelf -> stringResource(R.string.sync_on)
+        muted -> stringResource(R.string.unmute)
+        else -> stringResource(R.string.mute)
+    }
+    val shape = RoundedCornerShape(style.radiusChip)
+    Box(modifier) {
+        Box(
+            Modifier.size(44.dp)
+                .combinedClickable(
+                    role = Role.Switch,
+                    onClickLabel = label,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.ToggleOn)
+                        scope.launch { model.muteFromTile(d, !muted) }
+                    },
+                    onLongClickLabel = if (muted) null else stringResource(R.string.pause_for_a_time),
+                    onLongClick = if (muted) null else ({ times = true }),
+                )
+                .semantics {
+                    contentDescription = "$label, ${d.name}"
+                    stateDescription = label
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                Modifier.size(28.dp).clip(shape).background(if (muted) palette.danger else Color.Transparent)
+                    .border(maxOf(style.stroke, 1.dp), if (muted) palette.danger else palette.line, shape),
+                contentAlignment = Alignment.Center,
+            ) {
+                SwitchGlyph(if (muted) "speaker-off" else "speaker", if (muted) palette.onAccent else palette.textDim, 16.dp)
+            }
+        }
+        DropdownMenu(expanded = times, onDismissRequest = { times = false }) {
+            for (t in PauseTime.entries) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(if (t == PauseTime.EVER && !d.isSelf) R.string.mute_ever else t.title)) },
+                    onClick = {
+                        times = false
+                        scope.launch { model.muteFromTile(d, true, t.ms) }
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -760,12 +837,18 @@ internal fun DeviceSubtitle(d: LiveGroup.Device) {
         null -> standing
     }
     val palette = LocalPalette.current
-    if (d.muted != null) {
-        // Muted shows in the danger colour, after where it stands.
+    val off = d.syncOff?.takeIf { d.isSelf }
+    val mark = when {
+        d.muted != null -> stringResource(R.string.muted_mark)
+        off != null -> off.until?.let { stringResource(R.string.sync_off_until, shortTime(it)) } ?: stringResource(R.string.sync_off)
+        else -> null
+    }
+    if (mark != null) {
+        // Muted, or this phone's sync off, shows in the danger colour, after where it stands.
         Text(
             buildAnnotatedString {
                 append("$text · ")
-                withStyle(SpanStyle(color = palette.danger)) { append(stringResource(R.string.muted_mark)) }
+                withStyle(SpanStyle(color = palette.danger)) { append(mark) }
             },
             style = MaterialTheme.typography.bodySmall, color = palette.textDim, maxLines = 2, overflow = TextOverflow.Ellipsis,
         )

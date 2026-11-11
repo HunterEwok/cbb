@@ -222,9 +222,9 @@ p.code { font-size: 32px; font-weight: 700; letter-spacing: .15em; margin: 4px 0
 
 /* The user's order and collections (docs/apps.md, "Collections and the order of the tiles"). */
 .cell { position: relative; display: flex; }
-.cell > .tile, .cell > .row { flex: 1; min-width: 0; }
+.cell > .tile, .cell > .row, .cell > .tile-box { flex: 1; min-width: 0; }
 .list > .cell + .cell, .list > .cell + .row, .list > .row + .cell { border-top: 1px solid var(--line); }
-.cell.over > .tile, .cell.over > .row { outline: 2px dashed var(--accent); }
+.cell.over > .tile, .cell.over > .row, .cell.over > .tile-box > .tile { outline: 2px dashed var(--accent); }
 .cell.dragging { opacity: .4; }
 .row.inside { padding-left: 40px; }
 .row.section { font-weight: 600; }
@@ -243,3 +243,23 @@ button.icon[aria-pressed="true"] { background: var(--soft); color: var(--accent)
 .menu-items button { min-height: 40px; text-align: left; }
 .check { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
 
+
+/* The mute button in a tile's corner (docs/apps.md, "Muting from the tile"):
+   a 26px face in a 40px target; muted, the face fills with the warning
+   colour and the tile's line turns dashed. */
+.tile-box { position: relative; display: flex; min-width: 0; }
+.tile-box > .tile { flex: 1; min-width: 0; }
+.tile.cornered .top { padding-inline-end: 30px; justify-content: flex-start; gap: 6px; }
+.tile.muted { border-style: dashed; border-color: var(--danger); }
+.danger-text { color: var(--danger); }
+.mute-corner {
+  position: absolute; top: 0; inset-inline-end: 0; width: 40px; height: 40px; padding: 0;
+  border: 0; background: transparent; color: var(--text-dim); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.mute-corner > span {
+  width: 26px; height: 26px; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
+  border: max(var(--stroke), 1px) solid var(--line); border-radius: var(--radius-chip);
+}
+.mute-corner.on > span { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
+.mute-corner:focus-visible { outline: none; }
+.mute-corner:focus-visible > span { outline: 2px solid var(--accent); outline-offset: 2px; }

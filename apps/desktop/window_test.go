@@ -669,6 +669,21 @@ func (w *window) switches(t *testing.T) {
 	w.eval(`$click("#sync")`, nil)
 	w.wait(`$q("#sync").getAttribute("aria-pressed") === "true" && $q("#message").textContent.startsWith("Sync is on here")`)
 
+	// The button in the corner of this computer's tile is the house too.
+	w.eval(`$click('.mute-corner[data-mute="self"]')`, nil)
+	w.wait(`$q('.mute-corner[data-mute="self"]').getAttribute("aria-pressed") === "true" && $q('.tile[data-id="self"]').classList.contains("muted") && $q("#message").textContent.startsWith("Sync is off here")`)
+	if h := w.svc.lastSync(); h.Name != "off" || h.ForMS != 0 {
+		t.Errorf("the tile's corner sent %+v", h)
+	}
+	w.eval(`$click('.mute-corner[data-mute="self"]')`, nil)
+	w.wait(`$q('.mute-corner[data-mute="self"]').getAttribute("aria-pressed") === "false" && $q("#message").textContent.startsWith("Sync is on here")`)
+	// On another device's tile, held, it asks how long the admin mutes it
+	// for the group, and opens no tile menu.
+	w.eval(`$q('.mute-corner[data-mute="mac"]').dispatchEvent(new MouseEvent("contextmenu", {bubbles: true, cancelable: true})); true`, nil)
+	w.wait(`$q("#mute-dialog").open && !$q("#tile-menu")?.open`)
+	w.eval(`$clickText("#mute-dialog .menu-items button", "For 15 minutes")`, nil)
+	w.wait(`$q("#message").textContent.startsWith("It is muted") && $all("#devices .tile").length === 14`)
+
 	// The globe asks first; Cancel runs nothing.
 	w.eval(`$click("#away")`, nil)
 	w.wait(`$q("#confirm").open && $q("#confirm-title").textContent === "Turn Everywhere on?"`)
@@ -681,8 +696,8 @@ func (w *window) switches(t *testing.T) {
 	ranMu.Lock()
 	got := ran
 	ranMu.Unlock()
-	if !reflect.DeepEqual(got, [][]string{{"global", "on"}}) {
-		t.Errorf("the globe ran %q", got)
+	if !reflect.DeepEqual(got, [][]string{{"mute", "-on", "mac", "-for", "900000ms"}, {"global", "on"}}) {
+		t.Errorf("the corner and the globe ran %q", got)
 	}
 }
 

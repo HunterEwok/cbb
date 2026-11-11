@@ -95,6 +95,16 @@ they look, so both apps are built to the same plan.
    its row and its page. A phone takes both commands: muted, its copies stay on it, and Home
    says so until an admin unmutes it, an admin phone itself on its own page.
 
+   **Muting from the tile**: every tile has a small button in its corner (the end of the
+   line, so on the left in Arabic and Hebrew): a 28 pt face in a 44 pt target, while the rest
+   of the tile still opens the device. On this phone's own tile it is the house: a tap turns
+   sync off until turned on again, or on. On another device's tile it shows only on an admin
+   and mutes the device for the group, or unmutes it. A long press (a right click on a
+   computer) picks the time, as the house does. Muted, the button fills with the warning
+   colour and the tile's line turns dashed; the tile shows the new state at once and goes
+   back, with the error, only when the change is refused, so it never blinks or leaves the
+   list while the command goes out. The Mac, the tray app and Android have the same button.
+
    **Images and files** (docs/design.md, "Images and files"): the button sends an image on
    the clipboard as PNG or JPEG (HEIC and other formats are converted) and fetches a
    computer's image whole before it writes it, an image by its hash: the same image twice is
