@@ -1545,6 +1545,10 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
+  three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
+  also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on
+  a page of their own, [the lab](docs/guide/lab.md): experiments, not what 1.0 promises.
 - The bench's fleet runs its small devices with the same `cbb` as its computers, as the
   service alone (`-cbb-lite` is gone, `-coverdir` takes the Rust `cbb`'s coverage too), and its
   D3 case checks whom the members dial by D-89: one with a higher device ID at once, one with
