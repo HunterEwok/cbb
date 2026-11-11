@@ -203,27 +203,28 @@ fn the_ways_over_vless_when_the_port_is_closed() {
     );
 }
 
-/// The offer from a forwarder's VLESS answer: REALITY's key and short ID
-/// when it gives them, the path when it gives one.
+/// The offer from a forwarder's VLESS answer: the endpoint at the answer's
+/// port, the server name and the ID, with the transport and the path only
+/// when the answer gives them.
 #[test]
 fn offers_from_answers() {
     let at: SocketAddr = "192.0.2.7:4242".parse().unwrap();
     let v = vless_offer(
         at,
         "id",
-        VlessAnswer {
-            transport: String::new(),
-            port: 443,
-            public_key: Some(vec![1; 32]),
-            short_id: "ab".into(),
-            server_name: "s".into(),
-            path: String::new(),
-        },
+        VlessAnswer { transport: String::new(), port: 443, server_name: "s".into(), path: String::new() },
     );
     assert_eq!(v["endpoint"], "192.0.2.7:443");
-    assert_eq!(v["short_id"], "ab");
+    assert_eq!(v["server_name"], "s");
+    assert_eq!(v["id"], "id");
     assert!(v.get("transport").is_none() && v.get("path").is_none());
-    assert_eq!(v["public_key"], base64_std(&[1; 32]));
+    let v = vless_offer(
+        at,
+        "id",
+        VlessAnswer { transport: "xhttp".into(), port: 443, server_name: "s".into(), path: "/p".into() },
+    );
+    assert_eq!(v["transport"], "xhttp");
+    assert_eq!(v["path"], "/p");
     assert!(prove(&[1; 32], &[0; 32], &[0; 32]).is_none(), "a low-order point");
     assert!(prove(&[1; 32], &[0; 3], &[0; 32]).is_none());
 }
