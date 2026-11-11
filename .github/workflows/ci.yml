@@ -2161,12 +2161,12 @@ jobs:
           CBB_TEST_RUST_SERVICE: ${{ github.workspace }}/target/release/cbb
         run: |
           for a in mips mipsel; do
-            skip='TestLiteMemberAway|TestLiteHub|TestLiteForwardOnly|TestLiteRelay|TestLiteInvite|TestLiteJoinInvite'
+            skip='TestAloneMemberAway|TestAloneHub|TestAloneForwardOnly|TestAloneRelay|TestAloneInvite|TestAloneJoinInvite'
             q="$RUNNER_TEMP/qemu/bin/qemu-$a"
             printf '#!/bin/sh\nexec %s %s "$@"\n' "$q" "$PWD/target/$a-unknown-linux-musl/release/cbb" >"$RUNNER_TEMP/cbb-$a"
             chmod +x "$RUNNER_TEMP/cbb-$a"
             "$RUNNER_TEMP/cbb-$a" version | grep -q 'linux/mips'
-            CBB_TEST_ALONE="$RUNNER_TEMP/cbb-$a" go test ./internal/service -run 'TestLite' -skip "$skip" -v
+            CBB_TEST_ALONE="$RUNNER_TEMP/cbb-$a" go test ./internal/service -run 'TestAlone' -skip "$skip" -v
           done
 
   # The service's tests (internal/service) against the Rust service that

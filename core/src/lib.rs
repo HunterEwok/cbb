@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The protocol core of the cbb lite member (docs/protocol.md):
+//! The protocol core of cbb's members (docs/protocol.md):
 //! certificates and their checks, the signed records, the hybrid clock, the
 //! sync engine, the frames of the member protocol and the joiner's side of
 //! the pairing, and the format of the saved state for a board without a file
 //! system. It does no I/O and needs no operating system, only an
-//! allocator and a source of randomness, so the same code runs in the lite
-//! member on Linux and on a microcontroller such as the ESP32.
+//! allocator and a source of randomness, so the same code runs in cbb on
+//! computers, in the phones' apps and on a microcontroller such as the ESP32.
 //!
 //! With the tls feature it has the members' TLS as well (rustls without
 //! the standard library, a RustCrypto provider and a session without I/O).

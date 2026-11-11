@@ -16,11 +16,11 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 )
 
-// TestLiteAgent: the Rust cbb agent links an X11 session's clipboard with
+// TestAloneAgent: the Rust cbb agent links an X11 session's clipboard with
 // the Rust service through cbb-helper, both ways, and the helper ends with
 // the agent. CBB_TEST_ALONE names the Rust member's binary; CBB_TEST_X11 asks for
 // an X server in DISPLAY and xclip.
-func TestLiteAgent(t *testing.T) {
+func TestAloneAgent(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -37,17 +37,17 @@ func TestLiteAgent(t *testing.T) {
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
-	dir := joinLite(t, bin, pi)
-	lite := startLite(t, bin, dir, "-no-mdns", "-peer", pi.addr())
+	dir := joinAlone(t, bin, pi)
+	small := startAlone(t, bin, dir, "-no-mdns", "-peer", pi.addr())
 	waitFor(t, "the Rust member connected", func() bool {
-		st, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+		st, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
 	})
-	if _, err := lite.do(t, control.Header{Op: control.OpSync, On: control.Bool(true)}, ""); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpSync, On: control.Bool(true)}, ""); err != nil {
 		t.Fatal(err)
 	}
 
-	agent := exec.Command(bin, "-socket", lite.socket, "agent")
+	agent := exec.Command(bin, "-socket", small.socket, "agent")
 	agent.Env = append(os.Environ(), "CBB_HELPER="+helper, "XDG_RUNTIME_DIR="+t.TempDir(), "WAYLAND_DISPLAY=", "XDG_CACHE_HOME="+t.TempDir())
 	// A file, not a pipe: the helper inherits it, and a pipe would keep
 	// Wait waiting for the helper too.
@@ -95,7 +95,7 @@ func TestLiteAgent(t *testing.T) {
 		xclipIn(text)
 		time.Sleep(300 * time.Millisecond)
 		return pi.paste(t) == text
-	}, func() string { return "the Rust member has " + lite.paste(t) }, func() string { return "X11 has " + xclipOut() })
+	}, func() string { return "the Rust member has " + small.paste(t) }, func() string { return "X11 has " + xclipOut() })
 	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "from pi"); err != nil {
 		t.Fatal(err)
 	}

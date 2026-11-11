@@ -142,7 +142,7 @@
     <string name="app_info">Maelezo ya programu</string>
     <string name="hub_title">Simu hii kama kitovu</string>
     <string name="hub_switch">Simu hii ndiyo kitovu cha kikundi</string>
-    <string name="hub_body">Wakati programu iko wazi, simu hii ndiyo kitovu cha kikundi kisicho na kompyuta: simu, TV na wanachama wepesi wengine kwenye mtandao wa nyumbani huunganishwa nayo, na kwa kisambazaji huifikia kutoka mbali pia. Kisambazaji hupitisha pakiti zilizosimbwa tu; hujua lebo ya kikundi, ufunguo wa handaki wa simu hii na anwani, kamwe si kinachonakiliwa. Kompyuta iliyowashwa daima ni kitovu bora; hadi wakati huo simu hii inafanya kazi hiyo.</string>
+    <string name="hub_body">Wakati programu iko wazi, simu hii ndiyo kitovu cha kikundi kisicho na kompyuta: simu, TV na vifaa vidogo vingine kwenye mtandao wa nyumbani huunganishwa nayo, na kwa kisambazaji huifikia kutoka mbali pia. Kisambazaji hupitisha pakiti zilizosimbwa tu; hujua lebo ya kikundi, ufunguo wa handaki wa simu hii na anwani, kamwe si kinachonakiliwa. Kompyuta iliyowashwa daima ni kitovu bora; hadi wakati huo simu hii inafanya kazi hiyo.</string>
     <string name="hub_off">Kimezimwa: simu hii si kitovu.</string>
     <string name="hub_paused">Inasubiri programu: kitovu hufanya kazi wakati programu iko wazi.</string>
     <string name="hub_home_only">Kitovu cha nyumbani pekee: ongeza kisambazaji ili kusawazisha ukiwa mbali na nyumbani.</string>

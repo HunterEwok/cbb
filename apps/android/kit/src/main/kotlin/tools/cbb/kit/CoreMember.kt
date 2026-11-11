@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The phone's member in the Rust core (docs/core-api.md, "The member"): the
- * lite member's node on threads of its own inside the app, through the C
+ * Rust member's node on threads of its own inside the app, through the C
  * functions cbb_member_start, cbb_member_call and cbb_member_stop of
  * ffi/, loaded by JNA from libcbb_ffi as [Core] loads it. It dials the
  * members the app hands in ([found]), syncs with them and calls the app back

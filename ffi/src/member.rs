@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The member inside a phone's app (the Aurora app, the iPhone and Android
-//! apps): the lite member's node (`cbb_member::phone`) with the app's key,
+//! apps): cbb's node (`cbb_member::phone`) with the app's key,
 //! which stays where the app keeps it and signs through the callback the
 //! join takes too. The node runs on threads of its own: it dials the
 //! members mDNS finds or the app hands in, syncs with them, and calls the

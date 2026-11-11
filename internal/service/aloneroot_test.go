@@ -70,13 +70,13 @@ func runCLI(cli, socket, stdin string, args ...string) (string, error) {
 	return out.String(), err
 }
 
-// TestLiteRoot: the Rust service makes a group with cbb new and is its
+// TestAloneRoot: the Rust service makes a group with cbb new and is its
 // root (docs/design.md, "The service and its helper"): it admits a Go
 // computer by the QR code that computer shows (cbb pair -qr), syncs with
 // it, renames it, makes it an admin, freezes and unfreezes it, sets the key
 // level and removes it, each through the Go command line, and the Go
 // computer takes each record. CBB_TEST_ALONE names the Rust member's binary.
-func TestLiteRoot(t *testing.T) {
+func TestAloneRoot(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -86,7 +86,7 @@ func TestLiteRoot(t *testing.T) {
 	}
 	cli := cbbCLI(t)
 	dir := t.TempDir()
-	root := startLite(t, bin, dir, "-no-mdns")
+	root := startAlone(t, bin, dir, "-no-mdns")
 	cbb := func(stdin string, args ...string) (string, error) {
 		t.Helper()
 		return runCLI(cli, root.socket, stdin, args...)
@@ -137,7 +137,7 @@ func TestLiteRoot(t *testing.T) {
 
 	// The root dials the laptop, which listens now.
 	root.stop()
-	root = startLite(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
+	root = startAlone(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
 	waitFor(t, "the root and the laptop connected", func() bool {
 		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
@@ -215,7 +215,7 @@ func TestLiteRoot(t *testing.T) {
 		t.Errorf("a second freeze: %v\n%s", err, out)
 	}
 	root.stop()
-	root = startLite(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
+	root = startAlone(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
 	// The control socket answers while the service still loads its group.
 	waitFor(t, "the root back in its group", func() bool {
 		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
@@ -257,12 +257,12 @@ func TestLiteRoot(t *testing.T) {
 	waitFor(t, "the laptop removed", func() bool { return laptop.status(t).Removed })
 }
 
-// TestLiteRootWindow: the Rust root opens a pairing window with cbb pair,
+// TestAloneRootWindow: the Rust root opens a pairing window with cbb pair,
 // as Go's root does, and a Go computer joins it with the code it shows:
 // a wrong code counts and leaves the window open, a second window waits
 // for the first, the right code admits the computer, which then connects
 // to the root on the same port, and a window that closed refuses.
-func TestLiteRootWindow(t *testing.T) {
+func TestAloneRootWindow(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -278,7 +278,7 @@ func TestLiteRootWindow(t *testing.T) {
 	port := free.Addr().(*net.TCPAddr).Port
 	free.Close()
 	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
-	root := startLite(t, bin, t.TempDir(), "-no-mdns", "-port", strconv.Itoa(port))
+	root := startAlone(t, bin, t.TempDir(), "-no-mdns", "-port", strconv.Itoa(port))
 	if out, err := runCLI(cli, root.socket, "", "new"); err != nil {
 		t.Fatalf("cbb new: %v\n%s", err, out)
 	}
@@ -372,7 +372,7 @@ func TestLiteRootWindow(t *testing.T) {
 // isAdmin reports whether the records list the service as an admin and it
 // holds its admin CA: the records may reach it before the admin message
 // does, and until it has taken the CA it acts as no admin (slow under the
-// MIPS emulator, TestLiteTakeover).
+// MIPS emulator, TestAloneTakeover).
 func (s *testService) isAdmin(t *testing.T) bool {
 	t.Helper()
 	m, err := s.do(t, control.Header{Op: control.OpDevices}, "")
@@ -391,12 +391,12 @@ func (s *testService) isAdmin(t *testing.T) bool {
 	return false
 }
 
-// TestLiteTakeover: the Rust service joins a Go computer's group as a
+// TestAloneTakeover: the Rust service joins a Go computer's group as a
 // member (cbb pair), offers an admin key, and the Go root makes
 // it an admin; with the root lost, it takes the group over (cbb takeover)
 // after the root's delay of 0s, becomes the root, and a Go computer of the
 // group follows it.
-func TestLiteTakeover(t *testing.T) {
+func TestAloneTakeover(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -428,7 +428,7 @@ func TestLiteTakeover(t *testing.T) {
 	}
 	port := free.Addr().(*net.TCPAddr).Port
 	free.Close()
-	rust := startLite(t, bin, dir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", desk.addr(), "-peer", laptop.addr())
+	rust := startAlone(t, bin, dir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", desk.addr(), "-peer", laptop.addr())
 	waitFor(t, "the Rust member connected to both", func() bool {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 2 && st.Status.Role == "member"
@@ -521,10 +521,10 @@ func recordsHold(dir, text string) bool {
 	return false
 }
 
-// TestLiteRecovery: a Rust member that is no admin claims the group with
+// TestAloneRecovery: a Rust member that is no admin claims the group with
 // its recovery key when the root is lost (cbb recovery, with the text of
 // the sheet's QR code), becomes the root, and the Go computer follows.
-func TestLiteRecovery(t *testing.T) {
+func TestAloneRecovery(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -556,7 +556,7 @@ func TestLiteRecovery(t *testing.T) {
 	}
 	port := free.Addr().(*net.TCPAddr).Port
 	free.Close()
-	rust := startLite(t, bin, dir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", desk.addr(), "-peer", laptop.addr())
+	rust := startAlone(t, bin, dir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", desk.addr(), "-peer", laptop.addr())
 	waitFor(t, "the Rust member connected to both", func() bool {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 2
@@ -612,11 +612,11 @@ func rootIs(t *testing.T, s *testService, name string) func() bool {
 	}
 }
 
-// TestLiteHub: an admin Rust service is the group's hub (cbb global hub,
+// TestAloneHub: an admin Rust service is the group's hub (cbb global hub,
 // docs/protocol.md, section 11): a Go computer keeps its offer at home,
 // then reaches it only through the tunnel and syncs, and cbb global hub off
 // refuses to stop the only hub without -yes, then stops it.
-func TestLiteHub(t *testing.T) {
+func TestAloneHub(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -641,7 +641,7 @@ func TestLiteHub(t *testing.T) {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
 	}
 	c.Close()
-	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	rust := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
 	waitFor(t, "the Rust member connected to both", func() bool {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 2 && st.Status.Role == "member"
@@ -677,7 +677,7 @@ func TestLiteHub(t *testing.T) {
 	// The laptop leaves home: it reaches the Rust hub only through the
 	// tunnel, which the hub admitted its key for.
 	rust.stop()
-	rust = startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr())
+	rust = startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr())
 	laptopID := laptop.status(t).Device
 	laptop.stop()
 	h.hide(laptopID)
@@ -709,12 +709,12 @@ func TestLiteHub(t *testing.T) {
 	}
 }
 
-// TestLiteHubs runs the Rust service as the second of two hubs, below the
+// TestAloneHubs runs the Rust service as the second of two hubs, below the
 // Go root's: it waits as the root's client while the root serves, learns
 // the laptop's keys from what the root shares, serves the laptop when the
 // root is off, and gives way when the root serves again
 // (docs/protocol.md, section 11, "Several hubs").
-func TestLiteHubs(t *testing.T) {
+func TestAloneHubs(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -741,7 +741,7 @@ func TestLiteHubs(t *testing.T) {
 	c.Close()
 	deskAddr := desk.addr()
 	env := []string{"CBB_STANDBY_GRACE=2"}
-	rust := startLiteEnv(t, bin, dir, env, "-no-mdns", "-no-listen", "-peer", deskAddr, "-peer", laptop.addr())
+	rust := startAloneEnv(t, bin, dir, env, "-no-mdns", "-no-listen", "-peer", deskAddr, "-peer", laptop.addr())
 	adminOn(t, cli, desk, "rust")
 	deskPort, rustPort := freeUDP(t), freeUDP(t)
 	for _, s := range []*testService{desk, laptop} {
@@ -815,12 +815,12 @@ func TestLiteHubs(t *testing.T) {
 	waitFor(t, "the desk has it", func() bool { return desk.paste(t) == "the desk is back" })
 }
 
-// TestLiteHubCommands runs the hub commands both ways between the Rust
+// TestAloneHubCommands runs the hub commands both ways between the Rust
 // service and a Go root: the Rust hub moves the hub to the Go root, the root
 // makes the Rust service a hub again, and each stops the other being one
 // (docs/protocol.md, section 11, "Moving the hub", "Several hubs",
 // "Stopping a hub").
-func TestLiteHubCommands(t *testing.T) {
+func TestAloneHubCommands(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -845,7 +845,7 @@ func TestLiteHubCommands(t *testing.T) {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
 	}
 	c.Close()
-	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	rust := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
 	adminOn(t, cli, desk, "rust")
 	for _, s := range []*testService{desk, laptop} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
@@ -933,11 +933,11 @@ func TestLiteHubCommands(t *testing.T) {
 	waitFor(t, "sync away from home is off on the laptop", func() bool { return laptop.status(t).Away == nil })
 }
 
-// TestLiteHubForwarder runs the Rust hub behind Go's forwarder only: it
+// TestAloneHubForwarder runs the Rust hub behind Go's forwarder only: it
 // registers with its member certificate and the group's records, and the
 // laptop away from home reaches it through the forwarder (docs/protocol.md,
 // section 13).
-func TestLiteHubForwarder(t *testing.T) {
+func TestAloneHubForwarder(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -981,7 +981,7 @@ func TestLiteHubForwarder(t *testing.T) {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
 	}
 	c.Close()
-	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	rust := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
 	adminOn(t, cli, desk, "rust")
 	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
 	waitFor(t, "the Rust member a hub", func() bool {
@@ -1018,12 +1018,12 @@ func TestLiteHubForwarder(t *testing.T) {
 	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "through the forwarder" })
 }
 
-// TestLiteHubCredential: a Rust admin's hub registers with the Go
+// TestAloneHubCredential: a Rust admin's hub registers with the Go
 // forwarder with the group's hubs' credential that the Go root signs
 // (docs/protocol.md, section 18), as Go's hubCredentials, serves with a key
 // of its own for the period (section 11, "The hub's key"), and a Go laptop
 // away from home reaches it through the forwarder.
-func TestLiteHubCredential(t *testing.T) {
+func TestAloneHubCredential(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -1067,7 +1067,7 @@ func TestLiteHubCredential(t *testing.T) {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
 	}
 	c.Close()
-	rust := startLiteEnv(t, bin, dir, []string{"CBB_HUB_KEY_AHEAD=2"}, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	rust := startAloneEnv(t, bin, dir, []string{"CBB_HUB_KEY_AHEAD=2"}, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
 	adminOn(t, cli, desk, "rust")
 	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
 	waitFor(t, "the Rust member a hub", func() bool {
@@ -1115,12 +1115,12 @@ func TestLiteHubCredential(t *testing.T) {
 	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "through the forwarder, credentialed" })
 }
 
-// TestLiteForwardOnly has a Rust admin make another Rust member, no admin,
+// TestAloneForwardOnly has a Rust admin make another Rust member, no admin,
 // a hub that only passes copies on: it signs the member's record with
 // forward_only, which the Go root takes, and the hub command makes it a
 // hub that then makes no copies (docs/protocol.md, section 11, "Two kinds
 // of hub").
-func TestLiteForwardOnly(t *testing.T) {
+func TestAloneForwardOnly(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -1176,11 +1176,11 @@ func TestLiteForwardOnly(t *testing.T) {
 	}
 	rustAt := free.Addr().String()
 	free.Close()
-	rust := startLite(t, bin, rustDir, "-no-mdns", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
+	rust := startAlone(t, bin, rustDir, "-no-mdns", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
 	adminOn(t, cli, desk, "rust")
 	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
 	boardDir := join(rust, rustAt, "board")
-	board := startLite(t, bin, boardDir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", rustAt)
+	board := startAlone(t, bin, boardDir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", rustAt)
 	if _, err := board.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -1204,12 +1204,12 @@ func TestLiteForwardOnly(t *testing.T) {
 	}
 }
 
-// TestLiteHubVLESS has a Rust hub's clients come over VLESS with XHTTP:
+// TestAloneHubVLESS has a Rust hub's clients come over VLESS with XHTTP:
 // the admin Rust service is the hub with a forwarder and VLESS, registers
 // the group's VLESS user ID, keeps the forwarder's VLESS settings, and the
-// lite member, whose offer's UDP address then leads nowhere, reaches it
+// small device, whose offer's UDP address then leads nowhere, reaches it
 // through the forwarder's VLESS behind a TLS web server.
-func TestLiteHubVLESS(t *testing.T) {
+func TestAloneHubVLESS(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -1273,7 +1273,7 @@ func TestLiteHubVLESS(t *testing.T) {
 	}
 	rustAt := free.Addr().String()
 	free.Close()
-	rust := startLite(t, bin, rustDir, "-no-mdns", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
+	rust := startAlone(t, bin, rustDir, "-no-mdns", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
 	adminOn(t, cli, desk, "rust")
 	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(),
 		ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
@@ -1300,12 +1300,12 @@ func TestLiteHubVLESS(t *testing.T) {
 		return err == nil && json.Unmarshal(raw, &st) == nil && st.Forwarder != nil && st.Forwarder.VLESSID != "" && len(st.Forwarder.VLESS) > 0
 	})
 
-	dir := joinLite(t, bin, desk)
-	home := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", rustAt)
+	dir := joinAlone(t, bin, desk)
+	home := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", rustAt)
 	if _, err := home.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitUpTo(t, 30*time.Second, "the lite member keeps the Rust hub's offer with VLESS", func() bool {
+	waitUpTo(t, 30*time.Second, "the small device keeps the Rust hub's offer with VLESS", func() bool {
 		type kept struct {
 			Device string          `json:"device"`
 			VLESS  json.RawMessage `json:"vless"`
@@ -1351,8 +1351,8 @@ func TestLiteHubVLESS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	away := startLiteEnv(t, bin, dir, []string{"SSL_CERT_FILE=" + roots}, "-no-mdns", "-no-listen")
-	waitUpTo(t, 60*time.Second, "the lite member reaches the Rust hub over VLESS", func() bool {
+	away := startAloneEnv(t, bin, dir, []string{"SSL_CERT_FILE=" + roots}, "-no-mdns", "-no-listen")
+	waitUpTo(t, 60*time.Second, "the small device reaches the Rust hub over VLESS", func() bool {
 		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && m.Status.Away != nil && m.Status.Away.Through &&
 			slices.ContainsFunc(m.Status.Peers, func(p control.Device) bool { return p.ID == rustID })
@@ -1363,11 +1363,11 @@ func TestLiteHubVLESS(t *testing.T) {
 	waitFor(t, "the Rust hub has it", func() bool { return rust.paste(t) == "to the Rust hub, over VLESS" })
 }
 
-// TestLiteNetwork runs cbb network against the Rust service, which keeps
+// TestAloneNetwork runs cbb network against the Rust service, which keeps
 // the known networks as Go's networks.go does (member/src/networks.rs has
 // the rules' tests, with Go's network IDs): the member port and mDNS then
 // work on the networks this device is on now.
-func TestLiteNetwork(t *testing.T) {
+func TestAloneNetwork(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -1376,7 +1376,7 @@ func TestLiteNetwork(t *testing.T) {
 		t.Skip("the Rust member's tests run on Linux")
 	}
 	cli := cbbCLI(t)
-	root := startLite(t, bin, t.TempDir(), "-no-mdns", "-no-listen")
+	root := startAlone(t, bin, t.TempDir(), "-no-mdns", "-no-listen")
 	if out, err := runCLI(cli, root.socket, "", "new"); err != nil {
 		t.Fatalf("cbb new: %v\n%s", err, out)
 	}
@@ -1390,10 +1390,10 @@ func TestLiteNetwork(t *testing.T) {
 	}
 }
 
-// TestLiteRelay runs the Rust service in a group without a hub: it meets
+// TestAloneRelay runs the Rust service in a group without a hub: it meets
 // the Go desk at a blind relay, and once it is away from home they sync
 // through it (docs/design.md, "Blind relay").
-func TestLiteRelay(t *testing.T) {
+func TestAloneRelay(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -1415,7 +1415,7 @@ func TestLiteRelay(t *testing.T) {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
 	}
 	c.Close()
-	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr())
+	rust := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr())
 	waitFor(t, "the Rust member connected to the desk", func() bool {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
@@ -1446,7 +1446,7 @@ func TestLiteRelay(t *testing.T) {
 	// Away from home the Rust member knows no address of the desk: the
 	// relay joins them.
 	rust.stop()
-	rust = startLite(t, bin, dir, "-no-mdns", "-no-listen")
+	rust = startAlone(t, bin, dir, "-no-mdns", "-no-listen")
 	waitUpTo(t, 30*time.Second, "the Rust member reaches the desk through the relay", func() bool {
 		st := rust.status(t)
 		return st.Away != nil && st.Away.Through && len(st.Peers) == 1 && st.Peers[0].ID == deskID
@@ -1494,11 +1494,11 @@ func startRelay(t *testing.T, tag string) (*relay.Relay, relay.Keys) {
 	return r, keys
 }
 
-// TestLiteRelayRoot runs the Rust service as the root of a group that meets
+// TestAloneRelayRoot runs the Rust service as the root of a group that meets
 // at a blind relay: it starts the period and signs the hubs' and the
 // members' credentials (docs/protocol.md, section 18), with which both
 // devices register there, and the Go laptop and it sync through the relay.
-func TestLiteRelayRoot(t *testing.T) {
+func TestAloneRelayRoot(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -1508,7 +1508,7 @@ func TestLiteRelayRoot(t *testing.T) {
 	}
 	cli := cbbCLI(t)
 	dir := t.TempDir()
-	root := startLite(t, bin, dir, "-no-mdns")
+	root := startAlone(t, bin, dir, "-no-mdns")
 	if out, err := runCLI(cli, root.socket, "", "new"); err != nil {
 		t.Fatalf("cbb new: %v\n%s", err, out)
 	}
@@ -1533,7 +1533,7 @@ func TestLiteRelayRoot(t *testing.T) {
 		t.Fatalf("the laptop's join ended with %+v, %v", m, err)
 	}
 	root.stop()
-	root = startLite(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
+	root = startAlone(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
 	laptopID, rootID := laptop.status(t).Device, root.status(t).Device
 	waitFor(t, "the Rust root connected to the laptop", func() bool {
 		p := root.status(t).Peers
@@ -1559,7 +1559,7 @@ func TestLiteRelayRoot(t *testing.T) {
 	})
 
 	root.stop()
-	root = startLite(t, bin, dir, "-no-mdns")
+	root = startAlone(t, bin, dir, "-no-mdns")
 	waitUpTo(t, 30*time.Second, "the Rust root reaches the laptop through the relay", func() bool {
 		st := root.status(t)
 		return st.Away != nil && st.Away.Through && len(st.Peers) == 1 && st.Peers[0].ID == laptopID
@@ -1570,12 +1570,12 @@ func TestLiteRelayRoot(t *testing.T) {
 	waitFor(t, "the laptop has it", func() bool { return laptop.paste(t) == "from the root" })
 }
 
-// TestLiteRelayProject sets the Rust service to the project's relay,
+// TestAloneRelayProject sets the Rust service to the project's relay,
 // whose key the signed keys.json gives, then changes the relay's key: once
 // a newer keys.json names the new key, the device registers again by
 // itself. Then the relay moves, and entries.json says where to, as
 // TestProjectRelayNewKey does with a Go device.
-func TestLiteRelayProject(t *testing.T) {
+func TestAloneRelayProject(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -1586,12 +1586,12 @@ func TestLiteRelayProject(t *testing.T) {
 	signer := newReleaseSigner(t)
 	var h hub
 	pi := startEnv(t, &h, "pi", signer.rootsEnv(t))
-	dir := joinLite(t, bin, pi)
+	dir := joinAlone(t, bin, pi)
 	pemFile := filepath.Join(t.TempDir(), "roots.pem")
 	if err := os.WriteFile(pemFile, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.roots(t)[0]}), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	lite := startLiteEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile, "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1"}, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	small := startAloneEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile, "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1"}, "-no-mdns", "-no-listen", "-peer", pi.addr())
 	group := pi.status(t).Group
 	serve := func(keys relay.Keys, at string) (*relay.Relay, func()) {
 		r, err := relay.Listen(relay.Config{Listen: at, Keys: keys, Groups: []string{group}, Logf: t.Logf})
@@ -1620,14 +1620,14 @@ func TestLiteRelayProject(t *testing.T) {
 	r, stop := serve(oldKeys, "127.0.0.1:0")
 	at := r.Addr().String()
 
-	if _, err := lite.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 1, oldKeys)); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 1, oldKeys)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := lite.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: at, RelayKey: relay.Project, Consent: true}, ""); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: at, RelayKey: relay.Project, Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
 	connected := func() bool {
-		a := lite.status(t).Away
+		a := small.status(t).Away
 		return a != nil && a.Relay != nil && a.Relay.Connected
 	}
 	waitUpTo(t, 60*time.Second, "the Rust member registers with the relay's listed key", connected)
@@ -1637,14 +1637,14 @@ func TestLiteRelayProject(t *testing.T) {
 	stop()
 	_, stop = serve(newKeys, at)
 	waitUpTo(t, 60*time.Second, "the Rust member says the key is unknown", func() bool {
-		a := lite.status(t).Away
+		a := small.status(t).Away
 		return a != nil && a.Relay != nil && !a.Relay.Connected && a.Relay.Error != "" && a.Relay.Detail != ""
 	})
-	if _, err := lite.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 2, oldKeys, newKeys)); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 2, oldKeys, newKeys)); err != nil {
 		t.Fatal(err)
 	}
 	waitUpTo(t, 90*time.Second, "the Rust member registers with the new key", connected)
-	if a := lite.status(t).Away; a.Relay.Error != "" {
+	if a := small.status(t).Away; a.Relay.Error != "" {
 		t.Errorf("an error left in status: %q", a.Relay.Error)
 	}
 
@@ -1653,11 +1653,11 @@ func TestLiteRelayProject(t *testing.T) {
 	moved, stop := serve(newKeys, "127.0.0.1:0")
 	defer stop()
 	_, port, _ := net.SplitHostPort(moved.Addr().String())
-	if _, err := lite.do(t, control.Header{Op: control.OpEntries}, signer.signRelay(t, 3, []string{"relay.example.org:" + port}, newKeys)); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpEntries}, signer.signRelay(t, 3, []string{"relay.example.org:" + port}, newKeys)); err != nil {
 		t.Fatal(err)
 	}
 	waitUpTo(t, 90*time.Second, "the Rust member registers where the relay moved", func() bool {
-		a := lite.status(t).Away
+		a := small.status(t).Away
 		return connected() && a.Relay.Endpoint == moved.Addr().String()
 	})
 	raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))

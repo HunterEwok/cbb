@@ -8,7 +8,7 @@
 //! always shown; the details (each cause with its type) are shown under it
 //! in debug mode, and always written to the log. Debug mode follows the
 //! build (on in a debug build, off in a release build); the program
-//! overrides it with set_show_details (the lite member from `CBB_DEBUG` or the
+//! overrides it with set_show_details (cbb from `CBB_DEBUG` or the
 //! `-debug` flag), so the details of an error in a release build can be
 //! seen when needed.
 

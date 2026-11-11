@@ -14,10 +14,10 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 )
 
-// TestLiteServiceFlags: the Rust service takes -state and -socket after the
+// TestAloneServiceFlags: the Rust service takes -state and -socket after the
 // command, as launchd's plist, FreeBSD's rc script and OpenWrt's init script
 // pass them to the Go service, and -user only as root.
-func TestLiteServiceFlags(t *testing.T) {
+func TestAloneServiceFlags(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -28,7 +28,7 @@ func TestLiteServiceFlags(t *testing.T) {
 	dir := t.TempDir()
 	socket := filepath.Join(dir, "c.sock")
 	cmd := exec.Command(bin, "service", "-state", filepath.Join(dir, "state"), "-socket", socket, "-no-mdns", "-no-listen")
-	cmd.Stdout, cmd.Stderr = testWriter{t, "lite: ", nil}, testWriter{t, "lite: ", nil}
+	cmd.Stdout, cmd.Stderr = testWriter{t, "small: ", nil}, testWriter{t, "small: ", nil}
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

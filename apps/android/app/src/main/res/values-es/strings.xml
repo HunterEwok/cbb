@@ -142,7 +142,7 @@
     <string name="app_info">Información de la app</string>
     <string name="hub_title">Este teléfono como hub</string>
     <string name="hub_switch">Este teléfono es el hub del grupo</string>
-    <string name="hub_body">Mientras la app está abierta, este teléfono es el hub de un grupo sin ordenador: los demás teléfonos, televisores y miembros ligeros de la red de casa se conectan a él, y con un reenviador también llegan desde lejos. El reenviador solo transmite paquetes cifrados; conoce la etiqueta del grupo, la clave del túnel de este teléfono y las direcciones, nunca lo que se copia. Un ordenador siempre encendido es mejor hub; hasta entonces lo hace este teléfono.</string>
+    <string name="hub_body">Mientras la app está abierta, este teléfono es el hub de un grupo sin ordenador: los demás teléfonos, televisores y dispositivos pequeños de la red de casa se conectan a él, y con un reenviador también llegan desde lejos. El reenviador solo transmite paquetes cifrados; conoce la etiqueta del grupo, la clave del túnel de este teléfono y las direcciones, nunca lo que se copia. Un ordenador siempre encendido es mejor hub; hasta entonces lo hace este teléfono.</string>
     <string name="hub_off">Desactivado: este teléfono no es un hub.</string>
     <string name="hub_paused">Esperando a la app: el hub funciona mientras la app está abierta.</string>
     <string name="hub_home_only">Solo el hub de casa: añade un reenviador para sincronizar fuera de casa.</string>

@@ -19,18 +19,18 @@ func writeRoots(t *testing.T, signer *releaseSigner) []string {
 	return []string{signer.rootsEnv(t)}
 }
 
-// TestLiteRelease: a signed release passes between the Go service and the
+// TestAloneRelease: a signed release passes between the Go service and the
 // Rust one both ways, the Rust member keeps it across a restart and takes
 // no older or forged one.
-func TestLiteRelease(t *testing.T) {
-	bin := liteBin(t)
+func TestAloneRelease(t *testing.T) {
+	bin := aloneBin(t)
 	signer := newReleaseSigner(t)
 	env := writeRoots(t, signer)
 	var h hub
 	desk := startEnv(t, &h, "desk", signer.rootsEnv(t))
 	dir := joinFull(t, bin, desk)
 	args := []string{"-no-mdns", "-no-listen", "-peer", desk.addr()}
-	rust := startLiteEnv(t, bin, dir, env, args...)
+	rust := startAloneEnv(t, bin, dir, env, args...)
 	status := func() *control.Status {
 		m, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		if err != nil || m.Status == nil {
@@ -62,25 +62,25 @@ func TestLiteRelease(t *testing.T) {
 	waitFor(t, "the desk holds 0.6.2 from the Rust member", func() bool { return desk.status(t).Release == "0.6.2" })
 
 	rust.stop()
-	rust = startLiteEnv(t, bin, dir, env, args...)
+	rust = startAloneEnv(t, bin, dir, env, args...)
 	waitFor(t, "the Rust member holds 0.6.2 after a restart", func() bool {
 		m, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && m.Status != nil && m.Status.Release == "0.6.2"
 	})
 }
 
-// TestLiteReleaseArchives passes an archive of the held release between
+// TestAloneReleaseArchives passes an archive of the held release between
 // the Go service and the Rust one both ways, as cbb update hands it over
 // and asks for it; a file the release does not list is refused, and a
 // newer release drops it.
-func TestLiteReleaseArchives(t *testing.T) {
-	bin := liteBin(t)
+func TestAloneReleaseArchives(t *testing.T) {
+	bin := aloneBin(t)
 	signer := newReleaseSigner(t)
 	env := writeRoots(t, signer)
 	var h hub
 	desk := startEnv(t, &h, "desk", signer.rootsEnv(t))
 	dir := joinFull(t, bin, desk)
-	rust := startLiteEnv(t, bin, dir, env, "-no-mdns", "-no-listen", "-peer", desk.addr())
+	rust := startAloneEnv(t, bin, dir, env, "-no-mdns", "-no-listen", "-peer", desk.addr())
 	waitFor(t, "the Rust member connected", func() bool {
 		m, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && m.Status != nil && len(m.Status.Peers) == 1

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The local control socket (docs/protocol.md, section 8): a JSON header on
-//! one line, then exactly len bytes of payload. The lite member serves the
+//! one line, then exactly len bytes of payload. cbb serves the
 //! operations a member without CA keys has: copy, paste, status, devices
 //! and watch, so the Go command line and connectors can talk to it too.
 

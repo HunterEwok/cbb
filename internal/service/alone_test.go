@@ -83,25 +83,25 @@ func TestListenDialed(t *testing.T) {
 	waitFor(t, "the members dialed the member that listens", func() bool { return dialed.Load() > 0 })
 }
 
-// startLite runs the lite member (Rust, member/) with the state in
+// startAlone runs the small device (Rust, member/) with the state in
 // dir; it is stopped by stop or at the end of the test.
-func startLite(t *testing.T, bin, dir string, args ...string) *testService {
+func startAlone(t *testing.T, bin, dir string, args ...string) *testService {
 	t.Helper()
-	return startLiteEnv(t, bin, dir, nil, args...)
+	return startAloneEnv(t, bin, dir, nil, args...)
 }
 
-// startLiteEnv is startLite with env added to the lite member's
+// startAloneEnv is startAlone with env added to the small device's
 // environment.
-func startLiteEnv(t *testing.T, bin, dir string, env []string, args ...string) *testService {
+func startAloneEnv(t *testing.T, bin, dir string, env []string, args ...string) *testService {
 	t.Helper()
-	s := &testService{name: "lite", dir: dir, socket: filepath.Join(dir, "c.sock")}
+	s := &testService{name: "small", dir: dir, socket: filepath.Join(dir, "c.sock")}
 	cmd := exec.Command(bin, append([]string{"-state", dir, "-socket", s.socket, "-debug", "service"}, args...)...)
 	if env != nil {
 		cmd.Env = append(os.Environ(), env...)
 	}
 	// Each line names the service, by its -name when it has one, so that
 	// a failing test's log tells the members apart.
-	prefix := "lite: "
+	prefix := "small: "
 	if i := slices.Index(args, "-name"); i >= 0 && i+1 < len(args) {
 		prefix = args[i+1] + ": "
 	}
@@ -131,11 +131,11 @@ func startLiteEnv(t *testing.T, bin, dir string, env []string, args ...string) *
 		select {
 		case err := <-s.done:
 			s.cancel = nil
-			t.Fatalf("the lite member ended at the start: %v", err)
+			t.Fatalf("the small device ended at the start: %v", err)
 		default:
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("the admin socket of the lite member never appeared")
+			t.Fatal("the admin socket of the small device never appeared")
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -269,7 +269,7 @@ func TestFFIJoiner(t *testing.T) {
 		fmt.Fprintln(in, "PEERS")
 		return next("PEERS ") == "1"
 	})
-	// Its hello presents it as the phone it is, not as a lite member.
+	// Its hello presents it as the phone it is, not as a small device.
 	for _, d := range pi.devices(t) {
 		if d.Name == "aurora phone" && (d.OS != group.OSAurora || d.Store != "hardware" || d.Form != "phone" || d.OSVersion != "Aurora OS 5.1.5") {
 			t.Fatalf("the connected phone is listed as %+v", d)
@@ -1204,32 +1204,32 @@ func newCode(t *testing.T) string {
 	return fmt.Sprintf("%06d", n.Int64())
 }
 
-// joinLite has the lite member join pi's group: cbb pair on pi shows a
-// code, and cbb pair -code on the lite member reads it from standard input
-// and joins at pi's address. It returns the lite member's state directory.
-func joinLite(t *testing.T, bin string, pi *testService) string {
+// joinAlone has the small device join pi's group: cbb pair on pi shows a
+// code, and cbb pair -code on the small device reads it from standard input
+// and joins at pi's address. It returns the small device's state directory.
+func joinAlone(t *testing.T, bin string, pi *testService) string {
 	t.Helper()
-	return joinLiteEnv(t, bin, pi, nil)
+	return joinAloneEnv(t, bin, pi, nil)
 }
 
-// joinLiteEnv is joinLite with env added to cbb pair's environment.
-func joinLiteEnv(t *testing.T, bin string, pi *testService, env []string) string {
+// joinAloneEnv is joinAlone with env added to cbb pair's environment.
+func joinAloneEnv(t *testing.T, bin string, pi *testService, env []string) string {
 	t.Helper()
 	c, code := openWindow(t, pi)
 	defer c.Close()
 	pa := pi.addr()
 	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "-debug", "pair", "-name", "lite", "-code", pa)
+	join := exec.Command(bin, "-state", dir, "-debug", "pair", "-name", "small", "-code", pa)
 	join.Stdin = strings.NewReader(code + "\n")
 	if env != nil {
 		join.Env = append(os.Environ(), env...)
 	}
-	join.Stderr = testWriter{t, "lite join: ", nil}
+	join.Stderr = testWriter{t, "small join: ", nil}
 	out, err := join.Output()
 	if err != nil || !strings.Contains(string(out), "Joined the group") {
 		t.Fatalf("cbb pair: %v; %s", err, out)
 	}
-	if m, err := c.Receive(); err != nil || m.Name != "lite" {
+	if m, err := c.Receive(); err != nil || m.Name != "small" {
 		t.Fatalf("pair on pi ended with %+v, %v", m, err)
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "identity.json"))
@@ -1237,17 +1237,17 @@ func joinLiteEnv(t *testing.T, bin string, pi *testService, env []string) string
 		t.Fatal(err)
 	}
 	if strings.Contains(string(raw), "_key") {
-		t.Error("the lite member saved a CA key")
+		t.Error("the small device saved a CA key")
 	}
 	return dir
 }
 
-// TestLiteMember runs the lite member among Go members: it joins with the
-// code of cbb pair, gets no CA keys, is listed as a lite device and syncs
+// TestAloneMember runs the small device among Go members: it joins with the
+// code of cbb pair, gets no CA keys, is listed as a small device and syncs
 // both ways. (Joining by the phone's QR code, where the phone dials the
-// lite member, is covered by the phone kits' tests.) CBB_TEST_ALONE names the
-// lite member's binary (cargo build at the top).
-func TestLiteMember(t *testing.T) {
+// small device, is covered by the phone kits' tests.) CBB_TEST_ALONE names the
+// small device's binary (cargo build at the top).
+func TestAloneMember(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -1257,10 +1257,10 @@ func TestLiteMember(t *testing.T) {
 	laptop := startService(t, &h, "laptop")
 	pairWith(t, pi, laptop)
 
-	dir := joinLite(t, bin, pi)
+	dir := joinAlone(t, bin, pi)
 	pa := pi.addr()
 
-	// The lite member dials the computers, the desk too, and syncs with them.
+	// The small device dials the computers, the desk too, and syncs with them.
 	desk := startService(t, &h, "desk")
 	pairWith(t, pi, desk)
 	la := laptop.addr()
@@ -1271,32 +1271,32 @@ func TestLiteMember(t *testing.T) {
 	}
 	port := free.Addr().(*net.TCPAddr).Port
 	free.Close()
-	lite := startLite(t, bin, dir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", pa, "-peer", la, "-peer", da)
+	small := startAlone(t, bin, dir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", pa, "-peer", la, "-peer", da)
 	// The control socket answers while the service still loads its identity.
-	waitFor(t, "the lite member in the group", func() bool {
-		_, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+	waitFor(t, "the small device in the group", func() bool {
+		_, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil
 	})
-	st := lite.status(t)
+	st := small.status(t)
 	if st.Group != pi.status(t).Group || st.Role != "member" {
-		t.Fatalf("lite status %+v, want the group %s", st, pi.status(t).Group)
+		t.Fatalf("small status %+v, want the group %s", st, pi.status(t).Group)
 	}
-	waitFor(t, "the lite member connected", func() bool { return len(lite.status(t).Peers) == 3 })
-	if _, err := lite.do(t, control.Header{Op: control.OpCopy}, "from the lite member"); err != nil {
+	waitFor(t, "the small device connected", func() bool { return len(small.status(t).Peers) == 3 })
+	if _, err := small.do(t, control.Header{Op: control.OpCopy}, "from the small device"); err != nil {
 		t.Fatal(err)
 	}
 	for _, s := range []*testService{pi, laptop, desk} {
-		waitFor(t, s.name+" has the lite text", func() bool { return s.paste(t) == "from the lite member" })
+		waitFor(t, s.name+" has the small device text", func() bool { return s.paste(t) == "from the small device" })
 	}
 	if _, err := laptop.do(t, control.Header{Op: control.OpCopy}, "from the laptop"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member has the laptop text", func() bool { return lite.paste(t) == "from the laptop" })
+	waitFor(t, "the small device has the laptop text", func() bool { return small.paste(t) == "from the laptop" })
 
 	// The ZX Spectrum Next's front end: texts in the Spectrum character set,
 	// with their length and CRC-32 (member/README.md, "ZX Spectrum Next").
 	zx := []byte("ZX \x605\rnext")
-	next := exec.Command(bin, "-socket", lite.socket, "next", "copy", strconv.Itoa(len(zx)), fmt.Sprintf("%08x", crc32.ChecksumIEEE(zx)))
+	next := exec.Command(bin, "-socket", small.socket, "next", "copy", strconv.Itoa(len(zx)), fmt.Sprintf("%08x", crc32.ChecksumIEEE(zx)))
 	next.Stdin = bytes.NewReader(zx)
 	if out, err := next.Output(); err != nil || string(out) != "CBBGO\rCBBOK\r" {
 		t.Fatalf("cbb next copy: %v; %q", err, out)
@@ -1304,7 +1304,7 @@ func TestLiteMember(t *testing.T) {
 	waitFor(t, "the laptop has the Next's text", func() bool { return laptop.paste(t) == "ZX £5\nnext" })
 	// .cbb text -s: a secret from the Next arrives as a secret.
 	pw := []byte("hunter2")
-	next = exec.Command(bin, "-socket", lite.socket, "next", "copy", "-secret", strconv.Itoa(len(pw)), fmt.Sprintf("%08x", crc32.ChecksumIEEE(pw)))
+	next = exec.Command(bin, "-socket", small.socket, "next", "copy", "-secret", strconv.Itoa(len(pw)), fmt.Sprintf("%08x", crc32.ChecksumIEEE(pw)))
 	next.Stdin = bytes.NewReader(pw)
 	if out, err := next.Output(); err != nil || string(out) != "CBBGO\rCBBOK\r" {
 		t.Fatalf("cbb next copy -secret: %v; %q", err, out)
@@ -1317,30 +1317,30 @@ func TestLiteMember(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []byte("to the ?Next? \x60\r????")
-	waitFor(t, "the lite member has the laptop text for the Next", func() bool { return strings.HasPrefix(lite.paste(t), "to the") })
-	zxOut, err := exec.Command(bin, "-socket", lite.socket, "next", "paste").Output()
+	waitFor(t, "the small device has the laptop text for the Next", func() bool { return strings.HasPrefix(small.paste(t), "to the") })
+	zxOut, err := exec.Command(bin, "-socket", small.socket, "next", "paste").Output()
 	if wantOut := fmt.Sprintf("CBB1 %d %08x\r%s\rCBBOK\r", len(want), crc32.ChecksumIEEE(want), want); err != nil || string(zxOut) != wantOut {
 		t.Fatalf("cbb next paste: %v; %q, want %q", err, zxOut, wantOut)
 	}
 
-	// Every member lists it as a lite device, not an admin.
-	for _, s := range []*testService{pi, laptop, lite} {
-		waitFor(t, s.name+" lists the lite member", func() bool {
+	// Every member lists it as a small device, not an admin.
+	for _, s := range []*testService{pi, laptop, small} {
+		waitFor(t, s.name+" lists the small device", func() bool {
 			for _, d := range s.devices(t) {
 				if d.ID == st.Device {
-					return d.Role == group.RoleMember && !d.Admin && d.Name == "lite"
+					return d.Role == group.RoleMember && !d.Admin && d.Name == "small"
 				}
 			}
 			return false
 		})
 	}
 
-	// A new lite member syncs and says so in its hello; the root turns its
+	// A new small device syncs and says so in its hello; the root turns its
 	// sync off with a command, and it keeps it.
-	if m := lite.status(t).Mode; m != "shared" {
-		t.Errorf("a new lite member's mode is %q, want shared", m)
+	if m := small.status(t).Mode; m != "shared" {
+		t.Errorf("a new small device's mode is %q, want shared", m)
 	}
-	waitFor(t, "the laptop sees the lite member's mode", func() bool {
+	waitFor(t, "the laptop sees the small device's mode", func() bool {
 		for _, d := range laptop.devices(t) {
 			if d.ID == st.Device {
 				return d.Mode == "shared"
@@ -1348,9 +1348,9 @@ func TestLiteMember(t *testing.T) {
 		}
 		return false
 	})
-	// The lite member offers its key for sealed messages, and the root
+	// The small device offers its key for sealed messages, and the root
 	// records it, so the command below is sealed to it.
-	waitFor(t, "the root records the lite member's key for sealed messages", func() bool {
+	waitFor(t, "the root records the small device's key for sealed messages", func() bool {
 		id, err := group.Load(pi.dir)
 		if err != nil {
 			return false
@@ -1369,64 +1369,64 @@ func TestLiteMember(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: st.Device, On: control.Bool(false)}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if m := lite.status(t).Mode; m != "own" {
-		t.Errorf("after the root's command the lite member's mode is %q, want own", m)
+	if m := small.status(t).Mode; m != "own" {
+		t.Errorf("after the root's command the small device's mode is %q, want own", m)
 	}
-	if !lite.logged("opened a sealed mode command") {
-		t.Error("the lite member did not open the command sealed to it")
+	if !small.logged("opened a sealed mode command") {
+		t.Error("the small device did not open the command sealed to it")
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, syncFile)); err != nil || !strings.Contains(string(b), `"off":true`) {
-		t.Errorf("the lite member's %s: %q, %v", syncFile, b, err)
+		t.Errorf("the small device's %s: %q, %v", syncFile, b, err)
 	}
 	if _, err := laptop.do(t, control.Header{Op: control.OpSync, Device: st.Device, On: control.Bool(true)}, ""); err == nil {
-		t.Error("a device that is no admin turned the lite member's sync on")
+		t.Error("a device that is no admin turned the small device's sync on")
 	}
-	if _, err := lite.do(t, control.Header{Op: control.OpSync, On: control.Bool(true)}, ""); err != nil || lite.status(t).Mode != "shared" {
-		t.Errorf("cbb sync on on the lite member: %v", err)
+	if _, err := small.do(t, control.Header{Op: control.OpSync, On: control.Bool(true)}, ""); err != nil || small.status(t).Mode != "shared" {
+		t.Errorf("cbb sync on on the small device: %v", err)
 	}
 
-	// The lite member and the desk dial each other, the lower device ID
+	// The small device and the desk dial each other, the lower device ID
 	// first; with the other computers off the two still sync.
 	publishMember(t, st.Device, st.Group, port)
 	waitUpTo(t, 45*time.Second, "the desk connected to all three", func() bool { return len(desk.status(t).Peers) == 3 })
 	pi.stop()
 	laptop.stop()
-	waitFor(t, "the desk and the lite member alone", func() bool {
-		return len(desk.status(t).Peers) == 1 && len(lite.status(t).Peers) == 1
+	waitFor(t, "the desk and the small device alone", func() bool {
+		return len(desk.status(t).Peers) == 1 && len(small.status(t).Peers) == 1
 	})
 	if _, err := desk.do(t, control.Header{Op: control.OpCopy}, "from the desk"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member has the desk text", func() bool { return lite.paste(t) == "from the desk" })
-	if _, err := lite.do(t, control.Header{Op: control.OpCopy}, "back from the lite member"); err != nil {
+	waitFor(t, "the small device has the desk text", func() bool { return small.paste(t) == "from the desk" })
+	if _, err := small.do(t, control.Header{Op: control.OpCopy}, "back from the small device"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the desk has the lite text", func() bool { return desk.paste(t) == "back from the lite member" })
+	waitFor(t, "the desk has the small device text", func() bool { return desk.paste(t) == "back from the small device" })
 }
 
-// TestLiteRemotePaste: an admin's paste reaches the lite member's tmux
-// target, played here by the test, once the lite member's own user turned
-// remote paste on; the lite member keeps the full member's rules and log,
+// TestAloneRemotePaste: an admin's paste reaches the small device's tmux
+// target, played here by the test, once the small device's own user turned
+// remote paste on; the small device keeps the full member's rules and log,
 // and any admin turns it off there.
-func TestLiteRemotePaste(t *testing.T) {
+func TestAloneRemotePaste(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
-	dir := joinLite(t, bin, pi)
+	dir := joinAlone(t, bin, pi)
 	pa := pi.addr()
-	lite := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
-	waitFor(t, "the lite member connected", func() bool {
-		m, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+	small := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
+	waitFor(t, "the small device connected", func() bool {
+		m, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && len(m.Status.Peers) == 1
 	})
-	// pi sends to the lite member, so it must see the connection too: under
-	// qemu it can come a moment after the lite member's side.
-	waitFor(t, "pi has the lite member", func() bool { return len(pi.status(t).Peers) == 1 })
+	// pi sends to the small device, so it must see the connection too: under
+	// qemu it can come a moment after the small device's side.
+	waitFor(t, "pi has the small device", func() bool { return len(pi.status(t).Peers) == 1 })
 	paste := func(text string, h control.Header) error {
-		h.Op, h.Device = control.OpPasteOn, "lite"
+		h.Op, h.Device = control.OpPasteOn, "small"
 		_, err := pi.do(t, h, text)
 		return err
 	}
@@ -1438,13 +1438,13 @@ func TestLiteRemotePaste(t *testing.T) {
 		time.Sleep(time.Second) // one paste a second from one sender
 	}
 	wantRefused("off", "ls", control.Header{}, "remote paste is off on this device")
-	if m, err := lite.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil || m.Status == nil || m.Status.Paste == nil || !m.Status.Paste.On {
+	if m, err := small.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil || m.Status == nil || m.Status.Paste == nil || !m.Status.Paste.On {
 		t.Fatalf("paste-receive on: %+v, %v", m, err)
 	}
 	wantRefused("no target", "ls", control.Header{}, "nothing on this device can paste")
 
 	// The tmux helper offers to paste.
-	w := lite.dial(t)
+	w := small.dial(t)
 	defer w.Close()
 	if _, err := w.Do(&control.Message{Header: control.Header{Op: control.OpWatch, Inject: targetTmux}}); err != nil {
 		t.Fatal(err)
@@ -1468,11 +1468,11 @@ func TestLiteRemotePaste(t *testing.T) {
 			w.Send(&control.Message{Header: ans})
 		}
 	}()
-	waitFor(t, "the lite member offers tmux", func() bool {
-		p := lite.status(t).Paste
+	waitFor(t, "the small device offers tmux", func() bool {
+		p := small.status(t).Paste
 		return p != nil && len(p.Targets) == 1 && p.Targets[0] == targetTmux
 	})
-	out, err := exec.Command(bin, "-socket", lite.socket, "paste-receive").Output()
+	out, err := exec.Command(bin, "-socket", small.socket, "paste-receive").Output()
 	if err != nil || !strings.Contains(string(out), "Remote paste is on: the group's admins may paste here, without Enter.") {
 		t.Errorf("cbb paste-receive: %v; %s", err, out)
 	}
@@ -1501,41 +1501,41 @@ func TestLiteRemotePaste(t *testing.T) {
 	}
 
 	// Any admin turns it off.
-	if _, err := pi.do(t, control.Header{Op: control.OpReceive, Name: "off", Device: "lite"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpReceive, Name: "off", Device: "small"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if p := lite.status(t).Paste; p == nil || p.On {
+	if p := small.status(t).Paste; p == nil || p.On {
 		t.Errorf("after paste-off: %+v", p)
 	}
 	if set, err := remotepaste.Load(dir); err != nil || set.On {
-		t.Errorf("the lite member's settings: %+v, %v", set, err)
+		t.Errorf("the small device's settings: %+v, %v", set, err)
 	}
 }
 
-// TestLiteKeysGrant: the Rust service lets the uinput helper press the keys
+// TestAloneKeysGrant: the Rust service lets the uinput helper press the keys
 // of a remote paste it handed to a desktop session only, for that session's
 // user: the paste keys once, Enter once when the command asked for it, and
 // none after the session answered, as TestKeysGrant on the Go service.
-func TestLiteKeysGrant(t *testing.T) {
+func TestAloneKeysGrant(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
-	dir := joinLite(t, bin, pi)
-	lite := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pi.addr())
-	waitFor(t, "the lite member connected", func() bool {
-		m, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+	dir := joinAlone(t, bin, pi)
+	small := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	waitFor(t, "the small device connected", func() bool {
+		m, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && len(m.Status.Peers) == 1
 	})
-	waitFor(t, "pi has the lite member", func() bool { return len(pi.status(t).Peers) == 1 })
-	if _, err := lite.do(t, control.Header{Op: control.OpReceive, Name: "on", Enter: true}, ""); err != nil {
+	waitFor(t, "pi has the small device", func() bool { return len(pi.status(t).Peers) == 1 })
+	if _, err := small.do(t, control.Header{Op: control.OpReceive, Name: "on", Enter: true}, ""); err != nil {
 		t.Fatal(err)
 	}
 	uid := strconv.Itoa(os.Getuid())
 	keys := func(grant, req string) error {
-		c, err := control.Dial(lite.socket)
+		c, err := control.Dial(small.socket)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1544,19 +1544,19 @@ func TestLiteKeysGrant(t *testing.T) {
 		_, err = c.Do(&control.Message{Header: control.Header{Op: control.OpKeys, Name: req, Value: uid, Keys: grant}})
 		return err
 	}
-	w := lite.dial(t)
+	w := small.dial(t)
 	defer w.Close()
 	w.SetDeadline(time.Now().Add(60 * time.Second))
 	if _, err := w.Do(&control.Message{Header: control.Header{Op: control.OpWatch, Inject: targetDesktop, PasteOnly: true}}); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member offers the desktop", func() bool {
-		p := lite.status(t).Paste
+	waitFor(t, "the small device offers the desktop", func() bool {
+		p := small.status(t).Paste
 		return p != nil && len(p.Targets) == 1 && p.Targets[0] == targetDesktop
 	})
 	pasted := make(chan error, 1)
 	go func() {
-		_, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "lite", Enter: true}, "ls")
+		_, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "small", Enter: true}, "ls")
 		pasted <- err
 	}()
 	m, err := w.Receive()
@@ -1598,34 +1598,34 @@ func TestLiteKeysGrant(t *testing.T) {
 	}
 }
 
-// TestLiteQuickActions: the lite member runs only the actions its own user
+// TestAloneQuickActions: the small device runs only the actions its own user
 // turned on, for the signers they allow, and restarts at an admin's request by ending with an error, after which
 // systemd starts it again. A reboot is not run here.
-func TestLiteQuickActions(t *testing.T) {
+func TestAloneQuickActions(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
-	dir := joinLite(t, bin, pi)
+	dir := joinAlone(t, bin, pi)
 	pa := pi.addr()
-	lite := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
-	waitFor(t, "the lite member connected", func() bool {
-		m, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+	small := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
+	waitFor(t, "the small device connected", func() bool {
+		m, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && len(m.Status.Peers) == 1
 	})
-	// pi sends to the lite member, so it must see the connection too: under
-	// qemu it can come a moment after the lite member's side.
-	waitFor(t, "pi has the lite member", func() bool { return len(pi.status(t).Peers) == 1 })
+	// pi sends to the small device, so it must see the connection too: under
+	// qemu it can come a moment after the small device's side.
+	waitFor(t, "pi has the small device", func() bool { return len(pi.status(t).Peers) == 1 })
 	run := func(name string) error {
 		time.Sleep(time.Second) // one action a second from one sender
-		_, err := pi.do(t, control.Header{Op: control.OpActionOn, Device: "lite", Name: name}, "")
+		_, err := pi.do(t, control.Header{Op: control.OpActionOn, Device: "small", Name: name}, "")
 		return err
 	}
 	set := func(a control.Action) {
 		t.Helper()
-		if _, err := lite.do(t, control.Header{Op: control.OpActionSet, Actions: []control.Action{a}}, ""); err != nil {
+		if _, err := small.do(t, control.Header{Op: control.OpActionSet, Actions: []control.Action{a}}, ""); err != nil {
 			t.Fatalf("setting %+v: %v", a, err)
 		}
 	}
@@ -1646,11 +1646,11 @@ func TestLiteQuickActions(t *testing.T) {
 	set(control.Action{Name: actions.Restart, On: true, By: []string{actions.ByPhone}})
 	wantRefused(actions.Restart, "only for phone")
 	set(control.Action{Name: actions.Restart, On: true})
-	st := lite.status(t)
+	st := small.status(t)
 	if len(st.Actions) != len(actions.Presets) || st.Actions[2].Name != actions.Reboot || !st.Actions[2].On || st.Actions[4].On || !st.Actions[5].On {
-		t.Errorf("the lite member's actions: %+v", st.Actions)
+		t.Errorf("the small device's actions: %+v", st.Actions)
 	}
-	out, err := exec.Command(bin, "-socket", lite.socket, "action").Output()
+	out, err := exec.Command(bin, "-socket", small.socket, "action").Output()
 	if err != nil || !strings.Contains(string(out), "reboot           on, for every admin, keys in hardware only\n") {
 		t.Errorf("cbb action: %v; %s", err, out)
 	}
@@ -1658,13 +1658,13 @@ func TestLiteQuickActions(t *testing.T) {
 		t.Fatal(err)
 	}
 	select {
-	case err := <-lite.done:
-		lite.cancel = nil
+	case err := <-small.done:
+		small.cancel = nil
 		if err == nil {
-			t.Error("the lite member ended without an error, so systemd would not start it again")
+			t.Error("the small device ended without an error, so systemd would not start it again")
 		}
 	case <-time.After(10 * time.Second):
-		t.Fatal("the lite member did not restart")
+		t.Fatal("the small device did not restart")
 	}
 
 	// The log keeps who asked and how it ended, in the full member's file.
@@ -1677,15 +1677,15 @@ func TestLiteQuickActions(t *testing.T) {
 	}
 
 	// Started again, it keeps them, and any admin turns them off.
-	lite = startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
-	waitFor(t, "the lite member connected again", func() bool {
-		m, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+	small = startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
+	waitFor(t, "the small device connected again", func() bool {
+		m, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && len(m.Status.Peers) == 1
 	})
 	// pi may still hold the connection from before the restart a moment,
-	// so the first try can find no lite member to send to.
+	// so the first try can find no small device to send to.
 	waitFor(t, "pi turned the quick actions off", func() bool {
-		_, err := pi.do(t, control.Header{Op: control.OpActionOff, Device: "lite"}, "")
+		_, err := pi.do(t, control.Header{Op: control.OpActionOff, Device: "small"}, "")
 		if err != nil {
 			t.Logf("actions-off: %v", err)
 		}
@@ -1696,19 +1696,19 @@ func TestLiteQuickActions(t *testing.T) {
 	}
 }
 
-// TestLiteMemberAway: once sync away from home is on, the lite member
+// TestAloneMemberAway: once sync away from home is on, the small device
 // offers its tunnel key to the group's hub at home and keeps the hub's
 // offer; away from home it reaches the hub only through the WireGuard
-// tunnel (GotaTun and smoltcp in the lite member, the Go hub's netstack),
+// tunnel (GotaTun and smoltcp in the small device, the Go hub's netstack),
 // and syncs there.
-func TestLiteMemberAway(t *testing.T) {
+func TestAloneMemberAway(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
-	dir := joinLite(t, bin, pi)
+	dir := joinAlone(t, bin, pi)
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -1720,8 +1720,8 @@ func TestLiteMemberAway(t *testing.T) {
 
 	// At home: off until the user agrees, then the hub's offer comes.
 	pa := pi.addr()
-	home := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
-	waitFor(t, "the lite member at home", func() bool {
+	home := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
+	waitFor(t, "the small device at home", func() bool {
 		st, err := home.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && len(st.Status.Peers) == 1
 	})
@@ -1734,34 +1734,34 @@ func TestLiteMemberAway(t *testing.T) {
 	if _, err := home.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member keeps the hub's offer", func() bool {
+	waitFor(t, "the small device keeps the hub's offer", func() bool {
 		a := home.status(t).Away
 		return a != nil && a.HubDevice == piID && !a.Through
 	})
 	home.stop()
 
 	// Away: no address of the hub but its tunnel's.
-	away := startLite(t, bin, dir, "-no-mdns", "-no-listen")
-	waitUpTo(t, 30*time.Second, "the lite member reaches the hub through the tunnel", func() bool {
+	away := startAlone(t, bin, dir, "-no-mdns", "-no-listen")
+	waitUpTo(t, 30*time.Second, "the small device reaches the hub through the tunnel", func() bool {
 		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && m.Status.Away != nil && m.Status.Away.Through && len(m.Status.Peers) == 1
 	})
-	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "from the lite member, away"); err != nil {
+	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "from the small device, away"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the hub has it", func() bool { return pi.paste(t) == "from the lite member, away" })
-	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the lite member, away"); err != nil {
+	waitFor(t, "the hub has it", func() bool { return pi.paste(t) == "from the small device, away" })
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the small device, away"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member has it", func() bool { return away.paste(t) == "to the lite member, away" })
+	waitFor(t, "the small device has it", func() bool { return away.paste(t) == "to the small device, away" })
 	away.stop()
 
 	// Through a local UDP port that leads to the hub (cbb next link -udp
 	// on the ZX Spectrum Next): -tunnel-via sends the tunnel's packets
 	// there instead of the hub's address.
 	relayed := udpRelay(t, port)
-	away = startLite(t, bin, dir, "-no-mdns", "-no-listen", "-tunnel-via", relayed.addr)
-	waitUpTo(t, 30*time.Second, "the lite member reaches the hub through the local UDP port", func() bool {
+	away = startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-tunnel-via", relayed.addr)
+	waitUpTo(t, 30*time.Second, "the small device reaches the hub through the local UDP port", func() bool {
 		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && m.Status.Away != nil && m.Status.Away.Through && len(m.Status.Peers) == 1
 	})
@@ -1773,13 +1773,13 @@ func TestLiteMemberAway(t *testing.T) {
 	// through the tunnel): the key is gone, and so is the connection
 	// through the tunnel. Its own user turning it off again changes
 	// nothing.
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "off", Device: "lite"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "off", Device: "small"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "tunnel.json")); !os.IsNotExist(err) {
 		t.Errorf("tunnel.json after the away-off command: %v", err)
 	}
-	waitFor(t, "the lite member syncs at home only", func() bool {
+	waitFor(t, "the small device syncs at home only", func() bool {
 		st := away.status(t)
 		return st.Away == nil && len(st.Peers) == 0
 	})
@@ -1788,18 +1788,18 @@ func TestLiteMemberAway(t *testing.T) {
 	}
 }
 
-// TestLiteMemberAwayObfuscated syncs the lite member away from home with a
-// hub that hides its tunnel with AmneziaWG: the lite member keeps the
+// TestAloneMemberAwayObfuscated syncs the small device away from home with a
+// hub that hides its tunnel with AmneziaWG: the small device keeps the
 // offer's settings and speaks AmneziaWG to the Go hub (member/src/awg.rs
 // around GotaTun, amneziawg-go on the hub). CBB_TEST_ALONE names the binary.
-func TestLiteMemberAwayObfuscated(t *testing.T) {
+func TestAloneMemberAwayObfuscated(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
-	dir := joinLite(t, bin, pi)
+	dir := joinAlone(t, bin, pi)
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -1808,15 +1808,15 @@ func TestLiteMemberAwayObfuscated(t *testing.T) {
 		t.Fatal(err)
 	}
 	piID := pi.status(t).Device
-	home := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pi.addr())
-	waitFor(t, "the lite member at home", func() bool {
+	home := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	waitFor(t, "the small device at home", func() bool {
 		st, err := home.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && len(st.Status.Peers) == 1
 	})
 	if _, err := home.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member keeps the obfuscated hub's offer", func() bool {
+	waitFor(t, "the small device keeps the obfuscated hub's offer", func() bool {
 		a := home.status(t).Away
 		return a != nil && a.HubDevice == piID
 	})
@@ -1826,30 +1826,30 @@ func TestLiteMemberAwayObfuscated(t *testing.T) {
 		t.Fatalf("tunnel.json keeps no AmneziaWG settings (%v): %s", err, raw)
 	}
 
-	// The hub speaks AmneziaWG only: a lite member that reaches it speaks
+	// The hub speaks AmneziaWG only: a small device that reaches it speaks
 	// it too.
-	away := startLite(t, bin, dir, "-no-mdns", "-no-listen")
-	waitUpTo(t, 30*time.Second, "the lite member reaches the obfuscated hub through the tunnel", func() bool {
+	away := startAlone(t, bin, dir, "-no-mdns", "-no-listen")
+	waitUpTo(t, 30*time.Second, "the small device reaches the obfuscated hub through the tunnel", func() bool {
 		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && m.Status.Away != nil && m.Status.Away.Through && len(m.Status.Peers) == 1
 	})
-	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "from the lite member, hidden"); err != nil {
+	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "from the small device, hidden"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the hub has it", func() bool { return pi.paste(t) == "from the lite member, hidden" })
-	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the lite member, hidden"); err != nil {
+	waitFor(t, "the hub has it", func() bool { return pi.paste(t) == "from the small device, hidden" })
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the small device, hidden"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member has it", func() bool { return away.paste(t) == "to the lite member, hidden" })
+	waitFor(t, "the small device has it", func() bool { return away.paste(t) == "to the small device, hidden" })
 }
 
-// TestLiteMemberAwayXHTTP checks the lite member's way over VLESS with
+// TestAloneMemberAwayXHTTP checks the small device's way over VLESS with
 // XHTTP: the hub is reached only through a forwarder whose VLESS sits
-// behind a TLS web server with an RSA certificate from a CA, which the lite
+// behind a TLS web server with an RSA certificate from a CA, which the small device
 // member trusts through SSL_CERT_FILE. The offer's UDP address leads
-// nowhere, so the lite member tries it, then VLESS, and copies go both
+// nowhere, so the small device tries it, then VLESS, and copies go both
 // ways inside it. CBB_TEST_ALONE names the binary.
-func TestLiteMemberAwayXHTTP(t *testing.T) {
+func TestAloneMemberAwayXHTTP(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -1891,7 +1891,7 @@ func TestLiteMemberAwayXHTTP(t *testing.T) {
 
 	var h hub
 	pi := startService(t, &h, "pi")
-	dir := joinLite(t, bin, pi)
+	dir := joinAlone(t, bin, pi)
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -1904,15 +1904,15 @@ func TestLiteMemberAwayXHTTP(t *testing.T) {
 		return a != nil && a.Forwarder != nil && a.Forwarder.Registered
 	})
 	piID := pi.status(t).Device
-	home := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pi.addr())
-	waitFor(t, "the lite member at home", func() bool {
+	home := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	waitFor(t, "the small device at home", func() bool {
 		st, err := home.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && len(st.Status.Peers) == 1
 	})
 	if _, err := home.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member keeps the hub's offer with VLESS", func() bool {
+	waitFor(t, "the small device keeps the hub's offer with VLESS", func() bool {
 		a := home.status(t).Away
 		return a != nil && a.HubDevice == piID
 	})
@@ -1950,25 +1950,25 @@ func TestLiteMemberAwayXHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	away := startLiteEnv(t, bin, dir, []string{"SSL_CERT_FILE=" + roots}, "-no-mdns", "-no-listen")
-	waitUpTo(t, 60*time.Second, "the lite member reaches the hub over VLESS", func() bool {
+	away := startAloneEnv(t, bin, dir, []string{"SSL_CERT_FILE=" + roots}, "-no-mdns", "-no-listen")
+	waitUpTo(t, 60*time.Second, "the small device reaches the hub over VLESS", func() bool {
 		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && m.Status.Away != nil && m.Status.Away.Through && len(m.Status.Peers) == 1
 	})
-	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "from the lite member, over VLESS"); err != nil {
+	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "from the small device, over VLESS"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the hub has it", func() bool { return pi.paste(t) == "from the lite member, over VLESS" })
-	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the lite member, over VLESS"); err != nil {
+	waitFor(t, "the hub has it", func() bool { return pi.paste(t) == "from the small device, over VLESS" })
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the small device, over VLESS"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the lite member has it", func() bool { return away.paste(t) == "to the lite member, over VLESS" })
+	waitFor(t, "the small device has it", func() bool { return away.paste(t) == "to the small device, over VLESS" })
 }
 
-// TestLiteRootless runs the lite member as a rootless install (D-79): its
+// TestAloneRootless runs the small device as a rootless install (D-79): its
 // hello says so, the root records it as rootless, and it refuses the
 // console and the reboot, which need root. CBB_TEST_ALONE names the binary.
-func TestLiteRootless(t *testing.T) {
+func TestAloneRootless(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -1978,7 +1978,7 @@ func TestLiteRootless(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
-	dir := joinLite(t, bin, pi)
+	dir := joinAlone(t, bin, pi)
 	pa := pi.addr()
 	free, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -1986,17 +1986,17 @@ func TestLiteRootless(t *testing.T) {
 	}
 	port := free.Addr().(*net.TCPAddr).Port
 	free.Close()
-	lite := startLiteEnv(t, bin, dir, []string{"CBB_ROOTLESS=1"}, "-no-mdns", "-port", strconv.Itoa(port), "-peer", pa)
-	waitFor(t, "lite recorded as rootless", func() bool {
+	small := startAloneEnv(t, bin, dir, []string{"CBB_ROOTLESS=1"}, "-no-mdns", "-port", strconv.Itoa(port), "-peer", pa)
+	waitFor(t, "small recorded as rootless", func() bool {
 		for _, d := range pi.devices(t) {
-			if d.Name == "lite" {
+			if d.Name == "small" {
 				return d.Store == group.StoreRootless && d.Role == group.RoleMember
 			}
 		}
 		return false
 	})
 	run := func(args ...string) (string, error) {
-		cmd := exec.Command(bin, append([]string{"-socket", lite.socket}, args...)...)
+		cmd := exec.Command(bin, append([]string{"-socket", small.socket}, args...)...)
 		cmd.Env = append(os.Environ(), "CBB_ROOTLESS=1")
 		out, err := cmd.CombinedOutput()
 		return string(out), err

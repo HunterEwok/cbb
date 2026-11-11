@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! What the lite member keeps for remote paste (docs/design.md, "Remote
+//! What cbb keeps for remote paste (docs/design.md, "Remote
 //! paste"), as the full member's internal/remotepaste, in the same files:
 //! the switches its own user sets, the cleaning of a text before it goes
 //! in, the limits per sender and the log of the last pastes.

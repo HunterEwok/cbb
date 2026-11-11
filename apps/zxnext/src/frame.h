@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// The frames cbb next on the lite member answers in (member/README.md, "ZX Spectrum Next"),
+// The frames cbb next answers in (member/README.md, "ZX Spectrum Next"),
 // without any I/O, so the host compiler tests them too.
 
 #ifndef CBB_FRAME_H
@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-// What a line from the lite member is.
+// What a line from cbb on the Pi is.
 enum {
     LINE_OTHER, // the echo of the command, a prompt, a note (CBB#): skipped
     LINE_TEXT,  // CBB1 <len> <crc32>: len bytes of text follow, then CR

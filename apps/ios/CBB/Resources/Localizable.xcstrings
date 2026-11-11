@@ -17760,52 +17760,6 @@
         }
       }
     },
-    "While the app is open, this phone is the hub of a group without a computer: the other phones, TVs and lite members on the home network connect to it, and with a forwarder they reach it from afar too. The forwarder only passes encrypted packets; it learns the group's tag, this phone's tunnel key and the addresses, never what is copied. A computer that is always on is the better hub; until then this phone does it.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ما دام التطبيق مفتوحًا، يكون هذا الهاتف محور مجموعة بلا حاسوب: تتصل به الهواتف والتلفازات والأعضاء الخفيفة الأخرى على الشبكة المنزلية، ومع مُعيد توجيه تصل إليه من بعيد أيضًا. لا يمرّر مُعيد التوجيه إلا حزمًا مشفّرة؛ ويعرف وسم المجموعة ومفتاح نفق هذا الهاتف والعناوين، ولا يعرف أبدًا ما يُنسخ. الحاسوب الذي يعمل دائمًا هو المحور الأفضل؛ وحتى ذلك الحين يقوم هذا الهاتف بالمهمة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mientras la app está abierta, este teléfono es el hub de un grupo sin ordenador: los demás teléfonos, televisores y miembros ligeros de la red de casa se conectan a él, y con un reenviador también llegan desde lejos. El reenviador solo transmite paquetes cifrados; conoce la etiqueta del grupo, la clave del túnel de este teléfono y las direcciones, nunca lo que se copia. Un ordenador siempre encendido es mejor hub; hasta entonces lo hace este teléfono."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "כל עוד היישום פתוח, הטלפון הזה הוא הרכזת של קבוצה בלי מחשב: הטלפונים, הטלוויזיות והחברים הקלים האחרים ברשת הביתית מתחברים אליו, ועם מעביר הם מגיעים אליו גם מרחוק. המעביר מעביר רק מנות מוצפנות; הוא יודע את התג של הקבוצה, את מפתח המנהרה של הטלפון הזה ואת הכתובות, אבל לעולם לא את מה שמועתק. מחשב שתמיד דולק הוא רכזת טובה יותר; עד אז הטלפון הזה עושה זאת."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ऐप खुला रहने तक, यह फ़ोन बिना कंप्यूटर वाले समूह का हब है: घर के नेटवर्क के बाकी फ़ोन, टीवी और लाइट सदस्य इससे जुड़ते हैं, और फ़ॉरवर्डर के साथ दूर से भी पहुँचते हैं। फ़ॉरवर्डर केवल एन्क्रिप्टेड पैकेट आगे बढ़ाता है; वह समूह का टैग, इस फ़ोन की टनल कुंजी और पते जानता है, पर कभी नहीं जानता कि क्या कॉपी हुआ। हमेशा चालू रहने वाला कंप्यूटर बेहतर हब है; तब तक यह फ़ोन यह काम करता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Пока приложение открыто, этот телефон служит хабом группы без компьютера: к нему подключаются другие телефоны, телевизоры и лайт-участники в домашней сети, а с форвардером и издалека. Форвардер только передаёт зашифрованные пакеты: он узнаёт метку группы, ключ туннеля этого телефона и адреса, но никогда не видит, что копируется. Лучший хаб — компьютер, который всегда включён; пока его нет, хабом будет этот телефон."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wakati programu iko wazi, simu hii ndiyo kitovu cha kikundi kisicho na kompyuta: simu, TV na wanachama wepesi wengine kwenye mtandao wa nyumbani huunganishwa nayo, na kwa kisambazaji huifikia kutoka mbali pia. Kisambazaji hupitisha pakiti zilizosimbwa tu; hujua lebo ya kikundi, ufunguo wa handaki wa simu hii na anwani, kamwe si kinachonakiliwa. Kompyuta iliyowashwa daima ni kitovu bora; hadi wakati huo simu hii inafanya kazi hiyo."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "应用打开时，这部手机是没有电脑的群组的中心节点：家庭网络中的其他手机、电视和轻量成员会连接到它，有转发器时它们也能从远方连接。转发器只传递加密数据包；它会知道群组的标签、这部手机的隧道密钥和地址，但永远不会知道复制的内容。一直开机的电脑更适合做中心节点；在那之前由这部手机担任。"
-          }
-        }
-      }
-    },
     "This phone is the hub: sync works while the app is open.": {
       "localizations": {
         "ar": {

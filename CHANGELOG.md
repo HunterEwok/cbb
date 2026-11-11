@@ -232,7 +232,7 @@ All notable changes to cbb are documented in this file. The format follows
   the Rust `cbb` every computer's service hand it what needs Go.
 - The Rust `cbb` keeps its device key in the TPM, or a Mac's Secure Enclave, through
   `cbb-helper`, as the Go member does: `cbb pair` makes it there, `identity.json` keeps the
-  hardware's blob, and every signature goes through the helper (`TestLiteTPM`, on swtpm).
+  hardware's blob, and every signature goes through the helper (`TestAloneTPM`, on swtpm).
   The Rust `cbb` signs with a key on a YubiKey itself after its PIN, and the helper seals
   secrets (`seal`, `unseal`): the Rust `cbb` keeps `seal.json` and `tunnel.json` sealed by
   the hardware, and reads and writes a Go hub's `tunnel.json` as Go does
@@ -241,67 +241,67 @@ All notable changes to cbb are documented in this file. The format follows
   it admits a computer by the QR code that computer shows (`cbb pair -qr`), and removes,
   renames, freezes and unfreezes devices, makes a computer an admin, sets the key level and
   voids two histories (`cbb remove`, `rename`, `freeze`, `unfreeze`, `admin`, `keys`,
-  `resolve`), each through the unchanged Go command line (`TestLiteRoot`). It presents itself
+  `resolve`), each through the unchanged Go command line (`TestAloneRoot`). It presents itself
   as a full member when its device record says so. A member the records remove or freeze
   now gets those records before its connection closes. `cbb pair` on it opens a pairing
-  window with a code, which a computer joins as it joins a Go root (`TestLiteRootWindow`). It
+  window with a code, which a computer joins as it joins a Go root (`TestAloneRootWindow`). It
   also sets the takeover delay and how long an incoming copy stays live, hands the group to
   an admin, and mutes and unmutes a device (`cbb takeover -delay`, `incoming`, `handover`,
   `mute -on`, `unmute -on`). With the capability `admin` (`-caps`, on by default), it is a
   computer's service in a Go computer's group: it offers an admin key, becomes an admin when
   the root makes it one, and takes the group over from a lost root with `cbb takeover`,
   becoming the root once the claim takes effect and giving the other admins admin CAs from
-  the new root (`TestLiteTakeover`). Any of its members
+  the new root (`TestAloneTakeover`). Any of its members
   claims the group with the recovery key (`cbb recovery`, the sheet's text or QR code, or
   `-yubikey` with the key on a YubiKey through cbb-helper) when the root is lost
-  (`TestLiteRecovery`). An admin Rust service is the group's hub (`cbb global hub`, with
+  (`TestAloneRecovery`). An admin Rust service is the group's hub (`cbb global hub`, with
   the addresses away from home and `-port`): it admits each member's tunnel key from its
   hello, offers itself to them, serves the WireGuard tunnel (AmneziaWG when obfuscated) on
   its UDP port, and takes the members' connections through it as Go's hub does; `cbb global
-  hub off` moves its clients to the next hub and retires it (`TestLiteHub`). With other
+  hub off` moves its clients to the next hub and retires it (`TestAloneHub`). With other
   hubs it shares its clients and offer, takes theirs, waits as the client of a hub above it
   that serves, serves when that hub is gone and gives way when it is back
-  (`TestLiteHubs`, beside a Go hub). It moves the hub to another computer, makes one a hub
+  (`TestAloneHubs`, beside a Go hub). It moves the hub to another computer, makes one a hub
   and stops one with signed hub commands (`cbb global move`, `hub -on`, `hub off -on`), and
-  carries out the same commands from a Go admin or a phone (`TestLiteHubCommands`). A Rust
+  carries out the same commands from a Go admin or a phone (`TestAloneHubCommands`). A Rust
   hub registers with its forwarder (`-forwarder`, `-forwarder-key`, or `default` for the
-  project's) and its clients reach it through it (`TestLiteHubForwarder`), over VLESS with
-  XHTTP too (`-vless`, `TestLiteHubVLESS`). It also signs the
+  project's) and its clients reach it through it (`TestAloneHubForwarder`), over VLESS with
+  XHTTP too (`-vless`, `TestAloneHubVLESS`). It also signs the
   table of main hubs (`cbb global hubs`) and turns sync away from home off on another device
   (`cbb global off -on`), and makes a computer a hub that only passes copies on
-  (`hub -on DEVICE -forward-only`), which a Rust member can be too (`TestLiteForwardOnly`).
+  (`hub -on DEVICE -forward-only`), which a Rust member can be too (`TestAloneForwardOnly`).
   It keeps the known networks as Go does (`networks.json`, `cbb network`, the interfaces it
   keeps quiet on in `cbb status`), publishing itself and taking connections on the member
-  port only there (`TestLiteNetwork`). It keeps the group's server credentials as Go does
+  port only there (`TestAloneNetwork`). It keeps the group's server credentials as Go does
   (`credentials.json`, `server-keys.json`): it takes and passes on those its peers send,
   signs its server key for each period, and as the root starts the periods and signs the
   hubs' and the members' credentials. It meets the group at a blind relay (`cbb global
   relay`, with the relay's key or `default` for the project's), registering there with those
   credentials once they list it, and syncs through it with the members it reaches no other
-  way (`TestLiteRelay`, and `TestLiteRelayRoot` as the group's root). It follows the
+  way (`TestAloneRelay`, and `TestAloneRelayRoot` as the group's root). It follows the
   project's relay as Go does: it takes the signed lists from its peers and its control socket, fetches
   newer ones through the relay's address when the relay refuses it, and moves to the next
-  address the lists or DNS give when the relay is gone (`TestLiteRelayProject`). A Rust hub
+  address the lists or DNS give when the relay is gone (`TestAloneRelayProject`). A Rust hub
   registers with its forwarder with the group's hubs' credential, and serves its clients
-  with a new key in each period of the credentials (`TestLiteHubCredential`). A Rust hub
+  with a new key in each period of the credentials (`TestAloneHubCredential`). A Rust hub
   makes remote invitations (`invite`, with the admin's confirmation of each device that uses
-  one, `TestLiteInvite`), and the Rust member joins with one (`cbb pair -invite`), offering
-  its own tunnel key through the guest tunnel once it joined (`TestLiteJoinInvite`). An admin
+  one, `TestAloneInvite`), and the Rust member joins with one (`cbb pair -invite`), offering
+  its own tunnel key through the guest tunnel once it joined (`TestAloneJoinInvite`). An admin
   Rust service pastes on another device, runs its quick actions and turns either off there,
   one device or all (`cbb paste -on`, `cbb action NAME -on`, `cbb action off -on`/`-all`,
-  `cbb paste-receive off -on`/`-all`, `TestLiteAdminCommands`). The Rust service has every
+  `cbb paste-receive off -on`/`-all`, `TestAloneAdminCommands`). The Rust service has every
   preset the Go service has (lock, sleep, shutdown and the keyboard's layout too) and its
   user's own actions (`cbb action add`, `remove`), which CBB's agent runs in the user's
-  session, as it runs the presets on a Mac and Windows (`TestLiteOwnActions`); the uinput
-  helper presses a remote paste's keys for it with a one-time grant (`TestLiteKeysGrant`).
+  session, as it runs the presets on a Mac and Windows (`TestAloneOwnActions`); the uinput
+  helper presses a remote paste's keys for it with a one-time grant (`TestAloneKeysGrant`).
   The Rust service is a Bluetooth keyboard and a TV's remote through cbb-helper, which runs
   the Go service's code for both (`internal/peripheral`): `cbb keyboard`, `cbb remote`, their
   status, the remote pastes the user sends there, and the quick action `keyboard-layout`
-  (`TestLitePeripherals`). The Rust service passes the group's signed release on as the Go
+  (`TestAlonePeripherals`). The Rust service passes the group's signed release on as the Go
   service does: it keeps the newest that checks out, names it in its hello, sends it to the
   computers that hold an older one, shows it in status, and serves the archives that cbb
   update installed to its peers (`release`, `release-held`, `release-file`, `release-get`,
-  `release-want`, `TestLiteRelease`, `TestLiteReleaseArchives`). The Rust `cbb update` hands
+  `release-want`, `TestAloneRelease`, `TestAloneReleaseArchives`). The Rust `cbb update` hands
   the service the release and the archive it installed, downloads on a hub the archives the
   members update from, and installs from the group when no update server answers.
   The Rust service builds for Windows: its control sockets are AF_UNIX sockets there too, in
@@ -315,15 +315,15 @@ All notable changes to cbb are documented in this file. The format follows
   The Rust `cbb agent` links the session's clipboard with the service through cbb-helper,
   which runs the Go agent's code (`internal/agent`: Wayland and X11, the Mac's and Windows'
   pasteboard, Windows' remote paste target, the session's quick actions) and ends with it
-  (`TestLiteAgent`).
+  (`TestAloneAgent`).
   `cbb service` in Rust takes `-state` and `-socket` after the command too, as launchd's plist,
   FreeBSD's rc script and OpenWrt's init script pass them, and `-user`: started as root, it
   opens the mDNS sockets and then runs as that user, as the Go service does for FreeBSD
-  (`TestLiteServiceFlags`).
+  (`TestAloneServiceFlags`).
 - A request to the Rust service while it is still starting waits for it rather than hearing
   that the device is in no group.
 - The Rust member no longer can deadlock when a renewed certificate and new records come at
-  once (seen in `TestLiteTakeover`).
+  once (seen in `TestAloneTakeover`).
 - A pairing window closed while it sent its Welcome now ends when that attempt ends, also when
   the attempt fails, in Go and in Rust; an invitation cancelled at that moment no longer
   crashes the Go service.
@@ -331,16 +331,16 @@ All notable changes to cbb are documented in this file. The format follows
   desktop agent's copied image, `cbb paste -o` and the agent's fetch (`copy-media`,
   `copied-media`, `paste-media`), and `cbb config max-copy` and `max-copy-away`. It keeps and
   serves the content of media copies, and gives a watcher that takes them the copy whole; the
-  Go command line and agent work against it unchanged (`TestLiteClients`).
+  Go command line and agent work against it unchanged (`TestAloneClients`).
 - The lite member speaks AmneziaWG to a hub that hides its tunnel (member/src/awg.rs, around
   GotaTun's WireGuard): it keeps the group's settings from the hub's offer and syncs away from
-  home through the obfuscated hub instead of staying at home (`TestLiteMemberAwayObfuscated`
+  home through the obfuscated hub instead of staying at home (`TestAloneMemberAwayObfuscated`
   against the Go hub's amneziawg-go).
 - The lite member reaches a hub over VLESS with XHTTP (member/src/vless.rs, cbb_core::vless):
   HTTPS to the forwarder's site, its certificate checked against the system's CA certificates
   or `SSL_CERT_FILE` (RSA and P-384 added to the core's TLS provider for that), HTTP/1.1
   packet-up requests, its UDP addresses tried first only with AmneziaWG
-  (`TestLiteMemberAwayXHTTP` against the Go forwarder behind a web server).
+  (`TestAloneMemberAwayXHTTP` against the Go forwarder behind a web server).
 - The phones' tunnel in Rust (ffi/, `cbb_tunnel`, feature `tunnel`): the lite member's
   WireGuard with AmneziaWG and VLESS with XHTTP behind a loopback port, for the iPhone and
   Android apps (`TestRustPhoneTunnel` against the Go hub); the phone

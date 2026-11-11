@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The lite member's service: the control socket, the identity, the sync
+//! cbb's service: the control socket, the identity, the sync
 //! engine and the connections to the other members.
 
 use crate::sys::{UnixListener, UnixStream};
@@ -53,8 +53,8 @@ const WATCH_QUEUE: usize = 16;
 const RESTART_AFTER: Duration = Duration::from_millis(500);
 
 /// The targets a watcher offers for remote paste, as its watch request
-/// names them (docs/protocol.md, section 8). The lite member has no desktop
-/// of its own, but a full member's desktop connector may watch it.
+/// names them (docs/protocol.md, section 8). cbb has no desktop
+/// connector of its own, but a full member's desktop connector may watch it.
 pub(crate) const DESKTOP: &str = "desktop";
 pub(crate) const TMUX: &str = "tmux";
 pub(crate) const CONSOLE: &str = "console";
@@ -176,7 +176,7 @@ pub struct Config {
     pub peers: Vec<SocketAddr>,
     /// Find the members with mDNS, and publish this one.
     pub mdns: bool,
-    /// The member port, where phones and other lite members dial
+    /// The member port, where phones and other members dial
     /// this one; None listens nowhere.
     pub port: Option<u16>,
     /// Where the tunnel sends its packets instead of the hub's addresses: a
@@ -790,7 +790,7 @@ fn listen(path: &Path, admin: bool) -> Result<UnixListener> {
         std::fs::create_dir_all(dir).context(format!("cannot create {}", dir.display()))?;
     }
     if UnixStream::connect(path).is_ok() {
-        return Err(Error::msg(format!("another lite member service runs at {}", path.display())));
+        return Err(Error::msg(format!("another cbb service runs at {}", path.display())));
     }
     let _ = std::fs::remove_file(path);
     // The socket is made in a new directory that only the service can enter,
@@ -878,8 +878,8 @@ impl Service {
         }
     }
 
-    /// cbb global: shows sync away from home, or turns it on or off. The
-    /// lite member keeps its keys in files, so turning it on needs the
+    /// cbb global: shows sync away from home, or turns it on or off. Without
+    /// the helper cbb keeps its keys in files, so turning it on needs the
     /// user's consent.
     fn global(&self, h: &Header) -> Result<Message> {
         let (node, away) = (self.node()?, self.away()?);
@@ -975,7 +975,7 @@ impl Service {
 
     /// Carries out a command a member sent (docs/protocol.md, section 15):
     /// one that an admin signed for this device in its group, that has not
-    /// expired and was not carried out before. The lite member takes mode,
+    /// expired and was not carried out before. cbb takes mode,
     /// paste, action and the commands that turn things off; it is never the
     /// group's hub, so it refuses hub commands.
     fn command(&self, peer: &crate::certs::DeviceId, c: &crate::records::Record) -> wire::CommandResult {
@@ -1870,8 +1870,8 @@ impl Service {
     }
 
     /// cbb paste-receive on or off: only this device's own user turns
-    /// remote paste on here; the lite member is never an admin, so it turns
-    /// it off on no other device.
+    /// remote paste on here; it turns it off on no
+    /// other device.
     fn set_receive(&self, h: &Header) -> Result<Message> {
         match h.name.as_str() {
             "on" | "off" => {}

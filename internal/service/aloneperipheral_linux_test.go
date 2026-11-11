@@ -22,12 +22,12 @@ import (
 	"github.com/HunterEwok/cbb/internal/peripheral"
 )
 
-// TestLitePeripherals checks the Bluetooth keyboard and a TV's remote on
+// TestAlonePeripherals checks the Bluetooth keyboard and a TV's remote on
 // the Rust service, which cbb-helper runs for it: cbb keyboard and cbb
 // remote, a remote paste on the keyboard's host and on a Roku, and the
 // quick action keyboard-layout.
-func TestLitePeripherals(t *testing.T) {
-	bin := liteBin(t)
+func TestAlonePeripherals(t *testing.T) {
+	bin := aloneBin(t)
 	helper := filepath.Join(t.TempDir(), "cbb-helper")
 	if out, err := exec.Command("go", "build", "-o", helper, "github.com/HunterEwok/cbb/cmd/cbb-helper").CombinedOutput(); err != nil {
 		t.Fatalf("go build cbb-helper: %v\n%s", err, out)
@@ -35,26 +35,26 @@ func TestLitePeripherals(t *testing.T) {
 	f := bluetest.Start(t)
 	var h hub
 	pi := startService(t, &h, "pi")
-	dir := joinLite(t, bin, pi)
-	lite := startLiteEnv(t, bin, dir, []string{"CBB_HELPER=" + helper, "CBB_TEST_BLUEZ=" + f.Addr}, "-no-mdns", "-no-listen", "-peer", pi.addr())
-	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 && len(lite.status(t).Peers) == 1 })
+	dir := joinAlone(t, bin, pi)
+	small := startAloneEnv(t, bin, dir, []string{"CBB_HELPER=" + helper, "CBB_TEST_BLUEZ=" + f.Addr}, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 && len(small.status(t).Peers) == 1 })
 
 	// A Linux computer with cbb-helper can be the keyboard, so its status
 	// shows one, off, as Go's KeyboardStatus.
-	if k := lite.status(t).Keyboard; k == nil || k.On || k.Layout != "us" {
+	if k := small.status(t).Keyboard; k == nil || k.On || k.Layout != "us" {
 		t.Fatalf("the keyboard before on: %+v, want off", k)
 	}
-	m, err := lite.do(t, control.Header{Op: control.OpKeyboard, Name: "on", Keyboard: &control.Keyboard{Layout: "us", Rate: 60, Pastes: true}}, "")
+	m, err := small.do(t, control.Header{Op: control.OpKeyboard, Name: "on", Keyboard: &control.Keyboard{Layout: "us", Rate: 60, Pastes: true}}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if k := m.Status.Keyboard; k == nil || !k.On || k.Layout != "us" || !k.Pastes {
 		t.Fatalf("after on: %+v", k)
 	}
-	if _, err := lite.do(t, control.Header{Op: control.OpKeyboard, Name: "pair"}, ""); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpKeyboard, Name: "pair"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if k := lite.status(t).Keyboard; k == nil || k.VisibleUntilMS == 0 {
+	if k := small.status(t).Keyboard; k == nil || k.VisibleUntilMS == 0 {
 		t.Errorf("not visible after pair: %+v", k)
 	}
 	reports, stop := f.Subscribe(t)
@@ -72,21 +72,21 @@ func TestLitePeripherals(t *testing.T) {
 			}
 		}
 	}
-	if _, err := lite.do(t, control.Header{Op: control.OpKeyboard, Name: "type"}, "ok\r\n"); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpKeyboard, Name: "type"}, "ok\r\n"); err != nil {
 		t.Fatal(err)
 	}
 	want("ok\n")
 
 	// A remote paste goes to the host, and a line break needs Enter.
-	if _, err := lite.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if p := lite.status(t).Paste; p == nil || !slices.Contains(p.Targets, peripheral.TargetKeyboard) {
+	if p := small.status(t).Paste; p == nil || !slices.Contains(p.Targets, peripheral.TargetKeyboard) {
 		t.Errorf("the paste targets: %+v", p)
 	}
 	paste := func(text string) error {
 		time.Sleep(time.Second) // one paste a second from one sender
-		_, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "lite"}, text)
+		_, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "small"}, text)
 		return err
 	}
 	if err := paste("Wi-Fi 42"); err != nil {
@@ -99,17 +99,17 @@ func TestLitePeripherals(t *testing.T) {
 	stop()
 
 	// The quick action keyboard-layout.
-	if _, err := lite.do(t, control.Header{Op: control.OpActionSet, Actions: []control.Action{{Name: actions.Layout, On: true}}}, ""); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpActionSet, Actions: []control.Action{{Name: actions.Layout, On: true}}}, ""); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(time.Second) // one action a second from one sender
-	if _, err := pi.do(t, control.Header{Op: control.OpActionOn, Device: "lite", Name: actions.Layout}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpActionOn, Device: "small", Name: actions.Layout}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if set, err := blekeyboard.Load(dir); err != nil || set.Layout != keyboard.RU {
 		t.Errorf("after keyboard-layout: %+v, %v", set, err)
 	}
-	if _, err := lite.do(t, control.Header{Op: control.OpKeyboard, Name: "off"}, ""); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpKeyboard, Name: "off"}, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -128,17 +128,17 @@ func TestLitePeripherals(t *testing.T) {
 	}))
 	defer roku.Close()
 	addr := strings.TrimPrefix(roku.URL, "http://")
-	if _, err := lite.do(t, control.Header{Op: control.OpRemote, Name: "add", Address: addr, Value: "roku"}, ""); err == nil || !strings.Contains(err.Error(), "plain HTTP") {
+	if _, err := small.do(t, control.Header{Op: control.OpRemote, Name: "add", Address: addr, Value: "roku"}, ""); err == nil || !strings.Contains(err.Error(), "plain HTTP") {
 		t.Errorf("a Roku without consent: %v", err)
 	}
-	m, err = lite.do(t, control.Header{Op: control.OpRemote, Name: "add", Address: addr, Value: "roku", Consent: true}, "")
+	m, err = small.do(t, control.Header{Op: control.OpRemote, Name: "add", Address: addr, Value: "roku", Consent: true}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if tvs := m.Status.TVs; len(tvs) != 1 || tvs[0].Name != "Bedroom" || tvs[0].Kind != "roku" {
 		t.Fatalf("added: %+v", tvs)
 	}
-	if _, err := lite.do(t, control.Header{Op: control.OpRemote, Name: "pastes", Device: "bedroom", Value: "on"}, ""); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpRemote, Name: "pastes", Device: "bedroom", Value: "on"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := paste("hi"); err != nil {
@@ -149,7 +149,7 @@ func TestLitePeripherals(t *testing.T) {
 		defer mu.Unlock()
 		return slices.Equal(keys, []string{"Lit_h", "Lit_i"})
 	})
-	if tvs := lite.status(t).TVs; len(tvs) != 1 || !tvs[0].Pastes {
+	if tvs := small.status(t).TVs; len(tvs) != 1 || !tvs[0].Pastes {
 		t.Errorf("the status's TVs: %+v", tvs)
 	}
 }

@@ -137,7 +137,7 @@ fn cmd_copy(g: &Global, args: &[String]) -> Result<()> {
 func TestCheckCommands(t *testing.T) {
 	files := map[string][]byte{
 		"member/src/lib.rs":     []byte(libRs),
-		"docs/reference/cli.md": []byte("`cbb copy` sends. `cbb freeze` freezes.\n\n## The lite member\n\n`cbb version` prints.\n"),
+		"docs/reference/cli.md": []byte("`cbb copy` sends. `cbb freeze` freezes.\n\n## Installers\n\n`cbb version` prints.\n"),
 	}
 	got := checkCommands(files)
 	want := []string{"cbb pair", "cbb unfreeze"}

@@ -18,8 +18,7 @@ import (
 //   - a relative link in a Markdown file names a file or directory of the
 //     repository, and its #anchor, if any, a heading of that file;
 //   - the project's old names do not come back, in any file (oldName);
-//   - every command of cbb, the full and the lite member, is in docs/reference/cli.md,
-//     the lite member's in its section;
+//   - every command of cbb is in docs/reference/cli.md;
 //   - every subcommand of the full member that has flags of its own, and each
 //     of those flags, is in docs/reference/cli.md, the flags in a line that
 //     names the command;
@@ -229,7 +228,6 @@ func slug(heading string) string {
 	return b.String()
 }
 
-// liteSection is the heading of the lite member's commands in docs/reference/cli.md.
 // rsCommands are cbb's commands, from the match that runs them in
 // member/src/lib.rs (between "let res = match cmd {" and its end), each with
 // the function it calls ("" for one that runs in place).

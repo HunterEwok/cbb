@@ -7,7 +7,7 @@
 //! it finds (docs/protocol.md, section 3), by mDNS or as its app hands them
 //! in; while the app is in the front it may also listen as the group's hub
 //! at home (`listen`), and in the background it pauses. Away from home it
-//! reaches the group's hub through the same tunnel as the lite member
+//! reaches the group's hub through the same tunnel as cbb
 //! (`crate::away`, in a build with the feature `tunnel`), once the user
 //! turns sync away from home on.
 
@@ -290,7 +290,7 @@ impl Member {
     }
 
     /// Sync away from home as the app shows it, as `cbb global` shows it on
-    /// the lite member; None while it is off.
+    /// cbb; None while it is off.
     pub fn away_status(&self) -> Option<serde_json::Value> {
         self.away.status(&self.node).and_then(|a| serde_json::to_value(a).ok())
     }

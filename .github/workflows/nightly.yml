@@ -352,7 +352,7 @@ jobs:
         run: |
           if [ "$MEMBER" = rust ]; then
             export CBB_TEST_ALONE="$PWD/target/release/cbb"
-            set -- ./internal/service -run 'TestLite'
+            set -- ./internal/service -run 'TestAlone'
           else
             set -- ./internal/service ./internal/node ./internal/tunnel ./internal/pair
           fi

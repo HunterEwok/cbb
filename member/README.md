@@ -92,7 +92,7 @@ The e2e test runs the lite member among Go members: it joins through the phone's
 gets no CA keys and syncs both ways.
 
 ```sh
-CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service -run TestLiteMember -v
+CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service -run TestAloneMember -v
 ```
 
 ## Install

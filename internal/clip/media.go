@@ -58,7 +58,7 @@ type Manifest struct {
 
 // UnmarshalJSON reads a manifest and refuses one with a number that is not
 // an integer written as in a signed body, such as "-0": Go takes it for 0,
-// the lite member's reader for a float, so the members would not read one
+// the Rust core's reader for a float, so the members would not read one
 // manifest alike.
 func (m *Manifest) UnmarshalJSON(data []byte) error {
 	if err := jsonnum.IntegersOnly(data); err != nil {

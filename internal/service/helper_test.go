@@ -17,11 +17,11 @@ import (
 	"github.com/HunterEwok/cbb/internal/tpmkey/tpmtest"
 )
 
-// TestLiteHelper: the Rust member starts cbb-helper as its child, which
+// TestAloneHelper: the Rust member starts cbb-helper as its child, which
 // says hello over its inherited pipes, and the helper ends with the member
 // (docs/design.md, "The service and its helper"). CBB_TEST_ALONE names the Rust
 // member's binary.
-func TestLiteHelper(t *testing.T) {
+func TestAloneHelper(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -33,7 +33,7 @@ func TestLiteHelper(t *testing.T) {
 	if out, err := exec.Command("go", "build", "-o", helper, "github.com/HunterEwok/cbb/cmd/cbb-helper").CombinedOutput(); err != nil {
 		t.Fatalf("go build cbb-helper: %v\n%s", err, out)
 	}
-	s := startLiteEnv(t, bin, t.TempDir(), []string{"CBB_HELPER=" + helper})
+	s := startAloneEnv(t, bin, t.TempDir(), []string{"CBB_HELPER=" + helper})
 	deadline := time.Now().Add(20 * time.Second)
 	for !s.logged("cbb-helper runs: cbb ") {
 		if time.Now().After(deadline) {
@@ -65,11 +65,11 @@ func running(path string) bool {
 	return false
 }
 
-// TestLiteTPM: with cbb-helper beside it, the Rust member joins with its
+// TestAloneTPM: with cbb-helper beside it, the Rust member joins with its
 // device key in the TPM, swtpm here, as a Go member does: identity.json
 // keeps the TPM's blob and no key, and the member's handshakes and copies
 // are signed through the helper.
-func TestLiteTPM(t *testing.T) {
+func TestAloneTPM(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
 		t.Skip("CBB_TEST_ALONE is not set")
@@ -91,7 +91,7 @@ func TestLiteTPM(t *testing.T) {
 	t.Setenv("CBB_HELPER", helper)
 	var h hub
 	pi := startService(t, &h, "pi")
-	dir := joinLiteEnv(t, bin, pi, []string{sim})
+	dir := joinAloneEnv(t, bin, pi, []string{sim})
 	var f struct {
 		Key    []byte          `json:"key"`
 		KeyTPM json.RawMessage `json:"key_tpm"`
@@ -103,19 +103,19 @@ func TestLiteTPM(t *testing.T) {
 	if err := json.Unmarshal(raw, &f); err != nil || len(f.Key) != 0 || len(f.KeyTPM) == 0 {
 		t.Fatalf("identity.json keeps the key %d bytes, the TPM blob %q (%v)", len(f.Key), f.KeyTPM, err)
 	}
-	lite := startLiteEnv(t, bin, dir, []string{sim}, "-no-mdns", "-peer", pi.addr())
+	small := startAloneEnv(t, bin, dir, []string{sim}, "-no-mdns", "-peer", pi.addr())
 	waitFor(t, "the Rust member connected", func() bool {
-		st, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+		st, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
 	})
-	if _, err := lite.do(t, control.Header{Op: control.OpCopy}, "signed in the TPM"); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpCopy}, "signed in the TPM"); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "pi has the copy", func() bool { return pi.paste(t) == "signed in the TPM" })
 
 	// The secrets in files the TPM seals too, as Go keeps them: the key
 	// for sealed messages and the tunnel key, which a restart opens again.
-	if _, err := lite.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatalf("cbb global on: %v", err)
 	}
 	sealed := func(name, plain, blob string) {
@@ -128,10 +128,10 @@ func TestLiteTPM(t *testing.T) {
 	}
 	sealed("seal.json", "secret", "tpm")
 	sealed("tunnel.json", "key", "key_tpm")
-	lite.stop()
-	lite = startLiteEnv(t, bin, dir, []string{sim}, "-no-mdns", "-peer", pi.addr())
+	small.stop()
+	small = startAloneEnv(t, bin, dir, []string{sim}, "-no-mdns", "-peer", pi.addr())
 	waitFor(t, "the Rust member connected again with its sealed keys", func() bool {
-		st, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+		st, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 1 && st.Status.Away != nil
 	})
 }

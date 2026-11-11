@@ -18,8 +18,8 @@ import (
 	"github.com/HunterEwok/cbb/internal/invite"
 )
 
-// liteBin returns the Rust member's program, or skips the test.
-func liteBin(t *testing.T) string {
+// aloneBin returns the Rust member's program, or skips the test.
+func aloneBin(t *testing.T) string {
 	t.Helper()
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
@@ -31,12 +31,12 @@ func liteBin(t *testing.T) string {
 	return bin
 }
 
-// TestLiteInvite checks a remote invitation from the Rust service as the
+// TestAloneInvite checks a remote invitation from the Rust service as the
 // group's hub: a Go device on another network joins through the hub's
 // guest tunnel once the admin confirmed the device it shows, after one the
 // admin declined, then reaches the hub through the tunnel with its own key.
-func TestLiteInvite(t *testing.T) {
-	bin := liteBin(t)
+func TestAloneInvite(t *testing.T) {
+	bin := aloneBin(t)
 	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
@@ -52,7 +52,7 @@ func TestLiteInvite(t *testing.T) {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
 	}
 	c.Close()
-	rust := startLite(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr())
+	rust := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr())
 	waitFor(t, "the Rust member connected to the desk", func() bool {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
@@ -157,12 +157,12 @@ func TestLiteInvite(t *testing.T) {
 	waitFor(t, "the guest tunnel is gone", func() bool { return rust.logged("the hub cut off 1 client(s)") })
 }
 
-// TestLiteJoinInvite checks that the Rust member joins with a Go hub's
+// TestAloneJoinInvite checks that the Rust member joins with a Go hub's
 // remote invitation (cbb pair -invite): through the guest tunnel, once the
 // admin confirmed it, and that its service then offers its own key through
 // the guest tunnel and reaches the hub through the tunnel with it.
-func TestLiteJoinInvite(t *testing.T) {
-	bin := liteBin(t)
+func TestAloneJoinInvite(t *testing.T) {
+	bin := aloneBin(t)
 	var h hub
 	pi := startService(t, &h, "pi")
 	inv, text := inviteHub(t, &h, pi)
@@ -203,7 +203,7 @@ func TestLiteJoinInvite(t *testing.T) {
 		t.Errorf("the used invitation's file is still there: %v", err)
 	}
 
-	rust := startLite(t, bin, dir, "-no-mdns")
+	rust := startAlone(t, bin, dir, "-no-mdns")
 	waitUpTo(t, 60*time.Second, "the Rust member reaches the hub through its own tunnel", func() bool {
 		st := rust.status(t)
 		return st.Away != nil && st.Away.HubDevice == piID && st.Away.Through &&

@@ -18,6 +18,6 @@ body:
     id: need
     attributes:
       label: What you need
-      description: For example, the lite member in a router or another device.
+      description: For example, cbb in a router or another device.
     validations:
       required: true

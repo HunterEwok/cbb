@@ -168,8 +168,8 @@ pub type OnGuest = Box<dyn Fn(&Node, &DeviceId, &[Cert], wire::Guest) + Send + S
 /// from home is off.
 type TunnelKeys = Option<(Vec<u8>, Vec<u8>)>;
 
-/// The lite member's set of connections.
-/// How the member presents itself in its hellos: the lite member, or a
+/// The member's set of connections.
+/// How the member presents itself in its hellos: cbb, or a
 /// phone's app that runs it (crate::phone).
 #[derive(Clone)]
 pub struct Presence {
@@ -257,7 +257,7 @@ pub struct Node {
     /// sets them.
     evidence: RwLock<Vec<serde_json::Value>>,
     /// The sealed blobs of copies with images or files, for a phone's app,
-    /// which makes, fetches and serves them; None on the lite member.
+    /// which makes, fetches and serves them; None without the helper.
     content: Option<Arc<Store>>,
     /// Gets each copy that becomes the group's current one from a peer,
     /// for a phone's app, which shows it and fetches images or files.
@@ -1654,7 +1654,7 @@ impl Node {
         Ok(Dialed { up, again: up && self.reconnects.load(Ordering::SeqCst) != before })
     }
 
-    /// Runs a connection that a member (a phone or a lite member)
+    /// Runs a connection that a member (a phone or another member)
     /// opened to this one until it ends. It replaces an older connection
     /// to the same device. handshaken is called once the handshake is over,
     /// whether it worked or not.
@@ -2092,7 +2092,7 @@ impl Node {
                 "command" if m.command.is_some() => {
                     let cmd = m.command.unwrap();
                     // A phone passes a command for another device on
-                    // (docs/protocol.md, section 15); the lite member
+                    // (docs/protocol.md, section 15); cbb
                     // refuses it for itself.
                     if self.presence.role == "phone"
                         && let Some(head) = CommandHead::of(&cmd)

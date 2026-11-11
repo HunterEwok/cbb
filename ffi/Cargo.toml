@@ -20,7 +20,7 @@ crate-type = ["lib", "staticlib", "cdylib"]
 # join: a phone that joins by its QR code with a key the core does not hold
 # (src/join.rs), on the core's TLS; only the Aurora app's build takes it.
 join = ["cbb-core/tls", "dep:qrcode", "dep:rqrr", "dep:serde", "dep:serde_json"]
-# member: the lite member's node inside the app, with the app's key
+# member: cbb's node inside the app, with the app's key
 # (src/member.rs); only the Aurora app's build takes it.
 member = ["join", "dep:cbb-member"]
 # tunnel: the phones' tunnel to the hub (src/tunnel.rs), WireGuard with

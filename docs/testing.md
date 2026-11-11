@@ -64,7 +64,7 @@ becomes a vector here.
 - The Swift kit's `cbb-interop` and the Kotlin kit's (built by `./gradlew -p kit
   interopScript`) play the phone in Go's pairing and member tests: over plain TCP on Linux,
   over real TLS on macOS and with Conscrypt on Linux.
-- `TestLiteMember`, `TestLiteRemotePaste`, `TestLiteQuickActions` and `TestLiteMemberAway`
+- `TestAloneMember`, `TestAloneRemotePaste`, `TestAloneQuickActions` and `TestAloneMemberAway`
   run the built cbb without its helper (`CBB_TEST_ALONE`) among Go members, at home and through the hub's
   tunnel.
 - `TestEmbassyJoiner` runs the Nano ESP32's network code on Linux over a TAP interface
@@ -194,5 +194,5 @@ fix that removes the cause. The bench finds them too: `go run ./tools/bench -rep
 | Test | Where | Seen | What is known |
 |---|---|---|---|
 | `TestSeveralHubs` | `internal/service` | about one run in six, 2026-11 | not yet found |
-| `TestLiteHubs` | `internal/service`, against the Rust service | about two runs in five in CI, 2026-11 | after the first hub stops, the client's tunnel connection to the second hub ends right after it comes up, and the copy made then is lost |
+| `TestAloneHubs` | `internal/service`, against the Rust service | about two runs in five in CI, 2026-11 | after the first hub stops, the client's tunnel connection to the second hub ends right after it comes up, and the copy made then is lost |
 | `TestWindow` | `apps/desktop`, Windows | rarely, 2026-11 | Chrome gave no DevTools port within 30 seconds; the test now prints Chrome's error output, to be read when it fails again |

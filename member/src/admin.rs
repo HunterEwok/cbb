@@ -641,7 +641,7 @@ impl Admin<'_> {
     /// Records what a peer's hello says about its device, as Go's
     /// ensureListed on the group's root: a computer whose record names no
     /// system or another one, or that its record has in a file while its
-    /// hello says hardware, and a computer or lite member whose hello says
+    /// hello says hardware, and a computer or a small device whose hello says
     /// it is a rootless install (D-79), which is then no admin. Nothing is
     /// signed when the record already says it, or on a member that is not
     /// the root.

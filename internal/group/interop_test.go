@@ -585,7 +585,7 @@ type hubVectors struct {
 // (docs/protocol.md, section 11, "Several hubs"), the phones first and the
 // root's own device first among them, then the admin computers by device
 // ID, without a plain computer or a removed admin, for the phone kits and
-// the lite member to agree with.
+// the Rust core to agree with.
 func TestGoHubVectors(t *testing.T) {
 	var file hubVectors
 	pg := newPhoneGroup(t)
@@ -687,7 +687,7 @@ type commandVector struct {
 // the root, an admin phone and admin computers (one frozen, one removed),
 // or for another device or group, expired, from the future or altered, and
 // whether each counts (docs/protocol.md, section 15), for the phone kits
-// and the lite member to agree with.
+// and the Rust core to agree with.
 func TestGoCommandVectors(t *testing.T) {
 	var file commandVectors
 	{

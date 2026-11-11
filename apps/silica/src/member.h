@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// The phone as a member of its group: the lite member's node in the app's
+// The phone as a member of its group: the Rust member's node in the app's
 // process (ffi's cbb_member_*, docs/core-api.md), with the key in the
 // key store. It dials the members it finds, puts what they send into the
 // clipboard, and sends what the user copied when the app comes to the

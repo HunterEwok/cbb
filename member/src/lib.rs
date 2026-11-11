@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! cbb is the lite member of cbb for small Linux devices,
-//! such as routers and small boards: a member without CA keys that only
-//! dials the computers, joins by QR code through the
-//! phone, and syncs (docs/design.md, roadmap item 11).
+//! cbb, the member of a group on computers and small devices such as
+//! routers and small boards: a member without CA keys that joins by QR code
+//! through the phone and syncs (docs/design.md); on computers its helper,
+//! cbb-helper, does what needs Go.
 //!
 //! The program is this library and a main that calls [`main`]; the library
 //! also lets the Aurora app run the same member in its own process
@@ -735,8 +735,8 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
 pub(crate) fn joiner(state: &std::path::Path, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
     if identity::Identity::load(state)?.is_some() {
         return Err(Error::msg(format!(
-            "this device is already in a group, and a lite member admits no devices (use the phone app or \
-             a full member); to join another group, stop the service and remove {}",
+            "this device is already in a group, and it admits no devices here (use the phone app or \
+             an admin computer); to join another group, stop the service and remove {}",
             state.join(identity::FILE_NAME).display()
         )));
     }

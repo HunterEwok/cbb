@@ -1591,7 +1591,7 @@ func startRust(t *testing.T, bin string, s *testService) *testService {
 	t.Helper()
 	trace := filepath.Join(s.dir, "mdns-trace.log")
 	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir(), fmt.Sprintf("CBB_TEST_RENEW_EVERY=%d", renewEvery.Milliseconds()), fmt.Sprintf("CBB_HUB_KEY_AHEAD=%d", int64(hubKeyAhead.Seconds())), "CBB_MDNS_TRACE=" + trace}, s.env...)
-	r := startLiteEnv(t, bin, s.dir, env, "-port", strconv.Itoa(s.port), "-name", s.name)
+	r := startAloneEnv(t, bin, s.dir, env, "-port", strconv.Itoa(s.port), "-name", s.name)
 	t.Cleanup(func() { logTrace(t, s.name, trace) })
 	r.name, r.os, r.rust, r.env, r.port = s.name, s.os, true, s.env, s.port
 	// It ends with an error after cbb leave or an admin's restart, for

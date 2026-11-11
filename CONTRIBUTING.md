@@ -146,7 +146,7 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 cargo build -p cbb-core --target riscv32imac-unknown-none-elf   # the core without an OS
 cargo deny --locked check licenses bans sources   # the crates' licenses and sources (deny.toml, CI's advisories job)
 cargo build --release && CBB_TEST_ALONE=$PWD/target/release/cbb \
-  go test ./internal/service -run TestLiteMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
+  go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
 ```
 
 The Nano ESP32's network code on Linux (`embassy/`, root for the TAP interface):

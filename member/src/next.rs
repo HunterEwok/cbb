@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The front end for the ZX Spectrum Next (docs/roadmap.md, item 14).
-//! On the Accelerated Next, the lite member runs on the Raspberry Pi wired to the
+//! On the Accelerated Next, cbb runs on the Raspberry Pi wired to the
 //! Next's second UART, and the Next's `.cbb` dot command types `cbb next
 //! ...` at NextPi's shell on that UART. These commands answer in frames the
 //! Z80 can read without a parser: lines end in CR, texts are in the Spectrum

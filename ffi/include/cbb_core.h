@@ -92,7 +92,7 @@ void cbb_join_free(cbb_join *j);
 
 /*
  * The member inside the app (src/member.rs), only in a library built with the
- * feature member (the phones' apps): the lite member's node on threads of its
+ * feature member (the phones' apps): cbb's node on threads of its
  * own, with the app's key through sign. event gets each event as JSON on any
  * thread: {"type":"write","text","kind","ttl_ms"}, {"type":"log","line"},
  * {"type":"identity","cert","issuer","roots"}, {"type":"copy","copy"},

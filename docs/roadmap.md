@@ -963,7 +963,7 @@ single out the Rust client's own ClientHello, a browser-like one for XHTTP comes
   the ring stand-in). The same layer serves the ESP32 later. As built, the layer is
   `member/src/awg.rs` (checked end to end against the Go hub), and the VLESS client
   `member/src/vless.rs` over HTTP/1.1 with `cbb_core::vless`, checked against the Go forwarder
-  behind a web server (`TestLiteMemberAwayXHTTP`); the blind relay (item 28) comes later.
+  behind a web server (`TestAloneMemberAwayXHTTP`); the blind relay (item 28) comes later.
 
 Steps: the protocol and the Go forwarder and hub first, with Xray's XHTTP transport; then
 the phones' tunnel; then the lite member's client and its vectors; then cbb.tools' nginx

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The phones' tunnel to the group's hub, for sync away from home
-//! (docs/protocol.md, section 11): the lite member's WireGuard on GotaTun,
+//! (docs/protocol.md, section 11): cbb's WireGuard on GotaTun,
 //! with AmneziaWG and VLESS with XHTTP (`cbb_member::tunnel`), in the app's
 //! own process. A tunnel opens a TCP port on the loopback address that
 //! leads to the hub's member port; the app's node dials it with its own

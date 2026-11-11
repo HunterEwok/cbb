@@ -149,7 +149,7 @@
     <string name="app_info">App info</string>
     <string name="hub_title">This phone as the hub</string>
     <string name="hub_switch">This phone is the group\'s hub</string>
-    <string name="hub_body">While the app is open, this phone is the hub of a group without a computer: the other phones, TVs and lite members on the home network connect to it, and with a forwarder they reach it from afar too. The forwarder only passes encrypted packets; it learns the group\'s tag, this phone\'s tunnel key and the addresses, never what is copied. A computer that is always on is the better hub; until then this phone does it.</string>
+    <string name="hub_body">While the app is open, this phone is the hub of a group without a computer: the other phones, TVs and small devices on the home network connect to it, and with a forwarder they reach it from afar too. The forwarder only passes encrypted packets; it learns the group\'s tag, this phone\'s tunnel key and the addresses, never what is copied. A computer that is always on is the better hub; until then this phone does it.</string>
     <string name="hub_off">Off: this phone is no hub.</string>
     <string name="hub_paused">Waiting for the app: the hub works while the app is open.</string>
     <string name="hub_home_only">The hub at home only: add a forwarder for sync away from home.</string>

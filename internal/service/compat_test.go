@@ -57,8 +57,8 @@ func TestPreviousRelease(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 	curAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
-	current := startLite(t, cur, curDir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", root.addr())
-	previous := startLite(t, prev, prevDir, "-no-mdns", "-no-listen", "-peer", root.addr(), "-peer", curAddr)
+	current := startAlone(t, cur, curDir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", root.addr())
+	previous := startAlone(t, prev, prevDir, "-no-mdns", "-no-listen", "-peer", root.addr(), "-peer", curAddr)
 	cli := func(bin string, s *testService, stdin string, args ...string) string {
 		t.Helper()
 		out, err := runCLI(bin, s.socket, stdin, args...)
