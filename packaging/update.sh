@@ -4,7 +4,8 @@
 
 # Sourced by the install.sh of each system: how this copy was installed,
 # and the question about automatic updates (docs/guide/install.md,
-# "Updates").
+# "Updates"). Its messages go through packaging/l10n.sh, which the installer
+# sourced.
 
 # update_method BIN prints how the installer's program BIN came: brew for
 # Homebrew's copy, else CBB_INSTALL_METHOD (package for the OpenWrt
@@ -29,37 +30,34 @@ update_setup() {
 	upd_sudo='sudo '
 	[ "${CBB_ROOTLESS:-}" != 1 ] || upd_sudo=
 	if ! "$upd_cbb" update -installed-by "$upd_method"; then
-		echo "install.sh: could not record how CBB was installed; cbb update takes it as get.sh" >&2
+		note install.sh "could not record how CBB was installed; cbb update takes it as get.sh"
 	fi
 	[ "$upd_method" = get ] || return 0
 	case $upd_auto in
 	on | off) ;;
 	'') upd_auto=$("$upd_cbb" update -auto 2>/dev/null) || upd_auto= ;;
 	*)
-		echo "install.sh: automatic updates are on or off, not $upd_auto" >&2
+		note install.sh "automatic updates are on or off, not %s" "$upd_auto"
 		return 2
 		;;
 	esac
 	if [ "$upd_auto" != on ] && [ "$upd_auto" != off ]; then
 		[ -z "${CBB_UPDATING:-}" ] || return 0
-		echo "CBB can check once a day for a release the project signed and install it;"
-		echo "the check tells GitHub this device's address, as any download does."
-		printf 'Update automatically? [y/N] '
+		say "CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does."
+		t "Update automatically? [y/N]"
+		printf ' '
 		if (: </dev/tty) 2>/dev/null; then
 			upd_reply=
 			read -r upd_reply </dev/tty || upd_reply=
-			case $upd_reply in
-			y | Y | yes | Yes | YES) upd_auto=on ;;
-			*) upd_auto=off ;;
-			esac
+			if is_yes "$upd_reply"; then upd_auto=on; else upd_auto=off; fi
 		else
 			# Not an answer: the next run with a terminal asks again.
 			echo
-			echo "No terminal to answer on; not now. Later: ${upd_sudo}cbb update -auto on"
+			say "No terminal to answer on; not now. Later: %scbb update -auto on" "${upd_sudo}"
 			return 0
 		fi
 	fi
 	if ! "$upd_cbb" update -auto "$upd_auto"; then
-		echo "install.sh: could not turn automatic updates $upd_auto; run ${upd_sudo}cbb update -auto $upd_auto" >&2
+		note install.sh "could not turn automatic updates %s; run %scbb update -auto %s" "$upd_auto" "${upd_sudo}" "$upd_auto"
 	fi
 }

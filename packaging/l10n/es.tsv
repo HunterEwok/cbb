@@ -1,0 +1,261 @@
+  1. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  1. Permitir TCP %s entrante desde %s. Para: las conexiones de los dispositivos del grupo.
+  2. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  2. Permitir UDP 5353 entrante desde %s. Para: encontrar los dispositivos del grupo (mDNS).
+%s: removed the CBB rules.	%s: se quitaron las reglas de CBB.
+Firewall: closed the hub's UDP port %s.	Cortafuegos: se cerró el puerto UDP %s del hub.
+  In Firewall > Rules, on each interface of the home network (LAN and the others):	  En Firewall > Rules, en cada interfaz de la red de casa (LAN y las demás):
+    Pass, protocol TCP, source %s, destination This Firewall, port %s	    Pass, protocolo TCP, origen %s, destino This Firewall, puerto %s
+    Pass, protocol UDP, the same sources, destination This Firewall, port 5353	    Pass, protocolo UDP, los mismos orígenes, destino This Firewall, puerto 5353
+  Add to /etc/pf.conf, before the rules that block, and run pfctl -f /etc/pf.conf:	  Añada a /etc/pf.conf, antes de las reglas que bloquean, y ejecute pfctl -f /etc/pf.conf:
+  and the same lines in the script that firewall_script in rc.conf names, to keep them.	  y las mismas líneas en el script que nombra firewall_script en rc.conf, para conservarlas.
+  In Firewall > Rules on WAN: Pass, protocol UDP, source any, destination WAN address, port %s	  En Firewall > Rules en WAN: Pass, protocolo UDP, origen any, destino WAN address, puerto %s
+%s [y/N]	%s [s/N]
+No terminal to answer on; taken as No.	No hay terminal para responder; se toma como No.
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand:	No se añadió ninguna regla del cortafuegos. CBB solo funciona mientras el cortafuegos permita las reglas de arriba. Para añadirlas a mano:
+Firewall: no active firewall was found; no firewall rules are needed. If pf or ipfw is turned on later, run the installer again.	Cortafuegos: no se encontró ningún cortafuegos activo; no hacen falta reglas. Si más adelante activa pf o ipfw, ejecute el instalador de nuevo.
+Firewall: %s (active). CBB requires these rules:	Cortafuegos: %s (activo). CBB necesita estas reglas:
+CBB does not change pfSense's rules, and runs there unsupported. Add them by hand:	CBB no cambia las reglas de pfSense y allí funciona sin soporte. Añádalas a mano:
+ (express installation)	 (instalación rápida)
+ (as answered before)	 (según la respuesta anterior)
+With Yes, CBB keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both.	Con Sí, CBB guarda estas reglas en su propio ancla de pf, que su complemento añade a las reglas de OPNsense; al desinstalar se quitan ambos.
+With Yes, CBB keeps these rules in its own pf anchor and adds the lines that load it at the end of %s; uninstalling removes both.	Con Sí, CBB guarda estas reglas en su propio ancla de pf y añade al final de %s las líneas que la cargan; al desinstalar se quitan ambas cosas.
+With Yes, CBB adds these rules to ipfw's set %s at every start, and removes them on uninstall.	Con Sí, CBB añade estas reglas al conjunto %s de ipfw en cada arranque y las quita al desinstalar.
+Add these rules now?	¿Añadir estas reglas ahora?
+To let CBB add and manage them, run the installer again with --express.	Para que CBB las añada y las gestione, ejecute el instalador de nuevo con --express.
+Added the rules above%s. CBB manages them from now on.	Se añadieron las reglas de arriba%s. CBB las gestiona a partir de ahora.
+run it as root	ejecútelo como root
+neither pf nor ipfw is active; nothing was added.	ni pf ni ipfw están activos; no se añadió nada.
+failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again.	falló (código de salida %s). Para ver cada orden que ejecutó: CBB_ERROR_DETAILS=1, y ejecútelo de nuevo.
+CBB_HOME_CGNAT is 1 or 0, not %s	CBB_HOME_CGNAT es 1 o 0, no %s
+--port takes a port from 1024 to 65535	--port admite un puerto de 1024 a 65535
+CBB_FIREWALL is ask, express or no, not %s	CBB_FIREWALL es ask, express o no, no %s
+run it as root (sudo or doas)	ejecútelo como root (sudo o doas)
+this installer is for FreeBSD	este instalador es para FreeBSD
+%s does not run on this machine; is it built for %s?	%s no funciona en esta máquina; ¿está compilado para %s?
+an account named cbb exists here and is not this service's (its comment is not "CBB"); it would get the group's keys. Rename or remove it, then run install.sh again.	aquí existe una cuenta llamada cbb que no es la de este servicio (su comentario no es "CBB"); recibiría las claves del grupo. Cámbiele el nombre o elimínela y ejecute install.sh de nuevo.
+a group named cbb exists here with members, and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	aquí existe un grupo llamado cbb con miembros y sin cuenta de servicio; esos miembros llegarían al servicio. Cambie el nombre del grupo o elimínelo y ejecute install.sh de nuevo.
+Added %s to the cbb group; log in again to use cbb copy and paste.	Se añadió %s al grupo cbb; vuelva a iniciar sesión para usar cbb copy y paste.
+CBB uses TCP port %s instead of 8764.	CBB usa el puerto TCP %s en lugar de 8764.
+the service did not answer within 10 s: %s	el servicio no respondió en 10 s: %s
+CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	CBB funciona en el puerto TCP %s. Para quitarlo: sh /usr/local/share/cbb/uninstall.sh
+OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense: aparece en System > Diagnostics > Services, y sus reglas siguen en cada recarga del filtro.
+pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	pfSense no está soportado: una actualización de pfSense puede quitar CBB; ejecute este instalador de nuevo después de una.
+Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	Siguiente: ejecute cbb pair como root y escanee su código QR con la app CBB del teléfono; sin la app, vea docs/guide/without-app.md.
+CBB is removed, with this device's keys; it left its group.	CBB se quitó, con las claves de este dispositivo; salió de su grupo.
+CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	CBB se quitó. Sus claves quedan en /var/db/cbb para reinstalarlo; --purge las borra.
+--port needs a port number	--port necesita un número de puerto
+--home-cgnat needs on or off	--home-cgnat necesita on u off
+--auto-update needs on or off	--auto-update necesita on u off
+unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	opción desconocida %s (conocidas: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
+--rootless installs for your own user: run it without sudo: %s	--rootless instala para su propio usuario: ejecútelo sin sudo: %s
+--rootless is for Linux computers	--rootless es para ordenadores con Linux
+run it with sudo: %s	ejecútelo con sudo: %s
+no release for this MIPS system: it is not OpenWrt, which names its byte order	no hay versión para este sistema MIPS: no es OpenWrt, que indica su orden de bytes
+no release for the architecture %s	no hay versión para la arquitectura %s
+the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	el miembro ligero para MIPS aún no sincroniza fuera de casa (punto 37 de la hoja de ruta); el miembro completo sí.
+--console is not for a router	--console no es para un router
+--uinput is not for a router	--uinput no es para un router
+--home-cgnat is not for a router	--home-cgnat no es para un router
+--lite is for Linux; a Mac runs the full member	--lite es para Linux; un Mac usa el miembro completo
+--console is for Linux	--console es para Linux
+--uinput is for Linux	--uinput es para Linux
+--lite is for Linux; FreeBSD runs the full member	--lite es para Linux; FreeBSD usa el miembro completo
+this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	este instalador es para Linux, macOS y FreeBSD; en Windows use get.ps1
+tar is required	se necesita tar
+sha256sum or shasum is required	se necesita sha256sum o shasum
+curl or wget is required	se necesita curl o wget
+CBB_VERSION must look like v1.2.3	CBB_VERSION debe tener la forma v1.2.3
+the signed %s file is not in the strict form of signed bodies; not installing	el archivo firmado %s no está en la forma estricta de los cuerpos firmados; no se instala
+Not checked: the release's signature (CBB_VERIFY=skip).	Sin comprobar: la firma de la versión (CBB_VERIFY=skip).
+openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)	se necesita openssl para comprobar la firma de la versión (o CBB_VERIFY=skip para instalarla sin comprobar)
+%s has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)	%s no tiene archivos de versión firmados; no se instala (CBB_VERIFY=skip la instala sin comprobar)
+keys.json is not signed by the project's root key; not installing	keys.json no está firmado con la clave raíz del proyecto; no se instala
+keys.json has expired; check the clock, or try again later	keys.json ha caducado; revise el reloj o inténtelo más tarde
+keys.json is not valid; not installing	keys.json no es válido; no se instala
+keys.json holds a key that is not valid	keys.json contiene una clave no válida
+keys.json holds no release key	keys.json no contiene ninguna clave de versión
+release.json is not signed by a release key; not installing	release.json no está firmado con una clave de versión; no se instala
+stable.json is not signed by a release or channel key; not installing	stable.json no está firmado con una clave de versión o de canal; no se instala
+stable.json is not the stable channel's	stable.json no es del canal estable
+stable.json has expired; check the clock, or try again later	stable.json ha caducado; revise el reloj o inténtelo más tarde
+release.json is not the release stable.json names; not installing	release.json no es la versión que nombra stable.json; no se instala
+release.json is for %s, not %s	release.json es para %s, no para %s
+release.json does not list %s	release.json no incluye %s
+%s does not match the signed release.json; not installing it	%s no coincide con el release.json firmado; no se instala
+The release's signature checks out (%s).	La firma de la versión es correcta (%s).
+could not download %s	no se pudo descargar %s
+stable.json names no release	stable.json no nombra ninguna versión
+Downloading %s (%s)...	Descargando %s (%s)...
+SHA256SUMS does not list %s	SHA256SUMS no incluye %s
+%s does not match SHA256SUMS; not installing it	%s no coincide con SHA256SUMS; no se instala
+%s does not have this repository's build attestation; not installing it	%s no tiene la atestación de compilación de este repositorio; no se instala
+The archive's build attestation checks out.	La atestación de compilación del archivo es correcta.
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the archive's build attestation	CBB_ATTESTATION=require necesita gh con sesión iniciada (gh auth login) para comprobar la atestación de compilación del archivo
+Not checked: the archive's build attestation (it needs gh, signed in). SHA256SUMS matched.	Sin comprobar: la atestación de compilación del archivo (necesita gh con sesión iniciada). SHA256SUMS coincidió.
+  %s. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  %s. Permitir TCP %s entrante desde %s. Para: las conexiones de los dispositivos del grupo.
+  %s. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  %s. Permitir UDP 5353 entrante desde %s. Para: encontrar los dispositivos del grupo (mDNS).
+ufw: removed the CBB rules.	ufw: se quitaron las reglas de CBB.
+firewalld: removed the CBB rules and service.	firewalld: se quitaron las reglas y el servicio de CBB.
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run:	No se añadió ninguna regla del cortafuegos. CBB solo funciona mientras el cortafuegos permita las reglas de arriba. Para añadirlas a mano, ejecute:
+Then make them permanent the way this system keeps its %s rules.	Después hágalas permanentes de la forma en que este sistema guarda sus reglas de %s.
+Firewall: no active firewall was found; no firewall rules are needed. If a firewall is turned on later, run the installer again.	Cortafuegos: no se encontró ningún cortafuegos activo; no hacen falta reglas. Si más adelante activa un cortafuegos, ejecute el instalador de nuevo.
+cbb does not manage %s rules: rules added at run time do not survive a restart.	cbb no gestiona reglas de %s: las reglas añadidas en marcha no sobreviven a un reinicio.
+ (kept from an earlier installation)	 (conservadas de una instalación anterior)
+With Yes, CBB adds these rules, keeps them current on every update and removes them on uninstall.	Con Sí, CBB añade estas reglas, las mantiene al día en cada actualización y las quita al desinstalar.
+run it with sudo	ejecútelo con sudo
+no ufw or firewalld is active; nothing was added.	ni ufw ni firewalld están activos; no se añadió nada.
+%s needs root; a rootless install has no console or uinput helper	%s necesita root; una instalación sin root no tiene los ayudantes console ni uinput
+--rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless instala para su propio usuario: ejecútelo sin sudo. Con sudo, install.sh sin --rootless instala el servicio del sistema, que es más seguro.
+a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	una instalación sin root funciona como unidad de usuario de systemd, y esta sesión no tiene gestor de usuario de systemd; inicie sesión en un escritorio o por ssh y ejecútelo de nuevo
+--home-cgnat is for the full member	--home-cgnat es para el miembro completo
+CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	CBB ya está instalado aquí para todo el sistema (%s), y un dispositivo ejecuta un solo servicio; quítelo primero o consérvelo
+the desktop agent did not start; it starts at your next login	el agente de escritorio no arrancó; arrancará en su próximo inicio de sesión
+CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB funciona mientras tenga la sesión iniciada. Para que siga funcionando al cerrarla, un administrador ejecuta: sudo loginctl enable-linger %s
+CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	CBB funciona para %s en el puerto TCP %s, instalado sin root: nunca puede ser la raíz del grupo, un administrador ni el hub. Si un cortafuegos limita aquí las conexiones entrantes, un administrador permite TCP %s y UDP 5353 desde la red de casa. Para quitarlo: %s
+For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	Para copiar y pegar en tmux, añada esta línea a ~/.tmux.conf: source-file -q %s/tmux.conf
+Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	Siguiente: vea member/README.md; en resumen, %s pair aquí, y escanee su código QR con la app del teléfono.
+Next: run %s pair and scan its QR code with the CBB app on your phone.	Siguiente: ejecute %s pair y escanee su código QR con la app CBB del teléfono.
+this archive has no install-rootless.sh, so it cannot install without root	este archivo no tiene install-rootless.sh, así que no puede instalar sin root
+systemd is required	se necesita systemd
+the full member is installed here, and the lite member cannot use its keys; remove it first: %s	aquí está instalado el miembro completo, y el miembro ligero no puede usar sus claves; quítelo primero: %s
+the lite member is installed here, and the full member cannot use its keys; remove it first: %s	aquí está instalado el miembro ligero, y el miembro completo no puede usar sus claves; quítelo primero: %s
+an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	aquí existe una cuenta llamada cbb que no es la de este servicio (su comentario no es "cbb service"); recibiría las claves del grupo. Cámbiele el nombre o elimínela y ejecute install.sh de nuevo.
+a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	aquí existe un grupo llamado cbb con miembros (%s) y sin cuenta de servicio; esos miembros llegarían al servicio. Cambie el nombre del grupo o elimínelo y ejecute install.sh de nuevo.
+Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	No instalada: la app de la bandeja, que necesita GTK 4 y WebKitGTK 6.0 (Debian y Ubuntu: %s; Fedora: %s). Instálelos y ejecute esto de nuevo para añadirla.
+--uinput is for the full member, which runs the desktop connector	--uinput es para el miembro completo, que ejecuta el conector de escritorio
+could not load the uinput module now; it loads at the next boot	no se pudo cargar ahora el módulo uinput; se cargará en el próximo arranque
+100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	En este dispositivo, 100.64.0.0/10 cuenta como red de casa (--home-cgnat on).
+New member and admin keys of this device go into its TPM.	Las nuevas claves de miembro y de administrador de este dispositivo van a su TPM.
+CBB uses TCP port %s instead of 8764. If a firewall on the network limits incoming connections, allow TCP %s from the home network.	CBB usa el puerto TCP %s en lugar de 8764. Si un cortafuegos de la red limita las conexiones entrantes, permita TCP %s desde la red de casa.
+the uinput helper did not start; see journalctl -u cbb-uinput	el ayudante uinput no arrancó; vea journalctl -u cbb-uinput
+the desktop agent of %s did not start again; it starts at their next login	el agente de escritorio de %s no volvió a arrancar; arrancará en su próximo inicio de sesión
+cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow falló; ejecute sudo cbb global allow cuando el servicio esté en marcha.
+CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB funciona en el puerto TCP %s. Para quitarlo: sudo sh %s/uninstall.sh
+Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	Siguiente: vea member/README.md; en resumen, sudo -u cbb %s pair aquí, y escanee su código QR con la app del teléfono.
+Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	Siguiente: ejecute sudo %s pair y escanee su código QR con la app CBB del teléfono; sin la app, vea docs/guide/without-app.md.
+CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	CBB se quitó. Sus claves quedan en %s/cbb para reinstalarlo; --purge las borra.
+CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	CBB se quitó. Sus claves quedan en /var/lib/cbb para reinstalarlo; --purge las borra.
+%s does not run on this Mac	%s no funciona en este Mac
+%s was built without cgo, so it cannot link this Mac's clipboard; use a release build, or build it with CGO_ENABLED=1	%s se compiló sin cgo, así que no puede enlazar el portapapeles de este Mac; use una compilación de una versión o compílelo con CGO_ENABLED=1
+--in-place needs a path of letters, digits and / . _ + -, not %s	--in-place necesita una ruta de letras, dígitos y / . _ + -, no %s
+%s is a link, likely Homebrew's; run this with --in-place %s	%s es un enlace, probablemente de Homebrew; ejecute esto con --in-place %s
+100.64.0.0/10 counts as the home network on this Mac (--home-cgnat on).	En este Mac, 100.64.0.0/10 cuenta como red de casa (--home-cgnat on).
+Firewall: the macOS application firewall (on). CBB requires this rule:	Cortafuegos: el cortafuegos de aplicaciones de macOS (activado). CBB necesita esta regla:
+Firewall: the macOS application firewall (off). CBB requires this rule:	Cortafuegos: el cortafuegos de aplicaciones de macOS (desactivado). CBB necesita esta regla:
+  1. Allow incoming connections to %s. Purpose: connections from the group's devices on TCP %s and finding them on UDP 5353 (mDNS). The application firewall allows a program on every port and from every address; CBB itself accepts only the home network.	  1. Permitir conexiones entrantes a %s. Para: las conexiones de los dispositivos del grupo por TCP %s y encontrarlos por UDP 5353 (mDNS). El cortafuegos de aplicaciones permite un programa en todos los puertos y desde todas las direcciones; CBB mismo solo acepta la red de casa.
+With Yes, CBB adds this rule, keeps it current on every update and removes it on uninstall.	Con Sí, CBB añade esta regla, la mantiene al día en cada actualización y la quita al desinstalar.
+Add this rule now? [y/N]	¿Añadir esta regla ahora? [s/N]
+Added the rule above%s. CBB manages it from now on.	Se añadió la regla de arriba%s. CBB la gestiona a partir de ahora.
+No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	No se añadió la regla del cortafuegos. CBB solo funciona mientras el cortafuegos permita la regla de arriba. Para añadirla a mano, ejecute:
+To let CBB add and manage it, run the installer again with --express.	Para que CBB la añada y la gestione, ejecute el instalador de nuevo con --express.
+CBB is running on TCP port %s, in its group.	CBB funciona en el puerto TCP %s, en su grupo.
+CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	CBB funciona en el puerto TCP %s. Para unirse a un grupo: sudo cbb pair, y escanee su código QR con el teléfono o escriba el código de cbb pair en la raíz del grupo o en un administrador; o para crear un grupo: sudo cbb new.
+CBB is removed, with this Mac's keys; it left its group.	CBB se quitó, con las claves de este Mac; salió de su grupo.
+CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	CBB se quitó. Sus claves quedan en %s/state para reinstalarlo; --purge las borra.
+this installer is for OpenWrt	este instalador es para OpenWrt
+OpenWrt 25.12 or later is required (it installs packages with apk)	se necesita OpenWrt 25.12 o posterior (instala paquetes con apk)
+%s does not run on this router; is it built for %s?	%s no funciona en este router; ¿está compilado para %s?
+CBB is installed; procd is not running here, so it starts at the next boot.	CBB está instalado; procd no está en marcha aquí, así que arrancará en el próximo inicio.
+the service did not answer within 40 s: %s	el servicio no respondió en 40 s: %s
+see logread -e cbb	vea logread -e cbb
+CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB funciona en el puerto TCP %s, en la zona lan. Para quitarlo: sh /usr/share/cbb/uninstall.sh
+Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	La actualización asistida (ASU, owut) deja fuera los paquetes que no vienen de los repositorios de OpenWrt: instálelo de nuevo después de una.
+Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	Siguiente: ejecute su -s /bin/sh cbb -c 'cbb pair -name router' y escanee su código QR con la app CBB del teléfono.
+Next: run cbb pair and scan its QR code with the CBB app on your phone.	Siguiente: ejecute cbb pair y escanee su código QR con la app CBB del teléfono.
+CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB se quitó. Sus claves quedan en /etc/cbb para reinstalarlo; --purge las borra.
+This device is in no group yet, so it starts pairing now (--no-pair skips this).	Este dispositivo aún no está en ningún grupo, así que empieza el emparejamiento ahora (--no-pair lo omite).
+could not record how CBB was installed; cbb update takes it as get.sh	no se pudo guardar cómo se instaló CBB; cbb update lo tomará como get.sh
+automatic updates are on or off, not %s	las actualizaciones automáticas son on u off, no %s
+CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB puede buscar una vez al día una versión firmada por el proyecto e instalarla; la búsqueda le dice a GitHub la dirección de este dispositivo, como cualquier descarga.
+Update automatically? [y/N]	¿Actualizar automáticamente? [s/N]
+No terminal to answer on; not now. Later: %scbb update -auto on	No hay terminal para responder; ahora no. Más tarde: %scbb update -auto on
+could not turn automatic updates %s; run %scbb update -auto %s	no se pudieron poner las actualizaciones automáticas en %s; ejecute %scbb update -auto %s
+starting	iniciando
+a key is not P-256	una clave no es P-256
+%s is not a valid release file; not installing	%s no es un archivo de versión válido; no se instala
+%s is not signed by the project's key; not installing	%s no está firmado con la clave del proyecto; no se instala
+keys.json holds a key whose use is empty; not installing	keys.json contiene una clave con uso vacío; no se instala
+checking for administrator rights	comprobando los derechos de administrador
+run it in a PowerShell opened with "Run as administrator"	ejecútelo en un PowerShell abierto con "Ejecutar como administrador"
+finding the architecture	buscando la arquitectura
+finding the latest release	buscando la última versión
+downloading %s (%s)	descargando %s (%s)
+checking %s against SHA256SUMS	comprobando %s con SHA256SUMS
+checking the release's signature	comprobando la firma de la versión
+checking the build attestation of %s	comprobando la atestación de compilación de %s
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the build attestation	CBB_ATTESTATION=require necesita gh con sesión iniciada (gh auth login) para comprobar la atestación de compilación
+Not checked: the build attestation of the archive (it needs gh, signed in). SHA256SUMS matched.	Sin comprobar: la atestación de compilación del archivo (necesita gh con sesión iniciada). SHA256SUMS coincidió.
+unpacking %s	descomprimiendo %s
+running install.ps1	ejecutando install.ps1
+install.ps1 exited with %s	install.ps1 terminó con %s
+get.ps1: %s failed: %s	get.ps1: falló el paso "%s": %s
+For the full error: $env:CBB_ERROR_DETAILS = "1", and run it again.	Para ver el error completo: $env:CBB_ERROR_DETAILS = "1", y ejecútelo de nuevo.
+install.ps1: %s failed: %s	install.ps1: falló el paso "%s": %s
+Run it again with -Details for the full error.	Ejecútelo de nuevo con -Details para ver el error completo.
+%s %s exited with %s: %s	%s %s terminó con %s: %s
+install.ps1: run it in a PowerShell opened with "Run as administrator".	install.ps1: ejecútelo en un PowerShell abierto con "Ejecutar como administrador".
+install.ps1: -Port takes a port from 1024 to 65535.	install.ps1: -Port admite un puerto de 1024 a 65535.
+checking the binaries	comprobando los programas
+cbbw.exe is missing beside %s	falta cbbw.exe junto a %s
+%s is not built for Windows: %s	%s no está compilado para Windows: %s
+finding the signed-in user	buscando el usuario con sesión iniciada
+stopping cbb	deteniendo cbb
+copying the files to %s	copiando los archivos a %s
+adding cbb to PATH	añadiendo cbb a PATH
+making the %s group	creando el grupo %s
+adding %s to the %s group	añadiendo %s al grupo %s
+net localgroup %s %s /add exited with %s: %s	net localgroup %s %s /add terminó con %s: %s
+creating the service	creando el servicio
+setting the service's path failed with %s	no se pudo fijar la ruta del servicio: %s
+setting the port	fijando el puerto
+100.64.0.0/10 counts as the home network on this PC (-HomeCgnat on).	En este PC, 100.64.0.0/10 cuenta como red de casa (-HomeCgnat on).
+narrowing %s	restringiendo %s
+%s was not the administrators' own; it is now %s	%s no era de los administradores; ahora es %s
+allowing cbb in Windows Firewall	permitiendo cbb en el Firewall de Windows
+the local subnet	la subred local
+the local subnet and 100.64.0.0/10	la subred local y 100.64.0.0/10
+Firewall: Windows Firewall (on for %s). CBB requires these rules:	Cortafuegos: Firewall de Windows (activado para %s). CBB necesita estas reglas:
+Firewall: Windows Firewall (off). CBB requires these rules:	Cortafuegos: Firewall de Windows (desactivado). CBB necesita estas reglas:
+  1. Allow incoming TCP %s from %s to %s. Purpose: connections from the group's devices.	  1. Permitir TCP %s entrante desde %s hacia %s. Para: las conexiones de los dispositivos del grupo.
+  2. Allow incoming UDP 5353 from %s to %s. Purpose: finding the group's devices (mDNS).	  2. Permitir UDP 5353 entrante desde %s hacia %s. Para: encontrar los dispositivos del grupo (mDNS).
+Add these rules now? [y/N]	¿Añadir estas reglas ahora? [s/N]
+Add these rules now? [y/N] No console to answer on; taken as No.	¿Añadir estas reglas ahora? [s/N] No hay consola para responder; se toma como No.
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run in an administrator PowerShell:	No se añadió ninguna regla del cortafuegos. CBB solo funciona mientras el cortafuegos permita las reglas de arriba. Para añadirlas a mano, ejecute en un PowerShell de administrador:
+To let CBB add and manage them, run the installer again with -Express ($env:CBB_FIREWALL = "express" for get.ps1).	Para que CBB las añada y las gestione, ejecute el instalador de nuevo con -Express ($env:CBB_FIREWALL = "express" para get.ps1).
+CBB also adds an outbound rule that keeps its service on the home network and, with cbb global on, its group's servers.	CBB también añade una regla de salida que limita su servicio a la red de casa y, con cbb global on, a los servidores de su grupo.
+keeping the service on the home network	limitando el servicio a la red de casa
+starting the service	iniciando el servicio
+starting the agent with every sign-in	iniciando el agente en cada inicio de sesión
+starting the agent for %s	iniciando el agente para %s
+starting the tray app for %s	iniciando la app de la bandeja para %s
+The agent did not start now (%s); it starts when %s signs in again.	El agente no arrancó ahora (%s); arrancará cuando %s vuelva a iniciar sesión.
+The tray app did not start now (%s); it starts when %s signs in again.	La app de la bandeja no arrancó ahora (%s); arrancará cuando %s vuelva a iniciar sesión.
+starting the tray app with every sign-in	iniciando la app de la bandeja en cada inicio de sesión
+adding CBB to the Start menu	añadiendo CBB al menú Inicio
+registering the uninstaller	registrando el desinstalador
+waiting for the service	esperando al servicio
+the service does not answer; its log is %s	el servicio no responde; su registro es %s
+writing the outbound rule for what the service reaches now	escribiendo la regla de salida para lo que el servicio alcanza ahora
+cbb global allow exited with %s	cbb global allow terminó con %s
+recording how CBB was installed	guardando cómo se instaló CBB
+Could not record how CBB was installed; cbb update takes it as get.ps1.	No se pudo guardar cómo se instaló CBB; cbb update lo tomará como get.ps1.
+setting automatic updates	configurando las actualizaciones automáticas
+Update automatically? [y/N] No console to answer on; not now. Later: cbb update -auto on	¿Actualizar automáticamente? [s/N] No hay consola para responder; ahora no. Más tarde: cbb update -auto on
+Could not turn automatic updates %s; run cbb update -auto %s as administrator.	No se pudieron poner las actualizaciones automáticas en %s; ejecute cbb update -auto %s como administrador.
+CBB %s is running on TCP port %s; %s may use it.	CBB %s funciona en el puerto TCP %s; %s puede usarlo.
+It stays in its group.	Sigue en su grupo.
+Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	Siguiente, en una terminal abierta como administrador: cbb pair, y escanee su código QR con el teléfono o escriba el código de cbb pair en la raíz del grupo o en un administrador; o cree un grupo: cbb new.
+To remove it: Settings, Apps, CBB, Uninstall.	Para quitarlo: Configuración, Aplicaciones, CBB, Desinstalar.
+Y	S
+Yes	Sí
+y	s
+yes	sí
+uninstall.ps1: %s failed: %s	uninstall.ps1: falló el paso "%s": %s
+deleting the service	eliminando el servicio
+stopping the agents and the tray app	deteniendo los agentes y la app de la bandeja
+removing the update task and cbb update's folder	quitando la tarea de actualización y la carpeta de cbb update
+removing the firewall rules	quitando las reglas del cortafuegos
+removing the sign-in entries, the Start menu shortcut and the uninstaller entry	quitando las entradas de inicio de sesión, el acceso del menú Inicio y la entrada del desinstalador
+removing cbb from PATH	quitando cbb de PATH
+removing %s	quitando %s
+removing %s and the %s group	quitando %s y el grupo %s
+CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	CBB se quitó. Sus claves quedan en %s para reinstalarlo; -Purge las borra.

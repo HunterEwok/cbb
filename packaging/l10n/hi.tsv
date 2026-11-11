@@ -1,0 +1,261 @@
+  1. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  1. आने वाले TCP %s की अनुमति दें, %s से। उद्देश्य: समूह के डिवाइसों से कनेक्शन।
+  2. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  2. आने वाले UDP 5353 की अनुमति दें, %s से। उद्देश्य: समूह के डिवाइस ढूँढना (mDNS)।
+%s: removed the CBB rules.	%s: CBB के नियम हटा दिए गए।
+Firewall: closed the hub's UDP port %s.	फ़ायरवॉल: हब का UDP पोर्ट %s बंद कर दिया गया।
+  In Firewall > Rules, on each interface of the home network (LAN and the others):	  Firewall > Rules में, होम नेटवर्क के हर इंटरफ़ेस पर (LAN और बाकी):
+    Pass, protocol TCP, source %s, destination This Firewall, port %s	    Pass, प्रोटोकॉल TCP, स्रोत %s, गंतव्य This Firewall, पोर्ट %s
+    Pass, protocol UDP, the same sources, destination This Firewall, port 5353	    Pass, प्रोटोकॉल UDP, वही स्रोत, गंतव्य This Firewall, पोर्ट 5353
+  Add to /etc/pf.conf, before the rules that block, and run pfctl -f /etc/pf.conf:	  /etc/pf.conf में, रोकने वाले नियमों से पहले, जोड़ें और pfctl -f /etc/pf.conf चलाएँ:
+  and the same lines in the script that firewall_script in rc.conf names, to keep them.	  और वही पंक्तियाँ उस स्क्रिप्ट में जिसका नाम rc.conf का firewall_script देता है, ताकि वे बनी रहें।
+  In Firewall > Rules on WAN: Pass, protocol UDP, source any, destination WAN address, port %s	  WAN पर Firewall > Rules में: Pass, प्रोटोकॉल UDP, स्रोत any, गंतव्य WAN address, पोर्ट %s
+%s [y/N]	%s [y/N]
+No terminal to answer on; taken as No.	जवाब देने के लिए कोई टर्मिनल नहीं; "नहीं" माना गया।
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand:	कोई फ़ायरवॉल नियम नहीं जोड़ा गया। CBB तभी काम करता है जब फ़ायरवॉल ऊपर के नियमों की अनुमति देता है। उन्हें हाथ से जोड़ने के लिए:
+Firewall: no active firewall was found; no firewall rules are needed. If pf or ipfw is turned on later, run the installer again.	फ़ायरवॉल: कोई सक्रिय फ़ायरवॉल नहीं मिला; किसी नियम की ज़रूरत नहीं। अगर बाद में pf या ipfw चालू हो, तो इंस्टॉलर फिर से चलाएँ।
+Firewall: %s (active). CBB requires these rules:	फ़ायरवॉल: %s (सक्रिय)। CBB को ये नियम चाहिए:
+CBB does not change pfSense's rules, and runs there unsupported. Add them by hand:	CBB pfSense के नियम नहीं बदलता, और वहाँ बिना समर्थन के चलता है। उन्हें हाथ से जोड़ें:
+ (express installation)	 (त्वरित इंस्टॉलेशन)
+ (as answered before)	 (पहले दिए जवाब के अनुसार)
+With Yes, CBB keeps these rules in its own pf anchor, which its plugin hook adds to OPNsense's ruleset; uninstalling removes both.	"हाँ" पर, CBB ये नियम अपने pf anchor में रखता है, जिसे उसका प्लगइन hook OPNsense के नियमों में जोड़ता है; अनइंस्टॉल करने से दोनों हट जाते हैं।
+With Yes, CBB keeps these rules in its own pf anchor and adds the lines that load it at the end of %s; uninstalling removes both.	"हाँ" पर, CBB ये नियम अपने pf anchor में रखता है और उसे लोड करने वाली पंक्तियाँ %s के अंत में जोड़ता है; अनइंस्टॉल करने से दोनों हट जाते हैं।
+With Yes, CBB adds these rules to ipfw's set %s at every start, and removes them on uninstall.	"हाँ" पर, CBB हर शुरुआत में ये नियम ipfw के सेट %s में जोड़ता है, और अनइंस्टॉल पर हटा देता है।
+Add these rules now?	ये नियम अभी जोड़ें?
+To let CBB add and manage them, run the installer again with --express.	CBB को इन्हें जोड़ने और सँभालने देने के लिए, इंस्टॉलर --express के साथ फिर से चलाएँ।
+Added the rules above%s. CBB manages them from now on.	ऊपर के नियम जोड़ दिए गए%s। अब से CBB इन्हें सँभालता है।
+run it as root	इसे root के रूप में चलाएँ
+neither pf nor ipfw is active; nothing was added.	न pf सक्रिय है न ipfw; कुछ नहीं जोड़ा गया।
+failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again.	विफल (निकास स्थिति %s)। इसके चलाए हर कमांड के लिए: CBB_ERROR_DETAILS=1, और इसे फिर से चलाएँ।
+CBB_HOME_CGNAT is 1 or 0, not %s	CBB_HOME_CGNAT 1 या 0 होता है, %s नहीं
+--port takes a port from 1024 to 65535	--port 1024 से 65535 तक का पोर्ट लेता है
+CBB_FIREWALL is ask, express or no, not %s	CBB_FIREWALL ask, express या no होता है, %s नहीं
+run it as root (sudo or doas)	इसे root के रूप में चलाएँ (sudo या doas)
+this installer is for FreeBSD	यह इंस्टॉलर FreeBSD के लिए है
+%s does not run on this machine; is it built for %s?	%s इस मशीन पर नहीं चलता; क्या यह %s के लिए बना है?
+an account named cbb exists here and is not this service's (its comment is not "CBB"); it would get the group's keys. Rename or remove it, then run install.sh again.	यहाँ cbb नाम का एक खाता है जो इस सेवा का नहीं है (उसकी टिप्पणी "CBB" नहीं है); उसे समूह की कुंजियाँ मिल जातीं। उसका नाम बदलें या उसे हटाएँ, फिर install.sh फिर से चलाएँ।
+a group named cbb exists here with members, and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	यहाँ cbb नाम का एक समूह है जिसमें सदस्य हैं, और कोई सेवा खाता नहीं; वे सेवा तक पहुँच जाते। समूह का नाम बदलें या उसे हटाएँ, फिर install.sh फिर से चलाएँ।
+Added %s to the cbb group; log in again to use cbb copy and paste.	%s को cbb समूह में जोड़ा गया; cbb copy और paste इस्तेमाल करने के लिए फिर से लॉग इन करें।
+CBB uses TCP port %s instead of 8764.	CBB 8764 की जगह TCP पोर्ट %s इस्तेमाल करता है।
+the service did not answer within 10 s: %s	सेवा ने 10 सेकंड में जवाब नहीं दिया: %s
+CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	CBB TCP पोर्ट %s पर चल रहा है। इसे हटाने के लिए: sh /usr/local/share/cbb/uninstall.sh
+OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense: यह System > Diagnostics > Services में दिखता है, और इसके नियम हर फ़िल्टर रीलोड के साथ बने रहते हैं।
+pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	pfSense समर्थित नहीं है: pfSense का अपडेट CBB को हटा सकता है; अपडेट के बाद यह इंस्टॉलर फिर से चलाएँ।
+Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	आगे: root के रूप में cbb pair चलाएँ और उसका QR कोड फ़ोन पर CBB ऐप से स्कैन करें; ऐप के बिना, docs/guide/without-app.md देखें।
+CBB is removed, with this device's keys; it left its group.	CBB हटा दिया गया, इस डिवाइस की कुंजियों के साथ; इसने अपना समूह छोड़ दिया।
+CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	CBB हटा दिया गया। इसकी कुंजियाँ दोबारा इंस्टॉल के लिए /var/db/cbb में रहती हैं; --purge उन्हें हटाता है।
+--port needs a port number	--port को पोर्ट संख्या चाहिए
+--home-cgnat needs on or off	--home-cgnat को on या off चाहिए
+--auto-update needs on or off	--auto-update को on या off चाहिए
+unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	अज्ञात विकल्प %s (ज्ञात: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
+--rootless installs for your own user: run it without sudo: %s	--rootless आपके अपने उपयोगकर्ता के लिए इंस्टॉल करता है: इसे sudo के बिना चलाएँ: %s
+--rootless is for Linux computers	--rootless Linux कंप्यूटरों के लिए है
+run it with sudo: %s	इसे sudo के साथ चलाएँ: %s
+no release for this MIPS system: it is not OpenWrt, which names its byte order	इस MIPS सिस्टम के लिए कोई रिलीज़ नहीं: यह OpenWrt नहीं है, जो अपना बाइट क्रम बताता है
+no release for the architecture %s	आर्किटेक्चर %s के लिए कोई रिलीज़ नहीं
+the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	MIPS के लाइट सदस्य में अभी घर से दूर सिंक नहीं है (रोडमैप आइटम 37); पूर्ण सदस्य में है।
+--console is not for a router	--console राउटर के लिए नहीं है
+--uinput is not for a router	--uinput राउटर के लिए नहीं है
+--home-cgnat is not for a router	--home-cgnat राउटर के लिए नहीं है
+--lite is for Linux; a Mac runs the full member	--lite Linux के लिए है; Mac पूर्ण सदस्य चलाता है
+--console is for Linux	--console Linux के लिए है
+--uinput is for Linux	--uinput Linux के लिए है
+--lite is for Linux; FreeBSD runs the full member	--lite Linux के लिए है; FreeBSD पूर्ण सदस्य चलाता है
+this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	यह इंस्टॉलर Linux, macOS और FreeBSD के लिए है; Windows पर get.ps1 इस्तेमाल करें
+tar is required	tar ज़रूरी है
+sha256sum or shasum is required	sha256sum या shasum ज़रूरी है
+curl or wget is required	curl या wget ज़रूरी है
+CBB_VERSION must look like v1.2.3	CBB_VERSION v1.2.3 जैसा दिखना चाहिए
+the signed %s file is not in the strict form of signed bodies; not installing	हस्ताक्षरित %s फ़ाइल हस्ताक्षरित सामग्री के सख़्त रूप में नहीं है; इंस्टॉल नहीं किया जा रहा
+Not checked: the release's signature (CBB_VERIFY=skip).	जाँचा नहीं गया: रिलीज़ का हस्ताक्षर (CBB_VERIFY=skip)।
+openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)	रिलीज़ का हस्ताक्षर जाँचने के लिए openssl ज़रूरी है (या बिना जाँच इंस्टॉल करने के लिए CBB_VERIFY=skip)
+%s has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)	%s में कोई हस्ताक्षरित रिलीज़ फ़ाइल नहीं; इसे इंस्टॉल नहीं किया जा रहा (CBB_VERIFY=skip इसे बिना जाँच इंस्टॉल करता है)
+keys.json is not signed by the project's root key; not installing	keys.json प्रोजेक्ट की रूट कुंजी से हस्ताक्षरित नहीं है; इंस्टॉल नहीं किया जा रहा
+keys.json has expired; check the clock, or try again later	keys.json की अवधि समाप्त हो गई है; घड़ी जाँचें, या बाद में फिर कोशिश करें
+keys.json is not valid; not installing	keys.json मान्य नहीं है; इंस्टॉल नहीं किया जा रहा
+keys.json holds a key that is not valid	keys.json में एक कुंजी मान्य नहीं है
+keys.json holds no release key	keys.json में कोई रिलीज़ कुंजी नहीं है
+release.json is not signed by a release key; not installing	release.json किसी रिलीज़ कुंजी से हस्ताक्षरित नहीं है; इंस्टॉल नहीं किया जा रहा
+stable.json is not signed by a release or channel key; not installing	stable.json किसी रिलीज़ या चैनल कुंजी से हस्ताक्षरित नहीं है; इंस्टॉल नहीं किया जा रहा
+stable.json is not the stable channel's	stable.json स्थिर चैनल का नहीं है
+stable.json has expired; check the clock, or try again later	stable.json की अवधि समाप्त हो गई है; घड़ी जाँचें, या बाद में फिर कोशिश करें
+release.json is not the release stable.json names; not installing	release.json वह रिलीज़ नहीं है जिसका नाम stable.json देता है; इंस्टॉल नहीं किया जा रहा
+release.json is for %s, not %s	release.json %s के लिए है, %s के लिए नहीं
+release.json does not list %s	release.json में %s सूचीबद्ध नहीं है
+%s does not match the signed release.json; not installing it	%s हस्ताक्षरित release.json से मेल नहीं खाता; इसे इंस्टॉल नहीं किया जा रहा
+The release's signature checks out (%s).	रिलीज़ का हस्ताक्षर सही है (%s)।
+could not download %s	%s डाउनलोड नहीं हो सका
+stable.json names no release	stable.json किसी रिलीज़ का नाम नहीं देता
+Downloading %s (%s)...	%s डाउनलोड हो रहा है (%s)...
+SHA256SUMS does not list %s	SHA256SUMS में %s सूचीबद्ध नहीं है
+%s does not match SHA256SUMS; not installing it	%s SHA256SUMS से मेल नहीं खाता; इसे इंस्टॉल नहीं किया जा रहा
+%s does not have this repository's build attestation; not installing it	%s के पास इस रिपॉज़िटरी का बिल्ड प्रमाणन नहीं है; इसे इंस्टॉल नहीं किया जा रहा
+The archive's build attestation checks out.	आर्काइव का बिल्ड प्रमाणन सही है।
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the archive's build attestation	CBB_ATTESTATION=require को आर्काइव का बिल्ड प्रमाणन जाँचने के लिए साइन-इन किया हुआ gh (gh auth login) चाहिए
+Not checked: the archive's build attestation (it needs gh, signed in). SHA256SUMS matched.	जाँचा नहीं गया: आर्काइव का बिल्ड प्रमाणन (इसके लिए साइन-इन किया हुआ gh चाहिए)। SHA256SUMS मेल खा गया।
+  %s. Allow incoming TCP %s from %s. Purpose: connections from the group's devices.	  %s. आने वाले TCP %s की अनुमति दें, %s से। उद्देश्य: समूह के डिवाइसों से कनेक्शन।
+  %s. Allow incoming UDP 5353 from %s. Purpose: finding the group's devices (mDNS).	  %s. आने वाले UDP 5353 की अनुमति दें, %s से। उद्देश्य: समूह के डिवाइस ढूँढना (mDNS)।
+ufw: removed the CBB rules.	ufw: CBB के नियम हटा दिए गए।
+firewalld: removed the CBB rules and service.	firewalld: CBB के नियम और सेवा हटा दिए गए।
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run:	कोई फ़ायरवॉल नियम नहीं जोड़ा गया। CBB तभी काम करता है जब फ़ायरवॉल ऊपर के नियमों की अनुमति देता है। उन्हें हाथ से जोड़ने के लिए, चलाएँ:
+Then make them permanent the way this system keeps its %s rules.	फिर उन्हें उसी तरह स्थायी बनाएँ जिस तरह यह सिस्टम अपने %s नियम रखता है।
+Firewall: no active firewall was found; no firewall rules are needed. If a firewall is turned on later, run the installer again.	फ़ायरवॉल: कोई सक्रिय फ़ायरवॉल नहीं मिला; किसी नियम की ज़रूरत नहीं। अगर बाद में कोई फ़ायरवॉल चालू हो, तो इंस्टॉलर फिर से चलाएँ।
+cbb does not manage %s rules: rules added at run time do not survive a restart.	cbb %s नियम नहीं सँभालता: चलते समय जोड़े गए नियम रीस्टार्ट के बाद नहीं बचते।
+ (kept from an earlier installation)	 (पिछले इंस्टॉलेशन से रखा गया)
+With Yes, CBB adds these rules, keeps them current on every update and removes them on uninstall.	"हाँ" पर, CBB ये नियम जोड़ता है, हर अपडेट पर इन्हें मौजूदा रखता है और अनइंस्टॉल पर हटा देता है।
+run it with sudo	इसे sudo के साथ चलाएँ
+no ufw or firewalld is active; nothing was added.	न ufw सक्रिय है न firewalld; कुछ नहीं जोड़ा गया।
+%s needs root; a rootless install has no console or uinput helper	%s को root चाहिए; root के बिना इंस्टॉल में कोई console या uinput सहायक नहीं होता
+--rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless आपके अपने उपयोगकर्ता के लिए इंस्टॉल करता है: इसे sudo के बिना चलाएँ। sudo के साथ, --rootless के बिना install.sh सिस्टम सेवा इंस्टॉल करता है, जो ज़्यादा सुरक्षित है।
+a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	root के बिना इंस्टॉल systemd उपयोगकर्ता यूनिट के रूप में चलता है, और इस सत्र में systemd उपयोगकर्ता प्रबंधक नहीं है; डेस्कटॉप पर या ssh से लॉग इन करें और इसे फिर से चलाएँ
+--home-cgnat is for the full member	--home-cgnat पूर्ण सदस्य के लिए है
+CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	CBB यहाँ पूरे सिस्टम के लिए इंस्टॉल है (%s), और एक डिवाइस एक सेवा चलाता है; पहले उसे हटाएँ या उसे रहने दें
+the desktop agent did not start; it starts at your next login	डेस्कटॉप एजेंट शुरू नहीं हुआ; यह आपके अगले लॉग इन पर शुरू होगा
+CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB तब तक चलता है जब तक आप लॉग इन हैं। लॉग आउट के बाद भी इसे चलाए रखने के लिए, एक व्यवस्थापक चलाता है: sudo loginctl enable-linger %s
+CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	CBB %s के लिए TCP पोर्ट %s पर चल रहा है, root के बिना इंस्टॉल किया हुआ: यह कभी समूह का रूट, व्यवस्थापक या हब नहीं बन सकता। अगर यहाँ कोई फ़ायरवॉल आने वाले कनेक्शन सीमित करता है, तो एक व्यवस्थापक होम नेटवर्क से TCP %s और UDP 5353 की अनुमति देता है। इसे हटाने के लिए: %s
+For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	tmux में कॉपी और पेस्ट के लिए, यह पंक्ति ~/.tmux.conf में जोड़ें: source-file -q %s/tmux.conf
+Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	आगे: member/README.md देखें; संक्षेप में, यहाँ %s pair, और उसका QR कोड फ़ोन ऐप से स्कैन करें।
+Next: run %s pair and scan its QR code with the CBB app on your phone.	आगे: %s pair चलाएँ और उसका QR कोड फ़ोन पर CBB ऐप से स्कैन करें।
+this archive has no install-rootless.sh, so it cannot install without root	इस आर्काइव में install-rootless.sh नहीं है, इसलिए यह root के बिना इंस्टॉल नहीं कर सकता
+systemd is required	systemd ज़रूरी है
+the full member is installed here, and the lite member cannot use its keys; remove it first: %s	यहाँ पूर्ण सदस्य इंस्टॉल है, और लाइट सदस्य उसकी कुंजियाँ इस्तेमाल नहीं कर सकता; पहले उसे हटाएँ: %s
+the lite member is installed here, and the full member cannot use its keys; remove it first: %s	यहाँ लाइट सदस्य इंस्टॉल है, और पूर्ण सदस्य उसकी कुंजियाँ इस्तेमाल नहीं कर सकता; पहले उसे हटाएँ: %s
+an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	यहाँ cbb नाम का एक खाता है जो इस सेवा का नहीं है (उसकी टिप्पणी "cbb service" नहीं है); उसे समूह की कुंजियाँ मिल जातीं। उसका नाम बदलें या उसे हटाएँ, फिर install.sh फिर से चलाएँ।
+a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	यहाँ cbb नाम का एक समूह है जिसमें सदस्य हैं (%s), और कोई सेवा खाता नहीं; वे सेवा तक पहुँच जाते। समूह का नाम बदलें या उसे हटाएँ, फिर install.sh फिर से चलाएँ।
+Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	इंस्टॉल नहीं हुआ: ट्रे ऐप, जिसे GTK 4 और WebKitGTK 6.0 चाहिए (Debian और Ubuntu: %s; Fedora: %s)। उन्हें इंस्टॉल करें और इसे जोड़ने के लिए यह फिर से चलाएँ।
+--uinput is for the full member, which runs the desktop connector	--uinput पूर्ण सदस्य के लिए है, जो डेस्कटॉप कनेक्टर चलाता है
+could not load the uinput module now; it loads at the next boot	uinput मॉड्यूल अभी लोड नहीं हो सका; यह अगले बूट पर लोड होगा
+100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	इस डिवाइस पर 100.64.0.0/10 होम नेटवर्क माना जाता है (--home-cgnat on)।
+New member and admin keys of this device go into its TPM.	इस डिवाइस की नई सदस्य और व्यवस्थापक कुंजियाँ इसके TPM में जाती हैं।
+CBB uses TCP port %s instead of 8764. If a firewall on the network limits incoming connections, allow TCP %s from the home network.	CBB 8764 की जगह TCP पोर्ट %s इस्तेमाल करता है। अगर नेटवर्क पर कोई फ़ायरवॉल आने वाले कनेक्शन सीमित करता है, तो होम नेटवर्क से TCP %s की अनुमति दें।
+the uinput helper did not start; see journalctl -u cbb-uinput	uinput सहायक शुरू नहीं हुआ; journalctl -u cbb-uinput देखें
+the desktop agent of %s did not start again; it starts at their next login	%s का डेस्कटॉप एजेंट फिर से शुरू नहीं हुआ; यह उनके अगले लॉग इन पर शुरू होगा
+cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow विफल रहा; सेवा चलने पर sudo cbb global allow चलाएँ।
+CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB TCP पोर्ट %s पर चल रहा है। इसे हटाने के लिए: sudo sh %s/uninstall.sh
+Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	आगे: member/README.md देखें; संक्षेप में, यहाँ sudo -u cbb %s pair, और उसका QR कोड फ़ोन ऐप से स्कैन करें।
+Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	आगे: sudo %s pair चलाएँ और उसका QR कोड फ़ोन पर CBB ऐप से स्कैन करें; ऐप के बिना, docs/guide/without-app.md देखें।
+CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	CBB हटा दिया गया। इसकी कुंजियाँ दोबारा इंस्टॉल के लिए %s/cbb में रहती हैं; --purge उन्हें हटाता है।
+CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	CBB हटा दिया गया। इसकी कुंजियाँ दोबारा इंस्टॉल के लिए /var/lib/cbb में रहती हैं; --purge उन्हें हटाता है।
+%s does not run on this Mac	%s इस Mac पर नहीं चलता
+%s was built without cgo, so it cannot link this Mac's clipboard; use a release build, or build it with CGO_ENABLED=1	%s cgo के बिना बना है, इसलिए यह इस Mac के क्लिपबोर्ड से नहीं जुड़ सकता; रिलीज़ बिल्ड इस्तेमाल करें, या इसे CGO_ENABLED=1 के साथ बनाएँ
+--in-place needs a path of letters, digits and / . _ + -, not %s	--in-place को अक्षरों, अंकों और / . _ + - का पथ चाहिए, %s नहीं
+%s is a link, likely Homebrew's; run this with --in-place %s	%s एक लिंक है, शायद Homebrew का; इसे --in-place %s के साथ चलाएँ
+100.64.0.0/10 counts as the home network on this Mac (--home-cgnat on).	इस Mac पर 100.64.0.0/10 होम नेटवर्क माना जाता है (--home-cgnat on)।
+Firewall: the macOS application firewall (on). CBB requires this rule:	फ़ायरवॉल: macOS का एप्लिकेशन फ़ायरवॉल (चालू)। CBB को यह नियम चाहिए:
+Firewall: the macOS application firewall (off). CBB requires this rule:	फ़ायरवॉल: macOS का एप्लिकेशन फ़ायरवॉल (बंद)। CBB को यह नियम चाहिए:
+  1. Allow incoming connections to %s. Purpose: connections from the group's devices on TCP %s and finding them on UDP 5353 (mDNS). The application firewall allows a program on every port and from every address; CBB itself accepts only the home network.	  1. %s पर आने वाले कनेक्शनों की अनुमति दें। उद्देश्य: TCP %s पर समूह के डिवाइसों से कनेक्शन और UDP 5353 पर उन्हें ढूँढना (mDNS)। एप्लिकेशन फ़ायरवॉल किसी प्रोग्राम को हर पोर्ट पर और हर पते से अनुमति देता है; CBB खुद केवल होम नेटवर्क स्वीकार करता है।
+With Yes, CBB adds this rule, keeps it current on every update and removes it on uninstall.	"हाँ" पर, CBB यह नियम जोड़ता है, हर अपडेट पर इसे मौजूदा रखता है और अनइंस्टॉल पर हटा देता है।
+Add this rule now? [y/N]	यह नियम अभी जोड़ें? [y/N]
+Added the rule above%s. CBB manages it from now on.	ऊपर का नियम जोड़ दिया गया%s। अब से CBB इसे सँभालता है।
+No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	कोई फ़ायरवॉल नियम नहीं जोड़ा गया। CBB तभी काम करता है जब फ़ायरवॉल ऊपर के नियम की अनुमति देता है। इसे हाथ से जोड़ने के लिए, चलाएँ:
+To let CBB add and manage it, run the installer again with --express.	CBB को इसे जोड़ने और सँभालने देने के लिए, इंस्टॉलर --express के साथ फिर से चलाएँ।
+CBB is running on TCP port %s, in its group.	CBB TCP पोर्ट %s पर चल रहा है, अपने समूह में।
+CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	CBB TCP पोर्ट %s पर चल रहा है। किसी समूह से जुड़ें: sudo cbb pair, और उसका QR कोड फ़ोन से स्कैन करें या cbb pair का कोड समूह के रूट या किसी व्यवस्थापक पर टाइप करें; या समूह शुरू करें: sudo cbb new।
+CBB is removed, with this Mac's keys; it left its group.	CBB हटा दिया गया, इस Mac की कुंजियों के साथ; इसने अपना समूह छोड़ दिया।
+CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	CBB हटा दिया गया। इसकी कुंजियाँ दोबारा इंस्टॉल के लिए %s/state में रहती हैं; --purge उन्हें हटाता है।
+this installer is for OpenWrt	यह इंस्टॉलर OpenWrt के लिए है
+OpenWrt 25.12 or later is required (it installs packages with apk)	OpenWrt 25.12 या नया ज़रूरी है (यह apk से पैकेज इंस्टॉल करता है)
+%s does not run on this router; is it built for %s?	%s इस राउटर पर नहीं चलता; क्या यह %s के लिए बना है?
+CBB is installed; procd is not running here, so it starts at the next boot.	CBB इंस्टॉल हो गया; procd यहाँ नहीं चल रहा, इसलिए यह अगले बूट पर शुरू होगा।
+the service did not answer within 40 s: %s	सेवा ने 40 सेकंड में जवाब नहीं दिया: %s
+see logread -e cbb	logread -e cbb देखें
+CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB TCP पोर्ट %s पर चल रहा है, lan ज़ोन में। इसे हटाने के लिए: sh /usr/share/cbb/uninstall.sh
+Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	OpenWrt के फ़ीड से बाहर के पैकेज attended sysupgrade (ASU, owut) में छूट जाते हैं: उसके बाद इसे फिर से इंस्टॉल करें।
+Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	आगे: su -s /bin/sh cbb -c 'cbb pair -name router' चलाएँ और उसका QR कोड फ़ोन पर CBB ऐप से स्कैन करें।
+Next: run cbb pair and scan its QR code with the CBB app on your phone.	आगे: cbb pair चलाएँ और उसका QR कोड फ़ोन पर CBB ऐप से स्कैन करें।
+CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB हटा दिया गया। इसकी कुंजियाँ दोबारा इंस्टॉल के लिए /etc/cbb में रहती हैं; --purge उन्हें हटाता है।
+This device is in no group yet, so it starts pairing now (--no-pair skips this).	यह डिवाइस अभी किसी समूह में नहीं है, इसलिए यह अब पेयरिंग शुरू करता है (--no-pair इसे छोड़ देता है)।
+could not record how CBB was installed; cbb update takes it as get.sh	यह दर्ज नहीं हो सका कि CBB कैसे इंस्टॉल हुआ; cbb update इसे get.sh मानेगा
+automatic updates are on or off, not %s	स्वचालित अपडेट on या off होते हैं, %s नहीं
+CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB दिन में एक बार प्रोजेक्ट द्वारा हस्ताक्षरित रिलीज़ जाँचकर उसे इंस्टॉल कर सकता है; यह जाँच GitHub को इस डिवाइस का पता बताती है, जैसे कोई भी डाउनलोड।
+Update automatically? [y/N]	स्वचालित रूप से अपडेट करें? [y/N]
+No terminal to answer on; not now. Later: %scbb update -auto on	जवाब देने के लिए कोई टर्मिनल नहीं; अभी नहीं। बाद में: %scbb update -auto on
+could not turn automatic updates %s; run %scbb update -auto %s	स्वचालित अपडेट %s नहीं किए जा सके; %scbb update -auto %s चलाएँ
+starting	शुरू हो रहा है
+a key is not P-256	एक कुंजी P-256 नहीं है
+%s is not a valid release file; not installing	%s मान्य रिलीज़ फ़ाइल नहीं है; इंस्टॉल नहीं किया जा रहा
+%s is not signed by the project's key; not installing	%s प्रोजेक्ट की कुंजी से हस्ताक्षरित नहीं है; इंस्टॉल नहीं किया जा रहा
+keys.json holds a key whose use is empty; not installing	keys.json में एक कुंजी है जिसका उपयोग खाली है; इंस्टॉल नहीं किया जा रहा
+checking for administrator rights	व्यवस्थापक अधिकार जाँचे जा रहे हैं
+run it in a PowerShell opened with "Run as administrator"	इसे "Run as administrator" से खोले गए PowerShell में चलाएँ
+finding the architecture	आर्किटेक्चर पता किया जा रहा है
+finding the latest release	नवीनतम रिलीज़ खोजी जा रही है
+downloading %s (%s)	%s डाउनलोड हो रहा है (%s)
+checking %s against SHA256SUMS	%s को SHA256SUMS से जाँचा जा रहा है
+checking the release's signature	रिलीज़ का हस्ताक्षर जाँचा जा रहा है
+checking the build attestation of %s	%s का बिल्ड प्रमाणन जाँचा जा रहा है
+CBB_ATTESTATION=require needs gh, signed in (gh auth login), to check the build attestation	CBB_ATTESTATION=require को बिल्ड प्रमाणन जाँचने के लिए साइन-इन किया हुआ gh (gh auth login) चाहिए
+Not checked: the build attestation of the archive (it needs gh, signed in). SHA256SUMS matched.	जाँचा नहीं गया: आर्काइव का बिल्ड प्रमाणन (इसके लिए साइन-इन किया हुआ gh चाहिए)। SHA256SUMS मेल खा गया।
+unpacking %s	%s खोला जा रहा है
+running install.ps1	install.ps1 चलाया जा रहा है
+install.ps1 exited with %s	install.ps1 %s के साथ समाप्त हुआ
+get.ps1: %s failed: %s	get.ps1: %s विफल: %s
+For the full error: $env:CBB_ERROR_DETAILS = "1", and run it again.	पूरी त्रुटि के लिए: $env:CBB_ERROR_DETAILS = "1", और इसे फिर से चलाएँ।
+install.ps1: %s failed: %s	install.ps1: %s विफल: %s
+Run it again with -Details for the full error.	पूरी त्रुटि के लिए इसे -Details के साथ फिर से चलाएँ।
+%s %s exited with %s: %s	%s %s %s के साथ समाप्त हुआ: %s
+install.ps1: run it in a PowerShell opened with "Run as administrator".	install.ps1: इसे "Run as administrator" से खोले गए PowerShell में चलाएँ।
+install.ps1: -Port takes a port from 1024 to 65535.	install.ps1: -Port 1024 से 65535 तक का पोर्ट लेता है।
+checking the binaries	बाइनरी फ़ाइलें जाँची जा रही हैं
+cbbw.exe is missing beside %s	%s के पास cbbw.exe नहीं है
+%s is not built for Windows: %s	%s Windows के लिए नहीं बना है: %s
+finding the signed-in user	साइन-इन किया हुआ उपयोगकर्ता पता किया जा रहा है
+stopping cbb	cbb रोका जा रहा है
+copying the files to %s	फ़ाइलें %s में कॉपी की जा रही हैं
+adding cbb to PATH	cbb को PATH में जोड़ा जा रहा है
+making the %s group	%s समूह बनाया जा रहा है
+adding %s to the %s group	%s को %s समूह में जोड़ा जा रहा है
+net localgroup %s %s /add exited with %s: %s	net localgroup %s %s /add %s के साथ समाप्त हुआ: %s
+creating the service	सेवा बनाई जा रही है
+setting the service's path failed with %s	सेवा का पथ सेट करना %s के साथ विफल रहा
+setting the port	पोर्ट सेट किया जा रहा है
+100.64.0.0/10 counts as the home network on this PC (-HomeCgnat on).	इस PC पर 100.64.0.0/10 होम नेटवर्क माना जाता है (-HomeCgnat on)।
+narrowing %s	%s सीमित किया जा रहा है
+%s was not the administrators' own; it is now %s	%s व्यवस्थापकों का अपना नहीं था; अब यह %s है
+allowing cbb in Windows Firewall	Windows Firewall में cbb की अनुमति दी जा रही है
+the local subnet	स्थानीय सबनेट
+the local subnet and 100.64.0.0/10	स्थानीय सबनेट और 100.64.0.0/10
+Firewall: Windows Firewall (on for %s). CBB requires these rules:	फ़ायरवॉल: Windows Firewall (%s के लिए चालू)। CBB को ये नियम चाहिए:
+Firewall: Windows Firewall (off). CBB requires these rules:	फ़ायरवॉल: Windows Firewall (बंद)। CBB को ये नियम चाहिए:
+  1. Allow incoming TCP %s from %s to %s. Purpose: connections from the group's devices.	  1. आने वाले TCP %s की अनुमति दें, %s से %s तक। उद्देश्य: समूह के डिवाइसों से कनेक्शन।
+  2. Allow incoming UDP 5353 from %s to %s. Purpose: finding the group's devices (mDNS).	  2. आने वाले UDP 5353 की अनुमति दें, %s से %s तक। उद्देश्य: समूह के डिवाइस ढूँढना (mDNS)।
+Add these rules now? [y/N]	ये नियम अभी जोड़ें? [y/N]
+Add these rules now? [y/N] No console to answer on; taken as No.	ये नियम अभी जोड़ें? [y/N] जवाब देने के लिए कोई कंसोल नहीं; "नहीं" माना गया।
+No firewall rules were added. CBB works only while the firewall allows the rules above. To add them by hand, run in an administrator PowerShell:	कोई फ़ायरवॉल नियम नहीं जोड़ा गया। CBB तभी काम करता है जब फ़ायरवॉल ऊपर के नियमों की अनुमति देता है। उन्हें हाथ से जोड़ने के लिए, व्यवस्थापक PowerShell में चलाएँ:
+To let CBB add and manage them, run the installer again with -Express ($env:CBB_FIREWALL = "express" for get.ps1).	CBB को इन्हें जोड़ने और सँभालने देने के लिए, इंस्टॉलर -Express के साथ फिर से चलाएँ (get.ps1 के लिए $env:CBB_FIREWALL = "express")।
+CBB also adds an outbound rule that keeps its service on the home network and, with cbb global on, its group's servers.	CBB एक बाहर जाने वाला नियम भी जोड़ता है जो इसकी सेवा को होम नेटवर्क पर रखता है और, cbb global चालू होने पर, इसके समूह के सर्वरों पर।
+keeping the service on the home network	सेवा को होम नेटवर्क पर रखा जा रहा है
+starting the service	सेवा शुरू की जा रही है
+starting the agent with every sign-in	हर साइन-इन पर एजेंट शुरू करने की व्यवस्था की जा रही है
+starting the agent for %s	%s के लिए एजेंट शुरू किया जा रहा है
+starting the tray app for %s	%s के लिए ट्रे ऐप शुरू किया जा रहा है
+The agent did not start now (%s); it starts when %s signs in again.	एजेंट अभी शुरू नहीं हुआ (%s); यह तब शुरू होगा जब %s फिर से साइन इन करेंगे।
+The tray app did not start now (%s); it starts when %s signs in again.	ट्रे ऐप अभी शुरू नहीं हुआ (%s); यह तब शुरू होगा जब %s फिर से साइन इन करेंगे।
+starting the tray app with every sign-in	हर साइन-इन पर ट्रे ऐप शुरू करने की व्यवस्था की जा रही है
+adding CBB to the Start menu	CBB को Start मेनू में जोड़ा जा रहा है
+registering the uninstaller	अनइंस्टॉलर पंजीकृत किया जा रहा है
+waiting for the service	सेवा की प्रतीक्षा की जा रही है
+the service does not answer; its log is %s	सेवा जवाब नहीं देती; इसका लॉग %s है
+writing the outbound rule for what the service reaches now	सेवा अभी जिन तक पहुँचती है उनके लिए बाहर जाने वाला नियम लिखा जा रहा है
+cbb global allow exited with %s	cbb global allow %s के साथ समाप्त हुआ
+recording how CBB was installed	दर्ज किया जा रहा है कि CBB कैसे इंस्टॉल हुआ
+Could not record how CBB was installed; cbb update takes it as get.ps1.	यह दर्ज नहीं हो सका कि CBB कैसे इंस्टॉल हुआ; cbb update इसे get.ps1 मानेगा।
+setting automatic updates	स्वचालित अपडेट सेट किए जा रहे हैं
+Update automatically? [y/N] No console to answer on; not now. Later: cbb update -auto on	स्वचालित रूप से अपडेट करें? [y/N] जवाब देने के लिए कोई कंसोल नहीं; अभी नहीं। बाद में: cbb update -auto on
+Could not turn automatic updates %s; run cbb update -auto %s as administrator.	स्वचालित अपडेट %s नहीं किए जा सके; व्यवस्थापक के रूप में cbb update -auto %s चलाएँ।
+CBB %s is running on TCP port %s; %s may use it.	CBB %s TCP पोर्ट %s पर चल रहा है; %s इसे इस्तेमाल कर सकते हैं।
+It stays in its group.	यह अपने समूह में बना रहता है।
+Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	आगे, व्यवस्थापक के रूप में खोले गए टर्मिनल में: cbb pair, और उसका QR कोड फ़ोन से स्कैन करें या cbb pair का कोड समूह के रूट या किसी व्यवस्थापक पर टाइप करें; या समूह शुरू करें: cbb new।
+To remove it: Settings, Apps, CBB, Uninstall.	इसे हटाने के लिए: Settings, Apps, CBB, Uninstall।
+Y	हाँ
+Yes	हाँ
+y	हाँ
+yes	हाँ
+uninstall.ps1: %s failed: %s	uninstall.ps1: %s विफल: %s
+deleting the service	सेवा हटाई जा रही है
+stopping the agents and the tray app	एजेंट और ट्रे ऐप रोके जा रहे हैं
+removing the update task and cbb update's folder	अपडेट कार्य और cbb update का फ़ोल्डर हटाया जा रहा है
+removing the firewall rules	फ़ायरवॉल नियम हटाए जा रहे हैं
+removing the sign-in entries, the Start menu shortcut and the uninstaller entry	साइन-इन प्रविष्टियाँ, Start मेनू शॉर्टकट और अनइंस्टॉलर प्रविष्टि हटाई जा रही हैं
+removing cbb from PATH	cbb को PATH से हटाया जा रहा है
+removing %s	%s हटाया जा रहा है
+removing %s and the %s group	%s और %s समूह हटाए जा रहे हैं
+CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	CBB हटा दिया गया। इसकी कुंजियाँ दोबारा इंस्टॉल के लिए %s में रहती हैं; -Purge उन्हें हटाता है।
