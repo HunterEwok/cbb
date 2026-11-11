@@ -7,7 +7,10 @@ import (
 	"crypto/ecdh"
 	"crypto/rand"
 	"fmt"
+	"math"
 	"net/netip"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -106,35 +109,48 @@ func TestMemoryKeepIsLinear(t *testing.T) {
 	if d := time.Since(start); d > 5*time.Second {
 		t.Errorf("2000 registrations with known records took %v", d)
 	}
-	// The fastest of several runs, which noise only slows.
-	again := func(n int) time.Duration {
+	// A group of n records, already known, and the time of taking them in
+	// again: the call repeats for at least 10 ms and the time of one is
+	// taken, so a coarse clock (Windows) does not read it as zero.
+	group := func(n int) func() time.Duration {
 		m := newMemory(func(string) bool { return true })
 		rs := fakeRecords(n, 8)
 		m.keep("g", noSource, rs)
 		if got := len(m.records("g")); got != n {
 			t.Fatalf("kept %d records of %d", got, n)
 		}
-		// Each run repeats the call for at least 10 ms and takes the time
-		// of one, so a coarse clock (Windows) does not read it as zero.
-		best := time.Duration(1 << 62)
-		for range 15 {
+		// The garbage collector runs before each timed run and not during
+		// it: on a small virtual machine (CI's FreeBSD under qemu) a cycle
+		// in a run of the larger group's few calls read as a square.
+		return func() time.Duration {
+			runtime.GC()
+			defer debug.SetGCPercent(debug.SetGCPercent(-1))
 			calls := 0
 			start := time.Now()
-			for calls == 0 || time.Since(start) < 10*time.Millisecond {
+			for calls == 0 || time.Since(start) < 50*time.Millisecond {
 				m.keep("g", noSource, rs)
 				calls++
 			}
-			best = min(best, time.Since(start)/time.Duration(calls))
+			return time.Since(start) / time.Duration(calls)
 		}
-		return best
 	}
 	const n, k = 400, 8
 	if !fits(fakeRecords(k*n, 8)) {
 		t.Fatal("the larger group must fit")
 	}
-	small, large := again(n), again(k*n)
-	if large > 3*k*small {
-		t.Errorf("taking in %d known records again took %v, %d of them %v", k*n, large, n, small)
+	// The two sizes are timed in turn, round after round, so a busy machine
+	// (a CI virtual machine running other packages' tests) slows both alike,
+	// and the best round counts: noise only makes the ratio worse.
+	timeSmall, timeLarge := group(n), group(k*n)
+	small, large := time.Duration(1<<62), time.Duration(1<<62)
+	best := math.Inf(1)
+	for range 15 {
+		s, l := timeSmall(), timeLarge()
+		small, large = min(small, s), min(large, l)
+		best = min(best, float64(l)/float64(max(s, 1)))
+	}
+	if best > 3*k {
+		t.Errorf("taking in %d known records again took %v, %d of them %v (best round %.0f times as long)", k*n, large, n, small, best)
 	}
 	t.Logf("%d known records again: %v; %d: %v", n, small, k*n, large)
 }

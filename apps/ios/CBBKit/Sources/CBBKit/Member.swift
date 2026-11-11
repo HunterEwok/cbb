@@ -2,8 +2,8 @@
 
 import Foundation
 
-/// The member protocol of docs/protocol.md, sections 4 and 5, as the Go side
-/// speaks it (internal/node, internal/clip, internal/hlc): frames of a
+/// The member protocol of docs/protocol.md, sections 4 and 5, as the Rust core
+/// speaks it (core/src/wire.rs, core/src/clip.rs, core/src/hlc.rs): frames of a
 /// 4-byte big-endian length and a JSON message, a hello first, then events,
 /// pings, records and goodbyes.
 public enum Member {
@@ -496,31 +496,24 @@ public enum Member {
         }
     }
 
-    /// The way to the hub's forwarder over VLESS (section 11, "VLESS"),
-    /// with REALITY (`transport` empty: `publicKey` and `shortID`) or XHTTP
-    /// behind the forwarder's web server (`transport` "xhttp": `path`);
-    /// with it, the only way to the hub. The kit only carries it: the
-    /// tunnel (RustTunnel) checks and uses it, and refuses a transport it
-    /// does not take.
+    /// The way to the hub's forwarder over VLESS (section 11, "VLESS"), over
+    /// XHTTP behind the forwarder's web server (`transport` "xhttp"); with
+    /// it, the only way to the hub. The kit only carries it: the tunnel
+    /// (RustTunnel) checks and uses it, and refuses a transport it does not
+    /// take, such as an older forwarder's REALITY.
     public struct VLESS: Codable, Equatable, Sendable {
         public var transport: String
         public var endpoint: String
-        public var publicKey: Data
-        public var shortID: String
         public var serverName: String
         public var path: String
         public var id: String
 
-        public init(transport: String = "", endpoint: String, publicKey: Data = Data(), shortID: String = "",
-                    serverName: String, path: String = "", id: String) {
-            (self.transport, self.endpoint, self.publicKey, self.shortID) = (transport, endpoint, publicKey, shortID)
-            (self.serverName, self.path, self.id) = (serverName, path, id)
+        public init(transport: String = "xhttp", endpoint: String, serverName: String, path: String, id: String) {
+            (self.transport, self.endpoint, self.serverName, self.path, self.id) = (transport, endpoint, serverName, path, id)
         }
 
         enum CodingKeys: String, CodingKey {
             case transport, endpoint, path, id
-            case publicKey = "public_key"
-            case shortID = "short_id"
             case serverName = "server_name"
         }
 
@@ -528,8 +521,6 @@ public enum Member {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             transport = try c.decodeIfPresent(String.self, forKey: .transport) ?? ""
             endpoint = try c.decode(String.self, forKey: .endpoint)
-            publicKey = try c.decodeIfPresent(Data.self, forKey: .publicKey) ?? Data()
-            shortID = try c.decodeIfPresent(String.self, forKey: .shortID) ?? ""
             serverName = try c.decode(String.self, forKey: .serverName)
             path = try c.decodeIfPresent(String.self, forKey: .path) ?? ""
             id = try c.decode(String.self, forKey: .id)
@@ -539,8 +530,6 @@ public enum Member {
             var c = encoder.container(keyedBy: CodingKeys.self)
             if !transport.isEmpty { try c.encode(transport, forKey: .transport) }
             try c.encode(endpoint, forKey: .endpoint)
-            if !publicKey.isEmpty { try c.encode(publicKey, forKey: .publicKey) }
-            if !shortID.isEmpty { try c.encode(shortID, forKey: .shortID) }
             try c.encode(serverName, forKey: .serverName)
             if !path.isEmpty { try c.encode(path, forKey: .path) }
             try c.encode(id, forKey: .id)

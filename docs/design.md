@@ -109,7 +109,7 @@ apps" below).
   compares the same way everywhere.
 - **Member port**: CBB's one port, TCP 8764 unless the installer was given another,
   advertised in the mDNS SRV record. Every computer and lite member listens there for mutual
-  TLS (Macs since D-46); phones only dial, except a phone that is the hub. The ALPN protocol of a connection picks
+  TLS (Macs too, D-50); phones only dial, except a phone that is the hub. The ALPN protocol of a connection picks
   what it gets (docs/protocol.md, section 4):
   - members and the phone app, with the member ALPN protocol and mutual TLS;
   - pairing, with its own ALPN protocol.
@@ -122,9 +122,9 @@ apps" below).
 The few ideas the rest follows from:
 
 - **Equal members, no server** (D-3). Every device holds the whole state and passes it on;
-  last writer wins under a hybrid logical clock (D-14, D-19), so the group converges without
+  last writer wins under a hybrid logical clock (D-14, D-85), so the group converges without
   a coordinator.
-- **The group is a certificate authority** (D-9, D-10). A root key, on a phone's secure
+- **The group is a certificate authority** (D-9, D-33, D-51). A root key, on a phone's secure
   hardware or a computer, signs admin CAs and device certificates; every connection is
   mutual TLS 1.3 under them, and signed records add, rename and remove devices.
 - **Pairing by a short code or a QR code** with CPace inside TLS (D-9), so a guess costs one
@@ -132,9 +132,10 @@ The few ideas the rest follows from:
 - **One port at home, one tunnel away** (D-5, D-11, D-38). At home the members find each
   other by mDNS on one TCP port; away from home they reach a hub through the group's own
   WireGuard star, optionally through a forwarder or a blind relay that hold no keys.
-- **One protocol, four implementations**: Go (the service), Rust (the lite member), Swift
-  and Kotlin (the phone kits), held together by shared interop vectors in
-  `testdata/interop`.
+- **One protocol, two members, four readers**: the member protocol runs in Go (the service)
+  and in the Rust core, which the lite member and every phone app run (D-86); the Swift and
+  Kotlin kits still read and write the records, pairing and certificates themselves. All four
+  are held together by shared interop vectors in `testdata/interop`.
 - **Copies sealed end to end** (D-84). The device that copies seals each copy to the devices
   of the group that read copies and signs it, so the members that pass it on, a hub among
   them, carry it without reading or changing it, and the forwarder and the relay see even
@@ -157,7 +158,7 @@ The Rust program `cbb` (`member/`) becomes the one member on every device, a com
 much as a router: the group, sync, records, seals, admitting devices, commands and the
 control socket. What needs Go stays in Go, in `cbb-helper` (`cmd/cbb-helper`,
 `internal/helper`): keys in the TPM, the Secure Enclave and on a YubiKey, the hub's and the
-forwarder's tunnel with VLESS and REALITY, the relay, remote paste into desktop sessions and
+forwarder's tunnel with VLESS, the relay, remote paste into desktop sessions and
 Windows, quick actions, TVs and the Bluetooth keyboard. The move happens in steps; until it
 ends, the Go service described below is still the computers' member.
 
@@ -211,11 +212,8 @@ ends, the Go service described below is still the computers' member.
   watchers; one typed after its answer stops when remote paste goes off, which the helper
   reads in the same folder, or when `cbb`'s records no longer take its command, when `cbb`
   sends `peripheral-stop` (`TestLitePeripherals`).
-- **The way over VLESS inside REALITY.** rustls makes no browser's ClientHello, so for a
-  hub that offers REALITY `cbb` asks `vless-dial` with the hub's VLESS settings: the helper
-  runs Go's `internal/vless` client and answers with the way's ID and a local UDP port, to
-  which `cbb`'s tunnel sends its WireGuard packets; `vless-close` with the ID ends the way.
-  The way over XHTTP `cbb` makes itself (`member/src/vless.rs`).
+- **The way over VLESS.** `cbb` makes it itself, over XHTTP (`member/src/vless.rs`); the
+  helper has no part in it (REALITY, which it once made for `cbb`, is gone: D-91).
 - **The agent.** `cbb agent`, which the user's session starts, links that session's clipboard
   with the service: it starts its own `cbb-helper`, with the session's whole environment (its
   display and D-Bus), and asks it `agent` with the service's socket. The helper runs the Go
@@ -250,7 +248,7 @@ ends, the Go service described below is still the computers' member.
   protocols, `cbb/3` and `cbb-pair/2`, and takes a joiner's single P-256 certificate; the
   negotiated protocol decides after the handshake whether the member chain is checked again
   or the core's admission plays the exchange with the joiner confirming first
-  (`Admission::accept`, `TestLiteRootWindow`). Run with `-full`, it is a computer's service
+  (`Admission::accept`, `TestLiteRootWindow`). With the capability `admin`, it is a computer's service
   before its own device record arrives: its hellos offer an admin key (in the hardware where
   cbb-helper can put it, else `admin_key`), and an `admin` message's admin CA makes it an
   admin with a member certificate from that CA. On such an admin `takeover` keeps the new
@@ -304,8 +302,7 @@ ends, the Go service described below is still the computers' member.
 - **The server credentials.** `credentials.rs` keeps the group's credentials as Go's
   `credentials.go`: the core's `credential::Store` (Go's `group.Credentials`, the same rules
   of what counts) in `credentials.json`, the keys for the servers in `server-keys.json` (in
-  the TPM or the Secure Enclave through cbb-helper where it can put them there, as Go's
-  `ServerKeys`). Every peer gets them in a `credentials` message after its hello; new ones a
+  the TPM or the Secure Enclave through cbb-helper where it can put them there). Every peer gets them in a `credentials` message after its hello; new ones a
   peer sends are kept and passed on. When the records or the credentials change, and twice a
   day, the service brings them up to date as Go's `refreshCredential`: the root starts a
   period when the one kept is due or a member that sent its server key left; every member
@@ -656,8 +653,8 @@ permission to paste.
 - Third-party code: `golang.org/x/net`, `golang.org/x/sys`, `golang.org/x/crypto` and
   `golang.org/x/time` (BSD-3-Clause), `jezek/xgb` (BSD-3-Clause), `rsc.io/qr`
   (BSD-3-Clause), `amnezia-vpn/amneziawg-go` (MIT, a fork of wireguard-go) with gVisor's netstack (Apache-2.0)
-  and `google/btree` (Apache-2.0) for the tunnel, and the CPace implementation copied from
-  `rsc.io/cmd/mote` v0.1.3 (BSD-3-Clause) into `internal/third_party/cpace`. The lite
+  and `google/btree` (Apache-2.0) for the tunnel, and the CPace implementation translated to Rust from
+  `rsc.io/cmd/mote` v0.1.3 (BSD-3-Clause) in `core/src/third_party/cpace`. The lite
   member uses RustCrypto and rustls (MIT or Apache-2.0). The tray app reads QR codes from
   pictures with `makiuchi-d/gozxing` (Apache-2.0).
 
@@ -1140,7 +1137,7 @@ These take precedence over convenience:
 What no design hides, and the documentation says so: the network between a client and the
 hub (or the forwarder) sees that encrypted packets go to that address, when, and roughly how
 many. VLESS makes them look like an ordinary HTTPS connection to a website: the
-forwarder's own site, or a well-known one with REALITY. Where a network admits only listed addresses (allow-lists), no protocol helps.
+forwarder's own site. Where a network admits only listed addresses (allow-lists), no protocol helps.
 
 #### The hub
 
@@ -1218,8 +1215,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   (`ffi/src/tunnel.rs`), beside the client side: the lite member's tunnel, one for the lite
   member and every phone, rather than a Go tunnel bound by gomobile, which would keep a
   second WireGuard, AmneziaWG and VLESS to maintain and Go in both apps' builds (D-87). The
-  phones then reach a forwarder over VLESS with XHTTP only: REALITY needs a browser's
-  ClientHello, which rustls does not give, so it stays on the Go servers.
+  phones then reach a forwarder over VLESS with XHTTP, the only transport (D-91).
 - **The clients come quickly.** A phone hub is there for minutes at a time, so its clients
   keep trying it every few seconds while their own app or service runs, instead of backing
   off to 30 s and more; a handshake initiation to the forwarder costs one small packet, and
@@ -1461,7 +1457,8 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
 #### Joining from another network
 
 Three ways admit a device that is not on the home network. The first two work for the
-pairing itself; the third, the remote invitation, is built for computers.
+pairing itself; the third, the remote invitation, works for computers, phones and the lite
+member alike.
 
 - **Through SSH.** When the new computer can log in to a computer of the group that admits devices,
   it forwards a local port to the member port, `ssh -N -L 18764:localhost:8764 user@member`;
@@ -1487,19 +1484,24 @@ pairing itself; the third, the remote invitation, is built for computers.
   not kept across a restart of the service.
 - **Remote invitation**, for a device that shares no network and no SSH with the
   group. An admin makes it: the root or an admin phone, or the root or an admin computer
-  (`cbb invite`). Built so far for computers, made on the hub itself
-  when the hub can admit devices: `cbb invite` there, `cbb pair -invite FILE` on the new
-  computer (docs/protocol.md, section 12), and on a phone that is the hub, from its
-  Settings. Handing an invitation made on another admin to the hub, and using one on a
-  phone, are still planned. It is never typed: it comes only as a QR code or as
-  a file to open (`.cbbinvite`), and holds the group's tag, the hub's WireGuard public key
-  and addresses (and the forwarder's), a one-time WireGuard key pair with its preshared key
-  for a guest tunnel, a 128-bit one-time secret and the time it expires. It serves one
-  device once, for at most a day (an hour by default), and the admin can cancel it.
-  - The admin hands the invitation to the hub inside member TLS before it is used. The hub
-    adds the guest key as a peer that reaches only the pairing service inside the tunnel,
-    never the members' sync, and drops it after one use, at expiry, or after three failed
-    attempts. A packet without that key gets no answer, as for any unknown WireGuard key.
+  (`cbb invite`, or Send an invitation in the Mac app and the tray app, which run `cbb invite
+  -app` as the administrator). One button makes it, on the hub itself or through a hub of the
+  group the admin is connected to (docs/protocol.md, section 12). It is shown as a QR code,
+  the usual way; its text or its file (`.cbbinvite`) is the fallback for a computer and for a
+  channel that carries no picture. It is never typed. On a phone, Start's Join with an
+  invitation scans it, and the invitation waits on its own screen to be accepted or
+  declined; on a computer, `cbb pair -invite` takes the file or the text. It holds the
+  group's tag, the hub's WireGuard public key and addresses (and the forwarder's, with its
+  way over VLESS for networks that let no UDP through), a one-time WireGuard key pair with
+  its preshared key for a guest tunnel, a 128-bit one-time secret and the time it expires.
+  It serves one device once, for at most a day (an hour by default), and the admin can
+  cancel it.
+  - An admin that is not the hub hands the guest key to the hub inside member TLS before
+    the invitation is used, and keeps the pairing window and its CA key; the hub passes the
+    guest's pairing bytes to it. The hub adds the guest key as a peer that reaches only the
+    pairing service inside the tunnel, never the members' sync, and drops it after one use,
+    at expiry, or after three failed attempts. A packet without that key gets no answer, as
+    for any unknown WireGuard key.
   - The new device opens the guest tunnel and pairs with the hub with CPace on the secret,
     the same exchange as at home. The hub then shows the admin who made the invitation the
     device's name, system and key fingerprint; nothing is admitted until the admin
@@ -1509,7 +1511,9 @@ pairing itself; the third, the remote invitation, is built for computers.
     home or through the phone's own tunnel.
   - With its certificate the device offers its own tunnel key in its first hello through
     the guest tunnel; the hub admits it, drops the guest peer, and the device reconnects
-    with its own key as an ordinary client.
+    with its own key as an ordinary client. The guest stays for a day after the admission
+    until then, and the device keeps the invitation and tries again, so a device that
+    starts late or loses its network right after the join still gets through.
   - Why it is safe over the internet: without the guest key nobody reaches the hub at all;
     the 128-bit secret makes guessing hopeless and CPace allows no offline attack; the
     guest reaches nothing but the pairing; and the admin's confirmation names the device,
@@ -1607,13 +1611,12 @@ relay, or a hub.
      (`ffi/src/tunnel.rs` takes them as JSON), as the lite member does (`member/src/awg.rs`).
 2. **WireGuard inside VLESS**, between a client and the forwarder, with
    Xray-core (MPL-2.0) as a Go module in `cbb`, and in the phones' and the lite member's
-   Rust tunnel (`member/src/vless.rs`, XHTTP only: REALITY stays on the Go servers); VLESS
+   Rust tunnel (`member/src/vless.rs`); VLESS
    carries the UDP packets itself. The forwarder then has one path for everything, the hub does not
    change, and traffic is always inside our own tunnel. VLESS adds no security of its own and
    the design does not rely on it: the boundary stays the member TLS, then WireGuard.
-   - The forwarder's operator picks the transport, and the forwarder tells each registering
-     hub which one it runs:
-     - **XHTTP behind the web server of its own site**, the default on `cbb.tools`
+   - The transport is XHTTP, which the forwarder names to each registering hub:
+     - **XHTTP behind the web server of its own site**, as on `cbb.tools`
        (`cbb forward -vless-xhttp cbb.tools`): the web server (nginx) ends the TLS with the
        site's own certificate on TCP 443 and passes one path to the forwarder, which listens
        only on the loopback address; every other request gets the site. The path is made at
@@ -1623,10 +1626,6 @@ relay, or a hub.
        plain HTTP requests, which every web server and proxy passes. The web server sees the
        group's VLESS user ID and encrypted packets, nothing more, and that location keeps no
        log.
-     - **REALITY**, for forwarders on servers without a site of their own (`cbb forward
-       -vless-site www.example.com`): the forwarder listens on TCP 443, and whoever is not a
-       client gets that well-known site's own TLS and pages. Its REALITY key stays in its
-       key file.
    - The hub's user switches it on per group (`cbb global hub -forwarder ... -vless`, or the
      apps' switch). The hub makes the group's VLESS user ID, the forwarder lets that ID in
      while the hub is registered and tells the hub its transport and settings, and the hub
@@ -1657,8 +1656,10 @@ relay, or a hub.
    in `cbb_core::vless`), without Chrome's TLS fingerprint: a network sees rustls's
    ClientHello and HTTP/1.1 where Xray's client shows a browser's and HTTP/2. The site's
    certificate is checked against the system's roots with `cbb_core::tls::web`, which adds
-   RSA and P-384 to the members' provider. REALITY stays Go's: it needs a browser's
-   ClientHello ([roadmap item 46](roadmap.md#vless-behind-a-web-server)).
+   RSA and P-384 to the members' provider. REALITY, which borrows a well-known site's TLS,
+   was dropped rather than written in Rust (D-91): it needs a browser's ClientHello, which
+   rustls does not make, and nobody used it once `cbb.tools` ran XHTTP; a browser-like
+   ClientHello for the Rust XHTTP comes first, should a network single out rustls's.
 
 sing-box is not used (GPL).
 
@@ -1667,9 +1668,9 @@ sing-box is not used (GPL).
 | Member                         | Tunnel                                                                                        | Role                     |
 |--------------------------------|-----------------------------------------------------------------------------------------------|--------------------------|
 | Go service (Linux, FreeBSD, macOS, Windows) | amneziawg-go with netstack in `cbb`; Xray-core as a Go module                | hub, forwarder, relay or client |
-| iPhone app                     | in the app process, no Network Extension, one Go framework for WireGuard and Xray             | client, or the hub, while the app is open |
+| iPhone app                     | in the app process, no Network Extension; the Rust tunnel of `ffi/src/tunnel.rs` (D-87)        | client, or the hub, while the app is open |
 | Android app                    | in the app process, in the foreground service the app already has; no `VpnService`            | client, or the hub while the app is open or in its foreground service |
-| the lite member on Linux       | GotaTun's WireGuard (from Mullvad) with smoltcp's TCP, in its process; AmneziaWG and VLESS over XHTTP of its own, no REALITY | client |
+| the lite member on Linux       | GotaTun's WireGuard (from Mullvad) with smoltcp's TCP, in its process; AmneziaWG and VLESS over XHTTP of its own | client |
 | the lite member on the ESP32   | none: the home network only, until a mature WireGuard exists for it                           | home only                |
 
 - On phones the tunnel is ordinary UDP traffic of the app. It does not take the phone's
@@ -1688,7 +1689,7 @@ sing-box is not used (GPL).
   implementation its TLS uses too, so it stays all Rust and links with rust-lld. GotaTun
   speaks plain WireGuard; the lite member wraps its messages in AmneziaWG for a hub that
   hides its tunnel (`member/src/awg.rs`) and carries them over VLESS with XHTTP when the offer
-  has it (`member/src/vless.rs`). A hub reached over VLESS with REALITY only keeps it at home.
+  has it (`member/src/vless.rs`).
 - No push notifications: they go through Apple's and Google's servers. A phone gets the
   current text when the app opens, as at home.
 
@@ -1750,14 +1751,13 @@ only adds to it.
    switch, which keeps the hub's offer and reaches the hub through the tunnel while it is not
    found at home; remote invitations made and served on a phone that is the hub. Using an
    invitation on a phone follows.
-8. Blocked networks: AmneziaWG, then VLESS. Done: `cbb` and the phones' tunnel
-   run on amneziawg-go; obfuscation per group between computers (`cbb global hub
-   -obfuscate`), in the hub's offer and in invitations, on both phones, and through the
-   forwarder; VLESS between computers (`cbb forward -vless-xhttp` behind a web server or
-   `-vless-site` with REALITY, `cbb global hub -vless`) and on both phones.
-9. The lite member on Linux (done: `cbb global on`, GotaTun and smoltcp in `cbb`, plain
-   WireGuard only, so a group whose hub hides its tunnel keeps it at home); the ESP32 when
-   WireGuard on it is mature.
+8. Blocked networks: AmneziaWG, then VLESS. Done: `cbb` runs on amneziawg-go, and the
+   phones' and the lite member's tunnel on GotaTun with AmneziaWG of its own (`awg.rs`);
+   obfuscation per group between computers (`cbb global hub -obfuscate`), in the hub's offer and in invitations, on both phones, and through the
+   forwarder; VLESS between computers (`cbb forward -vless-xhttp` behind a web server,
+   `cbb global hub -vless`) and on both phones.
+9. The lite member on Linux (done: `cbb global on`, GotaTun and smoltcp in `cbb`, with
+   AmneziaWG and VLESS over XHTTP); the ESP32 when WireGuard on it is mature.
 
 ### What the servers learn
 
@@ -2378,6 +2378,19 @@ docs/protocol.md, section 16.
 9. On the bench: an update from the previous release on every device (L9), a refused
    downgrade, a refused unsigned build, a rotation of the release key by a root, and a drill
    for a lost release key.
+
+### Versions in one group
+
+From 0.6 on (D-92), a device of one release works in a group with devices of the release
+before it, and an update never breaks a group: the devices can be updated one at a time,
+in any order, and a group never has to be set up again. The group's records carry this: a
+new record type or field comes only with a new `v`, and a device of the older release keeps
+such a record, passes it on in sync and tells the user to update, while the group goes on
+under the records it can read ([protocol](protocol.md), section 10, "Records of a later
+version"). CI checks it: `tools/e2e/upgrade.sh` updates the members of the last published
+release to the build under test, one at a time, and the group, its devices and sync must
+survive. A group of 0.5 is not carried over: 0.6 reads no records of version 1, so such a
+group is set up again once.
 
 ## 7. Deployment view
 

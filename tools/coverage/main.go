@@ -48,7 +48,7 @@ var goParts = []struct {
 }{
 	{"go", goProduct},
 	{"go-core", func(rel string) bool {
-		return goProduct(rel) && slices.Contains([]string{"internal/group", "internal/pair", "internal/node", "internal/clip", "internal/hlc"}, path.Dir(rel))
+		return goProduct(rel) && slices.Contains([]string{"internal/group", "internal/clip", "internal/hlc"}, path.Dir(rel))
 	}},
 }
 
@@ -82,12 +82,17 @@ var llvmParts = map[string]func(file string) bool{
 	"rust-core": func(f string) bool {
 		return strings.Contains(f, "/core/src/") && !strings.Contains(f, "/third_party/") && !strings.Contains(f, "/tests/")
 	},
-	"rust-lite": func(f string) bool {
-		return strings.Contains(f, "/member/src/") && !strings.Contains(f, "/tests/")
-	},
+	"rust-lite": inMember,
+	// rust-service is member/src again, measured with Go's tests of the
+	// service run against the instrumented cbb as well (the service job).
+	"rust-service": inMember,
 	"swift-kit": func(f string) bool {
 		return strings.Contains(f, "/CBBKit/Sources/")
 	},
+}
+
+func inMember(f string) bool {
+	return strings.Contains(f, "/member/src/") && !strings.Contains(f, "/tests/")
 }
 
 type tally struct{ total, covered int }

@@ -50,6 +50,24 @@ enum AwayKeychain {
     static func save(_ s: AwayState?) throws { try KeychainData.save(service, try s.map { try $0.encoded() }) }
 }
 
+/// The remote invitation this phone joined by, until the hub's offer came
+/// (docs/protocol.md, section 12): its text, its hub and when the phone
+/// joined. Through its guest tunnel the phone offers its own tunnel key.
+struct InviteGuest: Codable, Equatable {
+    var invite: String
+    var hub: String
+    var joined: Date
+}
+
+enum InviteKeychain {
+    static let service = "tools.cbb.invite"
+
+    static func load() -> InviteGuest? { KeychainData.load(service).flatMap { try? JSONDecoder().decode(InviteGuest.self, from: $0) } }
+
+    /// Keeps g; nil deletes it.
+    static func save(_ g: InviteGuest?) throws { try KeychainData.save(service, try g.map { try JSONEncoder().encode($0) }) }
+}
+
 /// The phone's state as the group's hub in the keychain.
 enum HubKeychain {
     static let service = "tools.cbb.hub"

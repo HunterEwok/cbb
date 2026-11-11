@@ -120,7 +120,7 @@ func cache(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 // protocol allows is refused: a get of 1 MiB comes back in chunks padded
 // to 16 KiB, a get of a byte more is dropped while the connection keeps
 // serving, and 80 gets at once close it. (The 4 MiB a fetch keeps ahead
-// is the fetcher's own bound, which internal/node's tests check.)
+// is the fetcher's own bound, not one the holder enforces.)
 func fetchLimits(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/O15-fetch-limits/"
 	g := fleetGroup(ctx, r, f, "fleet/O15-fetch", 2)

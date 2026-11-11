@@ -875,8 +875,9 @@ static uint8_t quiet;
 // on a network of their own do with mDNS: the question for _cbb._tcp.local
 // goes from the ESP's UDP port 5354, which the members answer to that port
 // alone (a legacy unicast query, RFC 6762 section 6.7). The first answer
-// from a computer, not a lite member nor a phone (TXT r=lite, r=phone),
-// gives its address (the ESP names the sender) and port (its SRV record).
+// from a computer, not a member that only listens nor a phone (TXT
+// r=listen, r=phone), gives its address (the ESP names the sender) and port
+// (its SRV record).
 static const uint8_t mdns_query[] = {0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 4, '_', 'c', 'b', 'b', 4, '_', 't', 'c',
                                      'p', 5, 'l', 'o', 'c', 'a', 'l', 0, 0, 12, 0, 1};
 // Several connections at once (CIPMUX=1), the ESP's mode while the
@@ -953,7 +954,7 @@ static uint8_t mdns_answer(void)
     if (!end) return 1;
     *end = 0;
     // A response (QR bit) about _cbb, from a computer.
-    if (n < 12 || !(text[2] & 0x80) || !holds(text, n, "_cbb") || holds(text, n, "r=lite") ||
+    if (n < 12 || !(text[2] & 0x80) || !holds(text, n, "_cbb") || holds(text, n, "r=listen") ||
         holds(text, n, "r=phone") || !plain(ip) || strlen(ip) > 15)
         return 1;
     // A code is for the computer whose cbb pair shows it: its window is

@@ -21,10 +21,17 @@ fi
 failed() {
 	rc=$1
 	if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ] && [ "${CBB_ERROR_DETAILS:-}" != 1 ]; then
-		echo "uninstall.sh: failed (exit status $rc). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." >&2
+		note uninstall.sh "failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." "$rc"
 	fi
 }
 trap 'failed $?' EXIT
+# The messages in the user's language (packaging/l10n.sh, beside this file
+# where install.sh put it, or in the archive), read
+# before LC_ALL=C below.
+cbb_l10n=$(cd "$(dirname "$0")" && pwd)/l10n
+[ -f "$cbb_l10n.sh" ] || cbb_l10n=${cbb_l10n%/l10n}/../l10n
+# shellcheck source=packaging/l10n.sh
+. "$cbb_l10n.sh"
 export LC_ALL=C
 
 purge=no
@@ -37,7 +44,7 @@ case ${1:-} in
 	;;
 esac
 if [ "$(id -u)" -ne 0 ]; then
-	echo "uninstall.sh: run it as root (sudo or doas)" >&2
+	note uninstall.sh "run it as root (sudo or doas)"
 	exit 1
 fi
 
@@ -50,7 +57,7 @@ if [ -f "$share/firewall.sh" ]; then
 	sh "$share/firewall.sh" close
 	sh "$share/firewall.sh" hub-close
 fi
-rm -f /usr/local/etc/rc.d/cbb /usr/local/etc/rc.d/cbb.sh /usr/local/bin/cbb /usr/local/bin/cbb-helper \
+rm -f /usr/local/etc/rc.d/cbb /usr/local/etc/rc.d/cbb.sh /usr/local/bin/cbb /usr/local/bin/cbb-helper /usr/local/bin/cbb-forward /usr/local/bin/cbb-relay \
 	/usr/local/etc/xdg/autostart/cbb-desktop.desktop /usr/local/etc/cron.d/cbb-update
 rm -rf /var/db/cbb-update
 # OPNsense: without the hook, the next filter reload drops the anchor.
@@ -61,7 +68,7 @@ fi
 rm -rf "$share" /usr/local/etc/cbb /var/run/cbb
 if [ "$purge" = yes ]; then
 	rm -rf /var/db/cbb
-	echo "CBB is removed, with this device's keys; it left its group."
+	say "CBB is removed, with this device's keys; it left its group."
 else
-	echo "CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them."
+	say "CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them."
 fi

@@ -119,7 +119,7 @@ class GroupTest {
         typeAndAdd(code)
         until(90, "the phone admits ${Bench.PC}; the app says ${model.message}") { model.phase == AppModel.Phase.HOME }
         val out = pairing.finish(60)
-        assertTrue("cbb pair on ${Bench.PC} did not join:\n$out", out.contains("Joined the group."))
+        assertTrue("cbb pair on ${Bench.PC} did not join:\n$out", out.contains("Joined the group"))
         until(30, "${Bench.PC} in the phone's devices: ${model.group.devices.map { it.name }}") {
             model.group.devices.any { it.name == Bench.PC }
         }
@@ -127,9 +127,27 @@ class GroupTest {
         assertFalse("cbb status on ${Bench.PC} shows no group:\n$status", status.contains("Not in a group"))
     }
 
+    /**
+     * Waits until the phone is connected to name and no sync is going: a
+     * step that presses the button once, or sends once, starts as a person
+     * does who sees the computer online. Right after joining the phone's
+     * node starts again (the phone's hub), and the sync the app runs as its
+     * window takes the focus may still wait for a computer; a copy set
+     * meanwhile would go out with that sync, and the step's own press would
+     * then find nothing new.
+     */
+    private fun settled(name: String) {
+        until(60, "the phone connected to $name and idle: busy ${model.busy}, devices ${model.group.devices.map { "${it.name} online ${it.online}" }}") {
+            var idle = false
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { idle = !model.busy }
+            idle && model.group.devices.any { it.name == name && it.online }
+        }
+    }
+
     /** A1: the big button sends the phone's copy to the computer. */
     @Test
     fun a2_sendToComputer() {
+        settled(Bench.PC)
         val text = "cbb-bench phone A1 from the phone ${System.currentTimeMillis()}"
         setClip(text)
         runBlocking { model.sync() }
@@ -188,6 +206,7 @@ class GroupTest {
         Bench.start(Bench.PC, "TERM=xterm sh -c 'sleep infinity | script -qfc \"tmux attach -t cbb\" /dev/null'")
         until(10, "a tmux client on ${Bench.PC}") { Bench.run(Bench.PC, "tmux list-clients").isNotBlank() }
         val pane = { Bench.run(Bench.PC, "tmux capture-pane -p -J -t cbb") }
+        settled(Bench.PC)
         for ((method, secret) in listOf("type" to false, "paste" to false, "paste" to true)) {
             val text = "cbbbench$method${if (secret) "secret" else ""}${System.currentTimeMillis()}"
             // The receiver takes one paste a second from a sender.
@@ -228,6 +247,14 @@ class GroupTest {
         runBlocking { model.rename(id, "bench-second") }
         assertEquals("renaming says ${model.message}", R.string.renamed, model.message?.text)
         until(30, "the new name on ${Bench.PC}") { Bench.run(Bench.PC, "cbb status").contains("bench-second") }
+        // Only a connected device gets the record that removes it (docs/protocol.md, section 10,
+        // revocation): afterwards every member refuses it. The phone's first dial to a
+        // computer that just joined can fail, so the removal waits for the connection.
+        until(60, "the phone connected to $second") {
+            runBlocking { model.refresh() }
+            model.group.devices.any { it.id == id && it.online }
+        }
+        until(30, "the new name on $second") { Bench.run(second, "cbb status").contains("bench-second") }
         // A6: with the switch for devices off, the removal notifies of nothing.
         model.notifier.set(GroupEvent.Kind.DEVICES, false)
         try {
@@ -283,7 +310,7 @@ class GroupTest {
         } catch (e: AssertionError) {
             throw AssertionError("${e.message}\n${appState()}\n$dev's log:\n${Bench.logs(dev)}")
         }
-        assertTrue("cbb pair on $dev did not join:\n$out", out.contains("Joined the group."))
+        assertTrue("cbb pair on $dev did not join:\n$out", out.contains("Joined the group"))
         until(30, "$dev in the phone's devices") { model.group.devices.any { it.name == dev } }
     }
 
@@ -487,7 +514,7 @@ class GroupTest {
             }
             InstrumentationRegistry.getInstrumentation().runOnMainSync { model.answer(true) }
             val out = join.finish(120)
-            assertTrue("cbb pair -invite on $guest did not join:\n$out", out.contains("Joined the group."))
+            assertTrue("cbb pair -invite on $guest did not join:\n$out", out.contains("Joined the group"))
             until(30, "the invitation says it admitted $guest: ${model.inviteNote}") { model.inviteNote?.text == R.string.invite_admitted }
             until(60, "$guest in the phone's devices") { model.group.devices.any { it.name == guest } }
 
@@ -533,7 +560,7 @@ class GroupTest {
         val code = window.line("Pairing code:").replace(" ", "")
         val at = window.line("If it cannot find this one: cbb pair -code")
         val joined = Bench.run(guest, "cbb pair -code $at", stdin = "$code\n", seconds = 90)
-        assertTrue("cbb pair -code on $guest did not join:\n$joined", joined.contains("Joined the group."))
+        assertTrue("cbb pair -code on $guest did not join:\n$joined", joined.contains("Joined the group"))
         val admitted = window.finish(60)
         assertTrue("cbb pair on $hub did not admit $guest:\n$admitted", admitted.contains("joined the group."))
         until(60, "$guest, admitted by $hub, in the phone's devices: ${model.group.devices.map { it.name }}") {

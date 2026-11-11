@@ -1,8 +1,9 @@
 # Nightly: the differential comparison of the four implementations with a
 # fresh seed and more cases than a pull request's run, the native fuzz
-# targets of the readers of network input (docs/differential.md), and
+# targets of the readers of network input (docs/differential.md),
 # mutation testing of the records' code (docs/testing.md, "Mutation
-# testing"). It only
+# testing"), and the members' tests run many times over, to find the ones
+# that fail only now and then (docs/testing.md, "Unstable tests"). It only
 # reads the repository; a failure prints the cases, which become vectors of
 # testdata/interop.
 name: nightly
@@ -86,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [record_body, command, credential, release, wire, api]
+        target: [record_body, command, credential, release, wire, vless, api]
     defaults:
       run:
         working-directory: core/
@@ -115,6 +116,37 @@ jobs:
         with:
           name: cargo-fuzz-${{ matrix.target }}
           path: core/fuzz/artifacts/
+          if-no-files-found: ignore
+
+  cargo-fuzz-service:
+    name: cargo fuzz, the service (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [control, next_frames]
+    defaults:
+      run:
+        working-directory: member/
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the nightly toolchain and cargo-fuzz
+        run: |
+          rustup toolchain install nightly --profile minimal
+          cargo +nightly install cargo-fuzz --locked
+      - name: fuzz for ten minutes
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo +nightly fuzz run "$TARGET" -- -max_total_time=600 -rss_limit_mb=2048
+      - name: the input that failed
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cargo-fuzz-service-${{ matrix.target }}
+          path: member/fuzz/artifacts/
           if-no-files-found: ignore
 
   # Mutation testing: change the records' code (drop a check, turn < into <=)
@@ -156,6 +188,58 @@ jobs:
           path: mutants.out/
           if-no-files-found: ignore
 
+  # The service's readers of the control socket and the pairing window, the
+  # server credentials and the seals of the copies: a mutant the tests let
+  # live that tools/mutants/missed.txt does not name fails the job.
+  mutants-service:
+    name: cargo mutants (${{ matrix.crate }}, shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [cbb-core, cbb-lite]
+        shard: [0, 1, 2, 3]
+        include:
+          - crate: cbb-core
+            files: -f core/src/credential.rs -f core/src/seal.rs
+          - crate: cbb-lite
+            files: -f member/src/control.rs -f member/src/window.rs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the Rust toolchain and cargo-mutants
+        run: |
+          rustup toolchain install stable --profile minimal && rustup default stable
+          cargo install --locked cargo-mutants@27.1.0
+      - name: mutate
+        env:
+          CRATE: ${{ matrix.crate }}
+          FILES: ${{ matrix.files }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          # 2 is missed mutants and 3 timeouts, which the next step judges;
+          # anything else (4: the tests fail unmutated) is a failure here.
+          status=0
+          # shellcheck disable=SC2086 # FILES is several arguments
+          cargo mutants --in-place --no-shuffle --shard "$SHARD/4" --timeout 300 -p "$CRATE" $FILES || status=$?
+          {
+            echo "### cargo mutants, $CRATE, shard $SHARD/4"
+            echo '```'
+            cat mutants.out/missed.txt 2>/dev/null || echo "(none missed)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          case $status in 0 | 2 | 3) ;; *) echo "cargo mutants failed: $status"; exit 1 ;; esac
+      - name: no new survivors
+        run: tools/mutants/check.sh mutants.out/missed.txt tools/mutants/missed.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: mutants-service-${{ matrix.crate }}-${{ matrix.shard }}
+          path: mutants.out/
+          if-no-files-found: ignore
+
   mutants-go:
     name: gremlins (internal/authority)
     runs-on: ubuntu-latest
@@ -184,4 +268,114 @@ jobs:
           path: |
             gremlins.json
             gremlins.txt
+          if-no-files-found: ignore
+
+  # The unsafe code of the Rust service and the phones' library
+  # (docs/testing.md, "Unsafe code"): Miri checks the C functions of ffi
+  # pointer by pointer; AddressSanitizer runs the Rust tests and Go's tests
+  # of the service against a cbb built with it, which reaches the system
+  # calls Miri cannot.
+  miri:
+    name: miri (the C functions of ffi)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the nightly toolchain with Miri
+        run: rustup toolchain install nightly --profile minimal --component miri,rust-src
+      - name: cargo miri test
+        run: cargo +nightly miri test --locked -p cbb-ffi --features join --lib
+
+  asan:
+    name: address sanitizer (the Rust cbb and ffi)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      RUSTFLAGS: -Zsanitizer=address
+      RUSTDOCFLAGS: -Zsanitizer=address
+      # Threads still running at exit are not leaks worth a failure.
+      ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the nightly toolchain, and swtpm for the keys in a TPM
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends swtpm
+      - name: the Rust tests
+        run: |
+          cargo +nightly test --locked -Zbuild-std --target x86_64-unknown-linux-gnu -p cbb-lite
+          cargo +nightly test --locked -Zbuild-std --target x86_64-unknown-linux-gnu -p cbb-ffi --features member,tunnel
+      - name: Go's tests of the service against the cbb built with it
+        run: |
+          cargo +nightly build --locked -Zbuild-std --target x86_64-unknown-linux-gnu --release -p cbb-lite
+          bin="$PWD/target/x86_64-unknown-linux-gnu/release"
+          CGO_ENABLED=0 go build -trimpath -o "$bin/cbb-helper" ./cmd/cbb-helper
+          CBB_TEST_RUST_SERVICE="$bin/cbb" CBB_LITE="$bin/cbb" go test -timeout 60m ./internal/service
+
+  # A test that fails one run in ten never shows on a pull request's single run
+  # until it blocks one. Each test of the members runs ten times here, with the
+  # Go service and with the Rust cbb, and the summary lists every test that
+  # failed and how often; docs/testing.md, "Unstable tests", keeps the list.
+  unstable:
+    name: unstable tests (${{ matrix.member }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        member: [go, rust]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the Rust cbb
+        if: matrix.member == 'rust'
+        run: |
+          rustup toolchain install stable --profile minimal && rustup default stable
+          cargo build --locked --release -p cbb-lite
+      - name: each test ten times
+        env:
+          MEMBER: ${{ matrix.member }}
+        run: |
+          if [ "$MEMBER" = rust ]; then
+            export CBB_LITE="$PWD/target/release/cbb"
+            set -- ./internal/service -run 'TestLite'
+          else
+            set -- ./internal/service ./internal/node ./internal/tunnel ./internal/pair
+          fi
+          go test -json -count=10 -timeout 100m "$@" >"$RUNNER_TEMP/tests.json" || true
+          jq -r 'select(.Action == "fail" and .Test != null) | "\(.Package) \(.Test)"' "$RUNNER_TEMP/tests.json" |
+            sort | uniq -c | sort -rn >"$RUNNER_TEMP/failed.txt"
+          jq -r 'select(.Action == "fail" and .Test == null) | .Package' "$RUNNER_TEMP/tests.json" |
+            sort -u >"$RUNNER_TEMP/packages.txt"
+          {
+            echo "### Unstable tests ($MEMBER), failures in 10 runs"
+            echo '```'
+            if [ -s "$RUNNER_TEMP/failed.txt" ]; then cat "$RUNNER_TEMP/failed.txt"; else echo "(none)"; fi
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          # A package that failed without a failing test timed out or crashed.
+          if [ -s "$RUNNER_TEMP/failed.txt" ] || [ -s "$RUNNER_TEMP/packages.txt" ]; then
+            cat "$RUNNER_TEMP/failed.txt" "$RUNNER_TEMP/packages.txt"
+            exit 1
+          fi
+      - name: the tests' output
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unstable-${{ matrix.member }}
+          path: ${{ runner.temp }}/tests.json
           if-no-files-found: ignore

@@ -42,10 +42,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/hlc"
-	"github.com/HunterEwok/cbb/internal/node"
 )
 
 func main() {
@@ -77,14 +74,6 @@ func main() {
 		}
 		return
 	}
-	if name, ok := strings.CutPrefix(flag.Arg(0), "site:"); ok {
-		// forge -addr :443 site:NAME serves as the well-known site NAME.
-		if err := runSite(*addr, name); err != nil {
-			fmt.Fprintln(os.Stderr, "forge:", err)
-			os.Exit(1)
-		}
-		return
-	}
 	if kind, ok := strings.CutPrefix(flag.Arg(0), "tv:"); ok {
 		// forge -addr DIR tv:KIND plays a TV, writing what it saw in DIR.
 		if err := runTV(kind, *addr); err != nil {
@@ -108,7 +97,7 @@ func main() {
 		return
 	}
 	if flag.NArg() > 0 && qrCase(flag.Arg(0)) {
-		if err := runQR(*signer, flag.Arg(0)); err != nil {
+		if err := runQR(*socket, flag.Arg(0)); err != nil {
 			fmt.Fprintln(os.Stderr, "forge:", err)
 			os.Exit(1)
 		}
@@ -182,20 +171,13 @@ func run(state, signerDir string, to group.DeviceID, addr, system string, cases 
 	if ca == nil {
 		return fmt.Errorf("%s holds no admin key", signerDir)
 	}
-	eng := clip.New(clip.Config{Self: string(id.ID), Clock: hlc.NewClock(nil, hlc.Timestamp{}, nil)})
-	n := node.New(node.Config{Identity: id, Role: node.Member, Caps: group.AllCaps, Engine: eng, Name: "forge", OS: system})
+	n, err := dialMember(id, to, addr, system)
+	if err != nil {
+		return fmt.Errorf("connecting to %s: %v", addr, err)
+	}
 	defer n.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	dialed := make(chan error, 1)
-	go func() { dialed <- n.Dial(ctx, to, addr) }()
-	for len(n.Peers()) == 0 {
-		select {
-		case err := <-dialed:
-			return fmt.Errorf("connecting to %s: %v", addr, err)
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
 	tag := group.Tag(id.GroupCA.Cert)
 	body := func(target group.DeviceID, mode string) group.CommandBody {
 		now := time.Now()
@@ -205,11 +187,11 @@ func run(state, signerDir string, to group.DeviceID, addr, system string, cases 
 	send := func(name string, cmd group.Record, cmdID string) {
 		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		res, err := n.SendCommand(cctx, to, cmd, cmdID, nil)
+		res, err := n.command(cctx, cmd, cmdID)
 		switch {
 		case err != nil:
 			fmt.Printf("%s: no answer: %v\n", name, err)
-		case res.Status == node.ResultDone:
+		case res.Status == "done":
 			fmt.Printf("%s: done\n", name)
 		default:
 			fmt.Printf("%s: refused: %s\n", name, res.Reason)
@@ -252,7 +234,10 @@ func run(state, signerDir string, to group.DeviceID, addr, system string, cases 
 	sendAll := func(rs []group.Record) {
 		for len(rs) > 0 {
 			k := min(len(rs), 64)
-			n.SendRecords(rs[:k])
+			if err := n.records(rs[:k]); err != nil {
+				fmt.Printf("records: %v\n", err)
+				return
+			}
 			rs = rs[k:]
 		}
 		// The records leave before the connection closes.
@@ -314,7 +299,7 @@ func run(state, signerDir string, to group.DeviceID, addr, system string, cases 
 					return err
 				}
 			}
-			if err := sendCert(n, to, parts[1], by); err != nil {
+			if err := sendCert(n, parts[1], by); err != nil {
 				return err
 			}
 		case "event":
@@ -327,13 +312,13 @@ func run(state, signerDir string, to group.DeviceID, addr, system string, cases 
 			if err != nil {
 				return err
 			}
-			ev, ok, err := eng.Copied(parts[1], clip.Text, clip.Copy)
-			if err != nil || !ok {
+			ev, err := sealText(id, state, parts[1])
+			if err != nil {
 				return fmt.Errorf("making the event: %v", err)
 			}
 			for range count {
-				if !n.SendEvent(to, ev) {
-					return fmt.Errorf("%s is not connected", to)
+				if err := n.event(ev); err != nil {
+					return fmt.Errorf("sending the event to %s: %v", to, err)
 				}
 			}
 			time.Sleep(2 * time.Second)

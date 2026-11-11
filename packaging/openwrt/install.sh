@@ -29,10 +29,14 @@ fi
 failed() {
 	rc=$1
 	if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ] && [ "${CBB_ERROR_DETAILS:-}" != 1 ]; then
-		echo "install.sh: failed (exit status $rc). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." >&2
+		note install.sh "failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." "$rc"
 	fi
 }
 trap 'failed $?' EXIT
+# The messages in the user's language (packaging/l10n.sh).
+cbb_l10n=$(cd "$(dirname "$0")" && pwd)/../l10n
+# shellcheck source=packaging/l10n.sh
+. "$cbb_l10n.sh"
 
 usage() {
 	echo "usage: sh install.sh [--port N] [--auto-update on|off] [--no-pair] path/to/cbb" >&2
@@ -66,7 +70,7 @@ case $port in
 *[!0-9]*) usage ;;
 *)
 	if [ "$port" -lt 1024 ] || [ "$port" -gt 65535 ]; then
-		echo "install.sh: --port takes a port from 1024 to 65535" >&2
+		note install.sh "--port takes a port from 1024 to 65535"
 		exit 2
 	fi
 	;;
@@ -79,19 +83,19 @@ esac
 here=$(cd "$(dirname "$0")" && pwd)
 
 if [ "$(id -u)" -ne 0 ]; then
-	echo "install.sh: run it as root" >&2
+	note install.sh "run it as root"
 	exit 1
 fi
 if [ ! -f /etc/openwrt_release ]; then
-	echo "install.sh: this installer is for OpenWrt" >&2
+	note install.sh "this installer is for OpenWrt"
 	exit 1
 fi
 if ! command -v apk >/dev/null 2>&1; then
-	echo "install.sh: OpenWrt 25.12 or later is required (it installs packages with apk)" >&2
+	note install.sh "OpenWrt 25.12 or later is required (it installs packages with apk)"
 	exit 1
 fi
 if ! "$bin" version >/dev/null 2>&1; then
-	echo "install.sh: $bin does not run on this router; is it built for $(uname -m)?" >&2
+	note install.sh "%s does not run on this router; is it built for %s?" "$bin" "$(uname -m)"
 	exit 1
 fi
 
@@ -119,6 +123,14 @@ put 0644 "$here/cbb.keep" /lib/upgrade/keep.d/cbb
 put 0644 "$here/cbb.json" /etc/capabilities/cbb.json
 put 0644 "$here/firewall.sh" /usr/share/cbb/firewall.sh
 put 0644 "$here/uninstall.sh" /usr/share/cbb/uninstall.sh
+# uninstall.sh speaks the user's language too: only in this one, as a
+# router's flash is small.
+put 0644 "$here/../l10n.sh" /usr/share/cbb/l10n.sh
+rm -rf /usr/share/cbb/l10n
+mkdir -p /usr/share/cbb/l10n
+if [ -f "$cbb_l10n/$cbb_l10n_lang.tsv" ]; then
+	put 0644 "$cbb_l10n/$cbb_l10n_lang.tsv" "/usr/share/cbb/l10n/$cbb_l10n_lang.tsv"
+fi
 if [ ! -f /etc/config/cbb ]; then
 	put 0644 "$here/cbb.config" /etc/config/cbb
 fi
@@ -143,7 +155,7 @@ touch /var/state/cbb.time
 /etc/init.d/cbb enable
 if ! ubus call service list >/dev/null 2>&1; then
 	# A root file system without procd, such as a container.
-	echo "CBB is installed; procd is not running here, so it starts at the next boot."
+	say "CBB is installed; procd is not running here, so it starts at the next boot."
 	exit 0
 fi
 /etc/init.d/cbb restart
@@ -156,19 +168,19 @@ answers() { # cbb
 		sleep 1
 		i=$((i + 1))
 	done
-	echo "install.sh: the service did not answer within 40 s: $out" >&2
-	echo "install.sh: see logread -e cbb" >&2
+	note install.sh "the service did not answer within 40 s: %s" "$out"
+	note install.sh "see logread -e cbb"
 	return 1
 }
 answers /usr/bin/cbb || true
-echo "CBB is running on TCP port $port, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh"
-echo "Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one."
+say "CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh" "$port"
+say "Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one."
 if /usr/bin/cbb version 2>/dev/null | grep -q "lite member"; then
 	# shellcheck source=packaging/pair.sh
 	. "$here/../pair.sh"
 	if ! CBB_SOCKET=/var/run/cbb/control.sock pair_now /usr/bin/cbb cbb -name router; then
-		echo "Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone."
+		say "Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone."
 	fi
 else
-	echo "Next: run cbb pair and scan its QR code with the CBB app on your phone."
+	say "Next: run cbb pair and scan its QR code with the CBB app on your phone."
 fi

@@ -11,12 +11,12 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 ## Rules
 
 - Only standard, published constructions; nothing of our own. The one construction from an
-  Internet-Draft, CPace, is the CFRG's balanced PAKE and is copied as is
-  (`internal/third_party/cpace`, `core/src/third_party/cpace`).
+  Internet-Draft, CPace, is the CFRG's balanced PAKE and is translated line by line
+  from the Go original (`core/src/third_party/cpace`).
 - One curve for signatures: NIST P-256 with ECDSA and SHA-256, everywhere, since the
   phones' secure hardware (the Secure Enclave, Android's Keystore and StrongBox) and TPM 2.0
   all offer it.
-- Curve25519 only where the protocol requires it: CPace's suite, WireGuard and REALITY.
+- Curve25519 only where the protocol requires it: CPace's suite and WireGuard.
 - TLS 1.3 only (RFC 8446), never an earlier version, on every TCP connection.
 - Randomness from the operating system's generator only (`crypto/rand`, `getrandom`,
   `SecRandomCopyBytes`, `SecureRandom`).
@@ -40,7 +40,7 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 | Masking of the forwarder's hellos | ChaCha20 key stream (no authentication; the MAC inside does that) | RFC 8439 | 13 |
 | Sync away from home | WireGuard: Noise IK, Curve25519, ChaCha20-Poly1305, BLAKE2s, plus a preshared key per client | WireGuard paper, Noise | 11 |
 | AmneziaWG's header protection | ChaCha20 over the message header, nonce from the padding | AmneziaWG | 11 |
-| VLESS with REALITY | TLS 1.3 with an X25519 key pair of the forwarder | Xray-core | 11, 13 |
+| VLESS over XHTTP | TLS 1.3 to the web server in front of the forwarder, its certificate from a public CA | Xray-core, rustls | 11, 13 |
 | Hardware key proofs | Android Key Attestation, TPM 2.0 quotes and credential activation | Android, TCG | 17 |
 
 ## Libraries
@@ -66,7 +66,7 @@ CPace exchange, so the four implementations cannot drift apart ([testing](testin
 | Tunnel key | X25519 | each device that syncs away from home | sealed in the TPM on Linux when there is one, else a file of the service; the phone's keychain or app storage | until the device leaves the group |
 | Preshared key | 32 random bytes | each tunnel client | as the tunnel key | as the tunnel key |
 | Server key | ECDSA P-256 | each hub | the TPM on Linux when there is one, else a file of the service | until the hub leaves; each credential it gets lasts a period of 35 days |
-| Forwarder key | ECDSA P-256 and X25519 (WireGuard, REALITY) | the forwarder | its state directory | until its operator changes it |
+| Forwarder key | ECDSA P-256 | the forwarder | its state directory | until its operator changes it |
 | Release root keys | ECDSA P-256 | the maintainer | offline hardware keys | until replaced in a release |
 | Release and status keys | ECDSA P-256 | the maintainer | the maintainer's Secure Enclave, never CI | named in `keys.json`, at most 100 days per signature |
 | Pairing secrets | the six-digit code, CPace's scalars | for one attempt | memory only | the window, 5 minutes |

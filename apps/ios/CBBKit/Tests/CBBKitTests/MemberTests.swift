@@ -4,8 +4,8 @@
 import Foundation
 import XCTest
 
-/// Checks the member protocol against the vectors that the Go tests write
-/// (go test ./internal/node -update), and the engine and node by themselves.
+/// Checks the member protocol against the vectors in testdata/interop, which
+/// Go's member wrote and the Rust core reads, and the engine and node by themselves.
 final class MemberTests: XCTestCase {
     func vectors(_ name: String) throws -> Data {
         try Data(contentsOf: repoRoot().appendingPathComponent("testdata/interop/\(name)"))
@@ -105,19 +105,13 @@ final class MemberTests: XCTestCase {
         }
         XCTAssertNil(offer.vless)
         XCTAssertNil(hidden.vless)
-        XCTAssertEqual(vless, Member.VLESS(endpoint: "203.0.113.9:443", publicKey: Data(repeating: 9, count: 32),
-                                           shortID: "0123456789abcdef", serverName: "www.example.com",
-                                           id: "5f0c1e2d-3b4a-4c5d-8e6f-7a8b9c0d1e2f"))
+        XCTAssertEqual(vless, Member.VLESS(endpoint: "203.0.113.9:443", serverName: "cbb.tools",
+                                           path: "/banMEJvnYJJap8S/AbCdEfGhIjKlMnOpQr", id: "5f0c1e2d-3b4a-4c5d-8e6f-7a8b9c0d1e2f"))
         let vlessText = try vless.jsonText()
         XCTAssertEqual(try JSONDecoder().decode(Member.VLESS.self, from: Data(vlessText.utf8)), vless)
-        // VLESS over XHTTP behind the forwarder's web server: no REALITY key, a path.
-        let xhttpText = #"{"transport":"xhttp","endpoint":"203.0.113.9:443","server_name":"cbb.tools","path":"/banMEJvnYJJap8S","id":"5f0c1e2d-3b4a-4c5d-8e6f-7a8b9c0d1e2f"}"#
-        let xhttp = try JSONDecoder().decode(Member.VLESS.self, from: Data(xhttpText.utf8))
-        XCTAssertEqual(xhttp, Member.VLESS(transport: "xhttp", endpoint: "203.0.113.9:443", serverName: "cbb.tools",
-                                           path: "/banMEJvnYJJap8S", id: "5f0c1e2d-3b4a-4c5d-8e6f-7a8b9c0d1e2f"))
-        let again = try JSONSerialization.jsonObject(with: Data(try xhttp.jsonText().utf8)) as? [String: String]
-        XCTAssertNil(again?["public_key"])
-        XCTAssertEqual(again?["path"], "/banMEJvnYJJap8S")
+        let again = try JSONSerialization.jsonObject(with: Data(vlessText.utf8)) as? [String: String]
+        XCTAssertEqual(again?["transport"], "xhttp")
+        XCTAssertEqual(again?["path"], "/banMEJvnYJJap8S/AbCdEfGhIjKlMnOpQr")
         // A computer's hello says what it is.
         guard case let .hello(_, laptop) = decoded[15] else { return XCTFail("frame 15 is \(decoded[15])") }
         XCTAssertEqual(laptop.device, Member.DeviceInfo(form: "laptop", osVersion: "15.1", version: "0.5.0", mac: "a4:83:e7:01:02:0f"))

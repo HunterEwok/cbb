@@ -25,7 +25,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **9.** Apps for iPhone and Android, which make the phone the group's root of trust
    ([design](design.md#the-phone-apps)); tested in CI, not yet on a real phone or in a store.
 - **12.** Sync away from home through the group's own WireGuard tunnel: the hub, the phones and the
-    lite member on Linux as clients, remote invitations for computers, the forwarder, the
+    lite member on Linux as clients, remote invitations for computers and phones, the forwarder, the
     blind relay, AmneziaWG and VLESS ([design](design.md#sync-away-from-home)).
 - **16.** Full members, admins and the device's system, in 0.3 and 0.4
     ([design](design.md#members-capabilities-admins-and-the-operating-system)).
@@ -46,6 +46,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 - **48.** The name Copy Beyond Borders, short CBB, in 0.6 ([BRAND.md](../BRAND.md#the-name)):
     CBB under the icons, the full name in the stores, the docs and the site; the apps'
     identifiers start with `tools.cbb`.
+- **63.** Copies sealed end to end, in 0.6 (D-84; [protocol.md](protocol.md), section 4,
+    "Sealing").
 
 ### Partly done
 
@@ -159,6 +161,12 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 
     Later, point 8: the hubs' order from a table the root signs (D-65) instead of one derived
     from the roles.
+- **64.** **The service in Rust, for 0.6** (D-88;
+    [design](design.md#the-service-and-its-helper)): the Rust `cbb` as the service and the
+    command line on every computer, with the Go `cbb-helper` as its child for what needs Go.
+    The program and its helper are in; the whole command line in Rust, the relay's server in
+    Rust (the forwarder stays in Go) and the removal of the Go member's code follow, its
+    rules staying as the tests' reference.
 
 ### Next
 
@@ -290,12 +298,12 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       group without being removed by hand.
 - **46.** **XHTTP in 0.6 for `cbb`, the phones and the lite member.** Sync away from home through networks that block VPNs, on
     every member, the lite member included. There are two ways, equal options that the user
-    or the server's operator picks, and more may join them: VLESS and AmneziaWG. VLESS comes
-    in two kinds: with the site's real certificate, behind the server's own web server
-    (XHTTP, which the site's nginx passes to the forwarder; the project's forwarder at
-    cbb.tools runs it), or with REALITY, for forwarders without a web server. Every client
-    speaks each of them; the lite member on Linux speaks AmneziaWG and VLESS over XHTTP in
-    0.6 (the owner, 2026-11-07), not REALITY; the ESP32 and the blind relay come later
+    or the server's operator picks, and more may join them: VLESS and AmneziaWG. VLESS runs
+    with the site's real certificate, behind the server's own web server (XHTTP, which the
+    site's nginx passes to the forwarder; the project's forwarder at cbb.tools runs it);
+    REALITY, its other kind until then, was removed (the owner, 2026-11-08, D-91). Every
+    client speaks both ways; the lite member on Linux speaks AmneziaWG and VLESS over XHTTP
+    in 0.6 (the owner, 2026-11-07); the ESP32 and the blind relay come later
     ([below](#vless-behind-a-web-server)).
 - **47.** **After TestFlight.** Back Tap on the iPhone in two taps: iOS lets no app make a
     shortcut or set Back Tap, so the app carries a signed shortcut file (`shortcuts sign
@@ -333,19 +341,21 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     WiFi's through Arduino's own tool, NINA through the SerialNINAPassthrough sketch), and
     whether a classic ESP32 (520 KB of RAM, no PSRAM) holds `core/` with TLS 1.3, which
     builds today for the C6 and the S3 only. The Uno R4 WiFi first.
-- **52.** **Planned for 0.7.** A clipboard history in the phone apps, where the system keeps
-    none (the iPhone has none, even in iOS 27; Android only on some phones). The computers
-    keep using the system's history (Klipper, Win+V, Spotlight), where received copies
-    already land. The history:
+- **52.** **Planned for 0.7, on every device (the owner, 2026-11-09).** A clipboard history of
+    CBB's own, the same on the phones (iPhone, Android, Aurora), in the Mac app, in the tray
+    app on Linux and Windows and in `cbb` on the command line, so that it works alike
+    everywhere, also where the system keeps none (the iPhone has none, even in iOS 27; Android
+    only on some phones). The history:
     - stays on the device; it is never synced between the group's devices;
     - is off by default, one switch turns it on;
     - keeps entries for a time the user picks (1 hour, 1 day, 7 days), with a "Clear" button;
-    - is encrypted with the device's key (Secure Enclave, Android Keystore);
+    - is encrypted with the device's key (Secure Enclave, Android Keystore, the TPM, or the
+      key file where a computer has no chip);
     - never holds copies marked as secret (password managers' marks);
     - can be searched, and an entry is sent again with one tap.
     docs/apps.md's principle "no history" changes to say this. Why: users of the other
-    clipboard tools ask for a history more than for almost anything else, and phones lack
-    one.
+    clipboard tools ask for a history more than for almost anything else, and every device
+    should have the same one.
 - **53.** **Planned for 0.6, before the launch.** What a sceptical reader checks first,
     found by reading the project as one would (2026-11-02):
     - Done in 0.6: Android's automatic sending skips a copy that carries
@@ -447,7 +457,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       (alias `cbb`, certificate SHA-256 `16:99:CD:37:…:7C:E6:B3:6D`), which the environment
       **release** already holds. Write its fingerprint in docs/maintaining.md, "Android
       signing key"; 0.5.0's APK is signed by the old key, so 0.5.0 does not update to 0.6.0
-      in place (no compatibility before 1.0.0).
+      in place (compatibility starts with 0.6, D-92).
     - RuStore, Android: upload the release's signed `cbb-fdroid-X.Y.Z.apk` (the flavor
       without an update of its own and without Wear OS), not an AAB, so that RuStore never
       holds the key and its copy, the GitHub APK and F-Droid's share one certificate. The
@@ -521,15 +531,14 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     - Removing the app removes its token and key: a reinstalled app finds its slot
       uninitialized again, initializes it through QCA and joins as a new device.
 - **61.** **Planned for 0.6, before rc.1 (the owner, 2026-11-06).** Make sure the ways out
-    carry only cbb and never lead to the internet: the forwarder, VLESS (REALITY and XHTTP)
-    with the mirror, the relay and the hub's tunnel, on every member and both phones. This
+    carry only cbb and never lead to the internet: the forwarder, VLESS with the mirror, the relay and the hub's tunnel, on every member and both phones. This
     rests on the code (the forwarder only passes WireGuard packets between a group's hub
     and its clients, VLESS's one outbound goes to the forwarder, its registrations or the
     mirror whatever the client asked for, the hub's in-process stack opens only the member
     port and forwards nothing), with no route, NAT or firewall rule needed on the server.
     Done: tests in which a client that is not ours asks for other addresses, TCP and UDP,
     IPv4, IPv6 and names, the server's own loopback services among them, and reaches
-    nothing: VLESS over REALITY and XHTTP (`internal/vless/onlycbb_test.go`: packets reach
+    nothing: VLESS over XHTTP (`internal/vless/onlycbb_test.go`: packets reach
     only the forwarder's port, streams only the mirror, the registrations' ID neither), the
     hub's tunnel (`internal/tunnel/onlycbb_test.go`), the phones' hub
     (`internal/tunnel/rustonly_test.go`, the Rust hub through `tunnel-on-linux`), the relay (`internal/relay/onlycbb_test.go`) and the
@@ -547,6 +556,34 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       `.sna` or `.z80` at once, so a game sent from the phone runs on the Next.
     - `.cbb snap`: the Next's screen (ULA or Layer 2) to the group as a PNG, which the Pi
       makes.
+- **65.** **Planned for 0.6 (the owner, 2026-11-09).** "Why it does not sync": one screen in
+    the advanced settings of every app (iPhone, Android, Aurora, the Mac app, the tray app) and
+    the same reason in `cbb status`, which names one cause and what to do about it: the device
+    is not on the group's network, sync is off, no hub away from home, "Everywhere" not
+    allowed, the forwarder or the relay does not answer, the network blocks the tunnel, a key
+    or certificate has expired, the device was removed or frozen, or a newer version is
+    needed (`newer`). The causes come from the Rust core's state, so every device reads them
+    alike; the texts are in all eight languages.
+- **66.** **Planned for 0.7 (the owner, 2026-11-09).** Sending to one device ("Share → the
+    laptop"): the copy is sealed for the chosen device alone and written only to its
+    clipboard; the other devices of the group never get it.
+- **67.** **Later, not planned (the owner, 2026-11-09).** Several people in one group, each with
+    a clipboard of their own inside it. Today a group is the devices of one person, and two
+    people make two groups ([how it works](guide/how-it-works.md#the-group)). The records
+    allow adding it without breaking groups: new fields and record types come only with a
+    new `v`, which older devices keep, pass on and ask to be updated for
+    ([protocol.md](protocol.md), section 10, "Records of a later version").
+- **68.** **Planned for 0.6 (the owner, 2026-11-09).** Fewer choices in the apps:
+    - key levels and attestation (item 31): one sensible default, the rest deep in the
+      advanced settings;
+    - away from home, one switch for the user; the hub, the forwarder, the relay and the
+      ways through blocking networks are chosen by themselves, by hand only in the advanced
+      settings;
+    - the ZX Spectrum Next, the ESP32, the TV remotes and the Bluetooth keyboards are shown
+      as "the lab" in the README, on the site and in the docs: experiments, not what 1.0
+      promises.
+
+    Freezing and removing an admin stay two separate actions.
 
 ## Devices that are hard to type into
 
@@ -864,6 +901,11 @@ a web server; neither replaces the other. VLESS and AmneziaWG stay two equal way
 user or the server's operator picks the one their network lets through; more ways may
 join them later. REALITY suits forwarders that people run on servers of their own without
 a site.
+
+REALITY removed (the owner, 2026-11-08, D-91): nobody used it once cbb.tools ran XHTTP, and
+writing it in Rust would need a browser's ClientHello that rustls does not make. VLESS has
+one transport now, XHTTP; the history above is kept as it was decided. Should a network
+single out the Rust client's own ClientHello, a browser-like one for XHTTP comes first.
 
 - **The transport.** VLESS over XHTTP over TLS, as cbb.tools' nginx already passes VLESS
   for other uses. The web server (nginx) ends the TLS with the site's own certificate and

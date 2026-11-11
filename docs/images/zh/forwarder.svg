@@ -1,4 +1,5 @@
-<!-- SPDX-License-Identifier: AGPL-3.0-only. Drawn by tools/diagrams/diagrams.py; edit it there. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->
 <svg xmlns="http://www.w3.org/2000/svg" lang="zh" width="900" height="300" viewBox="0 0 900 300" role="img" aria-label="当互联网无法直接访问中枢时，中枢会向转发器注册">
 <title>当互联网无法直接访问中枢时，中枢会向转发器注册</title>
 <style>

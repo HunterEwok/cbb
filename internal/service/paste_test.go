@@ -5,12 +5,10 @@ package service
 
 import (
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/remotepaste"
 )
 
@@ -79,10 +77,22 @@ func TestRemotePaste(t *testing.T) {
 	time.Sleep(time.Second) // one paste a second from one sender
 	wantRefused("enter", "ls", control.Header{Enter: true}, "without Enter only")
 	time.Sleep(time.Second)
-	wantRefused("locked", "locked", control.Header{}, "the session is locked")
+	// The next paste goes as soon as the desktop has this one, not when
+	// its refusal is back, which may take longer than the second it must
+	// come within on a busy machine.
+	locked := make(chan error, 1)
+	c := pi.dial(t)
+	defer c.Close()
+	go func() {
+		_, err := c.Do(&control.Message{Header: control.Header{Op: control.OpPasteOn, Device: "deck"}, Payload: []byte("locked")})
+		locked <- err
+	}()
 	<-got
 	if wantRefused("too fast", "ls", control.Header{}, "too many pastes"); len(got) != 0 {
 		t.Error("a paste too fast reached the desktop")
+	}
+	if err := <-locked; err == nil || !strings.Contains(err.Error(), "the session is locked") {
+		t.Errorf("locked: %v, want %q", err, "the session is locked")
 	}
 	time.Sleep(time.Second)
 	if err := paste("hunter2", control.Header{Kind: control.KindSecret}); err != nil {
@@ -134,22 +144,6 @@ func TestRemotePaste(t *testing.T) {
 	// A member that is not an admin sends none.
 	if _, err := deck.do(t, control.Header{Op: control.OpPasteOn, Device: "pi"}, "ls"); err == nil || !strings.Contains(err.Error(), "only an admin") {
 		t.Errorf("deck pasted on pi: %v", err)
-	}
-}
-
-// TestPasteOnMacNeedsTheApp: without the app, a Mac says that it pastes
-// through it.
-func TestPasteOnMacNeedsTheApp(t *testing.T) {
-	var h hub
-	pi := startService(t, &h, "pi")
-	mac := startRole(t, &h, "mac", group.OSMacOS)
-	pairWith(t, pi, mac)
-	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
-	if _, err := mac.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPasteOn, Device: "mac"}, "ls"); err == nil || !strings.Contains(err.Error(), "a Mac pastes through the CBB app") {
-		t.Errorf("a paste on a Mac without the app: %v", err)
 	}
 }
 
@@ -286,14 +280,11 @@ func TestPasteLineBreaks(t *testing.T) {
 // refuses a command signed before it started, which it may have carried
 // out before.
 func TestCommandSignedBeforeStart(t *testing.T) {
-	var ahead atomic.Int64
-	ahead.Store(int64(time.Minute)) // deck starts a minute "later"
+	clock := newTestClock(t, time.Minute) // deck starts a minute "later"
 	var h hub
 	pi := startService(t, &h, "pi")
-	deck := startWith(t, &h, "deck", "linux", func(c *Config) {
-		c.now = func() time.Time { return time.Now().Add(time.Duration(ahead.Load())) }
-	})
-	ahead.Store(0)
+	deck := startEnv(t, &h, "deck", clock.env())
+	clock.set(t, 0)
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
 	if _, err := pi.do(t, control.Header{Op: control.OpReceive, Name: "off", Device: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "started after the command was signed") {

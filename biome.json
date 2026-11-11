@@ -1,0 +1,24 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.6.2/schema.json",
+	"files": {
+		"includes": ["apps/desktop/frontend/**", "!apps/desktop/frontend/tokens.js"]
+	},
+	"formatter": { "enabled": false },
+	"assist": { "enabled": false },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"style": { "preset": "none" },
+			"a11y": {
+				"useButtonType": "off",
+				"useHeadingContent": "off",
+				"noSvgWithoutTitle": "off"
+			},
+			"complexity": { "noImportantStyles": "off" },
+			"correctness": { "noUnusedVariables": "error" }
+		}
+	},
+	"css": { "linter": { "enabled": true } },
+	"html": { "linter": { "enabled": true } }
+}

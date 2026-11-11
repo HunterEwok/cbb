@@ -23,6 +23,29 @@ meaning for an old one; the registries (section 19) list every name in use. Wher
 code and this document differ, the Go code is the source of truth and the difference is a
 bug in one of them; a "Note:" line marks a known difference.
 
+### Contents
+
+- [1. Identifiers, names and ports](#1-identifiers-names-and-ports)
+- [2. Certificates](#2-certificates)
+- [3. Discovery (mDNS)](#3-discovery-mdns)
+- [4. Member protocol](#4-member-protocol)
+- [5. Sync semantics](#5-sync-semantics)
+- [6. Pairing a computer](#6-pairing-a-computer)
+- [7. The join QR code](#7-the-join-qr-code)
+- [8. Local control socket](#8-local-control-socket)
+- [9. The phone as the root](#9-the-phone-as-the-root)
+- [10. Admin CAs, device records and revocation](#10-admin-cas-device-records-and-revocation)
+- [11. Tunnel keys](#11-tunnel-keys)
+- [12. Remote invitations](#12-remote-invitations)
+- [13. The forwarder](#13-the-forwarder)
+- [14. The blind relay](#14-the-blind-relay)
+- [15. Commands](#15-commands)
+- [16. Signed releases](#16-signed-releases)
+- [17. Key stores](#17-key-stores)
+- [18. Server credentials](#18-server-credentials)
+- [19. Registries](#19-registries)
+- [20. Security considerations](#20-security-considerations)
+
 ### Conventions
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
@@ -47,8 +70,8 @@ these words depends on it.
   byte. In a URL's query each `+`, `/` and `=` is percent-encoded, and a reader decodes only
   percent escapes, never a `+` as a space. Three kinds of value stay in lowercase hex: the
   identifiers (device IDs, event and command IDs, group and period tags), which compare as
-  strings; the SHA-256 of a file (release files, Docker digests), which `sha256sum` prints;
-  and the REALITY short ID (section 13), whose form Xray sets.
+  strings; and the SHA-256 of a file (release files, Docker digests), which `sha256sum`
+  prints.
 - **Fingerprints.** A key has one fingerprint: SHA-256 over its SubjectPublicKeyInfo (DER),
   in standard base64, 44 characters, the same as a record's key hash (section 10). The
   join QR code, the confirmation of a joining device, a forwarder's or a relay's pin and a
@@ -107,7 +130,7 @@ these words depends on it.
   checkpoint, section 10; `size/commands`, section 15; `size/releases`, 256 KiB, section 16;
   `size/credentials`, 16 KiB, section 18) before anything else; then these rules, and for a
   record its canonical form (it encodes the value it parsed and compares bytes); then each
-  field against its row in the tables of its kind ("Field rows" in section 10, "The command"
+  field against its row in the tables of its kind ("Field rows" in section 10 and "The command"
   in section 15); then the group, the signature and the rules of evaluation. A body that
   fails a step is refused there, so a member never verifies a signature over a body it
   cannot read alike, and never evaluates a record whose fields another member reads
@@ -164,7 +187,7 @@ these words depends on it.
 | Member ALPN | `cbb/3` | `group.MemberProtocol` |
 | Pairing ALPN | `cbb-pair/2` | `pair.Protocol` |
 | Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `cbb-forward/2` (section 13) | `internal/forward` |
-| Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `internal/relay` |
+| Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `member/src/relayd` (`cbb-relay`) |
 | Pairing code | six ASCII digits; users may type spaces and dashes, which are removed | `pair.NormalizeCode` |
 | Join QR text | `cbb://join?code=` followed by the six-digit code (section 7) | `phone.JoinQR`, `phone.ParseJoinQR` |
 
@@ -179,7 +202,8 @@ once; more are closed at accept. An implementation SHOULD bound them likewise.
 
 All keys are ECDSA P-256; all signatures are ECDSA with SHA-256 (Go's default for P-256).
 Serial numbers are random. Go also adds subject and authority key identifiers; peers do not
-rely on them. Source: `internal/group/cert.go`, `internal/group/tls.go`, `internal/pair/join.go`.
+rely on them. Source: `internal/group/cert.go`, `internal/group/tls.go`, `core/src/certs.rs`,
+`core/src/issue.rs`.
 
 | Certificate | Subject CN | SAN | Validity | Extensions |
 |-------------|-----------|-----|----------|------------|
@@ -331,9 +355,8 @@ rescanned every 10 s.
 
 ## 4. Member protocol
 
-Source: `internal/node`, `internal/clip`, `internal/group/tls.go`,
-`internal/service/members.go`; the lite member's and the phones' `member/src/node.rs` and
-`member/src/phone.rs`.
+Source: `core/src/wire.rs`, `core/src/clip.rs`, `core/src/tls`; the service's and the
+phones' `member/src/node.rs` and `member/src/phone.rs`.
 
 ### Who dials whom
 
@@ -412,7 +435,7 @@ Message object:
 
 | Field | Type | In | Meaning |
 |-------|------|----|---------|
-| `t` | string | all | `hello`, `event`, `ping`, `bye`, `cert`, `records`, `admin`, `tunnel` or `hubs` (section 11), `command` or `result` (section 15), `evidence` (section 17), `credentials` (section 18), `release` (section 16), `get` or `missing` ("Content", below) |
+| `t` | string | all | `hello`, `event`, `ping`, `bye`, `cert`, `records`, `admin`, `tunnel` or `hubs` (section 11), `guest` (section 12, "Through the hub"), `command` or `result` (section 15), `evidence` (section 17), `credentials` (section 18), `release` (section 16), `get` or `missing` ("Content", below) |
 | `role` | string | hello | `member` (any device with the service or the firmware) or `phone` (a phone app) |
 | `hello` | object | hello | Hello (below) |
 | `event` | object | event | Event (below) |
@@ -441,7 +464,7 @@ Message object:
 
 1. After the TLS handshake each side MUST send its hello first, without waiting for the other's.
 2. Then events follow, in any number, interleaved with pings, records messages, `admin`,
-   `tunnel`, `hubs`, `credentials` (section 18), `command`, `result` and `reach`
+   `tunnel`, `hubs`, `guest` (section 12), `credentials` (section 18), `command`, `result` and `reach`
    messages, `evidence` (section 17), `release` (section 16), `get`, `missing` and `chunk`
    frames ("Content", below), and at most one `cert`.
 3. A side that has written nothing for 5 s MUST send `ping`. Every frame written resets that
@@ -455,7 +478,7 @@ Rules for the receiver:
   the connection. A hello whose `hello` object does not decode closes the connection. A
   `current` that does not decode (for example an unknown `kind` or `via` from a newer
   version) MUST count as no current event. A `current` that decodes but fails validation,
-  or that is a secret with its text, closes the connection (`internal/node/node.go`).
+  or that is a secret with its text, closes the connection (`core/src/clip.rs`, `reconcile`).
 - An `event` that does not decode or fails validation MUST be dropped; the connection stays.
 - Unknown `t` values and `ping` MUST be ignored, so a newer peer can add messages.
 - Timeouts: each frame must start arriving within 15 s of the previous one; once its length
@@ -523,7 +546,7 @@ depends on a version number.
 | `entries_keys_seq` | integer or absent | with `entries_seq`: the `seq` of the `keys.json` it came with; absent when it holds none |
 | `caps` | array of strings or absent | from a `member`: its capabilities ("Capabilities" above), sorted, each once; absent when it has none and from a phone. A receiver reads the first 32 names and keeps those it knows; only the sender's `device` record counts for what the group lets it do |
 | `features` | array of strings or absent | what the sender supports beyond the protocol of its ALPN version, each name once: `media` from a member that serves the content of media events ("Content", below), so others may send it `get`. A receiver reads the first 32 names and ignores those it does not know, so a later release adds a feature without a new ALPN version |
-| `group_ca` | string or absent | from a Go member on a connection that carries records only with a device no `device` record names ("Records only" in the exchange): the group's first root, DER in base64, so that a new phone restoring the group with the recovery key builds the group's path from the records (section 10, "The recovery key"). Every other hello leaves it out |
+| `group_ca` | string or absent | from a computer on a connection that carries records only with a device no `device` record names ("Records only" in the exchange): the group's first root, DER in base64, so that a new phone restoring the group with the recovery key builds the group's path from the records (section 10, "The recovery key"). Every other hello leaves it out |
 | `seal` | string or absent | the sender's public key for sealed messages, 1216 bytes in base64 (an X-Wing key, `internal/seal`), which the group's root puts in the sender's device record (`seal`, section 10) so that commands for it can be sealed (section 15); a key of another size is ignored; absent from the phones for now |
 
 ### Device
@@ -736,7 +759,7 @@ up to 64 KiB, and a copy of the same image twice is two different blobs.
 A member that wants the bytes of a copy asks a connected member whose hello says `media`
 for its sealed blob, by `blob.sha256`, and gets them in binary frames. Members fetch, keep and
 serve only sealed blobs, so a member that serves one, a hub that only passes copies on among
-them, never needs to read it. The Go code is `internal/node/content.go`.
+them, never needs to read it. The code is `member/src/content.rs`.
 
 - `{"t":"get","get":{"sha256":"...","offset":0,"length":1048576}}` asks for `length` bytes
   of the blob from `offset`. `length` is 1 to 1 MiB; a receiver drops a get that is not
@@ -797,7 +820,7 @@ a member that does not know the message ignores it.
 The parts marked "wire" are needed for convergence, and an implementation MUST follow them;
 the rest is the Go engine's local policy, which another member SHOULD follow so that users
 see the same behaviour. Source:
-`internal/clip/clip.go`, `internal/hlc/hlc.go`, `internal/node/node.go`.
+`core/src/clip.rs`, `core/src/hlc.rs`, `member/src/node.rs`.
 
 ### Hybrid logical clock (wire)
 
@@ -913,7 +936,7 @@ when the records set none. A write increments the write sequence number (section
 
 ## 6. Pairing a computer
 
-Source: `internal/pair`, `internal/third_party/cpace`, `internal/service/socket.go`.
+Source: `core/src/pair.rs`, `core/src/admit`, `core/src/third_party/cpace`, `member/src/pair.rs`.
 
 ### Window
 
@@ -955,7 +978,7 @@ A window for a remote invitation (design.md, "Joining from another network") dif
 ### Channel binding and CPace
 
 Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
-`internal/third_party/cpace`, with explicit key confirmation.
+`core/src/third_party/cpace`, with explicit key confirmation.
 
 | Input | Value |
 |-------|-------|
@@ -1063,7 +1086,7 @@ window (a plain `cbb pair`, an invitation) refuses a joiner that offers `admin_k
 confirmation, with `{"error": "refused"}`, and so does an admin computer that is not the root. A
 phone that offers no admin key, such as the Aurora OS app unless the user asks to join as an
 admin, joins any admin's window as a member: the admin signs its `device` record with role
-`phone` and no `admin`. A phone that listens and shows its QR code ("The joiner listens" below)
+`phone` and no `admin`, since a role gives no rights and only an admin key does (D-90). A phone that listens and shows its QR code ("The joiner listens" below)
 asks to be an admin the same way, and the root admits it as one with `cbb pair -qr -admin`. Before it certifies an
 admin key, the admitting side (the root computer, or an admin phone) checks `admin_proof` against
 `sid` of this connection, so that a key the joiner does not hold, or a proof made for another
@@ -1379,7 +1402,7 @@ has a root of the same form, which the computer holds in a file (section 10, "Ad
   StrongBox that cannot be exported, with the certificate profile of section 2 except
   path length 1 (MaxPathLen 1), CN `cbb group root YYYY-MM-DD`. Below it every admin
   phone has an admin CA (section 10). Computers get member certificates; a computer holds a
-  CA key only when the root phone makes it an admin (section 10, "A computer as admin").
+  CA key only when the root phone makes it an admin (section 10, "Admins").
   A phone MUST ask for the user's presence (Face ID, the fingerprint or the passcode) before
   it signs with the root or an admin key. A group CA has path length 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
   6).
@@ -2113,7 +2136,13 @@ beyond) and check the same bytes.
 - After adding records that refuse a certificate a member first queues the new records for
   its peers, then closes every connection whose peer certificate is now refused
   ("Certificates"), after what is queued for it and a `bye`, and the TLS check refuses it from
-  then on. So a revoked member that is connected gets the record that revokes it. A member
+  then on. So a revoked member that is connected gets the record that revokes it. One that
+  was not connected gets it on its next connection with any member: a peer whose own key
+  (its certificate's) the records revoke or freeze passes the TLS check, and its connection
+  carries records only; the member sends its records when the digests in the hellos differ,
+  takes nothing from the peer, and closes the connection after them and a `bye`. Either side
+  dials such a peer again as after a failure (1 s, doubling to 30 s), so that a removed
+  device costs one handshake now and then. A member
   that learns that its own key is revoked logs that it was removed from the group, and its
   status says so (`removed`); an admin computer whose admin key is frozen says that instead
   (`frozen`); the others refuse it. A member MUST close a connection, and refuse new ones,
@@ -2145,16 +2174,16 @@ beyond) and check the same bytes.
 ## 11. Tunnel keys
 
 The keys of the group's WireGuard tunnel for sync away from home ([design.md](design.md),
-"Sync away from home"). Implemented in Go (`internal/tunnel`, `internal/node`,
-`internal/service/tunnel.go`); the tunnel carries the member protocol between Go members
-("Through the tunnel" below). The phone kits speak the hello's `tunnel_key` and the
+"Sync away from home"). Implemented in the Rust `cbb` (`member/src/tunnel.rs`,
+`member/src/away.rs`, `member/src/node.rs`); the tunnel carries the member protocol between
+members ("Through the tunnel" below). The phone kits speak the hello's `tunnel_key` and the
 `tunnel` message (through the phones' member in the Rust core: `tunnel_key`, the `tunnel`
 event, `send_tunnel`) and run the tunnel itself in
 the Rust core (`ffi/src/tunnel.rs`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
 the offer and hand them to the tunnel. The lite member on Linux takes part as a client, with
 plain WireGuard only: GotaTun's WireGuard and smoltcp's TCP in its process
 (`member/src/tunnel.rs`, `member/src/away.rs`), with AmneziaWG (`member/src/awg.rs`) and VLESS over
-XHTTP (`member/src/vless.rs`); it refuses an offer whose `vless` is REALITY and then syncs at home only ("Through the tunnel" below).
+XHTTP (`member/src/vless.rs`).
 
 - Sync away from home is off by default; nothing in this section happens on a device until
   the user turns it on there (`cbb global on`, the control operation `away`). Go turns it on
@@ -2413,21 +2442,18 @@ with AmneziaWG's own names; every client sets them on its end before the hub as 
 
 A hub with a forwarder where the user asked for it (`cbb global hub -forwarder ... -vless`)
 has its clients reach the forwarder inside VLESS where UDP does not pass, which to the network is HTTPS to a
-website (docs/design.md, "Blocked networks"), in the transport the forwarder runs: XHTTP
-behind the web server of the forwarder's own site, or REALITY, which borrows a well-known
-site's TLS. The hub makes a VLESS user ID for the group once and keeps it
+website (docs/design.md, "Blocked networks"): XHTTP behind the web server of the
+forwarder's own site. The hub makes a VLESS user ID for the group once and keeps it
 (`forwarder.vless_id` in its `tunnel.json`); it learns the rest from the forwarder's answer
 when it registers (section 13) and keeps that too (`forwarder.vless`). Its offer then
 carries:
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `transport` | string or absent | `xhttp`, or absent for REALITY |
-| `endpoint` | string | `ip:port` (TCP): the forwarder's address with the port its answer gave, the web server's with XHTTP |
-| `public_key` | base64 | REALITY: the forwarder's key, X25519, 32 bytes; absent with XHTTP |
-| `short_id` | string | REALITY: the short ID, 2 to 16 hex digits; absent with XHTTP |
-| `server_name` | string | the site whose name the TLS handshake carries; with XHTTP, the name the site's certificate must carry |
-| `path` | string | XHTTP: the path the web server passes, a slash and 8 to 64 of `A-Z a-z 0-9 - _`; absent with REALITY |
+| `transport` | string | `xhttp`; a client refuses any other, and an offer without it, which an older forwarder's REALITY made |
+| `endpoint` | string | `ip:port` (TCP): the web server's, the forwarder's address with the port its answer gave |
+| `server_name` | string | the site whose name the TLS handshake carries and its certificate must carry |
+| `path` | string | the path the web server passes, a slash and 8 to 64 of `A-Z a-z 0-9 - _`, then the group's own part |
 | `id` | string | the group's VLESS user ID, a random UUID (version 4) |
 
 - A hub that sets VLESS speaks AmneziaWG as well ("Obfuscation" above): its offer carries
@@ -2442,8 +2468,7 @@ carries:
   comes, or changes, the members connect again and get the new offer.
 - The client runs VLESS without encryption (Xray-core) from a local UDP port to that
   endpoint, and points its WireGuard at the local port instead of the offer's `endpoints`.
-  With REALITY it is inside REALITY, with the TLS fingerprint of Chrome. With XHTTP it is
-  XHTTP's `packet-up` mode (plain HTTP requests, which any web server and proxy passes) on
+  It is XHTTP's `packet-up` mode (plain HTTP requests, which any web server and proxy passes) on
   `path`, with `server_name` as the host, over TLS with the fingerprint of Chrome, ALPN `h2`
   and `http/1.1`, and the site's certificate checked against the public CAs for
   `server_name`. Its HTTP connections are reused as Xray's own client configuration does
@@ -2488,16 +2513,20 @@ carries:
 ## 12. Remote invitations
 
 A device that shares no network with the group joins through the hub's tunnel with a remote
-invitation ([design.md](design.md), "Joining from another network"). Implemented in Go
-(`internal/invite`, `internal/service/invite.go`, `cbb invite`, `cbb pair -invite`) for
-computers, and made and served on a phone that is the group's hub (the Rust tunnel's
-`hub_invite`, the kits' `InvitationWindow`); the phones do not use invitations yet.
+invitation ([design.md](design.md), "Joining from another network"). Implemented in the Rust
+`cbb` (`member/src/inviter.rs`, `member/src/away/invite.rs`, `cbb invite`, `cbb pair -invite`)
+on the computers and the lite member, in the phones' member through ffi (`cbb_invite_*`,
+`cbb_join_*` with `invite`, the tunnel's `guest_start`), and on a phone that is the group's hub
+(the Rust tunnel's `hub_invite`, the kits' `InvitationWindow`). The text is read by the Rust
+core (`cbb_core::invite`) and Go's `internal/invite`.
 
 ### The invitation
 
-Made on the hub, by the control operation `invite` (`cbb invite`), or in the app of a phone
-that is the hub, whose endpoints are its forwarder's; a hub that only passes copies on
-(section 11, "Two kinds of hub") holds no CA key and refuses. Its text is
+Made by the root or any admin that admits devices: on the hub, by the control operation
+`invite` (`cbb invite`) or in the app of a phone that is the hub, whose endpoints are its
+forwarder's; on another admin, through a hub ("Through the hub"). A hub that only passes
+copies on (section 11, "Two kinds of hub") holds no CA key and makes none itself, though it
+opens the guest tunnel of another admin's invitation. Its text is
 `cbb://invite#` followed by standard base64 of this JSON (byte strings
 in it as in the rest of this document):
 
@@ -2513,6 +2542,7 @@ in it as in the rest of this document):
 | `s` | bytes | the pairing secret, at least 16 random bytes (128 bits) |
 | `exp` | number | when it expires, Unix seconds |
 | `o` | object or absent | the hub's obfuscation settings, as in its offer (section 11, "Obfuscation") |
+| `x` | object or absent | the way to the hub's forwarder over VLESS with XHTTP, as in its offer (section 11, "VLESS"): `transport` (`xhttp`), `endpoint`, `server_name`, `path` and `id`, all strings |
 
 The JSON is in the strict form of signed bodies (Conventions), with exactly these fields and
 no other, so that every implementation reads one text alike (Go's `internal/invite`, the
@@ -2531,23 +2561,31 @@ Rust core's `cbb_core::invite`, both checked on `testdata/interop/invites.json`)
 - `o`, when present, has every field of the offer's settings, each within the offer's
   bounds. Each `h1` to `h4` is `min-max`: two decimal numbers of 32 bits, without a sign or
   a leading zero, `min` not above `max`.
+- `x`, when present, has exactly its five fields, each a string: `transport` is `xhttp`,
+  `endpoint` an address as in `ep`, `server_name` a host name, `path` an absolute path and
+  `id` a UUID in lowercase, as the offer's VLESS settings. A hub whose offer has none, or
+  REALITY, which the phones and the lite member do not speak, writes none. A device that
+  cannot reach the hub over UDP dials the guest tunnel through it.
 
 A text refused names one reason, the same in every implementation:
 
 - `not_invitation`: not the prefix.
 - `damaged`: not standard base64, not strict JSON, a field missing, unknown or of another type.
 - `version`: a `v` other than 1.
-- `group`, `hub`, `key`, `endpoints`, `secret`, `expiry` or `obfuscation`: that field's
-  value is refused.
+- `group`, `hub`, `key`, `endpoints`, `secret`, `expiry`, `obfuscation` or `vless`: that
+  field's value is refused.
 
 A device joins only while `exp` is later than its clock. A device that does not know the
 time yet does not join.
 
-It travels as a file of one line (`.cbbinvite`, mode 0600, which `cbb invite` deletes when
-the invitation ends and `cbb pair -invite` deletes once it joined) or, later, a QR code; it
-is never typed. It is a secret until it is used. It serves one device once, for 1 hour
-unless the admin asks for up to 24 hours, and closes after three failed attempts or when
-the admin cancels it.
+It travels as a QR code of its text, the usual way, which a phone scans in Join with an
+invitation, or as its text or a file of one line (`.cbbinvite`, mode 0600, which `cbb invite`
+deletes when the invitation ends and `cbb pair -invite` deletes once it joined), for a
+computer and for whoever got the QR code another way; it is never typed. It is a secret
+until it is used. It serves one device once, for 1 hour unless the admin asks for up to 24
+hours, and closes after three failed attempts or when the admin cancels it. A device asks
+its user before it joins: it shows the group's tag, the hub and when the invitation expires,
+and joins only once the user accepts; declining sends nothing.
 
 ### The guest tunnel
 
@@ -2560,8 +2598,10 @@ the admin cancels it.
   (ALPN `cbb-pair/2`, section 6) of that invitation's window and nothing else,
   except, once the window admitted a device, member TLS from that device alone, for its
   first hello (below). Any other connection MUST be closed.
-- The hub drops the guest peer when the invitation ends without a device, and 2 minutes
-  after it admitted one.
+- The hub drops the guest peer when the invitation ends without a device, and once the
+  admitted device reached it with its own tunnel key (Joining, step 4), or 24 hours after it
+  admitted the device, whichever comes first: a device that starts late, or loses its
+  network after the join, still offers its key through the guest tunnel.
 
 ### Joining
 
@@ -2577,7 +2617,49 @@ the admin cancels it.
    tunnel. Its hello carries its own tunnel key, which the hub admits (section 11) and
    answers with its offer.
 4. With the offer, the device closes the guest tunnel and from then on reaches the hub
-   through the tunnel with its own key, as any member.
+   through the tunnel with its own key, as any member. Until it has the offer, it keeps the
+   invitation (the lite member and the Rust `cbb` in `invite-guest`, mode 0600, the phones in
+   their key store) and tries again through the guest tunnel, after a restart too, for up to
+   24 hours.
+
+### Through the hub
+
+An admin that is not the hub makes the invitation through a hub it is connected to: the
+first of the group's hubs (section 11) that takes it, or the one the admin names (`cbb invite
+-hub`). The admin keeps the window and the CA key; the hub only lets the guest in and passes
+the bytes. They talk in the member connection with `guest` messages (section 4): `{"t":
+"guest", "guest": {...}}`, the object's `op` naming what it does and `key` the guest's
+WireGuard public key, standard base64, which names the invitation:
+
+| `op` | From | Fields | Meaning |
+|------|------|--------|---------|
+| `open` | admin | `psk`, `expires_ms` | let this guest in until `expires_ms` (Unix milliseconds, at most 24 hours and a minute away) |
+| `opened` | hub | `hub_key`, `endpoints`, `obfuscation`, `vless` | the guest is in: the invitation's `hk`, `ep`, `o` and `x` |
+| `refused` | hub | `reason` | a sentence for the user: not a hub, not an admin that admits devices, a lifetime too long, or the key in use |
+| `data` | both | `conn`, `data` | bytes of the guest's connection `conn` (numbered by the hub from 1), at most 16 KiB a message |
+| `end` | both | `conn` | that side closed the connection for writing |
+| `admitted` | admin | `device` | the window admitted this device: the hub keeps the guest for its first hello (Joining, step 3) |
+| `close` | admin | | the invitation ended without a device |
+
+The hub takes `open` only from a peer whose chain and records make it the root or an admin
+that admits devices, and every later message about a guest only from the admin that opened
+it. The guest's connections to TCP 8764 inside the tunnel reach the admin's window through
+`data` messages; once the window admitted a device, its member connection through the guest
+tunnel reaches the hub's member listener, as on the hub's own invitation. A guest
+connection that comes while the admin is not connected is closed, and the device tries
+again; the guest stays until the invitation's expiry. A hub keeps a few such guests at once,
+and fewer for one admin.
+
+### On a phone that joins
+
+The phone joins in its app: Start's Join with an invitation reads the QR code, the text or
+the file, and the invitation waits to be accepted or declined. Accepted, the core starts the
+guest tunnel in the app's process and gives the app its loopback port, which the app dials
+for each attempt (`cbb_join_new` with `invite`, `cbb_join_accept`, `cbb_join_feed`); the
+phone is the TLS client of the pairing and shows the fingerprint the admin compares. Once
+admitted it saves its membership, turns sync away from home on, and offers its own tunnel
+key to the hub through the guest tunnel until the hub answers (the iPhone's and Android's
+`AwayFromHome`, the Aurora app through the member's `joined_by_invite`).
 
 ### On a phone that is the hub
 
@@ -2590,7 +2672,10 @@ secret as the password: the device confirms first, the phone asks its user to co
 device by its name, system and fingerprint, then unlocks its signing key (Face ID or the
 screen lock) and sends the welcome with its own tag. It gives no CA keys and makes no admin.
 It takes one attempt at a time, ends after three failures, and the guest goes at expiry,
-when the user cancels, or 2 minutes after the device was admitted. The invitation's file
+when the user cancels, or as on any hub once the admitted device offered its own key.
+An admin phone that is not the hub makes its invitation through a hub of the group, as
+"Through the hub" says, with the window in its member (`cbb_invite_*`); the invitation shows
+as a QR code. The invitation's file
 goes through the phone's share sheet. Go's `TestSwiftHubAdmitsInvitedGoJoiner` runs `cbb`'s
 joiner against the window of both kits.
 
@@ -2728,10 +2813,8 @@ together, and close the connection beyond that; a sender MUST stay below it.
    freeze the hub, the obfuscation settings are outside their bounds,
    another group registered that key or that VLESS user ID, the forwarder has no VLESS
    and the hub asked for it, or the forwarder is full. To a hub that asked for VLESS the
-   answer adds `"vless": {"port": number, "public_key": bytes, "short_id": string,
-   "server_name": string}` with REALITY, or `"vless": {"transport": "xhttp", "port":
-   number, "server_name": string, "path": string}` with XHTTP, where `port` is the web
-   server's, and the forwarder lets that user ID in while the registration lasts. A group has one registration: a new one replaces the old, whose
+   answer adds `"vless": {"transport": "xhttp", "port": number, "server_name": string,
+   "path": string}`, where `port` is the web server's, and the forwarder lets that user ID in while the registration lasts. A group has one registration: a new one replaces the old, whose
    connection closes.
 5. The registration lasts while the connection does; the hub sends nothing more on it. The
    forwarder sends `{"seen": "ip:port"}` whenever it learns a new address of the hub's
@@ -2785,9 +2868,7 @@ protection off a copy, and checks that the type field is in the message's range 
 
 ### VLESS
 
-A forwarder takes VLESS in one of two transports.
-
-With XHTTP (`cbb forward -vless-xhttp cbb.tools`) it listens on the loopback address
+A forwarder takes VLESS over XHTTP (`cbb forward -vless-xhttp cbb.tools`): it listens on the loopback address
 (`-vless-listen`, `127.0.0.1:3276` by default) for XHTTP as plain HTTP, behind the web
 server of its site, which ends the TLS on TCP 443 with the site's certificate and passes
 the path to it:
@@ -2807,16 +2888,7 @@ the path to it:
 - Every other request gets the site. The web server sees the VLESS user ID and the
   encrypted WireGuard packets and SHOULD keep no log of that path.
 
-With REALITY (`cbb forward -vless-site www.example.com`) it listens on TCP
-(`-vless-listen`, port 443 by default) for VLESS inside REALITY:
-
-- Its REALITY key is X25519, kept in its key file as a PEM block `CBB REALITY
-  KEY` of 32 bytes, made the first time. The short ID is the first 8 bytes of
-  HMAC-SHA256(that key, `cbb reality short id`), in hex.
-- A connection that is not a client's, by REALITY's check, gets the borrowed site's own
-  TLS and answers, from port 443 of that site.
-
-Either way:
+Beyond the paths:
 
 - Only the VLESS user IDs of registered hubs that asked for VLESS are let in. A client's
   UDP packets, whatever address the client names, go to the forwarder's own UDP port, from
@@ -2842,8 +2914,7 @@ Either way:
   forwarder, those the signed entry points name (section 16, "Entry points"), else the
   built-in ones: XHTTP on port 443 of `cbb.tools`, the path `/banMEJvnYJJap8S`.
   A registration over VLESS is charged to the client's own address as a direct one is:
-  over REALITY the address it connects from, over XHTTP the one the web server in front
-  names (`X-Real-IP`); when that is not known, those registrations share an eighth of
+  the one the web server in front names (`X-Real-IP`); when that is not known, those registrations share an eighth of
   the setup slots. All the registrations over VLESS, held or being set up, are bounded
   together at 1024 (relay-budget.md, "XHTTP").
   The forwarder knows which group's ID each of those ports serves, and the per-source
@@ -2900,8 +2971,9 @@ or to a log. With `CBB_DEBUG=1` it logs counts each minute.
 ## 14. The blind relay
 
 The meeting point, on the user's own server or the project's open relay, for a group that has
-no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Go (`internal/relay`,
-`cbb relay`, and on the devices `internal/service/relay.go`), and on the phones through
+no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Rust (`member/src/relayd`,
+`cbb-relay`, which `cbb relay` starts, and on the devices `member/src/relay.rs`), with Go's `internal/relay`
+kept as the reference its tests check it against, and on the phones through
 the Rust tunnel (`cbb_tunnel_relay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
 tunnel and joins two devices' connections inside the tunnels, and member TLS (section 4)
 runs end to end between the two devices.
@@ -3843,7 +3915,7 @@ does not know unless its section says it refuses it.
 | `cbb-forward/2` | TCP on the forwarder's port (8764 by default) | 13 |
 | `cbb-relay/2` | TCP on the relay's port (8764 by default) | 14 |
 | (WireGuard, AmneziaWG) | UDP on the hub's, forwarder's or relay's port (8764 by default) | 11, 13, 14 |
-| (VLESS with REALITY) | TCP 443 on a forwarder, by default | 11, 13 |
+| (VLESS over XHTTP) | TCP 443 on the web server in front of a forwarder | 11, 13 |
 | (mDNS) | UDP 5353, 224.0.0.251 and ff02::fb | 3 |
 
 ### Labels and domain separation
@@ -3856,7 +3928,6 @@ does not know unless its section says it refuses it.
 | `cbb forwarder admin` | TLS exporter label: the root's or an admin's signature of a registration | 13 |
 | `cbb forwarder hello` | TLS exporter label: the MAC key of a hub's hellos | 13 |
 | `cbb forwarder state` | HMAC input: the key of the forwarder's state file | 13 |
-| `cbb reality short id` | HMAC input: the forwarder's REALITY short ID | 13 |
 | `cbb relay key` | TLS exporter label: a device's proof of its WireGuard key | 14 |
 | `cbb attest v1` | the attestation challenge's prefix | 17 |
 | `cbb copy v1` | the start of a copy's header, whose hash binds its payload and wraps | 4 |

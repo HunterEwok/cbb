@@ -3,8 +3,10 @@
 
 // Command cbb-helper does for the service cbb what needs Go: it is started
 // by cbb as its child and serves cbb's requests over its standard input and
-// output, and nothing else (docs/design.md, "The service and its helper").
-// It logs to its standard error, which cbb passes on to its own log.
+// output (docs/design.md, "The service and its helper"). On Linux,
+// cbb paste-helper uinput runs it as the uinput helper too (cbb-helper
+// uinput), which needs Go's uinput keyboard. It logs to its standard error,
+// which cbb passes on to its own log.
 package main
 
 import (
@@ -30,10 +32,14 @@ func run(args []string, in io.Reader, out, errw io.Writer, terminal bool) int {
 		fmt.Fprintln(out, version.String())
 		return 0
 	}
+	if len(args) == 1 && args[0] == "uinput" {
+		return runUinput(context.Background(), errw)
+	}
 	if len(args) > 0 || terminal {
 		fmt.Fprintln(errw, "cbb-helper: the service cbb starts this program itself; run cbb instead")
 		return 2
 	}
+	watchParent()
 	err := newServer().Serve(in, out)
 	// The keys it loaded leave the TPM with it.
 	group.CloseTPM()
@@ -56,6 +62,5 @@ func newServer() *helper.Server {
 	s.HandleKeys()
 	s.HandlePeripherals(os.Stderr)
 	s.HandleAgent(os.Stderr)
-	s.HandleVLESS()
 	return s
 }

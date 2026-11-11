@@ -59,12 +59,17 @@ pub fn become_root(node: &Node, f: &takeover::Finished) -> Result<()> {
     Ok(())
 }
 
+/// What sent keeps for an admin given an admin CA: the root's key hash and
+/// the connection it went on (Node::connection).
+pub type AdminCaSent = ([u8; 32], Option<u64>);
+
 /// On the group's current root s, gives each connected admin whose admin
 /// CA is from an earlier root, as after a takeover, a new admin CA for the
 /// same key from this root, as Go's renewAdminCAs. The key comes from the
 /// admin CA in its chain, or from its hello. sent remembers, by device, the
-/// root each got one from. It returns how many it gave.
-pub fn renew_admin_cas(node: &Node, s: &Signer, sent: &Mutex<BTreeMap<String, [u8; 32]>>) -> usize {
+/// root each got one from and on which connection. It returns how many it
+/// gave.
+pub fn renew_admin_cas(node: &Node, s: &Signer, sent: &Mutex<BTreeMap<String, AdminCaSent>>) -> usize {
     let root = s.ca.key_hash();
     let chains: HashMap<String, Vec<Cert>> =
         node.peer_chains().into_iter().map(|(id, c)| (id.to_string(), c)).collect();
@@ -88,7 +93,11 @@ pub fn renew_admin_cas(node: &Node, s: &Signer, sent: &Mutex<BTreeMap<String, [u
                 .map(|k| k.to_sec1_point(false).as_bytes().to_vec()),
         };
         let Some(point) = point else { continue };
-        if sent.lock().unwrap().get(&id) == Some(&root) {
+        // One went on this connection already, which shows the chain the
+        // peer had when it connected; on a later one the peer that still
+        // shows none never got it, as when the connection ended first.
+        let conn = node.connection(&p.id);
+        if sent.lock().unwrap().get(&id) == Some(&(root, conn)) {
             continue;
         }
         let renewal = {
@@ -114,7 +123,7 @@ pub fn renew_admin_cas(node: &Node, s: &Signer, sent: &Mutex<BTreeMap<String, [u
             }
         }
         if node.send_to(&p.id, wire::admin(&renewal.admin_ca)) {
-            sent.lock().unwrap().insert(id.clone(), root);
+            sent.lock().unwrap().insert(id.clone(), (root, conn));
             n += 1;
             node.logf(&format!(
                 "cbb: gave the admin {} ({id}) a new admin CA from this root, for the same key",

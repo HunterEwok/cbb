@@ -26,12 +26,15 @@ use cbb_core::takeover::{self, ClaimState, How};
 use cbb_core::wire::{self, CommandResult, DeviceInfo};
 
 use crate::away::Away;
+pub use crate::away::GuestTunnel;
 use crate::button::{self, Own};
 use crate::content::Source;
 use crate::discovery::{Dialers, Listener};
 use crate::error::{Error, Result};
+pub use crate::inviter::Invite;
 use crate::node::{KeepIdentity, Node, OnCommand, OnMessage, OnPeer, OnTunnel, Peer, Presence, WriteReq};
 use crate::records::{Record, Records, Stored as _};
+pub use crate::window::{CONFIRM_WAIT, Confirm, Joined};
 use crate::{discovery, mute, service, uptime};
 use cbb_core::media::Part;
 
@@ -123,7 +126,7 @@ pub struct Member {
     tunnels: Arc<RwLock<Option<OnTunnel>>>,
     away: Arc<Away>,
     /// The admins given a new admin CA, by device, with the root it is from.
-    admin_cas: Mutex<std::collections::BTreeMap<String, [u8; 32]>>,
+    admin_cas: Mutex<std::collections::BTreeMap<String, crate::takeover::AdminCaSent>>,
 }
 
 /// What a member port a phone opens is for.
@@ -663,6 +666,39 @@ impl Member {
         Ok(())
     }
 
+    /// Makes a remote invitation as an admin of the group, with admitter's
+    /// CA key, valid for lifetime (an hour when zero, a day at most): its
+    /// guest tunnel on this phone when it is the group's hub, else through
+    /// hub or the first connected hub that takes it (docs/protocol.md,
+    /// section 12). confirm is asked about each device that uses it; the
+    /// app waits on the invitation and closes it.
+    pub fn invite(
+        &self,
+        admitter: Admitter,
+        lifetime: Duration,
+        hub: Option<&DeviceId>,
+        confirm: crate::window::Confirm,
+    ) -> Result<crate::inviter::Invite> {
+        let group = self.node.identity().tag();
+        let (node, away) = (&self.node, &self.away);
+        let open = |keys: &crate::inviter::GuestKeys, w: &Arc<crate::window::Window>, life: Duration| {
+            crate::inviter::open_where(node, away, hub, keys, w, life)
+        };
+        let inv = crate::inviter::Invite::start(admitter, &group, lifetime, confirm, &open)?;
+        (self.log)(&format!("cbb: an invitation is open for {} minutes", inv.lifetime.as_secs() / 60));
+        Ok(inv)
+    }
+
+    /// Takes up the invitation this phone joined with, once the app stored
+    /// its identity: sync away from home goes on, and the member offers its
+    /// own tunnel key to the invitation's hub through the guest tunnel until
+    /// the hub answers.
+    pub fn joined_by_invite(&self, text: &str) -> Result<()> {
+        cbb_core::invite::parse(text).map_err(|r| Error::msg(r.message()))?;
+        self.away_on()?;
+        crate::away::keep_guest(&self.state_dir, text)
+    }
+
     /// What the group's records stop and what ends it, for the app's card.
     pub fn alerts(&self) -> Vec<manage::Alert> {
         manage::alerts(&self.node.records().lock().unwrap())
@@ -689,6 +725,35 @@ impl Member {
     /// Where the claim to new_root stands; None when the records hold none.
     pub fn claim_state(&self, new_root: &[u8]) -> Option<ClaimState> {
         takeover::claim_state(&self.node.records().lock().unwrap(), new_root)
+    }
+
+    /// Adds a record the root signed about the group itself
+    /// (cbb_core::root), which make signs from the group's records at the
+    /// wall clock's milliseconds, and passes it to the group.
+    pub fn add_root_record(
+        &self,
+        make: impl FnOnce(&cbb_core::group::Records, i64) -> cbb_core::error::Result<Record>,
+    ) -> Result<()> {
+        let records = self.node.records();
+        let r = make(&records.lock().unwrap(), uptime::wall_ms())?;
+        self.node.add_own_records(std::slice::from_ref(&r));
+        if !records.lock().unwrap().has(&r) {
+            return Err(Error::msg("the group's records did not take the record; the log says why"));
+        }
+        Ok(())
+    }
+
+    /// The group's takeover delay, key level, recovery key and handover, for
+    /// the root's settings (cbb_core::root::view).
+    pub fn root_view(&self) -> cbb_core::root::View {
+        cbb_core::root::view(&self.node.records().lock().unwrap())
+    }
+
+    /// The admins and hubs other than this phone whose keys the key level
+    /// would not let in, by device ID (cbb_core::root::below_level).
+    pub fn below_level(&self, level: &str) -> Vec<String> {
+        let me = self.node.identity().id.to_string();
+        cbb_core::root::below_level(&self.node.records().lock().unwrap(), &me, level)
     }
 
     /// Makes the phone the group's root once its claim took effect: s is
@@ -745,32 +810,13 @@ impl Member {
     /// current root also each connected admin's CA from an earlier root,
     /// as after a takeover. It returns how many it renewed.
     pub fn renew(&self, s: &Signer) -> Result<usize> {
-        let now = uptime::wall_ms() / 1000;
-        let ident = self.node.identity();
+        let mut n = self.node.renew_due(s)?;
         let mut roots = self.node.records().lock().unwrap().roots();
         if roots.is_empty() {
-            roots.push(ident.root().clone());
-        }
-        let issuer = (!roots.iter().any(|r| r == s.ca)).then(|| s.ca.der.clone());
-        let mut n = 0;
-        for (to, chain) in self.node.peer_chains() {
-            match manage::renewal(&chain, &roots, s, now) {
-                Ok(Some(cert)) => {
-                    if self.node.send_to(&to, wire::cert(&cert, issuer.as_deref())) {
-                        n += 1;
-                    }
-                }
-                Ok(None) => {}
-                Err(e) => self.node.logf(&format!("cbb: renewing the certificate of {to}: {}", e.for_log())),
-            }
+            roots.push(self.node.identity().root().clone());
         }
         if roots.last() == Some(s.ca) {
             n += crate::takeover::renew_admin_cas(&self.node, s, &self.admin_cas);
-        }
-        let own: Vec<_> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
-        if let Some(cert) = manage::renewal(&own, &roots, s, now)? {
-            self.node.renewed(&cert, issuer.as_deref())?;
-            n += 1;
         }
         Ok(n)
     }

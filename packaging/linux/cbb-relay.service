@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# cbb relay on a server (docs/admin/self-hosting.md): the meeting point
+# cbb-relay, the server cbb relay runs, on a server (docs/admin/self-hosting.md): the meeting point
 # for the devices of a group that has no computer to be its hub. It holds no
 # group's keys and keeps nothing about the devices: no log names an
 # address, a group or a device, and on disk there is only its keys.
@@ -17,7 +17,7 @@ Type=simple
 # CBB_RELAY_FLAGS="-group TAG" (or "-open"); cbb relay takes no other setting.
 Environment=CBB_RELAY_FLAGS=
 EnvironmentFile=-/etc/cbb/relay.env
-ExecStart=/usr/local/bin/cbb relay $CBB_RELAY_FLAGS
+ExecStart=/usr/local/bin/cbb-relay $CBB_RELAY_FLAGS
 DynamicUser=yes
 StateDirectory=cbb-relay
 StateDirectoryMode=0700

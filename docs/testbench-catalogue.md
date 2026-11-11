@@ -26,7 +26,7 @@ here that replaces one there are in brackets, such as [C1].
 |---|---|---|
 | **real** | the bench's devices (testbench.md, section 3): the Linux desktop, the Windows PC, the Mac, the lite board, the away computer, the router as a device under test, the relay server, the phones, the watches, a TV | everything a user does on a real system: clipboards, desktops, sessions, installers, sleep, the apps |
 | **fleet** | containers on the controller, each a member with its own network namespace and state volume: up to 32 full members and 8 lite members, a FreeBSD and an OpenWrt virtual machine in QEMU, and "phones" played by the kits' interop programs (`cbb-interop` in Go, the Kotlin kit on the JVM, the Swift kit on the Mac) | combinations that need many devices, groups made and thrown away by the hundred, faults that must not touch the real devices (netem, port blocks, a full disk, a clock far off, a killed process), several groups on one network |
-| **time** | a test build (`-tags benchtime`, never released; `cbb version` says so) in which the long times run 100000 times faster: certificate lives and renewal thresholds (a member certificate lasts about 10 minutes), the 12 h renewal timer (every 5 s), server-credential periods (about 30 s) and the hub key's handover; and `CBB_TEST_CLOCK` (a duration such as `3h`, or an RFC 3339 time; or a file named by `CBB_TEST_CLOCK_FILE`, read when the service starts), which moves one member's wall clock for its service, its hybrid clock, its hellos and its certificate checks. `CBB_TEST_SCALE` sets another scale, such as 1 for cases that only move a clock by hours or days. Short times (pairing windows, invitations, secrets' 60 s, the media cache, replay caches) keep their length and are waited out | expiry, renewal and every rule that waits for time, in minutes |
+| **time** | a test build (`cargo build --release --bin cbb --features benchtime`, never released; `cbb version` says so) in which the long times run 100000 times faster: certificate lives and renewal thresholds (a member certificate lasts about 10 minutes), the 12 h renewal timer (every 5 s), server-credential periods (about 30 s) and the hub key's handover; and `CBB_TEST_CLOCK` (a duration such as `3h`, or an RFC 3339 time; or a file named by `CBB_TEST_CLOCK_FILE`, read when the service starts), which moves one member's wall clock for its service, its hybrid clock, its hellos and its certificate checks. `CBB_TEST_SCALE` sets another scale, such as 1 for cases that only move a clock by hours or days. Short times (pairing windows, invitations, secrets' 60 s, the media cache, replay caches) keep their length and are waited out | expiry, renewal and every rule that waits for time, in minutes |
 | **feed** | a release feed on the controller signed with the bench's own test keys, in the format of the real one (protocol.md, section 16) | updates, rollbacks, refused downgrades, tampered and expired manifests, without the real release keys |
 | **ui** | UI Automator over adb (Android phone, Wear OS, Android TV), XCUITest (the iPhone app on a simulator and a real iPhone, the Mac app), WebDriver for the tray app | the apps' screens, buttons and notifications |
 | **helper** | a small program the `setup-*` scripts put on a device: the Windows clipboard task, a clipboard manager's stand-in, a password manager's marks, a key-event reader | what only code inside the user's session can do |
@@ -68,8 +68,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | I3 | `get.sh` and `get.ps1` check the release: a good build installs; a tampered archive, a wrong signature, an expired manifest, an unknown key and a missing openssl are refused with a clear message; `CBB_VERSION` installs that release | feed | |
 | I4 | Uninstall and purge on each system leave nothing: service, agent, units, firewall rules, users and groups, the Apps entry on Windows, the state with `--purge`/`-Purge` and the keys kept without it [L10] | real, fleet | |
 | I5 | Install again over an install: the group, mode, settings, quick actions, remote paste switch and keys stay | real | |
-| I6 | Upgrade from the previous release one device at a time in a mixed group, copying between old and new after each step; state and keys survive; the agent restarts in every running session [L9] | real, fleet | |
-| I7 | Downgrade to the previous release over the new state: it starts or refuses clearly, and no key is lost [P14] | real, fleet | |
+| I6 | From 0.6 on, upgrade from the previous release one device at a time in a mixed group: the same group and devices, copying between old and new after each step and then between all; state and keys survive; the agent restarts in every running session [L9] | real, fleet | |
+| I7 | From 0.6 on, downgrade to the previous release over the new state: it starts in the same group or refuses clearly, and no key is lost [P14] | real, fleet | |
 | I8 | `cbb update -check` and `cbb update` on Linux, macOS and Windows from the feed: renamed into place (the running exe moved aside on Windows), the health check passes, the new version runs | feed, real | |
 | I9 | Updates refused: a tampered file, a bad signature, an expired manifest, an older version (the highest seen is kept), `min_from` not met, a wrong platform; each named in the message | feed | |
 | I10 | A new build that never becomes healthy is rolled back and listed as failed; the next check skips it | feed | |
@@ -88,6 +88,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | I23 | Our signed apk feed on OpenWrt: `apk add` from it, its key checked; the mips and mipsle builds boot and sync under QEMU (big-endian) | fleet | |
 | I24 | Windows binaries carry a valid Authenticode signature; `cbb update` checks it; SmartScreen lets the installer run | real | signing |
 | I25 | The installers' errors: a failed step names its exit status; `CBB_ERROR_DETAILS=1` shows every command and the full Windows error record | real | |
+| I26 | The upgrade from 0.5 to 0.6, once: a group made before 0.6 is not carried over (records version 2 have no migration); each member leaves it at its first start, says so in `cbb status`, keeps its settings, and a new group made on 0.6 works; a 0.5 member left in the old group reaches no 0.6 member | real, fleet | |
+| I27 | From 0.6 on a device of version N works in one group with N-1: the previous release's cbb (`tools/e2e/previous.sh`) and this build's join one group, sync both ways, take the record of a device admitted later, and the previous one takes its removal (TestPreviousRelease in CI; I6 with the bench's two versions) | fleet | |
 
 ## 2. Groups, pairing and roles (G)
 
@@ -150,6 +152,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | G41 | Every pair of joiner kind, admitter kind and path joins, syncs both ways, is removed and is then refused | fleet, real | |
 | G42 | Leave and come back: a device removed, reset and joined again under the same name gets a new device ID, and the old one stays removed | real, fleet | |
 | G43 | Groups side by side: two and ten groups on one network; no text, record or device crosses; neither pairs into the other without a code [S13] | fleet | |
+| G44 | A new device shows a code and a computer of the group types it: the device that waits announces itself by mDNS (TXT `j=1` and its fingerprint); `cbb pair -qr` with the six digits finds it and admits it; the lite member, the iPhone, the Android phone and the Aurora phone announce themselves while they wait; a device of another fingerprint or a wrong code is refused | fleet, ui | |
 
 ## 3. Certificates and keys (K)
 
@@ -174,7 +177,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 |---|---|---|---|
 | D1 | mDNS: every full member and the lite member publish and browse; avahi, systemd-resolved, mDNSResponder and the Windows DNS client keep working beside it; another group's records are ignored | real, fleet | |
 | D2 | Who dials: of two full members the lower ID dials; the other dials after 30 s when that is blocked; one connection per pair stays [P4] | fleet, real | |
-| D3 | Full members dial lite members; phones dial everyone; a phone that is the hub listens while its app is open | fleet, ui | |
+| D3 | Members that dial dial those that publish `r=listen` at once, whatever their device IDs; of two that dial, the lower device ID dials and the other does after 30 s; phones dial everyone; a phone that is the hub listens while its app is open | fleet, ui | |
 | D6 | Known networks: a member is quiet on a network it does not know; it learns one by making or joining a group, a pairing window or a member connection; `cbb status` names quiet networks; `sudo cbb network` after a new router | fleet | |
 | D7 | Only private, unique-local and link-local addresses are published and accepted; a public source address on the member port is refused by the program and by the unit's limits | fleet | |
 | D8 | Only IPv6 between two members; link-local addresses tried last [P19] | fleet, real | |
@@ -186,7 +189,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | D14 | A queue of 256 messages: a peer a whole queue behind is disconnected and catches up from its next hello | fleet | |
 | D15 | Junk on the member port: random bytes, a wrong ALPN, a TLS client without a certificate, a hello or an event that does not decode, a frame over 7 MiB: each closed or dropped, the service unharmed [S14] | fleet | |
 | D16 | Address change: a member's DHCP address changes; an away device moves between networks without a new invitation [F11] | fleet, real | |
-| D17 | mDNS answers and records: the TXT fields (`g=`, `r=lite`, `r=phone`), announcements at start, goodbyes at stop, answers to a query, browsing that ignores its own records | fleet | |
+| D17 | mDNS answers and records: the TXT fields (`g=`, `r=listen`, `r=phone`, `j=1`), announcements at start, goodbyes at stop, answers to a query, browsing that ignores its own records | fleet | |
+| D18 | Capabilities (`-caps`: `admin`, `dials`, `hub`) in the hello, the device record and the pairing Info: a member without `dials` dials no one; one without `hub` is refused as the hub and by `cbb global move`; one without `admin` cannot be made an admin; the ZX Next's Pi joins with `admin,dials`, an ESP32 with none; `cbb devices` and the apps show "Member" and decide what a device can do from its capabilities | fleet, ui | |
 
 ## 5. Sync of text (Y)
 
@@ -262,7 +266,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | O3 | `cbb copy FILE...`, `-text`, `-type png/jpeg/html`; `cbb paste -o DIR`: never replaces a file, waits for a copy still arriving, in `own` saves the group's copy | real | |
 | O4 | Formatted text: HTML from a browser and an office program arrives as HTML where a desktop takes it, as text on phones, the lite member and older connectors; HTML over 8 MiB or text over 256 KiB goes as text alone; never with a secret | real, helper | |
 | O5 | Limits: `max-copy` from 1 MiB to 1 GiB, `max-copy-away` up to `max-copy`, others refused; a copy over a receiver's limit is not fetched and is said once in `cbb status` and the log; the sender's own limit [P2] | real | |
-| O6 | Text-only devices (lite, Nano, ZX Next) take the text that goes with a copy and never fetch | real, fleet | |
+| O6 | Text-only devices (a small device's `cbb watch` and `cbb paste`, the Nano, the ZX Next) take the text that goes with a copy and keep their last text when none does; the file stays in the service's content cache (O9), never elsewhere | real, fleet | |
 | O7 | Transfer faults: a fetch cut in the middle resumes from its offset; the sender restarts mid-transfer; a newer copy stops the fetch; a corrupted chunk (hash mismatch) is refused and fetched again; a peer that stops answering is cancelled after 15 s | fleet | |
 | O8 | Priority: texts keep flowing during a 500 MB transfer | fleet, real | |
 | O9 | The cache: older copies deleted 10 min after they are replaced, all at a restart, within twice the limit; the agent's received folder emptied at start; the files readable only by the user | time, real | |
@@ -272,6 +276,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | O13 | Progress in `cbb status` and the apps' notification | real, ui | |
 | O14 | A member with a router's memory (`GOMEMLIMIT` as the OpenWrt package sets it, 64 MiB) passes a 90 MiB copy on to a member that reaches only it, without running out of memory: the parts go through its cache on disk | fleet, real | |
 | O15 | Fetch limits: gets of at most 1 MiB, 4 MiB ahead, 64 gets per connection; chunks padded to 16 KiB; a peer that asks for more is refused | fleet | |
+| O16 | GIF images, animated ones too, as `image/gif` on every clipboard (Linux, Windows' `GIF` format, the Mac's `com.compuserve.gif`, the phones), written as they came; a receiver offers the first frame as PNG beside it | real, ui | |
+| O17 | Received images and videos in the gallery: the Android album CBB (Pictures/CBB, Movies/CBB), Photos on the iPhone with permission only to add, Pictures/CBB and Videos/CBB on Aurora, an image the button fetches too; other files in Downloads/CBB and Files | ui, person | |
 
 ## 8. Remote paste (T)
 
@@ -297,6 +303,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | T18 | Bluetooth keyboards: the Android phone's HID device, the Nano's BLE keyboard (bonds in flash, erased by a reset), Linux over BlueZ; a phone whose maker left HID out is named | helper, ui | Nano |
 | T19 | Other TVs: Apple TV (Companion, or a Bluetooth keyboard), Samsung and LG remotes, Roku (off by default, plain HTTP) | person | TV, Apple TV |
 | T20 | The Nano's keyboard layouts, one per target, and its USB console's "reboot to flash" | helper | Nano |
+| T21 | Remote paste of images and files: `cbb paste -on DEVICE FILE...`, `-image` for one PNG, JPEG or GIF, `-copy` for the group's copy; the target fetches it, writes an image or files into its clipboard and presses the paste keys on X11, Wayland, GNOME and KDE (the portal, the uinput helper), Windows and the Mac app, so a chat gets the picture; tmux and the console refuse it with the reason; only a copy sealed to the sender too is taken; the phones' "Paste on…" send a picture or files, and the Android app takes an image through its accessibility service | real, fleet, ui | |
 
 ## 9. Quick actions (Q)
 
@@ -349,7 +356,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W31 | The forwarder down [F7], restarted (the hub registers again by itself), unreachable, a wrong key pinned | real, fleet | |
 | W32 | The forwarder's limits: 16 clients per group, packets and bytes per second, registrations per address and network; a busy group slowed alone | fleet | |
 | W33 | Two groups on one forwarder cannot reach each other [S8] | fleet | |
-| W34 | VLESS: a forwarder with `-vless-site`; anyone who is not a client gets the borrowed site; clients reach the hub only over VLESS; with UDP to the forwarder blocked, VLESS still works [P20] | real, fleet | |
+| W34 | VLESS: a forwarder with `-vless-xhttp` behind a web server whose CA the members trust; anyone who is not a client gets the web server's site; clients reach the hub only over VLESS; with UDP to the forwarder blocked, VLESS still works [P20] | real, fleet | |
 | W35 | AmneziaWG: nothing on the wire starts or is sized like WireGuard, directly and through the forwarder | fleet | |
 | W36 | The blind relay: `-group TAG` and `-open`; the consent text and `-yes`; sync both ways; a member and the relay restarted; a wrong key [P12] | real, fleet | |
 | W37 | The relay with credentials: pseudonyms only; a device the members' credential does not list is refused; one a newer credential leaves out is dropped | fleet | |
@@ -401,6 +408,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | H13 | Android TV: the leanback launcher, the D-pad, joining by the QR code on the TV | ui | TV |
 | H14 | The Steam Deck's Game Mode and gamescope [P17] | person | |
 | H15 | The iPad build and big screens: the layout of each screen in both orientations and split view | ui | iPad |
+| H16 | The ZX Next shows the group's latest image: `.cbb show` (Layer 2 in 320×256 with 256 colours or 640×256 with 16, dithered), each new image shown over the program in front while the network runs and the screen given back on a key, `-tape` through EAR; `.cbb speed` and the install's speeds stepping down until a file arrives whole; the files' SHA-256 checked on the Next | fleet, person | ZX Next |
 
 ## 13. The apps (A)
 
@@ -414,7 +422,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | A6 | Notifications of the group's events: one per event, the switches respected, never the clipboard; prompt on the iPhone through the push sender [P28] | ui | |
 | A7 | The Dynamic Island: the timer, the shield, the result, never the text [P30] | ui, person | iPhone |
 | A8 | Collections: make, rename, move devices, the order of tiles, one level, a device in one collection; Arrange mode with drag, the menu, VoiceOver and TalkBack actions, the keyboard; search and filters; the watch shows the phone's arrangement; the paste picker grouped the same; kept per installation, never in a record | ui | |
-| A9 | Languages (English, Russian) and the language menu when the system's language has none; right-to-left layout; accessibility labels | ui | |
+| A9 | Languages (the eight: Chinese, English, Spanish, Russian, Arabic, Swahili, Hebrew, Hindi) and the language menu when the system's language has none; right-to-left layout; accessibility labels | ui | |
 | A10 | The F-Droid flavour without Wear OS: builds reproducibly, works without Play services [P33] | ui | |
 | A11 | The iPhone's background app refresh runs and syncs | person | iPhone |
 | A12 | "Sync clipboard" without opening the app: App Intents and App Shortcuts, Back Tap, the Action button, the home-screen widget on both phones, the Control Center control; one line says what it did | ui | |
@@ -423,6 +431,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | A15 | Themes: ten colours in System, Dark and Light; tiles and list; every device icon | ui | |
 | A16 | Plain-language paths: a lost phone ("remove it on your other phone"), a group with one admin advised to add a second, errors in one line with the next step | ui | |
 | A17 | The Aurora OS app: the signed package installs through the store's installer; it joins by its QR code (a computer of the group scans and dials in); the group's copies reach its clipboard while it is in front; a copy goes out when it comes to the front and from the pull-down menu; the main page shows the members and the last copy; "Leave the group" deletes the membership; the key stays in its OP-TEE token across restarts | person | Aurora phone |
+| A18 | Two buttons on every app (the Mac, the tray app, the iPhone, Android, the watches, Aurora): sync on and off and away from home, each showing where it stands and changing it on every device of the group the button speaks for | ui, real | |
+| A19 | The Aurora app's further pages: taking a lost root's group over from the root's page (its admin key in the TEE the new root), collections and the tiles' order, the Bluetooth keyboard typing the clipboard into a paired device in its layout and speed, remote pastes typed once the user turned them on, received images and videos in the gallery | person | Aurora phone |
 
 ## 14. Security (S)
 
@@ -469,6 +479,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | E9 | Restarts during everything: members killed at random every 30 s for 10 minutes while copying | fleet | |
 | E10 | Soak for 24 h: a copy every 30 s from a random member, a fault every hour, memory and descriptors sampled every 5 minutes; flat, no restarts [Soak] | real, fleet | |
 | E11 | The service hung [F13]: SIGSTOP; commands answer within seconds; after SIGCONT it catches up | real | |
+| E12 | Budgets of the small devices: a small device capped as a Raspberry Pi Zero (512 MiB, a quarter of a core) and as a router (128 MiB, a quarter of a core) joins a group; its memory and CPU at rest, the time 20 copies take to arrive (p95), its memory after 200 more and the container's peak stay within each class's budget (testbench.md, "Budgets"); a real Pi Zero and router confirm it before a release | fleet, real | |
 
 ## 16. What the bench needs for this
 

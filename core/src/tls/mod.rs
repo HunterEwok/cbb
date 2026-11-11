@@ -588,6 +588,21 @@ pub fn pair_server(cert: &[u8], key: &[u8], clock: &Clock) -> Result<(rustls::Se
     Ok((cfg, exporter))
 }
 
+/// A blind relay's server configuration for the registrations
+/// (docs/protocol.md, section 14): TLS 1.3, ALPN protocol, its certificate
+/// with its PKCS #8 key, any client certificate required, which the relay
+/// checks itself, and no session tickets.
+pub fn registration_server(cert: &[u8], key: &[u8], protocol: &[u8], clock: &Clock) -> Result<rustls::ServerConfig> {
+    let (chain, key) = pair_identity(cert, key);
+    let mut cfg = server_builder(clock)?
+        .with_client_cert_verifier(Arc::new(AnyPeer))
+        .with_single_cert(chain, key)
+        .map_err(|e| Error::with("cannot use the relay's certificate", TlsError(e)))?;
+    cfg.alpn_protocols = vec![protocol.to_vec()];
+    cfg.send_tls13_tickets = 0;
+    Ok(cfg)
+}
+
 /// The joiner's server configuration of pair_server for a device key the
 /// core does not hold: key signs the handshake.
 pub fn pair_server_external(
@@ -652,6 +667,28 @@ pub fn pair_client_external(
     let exporter = Arc::new(Exporter::default());
     cfg.key_log = exporter.clone();
     Ok((cfg, exporter))
+}
+
+/// The client configuration of a new phone that restores a group with its
+/// recovery key (docs/protocol.md, section 10, "The recovery key"): ALPN
+/// cbb/3, chain (its member certificate, then the recovery key's admin CA)
+/// with key signing the handshake, and any server certificate, which the
+/// program checks against the records the member sends once they came.
+pub fn restore_client(
+    chain: &[Vec<u8>],
+    key: Arc<dyn crate::identity::ExternalKey>,
+    clock: &Clock,
+) -> Result<rustls::ClientConfig> {
+    let signer: Arc<dyn rustls::sign::SigningKey> = Arc::new(provider::ExternalSigningKey(key));
+    let chain = chain.iter().map(|c| CertificateDer::from(c.clone())).collect();
+    let certified = Arc::new(rustls::sign::CertifiedKey::new(chain, signer));
+    let mut cfg = client_builder(clock)?
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(AnyPeer))
+        .with_client_cert_resolver(Arc::new(OneClientCert(certified)));
+    cfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec()];
+    cfg.resumption = rustls::client::Resumption::disabled();
+    Ok(cfg)
 }
 
 /// The client configuration of a member that dials a joiner which listens

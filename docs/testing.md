@@ -14,7 +14,7 @@ real devices, and which level answers which question. The commands are in
 | Unit tests | one package or type does what its comment says | `*_test.go`, `cargo test`, `swift test`, `./gradlew -p kit test` | every push, in CI |
 | Interop vectors | the four implementations (Go, Rust, Swift, Kotlin) read and write the same bytes | `testdata/interop` | every push, in CI |
 | Cross tests | two implementations talk over a real connection | Go tests that start the Swift or Kotlin `cbb-interop`, or the lite member | every push, in CI |
-| Service tests | several members, with their real services, in one process or as programs | `internal/service`, `cmd/cbb` | every push, in CI |
+| Service tests | several members, with their real services, in one process or as programs | `internal/service`, `member/tests` | every push, in CI |
 | System tests | the built program on a real system: containers, sockets, a desktop, an installer | the `e2e`, `mdns with avahi`, `desktop clipboards`, `packaging`, `windows installer`, `OpenWrt`, `freebsd` jobs | every push, in CI |
 | App builds and tests | the apps build and their unit tests pass on simulators and runners | the `iPhone app`, `Mac app`, `tray app`, `Android app` jobs | every push, in CI |
 | Bench scenarios | real devices pass real copies over real networks | the [test bench](testbench.md), its [catalogue](testbench-catalogue.md) | before each release |
@@ -100,11 +100,12 @@ rise but not fall. When the table says "raise the floor", raise it in the same p
 | `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `lite` job |
-| `rust-lite` | lines of `member/src/` (much of it is tested by Go's tests of the lite member, which are not counted) | as `rust-core` |
+| `rust-lite` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
+| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service` and the desktop connector, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb` job |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
 
-The aims are 80% for `go` and 85% to 90% for the protocol's core in each implementation.
+The aims are 80% for `go`, 85% to 90% for the protocol's core in each implementation, and 90% for `rust-service`.
 A number is a hint, not the goal: a test that runs a line without checking what it did
 raises it and proves nothing.
 
@@ -114,6 +115,28 @@ To see Go's numbers locally:
 go test -coverpkg=./cmd/...,./internal/... -coverprofile=cover.out ./cmd/... ./internal/...
 go run ./tools/coverage -go cover.out -floor tools/coverage/floor.json
 ```
+
+And the Rust service's, on Linux (the tests of `internal/service` need mDNS, so a computer on a
+network or a container with one of its own):
+
+```sh
+eval "$(cargo llvm-cov show-env --sh)"
+cargo llvm-cov clean --workspace
+cargo test --release -p cbb-lite && cargo build --release -p cbb-lite
+CGO_ENABLED=0 go build -o target/release/cbb-helper ./cmd/cbb-helper
+CBB_TEST_RUST_SERVICE=$PWD/target/release/cbb CBB_LITE=$PWD/target/release/cbb go test ./internal/service
+cargo llvm-cov report --release --json --summary-only --output-path service.json
+go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/floor.json
+```
+
+## Unsafe code
+
+The Rust core has no unsafe code (`forbid(unsafe_code)`). The unsafe code in `member/src` (system
+calls) and `ffi/src` (the C functions the phones call) is checked by the nightly workflow: Miri
+runs `ffi`'s tests of its C functions pointer by pointer (`cargo +nightly miri test -p cbb-ffi
+--features join --lib`), and AddressSanitizer runs the Rust tests of `cbb-lite` and `cbb-ffi`
+and Go's tests of the service against a `cbb` built with it, which reaches the system calls
+Miri cannot.
 
 ## Mutation testing
 
@@ -125,10 +148,22 @@ into `<=`, returns early) and runs the tests against each change: `cargo mutants
 summary and its artifacts. The jobs report and do not fail yet; each missed change gets a
 test, or a note why it cannot matter, and then the jobs fail on a new one.
 
+The service's readers of outside input already fail on a new one: `cargo mutants` on the
+control socket's messages (`member/src/control.rs`), the pairing window
+(`member/src/window.rs`), the server credentials (`core/src/credential.rs`) and the seals of
+the copies (`core/src/seal.rs`), in four shards each, with `tools/mutants/check.sh`, which
+compares what lived with the known list, `tools/mutants/missed.txt`, line and column aside. A
+mutant on that list either changes nothing a caller can see (an equivalent mutant, with why
+in a comment) or lives in code that only Go's end-to-end tests reach, which `cargo mutants`
+does not run (the window's exchange with a joiner). A new survivor gets a test; a mutant that
+the tests now catch can leave the list.
+
 To run them locally:
 
 ```sh
 cargo mutants --in-place -p cbb-core -f core/src/authority.rs -f core/src/strict.rs
+cargo mutants --in-place -p cbb-lite -f member/src/control.rs -f member/src/window.rs
+tools/mutants/check.sh mutants.out/missed.txt tools/mutants/missed.txt
 go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./internal/authority
 ```
 
@@ -144,3 +179,20 @@ these before the bench has run them.
 
 A failing test is a finding, never noise: find the cause before running it again. A test is
 never skipped, disabled or retried until green to make CI pass.
+
+## Unstable tests
+
+A test that fails only now and then is a red test too, with a cause to find: a race in the
+code, a wait too short for a slow runner, or an order the test assumes. The nightly
+workflow's `unstable` job runs the members' tests ten times over, with the Go service and
+with the Rust `cbb`, and its summary lists every test that failed and how often. A test
+found there goes into this table with what is known of its cause, and leaves it with the
+fix that removes the cause. The bench finds them too: `go run ./tools/bench -repeat 5
+-scenario NAME fleet` lists in `flaky.txt` the cases that both passed and failed
+([test bench](testbench.md#11-automation)).
+
+| Test | Where | Seen | What is known |
+|---|---|---|---|
+| `TestSeveralHubs` | `internal/service` | about one run in six, 2026-11 | not yet found |
+| `TestLiteHubs` | `internal/service`, against the Rust service | about two runs in five in CI, 2026-11 | after the first hub stops, the client's tunnel connection to the second hub ends right after it comes up, and the copy made then is lost |
+| `TestWindow` | `apps/desktop`, Windows | rarely, 2026-11 | Chrome gave no DevTools port within 30 seconds; the test now prints Chrome's error output, to be read when it fails again |

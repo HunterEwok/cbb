@@ -5,7 +5,7 @@ import Foundation
 import XCTest
 
 /// Checks CBBKit against the vectors that the Go tests write to
-/// testdata/interop (go test ./internal/pair ./internal/phone -update).
+/// testdata/interop (go test ./internal/phone -update writes Go's; pairing's are fixed).
 final class InteropTests: XCTestCase {
     func vectors(_ name: String) throws -> Data {
         // Tests/CBBKitTests/InteropTests.swift, up to the repository root.

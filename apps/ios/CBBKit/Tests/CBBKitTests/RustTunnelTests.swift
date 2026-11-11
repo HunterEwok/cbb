@@ -40,7 +40,7 @@ final class RustTunnelTests: XCTestCase {
         XCTAssertNotEqual(t.port, 0)
         XCTAssertTrue(CoreMemberTests.connects("127.0.0.1", t.port), "the tunnel's loopback port takes a connection")
 
-        let guest = try hub.invite(group: "0123456789abcdef", endpoints: "[\"192.0.2.1:3276\"]", lifetime: 600, guestPort: member.port)
+        let guest = try hub.invite(group: "0123456789abcdef", endpoints: "[\"192.0.2.1:3276\"]", lifetime: 600, guestPort: member.port, vless: "")
         XCTAssertTrue(guest.text.hasPrefix("cbb://invite#"), guest.text)
         XCTAssertEqual(guest.secret.count, 16)
         XCTAssertGreaterThan(guest.expires, Date())

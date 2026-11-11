@@ -15,7 +15,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Checks the member protocol against the vectors that the Go tests write (go test ./internal/node -update). */
+/** Checks the member protocol against the vectors in testdata/interop, which Go's member wrote and the Rust core reads. */
 class MemberTest {
     private val v = Interop.read("member.json").jsonObject
 
@@ -84,7 +84,7 @@ class MemberTest {
         assertTrue(tunneled.isValid)
         assertNull(offer.vless)
         assertNull(hidden.vless)
-        assertTrue(tunneled.vless!!.contains("\"short_id\":\"0123456789abcdef\""))
+        assertTrue(tunneled.vless!!.contains("\"path\":\"/banMEJvnYJJap8S/AbCdEfGhIjKlMnOpQr\""))
     }
 
     @Test

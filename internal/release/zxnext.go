@@ -12,8 +12,8 @@ import (
 
 // TypeZXNext is the type of zxnext.json: the ZX Spectrum Next's files of a
 // release, signed by a release key, which the Pi's cbb checks before
-// `.cbb update` takes a newer CBB (docs/protocol.md, section 16, "The ZX
-// Spectrum Next's files").
+// `.cbb update` takes a newer CBB (docs/protocol.md, section 16, "Where the
+// files are").
 const TypeZXNext = "zxnext"
 
 // ZXNextNames are the files zxnext.json lists, each once: the dot command,

@@ -29,10 +29,16 @@ fi
 failed() {
 	rc=$1
 	if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ] && [ "${CBB_ERROR_DETAILS:-}" != 1 ]; then
-		echo "uninstall.sh: failed (exit status $rc). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." >&2
+		note uninstall.sh "failed (exit status %s). For every command it ran: CBB_ERROR_DETAILS=1, and run it again." "$rc"
 	fi
 }
 trap 'failed $?' EXIT
+# The messages in the user's language (packaging/l10n.sh, beside this file
+# where install.sh put it, or in the archive), read before LC_ALL=C below.
+cbb_l10n=$(cd "$(dirname "$0")" && pwd)/l10n
+[ -f "$cbb_l10n.sh" ] || cbb_l10n=${cbb_l10n%/l10n}/../l10n
+# shellcheck source=packaging/l10n.sh
+. "$cbb_l10n.sh"
 # The firewall tools answer in the user's language; what this reads is English.
 export LC_ALL=C
 
@@ -59,14 +65,14 @@ if [ "$(id -u)" -ne 0 ] && [ -n "${HOME:-}" ] && [ -e "$HOME/.local/bin/cbb" ]; 
 	rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/cbb" "$config/cbb" "$state/cbb-update"
 	if [ "$purge" = yes ]; then
 		rm -rf "$state/cbb"
-		echo "CBB is removed, with this device's keys; it left its group."
+		say "CBB is removed, with this device's keys; it left its group."
 	else
-		echo "CBB is removed. Its keys stay in $state/cbb for a reinstall; --purge removes them."
+		say "CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them." "$state"
 	fi
 	exit 0
 fi
 if [ "$(id -u)" -ne 0 ]; then
-	echo "uninstall.sh: run it with sudo" >&2
+	note uninstall.sh "run it with sudo"
 	exit 1
 fi
 
@@ -109,7 +115,7 @@ rm -f /etc/systemd/system/cbb.service /etc/systemd/system/cbb-console.service \
 	/etc/systemd/system/cbb-uinput.service /etc/modules-load.d/cbb-uinput.conf \
 	/etc/systemd/system/cbb-update.service /etc/systemd/system/cbb-update.timer \
 	/etc/xdg/autostart/cbb-desktop.desktop /etc/xdg/autostart/cbb-tray.desktop \
-	/usr/local/share/applications/cbb.desktop /usr/local/bin/cbb-desktop /usr/local/bin/cbb-helper \
+	/usr/local/share/applications/cbb.desktop /usr/local/bin/cbb-desktop /usr/local/bin/cbb-helper /usr/local/bin/cbb-forward /usr/local/bin/cbb-relay \
 	/etc/systemd/user/cbb-agent.service \
 	/etc/profile.d/cbb-console.sh /usr/lib/sysusers.d/cbb.conf /usr/local/bin/cbb \
 	/etc/profile.d/cbb-path.sh /etc/sysusers.d/cbb.conf /etc/atomic-update.conf.d/cbb.conf \
@@ -146,7 +152,7 @@ if [ "$purge" = yes ]; then
 	if getent group cbb >/dev/null 2>&1 && command -v groupdel >/dev/null 2>&1; then
 		groupdel cbb 2>/dev/null || true
 	fi
-	echo "CBB is removed, with this device's keys; it left its group."
+	say "CBB is removed, with this device's keys; it left its group."
 else
-	echo "CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them."
+	say "CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them."
 fi

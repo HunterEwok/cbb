@@ -32,8 +32,9 @@ const fleetDockerfile = `FROM debian:stable-slim
 RUN apt-get update && apt-get install -y --no-install-recommends iproute2 iptables procps tmux curl ca-certificates && rm -rf /var/lib/apt/lists/*
 `
 
-// fleetCoverDir, when set (-coverdir), is where a cbb built with -cover
-// writes its coverage from every container of the fleet.
+// fleetCoverDir, when set (-coverdir), is where the programs built for
+// coverage write it from every container of the fleet: a cbb-helper built
+// with -cover, and a cbb built with instrument-coverage (cargo llvm-cov).
 var fleetCoverDir string
 
 // Fleet is one run's containers and their network.
@@ -155,8 +156,15 @@ func (f *Fleet) containerOf(ctx context.Context, bin, net string, run, env []str
 		"--network", net, "--label", "cbbbench=fleet",
 		"--cap-add", "NET_ADMIN",
 		"-v", bin + ":/usr/local/bin/cbb:ro"}
+	// cbb-helper, the Go helper the Rust cbb starts, and cbb-forward and
+	// cbb-relay, which cbb forward and cbb relay run, beside it when built.
+	for _, p := range []string{"cbb-helper", "cbb-forward", "cbb-relay"} {
+		if path := filepath.Join(filepath.Dir(bin), p); fileExists(path) {
+			args = append(args, "-v", path+":/usr/local/bin/"+p+":ro")
+		}
+	}
 	if fleetCoverDir != "" {
-		args = append(args, "-v", fleetCoverDir+":/cover", "-e", "GOCOVERDIR=/cover")
+		args = append(args, "-v", fleetCoverDir+":/cover", "-e", "GOCOVERDIR=/cover", "-e", "LLVM_PROFILE_FILE=/cover/cbb-%p-%m.profraw")
 	}
 	args = append(args, run...)
 	for _, e := range env {
@@ -196,7 +204,7 @@ func (f *Fleet) Close(ctx context.Context) {
 	ms := f.members
 	f.mu.Unlock()
 	if len(ms) > 0 && fleetCoverDir != "" {
-		// A program built with -cover writes its counters when it exits:
+		// A program built for coverage writes its counters when it exits:
 		// let the services end before their containers go.
 		var wg sync.WaitGroup
 		for _, d := range ms {
@@ -296,3 +304,9 @@ func fleetIPOn(ctx context.Context, d *Device, net string) (string, error) {
 // fleetKill kills a member's service as a crash would; its stand-in
 // service manager starts it again.
 const fleetKill = `for p in /proc/[0-9]*; do [ "$(cat $p/comm 2>/dev/null)" = cbb ] && tr '\0' ' ' <$p/cmdline | grep -q 'cbb service' && kill -KILL ${p#/proc/}; done; true`
+
+// fileExists reports whether path is a file.
+func fileExists(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && !fi.IsDir()
+}

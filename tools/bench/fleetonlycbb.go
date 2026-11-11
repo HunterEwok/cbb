@@ -110,7 +110,7 @@ func onlyCBB(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 // registration, and its client away still syncs both ways.
 func hubOverVLESS(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/W45-hub-vless/"
-	a := newAwayGroupWith(ctx, r, f, "fleet/W45-hub-vless", 1, realityVLESS)
+	a := newAwayGroupWith(ctx, r, f, "fleet/W45-hub-vless", 1, xhttpVLESS)
 	if a == nil {
 		return
 	}
@@ -123,6 +123,14 @@ func hubOverVLESS(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 	if r.Do(p+"vless", func() error {
 		if err := connected(ctx, c, wait); err != nil {
 			return err
+		}
+		// The forwarder's web server has a certificate from a CA of its
+		// own, which the members must trust.
+		if err := a.trustWeb(ctx, hub, c); err != nil {
+			return err
+		}
+		if err := connected(ctx, c, wait); err != nil {
+			return fmt.Errorf("after the web server's CA: %w", err)
 		}
 		if err := succeeds(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-vless"), "", "VLESS"); err != nil {
 			return err

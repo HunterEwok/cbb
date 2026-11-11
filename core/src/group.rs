@@ -121,6 +121,12 @@ pub enum Refusal {
     /// the old root, if it is still in use, learns of the takeover and can
     /// undo it. Only Records::refused_peer returns it.
     TakenOver,
+    /// The chain's own key is removed or frozen: the connection carries
+    /// the records that say so, if the peer lacks them, and then closes, so
+    /// that a device removed while it was not connected hears it on its
+    /// next connection (docs/protocol.md, section 10, "Certificates"). Only
+    /// Records::refused_peer returns it.
+    Removed(&'static str),
 }
 
 impl Refusal {
@@ -129,7 +135,7 @@ impl Refusal {
             Refusal::NotListed => "no device record that counts names the device's key",
             Refusal::Stopped => "the group's records stop the exchange until its root decides",
             Refusal::TakenOver => "the group was taken over from this root; its connection carries records only",
-            Refusal::Refused(why) => why,
+            Refusal::Refused(why) | Refusal::Removed(why) => why,
         }
     }
 }
@@ -513,10 +519,20 @@ impl Records {
 
     /// Why a peer's connection is refused or carries records only: refused,
     /// except that an old root an admin took the group over from gets
-    /// records only (Refusal::TakenOver), as Go's allow.
+    /// records only (Refusal::TakenOver), as Go's allow, and a device whose
+    /// own key is removed or frozen gets the records that say so
+    /// (Refusal::Removed).
     pub fn refused_peer(&self, chain: &[Cert]) -> Option<Refusal> {
         match self.refused(chain) {
             Some(Refusal::Refused(_)) if self.taken_over(chain).is_some() => Some(Refusal::TakenOver),
+            Some(Refusal::Refused(why))
+                if chain.first().is_some_and(|c| {
+                    let k = c.key_hash();
+                    self.revoked(&k) || self.frozen(&k)
+                }) =>
+            {
+                Some(Refusal::Removed(why))
+            }
             r => r,
         }
     }
@@ -618,6 +634,13 @@ impl Records {
             .and_then(|(_, b)| b.key.map(|k| (st.root_device.clone(), k.0)))
     }
 
+    /// Whether the device `dev` with the member key `key` holds the group's
+    /// root: the root's own device by its key, which is not revoked. Only
+    /// it sends a member a TPM credential to open.
+    pub fn is_root_member(&self, dev: &str, key: &KeyHash) -> bool {
+        self.root_member().is_some_and(|(id, k)| id == dev && k == *key) && !self.revoked(key)
+    }
+
     /// Whether the device `dev` with the verified chain (leaf first) is the
     /// group's root or an admin, as Go's adminPeer: an admin CA of its own
     /// under a root on the path that a device record that counts names and
@@ -637,10 +660,22 @@ impl Records {
                 && !self.frozen(&k);
         }
         let key = leaf.key_hash();
-        if self.root_member().is_some_and(|(id, k)| id == dev && k == key) && !self.revoked(&key) {
+        self.is_root_member(dev, &key) || self.devices().iter().any(|d| d.id == dev && d.key == key && d.admin)
+    }
+
+    /// Whether the device `dev` with the verified chain may admit devices:
+    /// an admin peer (admin_peer) that is the root's own device, or whose
+    /// device record gives it the power admit. A hub carries remote
+    /// invitations only for such a device (docs/protocol.md, section 12,
+    /// "Through the hub").
+    pub fn admit_peer(&self, dev: &str, chain: &[Cert]) -> bool {
+        if !self.admin_peer(dev, chain) {
+            return false;
+        }
+        if self.root_member().is_some_and(|(id, k)| id == dev && !self.revoked(&k)) {
             return true;
         }
-        self.devices().iter().any(|d| d.id == dev && d.key == key && d.admin)
+        self.devices().iter().any(|d| d.id == dev && d.may(authority::POWER_ADMIT))
     }
 
     /// Whether the device `dev` may be the group's hub by the records
@@ -968,6 +1003,11 @@ impl Records {
         &self.tag
     }
 
+    /// The group's first root, which names the group.
+    pub fn group_ca(&self) -> &Cert {
+        &self.group_ca
+    }
+
     /// For every signer of the set, the highest seq the set holds of it:
     /// what a removal, a freeze or a claim names in seen, sorted by key.
     pub fn seen(&self) -> Vec<Seen> {
@@ -1180,6 +1220,26 @@ mod tests {
             n += 1;
         }
         assert!(n >= 5, "only {n} cases compared");
+    }
+
+    /// Only the root's own device, by its key, counts as the root's member:
+    /// not another device, not another key, nor its key once revoked.
+    #[test]
+    fn root_member_by_device_and_key() {
+        let mut n = 0;
+        for c in cases() {
+            let rs: Vec<Record> = serde_json::from_value(c["records"].clone()).unwrap();
+            let s = set_of(&c, &rs);
+            let Some((id, k)) = s.root_member() else { continue };
+            let name = c["name"].as_str().unwrap();
+            assert_eq!(s.is_root_member(&id, &k), !s.revoked(&k), "{name}");
+            let mut other = k;
+            other[0] ^= 1;
+            assert!(!s.is_root_member(&id, &other), "{name}: another key");
+            assert!(!s.is_root_member("0123456789abcdef0123456789abcdef", &k), "{name}: another device");
+            n += 1;
+        }
+        assert!(n >= 1, "no vector names the root's member");
     }
 
     /// The seq and prev the set gives a key's next record, and whether the

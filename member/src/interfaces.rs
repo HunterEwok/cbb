@@ -17,7 +17,7 @@ use std::sync::OnceLock;
 pub fn only() -> &'static [String] {
     static ONLY: OnceLock<Vec<String>> = OnceLock::new();
     ONLY.get_or_init(|| {
-        let v = std::env::var("CBB_INTERFACES").unwrap_or_default();
+        let v = crate::settings::get("CBB_INTERFACES").unwrap_or_default();
         if v.is_empty() && crate::openwrt() {
             return parse(&std::fs::read_to_string(OPENWRT_LIST).unwrap_or_default());
         }
@@ -52,7 +52,7 @@ pub struct Iface {
     pub index: Option<u32>,
 }
 
-fn system() -> Vec<Iface> {
+pub fn system() -> Vec<Iface> {
     if_addrs::get_if_addrs()
         .unwrap_or_default()
         .into_iter()

@@ -38,6 +38,7 @@ type validVector struct {
 	Secret      string          `json:"secret"`
 	Expires     int64           `json:"expires"`
 	Obfuscation json.RawMessage `json:"obfuscation"`
+	VLESS       json.RawMessage `json:"vless"`
 }
 
 type refusedVector struct {
@@ -91,7 +92,7 @@ func build(set map[string]string, drop ...string) string {
 			add(f[0], f[1])
 		}
 	}
-	for _, k := range []string{"o", "x", "dup"} {
+	for _, k := range []string{"o", "x", "y", "dup"} {
 		if v, ok := set[k]; ok && !seen[k] {
 			if k == "dup" {
 				b.WriteString(v)
@@ -120,7 +121,7 @@ func makeVectors() vectorFile {
 	base := validVector{Group: "0f1e2d3c4b5a6978", Hub: "0123456789abcdef0123456789abcdef",
 		HubKey: key(1), Endpoints: []string{"203.0.113.7:8764", "[2001:db8::7]:8764"},
 		GuestKey: key(2), GuestPSK: key(3), Secret: "BwcHBwcHBwcHBwcHBwcHBw==", Expires: 1_800_000_000,
-		Obfuscation: json.RawMessage("null")}
+		Obfuscation: json.RawMessage("null"), VLESS: json.RawMessage("null")}
 	add := func(name, text string, change func(*validVector)) {
 		c := base
 		c.Name, c.Text = name, text
@@ -139,6 +140,10 @@ func makeVectors() vectorFile {
 	})
 	long := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("s", 64)))
 	add("a secret of 64 bytes", build(map[string]string{"s": `"` + long + `"`}), func(c *validVector) { c.Secret = long })
+	add("through VLESS", build(map[string]string{"o": obf, "x": xhttp}), func(c *validVector) {
+		c.Obfuscation, c.VLESS = json.RawMessage(obf), json.RawMessage(xhttp)
+	})
+	add("VLESS only", build(map[string]string{"x": xhttp}), func(c *validVector) { c.VLESS = json.RawMessage(xhttp) })
 	add("fields in another order", wrap(`{"exp":1800000000,"s":"BwcHBwcHBwcHBwcHBwcHBw==","psk":"`+key(3)+`","k":"`+key(2)+`","ep":["203.0.113.7:8764","[2001:db8::7]:8764"],"hk":"`+key(1)+`","h":"0123456789abcdef0123456789abcdef","g":"0f1e2d3c4b5a6978","v":1}`), nil)
 
 	refuse := func(name, text string, r Reason) {
@@ -161,7 +166,8 @@ func makeVectors() vectorFile {
 	refuse("version as a string", build(map[string]string{"v": `"1"`}), Damaged)
 	refuse("version 1.0", build(map[string]string{"v": `1.0`}), Damaged)
 	refuse("no version", build(nil, "v"), Damaged)
-	refuse("unknown field", build(map[string]string{"x": `1`}), Damaged)
+	refuse("unknown field", build(map[string]string{"y": `1`}), Damaged)
+	refuse("VLESS not an object", build(map[string]string{"x": `1`}), Damaged)
 	refuse("field twice", build(map[string]string{"dup": `,"g":"0f1e2d3c4b5a6978"`}), Damaged)
 	refuse("field name in capitals", wrap(strings.Replace(mustJSON(good), `"hk"`, `"HK"`, 1)), Damaged)
 	refuse("null", build(map[string]string{"o": `null`}), Damaged)
@@ -213,8 +219,27 @@ func makeVectors() vectorFile {
 	refuse("range with spaces", obfWith(`"h1":"100-200"`, `"h1":"100 - 200"`), BadObfuscation)
 	refuse("range above 32 bits", obfWith(`"h4":"3221225488-4294967295"`, `"h4":"3221225488-4294967296"`), BadObfuscation)
 	refuse("header key zero", obfWith(`BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU=`, base64.StdEncoding.EncodeToString(make([]byte, 32))), BadObfuscation)
+	xWith := func(from, to string) string {
+		return build(map[string]string{"x": strings.Replace(xhttp, from, to, 1)})
+	}
+	refuse("VLESS null", build(map[string]string{"x": `null`}), Damaged)
+	refuse("VLESS empty", build(map[string]string{"x": `{}`}), BadVLESS)
+	refuse("VLESS unknown field", build(map[string]string{"x": strings.Replace(xhttp, `{`, `{"public_key":"AQ==",`, 1)}), Damaged)
+	refuse("VLESS without id", xWith(`,"id":"0f2d7b46-3c5e-4a1b-9c8d-7e6f5a4b3c2d"`, ``), BadVLESS)
+	refuse("VLESS with REALITY", xWith(`"transport":"xhttp"`, `"transport":""`), BadVLESS)
+	refuse("VLESS other transport", xWith(`"transport":"xhttp"`, `"transport":"grpc"`), BadVLESS)
+	refuse("VLESS host name", xWith(`"203.0.113.9:443"`, `"cbb.example:443"`), BadVLESS)
+	refuse("VLESS port 0", xWith(`"203.0.113.9:443"`, `"203.0.113.9:0"`), BadVLESS)
+	refuse("VLESS site in capitals", xWith(`"cbb.example"`, `"CBB.example"`), BadVLESS)
+	refuse("VLESS short path", xWith(`"/AbC-12_xyz0123456"`, `"/short"`), BadVLESS)
+	refuse("VLESS ID in capitals", xWith(`0f2d7b46`, `0F2D7B46`), BadVLESS)
+	refuse("VLESS ID of version 1", xWith(`-4a1b-`, `-1a1b-`), BadVLESS)
+	refuse("VLESS field not a string", xWith(`"/AbC-12_xyz0123456"`, `7`), Damaged)
 	return v
 }
+
+// xhttp is an invitation's VLESS settings with XHTTP.
+const xhttp = `{"transport":"xhttp","endpoint":"203.0.113.9:443","server_name":"cbb.example","path":"/AbC-12_xyz0123456","id":"0f2d7b46-3c5e-4a1b-9c8d-7e6f5a4b3c2d"}`
 
 func mustJSON(text string) string {
 	b, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(text, prefix))
@@ -250,6 +275,11 @@ func TestVectors(t *testing.T) {
 			t.Fatal(err)
 		}
 		v.Valid[i].Obfuscation = b.Bytes()
+		var x bytes.Buffer
+		if err := json.Compact(&x, v.Valid[i].VLESS); err != nil {
+			t.Fatal(err)
+		}
+		v.Valid[i].VLESS = x.Bytes()
 	}
 	if !reflect.DeepEqual(v, makeVectors()) {
 		t.Fatal("invites.json is out of date: go test ./internal/invite -run TestVectors -update")
@@ -267,13 +297,17 @@ func TestVectors(t *testing.T) {
 		b64 := base64.StdEncoding.EncodeToString
 		got := validVector{Name: c.Name, Text: c.Text, Group: in.Group, Hub: in.Hub, HubKey: b64(in.HubKey[:]),
 			Endpoints: eps, GuestKey: b64(in.GuestKey[:]), GuestPSK: b64(in.GuestPSK[:]), Secret: b64(in.Secret),
-			Expires: in.Expires.Unix(), Obfuscation: json.RawMessage("null")}
+			Expires: in.Expires.Unix(), Obfuscation: json.RawMessage("null"), VLESS: json.RawMessage("null")}
 		if in.Obfuscation != nil {
 			o, err := json.Marshal(in.Obfuscation)
 			if err != nil {
 				t.Fatal(err)
 			}
 			got.Obfuscation = o
+		}
+		if x := in.VLESS; x != nil {
+			got.VLESS = []byte(`{"transport":"xhttp","endpoint":"` + x.Endpoint + `","server_name":"` + x.ServerName +
+				`","path":"` + x.Path + `","id":"` + x.ID + `"}`)
 		}
 		if !reflect.DeepEqual(got, c) {
 			t.Errorf("%s: got %+v, want %+v", c.Name, got, c)

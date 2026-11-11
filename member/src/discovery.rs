@@ -11,6 +11,7 @@
 //! does not reach.
 
 use std::collections::HashMap;
+use std::io::Write as _;
 use std::net::{IpAddr, SocketAddr, SocketAddrV6, TcpListener};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -22,6 +23,53 @@ use crate::node::Node;
 use crate::pair::home_address;
 
 const SERVICE: &str = "_cbb._tcp.local.";
+
+/// The file CBB_MDNS_TRACE names, for the tests: every event browsing
+/// sees and mdns-sd's own debug log (the packets it sends and takes, its
+/// cache), with the time, so that a member that does not find another on
+/// CI can be told from what mDNS did.
+fn trace_file() -> Option<&'static Mutex<std::fs::File>> {
+    static FILE: std::sync::OnceLock<Option<Mutex<std::fs::File>>> = std::sync::OnceLock::new();
+    FILE.get_or_init(|| {
+        let path = std::env::var_os("CBB_MDNS_TRACE")?;
+        let f = std::fs::OpenOptions::new().create(true).append(true).open(path).ok()?;
+        Some(Mutex::new(f))
+    })
+    .as_ref()
+}
+
+/// Writes a line to the trace, after the time of day in UTC.
+fn trace(line: &str) {
+    let Some(f) = trace_file() else { return };
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    let (s, ms) = (now.as_secs() % 86400, now.subsec_millis());
+    let mut f = f.lock().unwrap_or_else(|e| e.into_inner());
+    let _ = writeln!(f, "{:02}:{:02}:{:02}.{ms:03} {line}", s / 3600, s / 60 % 60, s % 60);
+}
+
+/// Hands mdns-sd's debug log to the trace.
+struct TraceLog;
+
+impl log::Log for TraceLog {
+    fn enabled(&self, m: &log::Metadata) -> bool {
+        m.level() <= log::Level::Debug && m.target().starts_with("mdns_sd")
+    }
+
+    fn log(&self, r: &log::Record) {
+        if self.enabled(r.metadata()) {
+            trace(&format!("mdns-sd {}: {}", r.level(), r.args()));
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+/// Starts the trace when CBB_MDNS_TRACE names a file.
+fn start_trace() {
+    if trace_file().is_some() && log::set_logger(&TraceLog).is_ok() {
+        log::set_max_level(log::LevelFilter::Debug);
+    }
+}
 
 /// Announces a device that listens to join (docs/protocol.md section 3,
 /// TXT `j=1` and `f`, its certificate's fingerprint), so that a computer of
@@ -93,6 +141,14 @@ pub fn find_joiners(wait: Duration) -> crate::error::Result<Vec<(Vec<SocketAddr>
     Ok(waiting.into_values().collect())
 }
 
+/// The addresses of the members of the group tag that browsing finds, one
+/// list for each member, for a new phone that restores the group with its
+/// recovery key: browsed for up to wait, then a moment more for the others.
+pub fn find_group(tag: &str, wait: Duration) -> crate::error::Result<Vec<Vec<SocketAddr>>> {
+    let found = browse_txt(wait, |info| (info.get_property_val_str("g") == Some(tag)).then_some(()))?;
+    Ok(found.into_values().map(|(a, ())| a).collect())
+}
+
 /// Browses for up to wait for the members whose TXT pick takes, then a
 /// moment more for the others; by instance name, their addresses and what
 /// pick made of them.
@@ -108,20 +164,17 @@ fn browse_txt<T>(
         let _ = daemon.disable_interface(mdns_sd::IfKind::All);
         let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
     }
+    start_trace();
     let rx = daemon.browse(SERVICE).map_err(|e| Error::with("cannot browse with mDNS", e))?;
     let mut found = std::collections::BTreeMap::new();
     let mut deadline = std::time::Instant::now() + wait;
     let mut settled = false;
     while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
         let Ok(ev) = rx.recv_timeout(left) else { break };
+        trace(&format!("pairing browse: {ev:?}"));
         let mdns_sd::ServiceEvent::ServiceResolved(info) = ev else { continue };
         let Some(v) = pick(&info) else { continue };
-        let addrs = order(info.get_addresses().iter().map(|ip| match ip {
-            mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
-                SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, v6.scope_id().index))
-            }
-            other => SocketAddr::new(other.to_ip_addr(), info.port),
-        }));
+        let addrs = order(dial_addrs(&info).into_iter());
         if addrs.is_empty() {
             continue;
         }
@@ -162,6 +215,15 @@ const MAX_WAIT: Duration = Duration::from_secs(30);
 /// How long a member that dials waits for one with a lower device ID to
 /// dial it before it dials that one itself, as Go's fallbackDial.
 const FALLBACK: Duration = Duration::from_secs(30);
+
+/// The fallback test's wait, in milliseconds from CBB_TEST_FALLBACK, as
+/// Go's fallbackAfter: with it set, this member also dials the members with
+/// a greater device ID at port 1, as if a firewall there dropped the member
+/// port, so that only their fallback dials connect.
+fn test_fallback() -> Option<Duration> {
+    static AFTER: std::sync::OnceLock<Option<Duration>> = std::sync::OnceLock::new();
+    *AFTER.get_or_init(|| std::env::var("CBB_TEST_FALLBACK").ok()?.parse().ok().map(Duration::from_millis))
+}
 /// At most this many connections may be in their TLS handshake at once.
 const MAX_HANDSHAKES: usize = 16;
 /// The members found by browsing that are dialed at once, as Go's mDNS
@@ -170,9 +232,32 @@ const MAX_FOUND: usize = 64;
 /// How often the networks where this device publishes itself are checked
 /// again: an interface may have come up or moved to another network.
 const RECHECK: Duration = Duration::from_secs(5);
+/// The least time between two changes of this device's registration. A
+/// change of its TXT record is probed for about a second before mdns-sd
+/// announces it; a second change in that time, as a pairing window that
+/// closes and opens again for the next device, had mdns-sd hear its own
+/// announcement as another device's, rename this one ("ID (2)", "ID (3)",
+/// ...) and answer for none of the names until the renames stopped.
+const REPUBLISH_GAP: Duration = Duration::from_millis(1500);
 
 /// The addresses of a found member; None once it is gone.
 type Addrs = Arc<Mutex<Option<Vec<SocketAddr>>>>;
+
+/// Keeps the addresses of a member the app found: a member found again
+/// takes the new ones, and a new one is kept while fewer than MAX_FOUND
+/// are, and returned to be dialed. A member past MAX_FOUND is not dialed.
+fn remember(found: &mut HashMap<String, Addrs>, key: String, addrs: Vec<SocketAddr>) -> Option<Addrs> {
+    if let Some(a) = found.get(&key) {
+        *a.lock().unwrap() = Some(addrs);
+        return None;
+    }
+    if found.len() >= MAX_FOUND {
+        return None;
+    }
+    let a: Addrs = Arc::new(Mutex::new(Some(addrs)));
+    found.insert(key, a.clone());
+    Some(a)
+}
 
 /// Dials the member at addrs again and again: at once after this member
 /// ended the connection to connect again (a new hello), a second after a
@@ -191,6 +276,7 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
     let mut wait = FIRST_WAIT;
     let mut redials = node.redials();
     let mut since = std::time::Instant::now();
+    let mut last_failure = String::new();
     loop {
         if node.is_closed() {
             return;
@@ -199,13 +285,20 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
         if let (true, Some(p)) = (later, &peer) {
             let r = node.redials();
             if node.connected(p) {
+                // It dialed this one: this loop dials only below.
+                node.set_unreached(p, false);
                 (since, redials) = (std::time::Instant::now(), r);
                 node.nap(Duration::from_secs(1));
                 continue;
             }
-            if r == redials && since.elapsed() < FALLBACK {
+            if r == redials && since.elapsed() < test_fallback().unwrap_or(FALLBACK) {
                 node.nap(Duration::from_secs(1));
                 continue;
+            }
+            // A redial (a new network, the app resumed) is no sign that it
+            // could not dial this one.
+            if r == redials {
+                node.set_unreached(p, true);
             }
             redials = r;
         }
@@ -217,11 +310,25 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
         }
         let mut up = false;
         let mut again = false;
+        let mut failed = Vec::new();
         for a in list {
-            if let Ok(d) = node.dial_ended(a, peer.clone()) {
-                (up, again) = (d.up, d.again);
-                break;
+            match node.dial_ended(a, peer.clone()) {
+                Ok(d) => {
+                    (up, again) = (d.up, d.again);
+                    failed.clear();
+                    break;
+                }
+                Err(e) => failed.push(format!("{a}: {e:#}")),
             }
+        }
+        // Why a member cannot be reached is logged once, until it changes.
+        let why = failed.join("; ");
+        if why != last_failure {
+            if !why.is_empty() && !node.is_closed() {
+                let who = peer.as_ref().map_or_else(|| "the member".to_string(), ToString::to_string);
+                node.logf(&format!("cbb: cannot reach {who}: {why}"));
+            }
+            last_failure = why;
         }
         wait = next_wait(wait, up, again);
         if wait.is_zero() {
@@ -395,16 +502,11 @@ impl Dialers {
         let mut addrs: Vec<SocketAddr> = addrs.into_iter().filter(|a| home_address(a.ip())).collect();
         addrs.sort_by_key(|a| (a.ip().is_ipv6(), a.ip().is_loopback()));
         addrs.dedup();
-        let mut found = self.found.lock().unwrap();
-        if let Some(a) = found.get(key) {
-            *a.lock().unwrap() = Some(addrs);
-        } else if found.len() < MAX_FOUND {
-            let a: Addrs = Arc::new(Mutex::new(Some(addrs)));
-            found.insert(key.to_string(), a.clone());
+        let a = remember(&mut self.found.lock().unwrap(), key.to_string(), addrs);
+        if let Some(a) = a {
             let node = node.clone();
             std::thread::spawn(move || dial_loop(node, a, peer));
         }
-        drop(found);
         node.kick();
     }
 
@@ -485,11 +587,13 @@ fn browse(
         let _ = daemon.disable_interface(mdns_sd::IfKind::All);
         let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
     }
+    start_trace();
     let me = node.identity().id.clone();
     if let Ok(events) = daemon.monitor() {
         let n = node.clone();
         std::thread::spawn(move || {
             while let Ok(ev) = events.recv() {
+                trace(&format!("daemon: {ev:?}"));
                 if let mdns_sd::DaemonEvent::NameChange(c) = ev {
                     n.logf(&format!(
                         "cbb: mDNS renamed {} to {}: another device answers for the name",
@@ -536,6 +640,9 @@ fn browse(
         if at.as_ref().is_some_and(Vec::is_empty) {
             // On no known network: browse only.
             if let Some(name) = registered.take() {
+                log(
+                    "cbb: on no known network now: this device stops publishing itself by mDNS and only looks for the members",
+                );
                 let _ = daemon.unregister(&name);
             }
             return Ok(());
@@ -557,12 +664,23 @@ fn browse(
             None => mdns_sd::ServiceInfo::new(SERVICE, me.as_str(), &host, "", port, &txt[..])?.enable_addr_auto(),
         };
         registered = Some(info.get_fullname().to_string());
+        // Each change of what is published, so that a member nobody finds
+        // can be told from its log.
+        log(&format!(
+            "cbb: publishing this device by mDNS at {}{}",
+            match at {
+                Some(a) => a.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "),
+                None => "every address".into(),
+            },
+            if window { ", with the pairing window open" } else { "" }
+        ));
         daemon.register(info)
     };
     let mut window = node.window_open();
     let mut at = where_();
     publish(window, &at)?;
     let mut checked = Instant::now();
+    let mut published = Instant::now();
     let events = daemon.browse(SERVICE)?;
     let mut found: HashMap<DeviceId, Addrs> = HashMap::new();
     loop {
@@ -576,14 +694,16 @@ fn browse(
                 *a.lock().unwrap() = None;
             }
         }
-        if node.window_open() != window
+        if (node.window_open() != window
             || checked.elapsed() >= RECHECK
-            || away != at.as_ref().is_some_and(Vec::is_empty)
+            || away != at.as_ref().is_some_and(Vec::is_empty))
+            && published.elapsed() >= REPUBLISH_GAP
         {
             checked = Instant::now();
             let now = where_();
             if node.window_open() != window || now != at {
                 (window, at) = (node.window_open(), now);
+                published = Instant::now();
                 if let Err(e) = publish(window, &at) {
                     log(&format!("cbb: announcing this device failed: {e}"));
                 }
@@ -591,10 +711,12 @@ fn browse(
         }
         let Ok(ev) = ev else {
             if events.is_disconnected() {
+                log("cbb: looking for the members by mDNS ended: the mDNS daemon stopped sending what it finds");
                 break;
             }
             continue;
         };
+        trace(&format!("{me}: {ev:?}"));
         match ev {
             mdns_sd::ServiceEvent::ServiceResolved(info) => {
                 let Some(id) = instance_id(&info.fullname) else { continue };
@@ -621,20 +743,33 @@ fn browse(
                 if !as_phone && !dials {
                     continue;
                 }
-                let later = !as_phone && !listens_only(r) && id < me;
-                let addrs = order(info.get_addresses().iter().map(|ip| match ip {
-                    mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
-                        SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, v6.scope_id().index))
-                    }
-                    other => SocketAddr::new(other.to_ip_addr(), info.port),
-                }));
+                let later = dials_later(as_phone, port.is_some(), r, &id, &me);
+                let addrs = order(dial_addrs(&info).into_iter());
                 if addrs.is_empty() {
+                    log(&format!(
+                        "cbb: found {id} by mDNS with no address of a home network ({}); not dialed",
+                        info.get_addresses().iter().map(|a| a.to_ip_addr().to_string()).collect::<Vec<_>>().join(", ")
+                    ));
                     continue;
                 }
+                let addrs = if test_fallback().is_some() && id > me {
+                    addrs.into_iter().map(|a| SocketAddr::new(a.ip(), 1)).collect()
+                } else {
+                    addrs
+                };
                 match found.get(&id) {
                     Some(cur) => {
                         node.found(&id, true);
-                        *cur.lock().unwrap() = Some(addrs)
+                        // mDNS may first resolve a member with only some of
+                        // its addresses (a link-local one from the interface
+                        // the answer came on, which another interface's scope
+                        // can make unreachable); its dial loop, maybe backing
+                        // off after failing those, tries the new ones at once.
+                        let mut cur = cur.lock().unwrap();
+                        if cur.as_ref() != Some(&addrs) {
+                            *cur = Some(addrs);
+                            node.kick();
+                        }
                     }
                     // Anyone on the network can announce the group's tag, so
                     // the members dialed are bounded, as in Go.
@@ -667,6 +802,15 @@ fn browse(
 /// Reports whether a TXT `r` value names a member that does not dial,
 /// which every other member dials; keys and values are compared without
 /// regard to case.
+/// Reports whether a member dials one it found with the TXT `r` and the
+/// device ID `id` only after FALLBACK: when that one also dials and has the
+/// lower ID, so that it is the one to dial. A phone dials everyone at once,
+/// and so does a member that does not listen (-no-listen), which no one
+/// else can reach.
+fn dials_later(as_phone: bool, listening: bool, r: Option<&str>, id: &DeviceId, me: &DeviceId) -> bool {
+    !as_phone && listening && !listens_only(r) && id < me
+}
+
 fn listens_only(r: Option<&str>) -> bool {
     r.is_some_and(|v| v.eq_ignore_ascii_case("listen"))
 }
@@ -683,6 +827,32 @@ fn instance_id(fullname: &str) -> Option<DeviceId> {
     // Without the " (n)" that mDNS adds when the name conflicts, as when
     // the device's own registration answered for it before an update.
     DeviceId::parse(&instance(label)).ok()
+}
+
+/// The addresses a resolved member is dialed at. A link-local address
+/// takes the scope of the interface the answer came on, except one of this
+/// device's own (another member on the same device, as in tests), which is
+/// reached only through the interface that has it.
+fn dial_addrs(info: &mdns_sd::ResolvedService) -> Vec<SocketAddr> {
+    let own = std::sync::OnceLock::new();
+    info.get_addresses()
+        .iter()
+        .map(|ip| match ip {
+            mdns_sd::ScopedIp::V6(v6) if v6.addr().is_unicast_link_local() => {
+                let ifs: &Vec<interfaces::Iface> = own.get_or_init(interfaces::system);
+                let scope = link_scope(*v6.addr(), v6.scope_id().index, ifs);
+                SocketAddr::V6(SocketAddrV6::new(*v6.addr(), info.port, 0, scope))
+            }
+            other => SocketAddr::new(other.to_ip_addr(), info.port),
+        })
+        .collect()
+}
+
+/// The scope of a link-local address that came on the interface arrived:
+/// that interface's, or, for an address of this device's own, the index of
+/// the interface that has it.
+fn link_scope(a: std::net::Ipv6Addr, arrived: u32, own: &[interfaces::Iface]) -> u32 {
+    own.iter().find(|i| i.ip == IpAddr::V6(a)).and_then(|i| i.index).unwrap_or(arrived)
 }
 
 /// The addresses that would be published, IPv4 first, then routable IPv6,
@@ -702,6 +872,20 @@ fn order(addrs: impl Iterator<Item = SocketAddr>) -> Vec<SocketAddr> {
 mod tests {
     use super::*;
 
+    /// A link-local address of this device's own is dialed through the
+    /// interface that has it, whichever interface mDNS heard it on; another
+    /// device's through the interface it was heard on.
+    #[test]
+    fn own_link_local_takes_its_interface() {
+        let own = vec![
+            interfaces::Iface { name: "end0".into(), ip: "fe80::9e13".parse().unwrap(), prefix: 64, index: Some(2) },
+            interfaces::Iface { name: "veth1".into(), ip: "fe80::280e".parse().unwrap(), prefix: 64, index: Some(12) },
+        ];
+        assert_eq!(link_scope("fe80::9e13".parse().unwrap(), 12, &own), 2);
+        assert_eq!(link_scope("fe80::280e".parse().unwrap(), 2, &own), 12);
+        assert_eq!(link_scope("fe80::77".parse().unwrap(), 12, &own), 12);
+    }
+
     /// A name mDNS made unique by " (n)" names the same device.
     #[test]
     fn instance_drops_the_conflict_suffix() {
@@ -713,6 +897,24 @@ mod tests {
         let want = DeviceId::parse(id).ok();
         assert_eq!(instance_id(&format!("{id} (9).{SERVICE}")), want);
         assert_eq!(instance_id(&format!("{id}.{SERVICE}")), want);
+    }
+
+    /// The members the app finds and dials are bounded: past MAX_FOUND a
+    /// new one is not dialed, while one found again takes its new addresses.
+    #[test]
+    fn dials_at_most_max_found() {
+        use super::{MAX_FOUND, remember};
+        let addr = |i: usize| vec![std::net::SocketAddr::from(([192, 168, 0, (i % 250) as u8], 7000))];
+        let mut found = std::collections::HashMap::new();
+        for i in 0..MAX_FOUND {
+            assert!(remember(&mut found, i.to_string(), addr(i)).is_some(), "member {i}");
+        }
+        assert!(remember(&mut found, MAX_FOUND.to_string(), addr(1)).is_none());
+        assert_eq!(found.len(), MAX_FOUND);
+        assert!(remember(&mut found, "3".into(), addr(9)).is_none());
+        assert_eq!(*found["3"].lock().unwrap(), Some(addr(9)));
+        found.remove("0");
+        assert!(remember(&mut found, MAX_FOUND.to_string(), addr(1)).is_some());
     }
 
     /// A connection this member ended to send a new hello (a mode, a tunnel
@@ -743,6 +945,20 @@ mod tests {
         assert_eq!(instance_id(&format!("{id}._cbb._tcp.local.")).unwrap().as_str(), id);
         assert!(instance_id("printer._cbb._tcp.local.").is_none());
         assert!(instance_id(&format!("{id}._http._tcp.local.")).is_none());
+    }
+
+    #[test]
+    fn who_dials_later() {
+        let low = DeviceId::parse("00000000000000000000000000000001").unwrap();
+        let high = DeviceId::parse("fffffffffffffffffffffffffffffffe").unwrap();
+        // Of two that dial, the higher ID waits for the lower one.
+        assert!(dials_later(false, true, None, &low, &high));
+        assert!(!dials_later(false, true, None, &high, &low));
+        // Not for one that never dials, nor as a phone.
+        assert!(!dials_later(false, true, Some("listen"), &low, &high));
+        assert!(!dials_later(true, true, None, &low, &high));
+        // A member that does not listen cannot be dialed: it dials at once.
+        assert!(!dials_later(false, false, None, &low, &high));
     }
 
     #[test]

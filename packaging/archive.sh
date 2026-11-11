@@ -18,10 +18,13 @@
 # it, so a wrong path fails on every pull request, not only at a release.
 # cbb-helper (cbb-helper.exe), when it was built beside the binary, goes
 # beside cbb, where the Rust cbb looks for it (docs/design.md, "The service
-# and its helper"); its modules' notices join the others.
+# and its helper"); so do cbb-forward and cbb-relay, the servers that cbb
+# forward and cbb relay run. Each Go program packed adds its modules' notices.
+# The binary is the Rust cbb. With RUST_NOTICES naming a file, the notices
+# of the Rust cbb's crates (member/packaging/notices.sh TARGET) come first.
 # With CORE_NOTICES naming a file, the notices of the Rust core's crates
 # (member/packaging/notices.sh wasm32-unknown-unknown cbb-wasm)
-# follow those of the Go modules, for a binary built with the core.
+# follow those of the Go modules, for Go programs built with the core.
 set -eu
 
 if [ $# -ne 4 ]; then
@@ -54,17 +57,21 @@ modules() {
 notices() {
 	echo "CBB is free software under the GNU Affero General Public License v3.0"
 	echo "only (LICENSE). It is built with the code below, under its own licenses."
-	{
-		modules "$root/cmd/cbb"
-		if [ -n "$helper" ]; then modules "$root/cmd/cbb-helper"; fi
-		if [ -n "$desktop" ]; then modules "$root/apps/desktop"; fi
-	} | sort -u | while read -r mod version moddir; do
-		printf '\n================================================================\n%s %s\n' "$mod" "$version"
-		license_files "$moddir"
-	done
-	printf '\n================================================================\n'
-	printf 'The Go standard library and runtime, %s\n' "$(go env GOVERSION)"
-	license_files "$(go env GOROOT)"
+	if [ -n "${RUST_NOTICES:-}" ]; then
+		printf '\n================================================================\n'
+		cat "$RUST_NOTICES"
+	fi
+	if [ -n "$goprograms" ]; then
+		for program in $goprograms; do
+			modules "$root/$program"
+		done | sort -u | while read -r mod version moddir; do
+			printf '\n================================================================\n%s %s\n' "$mod" "$version"
+			license_files "$moddir"
+		done
+		printf '\n================================================================\n'
+		printf 'The Go standard library and runtime, %s\n' "$(go env GOVERSION)"
+		license_files "$(go env GOROOT)"
+	fi
 	for copied in "$root"/internal/third_party/*/; do
 		printf '\n================================================================\n'
 		printf 'internal/third_party/%s (copied; see its README.md)\n' "$(basename "$copied")"
@@ -96,6 +103,16 @@ helper=
 exe=
 [ "$os" != windows ] || exe=.exe
 [ ! -f "$(dirname "$bin")/cbb-helper$exe" ] || helper=$(dirname "$bin")/cbb-helper$exe
+# The servers, when they were built beside the binary.
+servers=
+for server in cbb-forward cbb-relay; do
+	[ ! -f "$(dirname "$bin")/$server$exe" ] || servers="$servers $server"
+done
+# The Go programs packed, by their folders, for their modules' notices.
+goprograms=
+[ -z "$helper" ] || goprograms="$goprograms cmd/cbb-helper"
+for server in $servers; do goprograms="$goprograms cmd/$server"; done
+[ -z "$desktop" ] || goprograms="$goprograms apps/desktop"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/cbb/packaging" "$out"
@@ -108,10 +125,13 @@ if [ "$os" = windows ]; then
 	if [ -n "$helper" ]; then
 		cp "$helper" "$work/cbb/cbb-helper.exe"
 	fi
+	for server in $servers; do
+		cp "$(dirname "$bin")/$server.exe" "$work/cbb/$server.exe"
+	done
 	if [ -n "$desktop" ]; then
 		cp "$desktop" "$work/cbb/cbb-desktop.exe"
 	fi
-	cp -R "$root/packaging/windows" "$work/cbb/packaging/"
+	cp -R "$root/packaging/windows" "$root/packaging/l10n" "$work/cbb/packaging/"
 	rm -f "$out/cbb-$os-$name.zip"
 	(cd "$work" && zip -qrX "$out/cbb-$os-$name.zip" cbb)
 	echo "$out/cbb-$os-$name.zip"
@@ -121,7 +141,11 @@ cp "$bin" "$work/cbb/cbb"
 if [ -n "$helper" ]; then
 	cp "$helper" "$work/cbb/cbb-helper"
 fi
-cp -R "$root/packaging/$dir" "$root/packaging/tmux" "$root/packaging/update.sh" "$root/packaging/pair.sh" "$work/cbb/packaging/"
+for server in $servers; do
+	cp "$(dirname "$bin")/$server" "$work/cbb/$server"
+done
+cp -R "$root/packaging/$dir" "$root/packaging/tmux" "$root/packaging/update.sh" "$root/packaging/pair.sh" \
+	"$root/packaging/l10n.sh" "$root/packaging/l10n" "$work/cbb/packaging/"
 if [ -n "$desktop" ]; then
 	cp "$desktop" "$work/cbb/cbb-desktop"
 	cp "$root/apps/desktop/icon.png" "$work/cbb/packaging/linux/cbb.png"

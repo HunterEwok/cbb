@@ -86,6 +86,8 @@ class Cbb < Formula
   def install
     bin.install "cbb"
     bin.install "cbb-helper" if File.exist?("cbb-helper")
+    bin.install "cbb-forward" if File.exist?("cbb-forward")
+    bin.install "cbb-relay" if File.exist?("cbb-relay")
     pkgshare.install "packaging"
   end
 
