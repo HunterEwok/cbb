@@ -152,7 +152,7 @@ public enum GroupCertificates {
 
     /// Checks the new root of a root record as Go's checkRoot does: a
     /// self-signed CA with path length 1 that may sign certificates, with a
-    /// P-256 key (docs/protocol.md, section 10, "Roots").
+    /// P-256 key (docs/protocol.md, section 10, "Handing the group over").
     public static func checkRoot(_ der: Data) throws {
         let c = try ParsedCertificate(der: der)
         guard c.isCA, c.pathLength == 1, c.canSignCertificates,
@@ -254,7 +254,7 @@ public enum GroupCertificates {
     }
 
     /// renewal(chain:...) in a group with several roots, the current one
-    /// last (section 10, "Roots"): the certificate may be from any of them,
+    /// last (section 10, "Handing the group over"): the certificate may be from any of them,
     /// or from an admin CA under any of them, and the renewed one is from
     /// the current root, or from adminCA.
     public static func renewal(chain: [Data], roots: [Data], caSigner: CertificateSigner, adminCA: Data? = nil, now: Date) throws -> Data? {
@@ -309,7 +309,7 @@ public enum GroupCertificates {
     }
 
     /// verifyMember(chain:groupCA:now:) in a group with several roots
-    /// (section 10, "Roots"): the leaf from any of them, or from an admin
+    /// (section 10, "Handing the group over"): the leaf from any of them, or from an admin
     /// CA under any of them.
     public static func verifyMember(chain: [Data], roots: [Data], now: Date) throws -> String {
         var last: Error = VerifyError.notFromGroupCA

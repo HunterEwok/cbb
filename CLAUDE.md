@@ -78,7 +78,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   which opens only the member port to its clients, and the client;
   `state.go` and `internal/service/tunnel.go` exchange its keys in the member protocol
   (docs/protocol.md, section 11).
-- `internal/vless`: VLESS with REALITY (Xray-core in the process) between a client and the
+- `internal/vless`: VLESS over XHTTP (Xray-core in the process) between a client and the
   forwarder, for networks that block WireGuard: the forwarder's side passes every packet to its
   own UDP port, the client's side is a local UDP port for WireGuard (docs/protocol.md,
   sections 11 and 13).
@@ -159,7 +159,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 
 ## Status
 
-Done: the Go service (0.2.0 released); the app makes its own group (root key in the Secure
+Done: the Go service (0.5.0 released); the app makes its own group (root key in the Secure
 Enclave, Face ID before each signing action), admits computers by QR code, syncs with them,
 shows the devices and removes them, renews certificates (any admin renews any device, the
 `cert` message carrying its admin CA); admin CAs under the root work in Go and in the kit
@@ -180,9 +180,9 @@ tunnel (`cbb global`; `TestLiteMemberAway`).
 
 Next steps, roughly in order:
 
-1. TestFlight (needs the Apple account), a signed macOS `.pkg`, remote invitations on the
-   phones (sync away from home works between computers, on both phones and on the lite
-   member: docs/protocol.md section 11), the lite member on the ESP32 (see docs/roadmap.md).
+1. TestFlight (needs the Apple account), a signed macOS `.pkg`, a run of remote invitations
+   on real phones (built on every device, docs/protocol.md section 12; e2e through
+   `phone-on-linux`), the lite member on the ESP32 (see docs/roadmap.md).
 
 Windows (the service, the agent, the installers) passes CI on windows-latest and runs in a
 Windows 11 virtual machine (Arm), where the tray app and the agent's clipboard work; not yet

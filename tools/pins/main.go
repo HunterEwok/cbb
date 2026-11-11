@@ -5,7 +5,8 @@
 // scripts write out by hand, which Dependabot does not see (it covers the
 // actions, Go modules, crates, Gradle, npm and Swift packages): qemu, zig,
 // the ESP32 toolchain, z88dk, the cargo tools CI installs, the pinned
-// nightly Rust and so on. For each pin it asks the tool's own registry or
+// nightly Rust, Xray-core (whose tags are not versions Go modules accept,
+// so go.mod pins a tag's commit and names the tag in a comment) and so on. For each pin it asks the tool's own registry or
 // release page for its latest stable version and prints one line; it
 // exits 1 when a pin is behind, when one tool is pinned at two versions,
 // or when the pinned nightly Rust is older than -nightly-days, so that the
@@ -43,11 +44,14 @@ import (
 // latest version is published.
 type pin struct {
 	name string
-	// re finds the version in the files; its first group is the version.
+	// re finds the version in the files; its last group is the version.
 	re *regexp.Regexp
 	// releases returns the stable versions, written as the pin writes
 	// them, each with when it was published.
 	releases func(ctx context.Context) ([]release, error)
+	// check, when set, makes sure the files pin what the version says
+	// (a commit pinned beside the tag it names).
+	check func(ctx context.Context, version string, paths []string) error
 }
 
 // release is a published version.
@@ -61,25 +65,36 @@ var files = []string{
 	".github/workflows/*.yml",
 	"member/packaging/*.sh",
 	"packaging/fdroid/*.yml",
+	"go.mod",
 }
 
 var pins = []pin{
-	{"qemu", regexp.MustCompile(`(?m)^\s+QEMU: "?([0-9][0-9.]*)"?\s*$`), gitlabTag("qemu-project/qemu", "v")},
-	{"zig (PyPI ziglang)", regexp.MustCompile(`ziglang==([0-9][^ \s]*)`), pypi("ziglang")},
-	{"cargo-zigbuild", regexp.MustCompile(`cargo-zigbuild==([0-9][^ \s]*)`), pypi("cargo-zigbuild")},
-	{"zizmor", regexp.MustCompile(`zizmor==([0-9][^ \s]*)`), pypi("zizmor")},
-	{"cargo-ndk", regexp.MustCompile(`cargo-ndk@([0-9][^ \s]*)`), crate("cargo-ndk")},
-	{"cargo-llvm-cov", regexp.MustCompile(`cargo-llvm-cov@([0-9][^ \s]*)`), crate("cargo-llvm-cov")},
-	{"cargo-deny", regexp.MustCompile(`cargo-deny@([0-9][^ \s]*)`), crate("cargo-deny")},
-	{"cargo-mutants", regexp.MustCompile(`cargo-mutants@([0-9][^ \s]*)`), crate("cargo-mutants")},
-	{"quint", regexp.MustCompile(`@informalsystems/quint@([0-9][^ \s"]*)`), npm("@informalsystems/quint")},
-	{"Rust for Xtensa (esp-rs/rust-build)", regexp.MustCompile(`(?m)^\s+ESP_RUST: "?([0-9][0-9.]*)"?\s*$`), githubRelease("esp-rs/rust-build", "v")},
-	{"Espressif's QEMU", regexp.MustCompile(`(?m)^\s+ESP_QEMU: "?(esp-develop-[0-9.]+-[0-9]+)"?\s*$`), githubRelease("espressif/qemu", "")},
-	{"espflash", regexp.MustCompile(`(?m)^\s+ESPFLASH: "?([0-9][0-9.]*)"?\s*$`), githubRelease("esp-rs/espflash", "v")},
-	{"z88dk", regexp.MustCompile(`(?m)^\s+Z88DK: "?([0-9][0-9.]*)"?\s*$`), githubRelease("z88dk/z88dk", "v")},
-	{"Rust (F-Droid build)", regexp.MustCompile(`--default-toolchain ([0-9][0-9.]*)`), githubRelease("rust-lang/rust", "")},
-	{"rustup (F-Droid build)", regexp.MustCompile(`rustup@([0-9][0-9.]*)`), githubTag("rust-lang/rustup", "")},
+	{name: "qemu", re: regexp.MustCompile(`(?m)^\s+QEMU: "?([0-9][0-9.]*)"?\s*$`), releases: gitlabTag("qemu-project/qemu", "v")},
+	{name: "zig (PyPI ziglang)", re: regexp.MustCompile(`ziglang==([0-9][^ \s]*)`), releases: pypi("ziglang")},
+	{name: "cargo-zigbuild", re: regexp.MustCompile(`cargo-zigbuild==([0-9][^ \s]*)`), releases: pypi("cargo-zigbuild")},
+	{name: "zizmor", re: regexp.MustCompile(`zizmor==([0-9][^ \s]*)`), releases: pypi("zizmor")},
+	{name: "reuse", re: regexp.MustCompile(`reuse==([0-9][^ \s]*)`), releases: pypi("reuse")},
+	{name: "typos", re: regexp.MustCompile(`typos==([0-9][^ \s]*)`), releases: pypi("typos")},
+	{name: "Biome", re: regexp.MustCompile(`@biomejs/biome@([0-9][^ \s"]*)`), releases: npm("@biomejs/biome")},
+	{name: "cargo-ndk", re: regexp.MustCompile(`cargo-ndk@([0-9][^ \s]*)`), releases: crate("cargo-ndk")},
+	{name: "cargo-llvm-cov", re: regexp.MustCompile(`cargo-llvm-cov@([0-9][^ \s]*)`), releases: crate("cargo-llvm-cov")},
+	{name: "cargo-deny", re: regexp.MustCompile(`cargo-deny@([0-9][^ \s]*)`), releases: crate("cargo-deny")},
+	{name: "cargo-mutants", re: regexp.MustCompile(`cargo-mutants@([0-9][^ \s]*)`), releases: crate("cargo-mutants")},
+	{name: "quint", re: regexp.MustCompile(`@informalsystems/quint@([0-9][^ \s"]*)`), releases: npm("@informalsystems/quint")},
+	{name: "Rust for Xtensa (esp-rs/rust-build)", re: regexp.MustCompile(`(?m)^\s+ESP_RUST: "?([0-9][0-9.]*)"?\s*$`), releases: githubRelease("esp-rs/rust-build", "v")},
+	{name: "Espressif's QEMU", re: regexp.MustCompile(`(?m)^\s+ESP_QEMU: "?(esp-develop-[0-9.]+-[0-9]+)"?\s*$`), releases: githubRelease("espressif/qemu", "")},
+	{name: "espflash", re: regexp.MustCompile(`(?m)^\s+ESPFLASH: "?([0-9][0-9.]*)"?\s*$`), releases: githubRelease("esp-rs/espflash", "v")},
+	{name: "z88dk", re: regexp.MustCompile(`(?m)^\s+Z88DK: "?([0-9][0-9.]*)"?\s*$`), releases: githubRelease("z88dk/z88dk", "v")},
+	{name: "Rust (F-Droid build)", re: regexp.MustCompile(`--default-toolchain ([0-9][0-9.]*)`), releases: githubRelease("rust-lang/rust", "")},
+	{name: "Xray-core (go.mod)", re: xrayRe, releases: githubTag(xrayRepo, "v"), check: xrayCommit},
+	{name: "rustup (F-Droid build)", re: regexp.MustCompile(`rustup@([0-9][0-9.]*)`), releases: githubTag("rust-lang/rustup", "")},
 }
+
+// xrayRepo is Xray-core's repository; xrayRe finds the tag that go.mod
+// names beside the commit it pins.
+const xrayRepo = "XTLS/Xray-core"
+
+var xrayRe = regexp.MustCompile(`(?m)^\s+github\.com/xtls/xray-core v\S+-([0-9a-f]{12}) // v([0-9][0-9.]*)\s*$`)
 
 // nightlyRe finds a pinned nightly Rust.
 var nightlyRe = regexp.MustCompile(`nightly-(\d{4}-\d{2}-\d{2})`)
@@ -95,7 +110,7 @@ func scan(re *regexp.Regexp, paths []string) (found, error) {
 			return nil, err
 		}
 		for _, m := range re.FindAllSubmatchIndex(b, -1) {
-			v := string(b[m[2]:m[3]])
+			v := string(b[m[len(m)-2]:m[len(m)-1]])
 			line := 1 + strings.Count(string(b[:m[0]]), "\n")
 			f[v] = append(f[v], fmt.Sprintf("%s:%d", p, line))
 		}
@@ -138,6 +153,14 @@ func main() {
 			fmt.Printf("FAIL %s: the latest version: %v\n", p.name, err)
 			bad = true
 			continue
+		}
+		if p.check != nil {
+			for _, v := range sortedKeys(f) {
+				if err := p.check(ctx, v, paths); err != nil {
+					fmt.Printf("FAIL %s: %v\n", p.name, err)
+					bad = true
+				}
+			}
 		}
 		due, newest := choose(rels, time.Now().Add(-time.Duration(*cooldown)*24*time.Hour))
 		latest := newest.version
@@ -415,4 +438,28 @@ func gitlabTag(project, prefix string) func(context.Context) ([]release, error) 
 		}
 		return out, nil
 	}
+}
+
+// xrayCommit checks that the commit go.mod pins for Xray-core is the one
+// of the tag its comment names, so that the comment cannot drift from the
+// pin it describes.
+func xrayCommit(ctx context.Context, version string, paths []string) error {
+	var c struct {
+		SHA string `json:"sha"`
+	}
+	if err := getJSON(ctx, "https://api.github.com/repos/"+xrayRepo+"/commits/v"+version, &c); err != nil {
+		return err
+	}
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		for _, m := range xrayRe.FindAllSubmatch(b, -1) {
+			if string(m[2]) == version && !strings.HasPrefix(c.SHA, string(m[1])) {
+				return fmt.Errorf("%s pins commit %s, but v%s is %s", p, m[1], version, c.SHA)
+			}
+		}
+	}
+	return nil
 }

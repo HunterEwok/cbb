@@ -26,6 +26,9 @@ never leave it; each signature with the group's root key or an admin key asks fo
 fingerprint or passcode, while the key it syncs with works without asking. A computer keeps its
 keys in files that only Copy Beyond Borders reads.
 
+A group is the devices of one person, who share one clipboard. Two people who want
+clipboards of their own make two groups.
+
 ### Rootless members
 
 Normally the installer needs `sudo` once, so that Copy Beyond Borders runs under an
@@ -117,8 +120,8 @@ group's tunnel:
 
 - **Obfuscation** (`-obfuscate`): the tunnel speaks AmneziaWG, which does not look like
   WireGuard on the wire. Computers and both phone apps support it.
-- **VLESS with REALITY** (`-vless`, through a forwarder): the devices reach the forwarder
-  inside what looks like an ordinary HTTPS connection to a well-known website. For networks
+- **VLESS** (`-vless`, through a forwarder): the devices reach the forwarder inside what
+  looks like an ordinary HTTPS connection to the forwarder's website. For networks
   that block both of the above. Computers and both phone apps support it.
 
 The lite member speaks only plain WireGuard, so with either of these it syncs at home only.

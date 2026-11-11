@@ -5,7 +5,6 @@ package service
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -461,18 +460,28 @@ func testAwayThroughForwarder(t *testing.T, obfuscate, overVLESS bool, deckEnv .
 	state := filepath.Join(t.TempDir(), "state.json")
 	cfg := forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: state}
 	if overVLESS {
-		cfg.VLESS = &forward.VLESSConfig{Listen: "127.0.0.1:0", Site: vlesstest.Site, Dest: vlesstest.Decoy(t)}
-		rand.Read(cfg.VLESS.Key[:])
+		// VLESS over XHTTP behind a TLS web server whose CA the deck
+		// trusts through SSL_CERT_FILE.
+		path, err := tunnel.NewVLESSPath()
+		if err != nil {
+			t.Fatal(err)
+		}
+		free, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		vlessAddr := free.Addr().String()
+		free.Close()
+		web, ca := vlesstest.WebServerCA(t, path, func() string { return vlessAddr })
+		roots := filepath.Join(t.TempDir(), "roots.pem")
+		if err := os.WriteFile(roots, ca, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		deckEnv = append(deckEnv, "SSL_CERT_FILE="+roots)
+		cfg.VLESS = &forward.VLESSConfig{Listen: vlessAddr, XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}
 	}
 	f, err := forward.Listen(cfg)
 	if err != nil {
-		t.Fatal(err)
-	}
-	// A client that comes before the forwarder has learned the site
-	// waits for it, and its handshakes with it.
-	rctx, rcancel := context.WithTimeout(context.Background(), time.Minute)
-	defer rcancel()
-	if err := f.Ready(rctx); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())

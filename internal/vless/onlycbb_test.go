@@ -4,8 +4,6 @@
 package vless
 
 import (
-	"context"
-	"crypto/rand"
 	"io"
 	"net"
 	"net/netip"
@@ -17,7 +15,6 @@ import (
 	"github.com/xtls/xray-core/proxy/dokodemo"
 
 	"github.com/HunterEwok/cbb/internal/tunnel"
-	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
 
 // outside stands for the internet, and for any service on the forwarder's
@@ -179,11 +176,6 @@ func targets(o *outside, network xnet.Network) []netip.AddrPort {
 // and the registrations' user ID neither.
 func onlyCBB(t *testing.T, s *Server, l tunnel.VLESS, o *outside) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	if err := s.Ready(ctx); err != nil {
-		t.Fatal(err)
-	}
 	for _, to := range targets(o, xnet.Network_UDP) {
 		if got := packetBack(t, hostile(t, l, xnet.Network_UDP, to.Addr().String(), to.Port())); got != "a packet" {
 			t.Errorf("a packet to %v: the answer %q did not come from the forwarder's port", to, got)
@@ -207,9 +199,7 @@ func onlyCBB(t *testing.T, s *Server, l tunnel.VLESS, o *outside) {
 	}
 	reg := l
 	reg.ID = RegistrationID
-	if l.Transport == tunnel.TransportXHTTP {
-		reg.Path = tunnel.RegistrationPath(l.Path)
-	}
+	reg.Path = tunnel.RegistrationPath(l.Path)
 	if got := packetBack(t, hostile(t, reg, xnet.Network_UDP, o.udp.Addr().String(), o.udp.Port())); got != "" {
 		t.Errorf("the registrations' user ID sent a packet somewhere: %q", got)
 	}
@@ -219,26 +209,9 @@ func onlyCBB(t *testing.T, s *Server, l tunnel.VLESS, o *outside) {
 	o.check(t)
 }
 
-// A client of a group, asking the forwarder's side over REALITY for any
-// address, TCP or UDP, reaches only the forwarder and the mirror.
-func TestOnlyCBBThroughREALITY(t *testing.T) {
-	o := newOutside(t)
-	var key [32]byte
-	rand.Read(key[:])
-	s, err := Listen(ServerConfig{Listen: "127.0.0.1:0", Dest: vlesstest.Decoy(t), ServerName: vlesstest.Site, Key: key,
-		To: echo(t), Mirror: tcpEcho(t)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	id, _ := tunnel.NewVLESSID()
-	if err := s.AddUser(id); err != nil {
-		t.Fatal(err)
-	}
-	onlyCBB(t, s, link(t, s, key, id), o)
-}
-
-// The same over XHTTP behind a web server.
+// A client of a group, asking the forwarder's side over XHTTP behind a
+// web server for any address, TCP or UDP, reaches only the forwarder and
+// the mirror.
 func TestOnlyCBBThroughXHTTP(t *testing.T) {
 	o := newOutside(t)
 	path, err := tunnel.NewVLESSPath()
@@ -263,11 +236,6 @@ func TestNoMirrorNoStreams(t *testing.T) {
 	id, _ := tunnel.NewVLESSID()
 	s, l := behindWebServerWith(t, ServerConfig{Listen: "127.0.0.1:0", Path: path, To: echo(t)}, id)
 	if err := s.AddUser(id); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	if err := s.Ready(ctx); err != nil {
 		t.Fatal(err)
 	}
 	for _, to := range targets(o, xnet.Network_TCP) {

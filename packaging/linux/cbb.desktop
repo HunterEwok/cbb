@@ -4,6 +4,13 @@
 Type=Application
 Name=CBB
 Comment=One clipboard for the devices of your home
+Comment[ar]=حافظة واحدة لأجهزة منزلك
+Comment[es]=Un solo portapapeles para los dispositivos de tu casa
+Comment[he]=לוח גזירים אחד למכשירים של הבית שלך
+Comment[hi]=आपके घर के डिवाइसों के लिए एक क्लिपबोर्ड
+Comment[ru]=Один буфер обмена для устройств вашего дома
+Comment[sw]=Ubao mmoja wa kunakili kwa vifaa vya nyumbani kwako
+Comment[zh]=家中所有设备共用一个剪贴板
 Exec=/usr/local/bin/cbb-desktop
 Icon=/usr/local/share/cbb/cbb.png
 Categories=Utility;

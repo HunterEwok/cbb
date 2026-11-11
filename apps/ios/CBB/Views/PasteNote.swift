@@ -37,10 +37,11 @@ struct PasteNote: View {
 }
 
 /// A remote invitation for a device far away (docs/protocol.md, section
-/// 12), from Home's +: made on the group's hub. On this phone while it is
-/// the hub: the button that opens it, its file to share, and the question
-/// about the device that used it, with the fingerprint to compare.
-/// Otherwise it says where to make one.
+/// 12), from Home's +: on an admin phone, the button that opens it (on this
+/// phone while it is the hub, else through a connected hub of the group),
+/// its QR code, which the new device scans, its file to share as the
+/// fallback, and the question about the device that used it, with the
+/// fingerprint to compare. Elsewhere it says who makes one.
 struct InviteSheet: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -49,10 +50,21 @@ struct InviteSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let hub = model.hub, hub.on, hub.status == .registered {
+                if model.isAdmin {
                     Section {
                         if let invite = model.invite {
-                            Text("The invitation is open until \(invite.expires.formatted(date: .omitted, time: .shortened)). Share its file only with the person who joins.")
+                            if let image = QRImage.make(invite.text) {
+                                Image(uiImage: image)
+                                    .interpolation(.none)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: 260)
+                                    .padding(Tokens.spacingMedium)
+                                    .background(Color.white, in: RoundedRectangle(cornerRadius: Tokens.radiusCard, style: .continuous))
+                                    .frame(maxWidth: .infinity)
+                                    .accessibilityLabel(Text("The invitation's QR code"))
+                            }
+                            Text("The invitation is open until \(invite.expires.formatted(date: .omitted, time: .shortened)). Show or send its QR code only to the person who joins; its file is the fallback.")
                                 .font(.footnote)
                                 .foregroundStyle(palette.textDim)
                             ShareLink(item: invite.file) { Text("Share the invitation") }
@@ -64,12 +76,12 @@ struct InviteSheet: View {
                             Text(verbatim: note).font(.caption).foregroundStyle(palette.textDim)
                         }
                     } footer: {
-                        Text("Its owner joins with cbb pair -invite. It works once, for an hour, while this app is open.")
+                        Text("On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with the file. It works once, for an hour, while this app is open; the group needs a hub.")
                     }
                     .listRowBackground(palette.surface)
                 } else {
                     Section {
-                        Text("On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.")
+                        Text("Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.")
                     }
                     .listRowBackground(palette.surface)
                 }

@@ -1,6 +1,7 @@
 # Contributing
 
-Copy Beyond Borders is developed by one maintainer. Thank you for your interest.
+Copy Beyond Borders is developed by one maintainer. Thank you for your interest. For help
+with using CBB, see [SUPPORT.md](SUPPORT.md).
 
 ## Issues are welcome
 
@@ -36,10 +37,12 @@ The maintainer follows these rules; they are written down to keep the history co
   ```
 
   Scripts and other source files start with the same two lines in their own comment style.
+  A file that cannot carry them, such as an image or a JSON file, takes its license from
+  [REUSE.toml](REUSE.toml); `reuse lint` checks that every file has one.
 
 - **Copied code** lives in its own directory below `internal/third_party`, with its
   `LICENSE` and a `README.md` that names the source and version; its files keep their own
-  copyright notices.
+  copyright notices, and REUSE.toml names its copyright and license for the whole directory.
 
 - **Pull requests.** Every change goes into `main` through a pull request and is merged with
   squash. `main` is protected.
@@ -60,6 +63,12 @@ The maintainer follows these rules; they are written down to keep the history co
   release and checks it against `SHA256SUMS`, an `install` for an unpacked archive, and an
   `uninstall` that the install leaves on the machine. `get.sh` serves Linux and macOS,
   `get.ps1` Windows; CI runs each of them.
+  The installers speak the user's language through `packaging/l10n.sh` (`say`, `sayerr`, `t`,
+  `note`) and `packaging/windows/l10n.ps1` (`T`): a message is a constant printf format whose
+  only directive is `%s`, with its values as arguments, and every catalog
+  `packaging/l10n/<language>.tsv` (English text, a tab, the translation) translates it with
+  its `%s` in the same order. `repocheck` checks both ways. The release puts the catalogs
+  into `get.sh` and `get.ps1` (`packaging/l10n-embed.sh`), which run alone.
 - **Documentation.** Each page says at the top who it is for and sits in its reader's part
   of [docs/README.md](docs/README.md), which `repocheck` checks: users' guides in plain
   words (`docs/guide`), administrators' pages (`docs/admin`), exact reference without the
@@ -102,6 +111,10 @@ pipx run zizmor==1.31.1 --offline --min-severity low .github/workflows   # their
 go run ./tools/repocheck       # English only, license headers, copied code, no programs or files over 1 MiB, documentation links and names
 go run ./tools/tokens -check   # apps/design/tokens.json -> Swift and Kotlin, WCAG contrast
 go run ./tools/icon -check     # the apps' icons
+sh .github/shellcheck.sh       # every shell script
+pipx run typos==1.51.1         # spelling of the English text (_typos.toml)
+npx --yes @biomejs/biome@2.6.2 ci   # the tray app's HTML, CSS and JavaScript (biome.json)
+pipx run reuse==6.2.0 lint     # every file's copyright and license (REUSE.toml)
 go test -race ./...
 go build -o /dev/null ./cmd/...
 GOOS=linux GOARCH=arm GOARM=6 go build -o /dev/null ./cmd/cbb-helper   # Raspberry Pi Zero W

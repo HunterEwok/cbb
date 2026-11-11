@@ -150,6 +150,10 @@ mod tests {
         }
         assert!(public_key(&[0u8; 31]).is_err());
         assert!(seal(&public[1..], b"", b"").is_err());
+        assert!(check_public_key(&public).is_ok());
+        for bad in [&[][..], &public[1..], &[0u8; PUBLIC_KEY_SIZE + 1]] {
+            assert!(check_public_key(bad).is_err(), "a key of {} bytes", bad.len());
+        }
         assert!(open(&secret, b"", &[0u8; OVERHEAD - 1]).is_err());
     }
 

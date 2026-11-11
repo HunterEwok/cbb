@@ -33,6 +33,7 @@ LIBS += $$PWD/core/$$QT_ARCH/libcbb_ffi.a -ldl -lpthread -lm
 SOURCES += \
     src/main.cpp \
     src/admit.cpp \
+    src/invite.cpp \
     src/blekeyboard.cpp \
     src/pastereceiver.cpp \
     src/app.cpp \
@@ -45,6 +46,7 @@ SOURCES += \
     src/platform/osinfo.cpp
 HEADERS += \
     src/admit.h \
+    src/invite.h \
     src/blekeyboard.h \
     src/pastereceiver.h \
     src/app.h \
@@ -96,11 +98,15 @@ DISTFILES += \
     qml/tools.cbb.aurora.qml \
     qml/pages/MainPage.qml \
     qml/pages/JoinPage.qml \
+    qml/pages/InvitationPage.qml \
+    qml/pages/InvitePage.qml \
     qml/pages/NewGroupPage.qml \
     qml/pages/AddDevicePage.qml \
     qml/pages/DevicePage.qml \
     qml/pages/AlertsCard.qml \
     qml/pages/RenameDevicePage.qml \
+    qml/pages/RecoveryPage.qml \
+    qml/pages/RestorePage.qml \
     qml/pages/DeviceTile.qml \
     qml/pages/DeviceRow.qml \
     qml/pages/DeviceItems.qml \

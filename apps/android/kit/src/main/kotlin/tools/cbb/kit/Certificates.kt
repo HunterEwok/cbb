@@ -250,7 +250,7 @@ object GroupCertificates {
     /**
      * Checks the new root of a root record as Go's checkRoot does: a
      * self-signed CA with path length 1 that may sign certificates, with a
-     * P-256 key (docs/protocol.md, section 10, "Roots").
+     * P-256 key (docs/protocol.md, section 10, "Handing the group over").
      */
     fun checkRoot(der: ByteArray) {
         val c = try { ParsedCertificate(der) } catch (e: MalformedException) { throw VerifyException(VerifyFailure.NOT_ROOT) }
@@ -359,7 +359,7 @@ object GroupCertificates {
 
     /**
      * The renewal for a peer's chain from a TLS handshake, leaf first, in a
-     * group with several roots, the current one last (section 10, "Roots"):
+     * group with several roots, the current one last (section 10, "Handing the group over"):
      * the certificate may be from any of them, or from an admin CA under any
      * of them, and the renewed one is from the current root, or from adminCA.
      */
@@ -418,7 +418,7 @@ object GroupCertificates {
 
     /**
      * verifyMember for a chain in a group with several roots (section 10,
-     * "Roots"): the leaf from any of them, or from an admin CA under any of
+     * "Handing the group over"): the leaf from any of them, or from an admin CA under any of
      * them.
      */
     fun verifyMember(chain: List<ByteArray>, roots: List<ByteArray>, now: Instant): String {

@@ -14,7 +14,7 @@ For anyone with a phone or a computer, in plain words.
 | [Installing](guide/install.md) | every system, Homebrew, winget, Docker, the firewall, updating, removing |
 | [The apps](guide/apps.md) | the phone, watch and desktop apps |
 | [Away from home](guide/away-from-home.md) | the hub, a forwarder, invitations |
-| [Networks that block VPNs](guide/blocked-networks.md) | AmneziaWG and VLESS with REALITY |
+| [Networks that block VPNs](guide/blocked-networks.md) | AmneziaWG and VLESS |
 | [Images, files and formatted text](guide/images-and-files.md) | what goes where, the sizes, saving received files |
 | [Remote paste](guide/remote-paste.md) | an admin puts a text into the focused app on another device |
 | [Keyboards and TVs](guide/keyboards-and-tvs.md) | type into a TV, tablet, console or computer as a Bluetooth or USB keyboard, or as the TV's remote |
@@ -61,7 +61,7 @@ for security reviewers.
 | Document | What is in it |
 |---|---|
 | [Design](design.md) | how it works and why, after the arc42 template: goals, context, building blocks, run time, deployment, concepts, quality, risks |
-| [Decisions](decisions.md) | every architecture decision, D-1 to D-78, with its status |
+| [Decisions](decisions.md) | the architecture decisions in force, and the replaced ones as their history |
 | [Threat model](threat-model.md) | the assets, adversaries, trust boundaries, and each threat with its defence and code |
 | [Protocol](protocol.md) | the wire format, for anyone writing another implementation |
 | [Group records, version 2](records-v2.md) | why the group's authority records moved to version 2 in 0.6 and how they are tested; the rules are in protocol.md, section 10 |

@@ -68,6 +68,16 @@ uint8_t *cbb_join_finish(cbb_join *j, int32_t saved, size_t *answer_len);
  * with the member (the Aurora app's).
  */
 int32_t cbb_join_announce(cbb_join *j, uint16_t port);
+/*
+ * With "invite" in the request, a remote invitation's text, the joiner
+ * dials in place of listening (docs/protocol.md, section 12): it starts the
+ * invitation's guest tunnel, the answer's "port" is the tunnel's loopback
+ * port, which the app dials for each attempt, and cbb_join_accept's answer
+ * has "send", the first bytes to send. cbb_join_answered returns 1 once the
+ * invitation's hub answered through the tunnel. Only in the build with the
+ * tunnel.
+ */
+int32_t cbb_join_answered(const cbb_join *j);
 void cbb_join_free(cbb_join *j);
 
 /*
@@ -118,9 +128,23 @@ void cbb_member_stop(cbb_member *m);
  * "root_ca", public its key, "name", "os", "store", "seal" answers
  * {"state","left_ms"} while the claim waits, signing nothing, and
  * {"state":"effective","cert"} once it made the phone the root.
+ * recover_with_sheet with "sheet" (the recovery sheet's QR code) and
+ * "root_ca" claims the group for a phone that restored it (cbb_restore): the
+ * sheet's key signs the claim, sign is not called.
  */
 uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                            size_t *answer_len);
+
+/*
+ * Restores a group on a new phone with its recovery key (src/restore.rs):
+ * request is {"sheet","public","name","os","addrs","wait_ms"}, sheet the recovery
+ * sheet's QR code and public the phone's member key point, which sign signs
+ * with during this call only. It blocks while it browses for the group by
+ * the sheet's tag (or asks addrs, "host:port") and takes the records from a member on a connection that
+ * carries records only, checked; the answer {"device","cert","issuer",
+ * "group_ca","roots","records","addr"} is what the app starts its member with.
+ */
+uint8_t *cbb_restore(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
 
 /*
  * The texts of the QR codes in a grey camera frame (src/qr.rs), only with the
@@ -157,6 +181,27 @@ cbb_admit *cbb_admit_new(const cbb_member *m, const uint8_t *request, size_t len
 uint8_t *cbb_admit_dial(cbb_admit *a, size_t *answer_len);
 uint8_t *cbb_admit_feed(cbb_admit *a, const uint8_t *data, size_t len, int64_t now_ms, size_t *answer_len);
 void cbb_admit_free(cbb_admit *a);
+
+/*
+ * A remote invitation an admin phone makes (src/invite.rs): request is
+ * {"public","admin_ca","expires","hub"} as for cbb_admit_new, expires in
+ * seconds (an hour when 0, a day at most) and hub a device ID or empty for
+ * any connected hub; sign with ctx signs until cbb_invite_free. The answer
+ * is {"invite","expires","modules"}; it waits for the hub, so the app calls
+ * it off its main thread. cbb_invite_next waits up to timeout_ms for a
+ * state past version and answers {"version","state","joining","name",
+ * "device","error"}, state open, joining (joining is
+ * {"device","name","os","fingerprint"}: the app asks the user and answers
+ * with cbb_invite_answer), done or failed. cbb_invite_free ends it and
+ * waits for its window to close.
+ */
+typedef struct cbb_invite cbb_invite;
+
+cbb_invite *cbb_invite_new(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
+                           uint8_t **answer, size_t *answer_len);
+uint8_t *cbb_invite_next(const cbb_invite *i, uint64_t version, uint64_t timeout_ms, size_t *answer_len);
+void cbb_invite_answer(const cbb_invite *i, int32_t yes);
+void cbb_invite_free(cbb_invite *i);
 
 /*
  * The phones' tunnel to the hub (src/tunnel.rs), only in a library built with

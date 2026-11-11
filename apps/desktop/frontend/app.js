@@ -169,10 +169,6 @@ function glyph(d, size = 44) {
     `stroke-width="1.8" stroke-linecap="round">${shapes[kindOf(d)]}</svg></span>`;
 }
 
-// Sync on (mode shared) or off (mode own; docs/design.md, "Sync on and
-// off").
-const modeName = (m) => ({ shared: t("On"), own: t("Off") })[m] ?? m;
-
 // How a hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
 const tunnels = ["plain", "obfuscate", "vless"];
 const tunnelName = (m) => ({ plain: "WireGuard", obfuscate: "AmneziaWG", vless: "VLESS" })[m];
@@ -613,13 +609,13 @@ async function menuChoice(v, ref, level) {
     case "end": return moveBy(ref, level, Infinity);
     case "new": {
       const name = await ask(t("New collection"), t("The collection is kept on this computer only."), t("Save"), "");
-      if (name && name.trim()) await arrange({ op: "new", name: name.trim(), devices: [ref.slice(2)] });
+      if (name?.trim()) await arrange({ op: "new", name: name.trim(), devices: [ref.slice(2)] });
       return;
     }
     case "rename": {
       const c = collectionOf(ref.slice(2));
       const name = await ask(t("Rename collection"), t("The collection is kept on this computer only."), t("Save"), c?.name ?? "");
-      if (name && name.trim()) await arrange({ op: "rename", collection: ref.slice(2), name: name.trim() });
+      if (name?.trim()) await arrange({ op: "rename", collection: ref.slice(2), name: name.trim() });
       return;
     }
   }
@@ -826,7 +822,7 @@ async function deviceAction(action) {
   switch (action) {
     case "rename": {
       const name = await ask(t("Rename %s", d.name), t("Every device of the group shows the new name."), t("Rename"), d.name);
-      if (name && name.trim()) await act("Rename", d.id, name.trim());
+      if (name?.trim()) await act("Rename", d.id, name.trim());
       break;
     }
     case "remove":
@@ -951,6 +947,7 @@ function openAdd() {
   const me = state.devices.find((x) => x.self);
   $("admit-box").hidden = !me?.admin;
   $("admit-none").hidden = !!me?.admin;
+  $("invite").hidden = !me?.admin;
   // Only the group's root makes admins.
   $("admit-admin-row").hidden = !me?.root;
   $("admit-admin").checked = false;
@@ -989,11 +986,56 @@ async function admit() {
   await act("Admit", text, admin);
 }
 
-// An invitation is made on the group's hub, which reaches a device far
-// away; cbb invite does it there for now.
+// A remote invitation for a device far away (docs/protocol.md, section
+// 12): Invite runs until it ends, while the dialog asks InviteState for its
+// QR code and the device that asks to join, which the user admits only if
+// it shows the same fingerprint (invite.go). Closing the dialog cancels.
+let inviting = false;
+
 async function invite() {
   $("add-dialog").close();
-  await ask(t("Send an invitation"), t("On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file."), t("OK"));
+  if (inviting) return;
+  inviting = true;
+  const dlg = $("invite-dialog");
+  $("invite-wait").hidden = false;
+  $("invite-code").hidden = true;
+  $("invite-ask").hidden = true;
+  let running = true;
+  const ended = call("Invite").catch((e) => console.error("Invite", e)).finally(() => {
+    running = false;
+    if (dlg.open) dlg.close("done");
+  });
+  dlg.onclose = () => {
+    if (running) call("CancelInvite").catch((e) => console.error("CancelInvite", e));
+  };
+  $("invite-yes").onclick = () => call("AnswerInvite", true).catch((e) => console.error("AnswerInvite", e));
+  $("invite-no").onclick = () => call("AnswerInvite", false).catch((e) => console.error("AnswerInvite", e));
+  dlg.returnValue = "";
+  dlg.showModal();
+  while (running && dlg.open) {
+    let i;
+    try {
+      i = await call("InviteState");
+    } catch (e) {
+      console.error("InviteState", e);
+    }
+    if (i?.image) {
+      $("invite-wait").hidden = true;
+      $("invite-code").hidden = !!i.joining;
+      $("invite-qr").src = i.image;
+      $("invite-text").textContent = i.text;
+      $("invite-ends").textContent = t("The invitation is valid until %s.", new Date(i.ends).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      $("invite-ask").hidden = !i.joining;
+      if (i.joining) {
+        $("invite-ask-title").textContent = t("%s (%s) used the invitation. Admit it only if the device shows the same fingerprint:", i.joining.name, i.joining.os);
+        $("invite-fingerprint").textContent = i.joining.fingerprint;
+      }
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  await ended;
+  inviting = false;
+  await refresh();
 }
 
 // The recovery key claims a group whose every phone is lost; this computer
@@ -1004,7 +1046,7 @@ async function recovery() {
     return;
   }
   const key = await ask(t("Claim the group with its recovery key?"), t("Type the key from the sheet, or paste its QR code's text. The claim waits as a takeover does."), t("Claim"), "");
-  if (key && key.trim()) await act("Recover", key.trim());
+  if (key?.trim()) await act("Recover", key.trim());
 }
 
 // Joining a group: JoinGroup runs until the join ends, while the dialog

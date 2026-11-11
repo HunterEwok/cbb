@@ -243,7 +243,7 @@ class RootTest {
     fun takeoverDelay() {
         val g = group()
         val e = assertFailsWith<PhoneGroup.Failure> { g.root.setTakeoverDelay(8L * 24 * 3600 * 1000, g.rootKey, Instant.now()) }
-        assertEquals(PhoneGroup.INVALID_DELAY, e.message)
+        assertEquals(INVALID_DELAY, e.message)
         assertFailsWith<PhoneGroup.Failure> { g.b.setTakeoverDelay(0, g.adminKey, Instant.now()) }
         g.fromRoot(g.root.setTakeoverDelay(0, g.rootKey, Instant.now()))
         val newRoot = g.newRoot()

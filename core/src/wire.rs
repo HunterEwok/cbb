@@ -80,6 +80,85 @@ pub struct Message {
     /// ("Content" in section 4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub get: Option<Get>,
+    /// In a guest message, a remote invitation that an admin makes through
+    /// the group's hub (section 12, "Through the hub"): decoded on its own
+    /// with [`Guest`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guest: Option<Value>,
+}
+
+/// A guest message (section 12, "Through the hub"): an admin that is not
+/// the hub asks the hub for a guest tunnel (`open`), the hub answers
+/// (`opened` or `refused`), the two pass the bytes of the guest's pairing
+/// connections (`data`, `end`), and the admin says how its window ended
+/// (`admitted` or `close`).
+#[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq)]
+pub struct Guest {
+    /// `open`, `opened`, `refused`, `data`, `end`, `admitted` or `close`.
+    pub op: String,
+    /// The guest's WireGuard public key, which names the invitation.
+    #[serde(with = "b64")]
+    pub key: Vec<u8>,
+    /// In open: the guest's preshared key.
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    pub psk: Option<Vec<u8>>,
+    /// In open: when the invitation ends, milliseconds since the Unix epoch.
+    #[serde(default, skip_serializing_if = "is_zero_i64")]
+    pub expires_ms: i64,
+    /// In opened: the hub's WireGuard public key.
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    pub hub_key: Option<Vec<u8>>,
+    /// In opened: the hub's addresses away from home, ip:port.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub endpoints: Vec<String>,
+    /// In opened: the group's AmneziaWG settings, as in the hub's offer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obfuscation: Option<Value>,
+    /// In opened: the way to the hub's forwarder over VLESS, as in the
+    /// hub's offer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vless: Option<Value>,
+    /// In refused: why.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub reason: String,
+    /// In data and end: the guest's connection, numbered by the hub from 1.
+    #[serde(default, skip_serializing_if = "is_zero_i64")]
+    pub conn: i64,
+    /// In data: the connection's bytes, at most [`MAX_GUEST_DATA`].
+    #[serde(with = "b64::opt", default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<Vec<u8>>,
+    /// In admitted: the device the admin's window admitted.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub device: String,
+}
+
+/// The most bytes one guest data message carries.
+pub const MAX_GUEST_DATA: usize = 16 << 10;
+
+/// A guest message.
+pub fn guest(g: &Guest) -> Message {
+    Message { kind: "guest".into(), guest: serde_json::to_value(g).ok(), ..Default::default() }
+}
+
+impl Guest {
+    /// Reads a guest message's object: a known op, a key of 32 bytes, and
+    /// what the op needs.
+    pub fn decode(v: &Value) -> Option<Guest> {
+        let g: Guest = serde_json::from_value(v.clone()).ok()?;
+        if g.key.len() != 32 {
+            return None;
+        }
+        let ok = match g.op.as_str() {
+            "open" => g.psk.as_ref().is_some_and(|p| p.len() == 32) && g.expires_ms > 0,
+            "opened" => g.hub_key.as_ref().is_some_and(|k| k.len() == 32) && !g.endpoints.is_empty(),
+            "refused" | "close" => true,
+            "data" => g.conn > 0 && g.data.as_ref().is_some_and(|d| !d.is_empty() && d.len() <= MAX_GUEST_DATA),
+            "end" => g.conn > 0,
+            "admitted" => !g.device.is_empty(),
+            _ => false,
+        };
+        ok.then_some(g)
+    }
 }
 
 /// A range of a copy's sealed blob, by its SHA-256 ("Content" in section
@@ -193,6 +272,23 @@ pub struct CommandResult {
     /// its app reads it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tunnel: Option<Value>,
+}
+
+/// The most bytes of a result's reason a member keeps.
+pub const MAX_REASON: usize = 256;
+
+/// Makes a result's reason fit to show to a person, a terminal's user among
+/// them: a control character (escape included) becomes a space, and it is
+/// cut to MAX_REASON bytes at a character boundary. The member that answers
+/// is a peer, so the member that takes its result cleans it, as Go's
+/// CleanReason did.
+pub fn clean_reason(s: &str) -> String {
+    let mut out: String = s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
+    if out.len() > MAX_REASON {
+        let end = (0..=MAX_REASON).rev().find(|&i| out.is_char_boundary(i)).unwrap_or(0);
+        out.truncate(end);
+    }
+    out
 }
 
 /// The content of a hello.
@@ -595,7 +691,27 @@ pub fn frame_len(head: [u8; 4], max: usize) -> Result<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CommandResult, DeviceInfo, archive_name_valid, decode};
+    use super::{CommandResult, DeviceInfo, MAX_REASON, archive_name_valid, clean_reason, decode};
+
+    /// A result's reason keeps its text, loses its control characters and
+    /// is cut whole characters at a time, as Go's TestCleanReason.
+    #[test]
+    fn reasons_are_cleaned() {
+        for (input, want) in [
+            ("the screen is locked", "the screen is locked"),
+            ("", ""),
+            ("a\x1b[2Jb\x1b]52;c;ZXZpbA==\x07c", "a [2Jb ]52;c;ZXZpbA== c"),
+            ("a\nb\tc\r", "a b c "),
+            ("a\u{9b}b", "a b"),
+            ("écran verrouillé", "écran verrouillé"),
+        ] {
+            assert_eq!(clean_reason(input), want, "{input:?}");
+        }
+        assert_eq!(clean_reason(&"a".repeat(1000)).len(), MAX_REASON);
+        let cut = clean_reason(&format!("{}é", "a".repeat(MAX_REASON - 1)));
+        assert_eq!(cut, "a".repeat(MAX_REASON - 1));
+        assert!(clean_reason(&"é".repeat(MAX_REASON)).len() <= MAX_REASON);
+    }
 
     /// A records-only hello carries the group's first root in base64, which
     /// a hello decodes back; every other hello leaves it out.

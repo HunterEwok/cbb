@@ -162,6 +162,17 @@ public struct RustTunnels: Tunnels {
     }
 }
 
+extension RustTunnels {
+    /// The guest tunnel of the remote invitation this phone joined by
+    /// (docs/protocol.md, section 12): its port leads to the hub's member
+    /// port, where the phone offers its own tunnel key until the hub's
+    /// offer comes.
+    public func guest(invite: String) throws -> OpenTunnel {
+        let ok = try RustTunnel.call(["op": "guest_start", "invite": invite])
+        return RustOpenTunnel(id: try RustTunnel.id(ok), port: try RustTunnel.port(ok, "port"))
+    }
+}
+
 /// A running tunnel to the hub.
 final class RustOpenTunnel: OpenTunnel, @unchecked Sendable {
     let id: Int
@@ -271,9 +282,11 @@ final class RustHub: HubTunnel, @unchecked Sendable {
         return String(decoding: d, as: UTF8.self)
     }
 
-    func invite(group: String, endpoints: String, lifetime: Int, guestPort: UInt16) throws -> HubGuest {
-        let ok = try RustTunnel.call(["op": "hub_invite", "id": id, "group": group, "endpoints": try RustTunnel.json(endpoints) ?? [Any](),
-                                      "lifetime": lifetime, "guest_port": Int(guestPort)])
+    func invite(group: String, endpoints: String, lifetime: Int, guestPort: UInt16, vless: String) throws -> HubGuest {
+        var req: [String: Any] = ["op": "hub_invite", "id": id, "group": group, "endpoints": try RustTunnel.json(endpoints) ?? [Any](),
+                                  "lifetime": lifetime, "guest_port": Int(guestPort)]
+        if let v = try RustTunnel.json(vless) { req["vless"] = v }
+        let ok = try RustTunnel.call(req)
         guard let text = ok["text"] as? String, let s = ok["secret"] as? String, let secret = Data(base64Encoded: s),
               let expires = RustTunnel.number(ok["expires"]) else {
             throw RustTunnel.Failure(message: "the tunnel's invitation does not read", details: "")
