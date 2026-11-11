@@ -1,0 +1,295 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+
+//! Which records a set keeps (rule 6): a ceiling for each key, then the
+//! set's room shared fairly between keys, so that no key, an old root's
+//! included, can push another key's records out by making many of its own.
+//!
+//! The room is counted in units: a record takes one unit for each 512
+//! bytes it starts (2 MiB over 4096 records), and a claim 63 more, since it
+//! brings a new root key. 4096 units hold at most 4096 records and 2 MiB.
+//!
+//! Each key's records are taken in its own order (seq, then ID; records of
+//! one seq with other IDs count against the same ceiling). At level s a
+//! key keeps the longest start of that order within min(s, its ceiling)
+//! units. A key's demand at s is min(s, its ceiling, all its units); s is
+//! the highest level at which the demands fit in 4096 units. So a key whose
+//! records take few units keeps them all whatever the others make: another
+//! key's records only lower the level down to the first key's own.
+//!
+//! The ceilings depend on the key alone: the group's first root's 1024
+//! units, any other key's 256. They never wait for the evaluation, so what
+//! is kept does not depend on which claims took effect.
+//!
+//! What is kept depends on the records alone, never on the order they came
+//! in. A member that drops records as they come remembers a little of what
+//! it dropped (`Cut`: the level, which only falls as records are added, and
+//! for each key the first record it dropped), and so keeps exactly what one
+//! that saw them all at once keeps.
+
+use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::vec::Vec;
+
+use super::key::{KeyHash, RecordId};
+use super::{MAX_ADMIN_RECORDS, MAX_RECORDS, MAX_ROOT_RECORDS, MAX_SET_BYTES};
+
+/// The bytes of one unit.
+pub const UNIT: usize = MAX_SET_BYTES / MAX_RECORDS;
+/// The units of the whole set.
+pub const ROOM: u64 = MAX_RECORDS as u64;
+/// What a claim adds to its units.
+pub const CLAIM_EXTRA: u64 = 63;
+
+/// One record as the keeping sees it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Item {
+    pub signer: KeyHash,
+    pub seq: u64,
+    pub id: RecordId,
+    pub units: u64,
+}
+
+/// The units of a record of size bytes.
+pub fn units(size: usize, claim: bool) -> u64 {
+    let u = size.div_ceil(UNIT).max(1) as u64;
+    if claim { u.saturating_add(CLAIM_EXTRA) } else { u }
+}
+
+/// A key's ceiling in units: the group's first root's 1024, any other
+/// key's 256.
+pub fn ceiling(first_root: bool) -> u64 {
+    if first_root { MAX_ROOT_RECORDS as u64 } else { MAX_ADMIN_RECORDS as u64 }
+}
+
+/// What a set that drops records as they come remembers of them.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Cut {
+    level: u64,
+    /// For each key, the first record of its order it dropped and the
+    /// units of the records dropped from there: nothing after it is kept,
+    /// and the units still count in the key's demand.
+    marks: BTreeMap<KeyHash, ((u64, RecordId), u64)>,
+}
+
+/// The highest level: past it no ceiling binds.
+const TOP: u64 = MAX_ROOT_RECORDS as u64;
+
+impl Default for Cut {
+    fn default() -> Cut {
+        Cut { level: TOP, marks: BTreeMap::new() }
+    }
+}
+
+impl Cut {
+    /// Reports whether a record comes at or after the first record its key
+    /// dropped: it is not kept.
+    pub fn past(&self, signer: &KeyHash, seq: u64, id: &RecordId) -> bool {
+        self.marks.get(signer).is_some_and(|(m, _)| (seq, *id) >= *m)
+    }
+}
+
+/// The IDs of the records a set keeps.
+pub fn keep(items: &[Item], ceiling_of: impl Fn(&KeyHash) -> u64) -> BTreeSet<RecordId> {
+    keep_after(items, ceiling_of, &Cut::default()).0
+}
+
+/// keep for a set that already dropped records: cut is what it remembers
+/// of them; the new cut comes back.
+pub fn keep_after(items: &[Item], ceiling_of: impl Fn(&KeyHash) -> u64, cut: &Cut) -> (BTreeSet<RecordId>, Cut) {
+    let mut by_key: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
+    for it in items {
+        if !cut.past(&it.signer, it.seq, &it.id) {
+            by_key.entry(it.signer).or_default().push(it);
+        }
+    }
+    struct Key<'a> {
+        hash: KeyHash,
+        ceiling: u64,
+        items: Vec<&'a Item>,
+        /// All its units, those of the records it dropped included.
+        total: u64,
+    }
+    let keys: Vec<Key> = by_key
+        .into_iter()
+        .map(|(hash, mut items)| {
+            items.sort_by_key(|it| (it.seq, it.id));
+            items.dedup_by_key(|it| it.id);
+            let dropped = cut.marks.get(&hash).map_or(0, |(_, u)| *u);
+            let total = items.iter().fold(dropped, |t, it| t.saturating_add(it.units));
+            Key { hash, ceiling: ceiling_of(&hash), items, total }
+        })
+        .collect();
+    let demand = |s: u64| keys.iter().fold(0u64, |d, k| d.saturating_add(s.min(k.ceiling).min(k.total)));
+    let top = cut.level.min(TOP);
+    let level = if demand(top) <= ROOM {
+        top
+    } else {
+        let (mut lo, mut hi) = (0u64, top);
+        // demand(lo) fits (nothing at 0), demand(hi) does not.
+        while hi.saturating_sub(lo) > 1 {
+            let mid = lo.saturating_add(hi.saturating_sub(lo) / 2);
+            if demand(mid) <= ROOM { lo = mid } else { hi = mid }
+        }
+        lo
+    };
+    let mut kept = BTreeSet::new();
+    let mut next = Cut { level, marks: BTreeMap::new() };
+    for k in &keys {
+        let cap = level.min(k.ceiling);
+        let mut used = 0u64;
+        let mut first_out: Option<(u64, RecordId)> = None;
+        let mut out_units = 0u64;
+        for it in &k.items {
+            let u = used.saturating_add(it.units);
+            if first_out.is_none() && u <= cap {
+                used = u;
+                kept.insert(it.id);
+            } else {
+                first_out.get_or_insert((it.seq, it.id));
+                out_units = out_units.saturating_add(it.units);
+            }
+        }
+        let old = cut.marks.get(&k.hash);
+        let mark = match (first_out, old) {
+            (Some(f), Some((m, u))) => Some((f.min(*m), out_units.saturating_add(*u))),
+            (Some(f), None) => Some((f, out_units)),
+            (None, Some(m)) => Some(*m),
+            (None, None) => None,
+        };
+        if let Some(m) = mark {
+            next.marks.insert(k.hash, m);
+        }
+    }
+    // Keys with no record left keep what they dropped.
+    for (h, m) in &cut.marks {
+        next.marks.entry(*h).or_insert(*m);
+    }
+    (kept, next)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    fn item(signer: u8, seq: u64, n: u32, size: usize) -> Item {
+        let mut id = [0u8; 32];
+        id[0] = signer;
+        id[1..5].copy_from_slice(&n.to_be_bytes());
+        id[5..13].copy_from_slice(&seq.to_be_bytes());
+        // One ID is one record: the size is part of it.
+        id[13..21].copy_from_slice(&(size as u64).to_be_bytes());
+        Item { signer: KeyHash([signer; 32]), seq, id: RecordId(id), units: units(size, false) }
+    }
+
+    /// Key 0 plays the group's first root.
+    fn ceil(k: &KeyHash) -> u64 {
+        ceiling(k.0[0] == 0)
+    }
+
+    fn kept_of(items: &[Item], kept: &BTreeSet<RecordId>, signer: u8) -> usize {
+        items.iter().filter(|it| it.signer.0[0] == signer && kept.contains(&it.id)).count()
+    }
+
+    /// One key making far more than the set holds, with forks at seq 1,
+    /// pushes out no record of a key that holds fewer.
+    #[test]
+    fn one_key_cannot_crowd_out_the_others() {
+        // The first root's key in the wrong hands after a takeover.
+        let mut items = Vec::new();
+        for n in 0..20_000 {
+            items.push(item(0, 1, n, 300));
+        }
+        for k in 1..13u8 {
+            for s in 1..=250 {
+                items.push(item(k, s, 0, 300));
+            }
+        }
+        let kept = keep(&items, ceil);
+        for k in 1..13u8 {
+            assert_eq!(kept_of(&items, &kept, k), 250);
+        }
+        let flood = kept_of(&items, &kept, 0);
+        assert!((250..=MAX_ROOT_RECORDS).contains(&flood), "{flood}");
+        let units: u64 = items.iter().filter(|it| kept.contains(&it.id)).map(|it| it.units).sum();
+        assert!(units <= ROOM);
+        // Big records: a key of 40 small ones keeps them all.
+        let mut items = Vec::new();
+        for n in 0..100 {
+            items.push(item(0, 1, n, 60_000));
+        }
+        for s in 1..=40 {
+            items.push(item(1, s, 0, 400));
+        }
+        let kept = keep(&items, ceil);
+        let units: u64 = items.iter().filter(|it| kept.contains(&it.id)).map(|it| it.units).sum();
+        assert!(units as usize * UNIT <= MAX_SET_BYTES);
+        assert_eq!(kept_of(&items, &kept, 1), 40);
+        // Many keys each wanting much: they share alike.
+        let mut items = Vec::new();
+        for k in 1..40u8 {
+            for s in 1..=256 {
+                items.push(item(k, s, 0, 300));
+            }
+        }
+        let kept = keep(&items, ceil);
+        let counts: BTreeSet<usize> = (1..40u8).map(|k| kept_of(&items, &kept, k)).collect();
+        assert_eq!(counts.len(), 1, "{counts:?}");
+    }
+
+    #[test]
+    fn the_ceilings_of_one_key() {
+        let mut items: Vec<Item> = (1..=300).map(|s| item(10, s, 0, 100)).collect();
+        assert_eq!(keep(&items, ceil).len(), MAX_ADMIN_RECORDS);
+        for it in items.iter_mut().take(10) {
+            it.units = units(100, true);
+        }
+        // Four claims take 256 units; the fifth does not fit.
+        assert_eq!(keep(&items, ceil).len(), 4);
+    }
+
+    fn arb_items() -> impl Strategy<Value = Vec<Item>> {
+        prop::collection::vec(
+            (0u8..8, 1u64..60, 0u32..4, prop::sample::select(vec![200usize, 700, 2_000, 9_000, 60_000])),
+            0..500,
+        )
+        .prop_map(|v| v.into_iter().map(|(k, s, n, b)| item(k, s, n, b)).collect())
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig { cases: 128, failure_persistence: None, ..ProptestConfig::default() })]
+
+        /// Keeping in two steps, or one record at a time, dropping what is
+        /// not kept and remembering the cut, keeps what one step keeps: so
+        /// the order records come in does not matter.
+        #[test]
+        fn any_order_keeps_the_same(a in arb_items(), b in arb_items()) {
+            let all: Vec<Item> = a.iter().chain(b.iter()).copied().collect();
+            let want = keep(&all, ceil);
+            let units: u64 = all
+                .iter()
+                .filter(|it| want.contains(&it.id))
+                .map(|it| (it.id, it.units))
+                .collect::<BTreeMap<_, _>>()
+                .values()
+                .sum();
+            prop_assert!(units <= ROOM);
+            let (first, cut) = keep_after(&a, ceil, &Cut::default());
+            let mut again: Vec<Item> = a.iter().filter(|it| first.contains(&it.id)).copied().collect();
+            again.extend(b.iter().copied());
+            prop_assert_eq!(keep_after(&again, ceil, &cut).0, want.clone());
+            for order in 0..2 {
+                let (mut held, mut cut) = (Vec::<Item>::new(), Cut::default());
+                let seq: Vec<Item> = if order == 0 { all.iter().rev().copied().collect() } else { all.clone() };
+                for it in seq {
+                    held.push(it);
+                    let (k, c) = keep_after(&held, ceil, &cut);
+                    held.retain(|it| k.contains(&it.id));
+                    cut = c;
+                }
+                let ids: BTreeSet<RecordId> = held.iter().map(|it| it.id).collect();
+                prop_assert_eq!(&ids, &want);
+            }
+        }
+    }
+}

@@ -22,8 +22,8 @@ use super::body::{
 };
 use super::key::{DeviceId, GroupId, Key, KeyHash, RecordId};
 use super::{
-    MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_FUTURE_ROOT_RECORDS, MAX_NEWER, MAX_PATH, MAX_RECORDS, MAX_ROOT_RECORDS,
-    MAX_SEQ, MAX_SET_BYTES, RULES_VERSION, Record,
+    MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_FUTURE_ROOT_RECORDS, MAX_NEWER, MAX_PATH, MAX_ROOT_RECORDS, MAX_SEQ,
+    RULES_VERSION, Record,
 };
 
 /// What the evaluation takes.
@@ -352,28 +352,28 @@ fn fail(failed: &mut BTreeMap<RecordId, Why>, id: RecordId, why: Why) {
     }
 }
 
-/// A record's place in the order the set's limits take records in, which
-/// depends on the record alone: the group's first root's records first,
-/// then every other record by seq, signer and ID. So adding records to a
-/// set only ever pushes others past the limits, and the kept set does not
-/// depend on the order records came in (rule 6).
-pub(crate) fn order_key(group_root: &KeyHash, b: &Body, id: &RecordId) -> (u8, u64, KeyHash, RecordId) {
-    (u8::from(&b.signer != group_root), b.seq, b.signer, *id)
+/// A record's order where nothing else decides: seq, signer, ID; it
+/// depends on the record alone.
+pub(crate) fn order_key(b: &Body, id: &RecordId) -> (u64, KeyHash, RecordId) {
+    (b.seq, b.signer, *id)
 }
 
-/// Of records sorted by order_key, how many fit in the set's ceilings on
-/// count and bytes.
-pub(crate) fn fits<'a>(sorted: impl Iterator<Item = &'a Record>) -> usize {
-    let mut size = 0usize;
-    let mut n = 0usize;
-    for r in sorted {
-        size = size.saturating_add(r.size());
-        if n >= MAX_RECORDS || size > MAX_SET_BYTES {
-            break;
-        }
-        n = n.saturating_add(1);
+/// The record as the keeping sees it (`keep`).
+pub(crate) fn item(r: &Record) -> super::keep::Item {
+    let claim = matches!(r.body().kind, Kind::Claim { .. });
+    super::keep::Item {
+        signer: r.body().signer,
+        seq: r.body().seq,
+        id: r.id(),
+        units: super::keep::units(r.size(), claim),
     }
-    n
+}
+
+/// The records of checked the set keeps: each key within its ceiling, the
+/// set's room shared between keys.
+pub(crate) fn kept_of(group_root: &KeyHash, checked: &[Checked<'_>]) -> BTreeSet<RecordId> {
+    let items: Vec<super::keep::Item> = checked.iter().map(|c| item(c.r)).collect();
+    super::keep::keep(&items, |k| super::keep::ceiling(k == group_root))
 }
 
 /// Turns a record set into the group's state. Records that do not verify
@@ -528,13 +528,15 @@ impl<'a> Evaluation<'a> {
         anchors: BTreeSet<RecordId>,
     ) -> Evaluation<'a> {
         let group_root = root.hash();
-        checked.sort_by_key(|c| order_key(&group_root, c.r.body(), &c.r.id()));
-        let keep = fits(checked.iter().map(|c| c.r));
+        let kept = kept_of(&group_root, &checked);
         let mut failed = failed;
-        for c in checked.get(keep..).unwrap_or_default() {
-            fail(&mut failed, c.r.id(), Why::Limit);
+        for c in &checked {
+            if !kept.contains(&c.r.id()) {
+                fail(&mut failed, c.r.id(), Why::Limit);
+            }
         }
-        checked.truncate(keep);
+        checked.retain(|c| kept.contains(&c.r.id()));
+        checked.sort_by_key(|c| order_key(c.r.body(), &c.r.id()));
         let mut e = Evaluation {
             group_root,
             anchors,
@@ -561,7 +563,7 @@ impl<'a> Evaluation<'a> {
             e.recs.push(Rec { r: c.r, id: c.r.id(), role: c.role, held: c.held, device });
         }
         // Over MAX_DEVICES: devices are taken in the order of their first
-        // record (the records are in order_key order already).
+        // record (the records are in order_key order).
         let mut first: Vec<(usize, DeviceId)> = e.devices.iter().map(|(d, rs)| (rs[0], *d)).collect();
         first.sort();
         let over: BTreeSet<DeviceId> = first.into_iter().skip(MAX_DEVICES).map(|(_, d)| d).collect();

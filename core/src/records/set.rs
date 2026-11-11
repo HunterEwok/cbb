@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 
 use super::eval::{self, Checked, Keys, Role, State, Why};
 use super::key::{Key, KeyHash, RecordId};
-use super::{Kind, Record, Rule};
+use super::{Kind, Record, Rule, keep};
 
 /// What inserting a record did.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -45,8 +45,11 @@ struct Entry {
 /// A member's record set.
 pub struct RecordSet {
     root: Key,
-    group_root: KeyHash,
     keys: Keys,
+    /// Each signer's units, to know when one is past its ceiling.
+    units: BTreeMap<KeyHash, u64>,
+    /// What the set remembers of the records it dropped.
+    cut: keep::Cut,
     records: BTreeMap<RecordId, Entry>,
     bytes: usize,
 }
@@ -54,9 +57,8 @@ pub struct RecordSet {
 impl RecordSet {
     /// An empty set for the group whose first root key is root.
     pub fn new(root: Key) -> RecordSet {
-        let group_root = root.hash();
         let keys = Keys::new(&root);
-        RecordSet { root, group_root, keys, records: BTreeMap::new(), bytes: 0 }
+        RecordSet { root, keys, units: BTreeMap::new(), cut: keep::Cut::default(), records: BTreeMap::new(), bytes: 0 }
     }
 
     pub fn root(&self) -> &Key {
@@ -109,10 +111,21 @@ impl RecordSet {
         }
         let Some((key, role)) = self.keys.signer(&r.body().signer) else { return Err(Refused::UnknownSigner) };
         let held = r.verify(key).map_err(Refused::Broken)?;
+        let signer = r.body().signer;
+        if self.cut.past(&signer, r.body().seq, &id) {
+            // Its key dropped a record before it: it would not be kept.
+            return Ok(Added::NoRoom);
+        }
         self.keys.learn(r.body(), role, held);
+        let units = self.units.entry(signer).or_default();
+        *units = units.saturating_add(eval::item(&r).units);
+        let over = *units > keep::ceiling(signer == self.root.hash());
         self.bytes = self.bytes.saturating_add(r.size());
         self.records.insert(id, Entry { record: r, role, held });
-        self.cut();
+        let total: u64 = self.units.values().sum();
+        if over || total > keep::ROOM {
+            self.cut();
+        }
         Ok(if self.records.contains_key(&id) { Added::Stored } else { Added::NoRoom })
     }
 
@@ -149,21 +162,27 @@ impl RecordSet {
         }
     }
 
-    /// Drops the records past the set's ceilings: the set keeps the first
-    /// records in an order that depends on each record alone (the group's
-    /// first root's first, then by seq), so what it keeps is the same
-    /// whatever order the records came in.
+    /// Drops the records the set does not keep (`keep`): each key within
+    /// its ceiling, the set's ceilings shared fairly between keys. What is
+    /// kept depends on the records alone, and dropping what is not kept
+    /// changes nothing, so the set is the same whatever order the records
+    /// came in.
     fn cut(&mut self) {
-        if self.records.len() <= super::MAX_RECORDS && self.bytes <= super::MAX_SET_BYTES {
-            return;
+        let items: Vec<keep::Item> = self.records.values().map(|e| eval::item(&e.record)).collect();
+        let root = self.root.hash();
+        let (kept, cut) = keep::keep_after(&items, |k| keep::ceiling(*k == root), &self.cut);
+        self.cut = cut;
+        let drop: Vec<RecordId> = self.records.keys().filter(|id| !kept.contains(*id)).copied().collect();
+        for id in drop {
+            self.remove(&id);
         }
-        let mut order: Vec<(_, RecordId)> =
-            self.records.iter().map(|(id, e)| (eval::order_key(&self.group_root, e.record.body(), id), *id)).collect();
-        order.sort();
-        let keep = eval::fits(order.iter().filter_map(|(_, id)| self.records.get(id).map(|e| &e.record)));
-        for (_, id) in order.get(keep..).unwrap_or_default() {
-            if let Some(e) = self.records.remove(id) {
-                self.bytes = self.bytes.saturating_sub(e.record.size());
+    }
+
+    fn remove(&mut self, id: &RecordId) {
+        if let Some(e) = self.records.remove(id) {
+            self.bytes = self.bytes.saturating_sub(e.record.size());
+            if let Some(u) = self.units.get_mut(&e.record.body().signer) {
+                *u = u.saturating_sub(eval::item(&e.record).units);
             }
         }
     }
@@ -200,9 +219,11 @@ impl RecordSet {
             .map(|e| e.record.id())
             .collect();
         for id in &drop {
-            if let Some(e) = self.records.remove(id) {
-                self.bytes = self.bytes.saturating_sub(e.record.size());
-            }
+            self.remove(id);
+        }
+        // The checkpoint starts the count again.
+        if !drop.is_empty() {
+            self.cut = keep::Cut::default();
         }
         drop.len()
     }
@@ -214,7 +235,7 @@ impl RecordSet {
         let mut keys = Keys::new(&self.root);
         let mut out = Vec::with_capacity(self.records.len());
         let mut left: Vec<&Entry> = self.records.values().collect();
-        left.sort_by_key(|e| eval::order_key(&self.group_root, e.record.body(), &e.record.id()));
+        left.sort_by_key(|e| eval::order_key(e.record.body(), &e.record.id()));
         loop {
             let mut rest = Vec::new();
             let mut learned = false;

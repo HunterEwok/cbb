@@ -300,6 +300,66 @@ fn two_admins_admitting_one_device() {
     }
 }
 
+/// A device another admin already admitted, and works, meets a second
+/// admin's different first record for it: neither counts, so the device
+/// is out of the state until the root records it, and then it is the
+/// root's alone.
+#[test]
+fn a_second_admins_first_record_for_a_working_device() {
+    let mut g = G::new();
+    let (pa, a, pb, b, t) = (k("phone a"), k("admin a"), k("phone b"), k("admin b"), k("t"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    g.admin(&pb, &b, POWER_ADMIT);
+    let ra = g.device(&a, &t, "from a", |_| {});
+    let works = g.state();
+    assert_eq!(works.device(&t.key.device_id()).unwrap().name, "from a");
+    let rb = g.device(&b, &t, "from b", |_| {});
+    let s = g.state();
+    assert!(s.device(&t.key.device_id()).is_none());
+    assert!(!s.counting.contains(&ra.id()) && !s.counting.contains(&rb.id()));
+    assert!(s.conflicts.iter().any(|c| c.kind == ConflictKind::Admits));
+    let rr = g.device(&k("root"), &t, "from root", |_| {});
+    let s = g.state();
+    assert_eq!(s.device(&t.key.device_id()).unwrap().name, "from root");
+    assert!(s.counting.contains(&rr.id()));
+}
+
+/// No key, the first root's included (after a takeover, the old root's),
+/// pushes another key's counting records out of the set by making many of
+/// its own, whatever order they come in.
+#[test]
+fn a_flood_from_one_key_keeps_the_others() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, a, pb, b) = (k("phone a"), k("admin a"), k("phone b"), k("admin b"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    g.admin(&pb, &b, POWER_ADMIT);
+    let admitted: Vec<Record> = (0..40).map(|i| g.device(&a, &k(&format!("t{i}")), "t", |_| {})).collect();
+    let quiet = g.recs.clone();
+    for flooder in [&root, &b] {
+        let mut g = G { root: k("root"), gid: g.gid, heads: g.heads.clone(), recs: quiet.clone() };
+        for i in 0..1500 {
+            g.device(flooder, &k(&format!("f{i}")), "flood", |_| {});
+        }
+        for order in 0..2 {
+            let mut recs = g.recs.clone();
+            if order == 1 {
+                recs.reverse();
+            }
+            let mut set = RecordSet::new(g.root.key.clone());
+            set.insert_all(recs);
+            assert!(set.len() < g.recs.len());
+            for r in &admitted {
+                assert!(set.contains(&r.id()));
+            }
+            let s = set.state(&BTreeMap::new());
+            for r in &admitted {
+                assert!(s.counting.contains(&r.id()));
+            }
+        }
+    }
+}
+
 #[test]
 fn removals_follow_the_powers() {
     let mut g = G::new();
@@ -623,8 +683,10 @@ fn the_set_stays_within_its_bytes_whatever_the_order() {
 
 #[test]
 fn many_claims_evaluate_quickly() {
+    // A claim takes 64 units of the set's 4096, so about 60 claims fit
+    // beside their admins' records: 56 here, all kept.
     let mut g = G::new();
-    let n = 400;
+    let n = 56;
     let mut admins = Vec::new();
     for i in 0..n {
         let (p, a) = (k(&format!("p{i}")), k(&format!("a{i}")));
@@ -640,6 +702,7 @@ fn many_claims_evaluate_quickly() {
     let t = Instant::now();
     let s = set.state(&BTreeMap::new());
     let took = t.elapsed();
+    assert_eq!(set.len(), g.recs.len());
     assert_eq!(s.stop, Stop::Full);
     assert_eq!(s.claims.len(), n);
     assert!(took.as_secs() < 10, "{took:?}");

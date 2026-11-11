@@ -34,6 +34,7 @@
 pub mod body;
 mod cbor;
 pub mod eval;
+pub mod keep;
 pub mod key;
 pub mod set;
 pub mod statement;
