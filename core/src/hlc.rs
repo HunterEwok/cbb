@@ -105,6 +105,7 @@ struct State {
 /// the floor never issues a timestamp below one issued before.
 pub struct Clock {
     now: Box<dyn Fn() -> i64 + Send + Sync>,
+    floor: Timestamp,
     state: Mutex<State>,
     save: Mutex<Option<Save>>,
 }
@@ -114,7 +115,14 @@ impl Clock {
     /// goes back before floor; save, if given, keeps the mark and reports
     /// whether it did.
     pub fn new(now: Box<dyn Fn() -> i64 + Send + Sync>, floor: Timestamp, save: Option<Save>) -> Clock {
-        Clock { now, state: Mutex::new(State { last: floor, mark: floor }), save: Mutex::new(save) }
+        Clock { now, floor, state: Mutex::new(State { last: floor, mark: floor }), save: Mutex::new(save) }
+    }
+
+    /// The floor the clock started from: the mark saved before this start,
+    /// at or after every timestamp this member issued or observed before
+    /// it (zero for a first start).
+    pub fn floor(&self) -> Timestamp {
+        self.floor
     }
 
     /// A timestamp for a local event, greater than every one returned or

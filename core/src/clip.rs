@@ -890,6 +890,9 @@ impl Engine {
             takes_media: st.takes_media,
             held,
             age_ms: ms(now.saturating_sub(st.copied_at)),
+            // A copy from before this member started is never new to its
+            // clipboard, whatever age a peer gives it.
+            before_start: !self.clock.floor().is_zero() && st.current.time <= self.clock.floor(),
             window_ms: ms(st.window),
             secret_ttl_ms: ms(SECRET_TTL),
         };
@@ -1046,6 +1049,45 @@ mod tests {
         let out = e.reconcile(B, Hello { wall: now, current: Some(event(crate::hlc::MAX_WALL)) }).unwrap();
         assert!(out.forward.is_none() && !out.write);
         assert!(e.received(event(now + 6 * 24 * 3600 * 1000)).is_ok());
+    }
+
+    /// After a restart a copy whose time is not after the clock mark saved
+    /// before it is not written, however young the age a peer gives it;
+    /// one made after it is.
+    #[test]
+    fn a_copy_from_before_the_start_is_not_written() {
+        let now = 1_792_886_400_000; // 2026-10-25
+        let mark = Timestamp { wall: now - 60_000, logical: 0 };
+        let e = Engine::new(
+            A,
+            Clock::new(Box::new(move || now), mark, None),
+            Box::new(move || now),
+            Box::new(|| Duration::from_secs(3600)),
+        );
+        let event = |wall, text: &str| Event {
+            id: random_id(),
+            origin: B.to_string(),
+            via: Via::Copy,
+            time: Timestamp { wall, logical: 0 },
+            age: 0,
+            kind: Kind::Text,
+            text: text.to_string(),
+            ..Event::default()
+        };
+        let old = e.received(event(mark.wall - 3_600_000, "an hour before")).unwrap();
+        assert!(!old.write && old.forward.is_some());
+        let at_mark = e.received(event(mark.wall, "at the mark")).unwrap();
+        assert!(!at_mark.write);
+        let new = e.received(event(mark.wall + 1, "after the mark")).unwrap();
+        assert!(new.write);
+        // A first start, with no mark, takes a young copy as before.
+        let first = Engine::new(
+            A,
+            Clock::new(Box::new(move || now), Timestamp::default(), None),
+            Box::new(move || now),
+            Box::new(|| Duration::from_secs(3600)),
+        );
+        assert!(first.received(event(now - 1_000, "young")).unwrap().write);
     }
 
     /// A phone's media copy becomes the group's current one with the key

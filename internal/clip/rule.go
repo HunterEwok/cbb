@@ -23,6 +23,10 @@ type Incoming struct {
 	TakesMedia  bool  `json:"takes_media"`
 	Held        bool  `json:"held"`
 	AgeMS       int64 `json:"age_ms"`
+	// BeforeStart: the copy's time is not after the clock mark the member
+	// saved before it last started, so its age alone (not signed) could
+	// pass an old copy off as new.
+	BeforeStart bool  `json:"before_start"`
 	WindowMS    int64 `json:"window_ms"`
 	SecretTTLMS int64 `json:"secret_ttl_ms"`
 }
@@ -59,7 +63,7 @@ func decide(i Incoming) Verdict {
 		return VerdictNoText
 	case i.Held:
 		return VerdictHeld
-	case i.AgeMS >= i.WindowMS:
+	case i.AgeMS >= i.WindowMS || i.BeforeStart:
 		return VerdictOld
 	}
 	return VerdictWrite
