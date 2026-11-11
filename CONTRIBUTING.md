@@ -134,7 +134,7 @@ npx @informalsystems/quint@0.33.1 test --backend=typescript docs/model/claims.qn
 npx @informalsystems/quint@0.33.1 run --backend=typescript --invariant=promises --max-steps=12 --max-samples=20000 docs/model/claims.qnt
 ```
 
-The lite member (Rust, the `lite` job in CI):
+cbb and the Rust workspace (the `rust` job in CI):
 
 The core and the phones' bindings deny panics outside their tests (`core/src/lib.rs`,
 `ffi/src/lib.rs`): read with `get`, add with `checked_` or `saturating_` operations, and
@@ -145,7 +145,7 @@ return an error. Where something truly cannot fail, allow the lint on that item 
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 cargo build -p cbb-core --target riscv32imac-unknown-none-elf   # the core without an OS
 cargo deny --locked check licenses bans sources   # the crates' licenses and sources (deny.toml, CI's advisories job)
-cargo build --release && CBB_LITE=$PWD/target/release/cbb \
+cargo build --release && CBB_TEST_ALONE=$PWD/target/release/cbb \
   go test ./internal/service -run TestLiteMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
 ```
 

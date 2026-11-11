@@ -21,9 +21,9 @@ import (
 // liteBin returns the Rust member's program, or skips the test.
 func liteBin(t *testing.T) string {
 	t.Helper()
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")

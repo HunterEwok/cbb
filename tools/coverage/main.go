@@ -82,7 +82,7 @@ var llvmParts = map[string]func(file string) bool{
 	"rust-core": func(f string) bool {
 		return strings.Contains(f, "/core/src/") && !strings.Contains(f, "/third_party/") && !strings.Contains(f, "/tests/")
 	},
-	"rust-lite": inMember,
+	"rust-member": inMember,
 	// rust-service is member/src again, measured with Go's tests of the
 	// service run against the instrumented cbb as well (the service job).
 	"rust-service": inMember,

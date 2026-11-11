@@ -18,12 +18,12 @@ import (
 
 // TestLiteAgent: the Rust cbb agent links an X11 session's clipboard with
 // the Rust service through cbb-helper, both ways, and the helper ends with
-// the agent. CBB_LITE names the Rust member's binary; CBB_TEST_X11 asks for
+// the agent. CBB_TEST_ALONE names the Rust member's binary; CBB_TEST_X11 asks for
 // an X server in DISPLAY and xclip.
 func TestLiteAgent(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")

@@ -87,9 +87,9 @@ func TestEntriesSpread(t *testing.T) {
 // passes it, keeps them and says in its hello that it holds them, so the
 // computer does not send them again.
 func TestLiteEntries(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	signer := newReleaseSigner(t)
 	var h hub

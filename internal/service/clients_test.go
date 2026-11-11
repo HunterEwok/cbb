@@ -21,12 +21,12 @@ import (
 // TestLiteClients: the Go command line and the desktop's clipboard agent
 // work against the Rust service as against the Go one: cbb status, config,
 // copy and paste of texts and files, and an agent whose clipboard takes
-// images (docs/design.md, "The service and its helper"). CBB_LITE names
+// images (docs/design.md, "The service and its helper"). CBB_TEST_ALONE names
 // the Rust member's binary.
 func TestLiteClients(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")

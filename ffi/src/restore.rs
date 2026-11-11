@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! A new phone restores a group with its recovery key (cbb_lite::restore),
+//! A new phone restores a group with its recovery key (cbb_member::restore),
 //! for an app whose member key the core does not hold (the Aurora app's in
 //! OP-TEE): it browses for the group by the sheet's tag, takes and checks
 //! the records from a member on a connection that carries records only,
@@ -73,7 +73,7 @@ pub(crate) fn restore(request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
         let wait = if a.wait_ms == 0 { WAIT } else { Duration::from_millis(a.wait_ms.min(60_000)) };
         let name = if a.name.trim().is_empty() { "Phone" } else { a.name.trim() };
         let addrs: Vec<std::net::SocketAddr> = a.addrs.iter().filter_map(|s| s.parse().ok()).collect();
-        let (r, g, addr) = cbb_lite::restore::restore(&a.sheet, key, name, &a.os, &addrs, wait)?;
+        let (r, g, addr) = cbb_member::restore::restore(&a.sheet, key, name, &a.os, &addrs, wait)?;
         Ok(Answer {
             device: r.device.to_string(),
             cert: r.cert,

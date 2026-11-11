@@ -65,7 +65,7 @@ becomes a vector here.
   interopScript`) play the phone in Go's pairing and member tests: over plain TCP on Linux,
   over real TLS on macOS and with Conscrypt on Linux.
 - `TestLiteMember`, `TestLiteRemotePaste`, `TestLiteQuickActions` and `TestLiteMemberAway`
-  run the built lite member (`CBB_LITE`) among Go members, at home and through the hub's
+  run the built cbb without its helper (`CBB_TEST_ALONE`) among Go members, at home and through the hub's
   tunnel.
 - `TestEmbassyJoiner` runs the Nano ESP32's network code on Linux over a TAP interface
   (`CBB_ESP32_ON_LINUX`).
@@ -99,8 +99,8 @@ rise but not fall. When the table says "raise the floor", raise it in the same p
 |---|---|---|
 | `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
-| `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `lite` job |
-| `rust-lite` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
+| `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `rust` job |
+| `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
 | `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service` and the desktop connector, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb` job |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
@@ -122,9 +122,9 @@ network or a container with one of its own):
 ```sh
 eval "$(cargo llvm-cov show-env --sh)"
 cargo llvm-cov clean --workspace
-cargo test --release -p cbb-lite && cargo build --release -p cbb-lite
+cargo test --release -p cbb-member && cargo build --release -p cbb-member
 CGO_ENABLED=0 go build -o target/release/cbb-helper ./cmd/cbb-helper
-CBB_TEST_RUST_SERVICE=$PWD/target/release/cbb CBB_LITE=$PWD/target/release/cbb go test ./internal/service
+CBB_TEST_RUST_SERVICE=$PWD/target/release/cbb CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service
 cargo llvm-cov report --release --json --summary-only --output-path service.json
 go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/floor.json
 ```
@@ -134,7 +134,7 @@ go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/fl
 The Rust core has no unsafe code (`forbid(unsafe_code)`). The unsafe code in `member/src` (system
 calls) and `ffi/src` (the C functions the phones call) is checked by the nightly workflow: Miri
 runs `ffi`'s tests of its C functions pointer by pointer (`cargo +nightly miri test -p cbb-ffi
---features join --lib`), and AddressSanitizer runs the Rust tests of `cbb-lite` and `cbb-ffi`
+--features join --lib`), and AddressSanitizer runs the Rust tests of `cbb-member` and `cbb-ffi`
 and Go's tests of the service against a `cbb` built with it, which reaches the system calls
 Miri cannot.
 
@@ -162,7 +162,7 @@ To run them locally:
 
 ```sh
 cargo mutants --in-place -p cbb-core -f core/src/authority.rs -f core/src/strict.rs
-cargo mutants --in-place -p cbb-lite -f member/src/control.rs -f member/src/window.rs
+cargo mutants --in-place -p cbb-member -f member/src/control.rs -f member/src/window.rs
 tools/mutants/check.sh mutants.out/missed.txt tools/mutants/missed.txt
 go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./internal/authority
 ```

@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Writes the licenses of the crates that the lite member, or another package
+# Writes the licenses of the crates that cbb, or another package
 # of the workspace, is built from, for one target, so that a release archive
 # carries their notices:
 #
 #   sh member/packaging/notices.sh TARGET [PACKAGE] >THIRD_PARTY_NOTICES
 #
-# PACKAGE is cbb-lite by default.
+# PACKAGE is cbb-member by default.
 #
 # Each crate of the normal dependency graph (not build or dev dependencies)
 # appears with its name, version and license expression, followed by its
@@ -21,15 +21,15 @@ if [ $# -lt 1 ] || [ $# -gt 2 ]; then
 	exit 2
 fi
 target=$1
-package=${2:-cbb-lite}
+package=${2:-cbb-member}
 cd "$(dirname "$0")/../.."
 
 meta=$(mktemp)
 trap 'rm -f "$meta"' EXIT
 cargo metadata --locked --format-version 1 >"$meta"
 
-if [ "$package" = cbb-lite ]; then
-	echo "The lite member of CBB is free software under the GNU Affero General"
+if [ "$package" = cbb-member ]; then
+	echo "cbb, the program, is free software under the GNU Affero General"
 	echo "Public License v3.0 only (LICENSE). It is built with the crates below, under"
 	echo "their own licenses."
 else

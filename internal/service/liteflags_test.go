@@ -18,9 +18,9 @@ import (
 // command, as launchd's plist, FreeBSD's rc script and OpenWrt's init script
 // pass them to the Go service, and -user only as root.
 func TestLiteServiceFlags(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")

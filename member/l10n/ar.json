@@ -9,7 +9,7 @@
  "is it running ({} status cbb)?": "هل هي تعمل ({} status cbb)؟",
  "is it running (start it with cbb service)?": "هل هي تعمل (ابدأها بـ cbb service)؟",
  "this command changes the group, so only the administrator may run it; run it with sudo": "هذا الأمر يغيّر المجموعة، لذا لا يشغّله إلا المسؤول؛ شغّله مع sudo",
- "cannot reach the lite member's service at {}; {}": "تعذّر الوصول إلى خدمة العضو الخفيف في {}؛ {}",
+ "cannot reach the CBB service at {}; {}": "تعذّر الوصول إلى خدمة CBB في {}؛ {}",
  "The group is stopped: its members exchange records only, no clipboard, until the group's root decides.": "المجموعة متوقفة: يتبادل أعضاؤها السجلات فقط، دون الحافظة، حتى يقرر جذر المجموعة.",
  "The group sends no secrets until its root decides.": "لا ترسل المجموعة أي أسرار حتى يقرر جذرها.",
  "This device leaves its group: its keys and the group's files here are deleted, remote paste\nand the quick actions are turned off, and the rest of the settings stay. It can then join this\ngroup again or another one (cbb pair). The group keeps listing it until an admin removes it.\nLeave the group? [y/N] ": "يغادر هذا الجهاز مجموعته: تُحذف مفاتيحه وملفات المجموعة هنا، ويتوقف اللصق عن بُعد\nوالإجراءات السريعة، وتبقى بقية الإعدادات. يمكنه بعد ذلك الانضمام إلى هذه المجموعة مجددًا\nأو إلى غيرها (cbb pair). تظل المجموعة تذكره حتى يزيله مشرف.\nمغادرة المجموعة؟ [y/N] ",

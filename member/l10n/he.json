@@ -9,7 +9,7 @@
  "is it running ({} status cbb)?": "האם הוא פועל ({} status cbb)?",
  "is it running (start it with cbb service)?": "האם הוא פועל (הפעילו אותו עם cbb service)?",
  "this command changes the group, so only the administrator may run it; run it with sudo": "הפקודה הזו משנה את הקבוצה, ולכן רק מנהל המערכת רשאי להריץ אותה; הריצו אותה עם sudo",
- "cannot reach the lite member's service at {}; {}": "אין גישה לשירות של החבר הקל ב־{}; {}",
+ "cannot reach the CBB service at {}; {}": "אין גישה לשירות של CBB ב־{}; {}",
  "The group is stopped: its members exchange records only, no clipboard, until the group's root decides.": "הקבוצה עצורה: חבריה מחליפים רשומות בלבד, ללא לוח, עד שהשורש של הקבוצה יחליט.",
  "The group sends no secrets until its root decides.": "הקבוצה לא שולחת סודות עד שהשורש שלה יחליט.",
  "This device leaves its group: its keys and the group's files here are deleted, remote paste\nand the quick actions are turned off, and the rest of the settings stay. It can then join this\ngroup again or another one (cbb pair). The group keeps listing it until an admin removes it.\nLeave the group? [y/N] ": "המכשיר הזה עוזב את הקבוצה שלו: המפתחות שלו וקובצי הקבוצה כאן נמחקים, ההדבקה מרחוק\nוהפעולות המהירות נכבות, ושאר ההגדרות נשארות. אחר כך הוא יכול להצטרף שוב לקבוצה הזו או לאחרת\n(cbb pair). הקבוצה ממשיכה להציג אותו עד שמנהל יסיר אותו.\nלעזוב את הקבוצה? [y/N] ",

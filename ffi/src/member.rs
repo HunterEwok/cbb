@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The member inside a phone's app (the Aurora app, the iPhone and Android
-//! apps): the lite member's node (`cbb_lite::phone`) with the app's key,
+//! apps): the lite member's node (`cbb_member::phone`) with the app's key,
 //! which stays where the app keeps it and signs through the callback the
 //! join takes too. The node runs on threads of its own: it dials the
 //! members mDNS finds or the app hands in, syncs with them, and calls the
@@ -26,9 +26,9 @@ use cbb_core::media::Part;
 use cbb_core::root::{self, Setting};
 use cbb_core::takeover::How;
 use cbb_core::wire::CommandResult;
-use cbb_lite::content::Source;
-use cbb_lite::node::{Peer, WriteReq};
-use cbb_lite::phone::{self, Listen, Member as Node};
+use cbb_member::content::Source;
+use cbb_member::node::{Peer, WriteReq};
+use cbb_member::phone::{self, Listen, Member as Node};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -502,13 +502,13 @@ impl Member {
                 }),
                 on_mute: Box::new(move |until: Option<i64>, by: &str| {
                     let for_ms = until
-                        .map_or(0, |u| if u == 0 { 0 } else { u.saturating_sub(cbb_lite::uptime::wall_ms()).max(1) });
+                        .map_or(0, |u| if u == 0 { 0 } else { u.saturating_sub(cbb_member::uptime::wall_ms()).max(1) });
                     ev.send(&Event::Mute { muted: until.is_some(), for_ms, by });
                 }),
                 log: Arc::new(move |line: &str| ev.send(&Event::Log { line })),
             })?;
             node.on_change(Box::new(move |c: &Copy| {
-                let key = cbb_lite::button::key_of(c).unwrap_or_default();
+                let key = cbb_member::button::key_of(c).unwrap_or_default();
                 ev.send(&Event::Copy { copy: copy_json(c, &key) });
             }));
             node.on_message(Box::new(move |from, m| {
@@ -826,7 +826,7 @@ impl Member {
     /// The check of the relay's port: the app names the device the relay
     /// announced from the call's loopback port, and the call is served only
     /// when its certificate names the same device.
-    fn caller_check(&self) -> cbb_lite::node::Admit {
+    fn caller_check(&self) -> cbb_member::node::Admit {
         let (answers, ev) = (self.answers.clone(), self.events);
         Arc::new(move |port: u16, id: &DeviceId| {
             let token = answers.next.fetch_add(1, Ordering::SeqCst);
@@ -906,7 +906,7 @@ impl Member {
                 // claim here and is not kept.
                 "recover_with_sheet" => {
                     let sheet = cbb_core::recovery::read(&a.sheet).map_err(|r| Error::msg(r.message()))?;
-                    let der = sheet.cert.as_deref().ok_or_else(|| Error::msg(cbb_lite::restore::NEEDS_QR))?;
+                    let der = sheet.cert.as_deref().ok_or_else(|| Error::msg(cbb_member::restore::NEEDS_QR))?;
                     let ca = Cert::parse(der)?;
                     let pkcs8 = sheet.pkcs8().ok_or_else(|| Error::msg("the recovery key cannot be encoded"))?;
                     let key = cbb_core::identity::FileKey::new(&pkcs8)?;
@@ -1016,10 +1016,10 @@ impl Member {
 
 /// Every device of the group as the app shows it: the same devices, in the
 /// same form, as the control socket's devices answers on a computer.
-fn devices_of(n: &cbb_lite::phone::Member) -> Vec<cbb_lite::control::Device> {
+fn devices_of(n: &cbb_member::phone::Member) -> Vec<cbb_member::control::Device> {
     n.device_views()
         .into_iter()
-        .map(|d| cbb_lite::control::Device {
+        .map(|d| cbb_member::control::Device {
             id: d.id,
             name: d.name,
             role: d.role,

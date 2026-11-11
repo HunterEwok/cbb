@@ -75,11 +75,11 @@ func runCLI(cli, socket, stdin string, args ...string) (string, error) {
 // computer by the QR code that computer shows (cbb pair -qr), syncs with
 // it, renames it, makes it an admin, freezes and unfreezes it, sets the key
 // level and removes it, each through the Go command line, and the Go
-// computer takes each record. CBB_LITE names the Rust member's binary.
+// computer takes each record. CBB_TEST_ALONE names the Rust member's binary.
 func TestLiteRoot(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -263,9 +263,9 @@ func TestLiteRoot(t *testing.T) {
 // for the first, the right code admits the computer, which then connects
 // to the root on the same port, and a window that closed refuses.
 func TestLiteRootWindow(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -397,9 +397,9 @@ func (s *testService) isAdmin(t *testing.T) bool {
 // after the root's delay of 0s, becomes the root, and a Go computer of the
 // group follows it.
 func TestLiteTakeover(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -525,9 +525,9 @@ func recordsHold(dir, text string) bool {
 // its recovery key when the root is lost (cbb recovery, with the text of
 // the sheet's QR code), becomes the root, and the Go computer follows.
 func TestLiteRecovery(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -617,9 +617,9 @@ func rootIs(t *testing.T, s *testService, name string) func() bool {
 // then reaches it only through the tunnel and syncs, and cbb global hub off
 // refuses to stop the only hub without -yes, then stops it.
 func TestLiteHub(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -715,9 +715,9 @@ func TestLiteHub(t *testing.T) {
 // root is off, and gives way when the root serves again
 // (docs/protocol.md, section 11, "Several hubs").
 func TestLiteHubs(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -821,9 +821,9 @@ func TestLiteHubs(t *testing.T) {
 // (docs/protocol.md, section 11, "Moving the hub", "Several hubs",
 // "Stopping a hub").
 func TestLiteHubCommands(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -938,9 +938,9 @@ func TestLiteHubCommands(t *testing.T) {
 // laptop away from home reaches it through the forwarder (docs/protocol.md,
 // section 13).
 func TestLiteHubForwarder(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -1024,9 +1024,9 @@ func TestLiteHubForwarder(t *testing.T) {
 // of its own for the period (section 11, "The hub's key"), and a Go laptop
 // away from home reaches it through the forwarder.
 func TestLiteHubCredential(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -1121,9 +1121,9 @@ func TestLiteHubCredential(t *testing.T) {
 // hub that then makes no copies (docs/protocol.md, section 11, "Two kinds
 // of hub").
 func TestLiteForwardOnly(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -1210,9 +1210,9 @@ func TestLiteForwardOnly(t *testing.T) {
 // lite member, whose offer's UDP address then leads nowhere, reaches it
 // through the forwarder's VLESS behind a TLS web server.
 func TestLiteHubVLESS(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -1368,9 +1368,9 @@ func TestLiteHubVLESS(t *testing.T) {
 // the rules' tests, with Go's network IDs): the member port and mDNS then
 // work on the networks this device is on now.
 func TestLiteNetwork(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -1394,9 +1394,9 @@ func TestLiteNetwork(t *testing.T) {
 // the Go desk at a blind relay, and once it is away from home they sync
 // through it (docs/design.md, "Blind relay").
 func TestLiteRelay(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -1499,9 +1499,9 @@ func startRelay(t *testing.T, tag string) (*relay.Relay, relay.Keys) {
 // members' credentials (docs/protocol.md, section 18), with which both
 // devices register there, and the Go laptop and it sync through the relay.
 func TestLiteRelayRoot(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -1576,9 +1576,9 @@ func TestLiteRelayRoot(t *testing.T) {
 // itself. Then the relay moves, and entries.json says where to, as
 // TestProjectRelayNewKey does with a Go device.
 func TestLiteRelayProject(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")

@@ -337,18 +337,10 @@ pub fn main() {
                 "forward" | "relay" => servers::run(&g, cmd, rest),
                 "install" => servers::install(rest),
                 "version" | "-version" | "--version" => {
-                    // Without its helper beside it, cbb is the lite member
-                    // (installers tell the two apart by this line).
-                    let lite = if helper::locate().is_some() { "" } else { ", the lite member" };
                     // Never to be mistaken for a release: its certificates
                     // last minutes.
                     let scaled = if cbb_core::benchtime::ENABLED { " (time-scaled bench build)" } else { "" };
-                    println!(
-                        "cbb {} ({}/{}){lite}{scaled}",
-                        service::VERSION,
-                        std::env::consts::OS,
-                        std::env::consts::ARCH
-                    );
+                    println!("cbb {} ({}/{}){scaled}", service::VERSION, std::env::consts::OS, std::env::consts::ARCH);
                     println!("{}", core_version());
                     Ok(())
                 }
@@ -925,7 +917,7 @@ pub(crate) fn connect(g: &Global) -> Result<UnixStream> {
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             Err(Error::msg("no permission to use the CBB service; add your user to the cbb group and log in again"))
         }
-        c => c.context(tr!("cannot reach the lite member's service at {}; {}", g.socket.display(), not_running())),
+        c => c.context(tr!("cannot reach the CBB service at {}; {}", g.socket.display(), not_running())),
     }
 }
 
@@ -979,7 +971,7 @@ pub(crate) fn open(g: &Global, h: &control::Header) -> Result<UnixStream> {
                     "this command changes the group, so only the administrator may run it; run it with sudo"
                 )));
             }
-            c => c.context(tr!("cannot reach the lite member's service at {}; {}", path.display(), not_running()))?,
+            c => c.context(tr!("cannot reach the CBB service at {}; {}", path.display(), not_running()))?,
         }
     } else {
         connect(g)?
@@ -1731,7 +1723,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
             }
             None => (update::ROOTS.iter().map(|r| r.to_vec()).collect(), update::Source::defaults(&st.mirror)?),
         };
-        let archive = update_os::archive_name(&exe).ok_or_else(|| {
+        let archive = update_os::archive_name().ok_or_else(|| {
             Error::msg(format!("the release has no archive for {}/{}", std::env::consts::OS, std::env::consts::ARCH))
         })?;
         let status = || -> Result<String> {

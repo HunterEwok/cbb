@@ -9,7 +9,7 @@
  "is it running ({} status cbb)?": "je, inaendeshwa ({} status cbb)?",
  "is it running (start it with cbb service)?": "je, inaendeshwa (ianzishe kwa cbb service)?",
  "this command changes the group, so only the administrator may run it; run it with sudo": "amri hii inabadilisha kikundi, kwa hiyo msimamizi wa mfumo pekee anaweza kuiendesha; iendeshe kwa sudo",
- "cannot reach the lite member's service at {}; {}": "haiwezi kufikia huduma ya mwanachama mwepesi kwenye {}; {}",
+ "cannot reach the CBB service at {}; {}": "haiwezi kufikia huduma ya CBB kwenye {}; {}",
  "The group is stopped: its members exchange records only, no clipboard, until the group's root decides.": "Kikundi kimesimamishwa: wanachama wake hubadilishana rekodi tu, bila ubao wa kunakili, hadi mzizi wa kikundi uamue.",
  "The group sends no secrets until its root decides.": "Kikundi hakitumi siri hadi mzizi wake uamue.",
  "This device leaves its group: its keys and the group's files here are deleted, remote paste\nand the quick actions are turned off, and the rest of the settings stay. It can then join this\ngroup again or another one (cbb pair). The group keeps listing it until an admin removes it.\nLeave the group? [y/N] ": "Kifaa hiki kinaondoka kwenye kikundi chake: funguo zake na faili za kikundi hapa zinafutwa,\nkubandika kwa mbali na vitendo vya haraka vinazimwa, na mipangilio mingine inabaki. Kisha\nkinaweza kujiunga tena na kikundi hiki au kingine (cbb pair). Kikundi kinaendelea kukiorodhesha\nhadi msimamizi akiondoe.\nOndoka kwenye kikundi? [y/N] ",

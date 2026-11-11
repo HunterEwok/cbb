@@ -148,9 +148,10 @@ environment secret**.
   without signing;
 - **Android app**: the Kotlin kit's tests and its cross tests with the Go code, and the app
   built, unit-tested and linted;
-- **lite member (Rust)**: `cargo fmt`, `clippy` and the tests of the Rust workspace, the ARM64 and
-  ARMv6 builds, and the e2e test of the lite member among Go members;
-- **lite core on the ESP32**: the lite protocol core with its TLS built for the ESP32-C6 (RISC-V) and the
+- **cbb (Rust)**: `cargo fmt`, `clippy` and the tests of the Rust workspace, the ARM64 and
+  ARMv6 builds, the installers without the helper (`get.sh --no-helper`, rootless) and
+  `cbb update` there, and the tests of cbb without its helper among other members;
+- **the core on the ESP32**: the protocol core with its TLS built for the ESP32-C6 (RISC-V) and the
   ESP32-S3 (Xtensa), and the Nano ESP32 firmware (`esp32/`) built, its console and
   flash settings tested and its self-test run in Espressif's QEMU (both downloaded by hash);
 - **ZX Spectrum Next**: the tests of the `.cbb` frame parser on the host, and the dot commands `.cbb`
@@ -193,9 +194,9 @@ Rules for workflows:
 - The archives are `cbb-<os>-<arch>.tar.gz` without the version, so that
   `releases/latest/download/` has fixed names for `get.sh`; each holds `cbb/` with the
   binary, `LICENSE`, `THIRD_PARTY_NOTICES` (the licenses of the Go modules, the copied code
-  and Go itself, written by `packaging/archive.sh`) and `packaging/`. The
-  `cbb-lite-linux-*` archives hold `cbb-lite/` in the same way (`member/packaging/archive.sh`), with the crates'
-  licenses (`member/packaging/notices.sh`), the same Linux installer and the lite member's unit.
+  and Go itself, written by `packaging/archive.sh`, after the crates' licenses from
+  `member/packaging/notices.sh`) and `packaging/`, with `cbb-helper` beside `cbb` on every
+  architecture but MIPS.
 - Published with `SHA256SUMS` and a build provenance attestation
   (`actions/attest-build-provenance`), which users can check with `gh attestation verify`.
 - What a release is built from: a software bill of materials in CycloneDX 1.6 JSON for each
@@ -203,7 +204,7 @@ Rules for workflows:
   other files:
   - `sbom-go.cdx.json`: the Go modules of every program in the archives (`cbb` and the tray
     app), read from the programs' own build information, and Go's standard library;
-  - `sbom-lite.cdx.json`: the crates the lite member is built with on its targets, without the
+  - `sbom-member.cdx.json`: the crates cbb is built with on its targets, without the
     ones only tests and build scripts use, with their checksums from `Cargo.lock`;
   - `sbom-phone-core.cdx.json`: the same for the Rust core both phone apps link (`ffi/`);
   - `sbom-ios-kit.cdx.json`: the Swift packages of the iPhone kit (`Package.resolved`);

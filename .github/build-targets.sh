@@ -41,7 +41,7 @@ EOF
 	[ "$os" != windows ] || exe=.exe
 	cp "$rust/cbb$exe" "$out/"
 	# cbb-relay and the Go programs beside cbb; not for the routers (MIPS),
-	# where cbb runs alone (the lite member).
+	# where cbb runs alone.
 	goprograms='' servers=''
 	if [ -z "$GOMIPS" ]; then
 		goprograms='cbb-helper cbb-forward' servers=cbb-relay

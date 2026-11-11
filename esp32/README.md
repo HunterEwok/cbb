@@ -187,5 +187,5 @@ the chip. Its feature `host` builds `esp32-on-linux`, which runs the same code o
 embassy-net over a TAP interface with a fixed address takes the place of the Wi-Fi and
 DHCP, and `esp32-on-linux` joins a group by the phone as the board's `pair` does. The Go test
 `TestEmbassyJoiner` plays the phone and has a Go member admit it (CONTRIBUTING.md, "The
-other parts", has the commands; CI's `lite` job runs it). Only the Wi-Fi driver and the
+other parts", has the commands; CI's `rust` job runs it). Only the Wi-Fi driver and the
 flash stay for a real board.

@@ -9,7 +9,7 @@
  "is it running ({} status cbb)?": "¿está en marcha ({} status cbb)?",
  "is it running (start it with cbb service)?": "¿está en marcha (inícialo con cbb service)?",
  "this command changes the group, so only the administrator may run it; run it with sudo": "esta orden cambia el grupo, así que solo el administrador puede ejecutarla; ejecútala con sudo",
- "cannot reach the lite member's service at {}; {}": "no se puede llegar al servicio del miembro ligero en {}; {}",
+ "cannot reach the CBB service at {}; {}": "no se puede llegar al servicio de CBB en {}; {}",
  "The group is stopped: its members exchange records only, no clipboard, until the group's root decides.": "El grupo está detenido: sus miembros solo intercambian registros, sin portapapeles, hasta que decida la raíz del grupo.",
  "The group sends no secrets until its root decides.": "El grupo no envía secretos hasta que decida su raíz.",
  "This device leaves its group: its keys and the group's files here are deleted, remote paste\nand the quick actions are turned off, and the rest of the settings stay. It can then join this\ngroup again or another one (cbb pair). The group keeps listing it until an admin removes it.\nLeave the group? [y/N] ": "Este dispositivo sale de su grupo: se borran aquí sus claves y los archivos del grupo, se\ndesactivan el pegado remoto y las acciones rápidas, y el resto de los ajustes se mantiene. Después\npuede volver a unirse a este grupo o a otro (cbb pair). El grupo lo sigue listando hasta que un\nadministrador lo elimine.\n¿Salir del grupo? [y/N] ",

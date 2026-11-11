@@ -22,15 +22,15 @@ crate-type = ["lib", "staticlib", "cdylib"]
 join = ["cbb-core/tls", "dep:qrcode", "dep:rqrr", "dep:serde", "dep:serde_json"]
 # member: the lite member's node inside the app, with the app's key
 # (src/member.rs); only the Aurora app's build takes it.
-member = ["join", "dep:cbb-lite"]
+member = ["join", "dep:cbb-member"]
 # tunnel: the phones' tunnel to the hub (src/tunnel.rs), WireGuard with
 # AmneziaWG and VLESS with XHTTP, in place of the Go tunnel; the iPhone's and
 # Android's builds take it.
-tunnel = ["join", "dep:cbb-lite", "cbb-lite/tunnel", "dep:base64"]
+tunnel = ["join", "dep:cbb-member", "cbb-member/tunnel", "dep:base64"]
 
 [dependencies]
 cbb-core = { path = "../core", features = ["std"] }
-cbb-lite = { path = "../member", default-features = false, optional = true }
+cbb-member = { path = "../member", default-features = false, optional = true }
 qrcode = { version = "0.14.1", default-features = false, optional = true }
 rqrr = { version = "0.11.0", default-features = false, optional = true }
 serde = { version = "1", features = ["derive"], optional = true }

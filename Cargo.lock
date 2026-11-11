@@ -228,7 +228,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "cbb-core",
- "cbb-lite",
+ "cbb-member",
  "p256",
  "qrcode",
  "rqrr",
@@ -237,7 +237,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cbb-lite"
+name = "cbb-member"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",

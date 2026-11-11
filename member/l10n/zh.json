@@ -9,7 +9,7 @@
  "is it running ({} status cbb)?": "它在运行吗（{} status cbb）？",
  "is it running (start it with cbb service)?": "它在运行吗（用 cbb service 启动）？",
  "this command changes the group, so only the administrator may run it; run it with sudo": "此命令会更改群组，只有管理员可以运行；请用 sudo 运行",
- "cannot reach the lite member's service at {}; {}": "无法连接到 {} 处的轻量成员服务；{}",
+ "cannot reach the CBB service at {}; {}": "无法连接到 {} 处的 CBB 服务；{}",
  "The group is stopped: its members exchange records only, no clipboard, until the group's root decides.": "群组已停止：在群组根设备作出决定之前，成员之间只交换记录，不同步剪贴板。",
  "The group sends no secrets until its root decides.": "在群组根设备作出决定之前，群组不发送机密。",
  "This device leaves its group: its keys and the group's files here are deleted, remote paste\nand the quick actions are turned off, and the rest of the settings stay. It can then join this\ngroup again or another one (cbb pair). The group keeps listing it until an admin removes it.\nLeave the group? [y/N] ": "本设备将退出其群组：这里的密钥和群组文件会被删除，远程粘贴和快捷操作会被关闭，\n其余设置保留。之后它可以重新加入此群组或其他群组（cbb pair）。在管理员移除它之前，\n群组会继续列出它。\n退出群组？[y/N] ",

@@ -10,7 +10,7 @@
   "A message to yourself": "खुद को संदेश",
   "A message to yourself works, but it takes several steps every time, and your text stays on someone else's server. A clipboard built into one system works only within it.": "खुद को संदेश भेजना काम करता है, पर हर बार कई कदम लगते हैं, और आपका टेक्स्ट किसी और के सर्वर पर रहता है। किसी एक सिस्टम में बना क्लिपबोर्ड सिर्फ़ उसी के भीतर काम करता है।",
   "A phone keeps its keys in its security chip (the Secure Enclave, Android's Keystore); they never leave it. A computer keeps them in its TPM or Secure Enclave when it has one, otherwise in files that only Copy Beyond Borders can read.": "फ़ोन अपनी कुंजियाँ अपनी सुरक्षा चिप (Secure Enclave, Android का Keystore) में रखता है; वे कभी उससे बाहर नहीं जातीं। कंप्यूटर उन्हें अपने TPM या Secure Enclave में रखता है, अगर उसमें हो, वरना ऐसी फ़ाइलों में जिन्हें सिर्फ़ Copy Beyond Borders पढ़ सकता है।",
-  "A router or a Raspberry Pi Zero that should only sync takes the lite member. On Linux:": "जिस राउटर या Raspberry Pi Zero को सिर्फ़ सिंक करना है, वह हल्का सदस्य इस्तेमाल करता है। Linux पर:",
+  "A router or a Raspberry Pi Zero that should only sync takes the same installer and can leave out the helper. On Linux:": "जिस राउटर या Raspberry Pi Zero को केवल सिंक करना है, वह वही इंस्टॉलर लेता है और सहायक छोड़ सकता है। Linux पर:",
   "A small member that only syncs, or a Docker image that is always on.": "एक छोटा सदस्य जो सिर्फ़ सिंक करता है, या हमेशा चालू रहने वाली Docker इमेज।",
   "A source that breaks these terms may be refused, at the level of its address, network or provider.": "इन शर्तों को तोड़ने वाले स्रोत को उसके पते, नेटवर्क या प्रदाता के स्तर पर मना किया जा सकता है।",
   "Add the computer.": "कंप्यूटर जोड़ें।",

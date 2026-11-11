@@ -75,12 +75,12 @@ rootfs)
 		sh /usr/share/cbb/uninstall.sh --purge
 		$removed
 		echo 'rootfs: installed and removed'
-		CBB_VERIFY=skip CBB_RELEASE_DIR=/rel sh /rel/get.sh --lite --port 9000
+		CBB_VERIFY=skip CBB_RELEASE_DIR=/rel sh /rel/get.sh --no-helper --port 9000
 		$installed
-		cbb version | grep -q 'lite member'
+		test ! -e /usr/bin/cbb-helper
 		sh /usr/share/cbb/uninstall.sh --purge
 		$removed
-		echo 'rootfs: the lite member installed and removed'
+		echo 'rootfs: get.sh --no-helper installed it, and it was removed'
 	"
 	;;
 feed)
@@ -256,12 +256,12 @@ vm)
 	run "$removed"
 	echo "vm: installed, checked and removed"
 
-	# The lite member, from the same init script.
-	run 'CBB_VERIFY=skip CBB_RELEASE_DIR=/tmp/rel sh /tmp/rel/get.sh --lite --port 9000'
+	# get.sh --no-helper, from the same init script.
+	run 'CBB_VERIFY=skip CBB_RELEASE_DIR=/tmp/rel sh /tmp/rel/get.sh --no-helper --port 9000'
 	run "$installed"
 	run '
 		set -ex
-		cbb version | grep -q "lite member"
+		test ! -e /usr/bin/cbb-helper
 		ubus call service list "{\"name\":\"cbb\"}" | grep -q "\"running\": true"
 		for i in $(seq 30); do logread -e cbb | grep -q "work only on br-lan" && break; sleep 1; done
 		logread -e cbb | grep -q "work only on br-lan"
@@ -270,7 +270,7 @@ vm)
 		sh /usr/share/cbb/uninstall.sh --purge
 	'
 	run "$removed"
-	echo "vm: the lite member installed, checked and removed"
+	echo "vm: get.sh --no-helper installed it, checked and removed"
 	;;
 *)
 	echo "usage: sh tools/e2e/openwrt.sh rootfs|vm|feed RELEASE_DIR" >&2

@@ -745,7 +745,7 @@ mod tests {
     /// packaging/archive.sh names them, as Go's archivePattern.
     #[test]
     fn archive_names() {
-        for ok in ["cbb-linux-arm64.tar.gz", "cbb-windows-amd64.zip", "cbb-lite-linux-mipsle.tar.gz"] {
+        for ok in ["cbb-linux-arm64.tar.gz", "cbb-windows-amd64.zip", "cbb-linux-mipsle.tar.gz"] {
             assert!(archive_name_valid(ok), "{ok}");
         }
         for bad in [

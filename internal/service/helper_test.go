@@ -19,12 +19,12 @@ import (
 
 // TestLiteHelper: the Rust member starts cbb-helper as its child, which
 // says hello over its inherited pipes, and the helper ends with the member
-// (docs/design.md, "The service and its helper"). CBB_LITE names the Rust
+// (docs/design.md, "The service and its helper"). CBB_TEST_ALONE names the Rust
 // member's binary.
 func TestLiteHelper(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -70,9 +70,9 @@ func running(path string) bool {
 // keeps the TPM's blob and no key, and the member's handshakes and copies
 // are signed through the helper.
 func TestLiteTPM(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")

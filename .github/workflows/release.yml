@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Builds a release from a version tag: an archive per platform, the lite
-# member's archives, the Android app's and the Wear OS app's APKs, with the
+# Builds a release from a version tag: an archive per platform, the
+# Android app's and the Wear OS app's APKs, with the
 # Developer ID certificates the Mac's .pkg (CBB.app and the service) and the
 # iPhone app's build for TestFlight, SHA256SUMS,
 # the Linux and Windows installers, a software bill of materials for each part
@@ -107,7 +107,7 @@ jobs:
           # cbb-helper, the Go helper cbb starts as its child, with the same
           # version: a release cbb takes only a helper of its own release. The
           # routers' builds (mips) go without the Go programs, as cbb runs
-          # there alone (the lite member).
+          # there alone.
           case $GOARCH in
           mips | mipsle) ;;
           *)
@@ -422,69 +422,6 @@ jobs:
       contents: read
       security-events: write
 
-  lite:
-    name: build (cbb-lite-linux-${{ matrix.name }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        include:
-          - { target: x86_64-unknown-linux-musl, name: amd64 }
-          - { target: aarch64-unknown-linux-musl, name: arm64 }
-          - { target: arm-unknown-linux-musleabihf, name: armv6 }
-    env:
-      ARCHIVE: cbb-lite-linux-${{ matrix.name }}.tar.gz
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: the Rust toolchain
-        run: |
-          rustup toolchain install stable --profile minimal --target ${{ matrix.target }}
-          rustup default stable
-      - name: build (static, linked with rust-lld; see .cargo/config.toml)
-        run: CBB_VERSION="${GITHUB_REF_NAME#v}" CBB_SOURCE="$GITHUB_SHA" cargo build --locked --release --target ${{ matrix.target }}
-      - name: archive, with the crates' licenses and the installer
-        run: sh member/packaging/archive.sh target/${{ matrix.target }}/release/cbb ${{ matrix.target }} ${{ matrix.name }} "$RUNNER_TEMP/dist"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ${{ env.ARCHIVE }}
-          path: ${{ runner.temp }}/dist/${{ env.ARCHIVE }}
-          if-no-files-found: error
-          retention-days: 1
-
-  litemips:
-    name: build (cbb-lite-linux-${{ matrix.name }}, no tunnel)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        include:
-          - { target: mips-unknown-linux-musl, arch: mips, name: mips }
-          - { target: mipsel-unknown-linux-musl, arch: mipsel, name: mipsle }
-    env:
-      ARCHIVE: cbb-lite-linux-${{ matrix.name }}.tar.gz
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: nightly Rust with the standard library's source, and zig
-        run: |
-          rustup toolchain install nightly-2026-10-26 --profile minimal --component rust-src
-          python3 -m venv "$RUNNER_TEMP/zig"
-          "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
-          echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
-      - name: build (static, soft float, without sync away from home; see member/packaging/mips.sh)
-        run: CBB_VERSION="${GITHUB_REF_NAME#v}" CBB_SOURCE="$GITHUB_SHA" sh member/packaging/mips.sh ${{ matrix.arch }}
-      - name: archive, with the crates' licenses and the installer
-        run: sh member/packaging/archive.sh target/${{ matrix.target }}/release/cbb ${{ matrix.target }} ${{ matrix.name }} "$RUNNER_TEMP/dist"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ${{ env.ARCHIVE }}
-          path: ${{ runner.temp }}/dist/${{ env.ARCHIVE }}
-          if-no-files-found: error
-          retention-days: 1
-
   openwrt-feed:
     # The apk feed for OpenWrt from the Linux archives above, signed with
     # the feed's ECDSA P-256 key (docs/maintaining.md, "The OpenWrt feed"),
@@ -534,9 +471,9 @@ jobs:
 
   zxnext:
     # The ZX Spectrum Next's files, laid out for cbb.tools (packaging/zxnext/site.sh),
-    # with the Pi Zero's lite member from the lite job.
+    # with the Pi Zero's cbb from the armv6 archive.
     name: build (cbb-zxnext)
-    needs: lite
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -557,17 +494,17 @@ jobs:
           cd z88dk && ./build.sh -k -p zxn
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: cbb-lite-linux-armv6.tar.gz
-          path: ${{ runner.temp }}/lite
+          name: cbb-linux-armv6.tar.gz
+          path: ${{ runner.temp }}/pi
       - name: the dot command and the driver, with the SHA-256 of the Pi's cbb
         working-directory: apps/zxnext
         run: |
-          tar -xzf "$RUNNER_TEMP/lite/cbb-lite-linux-armv6.tar.gz" -C "$RUNNER_TEMP/lite"
+          tar -xzf "$RUNNER_TEMP/pi/cbb-linux-armv6.tar.gz" -C "$RUNNER_TEMP/pi"
           export PATH="$RUNNER_TEMP/z88dk/bin:$PATH" ZCCCFG="$RUNNER_TEMP/z88dk/lib/config"
-          make PI_CBB="$RUNNER_TEMP/lite/cbb-lite/cbb"
+          make PI_CBB="$RUNNER_TEMP/pi/cbb/cbb"
       - name: the files for cbb.tools
         run: |
-          sh packaging/zxnext/site.sh apps/zxnext/build "$RUNNER_TEMP/lite/cbb-lite/cbb" "$RUNNER_TEMP/site"
+          sh packaging/zxnext/site.sh apps/zxnext/build "$RUNNER_TEMP/pi/cbb/cbb" "$RUNNER_TEMP/site"
           mkdir -p "$RUNNER_TEMP/dist"
           tar -czf "$RUNNER_TEMP/dist/cbb-zxnext.tar.gz" -C "$RUNNER_TEMP/site" zxnext
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -579,7 +516,7 @@ jobs:
 
   release:
     if: github.ref_type == 'tag'
-    needs: [build, macos-app, android, lite, litemips, zxnext, codeql-swift, openwrt-feed]
+    needs: [build, macos-app, android, zxnext, codeql-swift, openwrt-feed]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -600,15 +537,15 @@ jobs:
           cache: false # a release builds from scratch
       - name: the software bills of materials (tools/sbom, docs/maintaining.md)
         # The Go programs' modules from the programs themselves; the crates of
-        # cbb (the Rust program, also the lite member's) and of the phones'
+        # cbb (the Rust program) and of the phones'
         # Rust core on their targets; the Swift kit's packages. The Android
         # apps' came with their APKs.
         run: |
           go run ./tools/sbom go -o dist/sbom-go.cdx.json -version "$GITHUB_REF_NAME" \
             dist/cbb-linux-*.tar.gz dist/cbb-darwin-*.tar.gz \
             dist/cbb-freebsd-*.tar.gz dist/cbb-windows-*.zip
-          go run ./tools/sbom cargo -o dist/sbom-lite.cdx.json -version "$GITHUB_REF_NAME" -manifest Cargo.toml \
-            -package cbb-lite \
+          go run ./tools/sbom cargo -o dist/sbom-member.cdx.json -version "$GITHUB_REF_NAME" -manifest Cargo.toml \
+            -package cbb-member \
             -target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,armv7-unknown-linux-musleabihf,arm-unknown-linux-musleabihf,mips-unknown-linux-musl,mipsel-unknown-linux-musl,x86_64-unknown-freebsd,aarch64-unknown-freebsd,x86_64-apple-darwin,aarch64-apple-darwin,x86_64-pc-windows-gnu,aarch64-pc-windows-gnullvm
           go run ./tools/sbom cargo -o dist/sbom-phone-core.cdx.json -version "$GITHUB_REF_NAME" -manifest Cargo.toml \
             -package cbb-ffi \

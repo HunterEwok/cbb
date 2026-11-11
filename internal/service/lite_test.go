@@ -1245,12 +1245,12 @@ func joinLiteEnv(t *testing.T, bin string, pi *testService, env []string) string
 // TestLiteMember runs the lite member among Go members: it joins with the
 // code of cbb pair, gets no CA keys, is listed as a lite device and syncs
 // both ways. (Joining by the phone's QR code, where the phone dials the
-// lite member, is covered by the phone kits' tests.) CBB_LITE names the
+// lite member, is covered by the phone kits' tests.) CBB_TEST_ALONE names the
 // lite member's binary (cargo build at the top).
 func TestLiteMember(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
@@ -1409,9 +1409,9 @@ func TestLiteMember(t *testing.T) {
 // remote paste on; the lite member keeps the full member's rules and log,
 // and any admin turns it off there.
 func TestLiteRemotePaste(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
@@ -1517,9 +1517,9 @@ func TestLiteRemotePaste(t *testing.T) {
 // user: the paste keys once, Enter once when the command asked for it, and
 // none after the session answered, as TestKeysGrant on the Go service.
 func TestLiteKeysGrant(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
@@ -1602,9 +1602,9 @@ func TestLiteKeysGrant(t *testing.T) {
 // turned on, for the signers they allow, and restarts at an admin's request by ending with an error, after which
 // systemd starts it again. A reboot is not run here.
 func TestLiteQuickActions(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
@@ -1702,9 +1702,9 @@ func TestLiteQuickActions(t *testing.T) {
 // tunnel (GotaTun and smoltcp in the lite member, the Go hub's netstack),
 // and syncs there.
 func TestLiteMemberAway(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
@@ -1791,11 +1791,11 @@ func TestLiteMemberAway(t *testing.T) {
 // TestLiteMemberAwayObfuscated syncs the lite member away from home with a
 // hub that hides its tunnel with AmneziaWG: the lite member keeps the
 // offer's settings and speaks AmneziaWG to the Go hub (member/src/awg.rs
-// around GotaTun, amneziawg-go on the hub). CBB_LITE names the binary.
+// around GotaTun, amneziawg-go on the hub). CBB_TEST_ALONE names the binary.
 func TestLiteMemberAwayObfuscated(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
@@ -1848,11 +1848,11 @@ func TestLiteMemberAwayObfuscated(t *testing.T) {
 // behind a TLS web server with an RSA certificate from a CA, which the lite
 // member trusts through SSL_CERT_FILE. The offer's UDP address leads
 // nowhere, so the lite member tries it, then VLESS, and copies go both
-// ways inside it. CBB_LITE names the binary.
+// ways inside it. CBB_TEST_ALONE names the binary.
 func TestLiteMemberAwayXHTTP(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	path, err := tunnel.NewVLESSPath()
 	if err != nil {
@@ -1967,11 +1967,11 @@ func TestLiteMemberAwayXHTTP(t *testing.T) {
 
 // TestLiteRootless runs the lite member as a rootless install (D-79): its
 // hello says so, the root records it as rootless, and it refuses the
-// console and the reboot, which need root. CBB_LITE names the binary.
+// console and the reboot, which need root. CBB_TEST_ALONE names the binary.
 func TestLiteRootless(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	var h hub
 	pi := startService(t, &h, "pi")

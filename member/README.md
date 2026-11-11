@@ -81,18 +81,18 @@ rustup target add arm-unknown-linux-musleabihf
 cargo build --release --target arm-unknown-linux-musleabihf
 ```
 
-CI builds both for every pull request: the `cbb-lite-linux-arm64` and
-`cbb-lite-linux-armv6` artifacts of the `lite member (Rust)` job. A release builds static musl binaries for x86-64,
-ARM64 and ARMv6 with Rust's own linker (`.cargo/config.toml`), each in an archive
-(`packaging/archive.sh`) with `THIRD_PARTY_NOTICES`, the licenses of the crates it is built
-from (`packaging/notices.sh`), and the installer of the full member's Linux archive with the
-lite member's own systemd unit (`packaging/cbb.service`).
+CI builds both for every pull request: the `cbb-linux-arm64` and `cbb-linux-armv6`
+artifacts of the `cbb (Rust)` job. A release builds cbb for each system and architecture
+(`member/packaging/build.sh`) and packs it into that system's archive (`packaging/archive.sh`),
+`cbb-linux-<arch>.tar.gz` on Linux, with `cbb-helper` beside it on every architecture but MIPS
+and `THIRD_PARTY_NOTICES`, the licenses of the crates it is built from
+(`member/packaging/notices.sh`).
 
 The e2e test runs the lite member among Go members: it joins through the phone's QR code,
 gets no CA keys and syncs both ways.
 
 ```sh
-CBB_LITE=$PWD/target/release/cbb go test ./internal/service -run TestLiteMember -v
+CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service -run TestLiteMember -v
 ```
 
 ## Install
@@ -100,22 +100,23 @@ CBB_LITE=$PWD/target/release/cbb go test ./internal/service -run TestLiteMember 
 On the device, with systemd (Raspberry Pi OS, Debian, Ubuntu):
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --lite
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --no-helper
 ```
 
-`get.sh --lite` takes the release's static build for this architecture
-(`cbb-lite-linux-amd64.tar.gz`, `-arm64`, or `-armv6`, which also runs on
-ARMv7), checks it against `SHA256SUMS` and runs its `packaging/linux/install.sh`, the same installer as a full
-member's: the program as `/usr/local/bin/cbb`, the `cbb` user and group, the
+`get.sh` takes the release's archive for this architecture (`cbb-linux-amd64.tar.gz`,
+`-arm64`, `-armv7`, `-armv6`, `-mips` or `-mipsle`), checks it against `SHA256SUMS` and runs its
+`packaging/linux/install.sh`; `--no-helper` leaves `cbb-helper` out, which a small device
+without a desktop, a TPM or Bluetooth needs none of. It installs
+the program as `/usr/local/bin/cbb`, the `cbb` user and group, the
 service `cbb.service`, the tmux configuration, and, with your consent, mDNS and
 the member port from the home network in the firewall. `--port N`, `--console`, `--express`
-and `--no-firewall` work as for a full member ([the command reference](../docs/reference/cli.md#installers)).
-Running it again updates. It refuses to replace a full member, whose keys the lite member
-cannot use. Without curl, or for a binary you
-built, unpack the archive (or make one with `sh packaging/archive.sh`) and run
-`sudo sh cbb-lite/packaging/linux/install.sh cbb-lite/cbb`. To remove it:
+and `--no-firewall` work as on any computer ([the command reference](../docs/reference/cli.md#installers)).
+Running it again updates, and a device installed without the helper stays so. It refuses to
+leave out the helper of a device installed with it, since the helper may hold its keys.
+Without curl, or for a binary you built, unpack the archive (or make one with
+`sh packaging/archive.sh`) and run `sudo sh cbb/packaging/linux/install.sh --no-helper cbb/cbb`. To remove it:
 `sudo sh /usr/local/share/cbb/uninstall.sh` (`--purge` also deletes the keys). To leave the
-group and keep the lite member, for example after the group removed it: `sudo cbb leave`,
+group and keep cbb, for example after the group removed it: `sudo cbb leave`,
 then join again.
 
 The service waits until the device joins a group. Since a small device often has no keyboard
@@ -165,7 +166,7 @@ On a Linux computer where you have no `sudo`, install it for your own user inste
 ([D-79](../docs/decisions.md), "Rootless installs" in [docs/design.md](../docs/design.md)):
 
 ```sh
-curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --lite --rootless
+curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --no-helper --rootless
 cbb pair -name pi              # later, as yourself, without sudo -u (the installer pairs once)
 ```
 
@@ -183,15 +184,15 @@ OpenWrt has no user services, so a router takes the normal install.
 
 ### OpenWrt
 
-On a router with OpenWrt 25.12 or later (ARM64, ARMv7, x86-64, MIPS or MIPSel; on MIPS the lite
-member syncs only at home for now, without sync away from home), as root:
+On a router with OpenWrt 25.12 or later (ARM64, ARMv7, x86-64, MIPS or MIPSel; on MIPS cbb
+syncs only at home for now, without sync away from home), as root:
 
 ```sh
-uclient-fetch -qO - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh -s -- --lite
+uclient-fetch -qO - https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sh
 su -s /bin/sh cbb -c 'cbb pair -name router'   # later; the installer pairs once
 ```
 
-It installs OpenWrt's procd service, the same as a full member's
+It installs OpenWrt's procd service, cbb without its helper
 ([installing](../docs/guide/install.md#openwrt)), which runs `cbb service` as the user
 `cbb`. The keys live in `/etc/cbb/state`, the control socket is
 `/var/run/cbb/control.sock`. The member port, mDNS and the QR code's addresses

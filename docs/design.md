@@ -2403,7 +2403,7 @@ Where each part runs and how it is installed:
 | macOS | the service as a LaunchDaemon, the pasteboard agent as a LaunchAgent, the Mac app | `get.sh`, Homebrew |
 | Windows | the service as a Windows service, the agent at sign-in, the tray app | `get.ps1`, `install.ps1`, winget |
 | Android, iPhone, watches, TVs | the app, with its kit and the tunnel library in its process | the APK in each release; TestFlight later |
-| Small Linux devices, ESP32 | the lite member as a system service; the firmware | `get.sh --lite`; flashing |
+| Small Linux devices, ESP32 | `cbb` as a system service, without its helper; the firmware | `get.sh --no-helper`; flashing |
 | A server | `cbb forward` or `cbb relay` as a hardened systemd unit, or the Docker image | [running your own servers](admin/self-hosting.md) |
 
 The ports, files and logs of each are in [devices, ports and files](reference/devices.md).
@@ -2509,8 +2509,8 @@ One pull request each, smaller ones together:
 4. Done. A signed apk feed for `cbb.tools`, built by the release job once the feed's key is
    in the secrets ([maintaining.md](maintaining.md#the-openwrt-feed)); CI installs from a
    feed signed with a test key.
-5. The lite member on OpenWrt. Done: the procd script runs `cbb service` for it, `get.sh
-   --lite` installs it on aarch64, armv7, x86-64, mips and mipsle, and it takes
+5. `cbb` in Rust on OpenWrt. Done: the procd script runs `cbb service`, without its helper,
+   `get.sh` installs it on aarch64, armv7, x86-64, mips and mipsle, and it takes
    `CBB_INTERFACES`. On mips and mipsle it is built with nightly Rust (`-Zbuild-std`,
    `member/packaging/mips.sh`) and without the tunnel in 0.6, since GotaTun needs 64-bit
    atomics; CI runs its Go tests under qemu-mips; the tunnel there is planned for 0.7

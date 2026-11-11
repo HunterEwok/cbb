@@ -3,11 +3,11 @@
 
 //! cbb update (docs/guide/install.md, "Updating"):
 //! it checks keys.json, stable.json and release.json against the release
-//! roots, downloads the lite member's archive for this device, checks it and
+//! roots, downloads the archive for this device, checks it and
 //! the program in it, runs the archive's own installer, and puts the
 //! previous program back when the service does not report the new version
 //! within a minute. The downloads go through curl, wget or uclient-fetch,
-//! whichever the system has, so the lite member carries no HTTPS client of
+//! whichever the system has, so cbb carries no HTTPS client of
 //! its own; the signatures make the transport untrusted.
 
 use std::fs;
@@ -117,10 +117,10 @@ pub fn now_ms() -> i64 {
     crate::uptime::wall_ms()
 }
 
-/// The release's archive for this device and the installed cbb
+/// The release's archive for this device
 /// (update_os::archive_name); None for a system it does not build for.
 pub fn archive_name() -> Option<String> {
-    crate::update_os::installed_program().ok().and_then(|p| crate::update_os::archive_name(&p))
+    crate::update_os::archive_name()
 }
 
 /// Where the release files come from: a server, or a folder for tests.
@@ -819,7 +819,7 @@ mod tests {
     use std::cell::RefCell;
 
     const NOW: i64 = 1_800_000_000_000;
-    const ARCHIVE: &str = "cbb-lite-linux-test.tar.gz";
+    const ARCHIVE: &str = "cbb-linux-test.tar.gz";
 
     fn key(n: u8) -> SigningKey {
         SigningKey::from_slice(&[n; 32]).unwrap()
@@ -849,24 +849,18 @@ mod tests {
         fs::write(dir.join(name), data).unwrap();
     }
 
-    /// A release of version with the lite member's archive, whose cbb is
+    /// A release of version with an archive, whose cbb is
     /// "cbb VERSION", signed under root 1; prog overrides the hash
     /// release.json lists for it.
     fn publish(dir: &Path, version: &str, seq: u64, prog: Option<&str>) {
         let tree = dir.join("tree");
         let _ = fs::remove_dir_all(&tree);
-        fs::create_dir_all(tree.join("cbb-lite/packaging/linux")).unwrap();
+        fs::create_dir_all(tree.join("cbb/packaging/linux")).unwrap();
         let body = format!("cbb {version}");
-        fs::write(tree.join("cbb-lite/cbb"), &body).unwrap();
-        fs::write(tree.join("cbb-lite/packaging/linux/install.sh"), "#!/bin/sh\n").unwrap();
-        let st = Command::new("tar")
-            .arg("-czf")
-            .arg(dir.join(ARCHIVE))
-            .arg("-C")
-            .arg(&tree)
-            .arg("cbb-lite")
-            .status()
-            .unwrap();
+        fs::write(tree.join("cbb/cbb"), &body).unwrap();
+        fs::write(tree.join("cbb/packaging/linux/install.sh"), "#!/bin/sh\n").unwrap();
+        let st =
+            Command::new("tar").arg("-czf").arg(dir.join(ARCHIVE)).arg("-C").arg(&tree).arg("cbb").status().unwrap();
         assert!(st.success());
         let data = fs::read(dir.join(ARCHIVE)).unwrap();
         let (root, rel) = (key(1), key(2));
@@ -879,7 +873,7 @@ mod tests {
         let r = sign(
             serde_json::json!({"v": 1, "type": "release", "version": version, "channel": CHANNEL, "time_ms": at,
                 "files": [{"name": ARCHIVE, "size": data.len(), "sha256": hex(&sha256(&data)),
-                    "binaries": [{"name": "cbb-lite/cbb",
+                    "binaries": [{"name": "cbb/cbb",
                         "sha256": prog.map(String::from).unwrap_or_else(|| hex(&sha256(body.as_bytes())))}]}]}),
             &rel,
         );

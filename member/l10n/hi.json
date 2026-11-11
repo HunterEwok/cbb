@@ -9,7 +9,7 @@
  "is it running ({} status cbb)?": "क्या यह चल रही है ({} status cbb)?",
  "is it running (start it with cbb service)?": "क्या यह चल रही है (cbb service से शुरू करें)?",
  "this command changes the group, so only the administrator may run it; run it with sudo": "यह कमांड समूह को बदलती है, इसलिए इसे केवल व्यवस्थापक चला सकता है; इसे sudo के साथ चलाएँ",
- "cannot reach the lite member's service at {}; {}": "{} पर हल्के सदस्य की सेवा तक नहीं पहुँच सकते; {}",
+ "cannot reach the CBB service at {}; {}": "{} पर CBB की सेवा तक नहीं पहुँच सकते; {}",
  "The group is stopped: its members exchange records only, no clipboard, until the group's root decides.": "समूह रुका हुआ है: जब तक समूह का रूट तय न करे, इसके सदस्य केवल रिकॉर्ड का आदान-प्रदान करते हैं, क्लिपबोर्ड नहीं।",
  "The group sends no secrets until its root decides.": "जब तक इसका रूट तय न करे, समूह कोई गोपनीय टेक्स्ट नहीं भेजता।",
  "This device leaves its group: its keys and the group's files here are deleted, remote paste\nand the quick actions are turned off, and the rest of the settings stay. It can then join this\ngroup again or another one (cbb pair). The group keeps listing it until an admin removes it.\nLeave the group? [y/N] ": "यह डिवाइस अपना समूह छोड़ता है: यहाँ इसकी कुंजियाँ और समूह की फ़ाइलें मिटा दी जाती हैं, रिमोट\nपेस्ट और त्वरित क्रियाएँ बंद हो जाती हैं, और बाकी सेटिंग्स बनी रहती हैं। इसके बाद यह इसी या\nकिसी दूसरे समूह से फिर जुड़ सकता है (cbb pair)। जब तक कोई एडमिन इसे न हटाए, समूह इसे दिखाता रहता है।\nसमूह छोड़ें? [y/N] ",

@@ -9,7 +9,7 @@
  "is it running ({} status cbb)?": "она запущена ({} status cbb)?",
  "is it running (start it with cbb service)?": "она запущена (запустите её через cbb service)?",
  "this command changes the group, so only the administrator may run it; run it with sudo": "эта команда меняет группу, поэтому её может выполнить только администратор; запустите её через sudo",
- "cannot reach the lite member's service at {}; {}": "служба лёгкого участника недоступна по адресу {}; {}",
+ "cannot reach the CBB service at {}; {}": "служба CBB недоступна по адресу {}; {}",
  "The group is stopped: its members exchange records only, no clipboard, until the group's root decides.": "Группа остановлена: её участники обмениваются только записями, без буфера обмена, пока корень группы не решит.",
  "The group sends no secrets until its root decides.": "Группа не отправляет секреты, пока её корень не решит.",
  "This device leaves its group: its keys and the group's files here are deleted, remote paste\nand the quick actions are turned off, and the rest of the settings stay. It can then join this\ngroup again or another one (cbb pair). The group keeps listing it until an admin removes it.\nLeave the group? [y/N] ": "Это устройство выходит из группы: его ключи и файлы группы здесь удаляются, вставка с других\nустройств и быстрые действия выключаются, остальные настройки остаются. Потом оно может снова\nвойти в эту группу или в другую (cbb pair). Группа показывает его, пока админ его не удалит.\nВыйти из группы? [y/N] ",

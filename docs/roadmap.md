@@ -942,7 +942,7 @@ single out the Rust client's own ClientHello, a browser-like one for XHTTP comes
     its UDP socket.
   - Interop vectors for the VLESS header, the XHTTP framing and the encryption in
     `testdata/interop`, checked against Xray-core, and a test of the lite member against
-    the Go forwarder in CI's `lite` job.
+    the Go forwarder in CI's `rust` job.
 - **Risks.** rustls' ClientHello is not a browser's, and a censor that singles out TLS
   fingerprints (JA3, JA4) may notice it; a real site and its certificate still hide far more
   than plain WireGuard, and the order of the cipher suites and extensions can be brought

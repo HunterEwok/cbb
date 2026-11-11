@@ -41,7 +41,7 @@ mkdir -p "$out"
 out=$(cd "$out" && pwd)
 base="https://github.com/$repo/releases/download/v$tag"
 curl -fsSL --retry 3 -o "$out/SHA256SUMS" "$base/SHA256SUMS"
-for archive in cbb-linux-amd64.tar.gz cbb-lite-linux-amd64.tar.gz; do
+for archive in cbb-linux-amd64.tar.gz; do
 	grep -q " \*\?$archive\$" "$out/SHA256SUMS" || continue
 	curl -fsSL --retry 3 -o "$out/$archive" "$base/$archive"
 	(cd "$out" && grep " \*\?$archive\$" SHA256SUMS | sha256sum -c - >&2)

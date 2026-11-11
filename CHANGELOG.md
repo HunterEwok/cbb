@@ -1569,6 +1569,15 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- One archive for each system and architecture: small Linux devices install from
+  `cbb-linux-<arch>.tar.gz` like any computer, and `get.sh` and `install.sh` decide what goes in.
+  `--no-helper` leaves `cbb-helper` out, for a device that needs none of what it does (keys in
+  a TPM, the desktop's clipboard and keys, Bluetooth); a device installed without it stays so
+  on later runs and updates, and one installed with it, which the helper may hold the keys
+  of, is never left without it. Without the helper the systemd unit gets no address limit,
+  whose BPF maps fail on small boards, and the installer pairs at once, as on OpenWrt, which
+  always runs `cbb` alone. `cbb update` takes the system's archive, `cbb version` no longer
+  names a kind of member, and the crate is `cbb-member`.
 - The tunnel's disguise on a hub is now "Strict networks", two switches in the tray, Mac,
   iPhone and Android apps: networks that block VPNs (AmneziaWG) and networks that let only the
   web through (VLESS, which needs the first).
@@ -2109,6 +2118,8 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Removed
 
+- The lite member's archives (`cbb-lite-linux-*`), their release jobs and unit, `get.sh
+  --lite`, and OpenWrt's `memlimit` setting (`GOMEMLIMIT`, which only the Go service read).
 - The Rust core as WebAssembly in the Go programs (`internal/core`, `wasm/`, wazero and the
   build tags `cbbwasm` and `cbbcore`): `cbb-helper` and `cbb-forward` run Go's own rules,
   which the interop vectors and the differential run keep the same as the core's. The Mac's

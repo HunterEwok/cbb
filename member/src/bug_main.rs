@@ -7,5 +7,5 @@
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    std::process::exit(cbb_lite::bugd::command(&args, &mut std::io::stderr()));
+    std::process::exit(cbb_member::bugd::command(&args, &mut std::io::stderr()));
 }

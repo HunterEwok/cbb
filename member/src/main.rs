@@ -4,5 +4,5 @@
 //! cbb, the lite member: the library's program.
 
 fn main() {
-    cbb_lite::main();
+    cbb_member::main();
 }
