@@ -177,6 +177,23 @@ fn the_budgets_hold_per_token_and_per_tag() {
     w.service.stop();
 }
 
+#[test]
+fn one_address_brings_a_bounded_number_of_new_groups() {
+    let w = world(Budgets::default());
+    for i in 0..16u8 {
+        let (key, creds) = member([100 + i; 16], 1, &format!("period {i}"), 1, true);
+        Client::connect(w.service.addr(), w.pin, key, &refs(&creds)).unwrap();
+    }
+    let (key, creds) = member([200; 16], 1, "period x", 1, true);
+    let e = Client::connect(w.service.addr(), w.pin, key, &refs(&creds)).err().unwrap();
+    assert!(e.to_string().contains("too many groups"), "{e}");
+    // A group already seen still says hello.
+    let (key, creds) = member([100; 16], 1, "period 0", 1, true);
+    assert!(Client::connect(w.service.addr(), w.pin, key, &refs(&creds)).is_ok());
+    assert_eq!(w.service.stats().0, 16);
+    w.service.stop();
+}
+
 /// A fake HTTP/2 server for one request: reads the preface, the settings,
 /// a request, and answers with `status` (indexed when 200, else a literal)
 /// and the body.

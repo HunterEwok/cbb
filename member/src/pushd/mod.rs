@@ -95,8 +95,15 @@ pub struct Config {
 /// How long a `once` is remembered, and how many at most.
 const ONCE_FOR: Duration = Duration::from_secs(24 * 3600);
 const ONCE_MAX: usize = 1 << 20;
-/// Tags and token budgets kept at most.
+/// Tags and token budgets kept at most. Anyone can make a period key and
+/// credentials of a tag of their own, so the table of first period keys is
+/// bounded three ways: an entry lives at most until its credentials expire
+/// (and never longer than `TAG_LIFE` unseen), at most `TAGS_MAX` entries
+/// are held (the one unseen the longest gives way), and one address (an
+/// IPv6 /64) brings at most `NEW_TAGS` new tags an hour.
 const TAGS_MAX: usize = 65_536;
+const TAG_LIFE: Duration = Duration::from_secs(31 * 24 * 3600);
+const NEW_TAGS: (f64, f64) = (16.0, 16.0);
 const TOKENS_MAX: usize = 1 << 20;
 /// The hello within this, and at most this long between sends.
 const HELLO_WAIT: Duration = Duration::from_secs(10);
@@ -132,6 +139,9 @@ struct Period {
     members_version: u64,
     budget: Bucket,
     seen: Instant,
+    /// When its credentials expire: the entry goes then (a period's
+    /// credentials never outlive the period).
+    expires_ms: u64,
 }
 
 #[derive(Default)]
@@ -141,6 +151,8 @@ struct State {
     once: HashMap<[u8; 32], Instant>,
     connections: usize,
     per_address: HashMap<IpAddr, usize>,
+    /// New tags each address (its /64 for IPv6) may bring.
+    new_tags: HashMap<IpAddr, Bucket>,
 }
 
 struct Inner {
@@ -191,7 +203,13 @@ impl Inner {
 
     /// Checks a hello: the face's hubs' and members' credentials and the
     /// member's server key among the members. Returns the tag's keyed hash.
-    fn hello(&self, creds: &[&[u8]], server_key: &[u8], now: u64) -> std::result::Result<[u8; 32], &'static str> {
+    fn hello(
+        &self,
+        creds: &[&[u8]],
+        server_key: &[u8],
+        now: u64,
+        from: IpAddr,
+    ) -> std::result::Result<[u8; 32], &'static str> {
         let mut hubs = None;
         let mut members = None;
         for c in creds {
@@ -219,10 +237,23 @@ impl Inner {
         let tag = self.keyed(b"tag", &hubs.group, &[]);
         let mut st = self.lock();
         let at = Instant::now();
-        if !st.periods.contains_key(&tag) && st.periods.len() >= TAGS_MAX {
-            // Forget the period not seen the longest.
-            if let Some(old) = st.periods.iter().min_by_key(|(_, p)| p.seen).map(|(k, _)| *k) {
-                st.periods.remove(&old);
+        if !st.periods.contains_key(&tag) {
+            let payer = payer(from);
+            if !st.new_tags.contains_key(&payer) && st.new_tags.len() >= TAGS_MAX {
+                st.new_tags.retain(|_, b| at.saturating_duration_since(b.at) < Duration::from_secs(3600));
+            }
+            let b = st.new_tags.entry(payer).or_insert(Bucket { left: NEW_TAGS.1, at });
+            if b.take(NEW_TAGS, at).is_err() {
+                return Err("too many groups from this address; try later");
+            }
+            if st.periods.len() >= TAGS_MAX {
+                st.periods.retain(|_, p| p.expires_ms > now && at.saturating_duration_since(p.seen) < TAG_LIFE);
+            }
+            if st.periods.len() >= TAGS_MAX {
+                // Forget the period not seen the longest.
+                if let Some(old) = st.periods.iter().min_by_key(|(_, p)| p.seen).map(|(k, _)| *k) {
+                    st.periods.remove(&old);
+                }
             }
         }
         let burst = self.cfg.budgets.per_tag.1;
@@ -232,6 +263,7 @@ impl Inner {
             members_version: 0,
             budget: Bucket { left: burst, at },
             seen: at,
+            expires_ms: 0,
         });
         if p.key != hubs.signer {
             return Err("another period key than the one first seen for this group");
@@ -242,6 +274,7 @@ impl Inner {
         p.hubs_version = hubs.version;
         p.members_version = members.version;
         p.seen = at;
+        p.expires_ms = hubs.expires_ms.min(members.expires_ms);
         Ok(tag)
     }
 
@@ -264,6 +297,10 @@ impl Inner {
             }
             let budgets = self.cfg.budgets;
             let Some(p) = st.periods.get_mut(tag) else { return (push::SENT_FAILED, None) };
+            if p.expires_ms <= now_ms() {
+                // The credentials expired while connected: a new hello.
+                return (push::SENT_FAILED, Some(1000));
+            }
             if let Err(wait) = p.budget.take(budgets.per_tag, at) {
                 return (push::SENT_BUDGET, Some(wait.as_millis() as u64));
             }
@@ -324,7 +361,8 @@ impl Inner {
             _ => return write_frame(&mut s, &push::error("the first message is push/hello")),
         };
         let refs: Vec<&[u8]> = creds.iter().map(Vec::as_slice).collect();
-        let tag = match self.hello(&refs, &key, now_ms()) {
+        let from = s.sock.peer_addr().map_or(IpAddr::from([0u8; 4]), |a| a.ip());
+        let tag = match self.hello(&refs, &key, now_ms(), from) {
             Ok(t) => t,
             Err(why) => return write_frame(&mut s, &push::error(why)),
         };
@@ -346,6 +384,18 @@ impl Inner {
             write_frame(&mut s, &push::sent(send.n, status, retry))?;
         }
         Ok(())
+    }
+}
+
+/// Who pays for a new tag: the address, or its /64 for IPv6.
+fn payer(ip: IpAddr) -> IpAddr {
+    match ip {
+        IpAddr::V6(v6) => {
+            let mut o = v6.octets();
+            o[8..].fill(0);
+            IpAddr::from(o)
+        }
+        v4 => v4,
     }
 }
 
