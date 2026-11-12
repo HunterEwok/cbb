@@ -395,7 +395,11 @@ of a notification comes from the app's translations, never from a string in the 
 
 On the iPhone and iPad, `PushVault` (CBBKit) keeps this in the keychain access group
 `tools.cbb.push`, which the app and its notification extension (`apps/ios/NotificationService`)
-share; the member key goes to the app's first group, which the extension does not have.
+share; the member key and the app's other secrets go to the app's first group, which the
+extension does not have and which every keychain query of the app's names
+(`KeychainIdentity.accessGroup`). The extension's one app group is `group.tools.cbb.push`, for
+the IDs it showed and the hints-only marks; the app's own group, with the group's file and the
+servers' credentials, is not the extension's.
 `App/PushSetup.swift` asks iOS for the token and makes the registrations: one sender (token,
 platform, send key, its hint, the last challenge) for every group, and per group the push keys,
 the slot and the last registration. A registration is made again only when what it says changed
@@ -403,7 +407,11 @@ the slot and the last registration. A registration is made again only when what 
 because the app ran. A device gone or a new root draws a new push key, and the previous one is
 not kept, so a removed member's bodies open nothing; until then an event of a removal, a new root
 or a stop marks the group hints-only (`PushMarks`), and the mark is spent once the app has
-applied that change and drawn the new key. A copy's text gets the notification's Copy button;
+applied that change and drawn the new key, or has synced the group's records with a member after
+the mark (one stayed connected 30 s) and so found no such change. Leaving the group forgets its
+push keys, secrets and marks; the sender stays while the token does, so a group joined later
+registers under the send key the service has confirmed. The Android app does the same
+(`PushVault.kt`, `PushSetup.kt`). A copy's text gets the notification's Copy button;
 the test tool's row in Settings is in debug builds only.
 
 On the members the sender is `member/src/pusher.rs`, and the project's push service is

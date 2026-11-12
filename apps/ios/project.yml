@@ -30,9 +30,14 @@ settings:
     # (App/PushSetup.swift): release builds only, debug builds signed ad hoc
     # have no push.
     CBB_PUSH_KEYCHAIN: ""
+    # The keychain group of the app's own keys and secrets, which every one of
+    # its keychain queries names (KeychainIdentity.accessGroup): release builds
+    # only, as their entitlement.
+    CBB_SHARED_KEYCHAIN: ""
   configs:
     Release:
       CBB_PUSH_KEYCHAIN: $(AppIdentifierPrefix)tools.cbb.push
+      CBB_SHARED_KEYCHAIN: $(AppIdentifierPrefix)tools.cbb.shared
 targets:
   CBB:
     type: application
@@ -70,6 +75,7 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         NSBonjourServices: [_cbb._tcp]
         CBBPushKeychain: $(CBB_PUSH_KEYCHAIN)
+        CBBSharedKeychain: $(CBB_SHARED_KEYCHAIN)
         # A dragged device tile (Views/Arrange.swift), which stays in the app.
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: tools.cbb.tile
@@ -118,6 +124,7 @@ targets:
         CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
         NSBonjourServices: [_cbb._tcp]
         NSLocalNetworkUsageDescription: CBB finds your computers on the home network to send them what you share.
+        CBBSharedKeychain: $(CBB_SHARED_KEYCHAIN)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController

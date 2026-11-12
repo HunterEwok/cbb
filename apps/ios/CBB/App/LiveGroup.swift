@@ -392,6 +392,21 @@ final class LiveGroup: GroupController {
     }
 
     /// Takes in the records the member got from its peers.
+    /// The group's records count as synced with a member once one has
+    /// stayed connected for 30 s (its records came in at the connection's
+    /// start): that spends the push hints-only marks that arrived before.
+    private func syncedSoon() {
+        let before = Set(((try? node?.peers()) ?? []).map(\.device))
+        guard !before.isEmpty else { return }
+        let since = Date()
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard let self, let node = self.node else { return }
+            let now = Set(((try? node.peers()) ?? []).map(\.device))
+            if !now.isDisjoint(with: before) { PushSetup.shared.synced(at: since) }
+        }
+    }
+
     private func pullRecords() {
         guard let node, let rs = try? node.records(), !rs.isEmpty, let g = state else { return }
         var set = g.records
@@ -1920,6 +1935,7 @@ final class LiveGroup: GroupController {
         case .peer:
             take(peers: (try? node?.peers()) ?? [])
             pullRecords()
+            syncedSoon()
         case let .message(from, .evidence(ev)):
             let chain = ((try? node?.peers()) ?? []).first { $0.device == from }?.chain ?? []
             guard !chain.isEmpty else { return }

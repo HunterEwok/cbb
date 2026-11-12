@@ -89,6 +89,25 @@ final class PushSetup {
         refresh()
     }
 
+    /// The group's records are synced with a member since `at`: the
+    /// hints-only marks that arrived before then are spent.
+    func synced(at: Date) {
+        guard let group else { return }
+        PushMarks.synced(group.tag, at: at, in: PushMarks.defaults)
+    }
+
+    /// The phone left its group: the group's push keys, slot, secrets and
+    /// marks go; the sender stays while the token does (PushVault.forget).
+    /// The members drop the phone's registration when its removal comes.
+    func left() {
+        guard let group else { return }
+        if Self.accessGroup != nil {
+            do { try vault.forget(group.tag) } catch { fail(error) }
+        }
+        PushMarks.synced(group.tag, at: .distantFuture, in: PushMarks.defaults)
+        self.group = nil
+    }
+
     #if DEBUG
     /// The group's registration frame in base64, for the test tool; never
     /// in a release build.
@@ -137,7 +156,7 @@ final class PushSetup {
             }
             // A hints-only mark whose change is now applied, with its new
             // key in place, is spent.
-            PushMarks.spend(group.tag, try vault.load(group.tag), in: Shared.defaults)
+            PushMarks.spend(group.tag, try vault.load(group.tag), in: PushMarks.defaults)
             problem = nil
         } catch {
             fail(error)

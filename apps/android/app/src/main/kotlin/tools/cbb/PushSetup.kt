@@ -19,6 +19,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.util.Log
+import androidx.core.content.edit
 import org.json.JSONObject
 import tools.cbb.kit.Push
 import tools.cbb.kit.PushMarks
@@ -77,7 +78,7 @@ object PushSetup {
 
     /** The user turned the switch. */
     fun set(c: Context, on: Boolean) {
-        settings(c).edit().putBoolean(ON, on).apply()
+        settings(c).edit { putBoolean(ON, on) }
         if (on) {
             PushPlatform.start(c)
         } else {
@@ -132,15 +133,23 @@ object PushSetup {
         if (tag == null || me == null || me.size != 16) return
         val list = devices.mapNotNull { hex(it.id) }
         val root = devices.firstOrNull { it.isRoot }?.id?.let(::hex)
-        prefs(c).edit().putString("group", tag).apply()
+        prefs(c).edit { putString("group", tag) }
         refresh(c, tag, me, PushVault.Devices(list, root))
+    }
+
+    /**
+     * The group's records are synced with a member since [sinceMs]: the
+     * hints-only marks that arrived before then are spent.
+     */
+    fun synced(c: Context, tag: String, sinceMs: Long) {
+        runCatching { marks(c).synced(tag, sinceMs) }.onFailure { Log.e(TAG, "push: cannot spend the marks", it) }
     }
 
     /** The phone left its group: that group's push state goes. */
     fun forget(c: Context) {
         val tag = prefs(c).getString("group", null) ?: return
         runCatching { vault(c).forget(tag) }.onFailure { Log.e(TAG, "push: cannot forget the group", it) }
-        prefs(c).edit().remove("group").apply()
+        prefs(c).edit { remove("group") }
     }
 
     /** A member asked for the registration of the group with this slot (`push-renew`). */
@@ -289,7 +298,7 @@ object PushSetup {
     private fun next(c: Context): Int {
         val p = prefs(c)
         val n = p.getInt("next", 1000)
-        p.edit().putInt("next", if (n >= 1999) 1000 else n + 1).apply()
+        p.edit { putInt("next", if (n >= 1999) 1000 else n + 1) }
         return n
     }
 
@@ -297,7 +306,7 @@ object PushSetup {
 
     private fun remember(c: Context, id: ByteArray) {
         val list = (prefs(c).getString(SHOWN, "") ?: "").split(',').filter { it.isNotEmpty() } + b64(id)
-        prefs(c).edit().putString(SHOWN, list.takeLast(SHOWN_MAX).joinToString(",")).apply()
+        prefs(c).edit { putString(SHOWN, list.takeLast(SHOWN_MAX).joinToString(",")) }
     }
 
     private fun b64(b: ByteArray) = Base64.encodeToString(b, Base64.NO_WRAP)
@@ -347,7 +356,7 @@ class SealedStore private constructor(private val dir: File) : PushVault.Store {
         }
     }
 
-    override fun put(name: String, value: ByteArray?) = synchronized(this) {
+    override fun put(name: String, value: ByteArray?): Unit = synchronized(this) {
         val f = File(dir, name)
         if (value == null) {
             f.delete()

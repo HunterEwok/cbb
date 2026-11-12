@@ -2531,6 +2531,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             is CoreMember.Event.PeerConnected -> {
                 takeRecords(n)
                 peerConnected(n, e.peer, isHub, h)
+                syncedSoon(n, e.peer.device)
             }
             is CoreMember.Event.Tunnel -> a.keep(e.from, e.offer)
             is CoreMember.Event.Command -> Thread({
@@ -2600,6 +2601,22 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * answers its tunnel key with its offers and shares its clients with the
      * group's other hubs; every peer gets the group's server credentials.
      */
+    /**
+     * The group's records are synced with a member once it has stayed
+     * connected for 30 s (its records came in at the connection's start):
+     * that spends the push hints-only marks that arrived before it connected.
+     */
+    private fun syncedSoon(n: CoreMember, device: String) {
+        val since = System.currentTimeMillis()
+        Thread({
+            Thread.sleep(SYNCED_AFTER_MS)
+            if (runCatching { n.peers() }.getOrDefault(emptyList()).any { it.device == device }) {
+                val tag = groupTag ?: return@Thread
+                PushSetup.synced(context, tag, since)
+            }
+        }, "push synced").start()
+    }
+
     private fun peerConnected(n: CoreMember, p: CoreMember.Peer, isHub: Boolean, h: HubOnPhone) {
         if (p.recordsOnly) return
         renew(p.device, p.chain)
@@ -3110,6 +3127,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
 
     companion object {
+        /** How long a member stays connected before the records count as synced with it. */
+        private const val SYNCED_AFTER_MS = 30_000L
+
         /** The time of the newest `recovery` record that names key. */
         internal fun recoveryMade(key: ByteArray, records: List<Member.Record>): Instant? {
             for (r in records.asReversed()) {

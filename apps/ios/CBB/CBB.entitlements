@@ -2,8 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- The app and its share extension share the group's file (the app group) and this phone's
-     member key (the first keychain access group, where new keys go); the push keys go to the
-     second, which the notification extension shares and nothing else (App/PushSetup.swift);
+     member key (the first keychain access group, where new keys go, which every query of the
+     app's names); the push keys go to the second, and the notification extension's shown IDs and
+     hints-only marks to the second app group, which the notification extension shares and
+     nothing else (App/PushSetup.swift);
      push comes through APNs; NFC reads a YubiKey (App/YubiKeyNfc.swift). Release builds only:
      they need the Apple developer account; debug builds signed ad hoc go without. -->
 <plist version="1.0">
@@ -11,6 +13,7 @@
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.tools.cbb</string>
+		<string>group.tools.cbb.push</string>
 	</array>
 	<key>aps-environment</key>
 	<string>production</string>

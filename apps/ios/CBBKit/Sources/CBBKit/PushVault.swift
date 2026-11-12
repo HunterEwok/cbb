@@ -195,12 +195,13 @@ public final class PushVault: @unchecked Sendable {
         return out
     }
 
-    /// Removes the group and, with no group left, the sender.
+    /// Removes the group: its push keys, slot, secrets and origins. The
+    /// sender stays while the token does, so the next group registers under
+    /// the same send key, whose binding the push service has confirmed.
     public func forget(_ group: String) throws {
         lock.lock()
         defer { lock.unlock() }
         try save(group, nil)
-        if try groups().isEmpty { try save(sender: nil) }
     }
 
     /// Changes one group's state under the lock.

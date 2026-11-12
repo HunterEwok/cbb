@@ -16,9 +16,10 @@ final class NotificationService: UNNotificationServiceExtension {
     private var handler: ((UNNotificationContent) -> Void)?
     private var content: UNMutableNotificationContent?
 
-    /// The app group's defaults: the IDs already shown and the hints-only
-    /// marks, nothing secret.
-    private static let defaults = UserDefaults(suiteName: "group.tools.cbb")
+    /// The push app group's defaults (`PushMarks.appGroup`, the
+    /// extension's only app group): the IDs already shown and the
+    /// hints-only marks, nothing secret.
+    private static let defaults = PushMarks.defaults
     private static let shownKey = "push.shown"
     private static let shownMax = 200
 

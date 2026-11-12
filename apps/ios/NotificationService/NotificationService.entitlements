@@ -2,13 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- The notification extension reads the push keys from a keychain access group of its own,
-     never the app's first one with the member key and the sealing secret, and the app group for
-     the IDs it already showed. Release builds only: they need the Apple developer account. -->
+     never the app's first one with the member key and the sealing secret, and keeps the IDs it
+     already showed and the hints-only marks in an app group of its own with the app, never the
+     app's group with the group's file and the servers' credentials. Release builds only: they
+     need the Apple developer account. -->
 <plist version="1.0">
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.tools.cbb</string>
+		<string>group.tools.cbb.push</string>
 	</array>
 	<key>keychain-access-groups</key>
 	<array>

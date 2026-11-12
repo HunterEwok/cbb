@@ -152,9 +152,20 @@ final class PushTests: XCTestCase {
         // On again: a new push key, nothing from before kept.
         try vault.register("g1", me: me, token: Data(repeating: 8, count: 32), env: Push.Env.apns, kinds: [.copies])
         XCTAssertEqual(try vault.load("g1").keys.count, 1)
+        // Leaving every group drops the groups and keeps the sender: a group
+        // joined later registers under the same send key and challenge.
+        let kept = try vault.sender()
+        XCTAssertTrue(try vault.keep(challenge: value + kept.keyHint!))
         try vault.forget("g1")
         try vault.forget("g2")
-        XCTAssertEqual(try vault.sender(), PushVault.Sender(), "the sender goes with the last group")
+        XCTAssertEqual(try vault.groups(), [])
+        XCTAssertNil(try? vault.load("g1").slot)
+        let g3 = try XCTUnwrap(try vault.register("g3", me: me, token: Data(repeating: 8, count: 32), env: Push.Env.apns,
+                                                  kinds: [.copies]))
+        XCTAssertEqual(g3.keyHint, kept.keyHint)
+        XCTAssertEqual(try vault.sender().sendKey, kept.sendKey)
+        XCTAssertEqual(try vault.load("g3").registered?.challenge, value)
+        try vault.forget("g3")
     }
 
     /// testdata/interop/push-open.json, from the Rust core's push tests: the
@@ -265,13 +276,31 @@ final class PushTests: XCTestCase {
         let app = try groups("apps/ios/CBB/CBB.entitlements")
         XCTAssertEqual(app.first, "$(AppIdentifierPrefix)tools.cbb.shared", "new keys go to the first group, not push's")
         XCTAssertTrue(app.contains("$(AppIdentifierPrefix)tools.cbb.push"))
+        // The extension's one app group is push's, never the app's group with
+        // the group's file and the servers' credentials.
+        func appGroups(_ path: String) throws -> [String] {
+            let d = try Data(contentsOf: root.appendingPathComponent(path))
+            let p = try PropertyListSerialization.propertyList(from: d, format: nil) as? [String: Any]
+            return p?["com.apple.security.application-groups"] as? [String] ?? []
+        }
+        XCTAssertEqual(try appGroups("apps/ios/NotificationService/NotificationService.entitlements"), [PushMarks.appGroup])
+        XCTAssertEqual(Set(try appGroups("apps/ios/CBB/CBB.entitlements")), ["group.tools.cbb", PushMarks.appGroup])
         // Only push's code names the push group.
         let sources = root.appendingPathComponent("apps/ios")
         let files = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil)?
             .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" && !$0.path.contains("/.build/") } ?? []
-        for f in files where !["PushVault.swift", "PushSetup.swift", "NotificationService.swift", "PushTests.swift"].contains(f.lastPathComponent) {
+        for f in files where !["PushVault.swift", "PushSetup.swift", "NotificationService.swift", "PushTests.swift",
+                               "PushMarks.swift"].contains(f.lastPathComponent) {
             let text = try String(contentsOf: f, encoding: .utf8)
             XCTAssertFalse(text.contains("CBBPushKeychain") || text.contains("tools.cbb.push"), f.lastPathComponent)
+        }
+        // The app's own keychain queries name its access group, so an item in
+        // the push group never answers one (the watch has a keychain of its
+        // own; the tests make their own items).
+        for f in files where !["PushVault.swift", "WatchKey.swift"].contains(f.lastPathComponent) && !f.path.contains("Tests/") {
+            let text = try String(contentsOf: f, encoding: .utf8)
+            guard text.contains("SecItem") || text.contains("SecKeyCreateRandomKey") else { continue }
+            XCTAssertTrue(text.contains("inGroup("), "\(f.lastPathComponent) queries the keychain without the app's access group")
         }
     }
 
@@ -313,6 +342,16 @@ final class PushTests: XCTestCase {
         PushMarks.mark("g", event: 6, device: nil, now: Date(timeIntervalSince1970: 10), in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
         g.keyDrawnMS = 11_000
+        XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
+        // An event naming a change that never comes (a removal of a device
+        // that stays, a stop that is not there): spent once the app has
+        // synced the group's records with a member after it.
+        PushMarks.mark("g", event: 2, device: gone, now: Date(timeIntervalSince1970: 20), in: defaults)
+        PushMarks.mark("g", event: 6, device: nil, now: Date(timeIntervalSince1970: 21), in: defaults)
+        XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
+        PushMarks.synced("g", at: Date(timeIntervalSince1970: 20.5), in: defaults)
+        XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults), "the stop came after that sync")
+        PushMarks.synced("g", at: Date(timeIntervalSince1970: 22), in: defaults)
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
     }
     #endif

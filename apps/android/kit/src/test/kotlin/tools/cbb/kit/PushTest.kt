@@ -125,10 +125,17 @@ class PushTest {
         assertNull(vault.register("g1", me, null, env = null, kinds = 0))
         vault.register("g1", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1)
         assertEquals(1, vault.load("g1").keys.size)
+        // Leaving every group drops the groups and keeps the sender: a group
+        // joined later registers under the same send key and challenge.
+        val kept = vault.sender()
+        assertTrue(vault.keep(value + kept.keyHint!!))
         vault.forget("g1")
         vault.forget("g2")
-        assertNull(vault.sender().sendKey)
-        assertTrue(vault.items().isEmpty())
+        assertTrue(vault.groups().isEmpty())
+        assertEquals(1, vault.items().size, "the sender alone")
+        val g3 = assertNotNull(vault.register("g3", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1))
+        assertContentEquals(kept.keyHint, g3.keyHint)
+        assertNotNull(vault.load("g3").registered?.challenge, "registered with the kept challenge")
     }
 
     /** testdata/interop/push-open.json, from the Rust core's push tests: a real copy shows across a rotation. */
@@ -220,6 +227,15 @@ class PushTest {
         marks.mark("g", 6, null, 10_000)
         assertTrue(marks.hintsOnly("g", g))
         g.keyDrawnMs = 11_000
+        assertFalse(marks.hintsOnly("g", g))
+        // An event naming a change that never comes: spent once the app has
+        // synced the group's records with a member after it.
+        marks.mark("g", 2, gone, 20_000)
+        marks.mark("g", 6, null, 21_000)
+        assertTrue(marks.hintsOnly("g", g))
+        marks.synced("g", 20_500)
+        assertTrue(marks.hintsOnly("g", g), "the stop came after that sync")
+        marks.synced("g", 22_000)
         assertFalse(marks.hintsOnly("g", g))
     }
 

@@ -191,10 +191,13 @@ class PushVault(private val store: Store) {
     /** Every item the vault wrote, as stored. */
     fun items(): List<ByteArray> = store.names().filter { it == SENDER || it.startsWith(GROUP) }.mapNotNull { store.get(it) }
 
-    /** Removes the group and, with no group left, the sender. */
+    /**
+     * Removes the group: its push keys, slot, secrets and origins. The sender
+     * stays while the token does, so the next group registers under the same
+     * send key, whose binding the push service has confirmed.
+     */
     fun forget(group: String) = synchronized(lock) {
         save(group, null)
-        if (groups().isEmpty()) save(null as Sender?)
     }
 
     /**
@@ -381,6 +384,24 @@ class PushMarks(private val store: PushVault.Store) {
 
     /** Whether the group shows copies only as hints. */
     fun hintsOnly(group: String, g: PushVault.Group): Boolean = all()[group]?.any { it.inForce(g) } ?: false
+
+    /**
+     * The app has synced the group's records with a member since [atMs] (one
+     * has stayed connected a while): the marks that arrived before then are
+     * spent, whether their change was there to apply (and a key was drawn for
+     * it) or not there at all, as for an event made by a holder of the push
+     * key that names a change which never comes.
+     */
+    fun synced(group: String, atMs: Long) {
+        synchronized(this) {
+            val marks = all()
+            val l = marks[group] ?: return
+            val left = l.filter { it.atMs >= atMs }
+            if (left.size == l.size) return
+            if (left.isEmpty()) marks.remove(group) else marks[group] = left.toMutableList()
+            save(marks)
+        }
+    }
 
     /** Drops the marks the group's state has spent. */
     fun spend(group: String, g: PushVault.Group) {

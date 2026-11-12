@@ -1248,6 +1248,7 @@ final class AppModel: ObservableObject {
             message = Self.describe(error)
             return false
         }
+        PushSetup.shared.left()
         if notifies { Notifier.shared.forget() }
         do {
             try group.prepare()

@@ -11,8 +11,10 @@ import Security
 enum KeychainData {
     enum Failure: Error { case keychain(OSStatus) }
 
+    /// In the app's own access group, never the push group's.
     private static func query(_ service: String) -> [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: "state"]
+        let q = KeychainIdentity.inGroup([kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: "state"])
+        return Dictionary(uniqueKeysWithValues: q.map { ($0.key as String, $0.value) })
     }
 
     static func load(_ service: String) -> Data? {
