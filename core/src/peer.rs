@@ -18,17 +18,25 @@ pub enum Standing {
     Unknown,
     /// A key that may not talk, and why.
     Refused(&'static str),
+    /// The group is halted here (`State::halted`): nobody is a member. The
+    /// peer may connect only to give and take the recovery key's records,
+    /// the fork's proof: no copies, no other records.
+    Halted,
 }
 
 /// Where the peer with key `peer` stands in the records `state`, for the
 /// device whose own key hash is `own`: removed keys, frozen devices, an ID
 /// that two keys claim or a removed device's ID, and the device itself are
-/// refused; a key no record names is unknown.
+/// refused; a key no record names is unknown. While the group is halted
+/// every other key is `Halted`, whatever the records say of it.
 pub fn standing(state: &State, own: &KeyHash, peer: &[u8; 65]) -> Standing {
     let key = Key::new(Alg::Es256, peer);
     let h = key.hash();
     if &h == own {
         return Standing::Refused("connected to itself");
+    }
+    if state.halted() {
+        return Standing::Halted;
     }
     let rh = crate::records::KeyHash(h.0);
     if state.revoked.contains(&rh) {

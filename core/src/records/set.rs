@@ -29,6 +29,10 @@ pub enum Added {
     /// room, and taken when the list comes. Until then it counts for
     /// nothing.
     Waiting,
+    /// The group is halted here (`State::halted`): the set takes only the
+    /// recovery key's records and what the newest list applied below the
+    /// fork names.
+    Halted,
 }
 
 /// Why a record was not taken.
@@ -78,6 +82,10 @@ pub struct RecordSet {
     /// it), but for the two sides of a fork, by key hash.
     /// With each its key and the lowest recovery seq that names it.
     early_roots: BTreeMap<KeyHash, (u64, Key)>,
+    /// While the group is halted, what the set takes besides the recovery
+    /// key's records: the IDs the newest list applied below the fork
+    /// names (`State::halted`).
+    halted: Option<BTreeSet<RecordId>>,
     /// The records of those roots, verified, kept aside until the list
     /// comes; all of them within one root's room, the lowest recovery seq
     /// first, then the lowest seq, then the smallest ID. They count for
@@ -144,6 +152,7 @@ impl RecordSet {
             lists: BTreeMap::new(),
             waiting: None,
             early_roots: BTreeMap::new(),
+            halted: None,
             early: BTreeMap::new(),
             notices: BTreeSet::new(),
             checkpoints: Vec::new(),
@@ -240,6 +249,9 @@ impl RecordSet {
         let Some((key, role)) = self.keys.signer(&r.body().signer) else { return Err(Refused::UnknownSigner) };
         let key = key.clone();
         let signer = r.body().signer;
+        if role != Role::Recovery && self.halted.as_ref().is_some_and(|keep| !keep.contains(&id)) {
+            return Ok(Added::Halted);
+        }
         if self.early_roots.contains_key(&signer) && !self.promoted.contains(&signer) {
             return self.insert_early(r);
         }
@@ -462,6 +474,22 @@ impl RecordSet {
         let promoted = chain.promoted();
         let mut cuts = chain.cuts();
         self.waiting = chain.waiting;
+        // Halted: what the set holds besides the recovery key's records is
+        // what the newest list applied below the fork names, nothing else,
+        // so that every member holding the proof holds the same.
+        self.halted = chain.halted().then(|| chain.cut.as_ref().map(|c| c.keep.clone()).unwrap_or_default());
+        if let Some(keep) = &self.halted {
+            let gone: Vec<RecordId> = self
+                .records
+                .values()
+                .filter(|e| e.role != Role::Recovery && !keep.contains(&e.record.id()))
+                .map(|e| e.record.id())
+                .collect();
+            for id in &gone {
+                self.remove(id);
+            }
+            self.early.clear();
+        }
         // The roots a held recovery record names that are not on the path
         // yet, but for one side of a fork: at most one per seq, 16 in all.
         let forked: BTreeSet<RecordId> = chain.fork.iter().copied().collect();
@@ -476,7 +504,7 @@ impl RecordSet {
             let slot = early_roots.entry(h).or_insert((seq, root.clone()));
             slot.0 = slot.0.min(seq);
         }
-        self.early_roots = early_roots;
+        self.early_roots = if self.halted.is_some() { BTreeMap::new() } else { early_roots };
         if let (Some(old), Some(new)) = (self.cuts.values().next(), cuts.values().next())
             && old.record == new.record
         {
@@ -1048,8 +1076,20 @@ impl RecordSet {
 
     /// What a peer gets in sync (design-records-v3 section 3): a device of
     /// the group all of it; a removed device only the counting removals
-    /// that name it; any other key nothing.
+    /// that name it; any other key nothing. While the group is halted,
+    /// every peer, whatever the records say of it, gets the recovery key's
+    /// records and nothing else: after a fork the two that prove it, each
+    /// valid by its own bytes; otherwise the chain, the record this
+    /// version cannot read with it.
     pub fn for_peer<'a>(&'a self, state: &State, peer: &KeyHash) -> Vec<&'a Record> {
+        if state.halted() {
+            let mut out: Vec<&Record> = match state.fork {
+                Some((_, a, b)) => [a, b].iter().filter_map(|id| self.get(id)).collect(),
+                None => self.records.values().filter(|e| e.role == Role::Recovery).map(|e| &e.record).collect(),
+            };
+            out.sort_by_key(|r| (r.body().seq, r.id()));
+            return out;
+        }
         if state.revoked.contains(peer) {
             let mut out: Vec<&Record> = self
                 .records

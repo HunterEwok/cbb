@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::records::set::Written;
+use alloc::collections::BTreeSet;
 
 /// The device record of a new phone of the root.
 fn phone(member: &K) -> Device {
@@ -872,4 +873,75 @@ fn a_change_lists_removals_that_name_someone_within_their_share() {
     assert!(ghosts.iter().all(|id| !list.contains(id)));
     let listed: Vec<&RecordId> = of_tv.iter().filter(|id| list.contains(id)).collect();
     assert_eq!(listed, of_tv[of_tv.len() - EARLIER_REMOVALS..].iter().collect::<Vec<_>>());
+}
+
+/// While halted a set takes the recovery key's records and what the list
+/// applied below the fork names, and shows only that: a member that held
+/// everything before the proof came and one that took it all at once hold
+/// and show the same. After a fork at seq 1 that is the first root alone.
+#[test]
+fn a_halted_member_shows_the_chain_below_the_fork() {
+    let mut g = base();
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n1"), &k("new phone"), &[k("old phone").hash]);
+    g.device(&k("n1"), &k("tablet"), "tablet", |_| {});
+    let twin = head_at(&g, 1, None, &k("n9"), [9; 32]);
+    let mut old = set_of(&g.root.key);
+    sync_all(&mut old, &g.recs, &g.lists);
+    assert_eq!(old.insert(twin.clone()), Ok(Added::Stored));
+    // The first root's key signs after the fork: not taken.
+    let thief = g.device(&k("root"), &k("thief"), "thief", |_| {});
+    assert_eq!(old.insert(thief), Ok(Added::Halted));
+    let s = old.state();
+    let head = s.changes.iter().map(|c| c.record).find(|id| *id != twin.id()).unwrap();
+    let (a, b) = if head < twin.id() { (head, twin.id()) } else { (twin.id(), head) };
+    assert_eq!(s.fork, Some((1, a, b)));
+    assert_eq!(s.roots, vec![k("root").hash]);
+    assert!(s.devices.is_empty());
+    let mut all = g.recs.clone();
+    all.push(twin);
+    let fresh = set_with(&g.root.key, &all, &g.lists);
+    assert_eq!(fresh.digest(), old.digest());
+    assert_eq!(fresh.state(), s);
+    // Every peer gets the two heads and nothing else.
+    let me = crate::format::KeyHash(k("laptop").hash.0);
+    for peer in ["thief", "tablet", "laptop", "old phone", "stranger"] {
+        let p: [u8; 65] = k(peer).key.public.clone().try_into().unwrap();
+        if peer != "laptop" {
+            assert_eq!(crate::peer::standing(&s, &me, &p), crate::peer::Standing::Halted);
+        }
+        let ids: Vec<RecordId> = old.for_peer(&s, &k(peer).hash).iter().map(|r| r.id()).collect();
+        assert_eq!(ids.iter().copied().collect::<BTreeSet<_>>(), BTreeSet::from([a, b]));
+    }
+}
+
+/// After a fork at depth the state shows the roots below it and the
+/// devices and removals of the list applied there; the last root's own
+/// records do not show, its first records (its phone, the owner's
+/// unticks) among them.
+#[test]
+fn a_fork_at_depth_shows_the_list_below_it() {
+    let mut g = base();
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n1"), &k("new phone"), &[k("old phone").hash]);
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n2"), &k("phone 2"), &[k("new phone").hash]);
+    let mut old = set_of(&g.root.key);
+    sync_all(&mut old, &g.recs, &g.lists);
+    let prev = old.state().chain().first().copied();
+    let twin = head_at(&g, 2, prev, &k("n9"), [9; 32]);
+    old.insert(twin.clone()).unwrap();
+    let late = g.device(&k("n1"), &k("thief"), "thief", |_| {});
+    assert_eq!(old.insert(late), Ok(Added::Halted));
+    let s = old.state();
+    assert!(s.halted());
+    assert_eq!(s.fork.map(|f| f.0), Some(2));
+    assert_eq!(s.roots, vec![k("root").hash, k("n1").hash]);
+    let devices: BTreeSet<KeyHash> = s.devices.iter().map(|d| d.key.hash()).collect();
+    assert_eq!(devices, BTreeSet::from([k("laptop").hash, k("tv").hash, k("old phone").hash]));
+    let mut all = g.recs.clone();
+    all.push(twin);
+    let fresh = set_with(&g.root.key, &all, &g.lists);
+    assert_eq!(fresh.digest(), old.digest());
+    assert_eq!(fresh.state(), s);
 }

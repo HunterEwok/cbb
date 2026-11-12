@@ -1709,17 +1709,17 @@ mod differential {
         for l in &g.lists {
             let _ = late.insert_list(l);
         }
+        // A halted set took nothing but the recovery records before the
+        // lists came; it asks for what the list names, as a member does.
+        if late.state().halted() {
+            late.insert_all(order.iter().cloned());
+        }
         for _ in 0..2 {
             let s = late.state();
             late.compact(&s);
         }
         let ls = late.state();
-        // A halted group's display after a fork at depth is settled apart
-        // (it may still depend on what came before the proof).
-        if st.halted() {
-            assert!(ls.halted());
-            return m;
-        }
+        assert_eq!((ls.halted(), ls.fork), (st.halted(), st.fork));
         assert_eq!(
             (&ls.roots, &ls.devices, &ls.revoked, &ls.stop, &ls.changes),
             (&st.roots, &st.devices, &st.revoked, &st.stop, &st.changes)
