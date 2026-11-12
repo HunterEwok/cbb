@@ -53,6 +53,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_TEST_BLUEZ` | cbb-helper on Linux | For tests only: the D-Bus address of a test's BlueZ (`bluetest`), which the Bluetooth keyboard registers with instead of the system bus. |
 | `CBB_WRITE_MUTANTS` | the core's tests (`cargo test -p cbb-core`) | For development only: `1` writes `testdata/format/wave4-mutants.json` again from what the readers say, instead of failing when the file no longer matches them. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-xhttp vpn.example.org`. |
+| `CBB_PUSH_FLAGS` | `cbb-push.service` | The flags of the project's push service on cbb.tools: `-apns-team`, `-apns-key-id`, `-apns-sandbox-key-id` (the keys come from systemd's credentials). |
 | `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |
 | `CBB_TRAFFIC_IFACE` | `site/deploy/cbb-traffic.sh` on cbb.tools | The network interface whose traffic counts for [the servers' budget](../relay-budget.md#money-and-traffic); unset, the default route's. |
 | `CBB_TRAFFIC_OUT` | `site/deploy/cbb-traffic.sh` on cbb.tools | Where it writes the totals of the last 24 hours; `/srv/cbb.tools/status/traffic.json` by default. |
@@ -108,6 +109,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_REPO` | `tools/e2e/previous.sh` | The repository on GitHub whose releases it reads, `HunterEwok/cbb` by default. |
 | `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Limits the weekly fleet run to these scenarios (`-scenario`); all of them when unset. |
 | `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary, which the tests of `internal/relay`, `internal/tunnel` and `internal/service` run as the blind relay; without it they take the `cbb-relay` beside the `cbb` of `CBB_TEST_ALONE` or `CBB_TEST_RUST_SERVICE`, and skip when there is none. |
+| `CBB_PUSH_LIVE_ROOTS` | the push service's tests, by hand | The CA certificates the ignored test that reaches Apple's sandbox checks it with. |
 | `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `group_record_bytes`, `record_bytes`); the Go tests set it. |
 | `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |
 | `CBB_TEST_RUST_SERVICE` | Go tests of the service | The Rust service's binary: the tests that start a Linux member with the default configuration run it in place of the Go service, finding their peers by mDNS. |
