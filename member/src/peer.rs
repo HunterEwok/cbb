@@ -96,6 +96,13 @@ pub fn sid_at_screen(s: &UnixStream) -> Option<(String, bool)> {
     Some((win::sid_of(Some(pid))?, win::active(session)))
 }
 
+/// The session of the process at the other end of s, where the service
+/// shows what a confirmation is for.
+#[cfg(windows)]
+pub fn session(s: &UnixStream) -> Option<u32> {
+    win::session_of(s.peer_pid()?)
+}
+
 /// Root and the service's own user, which take every target.
 #[cfg(unix)]
 pub fn privileged(uid: Who) -> bool {

@@ -225,11 +225,87 @@ impl Pace {
 /// Marks the prompts for the catalogs, which take what tr! names
 /// (l10n.rs, catalogs_are_complete).
 #[cfg(test)]
-fn _catalog_marks() -> [&'static str; 2] {
+fn _catalog_marks() -> [&'static str; 18] {
     [
         tr!("Confirm a change to your CBB group."),
         tr!("Confirm an important change to your CBB group: it cannot be undone."),
+        tr!("CBB: make a new group on this computer."),
+        tr!("CBB: leave the group. It cannot be undone."),
+        tr!("CBB: take the group over from its root. It cannot be undone."),
+        tr!("CBB: recover the group with its recovery key. It cannot be undone."),
+        tr!("CBB: hand the group over to another admin. It cannot be undone."),
+        tr!("CBB: change where the group's devices must keep their keys."),
+        tr!("CBB: change how long a takeover of the group waits."),
+        tr!("CBB: make a device an admin of the group."),
+        tr!("CBB: admit a new device to the group."),
+        tr!("CBB: join this computer to a group."),
+        tr!("CBB: admit new devices to the group by an invitation."),
+        tr!("CBB: change sync away from home."),
+        tr!("CBB: change the group's hubs."),
+        tr!("CBB: change which devices may paste on this computer."),
+        tr!("CBB: change this computer's Bluetooth keyboard."),
+        tr!("CBB: change the TVs this computer is a remote of."),
     ]
+}
+
+/// The right that confirms op on a Mac: each operation confirmed each time
+/// has one of its own (RIGHT_EACH, a dot and the operation), whose prompt,
+/// naming the action, the installer wrote as root, so that a program of the
+/// user that asks for it cannot make the prompt say another action; any
+/// other takes its tier's right, whose prompt cbb completes with the action.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn system_right(op: &str) -> String {
+    match op_prompt(op) {
+        Some(_) => format!("{RIGHT_EACH}.{op}"),
+        None => right(op).to_string(),
+    }
+}
+
+/// The prompt of an operation's own right (system_right), in English; the
+/// catalogs translate it (`member/l10n`).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn op_prompt(op: &str) -> Option<&'static str> {
+    Some(match op {
+        op::NEW => "CBB: make a new group on this computer.",
+        op::LEAVE => "CBB: leave the group. It cannot be undone.",
+        op::TAKE_OVER => "CBB: take the group over from its root. It cannot be undone.",
+        op::RECOVER => "CBB: recover the group with its recovery key. It cannot be undone.",
+        op::HAND_OVER => "CBB: hand the group over to another admin. It cannot be undone.",
+        op::KEY_LEVEL => "CBB: change where the group's devices must keep their keys.",
+        op::TAKEOVER_DELAY => "CBB: change how long a takeover of the group waits.",
+        op::MAKE_ADMIN => "CBB: make a device an admin of the group.",
+        "pair" => "CBB: admit a new device to the group.",
+        "join" => "CBB: join this computer to a group.",
+        "invite" => "CBB: admit new devices to the group by an invitation.",
+        "away" => "CBB: change sync away from home.",
+        "hubs" => "CBB: change the group's hubs.",
+        "paste_receive" => "CBB: change which devices may paste on this computer.",
+        "keyboard" => "CBB: change this computer's Bluetooth keyboard.",
+        "remote" => "CBB: change the TVs this computer is a remote of.",
+        _ => return None,
+    })
+}
+
+/// The prompt of the right named `name` in each language of the project,
+/// as prompts: an operation's own right says its action.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn right_prompts(name: &str) -> Vec<(&'static str, &'static str)> {
+    let Some(english) = name.strip_prefix(RIGHT_EACH).and_then(|o| o.strip_prefix('.')).and_then(op_prompt) else {
+        return prompts(name);
+    };
+    let mut out = vec![("", english)];
+    for lang in crate::l10n::LANGS {
+        out.push((lang, crate::l10n::lookup(lang, english).unwrap_or(english)));
+    }
+    out
+}
+
+/// Every right a Mac's installer writes, and its uninstaller removes.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn system_rights() -> Vec<String> {
+    let mut out = vec![RIGHT_KEPT.to_string(), RIGHT_EACH.to_string()];
+    out.extend(EACH_TIME.iter().map(|op| system_right(op)));
+    out
 }
 
 /// The prompt in each language of the project: the language's code ("" for
@@ -255,7 +331,7 @@ pub fn supported() -> bool {
 #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
 pub fn check(conn: &UnixStream, h: &Header, accepted: u64) -> Result<()> {
     #[cfg(target_os = "macos")]
-    return mac::check(&h.auth, right(&h.op));
+    return mac::check(&h.auth, &system_right(&h.op));
     #[cfg(target_os = "linux")]
     return linux::check(conn, h, accepted);
     #[cfg(all(windows, feature = "tunnel"))]
@@ -346,7 +422,11 @@ pub fn setup_cli(args: &[String]) -> Result<()> {
 pub fn prepare(h: &mut Header, ask: &dyn Fn(Header) -> Result<Header>) -> Result<()> {
     #[cfg(target_os = "macos")]
     {
-        h.auth = mac::authorize(right(&h.op), &prompt_for(h))?;
+        // An operation's own right says its action in the prompt the
+        // installer wrote; cbb adds no text of its own to it.
+        let r = system_right(&h.op);
+        let text = (r == right(&h.op)).then(|| prompt_for(h));
+        h.auth = mac::authorize(&r, text.as_deref())?;
     }
     #[cfg(all(windows, feature = "tunnel"))]
     win::prepare(h, ask)?;
@@ -371,6 +451,26 @@ pub fn register_cli(args: &[String], request: &dyn Fn(Header) -> Result<Header>)
     };
     request(Header { op: OP_REGISTER.into(), name: sid.clone(), value: key, ..Default::default() })?;
     Ok(())
+}
+
+/// cbb's request for a challenge to confirm h on Windows (OP_CHALLENGE):
+/// the operation, with the name and device that make its action.
+#[cfg_attr(not(all(windows, feature = "tunnel")), allow(dead_code))]
+pub fn challenge_request(h: &Header) -> Header {
+    Header {
+        op: OP_CHALLENGE.into(),
+        value: h.op.clone(),
+        name: h.name.clone(),
+        device: h.device.clone(),
+        ..Default::default()
+    }
+}
+
+/// The request a challenge request c is for, as far as its action goes: the
+/// service shows that action itself and binds the challenge to it.
+#[cfg_attr(not(all(windows, feature = "tunnel")), allow(dead_code))]
+pub fn challenged(c: &Header) -> Header {
+    Header { op: c.value.clone(), name: c.name.clone(), device: c.device.clone(), ..Default::default() }
 }
 
 /// What a confirmation on Windows signs: the action the user was shown
@@ -580,7 +680,7 @@ mod mac {
 
     use base64::Engine as _;
 
-    use super::{CANCELLED, KEEP_SECS, RIGHT_EACH, RIGHT_KEPT, UNAVAILABLE};
+    use super::{CANCELLED, KEEP_SECS, RIGHT_KEPT, UNAVAILABLE};
     use crate::error::{Error, Result};
     use crate::sekey::CFDictionaryCallBacks;
 
@@ -718,9 +818,10 @@ mod mac {
         }
     }
 
-    /// Writes both rights to the authorization database: an administrator
-    /// of this Mac (Touch ID where the Mac has it, else the password), for
-    /// five minutes in the user's session, or each time. Only root writes
+    /// Writes the rights to the authorization database (system_rights): an
+    /// administrator of this Mac (Touch ID where the Mac has it, else the
+    /// password), for five minutes in the user's session, or each time, one
+    /// right for each operation confirmed each time. Only root writes
     /// them: for anyone else, changing a right asks for a password that a
     /// service has no screen to show, and the call would wait for ever.
     pub fn install() -> Result<()> {
@@ -736,12 +837,13 @@ mod mac {
             return Err(Error::msg(format!("AuthorizationCreate: {st}")));
         }
         let res = (|| {
-            for right in [RIGHT_KEPT, RIGHT_EACH] {
+            for right in super::system_rights() {
+                let right = right.as_str();
                 let mut o = Owned(Vec::new());
                 let keep = right == RIGHT_KEPT;
                 let timeout: i32 = if keep { KEEP_SECS as i32 } else { 0 };
                 let mut prompts = Vec::new();
-                for (lang, text) in super::prompts(right) {
+                for (lang, text) in super::right_prompts(right) {
                     prompts.push((o.string(lang)?, o.string(text)?));
                 }
                 let prompt = o.dict(&prompts)?;
@@ -768,7 +870,7 @@ mod mac {
                 }
                 let def = o.dict(&keyed)?;
                 let name = CString::new(right).map_err(|_| Error::msg("a right with a NUL"))?;
-                let key = o.string(super::prompt(right))?;
+                let key = o.string(super::right_prompts(right)[0].1)?;
                 // SAFETY: every argument is a live object or null where the
                 // API takes null (no bundle, no table).
                 let st =
@@ -802,7 +904,7 @@ mod mac {
     /// the system's prompt in the user's session, as its external form. The
     /// authorization stays for as long as cbb runs, so that the service
     /// finds it.
-    pub fn authorize(right: &str, prompt: &str) -> Result<String> {
+    pub fn authorize(right: &str, prompt: Option<&str>) -> Result<String> {
         let mut auth: AuthorizationRef = std::ptr::null_mut();
         // SAFETY: an empty authorization of this process.
         status(
@@ -813,15 +915,16 @@ mod mac {
         let mut item =
             AuthorizationItem { name: std::ptr::null(), value_length: 0, value: std::ptr::null_mut(), flags: 0 };
         let rights = rights_of(&name, &mut item);
-        // The prompt names the action (kAuthorizationEnvironmentPrompt).
-        let mut text = prompt.as_bytes().to_vec();
+        // The prompt names the action (kAuthorizationEnvironmentPrompt),
+        // unless the right's own prompt does.
+        let mut text = prompt.unwrap_or_default().as_bytes().to_vec();
         let mut shown = AuthorizationItem {
             name: ENV_PROMPT.as_ptr().cast(),
             value_length: text.len(),
             value: text.as_mut_ptr().cast(),
             flags: 0,
         };
-        let env = AuthorizationRights { count: 1, items: &mut shown };
+        let env = AuthorizationRights { count: u32::from(prompt.is_some()), items: &mut shown };
         // SAFETY: rights points at one item whose name lives for the call,
         // and env at one whose name and text do too.
         let st = unsafe {
@@ -925,7 +1028,8 @@ mod win {
 
     struct State {
         dir: PathBuf,
-        challenges: Vec<(Vec<u8>, String, String, Instant)>,
+        /// The nonce, the user's SID, the operation, its action, when given.
+        challenges: Vec<(Vec<u8>, String, String, String, Instant)>,
         kept: HashMap<String, Instant>,
         /// When each user was last given challenges, within the minute.
         asked: HashMap<String, Vec<Instant>>,
@@ -961,15 +1065,19 @@ mod win {
 
     /// The answer to a confirm request: "kept" while the user's last
     /// confirmation lasts, "register" for a user with no key, else "sign"
-    /// with a new challenge for the operation h.value.
+    /// with a new challenge for the action of the request h is for
+    /// (challenged), once the user chose OK in the service's own message in
+    /// the user's session that names it: a program of the user cannot make
+    /// it say another action.
     pub fn challenge(conn: &UnixStream, h: &Header) -> Result<Message> {
         let sid = user(conn)?;
-        let (name, value) = with(|st| {
-            if kept(st, &sid, &h.value) {
-                return Ok(("kept", String::new()));
+        let wanted = super::challenged(h);
+        let next = with(|st| {
+            if kept(st, &sid, &wanted.op) {
+                return Ok("kept");
             }
             if !keys(&st.dir).contains_key(&sid) {
-                return Ok(("register", String::new()));
+                return Ok("register");
             }
             let now = Instant::now();
             st.asked.retain(|_, t| {
@@ -981,17 +1089,69 @@ mod win {
                 return Err(Error::msg(super::BUSY));
             }
             asked.push(now);
+            Ok("sign")
+        })?;
+        let mut value = String::new();
+        if next == "sign" {
+            // Shown without the lock: the user may take a while.
+            let session = crate::peer::session(conn).ok_or_else(|| Error::msg(UNAVAILABLE))?;
+            if !agree_in(session, &super::prompt_for(&wanted))? {
+                return Err(Error::msg(CANCELLED));
+            }
             let mut nonce = vec![0u8; 32];
             getrandom::fill(&mut nonce).map_err(|e| Error::msg(format!("no random numbers: {e}")))?;
-            st.challenges.retain(|c| c.3.elapsed() < CHALLENGE_TIME);
-            if st.challenges.len() >= MAX_CHALLENGES {
-                st.challenges.remove(0);
-            }
-            st.challenges.push((nonce.clone(), sid.clone(), h.value.clone(), Instant::now()));
-            Ok(("sign", base64::engine::general_purpose::STANDARD.encode(nonce)))
-        })?;
-        let header = Header { op: OP_CHALLENGE.into(), name: name.into(), value, done: true, ..Default::default() };
+            with(|st| {
+                st.challenges.retain(|c| c.4.elapsed() < CHALLENGE_TIME);
+                if st.challenges.len() >= MAX_CHALLENGES {
+                    st.challenges.remove(0);
+                }
+                st.challenges.push((
+                    nonce.clone(),
+                    sid.clone(),
+                    wanted.op.clone(),
+                    super::action(&wanted),
+                    Instant::now(),
+                ));
+                Ok(())
+            })?;
+            value = base64::engine::general_purpose::STANDARD.encode(nonce);
+        }
+        let header = Header { op: OP_CHALLENGE.into(), name: next.into(), value, done: true, ..Default::default() };
         Ok(crate::control::reply(header, Vec::new()))
+    }
+
+    /// Shows text in the session's own message box, from the service, with
+    /// OK and Cancel; whether the user chose OK within CHALLENGE_TIME.
+    fn agree_in(session: u32, text: &str) -> Result<bool> {
+        use windows_sys::Win32::System::RemoteDesktop::WTSSendMessageW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            IDOK, MB_ICONQUESTION, MB_OKCANCEL, MB_SETFOREGROUND, MB_TOPMOST,
+        };
+        let wide = |s: &str| s.encode_utf16().collect::<Vec<u16>>();
+        let (text, title) = (wide(text), wide("CBB"));
+        let mut answer = 0;
+        // SAFETY: both strings outlive the call, which reads as many bytes
+        // as it is told; answer is valid for it to write. The current
+        // server is the null handle.
+        let ok = unsafe {
+            WTSSendMessageW(
+                std::ptr::null_mut(),
+                session,
+                title.as_ptr(),
+                (title.len() * 2) as u32,
+                text.as_ptr(),
+                (text.len() * 2) as u32,
+                MB_OKCANCEL | MB_ICONQUESTION | MB_TOPMOST | MB_SETFOREGROUND,
+                CHALLENGE_TIME.as_secs() as u32,
+                &mut answer,
+                1,
+            )
+        };
+        if ok == 0 {
+            return Err(Error::msg(format!("cannot show the message: {}", std::io::Error::last_os_error()))
+                .context(UNAVAILABLE));
+        }
+        Ok(answer == IDOK)
     }
 
     /// The service's check: the user's last confirmation still lasts, or
@@ -1026,7 +1186,13 @@ mod win {
             let at = st
                 .challenges
                 .iter()
-                .position(|c| c.0 == challenge && c.1 == sid && c.2 == h.op && c.3.elapsed() < CHALLENGE_TIME)
+                .position(|c| {
+                    c.0 == challenge
+                        && c.1 == sid
+                        && c.2 == h.op
+                        && c.3 == super::action(h)
+                        && c.4.elapsed() < CHALLENGE_TIME
+                })
                 .ok_or_else(|| Error::msg("the confirmation came too late or for another action; try again"))?;
             st.challenges.remove(at);
             let key =
@@ -1163,18 +1329,14 @@ mod win {
     pub fn prepare(h: &mut Header, ask: &dyn Fn(Header) -> Result<Header>) -> Result<()> {
         let mut registered = false;
         loop {
-            let a = ask(Header { op: OP_CHALLENGE.into(), value: h.op.clone(), ..Default::default() })?;
+            // The service shows the action in the user's session itself.
+            let a = ask(super::challenge_request(h))?;
             match a.name.as_str() {
                 "kept" => return Ok(()),
                 "sign" => {
                     let b64 = &base64::engine::general_purpose::STANDARD;
                     let nonce =
                         b64.decode(&a.value).map_err(|_| Error::msg("the service's challenge is not base64"))?;
-                    // Windows Hello's prompt cannot say what it confirms:
-                    // CBB says it first.
-                    if !agree(&super::prompt_for(h))? {
-                        return Err(Error::msg(CANCELLED));
-                    }
                     match sign(&super::hello_message(h, &nonce))? {
                         Some(sig) => {
                             h.auth = format!("{}.{}", a.value, b64.encode(sig));
@@ -1192,32 +1354,6 @@ mod win {
             elevate_register(&key)?;
             registered = true;
         }
-    }
-
-    /// Shows text in a dialog of CBB's, with OK and Cancel; whether the
-    /// user chose OK.
-    fn agree(text: &str) -> Result<bool> {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{
-            IDOK, MB_ICONQUESTION, MB_OKCANCEL, MB_SETFOREGROUND, MB_TOPMOST, MessageBoxW,
-        };
-        let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
-        let (text, title) = (wide(text), wide("CBB"));
-        // SAFETY: both strings are NUL-terminated and outlive the call; no
-        // owner window.
-        let r = unsafe {
-            MessageBoxW(
-                std::ptr::null_mut(),
-                text.as_ptr(),
-                title.as_ptr(),
-                MB_OKCANCEL | MB_ICONQUESTION | MB_TOPMOST | MB_SETFOREGROUND,
-            )
-        };
-        if r == 0 {
-            return Err(
-                Error::msg(format!("cannot show the dialog: {}", std::io::Error::last_os_error())).context(UNAVAILABLE)
-            );
-        }
-        Ok(r == IDOK)
     }
 
     fn status(s: KeyCredentialStatus) -> Result<()> {
@@ -1411,6 +1547,46 @@ mod tests {
         }
     }
 
+    /// On a Mac each operation confirmed each time has a right of its own,
+    /// whose prompt names it in every language, and the uninstaller
+    /// removes every right the installer writes; the everyday ones, and
+    /// operations not listed, keep their tier's right.
+    #[test]
+    fn a_right_for_each_operation() {
+        for op in EACH_TIME {
+            let r = system_right(op);
+            assert_eq!(r, format!("{RIGHT_EACH}.{op}"));
+            let prompts = right_prompts(&r);
+            assert_eq!(prompts[0], ("", op_prompt(op).unwrap()));
+            for lang in crate::l10n::LANGS {
+                assert!(crate::l10n::lookup(lang, op_prompt(op).unwrap()).is_some(), "{op} in {lang}");
+            }
+        }
+        for op in KEPT {
+            assert_eq!(system_right(op), RIGHT_KEPT, "{op}");
+        }
+        assert_eq!(system_right("an_operation_added_later"), RIGHT_EACH);
+        assert_eq!(right_prompts(RIGHT_EACH), prompts(RIGHT_EACH));
+        let rights = system_rights();
+        assert_eq!(rights.len(), 2 + EACH_TIME.len());
+        let uninstall = include_str!("../../packaging/macos/uninstall.sh");
+        for r in &rights {
+            assert!(uninstall.split_whitespace().any(|w| w.trim_end_matches(';') == r), "uninstall.sh leaves {r}");
+        }
+    }
+
+    /// The challenge cbb asks for carries what makes the action, so that
+    /// the service shows, and binds the challenge to, the action cbb sends.
+    #[test]
+    fn challenges_name_the_action() {
+        let h = Header { op: "make_admin".into(), device: "laptop".into(), name: "x".into(), ..Default::default() };
+        let c = challenge_request(&h);
+        assert_eq!(c.op, OP_CHALLENGE);
+        assert_eq!(action(&challenged(&c)), action(&h));
+        assert_eq!(challenged(&c).op, "make_admin");
+        assert!(prompt_for(&challenged(&c)).ends_with("cbb make-admin x laptop"));
+    }
+
     /// What Windows Hello signs names the action, its device and the
     /// challenge.
     #[test]
@@ -1458,7 +1634,9 @@ mod tests {
             assert_ne!(crate::l10n::lookup(lang, PROMPT_KEPT), None, "{lang}");
             assert_ne!(crate::l10n::lookup(lang, PROMPT_EACH), None, "{lang}");
         }
-        assert_eq!(_catalog_marks(), [PROMPT_KEPT, PROMPT_EACH]);
+        let mut want = vec![PROMPT_KEPT, PROMPT_EACH];
+        want.extend(EACH_TIME.iter().map(|op| op_prompt(op).unwrap()));
+        assert_eq!(_catalog_marks().to_vec(), want);
     }
 
     /// The prompt names the action and its device, without what could

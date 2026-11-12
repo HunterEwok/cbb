@@ -137,5 +137,21 @@
  "Paste the invitation: ": "Pegue la invitación: ",
  "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "la invitación es un secreto, así que cbb la toma de su archivo o, con cbb pair -invite -, pegada en la entrada estándar, nunca de la línea de órdenes",
  "cannot find this user's settings folder, so the agent of the user's session would not run the command": "no se encuentra la carpeta de ajustes de este usuario, así que el agente de su sesión no ejecutaría la orden",
- "cannot write the command in this user's settings folder": "no se puede escribir el comando en la carpeta de ajustes de este usuario"
+ "cannot write the command in this user's settings folder": "no se puede escribir el comando en la carpeta de ajustes de este usuario",
+ "CBB: make a new group on this computer.": "CBB: crear un grupo nuevo en este ordenador.",
+ "CBB: leave the group. It cannot be undone.": "CBB: salir del grupo. No se puede deshacer.",
+ "CBB: take the group over from its root. It cannot be undone.": "CBB: tomar el grupo de su raíz. No se puede deshacer.",
+ "CBB: recover the group with its recovery key. It cannot be undone.": "CBB: recuperar el grupo con su clave de recuperación. No se puede deshacer.",
+ "CBB: hand the group over to another admin. It cannot be undone.": "CBB: entregar el grupo a otro administrador. No se puede deshacer.",
+ "CBB: change where the group's devices must keep their keys.": "CBB: cambiar dónde deben guardar sus claves los dispositivos del grupo.",
+ "CBB: change how long a takeover of the group waits.": "CBB: cambiar cuánto espera una toma del grupo.",
+ "CBB: make a device an admin of the group.": "CBB: hacer un dispositivo administrador del grupo.",
+ "CBB: admit a new device to the group.": "CBB: admitir un dispositivo nuevo en el grupo.",
+ "CBB: join this computer to a group.": "CBB: unir este ordenador a un grupo.",
+ "CBB: admit new devices to the group by an invitation.": "CBB: admitir dispositivos nuevos en el grupo con una invitación.",
+ "CBB: change sync away from home.": "CBB: cambiar la sincronización fuera de casa.",
+ "CBB: change the group's hubs.": "CBB: cambiar los hubs del grupo.",
+ "CBB: change which devices may paste on this computer.": "CBB: cambiar qué dispositivos pueden pegar en este ordenador.",
+ "CBB: change this computer's Bluetooth keyboard.": "CBB: cambiar el teclado Bluetooth de este ordenador.",
+ "CBB: change the TVs this computer is a remote of.": "CBB: cambiar los televisores de los que este ordenador es mando."
 }

@@ -137,5 +137,21 @@
  "Paste the invitation: ": "הדביקו את ההזמנה: ",
  "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "ההזמנה היא סוד, לכן cbb לוקח אותה מהקובץ שלה או, עם cbb pair -invite -, מודבקת בקלט התקני, ולעולם לא משורת הפקודה",
  "cannot find this user's settings folder, so the agent of the user's session would not run the command": "תיקיית ההגדרות של המשתמש לא נמצאה, ולכן הסוכן של ההפעלה שלו לא יריץ את הפקודה",
- "cannot write the command in this user's settings folder": "לא ניתן לכתוב את הפקודה בתיקיית ההגדרות של משתמש זה"
+ "cannot write the command in this user's settings folder": "לא ניתן לכתוב את הפקודה בתיקיית ההגדרות של משתמש זה",
+ "CBB: make a new group on this computer.": "CBB: יצירת קבוצה חדשה במחשב הזה.",
+ "CBB: leave the group. It cannot be undone.": "CBB: יציאה מהקבוצה. לא ניתן לבטל זאת.",
+ "CBB: take the group over from its root. It cannot be undone.": "CBB: השתלטות על הקבוצה מהשורש שלה. לא ניתן לבטל זאת.",
+ "CBB: recover the group with its recovery key. It cannot be undone.": "CBB: שחזור הקבוצה במפתח השחזור שלה. לא ניתן לבטל זאת.",
+ "CBB: hand the group over to another admin. It cannot be undone.": "CBB: העברת הקבוצה למנהל אחר. לא ניתן לבטל זאת.",
+ "CBB: change where the group's devices must keep their keys.": "CBB: שינוי המקום שבו מכשירי הקבוצה חייבים לשמור את המפתחות שלהם.",
+ "CBB: change how long a takeover of the group waits.": "CBB: שינוי משך ההמתנה של השתלטות על הקבוצה.",
+ "CBB: make a device an admin of the group.": "CBB: הפיכת מכשיר למנהל של הקבוצה.",
+ "CBB: admit a new device to the group.": "CBB: קבלת מכשיר חדש לקבוצה.",
+ "CBB: join this computer to a group.": "CBB: צירוף המחשב הזה לקבוצה.",
+ "CBB: admit new devices to the group by an invitation.": "CBB: קבלת מכשירים חדשים לקבוצה בהזמנה.",
+ "CBB: change sync away from home.": "CBB: שינוי הסנכרון מחוץ לבית.",
+ "CBB: change the group's hubs.": "CBB: שינוי הרכזות של הקבוצה.",
+ "CBB: change which devices may paste on this computer.": "CBB: שינוי המכשירים שיכולים להדביק במחשב הזה.",
+ "CBB: change this computer's Bluetooth keyboard.": "CBB: שינוי מקלדת ה-Bluetooth של המחשב הזה.",
+ "CBB: change the TVs this computer is a remote of.": "CBB: שינוי הטלוויזיות שהמחשב הזה משמש להן שלט."
 }

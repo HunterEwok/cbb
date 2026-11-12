@@ -137,5 +137,21 @@
  "Paste the invitation: ": "निमंत्रण पेस्ट करें: ",
  "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "निमंत्रण गोपनीय है, इसलिए cbb इसे इसकी फ़ाइल से या cbb pair -invite - के साथ मानक इनपुट पर पेस्ट किए गए पाठ से लेता है, कमांड लाइन से कभी नहीं",
  "cannot find this user's settings folder, so the agent of the user's session would not run the command": "इस उपयोगकर्ता का सेटिंग फ़ोल्डर नहीं मिला, इसलिए उसके सत्र का एजेंट कमांड नहीं चलाएगा",
- "cannot write the command in this user's settings folder": "इस उपयोगकर्ता के सेटिंग फ़ोल्डर में कमांड नहीं लिखा जा सका"
+ "cannot write the command in this user's settings folder": "इस उपयोगकर्ता के सेटिंग फ़ोल्डर में कमांड नहीं लिखा जा सका",
+ "CBB: make a new group on this computer.": "CBB: इस कंप्यूटर पर नया समूह बनाएँ।",
+ "CBB: leave the group. It cannot be undone.": "CBB: समूह छोड़ें। इसे पूर्ववत नहीं किया जा सकता।",
+ "CBB: take the group over from its root. It cannot be undone.": "CBB: समूह को उसके रूट से अपने अधिकार में लें। इसे पूर्ववत नहीं किया जा सकता।",
+ "CBB: recover the group with its recovery key. It cannot be undone.": "CBB: रिकवरी कुंजी से समूह को पुनर्प्राप्त करें। इसे पूर्ववत नहीं किया जा सकता।",
+ "CBB: hand the group over to another admin. It cannot be undone.": "CBB: समूह दूसरे एडमिन को सौंपें। इसे पूर्ववत नहीं किया जा सकता।",
+ "CBB: change where the group's devices must keep their keys.": "CBB: बदलें कि समूह के डिवाइस अपनी कुंजियाँ कहाँ रखें।",
+ "CBB: change how long a takeover of the group waits.": "CBB: बदलें कि समूह का अधिग्रहण कितनी देर प्रतीक्षा करे।",
+ "CBB: make a device an admin of the group.": "CBB: किसी डिवाइस को समूह का एडमिन बनाएँ।",
+ "CBB: admit a new device to the group.": "CBB: समूह में नया डिवाइस शामिल करें।",
+ "CBB: join this computer to a group.": "CBB: इस कंप्यूटर को किसी समूह से जोड़ें।",
+ "CBB: admit new devices to the group by an invitation.": "CBB: आमंत्रण से समूह में नए डिवाइस शामिल करें।",
+ "CBB: change sync away from home.": "CBB: घर से बाहर सिंक बदलें।",
+ "CBB: change the group's hubs.": "CBB: समूह के हब बदलें।",
+ "CBB: change which devices may paste on this computer.": "CBB: बदलें कि कौन से डिवाइस इस कंप्यूटर पर पेस्ट कर सकते हैं।",
+ "CBB: change this computer's Bluetooth keyboard.": "CBB: इस कंप्यूटर का Bluetooth कीबोर्ड बदलें।",
+ "CBB: change the TVs this computer is a remote of.": "CBB: वे टीवी बदलें जिनका रिमोट यह कंप्यूटर है।"
 }

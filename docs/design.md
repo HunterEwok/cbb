@@ -958,24 +958,27 @@ seconds, doubling up to five minutes; on Windows at most six challenges a minute
 logs every confirmed action with its user.
 
 Who shows the prompt differs. On Linux polkit's agent shows it, with the action the service
-names, and the service paces it. On Windows `cbb` shows the action in its own dialog before
-Windows Hello's prompt, and the key signs that action, which the service derives from the
-request itself: a signature confirms no other action or device, but the text in the dialog and
-the pace of the prompts are `cbb`'s, so a program of the user that skips the dialog still needs
-Windows Hello, whose prompt names no action. On a Mac `cbb` asks macOS for the right with the
-action in the prompt, and the service only checks the right it holds: the text and the pace of
-the prompts are the caller's, so a program of the user may raise the system's prompt with a
-text of its own. On both, the system's prompt and the user's fingerprint, face or password are
-what confirm, never the text.
+names, and the service paces it. On Windows the service itself shows the action in the user's
+session (`WTSSendMessage`) before it gives the challenge, and paces the challenges; the
+Windows Hello key then signs that action, which the service derives from the request again, so
+a signature confirms no other action or device. On a Mac each operation confirmed each time
+has a right of its own (`tools.cbb.admin.each.make_admin` and so on), whose prompt, naming the
+action, the installer wrote as root, and the service checks the right of the operation it
+takes; the everyday changes share a right whose prompt `cbb` completes with the action, and a
+program of the user may raise that prompt with a text of its own. Whether a caller's text can
+take the place of a right's own prompt on a Mac waits for a run on a Mac. Everywhere, the
+system's prompt and the user's fingerprint, face or password are what confirm, never the text.
 
 `cbb` run as a user of the service's group sends an admin request on the control socket when
 the admin socket is out of reach, and the service takes it once confirmed:
 
-- **macOS**: two rights in the authorization database, `tools.cbb.admin` (shared in the
-  session for 300 seconds) and `tools.cbb.admin.each` (each time), both for an administrator
-  of the Mac, which the installer writes as root (`cbb confirm-setup`; the service, as `_cbb`,
-  cannot). `cbb` asks for the right with the action in the prompt
-  (`kAuthorizationEnvironmentPrompt`), so macOS shows its window with Touch ID, and sends the
+- **macOS**: rights in the authorization database, `tools.cbb.admin` (shared in the session
+  for 300 seconds), and each time `tools.cbb.admin.each` (an operation not listed) and one
+  `tools.cbb.admin.each.OPERATION` for each operation confirmed each time, all for an
+  administrator of the Mac, which the installer writes as root (`cbb confirm-setup`; the
+  service, as `_cbb`, cannot), and the uninstaller removes. `cbb` asks for the operation's
+  right, with the action in the prompt (`kAuthorizationEnvironmentPrompt`) only for the shared
+  ones, so macOS shows its window with Touch ID, and sends the
   authorization's external form in the request's `auth`; the service checks that it holds the
   right, without a prompt of its own, and refuses a right that is not in the database, which
   the system's default rule would otherwise decide.
@@ -992,9 +995,10 @@ the admin socket is out of reach, and the service takes it once confirmed:
 - **Windows**: Windows Hello. `cbb` makes the user's Windows Hello key once and registers its
   public key with the service as the administrator, through the UAC prompt
   (`confirm-keys.json` in the state folder, by the user's SID). For each confirmation the
-  service gives a challenge on the control socket (`confirm`), `cbb` shows the action in a
-  dialog of its own (Windows Hello's prompt cannot say it) and signs the challenge with the
-  key, which shows Windows Hello's prompt, and the service checks the signature for the user
+  service shows the action in the user's session with OK and Cancel (Windows Hello's prompt
+  cannot say it), then gives a challenge on the control socket (`confirm`), bound to that
+  action; `cbb` signs it with the key, which shows Windows Hello's prompt, and the service
+  checks the signature, for the same action, for the user
   at the other end, in an active session; it remembers that user's five minutes itself. Only
   a member of the PC's Administrators group registers a key, and at every confirmation the
   service checks that the user still is one: a user taken out of it loses the key. The key is

@@ -137,5 +137,21 @@
  "Paste the invitation: ": "Bandika mwaliko: ",
  "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "mwaliko ni siri, kwa hiyo cbb huuchukua kutoka faili lake au, kwa cbb pair -invite -, ukibandikwa kwenye ingizo la kawaida, kamwe si kwenye mstari wa amri",
  "cannot find this user's settings folder, so the agent of the user's session would not run the command": "haiwezi kupata folda ya mipangilio ya mtumiaji huyu, kwa hiyo wakala wa kipindi chake hangeendesha amri",
- "cannot write the command in this user's settings folder": "imeshindwa kuandika amri kwenye folda ya mipangilio ya mtumiaji huyu"
+ "cannot write the command in this user's settings folder": "imeshindwa kuandika amri kwenye folda ya mipangilio ya mtumiaji huyu",
+ "CBB: make a new group on this computer.": "CBB: unda kikundi kipya kwenye kompyuta hii.",
+ "CBB: leave the group. It cannot be undone.": "CBB: ondoka kwenye kikundi. Haiwezi kutenduliwa.",
+ "CBB: take the group over from its root. It cannot be undone.": "CBB: chukua kikundi kutoka kwa mzizi wake. Haiwezi kutenduliwa.",
+ "CBB: recover the group with its recovery key. It cannot be undone.": "CBB: rejesha kikundi kwa ufunguo wake wa urejeshaji. Haiwezi kutenduliwa.",
+ "CBB: hand the group over to another admin. It cannot be undone.": "CBB: kabidhi kikundi kwa msimamizi mwingine. Haiwezi kutenduliwa.",
+ "CBB: change where the group's devices must keep their keys.": "CBB: badilisha mahali vifaa vya kikundi vinapopaswa kuhifadhi funguo zao.",
+ "CBB: change how long a takeover of the group waits.": "CBB: badilisha muda ambao uchukuaji wa kikundi unasubiri.",
+ "CBB: make a device an admin of the group.": "CBB: fanya kifaa kuwa msimamizi wa kikundi.",
+ "CBB: admit a new device to the group.": "CBB: kubali kifaa kipya kwenye kikundi.",
+ "CBB: join this computer to a group.": "CBB: unganisha kompyuta hii na kikundi.",
+ "CBB: admit new devices to the group by an invitation.": "CBB: kubali vifaa vipya kwenye kikundi kwa mwaliko.",
+ "CBB: change sync away from home.": "CBB: badilisha usawazishaji ukiwa mbali na nyumbani.",
+ "CBB: change the group's hubs.": "CBB: badilisha vitovu vya kikundi.",
+ "CBB: change which devices may paste on this computer.": "CBB: badilisha vifaa vinavyoweza kubandika kwenye kompyuta hii.",
+ "CBB: change this computer's Bluetooth keyboard.": "CBB: badilisha kibodi ya Bluetooth ya kompyuta hii.",
+ "CBB: change the TVs this computer is a remote of.": "CBB: badilisha televisheni ambazo kompyuta hii ni rimoti yake."
 }

@@ -1665,8 +1665,10 @@ All notable changes to cbb are documented in this file. The format follows
   a hub and sync away from home, taking remote pastes, and pairing a Bluetooth keyboard or a
   TV's remote ask each time; muting the computer itself, or ending a mute it set, asks nothing
   of the user surely at its screen. Each prompt names the action and its device,
-  a user has one prompt at a time, and a cancelled one makes the next wait; on Windows the
-  Windows Hello key signs the action itself. The installers
+  a user has one prompt at a time, and a cancelled one makes the next wait. On a Mac each
+  action confirmed each time has a right of its own whose prompt the installer writes; on
+  Windows the service shows the action in the user's session, and the Windows Hello key signs
+  it. The installers
   write the rights on a Mac and the polkit actions on Linux (`cbb confirm-setup`); on Windows
   only an administrator of the PC confirms, checked at every confirmation, and
   `cbb confirm-key -remove SID` removes a user's key. `cbb` run without `sudo` does the same,

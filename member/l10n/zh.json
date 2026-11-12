@@ -137,5 +137,21 @@
  "Paste the invitation: ": "粘贴邀请：",
  "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "邀请是机密，因此 cbb 从其文件读取，或用 cbb pair -invite - 从标准输入粘贴，绝不从命令行读取",
  "cannot find this user's settings folder, so the agent of the user's session would not run the command": "找不到此用户的设置文件夹，因此用户会话的代理不会运行该命令",
- "cannot write the command in this user's settings folder": "无法将命令写入此用户的设置文件夹"
+ "cannot write the command in this user's settings folder": "无法将命令写入此用户的设置文件夹",
+ "CBB: make a new group on this computer.": "CBB：在这台电脑上创建新群组。",
+ "CBB: leave the group. It cannot be undone.": "CBB：退出群组。此操作无法撤销。",
+ "CBB: take the group over from its root. It cannot be undone.": "CBB：从根设备接管群组。此操作无法撤销。",
+ "CBB: recover the group with its recovery key. It cannot be undone.": "CBB：用恢复密钥恢复群组。此操作无法撤销。",
+ "CBB: hand the group over to another admin. It cannot be undone.": "CBB：将群组移交给另一位管理员。此操作无法撤销。",
+ "CBB: change where the group's devices must keep their keys.": "CBB：更改群组设备必须保存密钥的位置。",
+ "CBB: change how long a takeover of the group waits.": "CBB：更改接管群组的等待时间。",
+ "CBB: make a device an admin of the group.": "CBB：将设备设为群组管理员。",
+ "CBB: admit a new device to the group.": "CBB：让新设备加入群组。",
+ "CBB: join this computer to a group.": "CBB：将这台电脑加入群组。",
+ "CBB: admit new devices to the group by an invitation.": "CBB：通过邀请让新设备加入群组。",
+ "CBB: change sync away from home.": "CBB：更改离家同步。",
+ "CBB: change the group's hubs.": "CBB：更改群组的中心。",
+ "CBB: change which devices may paste on this computer.": "CBB：更改哪些设备可以在这台电脑上粘贴。",
+ "CBB: change this computer's Bluetooth keyboard.": "CBB：更改这台电脑的蓝牙键盘。",
+ "CBB: change the TVs this computer is a remote of.": "CBB：更改这台电脑作为遥控器的电视。"
 }
