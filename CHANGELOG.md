@@ -13,6 +13,14 @@ All notable changes to cbb are documented in this file. The format follows
   of every app translated with its placeholders; screen reader names, contrast, large text and
   the keyboard; screenshot regressions of the tray window and the Android screens. Go's
   coverage floor is 80%, with new tests of cbb-helper's keyboard and TV remote.
+- The forwarder refuses the groups their operator lists after an abuse report:
+  `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again
+  within ten seconds of a change; a listed group is refused at registration and its devices
+  already there are dropped, while every other group goes on. A broken list keeps the one
+  before. The terms of the public servers say so, in every language.
+- The monitor watches the traffic of cbb.tools: `cbb-traffic.timer` on the server publishes
+  the totals of the last 24 hours at `/status/traffic.json`, and the monitor fails past 1 TB
+  or when the file stops changing (docs/relay-budget.md, "Money and traffic").
 - "Why it does not sync" in the advanced settings of the iPhone, Android, Aurora, Mac and tray
   apps: one sentence on why this device does not sync and what to do, then the other reasons.
   The Rust core decides them (`cbb_core::why`, the core's call `why`, the phone member's `why`,
