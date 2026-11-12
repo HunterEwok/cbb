@@ -22,7 +22,10 @@ final class HubOnPhoneTests: XCTestCase {
 
         init(memberPort: UInt16, clients: String) { (self.memberPort, held) = (memberPort, clients) }
         func setClients(_ json: String) throws { held = json }
+        /// The credentials the tunnel had when it registered.
+        var credentialsAtRegister: Int?
         func register(endpoint: String, pin: String, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: String, vlessID: String) throws {
+            credentialsAtRegister = credentials.count
             registered = [endpoint, pin]
             shown = records
             self.vlessID = vlessID
@@ -216,6 +219,7 @@ final class HubOnPhoneTests: XCTestCase {
         h.start(group())
         let t = try XCTUnwrap(tunnels.started.last)
         XCTAssertEqual(t.credentials.count, 1)
+        XCTAssertEqual(t.credentialsAtRegister, 1, "the tunnel registered before it had the credential")
         XCTAssertTrue(t.credentials[0].contains("\"body\""), t.credentials[0])
         h.setCredentials(.init(serverKey: Data([9]), sign: { $0 }, credentials: [one]))
         XCTAssertEqual(t.credentials.count, 1, "the same credential went to the tunnel again")

@@ -227,6 +227,19 @@ public final class HubOnPhone: @unchecked Sendable {
         if let t { apply(t) }
     }
 
+    /// Hands a new tunnel the credentials c, if any, and returns what it
+    /// took ("" for none).
+    private func hand(_ t: HubTunnel, _ c: Credentials?) -> String {
+        guard let c else { return "" }
+        do {
+            try t.setCredentials(serverKey: c.serverKey, sign: c.sign, creds: c.creds)
+            return c.shown
+        } catch {
+            log("cannot hand the hubs' credential to the tunnel", error)
+            return ""
+        }
+    }
+
     /// Hands the tunnel the credentials when they changed since it last
     /// took them.
     private func apply(_ t: HubTunnel) {
@@ -454,11 +467,15 @@ public final class HubOnPhone: @unchecked Sendable {
         let (s, h) = ready
         guard let fw = s.forwarder else { return }
         let t: HubTunnel
+        var handed = ""
         do {
             t = try tunnels.start(privateKey: s.key, device: device, memberPort: g.memberPort,
                                   obfuscation: try s.obfuscation?.jsonText() ?? "", clients: try h.clientsJSON())
             // Away from home the hub may reach the project's forwarder only over VLESS (section 13).
             if fw.isProject { try t.setProjectWays(g.ways.isEmpty ? "" : try Self.json(g.ways)) }
+            // The credential goes first, so that not even the first
+            // registration shows the member certificate and the records.
+            handed = hand(t, lock.withLock { credentials })
             try t.register(endpoint: fw.endpoint, pin: fw.pin, chain: g.chain, sign: g.sign, records: try Self.json(g.records), vlessID: s.vlessID ?? "")
         } catch {
             log("the hub could not start", error)
@@ -467,10 +484,11 @@ public final class HubOnPhone: @unchecked Sendable {
         }
         let kept = lock.withLock {
             guard tunnel == nil, state?.on == true else { return false }
-            (tunnel, failure, shown) = (t, nil, "")
+            (tunnel, failure, shown) = (t, nil, handed)
             return true
         }
         if !kept { return t.close() }
+        // Credentials set while it started reach it now.
         apply(t)
     }
 

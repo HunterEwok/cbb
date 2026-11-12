@@ -33,7 +33,11 @@ class HubOnPhoneTest {
             held = json
         }
 
+        /** The credentials the tunnel had when it registered. */
+        var credentialsAtRegister: Int? = null
+
         override fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String, vlessID: String) {
+            credentialsAtRegister = credentials.size
             registered = listOf(endpoint, pin, chain)
             shown = records
             this.vlessID = vlessID
@@ -193,6 +197,7 @@ class HubOnPhoneTest {
         h.start(group())
         val t = tunnels.started.last()
         assertEquals(1, t.credentials.size)
+        assertEquals("the tunnel registered before it had the credential", 1, t.credentialsAtRegister)
         assertTrue(t.credentials[0], t.credentials[0].contains("\"body\""))
         h.setCredentials(HubOnPhone.Credentials(byteArrayOf(9), { it }, listOf(one)))
         assertEquals("the same credential went to the tunnel again", 1, t.credentials.size)

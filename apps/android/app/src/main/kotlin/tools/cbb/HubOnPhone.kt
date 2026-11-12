@@ -259,6 +259,18 @@ class HubOnPhone(
         apply(t)
     }
 
+    /** Hands a new tunnel the credentials c, if any, and returns what it took ("" for none). */
+    private fun hand(t: HubTunnel, c: Credentials?): String {
+        if (c == null) return ""
+        return try {
+            t.setCredentials(c.serverKey, c.sign, c.creds)
+            c.shown
+        } catch (e: Exception) {
+            log("cannot hand the hubs' credential to the tunnel", e)
+            ""
+        }
+    }
+
     /** Hands the tunnel the credentials when they changed since it last took them. */
     private fun apply(t: HubTunnel) {
         val (c, changed) = synchronized(lock) {
@@ -459,10 +471,13 @@ class HubOnPhone(
             s to (hub ?: return)
         }
         val fw = s.forwarder ?: return
+        var handed = ""
         val t = try {
             tunnels.start(s.key, device, g.memberPort, s.obfuscation ?: "", h.clientsJson).also {
                 // Away from home the hub may reach the project's forwarder only over VLESS (section 13).
                 if (fw.isProject) it.setProjectWays(if (g.ways.isEmpty()) "" else JsonArray(g.ways.map { w -> w.toJson() }).toString())
+                // The credential goes first, so that not even the first registration shows the member certificate and the records.
+                handed = hand(it, synchronized(lock) { credentials })
                 it.register(fw.endpoint, fw.pin, JsonArray(g.chain.map { bytes(it) }).toString(), g.sign, recordsJson(g.records), s.vlessID ?: "")
             }
         } catch (e: Exception) {
@@ -476,7 +491,7 @@ class HubOnPhone(
                     tunnel = t
                     tunnelPort = g.memberPort
                     failure = null
-                    shown = ""
+                    shown = handed
                 }
             }
         }
@@ -484,6 +499,7 @@ class HubOnPhone(
             runCatching { t.close() }
             return
         }
+        // Credentials set while it started reach it now.
         apply(t)
     }
 
