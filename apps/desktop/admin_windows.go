@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"unicode/utf16"
 	"unsafe"
 
@@ -17,6 +19,15 @@ import (
 )
 
 const deniedText = "No permission to use the service: add your user to the cbb group and sign in again."
+
+// userConfirms: the service confirms admin actions on Windows with Windows
+// Hello; cbb registers the user's key once through the UAC prompt.
+const userConfirms = true
+
+// hideWindow keeps cbb's console from showing.
+func hideWindow(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000} // CREATE_NO_WINDOW
+}
 
 // runAdmin runs cbb as the administrator through the UAC prompt: an
 // elevated PowerShell, started with ShellExecuteEx's runas, calls cbb with
