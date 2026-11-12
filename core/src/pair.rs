@@ -18,6 +18,7 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 
 use serde::{Deserialize, Serialize};
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::authority::Record;
 use crate::certs::{self, Cert, DeviceId, b64};
@@ -174,9 +175,10 @@ impl core::fmt::Display for Refusal {
 impl core::error::Error for Refusal {}
 
 /// Returns the six digits of a code a user typed, without spaces and
-/// dashes.
-pub fn normalize_code(s: &str) -> Result<String> {
-    let c: String = s.chars().filter(|c| *c != ' ' && *c != '-').collect();
+/// dashes, wiped when dropped.
+pub fn normalize_code(s: &str) -> Result<Zeroizing<String>> {
+    let mut c = Zeroizing::new(String::with_capacity(s.len()));
+    c.extend(s.chars().filter(|c| *c != ' ' && *c != '-'));
     if c.len() != 6 || !c.bytes().all(|b| b.is_ascii_digit()) {
         return Err(Error::msg("the code is six digits"));
     }
@@ -212,6 +214,12 @@ pub struct Joiner {
     /// A phone's admin key, which its info offers so that the root makes it
     /// an admin.
     admin: Option<Arc<dyn ExternalKey>>,
+}
+
+impl Drop for Joiner {
+    fn drop(&mut self) {
+        self.key.zeroize();
+    }
 }
 
 impl Joiner {
@@ -593,11 +601,21 @@ pub fn join_qr(code: &str, addrs: &[String], fingerprint: &str) -> String {
 
 /// What a join QR code carries: the code, the joiner's addresses
 /// (host:port) and its certificate's fingerprint.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct JoinLink {
     pub code: String,
     pub addrs: Vec<String>,
     pub fingerprint: String,
+}
+
+impl core::fmt::Debug for JoinLink {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("JoinLink")
+            .field("code", &crate::secret::Redacted(self.code.len()))
+            .field("addrs", &self.addrs)
+            .field("fingerprint", &self.fingerprint)
+            .finish()
+    }
 }
 
 /// The most addresses a join QR code's reader takes.
@@ -614,7 +632,7 @@ pub fn parse_join_qr(text: &str) -> Result<JoinLink> {
         let (k, v) = item.split_once('=').unwrap_or((item, ""));
         let v = query_unescape(v).ok_or_else(bad)?;
         match k {
-            "code" => link.code = normalize_code(&v)?,
+            "code" => link.code = normalize_code(&v)?.as_str().to_string(),
             "addr" if link.addrs.len() < MAX_ADDRS && !v.is_empty() => link.addrs.push(v),
             "fp" => link.fingerprint = v,
             _ => {}
@@ -687,7 +705,7 @@ mod tests {
 
     #[test]
     fn codes() {
-        assert_eq!(normalize_code(" 123-456 ").unwrap(), "123456");
+        assert_eq!(normalize_code(" 123-456 ").unwrap().as_str(), "123456");
         assert!(normalize_code("12345").is_err());
         assert!(normalize_code("12345a").is_err());
         assert_eq!(new_code().len(), 6);

@@ -15,7 +15,7 @@ use crate::error::{Context, Error, Result};
 const MAX_HEADER: usize = 64 << 10;
 const MAX_PAYLOAD: usize = (1 << 20) + 64;
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct Header {
     #[serde(default)]
     pub op: String,
@@ -192,6 +192,74 @@ pub struct Header {
     /// In invite: a device to confirm, before it is admitted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub joining: Option<Joining>,
+}
+
+impl core::fmt::Debug for Header {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Header")
+            .field("op", &self.op)
+            .field("kind", &self.kind)
+            .field("via", &self.via)
+            .field("seq", &self.seq)
+            .field("ttl_ms", &self.ttl_ms)
+            .field("len", &self.len)
+            .field("error", &self.error)
+            .field("details", &self.details)
+            .field("done", &self.done)
+            .field("consent", &self.consent)
+            .field("name", &self.name)
+            .field("device", &self.device)
+            .field("status", &self.status)
+            .field("devices", &self.devices)
+            .field("view", &self.view)
+            .field("arrange", &self.arrange)
+            .field("method", &self.method)
+            .field("enter", &self.enter)
+            .field("console", &self.console)
+            .field("no_lock_check", &self.no_lock_check)
+            .field("inject", &self.inject)
+            .field("paste_only", &self.paste_only)
+            .field("images", &self.images)
+            .field("files", &self.files)
+            .field("html", &self.html)
+            .field("refused", &self.refused)
+            .field("detail", &self.detail)
+            .field("actions", &self.actions)
+            .field("all", &self.all)
+            .field("for_ms", &self.for_ms)
+            .field("value", &self.value)
+            .field("part", &self.part)
+            .field("allow_file_key", &self.allow_file_key)
+            .field("on", &self.on)
+            .field("standing", &self.standing)
+            .field("new_name", &self.new_name)
+            .field("below", &self.below)
+            .field("code", &cbb_core::secret::Redacted(self.code.len()))
+            .field("addrs", &self.addrs)
+            .field("fingerprint", &self.fingerprint)
+            .field("admins", &self.admins)
+            .field("expires", &self.expires)
+            .field("address", &self.address)
+            .field("listen", &self.listen)
+            .field("port", &self.port)
+            .field("forwarder", &self.forwarder)
+            .field("forwarder_key", &self.forwarder_key)
+            .field("relay", &self.relay)
+            .field("relay_key", &self.relay_key)
+            .field("obfuscate_off", &self.obfuscate_off)
+            .field("vless_off", &self.vless_off)
+            .field("keep", &self.keep)
+            .field("force", &self.force)
+            .field("forward_only", &self.forward_only)
+            .field("hubs", &self.hubs)
+            .field("keys", &self.keys)
+            .field("keyboard", &self.keyboard)
+            .field("act", &self.act)
+            .field("command", &self.command)
+            .field("invite", &self.invite)
+            .field("joining", &self.joining)
+            .finish()
+    }
 }
 
 /// A device that used a remote invitation, for the admin to confirm, as

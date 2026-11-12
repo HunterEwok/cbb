@@ -92,7 +92,7 @@ pub struct Message {
 /// (`opened` or `refused`), the two pass the bytes of the guest's pairing
 /// connections (`data`, `end`), and the admin says how its window ended
 /// (`admitted` or `close`).
-#[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct Guest {
     /// `open`, `opened`, `refused`, `data`, `end`, `admitted` or `close`.
     pub op: String,
@@ -130,6 +130,25 @@ pub struct Guest {
     /// In admitted: the device the admin's window admitted.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub device: String,
+}
+
+impl core::fmt::Debug for Guest {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Guest")
+            .field("op", &self.op)
+            .field("key", &self.key)
+            .field("psk", &self.psk.as_ref().map(|k| crate::secret::Redacted(k.len())))
+            .field("expires_ms", &self.expires_ms)
+            .field("hub_key", &self.hub_key)
+            .field("endpoints", &self.endpoints)
+            .field("obfuscation", &self.obfuscation.as_ref().map(|_| "<hidden>"))
+            .field("vless", &self.vless.as_ref().map(|_| "<hidden>"))
+            .field("reason", &self.reason)
+            .field("conn", &self.conn)
+            .field("data", &self.data)
+            .field("device", &self.device)
+            .finish()
+    }
 }
 
 /// The most bytes one guest data message carries.
@@ -292,7 +311,7 @@ pub fn clean_reason(s: &str) -> String {
 }
 
 /// The content of a hello.
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct HelloBody {
     #[serde(rename = "wall_ms", default)]
     pub wall: i64,
@@ -370,6 +389,35 @@ pub struct HelloBody {
     /// "Capabilities"); a receiver keeps those it knows (clean_caps).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub caps: Vec<String>,
+}
+
+impl core::fmt::Debug for HelloBody {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("HelloBody")
+            .field("wall", &self.wall)
+            .field("current", &self.current)
+            .field("records", &self.records)
+            .field("name", &self.name)
+            .field("os", &self.os)
+            .field("device", &self.device)
+            .field("tunnel_key", &self.tunnel_key)
+            .field("tunnel_psk", &self.tunnel_psk.as_ref().map(|k| crate::secret::Redacted(k.len())))
+            .field("admin_key", &self.admin_key)
+            .field("mode", &self.mode)
+            .field("muted", &self.muted)
+            .field("muted_for_ms", &self.muted_for_ms)
+            .field("key_store", &self.key_store)
+            .field("actions", &self.actions)
+            .field("seal", &self.seal)
+            .field("entries_seq", &self.entries_seq)
+            .field("entries_keys_seq", &self.entries_keys_seq)
+            .field("release_seq", &self.release_seq)
+            .field("release_keys_seq", &self.release_keys_seq)
+            .field("features", &self.features)
+            .field("group_ca", &self.group_ca)
+            .field("caps", &self.caps)
+            .finish()
+    }
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -455,7 +503,7 @@ impl DeviceInfo {
 }
 
 /// The group's hub's offer for a member's tunnel key (section 11).
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct TunnelOffer {
     #[serde(with = "b64")]
     pub hub_key: Vec<u8>,
@@ -481,6 +529,21 @@ pub struct TunnelOffer {
     /// tries after `hub_key` (section 11, "The hub's key"); empty for none.
     #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
     pub next_key: Vec<u8>,
+}
+
+impl core::fmt::Debug for TunnelOffer {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("TunnelOffer")
+            .field("hub_key", &self.hub_key)
+            .field("psk", &crate::secret::Redacted(self.psk.len()))
+            .field("endpoints", &self.endpoints)
+            .field("obfuscation", &self.obfuscation.as_ref().map(|_| "<hidden>"))
+            .field("vless", &self.vless.as_ref().map(|_| "<hidden>"))
+            .field("hub", &self.hub)
+            .field("moved", &self.moved)
+            .field("next_key", &self.next_key)
+            .finish()
+    }
 }
 
 /// The roles a peer may claim.

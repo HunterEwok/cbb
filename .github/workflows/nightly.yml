@@ -87,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [record_body, command, credential, release, wire, vless, api]
+        target: [record_body, command, credential, release, wire, vless, api, format]
     defaults:
       run:
         working-directory: core/

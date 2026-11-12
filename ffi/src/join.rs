@@ -83,7 +83,7 @@ pub(crate) fn wall_ms() -> i64 {
 /// A joiner that listens, with its current attempt.
 pub struct Join {
     joiner: Joiner,
-    code: String,
+    code: cbb_core::secret::Zeroizing<String>,
     clock: Clock,
     attempt: Option<Attempt>,
     /// A remote invitation's secret, in place of the code.
@@ -217,12 +217,16 @@ impl Join {
             if !a.invite.is_empty() {
                 return Join::invited(joiner, &a.invite);
             }
-            let code = if a.code.is_empty() { pair::new_code() } else { pair::normalize_code(&a.code)? };
+            let code = if a.code.is_empty() {
+                cbb_core::secret::Zeroizing::new(pair::new_code())
+            } else {
+                pair::normalize_code(&a.code)?
+            };
             let qr = pair::join_qr(&code, &a.addrs, &joiner.fingerprint());
             let modules = modules(&qr)?;
             let ans = NewAnswer {
                 device: joiner.id.to_string(),
-                code: code.clone(),
+                code: code.to_string(),
                 fingerprint: joiner.fingerprint(),
                 qr,
                 modules,
@@ -268,7 +272,7 @@ impl Join {
         };
         let j = Join {
             joiner,
-            code: String::new(),
+            code: cbb_core::secret::Zeroizing::new(String::new()),
             clock: clock(),
             attempt: None,
             secret: Some(inv.secret.clone()),

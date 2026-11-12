@@ -112,7 +112,7 @@ fn random(b: &mut [u8]) {
 }
 
 /// The group's AmneziaWG settings, as the hub's offer carries them.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Obfuscation {
     pub jc: u32,
     pub jmin: u32,
@@ -120,6 +120,19 @@ pub struct Obfuscation {
     pub s: [u32; 4],
     pub h: [Range; 4],
     pub header_key: [u8; 32],
+}
+
+impl core::fmt::Debug for Obfuscation {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Obfuscation")
+            .field("jc", &self.jc)
+            .field("jmin", &self.jmin)
+            .field("jmax", &self.jmax)
+            .field("s", &self.s)
+            .field("h", &self.h)
+            .field("header_key", &cbb_core::secret::Redacted(self.header_key.len()))
+            .finish()
+    }
 }
 
 #[derive(Deserialize)]
@@ -383,7 +396,7 @@ impl Awg {
             }
             _ => {
                 let m1 = mac1_at(msg.len());
-                if mac(&self.mac1_in, &msg[..m1]) != msg[m1..m1 + 16] {
+                if !cbb_core::secret::ct_eq(&mac(&self.mac1_in, &msg[..m1]), &msg[m1..m1 + 16]) {
                     return None;
                 }
                 msg[..4].copy_from_slice(&(kind as u32 + 1).to_le_bytes());
