@@ -248,17 +248,24 @@ module records_v3 {
   // checkpoints, so that a full root can still checkpoint, and any root's removals, freezes
   // and resolves, so that a full set never drops one while it keeps a record of that root
   // (decision 15). Which of the two comes first is open (EARLY_BEFORE_CHECKPOINTS).
-  // A key's order of keeping. A root a takeover cut keeps, within the cut, what the counting
-  // checkpoint names first, then its line from the head the claim saw downward, never a part in
-  // the middle (decision 22); other keys as before.
+  // A key's order of keeping. A root a takeover cut keeps, within the cut, its line from the
+  // head the claim saw down to the checkpoint that vouches for the rest, then what that
+  // checkpoint names, then the rest of its line downward, never a part in the middle
+  // (decision 22); other keys as before.
   type Order = { roots: Set[Key], cuts: Key -> List[Id], anchors: Set[Id] }
   pure def pos(r: Record, cur: Key, ord: Order): int = {
     val cp = r.signer == cur and r.kind == "checkpoint"
     val early = ord.roots.contains(r.signer) and (r.kind == "revoke" or r.kind == "freeze" or r.kind == "resolve")
     if (r.signer != cur and ord.cuts.keys().contains(r.signer)) {
       val l = ord.cuts.get(r.signer)
-      if (ord.anchors.contains(r.id)) r.seq * 100 + hid(r.id)
-      else if (l.indices().exists(i => l[i] == r.id)) 10000 + (l.length() - r.seq) * 100 + hid(r.id)
+      // The line from the head the claim saw down to the checkpoint that vouches for the rest
+      // comes first: without it nothing below shows; then what that checkpoint names; then
+      // the rest of the line, head-down.
+      val vouched = l.indices().fold(0, (m, i) => if (ord.anchors.contains(l[i])) max2(m, i + 1) else m)
+      val onLine = l.indices().exists(i => l[i] == r.id)
+      if (onLine and r.seq > vouched) (l.length() - r.seq) * 100 + hid(r.id)
+      else if (ord.anchors.contains(r.id)) 5000 + r.seq * 100 + hid(r.id)
+      else if (onLine) 10000 + (l.length() - r.seq) * 100 + hid(r.id)
       else 200000 + r.seq * 100 + hid(r.id)
     }
     else if (cp) (if (EARLY_BEFORE_CHECKPOINTS) 10000 else 0) + (MAXREC + 4 - r.seq) * 100 + hid(r.id)
@@ -357,6 +364,17 @@ module records_v3 {
   pure def countedIds(s: Store): Set[Id] = s.counted.indices().map(i => s.counted[i].id)
   pure def countedRoots(s: Store): Set[Key] = s.counted.indices().map(i => s.counted[i].target)
   pure def storeAnchors(s: Store, db: Id -> Record): Set[Id] = if (s.checkpoint == 0) Set() else anchorsOf(db.get(s.checkpoint))
+  // A root a takeover cut has its line fixed by hashes, from the head the claim saw down. The
+  // newest checkpoint on that line that the set holds vouches by ID for what its keep names,
+  // compacted on or not; a twin off the line is no part of it.
+  pure def lineAnchors(s: Store, items: Set[Record]): Set[Id] = {
+    val cuts = keptCuts(s)
+    cuts.keys().fold(Set(), (acc, k) => {
+      val cs = items.filter(r => r.signer == k and r.kind == "checkpoint" and inLine(cuts.get(k), r.id))
+      val newest = cs.filter(c => cs.forall(o => o == c or c.seq > o.seq))
+      newest.fold(acc, (a, c) => a.union(anchorsOf(c)))
+    })
+  }
 
   // What a set keeps of items: the counted claims apart from any room; of the rest what the
   // rooms keep; then, of a root a takeover cut, only what its chain shows (down from the head
@@ -366,11 +384,11 @@ module records_v3 {
     val cuts = keptCuts(s)
     val admins = learned(recsOf(s.got, db), path, cuts)
     val pinned = items.filter(r => countedIds(s).contains(r.id))
-    val anchors = storeAnchors(s, db)
+    val anchors = storeAnchors(s, db).union(lineAnchors(s, items))
     // A cut root's record below a record of its chain the set lacks takes no room (decision 22:
     // head-down, never past a gap).
     val shown = items.filter(r => withinIn(cuts, r, idsOf(items), anchors))
-    val res = keepAfter(shown.exclude(pinned), ceilings(path, admins), cut, last(path), orderOf(s, db), countedRoots(s))
+    val res = keepAfter(shown.exclude(pinned), ceilings(path, admins), cut, last(path), { ...orderOf(s, db), anchors: anchors }, countedRoots(s))
     val k0 = res._1.union(idsOf(pinned))
     val k1 = k0.filter(i => withinIn(cuts, db.get(i), k0, anchors))
     val k2 = k1.filter(i => withinIn(cuts, db.get(i), k1, anchors))
@@ -869,8 +887,8 @@ module records_v3 {
   // A newcomer (decision 21): m starts again from what admitter x hands it, x's records and
   // counted claims. It takes each counted claim, in order, that its proof shows: the one
   // epoch of the claim's root, the path of the counted claims before it, with that claim
-  // alone decided there and held for the delay (audit 2c, Q-6); it drops one that does not
-  // prove, with those after it.
+  // alone decided there and held for the delay (audit 2c, Q-6); a Welcome with one that does
+  // not prove is refused.
   pure def proves(given: Set[Record], prefix: List[Counted], c: Counted, anchors: Set[Id]): bool = {
     val path = prefix.foldl([ROOT], (l, x) => l.append(x.target))
     val cuts = prefix.indices().fold(Map(), (m, j) => m.put(path[j], prefix[j].cut))
@@ -882,15 +900,19 @@ module records_v3 {
   }
   pure def welcomeStore(sx: Store, db: Id -> Record): Store = {
     val given = recsOf(sx.recs, db)
-    val anchors = storeAnchors(sx, db)
+    val anchors = storeAnchors(sx, db).union(lineAnchors(sx, given))
     val proved = range(0, sx.counted.length()).foldl((NOCOUNTED, true), (acc, i) =>
       if (acc._2 and proves(given, acc._1, sx.counted[i], anchors)) (acc._1.append(sx.counted[i]), true) else (acc._1, false))
     sx.recs.fold({ ...EMPTY, counted: proved._1 }, (s, i) => insertInto(s, db.get(i), db))
   }
   action welcomeNewcomer = nondet x = MEMBERS.exclude(Set("m")).oneOf() welcomeFrom(x)
   action welcomeFrom(x: str): bool = {
-    val sv = withCounted(welcomeStore(st.get(x), db), db)
+    val ws = welcomeStore(st.get(x), db)
+    val sv = withCounted(ws, db)
     all {
+      // The joiner refuses a Welcome whose counted claims its records do not prove (format
+      // section 19); the joiner then has not joined.
+      ws.counted.length() == st.get(x).counted.length(),
       db' = db,
       nextId' = nextId,
       st' = st.put("m", sv._1),
@@ -987,11 +1009,26 @@ module records_v3 {
     }
   }
   action broadcast = nondet i = db.keys().oneOf() offerEveryone(i)
+  // Sync with fairness: every member is offered, in ID order, every record some member holds.
+  action syncAll = {
+    val held = MEMBERS.fold(Set(), (u, n) => u.union(st.get(n).recs))
+    val order = range(1, nextId).select(i => held.contains(i))
+    val nx = MEMBERS.mapBy(m => withCounted(order.foldl(st.get(m), (s, i) => insertInto(s, db.get(i), db)), db))
+    all {
+      db' = db,
+      nextId' = nextId,
+      st' = MEMBERS.mapBy(m => nx.get(m)._1),
+      views' = MEMBERS.mapBy(m => nx.get(m)._2),
+      gone' = MEMBERS.mapBy(m => gone.get(m).union(rootRemoved(nx.get(m)._2, db))),
+      before' = MEMBERS.mapBy(m => views.get(m).path),
+      welcomed' = welcomed,
+    }
+  }
   action broadcastNewest = offerEveryone(nextId - 1)
   action guided = any {
     step, signTakeover, signTakeover, signTakeover, signNewRoot, signNewRoot, signNewRoot, signCopies, signCheckpoint,
     broadcast, broadcastNewest, broadcastNewest, broadcastNewest, broadcastNewest, deliver,
-    tickAll, tickAll, tickAll, tickAll, compact, compact, welcomeNewcomer, signHandover, signHidden, signCheckpointNaming,
+    tickAll, tickAll, tickAll, tickAll, compact, compact, syncAll, syncAll, welcomeNewcomer, signHandover, signHidden, signCheckpointNaming,
   }
 
   // Witnesses of a run (quint run --witnesses): how many traces reach these.
@@ -1023,7 +1060,10 @@ module records_v3 {
   // 2. A key a root removed stays removed, unless a takeover cut the removal off: the new root
   // takes the old root's records up to the line the claim saw, and no further.
   pure def cutOff(v: View, r: Record): bool = not(within(v.cuts, r))
-  val removedStayOut = MEMBERS.forall(m => {
+  // A gap is liveness, not a rule: an honest peer that holds a line serves it, so a member is
+  // checked once it was offered, to no change, every record some member holds.
+  def synced(m: str): bool = MEMBERS.forall(n => st.get(n).recs.forall(i => insertInto(st.get(m), db.get(i), db).recs == st.get(m).recs))
+  val removedStayOut = MEMBERS.forall(m => synced(m) implies {
     val v = views.get(m)
     val removals = recsOf(st.get(m).got, db).filter(r => r.kind == "revoke" and ROOT_KEYS.contains(r.signer))
     gone.get(m).forall(k =>
@@ -1085,7 +1125,7 @@ module records_v3 {
         else named.contains(k) and sumUnits(ofKey(rs, k)) <= FUTURE),
       saturated(m) implies owners.forall(k =>
         sumUnits(ofKey(rs, k)) + MAXU - 1 >= min2(fair, min2(ceil.get(k), sumUnits(ofKey(got.filter(r => storable(s, r, db) and not(pins.contains(r.id))
-          and withinIn(keptCuts(s), r, s.got, storeAnchors(s, db))), k))))),
+          and withinIn(keptCuts(s), r, s.got, storeAnchors(s, db).union(lineAnchors(s, got)))), k))))),
     }
   })
 
