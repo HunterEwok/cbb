@@ -11,6 +11,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -83,7 +85,7 @@ func TestPQNew(t *testing.T) {
 	}
 	// The file alone is no key: it is encrypted.
 	entries, _ := os.ReadDir(filepath.Join(dir, "pq"))
-	if len(entries) != 3 {
+	if len(entries) != 4 {
 		t.Fatalf("pq holds %d files", len(entries))
 	}
 	// file:EC.pem alone holds one half; the PQ half comes from pq.
@@ -123,8 +125,20 @@ func TestPQNew(t *testing.T) {
 	// A new run with a wrong passphrase signs nothing, and says so.
 	cachedPassphrase = nil
 	readPassphrase = func(string) ([]byte, error) { return []byte("not the passphrase"), nil }
+	before := opened
 	if _, err := signWith(release.Signer{c, lazy}, kb0()); !errors.Is(err, errPassphrase) {
 		t.Errorf("a wrong passphrase: %v", err)
+	}
+	if opened != before {
+		t.Error("a wrong passphrase asked the hardware")
+	}
+	// Another half's pq-new takes the same passphrase, asked once.
+	cachedPassphrase = nil
+	n := 0
+	readPassphrase = func(string) ([]byte, error) { n++; return []byte("another passphrase"), nil }
+	ec2 := ecFile(t, t.TempDir())
+	if pqNew([]string{"-key", "file:" + ec2, "-to", "age1yubikey1test", "-identity", id}) == nil || n != 1 {
+		t.Errorf("pq-new sealed a half with another passphrase (asked %d)", n)
 	}
 	readPassphrase = func(string) ([]byte, error) { return []byte("the owner's passphrase"), nil }
 	s := release.Signer{c, pq}
@@ -284,5 +298,19 @@ func TestSeal(t *testing.T) {
 	}
 	if _, err := unseal([]byte("right passphrase"), box[:40], "name"); err == nil {
 		t.Error("a seal cut short opened")
+	}
+}
+
+// fetch reads a release file whole up to release.MaxFile, as every reader.
+func TestFetchWholeFile(t *testing.T) {
+	big := bytes.Repeat([]byte("a"), release.MaxFile)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write(big) }))
+	defer srv.Close()
+	prev := http.DefaultClient
+	http.DefaultClient = srv.Client()
+	defer func() { http.DefaultClient = prev }()
+	got, err := fetch(srv.URL)
+	if err != nil || len(got) != release.MaxFile {
+		t.Errorf("fetched %d bytes of %d: %v", len(got), release.MaxFile, err)
 	}
 }

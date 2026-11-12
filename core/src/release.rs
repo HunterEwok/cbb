@@ -331,7 +331,8 @@ fn verify_half(alg: u64, spki: &[u8], body: &[u8], sig: &[u8]) -> bool {
     match alg {
         ALG_ES256 => {
             let (Some(key), Ok(sig)) = (crate::certs::p256_spki(spki), Signature::from_der(sig)) else { return false };
-            key.verify(body, &sig).is_ok()
+            // One form of each signature: S in the lower half, as in Go.
+            sig.normalize_s() == sig && key.verify(body, &sig).is_ok()
         }
         ALG_SLH_DSA => crate::slhdsa::from_spki(spki).is_some_and(|k| crate::slhdsa::verify(k, body, sig, SLH_CONTEXT)),
         _ => false,
@@ -993,7 +994,8 @@ pub mod testing {
 
         /// The file of body with both signatures.
         pub fn sign(&self, body: &[u8]) -> File {
-            let es: Signature = self.es.sign(body);
+            // S in the lower half, the one form readers take.
+            let es: Signature = Signer::<Signature>::sign(&self.es, body).normalize_s();
             let slh = self.slh.try_sign_with_context(body, SLH_CONTEXT, None).expect("a short context");
             File {
                 body: body.to_vec(),

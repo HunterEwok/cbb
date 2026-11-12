@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -136,7 +137,15 @@ var readPassphrase = func(prompt string) ([]byte, error) {
 	return p, err
 }
 
-// passphrase returns the run's passphrase, asking for it the first time.
+// passphraseCheck is a file beside the halves, sealed with the
+// passphrase, so that a run knows a wrong passphrase before it asks the
+// hardware for anything, and every half gets the same passphrase.
+func passphraseCheck() string { return filepath.Join(pqDir(), "passphrase.check") }
+
+const checkText = "the passphrase of the post-quantum halves"
+
+// passphrase returns the run's passphrase, asking for it the first time
+// and checking it against passphrase.check when there is one.
 func passphrase() ([]byte, error) {
 	if cachedPassphrase != nil {
 		return cachedPassphrase, nil
@@ -148,17 +157,27 @@ func passphrase() ([]byte, error) {
 	if len(p) == 0 {
 		return nil, errors.New("no passphrase")
 	}
+	if box, err := os.ReadFile(passphraseCheck()); err == nil {
+		if _, err := unseal(p, box, "check"); err != nil {
+			clear(p)
+			return nil, err
+		}
+	}
 	cachedPassphrase = p
 	return p, nil
 }
 
-// newPassphrase asks for the passphrase twice, for a new seal, unless the
-// run has it already; one passphrase serves every hardware half.
+// newPassphrase returns the passphrase for a new seal: the one every half
+// has, checked against passphrase.check, or for the first half a new one,
+// asked twice, which passphrase.check then records.
 func newPassphrase() ([]byte, error) {
 	if cachedPassphrase != nil {
 		return cachedPassphrase, nil
 	}
-	p, err := readPassphrase("release-sign: the passphrase of the post-quantum halves (the same for every hardware key; keep it in the password manager and on paper with the backup): ")
+	if _, err := os.Stat(passphraseCheck()); err == nil {
+		return passphrase()
+	}
+	p, err := readPassphrase("release-sign: a new passphrase for the post-quantum halves (the same for every hardware key; keep it in the password manager and on paper with the backup): ")
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +191,16 @@ func newPassphrase() ([]byte, error) {
 	}
 	if !bytes.Equal(p, again) {
 		return nil, errors.New("the two passphrases differ")
+	}
+	box, err := seal(p, []byte(checkText), "check")
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(pqDir(), 0o700); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(passphraseCheck(), box, 0o600); err != nil {
+		return nil, err
 	}
 	cachedPassphrase = p
 	return p, nil

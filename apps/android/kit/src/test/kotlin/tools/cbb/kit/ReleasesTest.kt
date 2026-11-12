@@ -21,7 +21,7 @@ class ReleasesTest {
         val roots = v.getValue("roots").jsonArray.map { Releases.Key.fromJson(it.jsonObject) }
         val now = v.getValue("now_ms").jsonPrimitive.long
         val cases = v.getValue("vectors").jsonArray.map { it.jsonObject }
-        assertEquals(47, cases.size)
+        assertEquals(53, cases.size)
         // Each case names its files by their index in files.
         val files = v.getValue("files").jsonArray.map { Releases.File.fromJson(it.jsonObject) }
         for (c in cases) {

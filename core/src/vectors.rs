@@ -558,21 +558,31 @@ fn go_release() {
     let name = v["channel"].as_str().unwrap();
     let now = v["now_ms"].as_i64().unwrap();
     let cases = v["vectors"].as_array().unwrap();
-    assert_eq!(cases.len(), 49);
-    // A release.json as it comes, under the first case's keys.json and
-    // channel file: an envelope read otherwise than Go reads it refuses.
-    let envelopes = v["envelopes"].as_array().unwrap();
+    assert_eq!(cases.len(), 53);
+    // A release.json as it comes, under one keys.json and channel file
+    // (go-release-envelopes.json): an envelope read otherwise than Go reads
+    // it refuses.
+    let ev = vectors("go-release-envelopes.json");
+    let envelopes = ev["envelopes"].as_array().unwrap();
     assert_eq!(envelopes.len(), 18);
-    let first = &cases[0];
-    let keys: File = serde_json::from_value(v["files"][first["keys"].as_u64().unwrap() as usize].clone()).unwrap();
-    let channel: File = serde_json::from_value(v["files"][first["channel"].as_u64().unwrap() as usize].clone()).unwrap();
+    let env_roots: Vec<release::Key> = serde_json::from_value(ev["roots"].clone()).unwrap();
+    let keys: File = serde_json::from_value(ev["keys"].clone()).unwrap();
+    let channel: File = serde_json::from_value(ev["channel_file"].clone()).unwrap();
     for e in envelopes {
         let label = e["name"].as_str().unwrap();
         let taken = serde_json::from_str::<File>(e["release"].as_str().unwrap())
             .map_err(|e| alloc::format!("{e}"))
             .and_then(|r| {
-                release::check(&keys, &channel, &r, &roots, name, now, &Seen::default())
-                    .map_err(|e| alloc::string::String::from(e.message()))
+                release::check(
+                    &keys,
+                    &channel,
+                    &r,
+                    &env_roots,
+                    ev["channel"].as_str().unwrap(),
+                    ev["now_ms"].as_i64().unwrap(),
+                    &Seen::default(),
+                )
+                .map_err(|e| alloc::string::String::from(e.message()))
             });
         assert_eq!(taken.is_ok(), e["ok"].as_bool().unwrap(), "envelope {label}: {:?}", taken.err());
     }
@@ -1066,5 +1076,24 @@ fn stop_exchange() {
     }
     for stop in ["none", "secrets", "full"] {
         assert!(seen.contains(stop), "no case with stop {stop}");
+    }
+}
+
+/// The SLH-DSA verifier against NIST's vectors for SLH-DSA-SHA2-128s
+/// (ACVP, external interface, pure, with a context), so that it answers
+/// as the standard and not only as the Go library that signs the other
+/// vectors.
+#[test]
+fn nist_slh_dsa() {
+    fn unhex(s: &str) -> Vec<u8> {
+        (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect()
+    }
+    let v = vectors("nist-slh-dsa-sha2-128s.json");
+    let cases = v["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 17);
+    for c in cases {
+        let f = |k: &str| unhex(c[k].as_str().unwrap());
+        let got = crate::slhdsa::verify(&f("pk"), &f("msg"), &f("sig"), &f("ctx"));
+        assert_eq!(got, c["pass"].as_bool().unwrap(), "{} ({})", c["id"], c["reason"]);
     }
 }

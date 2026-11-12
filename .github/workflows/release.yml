@@ -30,7 +30,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Devices built here take keys.json only under the roots this tree pins;
+  # a root missing its post-quantum half would sign nothing they take
+  # (docs/maintaining.md, "Two signatures"). Every job that builds what a
+  # device runs waits for this one, on a tag and run by hand alike.
+  roots:
+    name: the pinned roots carry both halves of each root
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - env:
+          CBB_RELEASE_TAG: ${{ github.ref_name }}
+        run: go test -count=1 -run '^TestPinnedRootsComplete$' ./internal/release
+
   build:
+    needs: [roots]
     name: build (${{ matrix.goos }}-${{ matrix.name }})
     strategy:
       fail-fast: true
@@ -72,14 +93,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # a release builds from scratch
-      # Devices built from a tag take keys.json only under the roots it pins;
-      # a root missing its post-quantum half would sign nothing they take
-      # (docs/maintaining.md, "Two signatures"). fail-fast stops the others.
-      - name: the pinned roots carry both halves of each root
-        if: github.event_name == 'push' && matrix.goos == 'linux' && matrix.name == 'amd64'
-        env:
-          CBB_RELEASE_TAG: ${{ github.ref_name }}
-        run: env -u GOOS -u GOARCH go test -count=1 -run '^TestPinnedRootsComplete$' ./internal/release
       - name: zig, which links cbb for FreeBSD and Windows, and the nightly Rust of the routers' builds
         if: matrix.goos == 'freebsd' || matrix.goos == 'windows' || matrix.gomips
         run: |
@@ -295,6 +308,7 @@ jobs:
 
   testflight:
     name: build (the iPhone app, to TestFlight)
+    needs: [roots]
     runs-on: macos-latest
     timeout-minutes: 60
     # The Apple Distribution certificate, the App Store profiles and the App
@@ -344,6 +358,7 @@ jobs:
 
   android:
     name: build (android)
+    needs: [roots]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: release # the Android release key

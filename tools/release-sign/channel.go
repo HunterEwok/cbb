@@ -56,7 +56,7 @@ func fetch(src string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s: %s", src, resp.Status)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, 2*release.MaxBody))
+	return io.ReadAll(io.LimitReader(resp.Body, release.MaxFile))
 }
 
 func fetchFile(src string) (release.File, error) {

@@ -5,8 +5,10 @@ package release
 
 import (
 	"bytes"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -14,11 +16,14 @@ import (
 	"flag"
 	"fmt"
 	"math"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/cloudflare/circl/sign/slhdsa"
 )
 
 var update = flag.Bool("update", false, "rewrite testdata/interop/go-release.json")
@@ -172,6 +177,16 @@ type vectorsFile struct {
 		OK      bool     `json:"ok"`
 		Revoked []string `json:"revoked,omitempty"`
 	} `json:"status"`
+}
+
+// envelopesFile is testdata/interop/go-release-envelopes.json: the
+// envelopes under one keys.json and channel file.
+type envelopesFile struct {
+	Roots     []Key      `json:"roots"`
+	NowMS     int64      `json:"now_ms"`
+	Name      string     `json:"channel"`
+	Keys      File       `json:"keys"`
+	Channel   File       `json:"channel_file"`
 	Envelopes []envelope `json:"envelopes"`
 }
 
@@ -219,7 +234,6 @@ func (v vectors) MarshalJSON() ([]byte, error) {
 		}{c.Name, t.add(c.Keys), t.add(c.Status), c.Seen, c.OK, c.Revoked})
 	}
 	out.Files = t.files
-	out.Envelopes = v.Envelopes
 	return json.Marshal(out)
 }
 
@@ -234,7 +248,7 @@ func (v *vectors) UnmarshalJSON(b []byte) error {
 		}
 		return in.Files[i]
 	}
-	*v = vectors{Roots: in.Roots, NowMS: in.NowMS, Name: in.Name, Envelopes: in.Envelopes}
+	*v = vectors{Roots: in.Roots, NowMS: in.NowMS, Name: in.Name}
 	for _, c := range in.Vectors {
 		v.Vectors = append(v.Vectors, vector{c.Name, file(c.Keys), file(c.Channel), file(c.Release), c.Seen, c.OK, c.Version})
 	}
@@ -367,6 +381,24 @@ func makeVectors(t *testing.T) vectors {
 	sameName := keysBody(9, nowMS-1000, 90*day)
 	sameName.Keys = append(rk1.keys("release key 1", ""), rk2.keys("release key 1", "")...)
 	add("release.json signed by two keys under one name, one half each", sign(t, sameName, root1), ch, mixed(rel, relBy2, AlgSLHDSA), first, "")
+	twiceBroken := rel
+	twiceBroken.Sigs = append(append([]Sig{}, rel.Sigs...), Sig{Alg: AlgSLHDSA, Key: rel.Sigs[1].Key, Sig: brokenPQ.Sigs[1].Sig})
+	add("release.json with its pair and a broken second SLH-DSA signature of the same half", keys, ch, twiceBroken, first, "")
+	nine := rel
+	nine.Sigs = append([]Sig{}, rel.Sigs...)
+	for len(nine.Sigs) < 9 {
+		nine.Sigs = append(nine.Sigs, Sig{Alg: 9, Key: bytes.Repeat([]byte{9}, 32), Sig: []byte{byte(len(nine.Sigs))}})
+	}
+	add("release.json with nine signatures", keys, ch, nine, first, "")
+	oneName := keysBody(10, nowMS-1000, 90*day)
+	oneName.Keys = append(rk1.keys("k", ""), ck.keys("k", UseChannel)...)
+	chBody := channelBody("stable", 8, nowMS-1000, 30*day, rel, "0.6.0")
+	chFile := mixed(sign(t, chBody, rk1), sign(t, chBody, ck), AlgSLHDSA)
+	add("the channel signed by one half of a release key and one of a channel key of the same name", sign(t, oneName, root1), chFile, rel, first, "")
+	highS := rel
+	highS.Sigs = append([]Sig{}, rel.Sigs...)
+	highS.Sigs[0].Sig = otherS(t, rel.Sigs[0].Sig)
+	add("release.json whose ES256 signature has the other S", keys, ch, highS, first, "")
 	spelled := keysBody(3, nowMS-day.Milliseconds(), 90*day)
 	spelled.Keys = rk1.keys("release key 1", "")
 	spelled.Keys[1].Use = UseRelease
@@ -440,12 +472,21 @@ func makeVectors(t *testing.T) vectors {
 // section 16), for the Rust cbb and the phone kits to agree with.
 func TestReleaseVectors(t *testing.T) {
 	path := filepath.Join("..", "..", "testdata", "interop", "go-release.json")
+	envPath := filepath.Join("..", "..", "testdata", "interop", "go-release-envelopes.json")
 	if *update {
-		data, err := json.MarshalIndent(makeVectors(t), "", "\t")
+		made := makeVectors(t)
+		data, err := json.MarshalIndent(made, "", "\t")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		env := envelopesFile{made.Roots, made.NowMS, made.Name, made.Vectors[0].Keys, made.Vectors[0].Channel, made.Envelopes}
+		if data, err = json.MarshalIndent(env, "", "\t"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(envPath, append(data, '\n'), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -457,14 +498,25 @@ func TestReleaseVectors(t *testing.T) {
 	if err := json.Unmarshal(data, &v); err != nil {
 		t.Fatal(err)
 	}
-	if len(v.Vectors) != 49 || len(v.Status) != 18 || len(v.Envelopes) != 18 {
-		t.Fatalf("the file has %d vectors, %d of the list and %d envelopes", len(v.Vectors), len(v.Status), len(v.Envelopes))
+	if len(v.Vectors) != 53 || len(v.Status) != 18 {
+		t.Fatalf("the file has %d vectors and %d of the list", len(v.Vectors), len(v.Status))
 	}
-	for _, c := range v.Envelopes {
+	envData, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env envelopesFile
+	if err := json.Unmarshal(envData, &env); err != nil {
+		t.Fatal(err)
+	}
+	if len(env.Envelopes) != 18 {
+		t.Fatalf("%d envelopes", len(env.Envelopes))
+	}
+	for _, c := range env.Envelopes {
 		var rel File
 		err := json.Unmarshal([]byte(c.Release), &rel)
 		if err == nil {
-			_, _, err = Check(v.Vectors[0].Keys, v.Vectors[0].Channel, rel, v.Roots, v.Name, time.UnixMilli(v.NowMS), Seen{})
+			_, _, err = Check(env.Keys, env.Channel, rel, env.Roots, env.Name, time.UnixMilli(env.NowMS), Seen{})
 		}
 		if (err == nil) != c.OK {
 			t.Errorf("envelope %s: %v, the file says ok %v", c.Name, err, c.OK)
@@ -931,5 +983,74 @@ func TestClearSLH(t *testing.T) {
 	}
 	if bytes.Equal(b[32:], make([]byte, 32)) {
 		t.Error("the public key went too")
+	}
+}
+
+// TestNISTSLHDSA checks the SLH-DSA library against NIST's vectors for
+// SLH-DSA-SHA2-128s (ACVP, external interface, pure, with a context), as
+// the Rust core's nist_slh_dsa does.
+func TestNISTSLHDSA(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "interop", "nist-slh-dsa-sha2-128s.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v struct {
+		Cases []struct {
+			ID, PK, Msg, Ctx, Sig, Reason string
+			Pass                          bool
+		}
+	}
+	if err := json.Unmarshal(data, &v); err != nil || len(v.Cases) != 17 {
+		t.Fatalf("%d cases, %v", len(v.Cases), err)
+	}
+	unhex := func(s string) []byte {
+		b, err := hex.DecodeString(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	for _, c := range v.Cases {
+		spki := append(append([]byte{}, slhSPKIPrefix...), unhex(c.PK)...)
+		pk := slhdsa.PublicKey{ID: slhdsa.SHA2_128s}
+		if err := pk.UnmarshalBinary(spki[len(slhSPKIPrefix):]); err != nil {
+			t.Fatal(err)
+		}
+		got := slhdsa.Verify(&pk, slhdsa.NewMessage(unhex(c.Msg)), unhex(c.Sig), unhex(c.Ctx))
+		if got != c.Pass {
+			t.Errorf("%s (%s): %v, NIST says %v", c.ID, c.Reason, got, c.Pass)
+		}
+	}
+}
+
+// otherS returns the ES256 signature with S replaced by n - S, which
+// verifies as well and no reader takes.
+func otherS(t *testing.T, sig []byte) []byte {
+	var rs struct{ R, S *big.Int }
+	if _, err := asn1.Unmarshal(sig, &rs); err != nil {
+		t.Fatal(err)
+	}
+	rs.S.Sub(elliptic.P256().Params().N, rs.S)
+	out, err := asn1.Marshal(rs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// Signatures are made with S in the lower half, and the other S is refused.
+func TestLowS(t *testing.T) {
+	s := newSigner(t)
+	for range 20 {
+		f, err := Sign(releaseBody("0.6.0", "stable"), s.key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, low := lowS(f.Sigs[0].Sig); !low {
+			t.Fatal("a signature with the high S")
+		}
+		if !verifyHalf(AlgES256, s.pubs[AlgES256], f.Body, f.Sigs[0].Sig) || verifyHalf(AlgES256, s.pubs[AlgES256], f.Body, otherS(t, f.Sigs[0].Sig)) {
+			t.Fatal("the low S refused or the high S taken")
+		}
 	}
 }

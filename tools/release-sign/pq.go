@@ -23,12 +23,14 @@ import (
 )
 
 // The post-quantum half of a key (docs/maintaining.md, "Two signatures")
-// cannot live in a YubiKey or the Secure Enclave. It is a file encrypted
-// with age to a key in the same hardware that holds the classical half
+// cannot live in a YubiKey or the Secure Enclave. It is a file sealed with
+// the maintainer's passphrase (seal.go) and then encrypted with age to a
+// key in the same hardware that holds the classical half
 // (age-plugin-yubikey in a free slot of that YubiKey, age-plugin-se in the
-// Mac's enclave), opened for one signature and dropped: the file alone
-// signs nothing, and the classical half alone signs nothing a device
-// takes.
+// Mac's enclave), opened for each signature and cleared after. The
+// hardware's wrap is P-256; the passphrase keeps a copied file from being
+// the key to an adversary who breaks P-256. The classical half alone signs
+// nothing a device takes.
 
 // pqDir is where the encrypted halves are, each named by the SHA-256 of
 // its classical half's SubjectPublicKeyInfo: HASH.age, opened with the
@@ -166,6 +168,10 @@ func openHalf(classical crypto.Signer, spec string) (crypto.Signer, error) {
 		file := filepath.Join(dir, name+".age")
 		if _, err2 := os.Stat(file); err2 != nil {
 			return nil, fmt.Errorf("the key's post-quantum half is not in %s (release-sign pq-new makes it): %w", dir, err2)
+		}
+		// The passphrase first: a wrong one stops before the hardware.
+		if _, err := passphrase(); err != nil {
+			return nil, err
 		}
 		step("opening the key's post-quantum half: touch the hardware key again if it asks")
 		data, err = ageDecrypt(filepath.Join(dir, name+".identity"), file)

@@ -12,11 +12,11 @@ All notable changes to cbb are documented in this file. The format follows
   (docs/protocol.md, section 16, "Two signatures"): a release stays trusted when a quantum
   computer breaks P-256. Files list their signatures (`sigs`) and `keys.json` names each
   half's algorithm (`alg`); unknown algorithms are passed over, so later versions can add
-  one. Each key's post-quantum half sits beside its P-256 half, encrypted with `age` to the
+  one. Each key's post-quantum half sits beside its P-256 half, sealed with the maintainer's passphrase and then encrypted with `age` to the
   same YubiKey or Secure Enclave, or as an encrypted credential on cbb.tools
   (`release-sign pq-new`, and `pq-check` to prove a pair; docs/maintaining.md, "Two
   signatures"). A release cannot be made while a pinned root lacks a half: `release-sign
-  publish` refuses and the release workflow checks the tag. The phone kits check
+  publish` refuses and the release workflow checks the roots before it builds anything. The phone kits check
   release files through the Rust core (`release_check`, `release_check_status`,
   `release_check_entries`), which pins the roots, and `get.sh` checks the SLH-DSA
   signatures where OpenSSL 3.5 or later is installed and says which it checked; `get.ps1`

@@ -1209,6 +1209,9 @@ mod tests {
         let one = key(1).pem("root-1").replace("Name: root-1\n", "");
         fs::write(dir.join("n.pem"), one).unwrap();
         assert!(read_roots(&dir.join("n.pem")).is_err(), "a root without a name");
-        assert_eq!(release::pinned_roots().len(), 2, "the pinned roots read");
+        // Two roots, by name, whether roots.pem holds their P-256 halves only
+        // or both halves of each.
+        let names: std::collections::BTreeSet<_> = release::pinned_roots().into_iter().map(|r| r.name).collect();
+        assert_eq!(names.len(), 2, "the pinned roots read");
     }
 }

@@ -184,7 +184,7 @@ func (c *checker) file(f signed) {
 		c.fail("%s: %s", f.url, resp.Status)
 		return
 	}
-	expires, err := expiry(io.LimitReader(resp.Body, 2*release.MaxBody))
+	expires, err := expiry(io.LimitReader(resp.Body, release.MaxFile))
 	if err != nil {
 		c.fail("%s: %v", f.url, err)
 		return

@@ -11,11 +11,13 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"reflect"
 	"sort"
 	"strconv"
@@ -326,6 +328,28 @@ func checkPublic(alg int, spki []byte) error {
 // known reports whether this version verifies signatures of alg.
 func known(alg int) bool { return alg == AlgES256 || alg == AlgSLHDSA }
 
+// p256HalfN is half the order of P-256.
+var p256HalfN = new(big.Int).Rsh(elliptic.P256().Params().N, 1)
+
+// lowS returns an ES256 signature with its S in the lower half, and
+// whether it was so already. A signature that does not parse is returned
+// as it is, and is not low.
+func lowS(sig []byte) ([]byte, bool) {
+	var rs struct{ R, S *big.Int }
+	if rest, err := asn1.Unmarshal(sig, &rs); err != nil || len(rest) != 0 || rs.S == nil || rs.S.Sign() <= 0 {
+		return sig, false
+	}
+	if rs.S.Cmp(p256HalfN) <= 0 {
+		return sig, true
+	}
+	rs.S.Sub(elliptic.P256().Params().N, rs.S)
+	out, err := asn1.Marshal(rs)
+	if err != nil {
+		return sig, false
+	}
+	return out, false
+}
+
 // verifyHalf checks one signature of a known algorithm over body.
 func verifyHalf(alg int, spki, body, sig []byte) bool {
 	switch alg {
@@ -333,6 +357,11 @@ func verifyHalf(alg int, spki, body, sig []byte) bool {
 		pub, err := x509.ParsePKIXPublicKey(spki)
 		k, ok := pub.(*ecdsa.PublicKey)
 		if err != nil || !ok || k.Curve != elliptic.P256() {
+			return false
+		}
+		// One form of each signature: S in the lower half (the other S
+		// verifies as well, so it is refused, as in the core).
+		if _, low := lowS(sig); !low {
 			return false
 		}
 		sum := sha256.Sum256(body)
@@ -416,7 +445,10 @@ func signData(data []byte, s Signer) (File, error) {
 		switch alg {
 		case AlgES256:
 			sum := sha256.Sum256(data)
-			sig, err = h.Sign(rand.Reader, sum[:], crypto.SHA256)
+			if sig, err = h.Sign(rand.Reader, sum[:], crypto.SHA256); err == nil {
+				// A YubiKey, the Secure Enclave and Go give either S.
+				sig, _ = lowS(sig)
+			}
 		default:
 			sig, err = h.Sign(rand.Reader, data, crypto.Hash(0))
 		}

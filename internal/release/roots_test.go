@@ -242,9 +242,9 @@ func TestCompleteRoots(t *testing.T) {
 	}
 }
 
-// TestPinnedRootsComplete runs in the release workflow on a tag
-// (CBB_RELEASE_TAG set): a release whose pinned roots lack a half would
-// build devices that take no keys.json.
+// TestPinnedRootsComplete runs in the release workflow before anything
+// is built (CBB_RELEASE_TAG set): a release whose pinned roots lack a half
+// would build devices that take no keys.json.
 func TestPinnedRootsComplete(t *testing.T) {
 	if os.Getenv("CBB_RELEASE_TAG") == "" {
 		t.Skip("only for a release tag (CBB_RELEASE_TAG)")

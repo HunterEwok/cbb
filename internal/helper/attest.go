@@ -67,9 +67,9 @@ func statusURL() string {
 	return "https://cbb.tools/attest/"
 }
 
-// The most a fetched file may hold: a little more than a release file's
-// body in its envelope.
-const maxStatusFile = 2 * release.MaxBody
+// The most a fetched file may hold: a release file whole, its body and
+// its signatures (docs/protocol.md, section 16).
+const maxStatusFile = release.MaxFile
 
 func fetchStatus(req *control.Message) (*control.Message, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

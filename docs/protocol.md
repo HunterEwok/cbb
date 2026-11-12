@@ -3386,6 +3386,23 @@ not verify refuses the file. So a later version can add an algorithm beside thes
 MUST keep signing with both while readers of 0.6 are in use. 0.5 reads no release files, so
 the envelope of `sig` and `key` that it never took is gone.
 
+Every reader reads a file alike, in one strict form beside the body's own:
+
+- The envelope is a JSON object whose members are named exactly `body` and `sigs`, neither
+  twice; other members are passed over. `body` is base64 in its one form (standard alphabet,
+  padded, no line break, no stray bits).
+- Each entry of `sigs` (at most 8) is an object with `alg`, `key` and `sig`, none twice,
+  others passed over: `alg` an integer from 1 to 2^31 − 1, `key` and `sig` base64 in its one
+  form. Any other shape refuses the file, whatever its algorithm; an entry of that shape and
+  an algorithm the reader does not know is passed over.
+- A key in `keys.json` names an `alg` from 1 to 2^31 − 1. A key that signs (every use but
+  `forwarder` and `relay`) is its halves under one `name` and `use`, one of each algorithm:
+  two halves of one algorithm under one name and use refuse the `keys.json`, so the halves of
+  two keys never count as one. A release key's `use` left out and written `"release"` are one
+  use. `roots.pem` holds one half of each algorithm under each `Name`.
+- An ES256 signature is DER with its S in the lower half of the curve's order; the other S,
+  which verifies as well, is refused, so that each signature has one form.
+
 A root is replaced only by a release. The programs pin the roots in their code (`roots.pem`,
 read by Go and the Rust core when they are built), so no file can add a root to a device
 that is running. The release that ships a new root, beside the root that stays, reaches a
