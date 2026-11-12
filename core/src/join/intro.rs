@@ -173,7 +173,9 @@ impl Intro {
             match trial.insert(r.clone()) {
                 Ok(Added::Stored) => new.push(r.clone()),
                 Ok(Added::Known) => {}
-                Ok(Added::NoRoom | Added::Waiting | Added::Halted) | Err(_) => return Err(Refusal::Broken),
+                Ok(Added::NoRoom | Added::Waiting | Added::Halted | Added::Settled { .. }) | Err(_) => {
+                    return Err(Refusal::Broken);
+                }
             }
         }
         let state = trial.state();
