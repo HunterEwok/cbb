@@ -109,7 +109,8 @@ type State struct {
 
 	// Next, on a hub, is the key it serves with from NextAt on, which its
 	// offers give its clients ahead of time; zero for none. NextFor is the
-	// tag of its period.
+	// tag of the period it was made in. The Rust cbb rotates them
+	// (member/src/tunnel.rs); Go reads and keeps them.
 	Next    Key
 	NextFor string
 	NextAt  time.Time
@@ -480,32 +481,6 @@ func (s *State) ServingKey() Key {
 // ownKey reports whether pub is one of this device's public keys.
 func (s *State) ownKey(pub Key) bool {
 	return pub == s.Key.Public() || !s.Serving.IsZero() && pub == s.Serving.Public() || !s.Next.IsZero() && pub == s.Next.Public()
-}
-
-// Rotate brings the hub's key for its clients up to the period tagged
-// period (docs/protocol.md, section 11, "The hub's key"): a period it has
-// no key for yet gets the next key, which the hub serves with from
-// now+ahead on, and once that time came the next key is the one it serves
-// with. changed tells whether the state must be saved and the offers sent
-// again, and switched whether the hub must start again with the new key.
-func (s *State) Rotate(period string, now time.Time, ahead time.Duration) (changed, switched bool, err error) {
-	if !s.IsHub {
-		return false, false, nil
-	}
-	if !s.Next.IsZero() && !now.Before(s.NextAt) {
-		s.Serving, s.ServingFor = s.Next, s.NextFor
-		s.Next, s.NextFor, s.NextAt = Key{}, "", time.Time{}
-		changed, switched = true, true
-	}
-	if period == "" || period == s.ServingFor || period == s.NextFor {
-		return changed, switched, nil
-	}
-	k, err := NewPrivateKey()
-	if err != nil {
-		return changed, switched, fmt.Errorf("tunnel: making the key: %w", err)
-	}
-	s.Next, s.NextFor, s.NextAt = k, period, now.Add(ahead)
-	return true, switched, nil
 }
 
 func unsealKey(b *keyseal.Blob) (Key, error) {

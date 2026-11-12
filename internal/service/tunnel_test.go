@@ -639,6 +639,116 @@ func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 	}
 }
 
+// TestHubVLESSIDTaken has a hub find its VLESS user ID held at the
+// forwarder by another group: it takes a new one and registers with it
+// rather than lose its way over VLESS.
+func TestHubVLESSIDTaken(t *testing.T) {
+	t.Setenv("CBB_DEBUG", "1")
+	cert, err := forward.NewCert()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vlessAddr := free.Addr().String()
+	free.Close()
+	web, _ := vlesstest.WebServerCA(t, path, func() string { return vlessAddr })
+	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json"),
+		VLESS: &forward.VLESSConfig{Listen: vlessAddr, XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		f.Serve(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-served
+	}()
+
+	// The hub's VLESS user ID and the path of its way, as its state keeps them.
+	vlessOf := func(s *testService) (id, path string) {
+		var st struct {
+			Forwarder *struct {
+				VLESSID string `json:"vless_id"`
+				VLESS   *struct {
+					Path string `json:"path"`
+				} `json:"vless"`
+			} `json:"forwarder"`
+		}
+		raw, err := os.ReadFile(filepath.Join(s.dir, tunnel.StateFile))
+		if err != nil || json.Unmarshal(raw, &st) != nil || st.Forwarder == nil || st.Forwarder.VLESS == nil {
+			return "", ""
+		}
+		return st.Forwarder.VLESSID, st.Forwarder.VLESS.Path
+	}
+	hubAt := func(s *testService) string {
+		if _, err := s.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf)}, ""); err != nil {
+			t.Fatal(err)
+		}
+		var id string
+		waitFor(t, s.name+" registers with VLESS", func() bool {
+			a := s.status(t).Away
+			id, _ = vlessOf(s)
+			return id != "" && a != nil && a.Forwarder != nil && a.Forwarder.Registered
+		})
+		return id
+	}
+	var h1, h2 hub
+	pi := startService(t, &h1, "pi")
+	taken := hubAt(pi)
+	other := startService(t, &h2, "other")
+	hubAt(other)
+
+	// The other group's hub comes back with the pi's user ID.
+	other.stop()
+	file := filepath.Join(other.dir, tunnel.StateFile)
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st map[string]any
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatal(err)
+	}
+	fw := st["forwarder"].(map[string]any)
+	fw["vless_id"] = taken
+	delete(fw, "vless")
+	if raw, err = json.Marshal(st); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	other = restartService(t, &h2, other)
+	waitUpTo(t, 60*time.Second, "the other hub registers with a user ID of its own", func() bool {
+		id, p := vlessOf(other)
+		a := other.status(t).Away
+		return id != "" && id != taken && strings.HasSuffix(p, "/"+tunnel.GroupPath(id)) && a != nil && a.Forwarder != nil && a.Forwarder.Registered
+	})
+	if !other.logged("takes a new one") {
+		t.Error("the other hub did not say why it took a new user ID")
+	}
+	if id, _ := vlessOf(pi); id != taken || !pi.status(t).Away.Forwarder.Registered {
+		t.Errorf("the pi's registration changed: %q", id)
+	}
+}
+
 // keptNextVLESSID is the VLESS user ID that goes with the next key of hub's
 // offer as s keeps it, "" for none.
 func keptNextVLESSID(t *testing.T, s *testService, hub string) string {

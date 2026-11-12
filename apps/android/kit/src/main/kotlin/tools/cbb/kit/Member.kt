@@ -416,13 +416,15 @@ object Member {
          * Whether it is an offer a tunnel can take, as the Rust member checks
          * one: keys of 32 bytes that are not all zeros, at most 8 endpoints,
          * each with a port that is not 0, and settings for the next key only
-         * with that key and beside the present ones.
+         * with that key and beside the present ones: next obfuscation
+         * settings the tunnel takes, and a next way over VLESS to the same
+         * forwarder with the path made for its user ID.
          */
         val isValid: Boolean get() =
             hubKey.size == 32 && psk.size == 32 && endpoints.size <= 8 && (nextKey == null || nextKey.size == 32) &&
                 hubKey.any { it != 0.toByte() } && psk.any { it != 0.toByte() } && endpoints.all(::hasPort) &&
-                (nextObfuscation == null || nextKey != null && obfuscation != null) &&
-                (nextVless == null || nextKey != null && vless != null)
+                (nextObfuscation == null || nextKey != null && obfuscation != null && TunnelSettings.obfuscationValid(nextObfuscation)) &&
+                (nextVless == null || nextKey != null && vless != null && TunnelSettings.isNextVless(nextVless, vless))
 
         /** The same offer with another preshared key and hub, and moved set. */
         fun with(psk: ByteArray, hub: String?, moved: Boolean = false): TunnelOffer =

@@ -1551,10 +1551,13 @@ All notable changes to cbb are documented in this file. The format follows
   hub's key"): its offers always give the next ones ahead of time, and when a new period
   comes the hub serves with them at once and registers again with its forwarder under it,
   staying under the old period until then, so the forwarder cannot link the group's traffic
-  from one month to the next by any of them. The forwarder makes a group's XHTTP path from
-  its VLESS user ID, so the hub knows the next path too. The lite member and both phone
-  apps try a hub with its next key and settings too, so one that was away when the hub
-  moved on still reaches it.
+  from one month to the next by any of these three (the hub's address and port, which it sees
+  with every packet, stay as the network gives them). The forwarder makes a group's XHTTP path
+  from its VLESS user ID, so the hub knows the next path too; a hub whose user ID the forwarder
+  already holds for another group takes a new one. The lite member and both phone apps try a
+  hub with its next key and settings too, so one that was away when the hub moved on still
+  reaches it; the phone kits take next settings only to the same forwarder, with the path made
+  for the next user ID, and obfuscation the tunnel accepts.
 - The test bench resets a Windows device itself: `uninstall.ps1 -Purge`, a check that it left
   nothing, and `install.ps1` from the build's zip, so a Windows VM needs no snapshot.
 - FreeBSD: release archives for amd64 and arm64, `get.sh` and an installer with an rc.d

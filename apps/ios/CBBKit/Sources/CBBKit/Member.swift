@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import Crypto
 import Foundation
 
 /// The member protocol of docs/protocol.md, sections 4 and 5, as the Rust core
@@ -415,12 +416,14 @@ public enum Member {
         /// Whether it is an offer a tunnel can take, as the Rust member
         /// checks one: keys of 32 bytes that are not all zeros, at most 8
         /// endpoints, each with a port that is not 0, and settings for the
-        /// next key only with that key and beside the present ones.
+        /// next key only with that key and beside the present ones: next
+        /// obfuscation settings the tunnel takes, and a next way over VLESS
+        /// to the same forwarder with the path made for its user ID.
         public var isValid: Bool {
             hubKey.count == 32 && psk.count == 32 && endpoints.count <= 8 && (nextKey?.count ?? 32) == 32
                 && hubKey.contains { $0 != 0 } && psk.contains { $0 != 0 } && endpoints.allSatisfy(Self.hasPort)
-                && (nextObfuscation == nil || nextKey != nil && obfuscation != nil)
-                && (nextVLESS == nil || nextKey != nil && vless != nil)
+                && (nextObfuscation.map { nextKey != nil && obfuscation != nil && $0.isValid } ?? true)
+                && (nextVLESS.map { n in nextKey != nil && vless.map { n.isNext(of: $0) } == true } ?? true)
         }
 
         /// Whether endpoint ends in a port from 1 to 65535, as in
@@ -554,6 +557,41 @@ public enum Member {
         public func jsonText() throws -> String {
             String(decoding: try JSONEncoder().encode(self), as: UTF8.self)
         }
+
+        /// Whether these are the settings a hub gives with its next key
+        /// beside now (section 11, "The hub's key"): the same forwarder, a
+        /// VLESS user ID, and now's path with its group part made for that
+        /// ID (section 13, "VLESS").
+        public func isNext(of now: VLESS) -> Bool {
+            guard transport == now.transport, endpoint == now.endpoint, serverName == now.serverName,
+                  Self.isUserID(id), now.path.hasPrefix("/") else { return false }
+            let base = now.path.dropFirst().split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)[0]
+            return path == "/\(base)/\(Self.groupPath(id))"
+        }
+
+        /// The group's part of the XHTTP path for the VLESS user ID id, as
+        /// the forwarder makes it: the first 16 bytes of SHA-256 over
+        /// "cbb group path", a zero byte and the ID, in unpadded base64url.
+        static func groupPath(_ id: String) -> String {
+            let sum = Data(SHA256.hash(data: Data("cbb group path\0".utf8) + Data(id.utf8))).prefix(16)
+            return Data(sum).base64EncodedString().replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        }
+
+        /// Whether s is a VLESS user ID: a UUID of version 4 in lowercase.
+        static func isUserID(_ s: String) -> Bool {
+            let b = Array(s.utf8)
+            guard b.count == 36 else { return false }
+            for (i, c) in b.enumerated() {
+                switch i {
+                case 8, 13, 18, 23: if c != UInt8(ascii: "-") { return false }
+                case 14: if c != UInt8(ascii: "4") { return false }
+                case 19: if !"89ab".utf8.contains(c) { return false }
+                default: if !"0123456789abcdef".utf8.contains(c) { return false }
+                }
+            }
+            return true
+        }
     }
 
     /// A group's AmneziaWG settings (section 11, "Obfuscation"), with
@@ -573,6 +611,35 @@ public enum Member {
         /// The settings as JSON, for the tunnel.
         public func jsonText() throws -> String {
             String(decoding: try JSONEncoder().encode(self), as: UTF8.self)
+        }
+
+        /// Whether the tunnel takes the settings, within the bounds both the
+        /// Rust member and internal/tunnel check: at most 16 junk packets of
+        /// at most 1000 bytes, paddings of 16 to 64 bytes that keep the
+        /// handshake messages' sizes apart, type ranges above 4 that do not
+        /// overlap, and a header protection key of 32 bytes, not all zeros.
+        public var isValid: Bool {
+            let pads = [s1, s2, s3, s4]
+            guard (0...16).contains(jc), 0 <= jmin, jmin <= jmax, jmax <= 1000, pads.allSatisfy((16...64).contains),
+                  Set([148 + s1, 92 + s2, 64 + s3]).count == 3,
+                  headerProtectionKey.count == 32, headerProtectionKey.contains(where: { $0 != 0 }) else { return false }
+            let types = [h1, h2, h3, h4].compactMap(Self.range)
+            guard types.count == 4, types.allSatisfy({ $0.lowerBound > 4 }) else { return false }
+            for i in types.indices { for j in types.indices where j > i && types[i].overlaps(types[j]) { return false } }
+            return true
+        }
+
+        /// "min-max" as a range: two decimal numbers of 32 bits in their
+        /// shortest form, the first not above the second.
+        static func range(_ s: String) -> ClosedRange<UInt32>? {
+            let parts = s.split(separator: "-", omittingEmptySubsequences: false)
+            guard parts.count == 2, let lo = number(parts[0]), let hi = number(parts[1]), lo <= hi else { return nil }
+            return lo...hi
+        }
+
+        static func number(_ s: Substring) -> UInt32? {
+            guard !s.isEmpty, s.count <= 10, s.count == 1 || !s.hasPrefix("0"), s.utf8.allSatisfy({ (48...57).contains($0) }) else { return nil }
+            return UInt32(s)
         }
     }
 

@@ -779,6 +779,19 @@ impl State {
         Ok((changed, switched))
     }
 
+    /// Gives the hub's forwarder a new VLESS user ID in place of the one it
+    /// has, with the way the forwarder's answer gives for it, and a next one
+    /// that is neither; false when the hub has no VLESS.
+    pub fn new_vless_id(&mut self) -> bool {
+        let Some(f) = self.forwarder.as_mut().filter(|f| !f.vless_id.is_empty()) else { return false };
+        let old = std::mem::replace(&mut f.vless_id, new_vless_id());
+        f.vless = f.vless.as_ref().and_then(|v| cbb_core::vless::with_id(v, &f.vless_id));
+        if !self.next_vless_id.is_empty() {
+            self.next_vless_id = new_vless_id();
+        }
+        old != f.vless_id
+    }
+
     /// The hub's VLESS settings for its next key, which its offers carry
     /// beside next_key; None without VLESS or before the forwarder answered.
     pub fn next_vless(&self) -> Option<serde_json::Value> {
@@ -1808,6 +1821,63 @@ mod tests {
         assert!(st.obfuscation.is_none() && st.forwarder.as_ref().unwrap().vless_id.is_empty());
         st.clear_periods();
         assert!(st.next.is_empty() && st.serving_for.is_empty());
+    }
+
+    /// A hub that stops and starts again between a new period and its switch
+    /// keeps its next key and settings, and switches when their time comes.
+    #[test]
+    fn a_restarted_hub_switches_on_time() {
+        let dir = std::env::temp_dir().join(format!("cbb-tunnel-restart-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut st = State::new("g").unwrap();
+        st.is_hub = true;
+        st.obfuscation = Some(new_obfuscation().unwrap());
+        assert_eq!(st.rotate("p1", 0, 10).unwrap(), (true, false));
+        assert_eq!(st.rotate("p1", 10, 10).unwrap(), (true, true));
+        let (next, obf) = (st.next_public(), st.next_obfuscation().unwrap());
+        assert_eq!(st.rotate("p2", 15, 10).unwrap(), (false, false), "the next one is too young");
+        st.save(&dir).unwrap();
+        let mut again = State::load(&dir).unwrap().unwrap();
+        assert_eq!(
+            (again.next_public(), again.next_obfuscation(), again.serving_for.as_str()),
+            (next.clone(), Some(obf.clone()), "p1")
+        );
+        assert_eq!(again.rotate("p2", 19, 10).unwrap(), (false, false));
+        assert_eq!(again.rotate("p2", 20, 10).unwrap(), (true, true));
+        assert_eq!(
+            (public_of(&again.serving), again.obfuscation.as_ref(), again.serving_for.as_str()),
+            (next, Some(&obf), "p2")
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A VLESS user ID the forwarder holds for another group is replaced,
+    /// with the path made for the new one; without VLESS nothing changes.
+    #[test]
+    fn takes_a_new_vless_id() {
+        let mut st = State::new("g").unwrap();
+        st.is_hub = true;
+        assert!(!st.new_vless_id());
+        let id = "6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d";
+        st.forwarder = Some(Forwarder {
+            endpoint: "192.0.2.7:8764".parse().unwrap(),
+            pin: String::new(),
+            vless_id: id.into(),
+            vless: Some(serde_json::json!({"transport": "xhttp", "endpoint": "192.0.2.7:443",
+                "server_name": "cbb.example.org", "path": format!("/AbC-12_xyz0123456/{}", cbb_core::vless::group_path(id)), "id": id})),
+            project: false,
+        });
+        st.rotate("p1", 0, 10).unwrap();
+        let next = st.next_vless_id.clone();
+        assert!(st.new_vless_id());
+        let f = st.forwarder.as_ref().unwrap();
+        let v = f.vless.as_ref().unwrap();
+        assert!(f.vless_id != id && v["id"] == f.vless_id.as_str());
+        assert_eq!(
+            v["path"].as_str().unwrap(),
+            format!("/AbC-12_xyz0123456/{}", cbb_core::vless::group_path(&f.vless_id))
+        );
+        assert!(!st.next_vless_id.is_empty() && st.next_vless_id != next && st.next_vless_id != f.vless_id);
     }
 
     #[test]

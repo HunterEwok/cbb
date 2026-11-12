@@ -172,6 +172,10 @@ fn vless_ways(addr: std::net::IpAddr, id: &str, learned: Option<&Value>, ways: &
     out
 }
 
+/// What the forwarder answers when another group registered the hub's VLESS
+/// user ID (internal/forward's register.go).
+pub const VLESS_ID_TAKEN: &str = "another group registered that VLESS user ID";
+
 /// The hubs' credential a hub registers with in place of its member
 /// certificate and the records (docs/protocol.md, section 18).
 #[derive(Clone)]

@@ -72,6 +72,40 @@ final class AwayFromHomeTests: XCTestCase {
         alone = both
         alone.vless = nil
         XCTAssertFalse(alone.isValid)
+        XCTAssertTrue(both.isValid)
+        // The next settings themselves are checked too: obfuscation the
+        // tunnel would not take, and a way over VLESS to another forwarder,
+        // with another path or with no user ID.
+        var bad = both
+        bad.nextObfuscation?.s2 = 96
+        XCTAssertFalse(bad.isValid)
+        bad = both
+        bad.nextObfuscation?.h2 = "150-250"
+        XCTAssertFalse(bad.isValid)
+        bad = both
+        bad.nextObfuscation?.headerProtectionKey = Data(count: 32)
+        XCTAssertFalse(bad.isValid)
+        bad = both
+        bad.nextObfuscation?.h4 = "0700-800"
+        XCTAssertFalse(bad.isValid)
+        bad = both
+        bad.nextObfuscation?.jc = 17
+        XCTAssertFalse(bad.isValid)
+        bad = both
+        bad.nextVLESS?.endpoint = "198.51.100.7:443"
+        XCTAssertFalse(bad.isValid)
+        bad = both
+        bad.nextVLESS?.serverName = "example.com"
+        XCTAssertFalse(bad.isValid)
+        bad = both
+        bad.nextVLESS?.path = "/banMEJvnYJJap8S/AbCdEfGhIjKlMnOpQr"
+        XCTAssertFalse(bad.isValid)
+        bad = both
+        bad.nextVLESS?.id = "0B6E7F10-2A3B-4C5D-9E8F-112233445566"
+        XCTAssertFalse(bad.isValid)
+        bad = both
+        bad.nextVLESS?.path = "/otherBase0/mefvDB5qwj9eeFnyKOOk4A"
+        XCTAssertFalse(bad.isValid)
         // A short key, a short preshared key and a bad offer are not states.
         XCTAssertNil(AwayState.decode(try AwayState(key: Data(count: 31)).encoded()))
         XCTAssertNil(AwayState.decode(try AwayState(key: key, psk: Data(count: 31)).encoded()))

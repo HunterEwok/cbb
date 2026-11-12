@@ -2725,9 +2725,11 @@ credential (section 18) shows besides only the period's tag, a certificate of it
 that names neither a device nor a group, and the period's hubs' credential: hashes of
 server keys, padded, a version, an expiry and the period key; all of it new each period, as are
 the hub's WireGuard key, its obfuscation settings and its VLESS user ID (section 11, "The hub's
-key"). The hub moves to all of them at once, as it registers under the new period, so none of
-them links two periods; the first period a hub serves still has the key its hello offers for
-three days. A hub that registers with
+key"). The hub moves to its key, settings and user ID at once, as it registers under the new
+period, so none of these three links two periods; the hub's source address and port, which
+the forwarder sees as it sees every packet's, stay the same across the change unless its
+network changes them, and so may link two periods. The first period a hub serves still has the
+key its hello offers for three days. A hub that registers with
 records shows instead the group tag, its member certificate (device ID, validity, admin
 CA), the group's root certificates and its authority records, which name the root's and the
 admins' devices, with their names and systems, and the removals. It never sees a member key,
@@ -2838,7 +2840,8 @@ together, and close the connection beyond that; a sender MUST stay below it.
    another group registered that key or that VLESS user ID, or the forwarder is full. A
    forwarder without VLESS registers a hub that asked for it for UDP alone and leaves
    `vless` out of its answer; the hub then forgets its VLESS user ID and sends its offer
-   without `vless`. To a hub that asked for VLESS a forwarder with it adds to its answer
+   without `vless`. A hub told that another group registered its VLESS user ID takes a new
+   one, with the path made for it, sends its offers again and registers again. To a hub that asked for VLESS a forwarder with it adds to its answer
    `"vless": {"transport": "xhttp", "port": number, "server_name": string, "path": string}`,
    where `port` is the web server's, and the forwarder lets that user ID in while the registration lasts. A group has one registration: a new one replaces the old, whose
    connection closes.

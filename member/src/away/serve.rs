@@ -367,13 +367,7 @@ impl Away {
                 let (serving_for, held) = (st.serving_for.clone(), Mutex::new(None));
                 let f: forward::CredentialFn = Arc::new(move || {
                     let n = n.upgrade()?;
-                    if serving_for.is_empty() || c.period_tag(&n).as_deref() == Some(serving_for.as_str()) {
-                        let now = c.hub(&n);
-                        held.lock().unwrap().clone_from(&now);
-                        return now;
-                    }
-                    // A hub that started meanwhile holds none: the new period's.
-                    held.lock().unwrap().clone().or_else(|| c.hub(&n))
+                    credential_for(&serving_for, c.period_tag(&n).as_deref(), &held, || c.hub(&n))
                 });
                 f
             }),
@@ -391,11 +385,15 @@ impl Away {
     /// registered the hub without VLESS has none: the hub then offers UDP
     /// alone rather than wait for settings that never come.
     pub(super) fn vless_learned(&self, node: &Node) {
-        let (registered, got) = {
+        let (registered, got, error) = {
             let serving = self.serving.lock().unwrap();
             let report = serving.as_ref().and_then(|s| s.forwarding.as_ref()).map(|f| f.report.lock().unwrap().clone());
-            report.map_or((false, None), |r| (r.registered, r.vless))
+            report.map_or((false, None, None), |r| (r.registered, r.vless, r.error))
         };
+        if error.is_some_and(|e| e.contains(forward::VLESS_ID_TAKEN)) {
+            self.vless_id_taken(node);
+            return;
+        }
         let Some(v) = got else {
             if registered {
                 self.no_vless(node);
@@ -419,6 +417,30 @@ impl Away {
         drop(cur);
         let at = v.get("endpoint").and_then(|e| e.as_str()).unwrap_or_default();
         (self.log)(&format!("cbb: sync away from home: the hub's clients come over VLESS to the forwarder at {at}"));
+        node.reconnect();
+    }
+
+    /// Takes a new VLESS user ID when the forwarder holds the hub's for
+    /// another group, so that the hub keeps its way over VLESS for the period
+    /// rather than ask for that one again: it registers again with the new
+    /// one and the members connect again for the offer with it.
+    fn vless_id_taken(&self, node: &Node) {
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return };
+        let mut next = st.clone();
+        if !next.new_vless_id() {
+            return;
+        }
+        self.stop_serving();
+        if let Err(e) = next.save(&self.dir) {
+            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
+            return;
+        }
+        *st = next;
+        drop(cur);
+        (self.log)(
+            "cbb: sync away from home: the forwarder holds the hub's VLESS user ID for another group; the hub takes a new one",
+        );
         node.reconnect();
     }
 
@@ -522,6 +544,26 @@ impl Away {
                 .map(|f| control::Forwarder { endpoint: f.endpoint.to_string(), ..Default::default() }),
         };
     }
+}
+
+/// The credential a hub that serves with its key for the period serving_for
+/// registers with, while the period now is that of the credential `now` gives:
+/// that one while they agree (or before the hub's first period), which it
+/// keeps in held; once they differ, the one it kept, so that it stays under
+/// its period until it switches. A hub that started again meanwhile kept none
+/// and takes the new period's.
+fn credential_for<T: Clone>(
+    serving_for: &str,
+    period: Option<&str>,
+    held: &Mutex<Option<T>>,
+    now: impl FnOnce() -> Option<T>,
+) -> Option<T> {
+    if serving_for.is_empty() || period == Some(serving_for) {
+        let now = now();
+        held.lock().unwrap().clone_from(&now);
+        return now;
+    }
+    held.lock().unwrap().clone().or_else(now)
 }
 
 /// The tunnel address the connection from the loopback port from_port came
@@ -736,6 +778,25 @@ fn hub_key_ahead() -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The hub stays under the period it serves with until it switches;
+    /// one that started again in between has kept nothing and takes the
+    /// new period's credential.
+    #[test]
+    fn registers_under_the_period_it_serves() {
+        let held = Mutex::new(None);
+        assert_eq!(credential_for("", Some("p1"), &held, || Some("c1")), Some("c1"), "before the first period");
+        assert_eq!(credential_for("p1", Some("p1"), &held, || Some("c1v2")), Some("c1v2"), "a newer one of the period");
+        assert_eq!(
+            credential_for("p1", Some("p2"), &held, || Some("c2")),
+            Some("c1v2"),
+            "a new period, not switched yet"
+        );
+        assert_eq!(credential_for("p2", Some("p2"), &held, || Some("c2")), Some("c2"), "switched");
+        let restarted = Mutex::new(None);
+        assert_eq!(credential_for("p2", Some("p3"), &restarted, || Some("c3")), Some("c3"), "started again in between");
+        assert_eq!(credential_for::<&str>("p2", None, &Mutex::new(None), || None), None);
+    }
 
     /// The project's forwarder: the command line sends its resolved address
     /// and "default", and the hub takes the first pin it knows; a pin of it
