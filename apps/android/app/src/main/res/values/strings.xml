@@ -77,6 +77,7 @@
     <string name="cbb_name" translatable="false">CBB</string>
     <string name="channel_events">The group\'s events</string>
     <string name="channel_pastes">Remote pastes</string>
+    <string name="channel_push">While the app is closed</string>
     <string name="channel_sync">Syncing with your computers</string>
     <string name="claim_cancelled">The claim is cancelled. The other devices hear of it as soon as they connect.</string>
     <string name="close">Close</string>
@@ -416,6 +417,21 @@
     <string name="pause_hour">For an hour</string>
     <string name="pause_quarter">For 15 minutes</string>
     <string name="project_terms">Terms of the project\'s servers</string>
+    <string name="push_copy">Copy</string>
+    <string name="push_copy_waits">A copy is waiting. Open the app.</string>
+    <string name="push_event_joined">A device joined your group. Open the app to see it.</string>
+    <string name="push_event_own">This device\'s record changed. Open the app to check.</string>
+    <string name="push_event_removed">A device was removed from your group. Open the app to check.</string>
+    <string name="push_event_root">Your group\'s root changed. Open the app to check.</string>
+    <string name="push_event_stopped">Your group stopped. Open the app to check.</string>
+    <string name="push_event_waiting">A device is waiting to join your group. Open the app.</string>
+    <string name="push_neutral">New in your group. Open the app.</string>
+    <string name="push_new_copy">New copy</string>
+    <string name="push_no_distributor">No UnifiedPush distributor is installed. Install one, such as ntfy, to be notified while the app is closed.</string>
+    <string name="push_note">A sealed notice goes through your phone\'s push service; only this phone opens it, and neither that service nor CBB\'s sees your copies.</string>
+    <string name="push_problem">Notifications while the app is closed could not be set up.</string>
+    <string name="push_secret">A secret was copied. Open the app to see it.</string>
+    <string name="push_switch">Notify me when the app is closed</string>
     <string name="qr_text">QR code text</string>
     <string name="quick_actions">Quick actions…</string>
     <string name="quick_actions_none">%1$s has no quick action turned on. Its user turns them on there, with sudo cbb action enable.</string>
