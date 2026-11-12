@@ -967,6 +967,23 @@ fn pair_with_a_code() {
                 stderr: "usage",
                 ..Case::default()
             },
+            // The invitation is a secret: never on the command line, where
+            // other users and the system's log see it.
+            Case {
+                name: "an invitation's text as an argument",
+                args: &["pair", "-invite", "cbb://invite#abc"],
+                code: 1,
+                stderr: "never on the command line",
+                ..Case::default()
+            },
+            Case {
+                name: "an invitation on standard input",
+                args: &["pair", "-invite", "-"],
+                stdin: "cbb://invite#not-one\n",
+                code: 1,
+                stderr: "invitation",
+                ..Case::default()
+            },
             // A bad code fails before the service is asked or the address
             // dialed.
             Case {
@@ -1298,7 +1315,8 @@ fn remote_commands() {
             },
             Case {
                 name: "code",
-                args: &["remote", "code", "A1B2C3"],
+                args: &["remote", "code"],
+                stdin: "A1B2C3\n",
                 sent: Some(("remote", Some(|s| s.s("name") == "code" && s.s("code") == "A1B2C3"))),
                 ..Case::default()
             },
@@ -1337,7 +1355,8 @@ fn remote_commands() {
             },
             Case {
                 name: "refused",
-                args: &["remote", "code", "000000"],
+                args: &["remote", "code"],
+                stdin: "000000\n",
                 answer: err("the TV took no code"),
                 sent: Some(("remote", None)),
                 code: 1,
@@ -1373,6 +1392,7 @@ fn remote_commands() {
                 ..Case::default()
             },
             Case { name: "code without one", args: &["remote", "code"], code: 2, ..Case::default() },
+            Case { name: "code on the command line", args: &["remote", "code", "A1B2C3"], code: 2, ..Case::default() },
             Case { name: "cancel with an argument", args: &["remote", "cancel", "x"], code: 2, ..Case::default() },
             Case { name: "remove without a TV", args: &["remote", "remove"], code: 2, ..Case::default() },
             Case { name: "type with two texts", args: &["remote", "type", "a", "b"], code: 2, ..Case::default() },

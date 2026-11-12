@@ -133,5 +133,8 @@
  "Handing this device's tunnel key to the hub...": "جارٍ تسليم مفتاح نفق هذا الجهاز إلى المحور...",
  "The hub took it: this device syncs from afar now.": "قبله المحور: يتزامن هذا الجهاز الآن عن بُعد.",
  "The hub has not answered yet; the service keeps trying for a day.": "لم يستجب المحور بعد؛ تواصل الخدمة المحاولة لمدة يوم.",
- "Start the service (cbb service) within a day: it hands this device's key to the hub.": "شغّل الخدمة (cbb service) خلال يوم: فهي تسلّم مفتاح هذا الجهاز إلى المحور."
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "شغّل الخدمة (cbb service) خلال يوم: فهي تسلّم مفتاح هذا الجهاز إلى المحور.",
+ "Paste the invitation: ": "الصق الدعوة: ",
+ "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "الدعوة سرّية، لذا يأخذها cbb من ملفها أو، مع cbb pair -invite -، ملصقة على الإدخال القياسي، وليس من سطر الأوامر أبدًا",
+ "cannot find this user's settings folder, so the agent of the user's session would not run the command": "تعذّر العثور على مجلد إعدادات هذا المستخدم، لذا لن يشغّل وكيل جلسته الأمر"
 }

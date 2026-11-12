@@ -50,14 +50,31 @@ pub const RIGHT_EACH: &str = "tools.cbb.admin.each";
 
 /// The operations confirmed each time: making a group, leaving it, taking
 /// it over or handing it on, recovering its root, making a device an admin,
-/// and the settings that decide who may hold the group.
-pub const EACH_TIME: [&str; 8] =
-    [op::NEW, op::LEAVE, op::TAKE_OVER, op::RECOVER, op::HAND_OVER, op::KEY_LEVEL, op::TAKEOVER_DELAY, op::MAKE_ADMIN];
+/// the settings that decide who may hold the group, and what lets another
+/// device in for good or sends this device's copies elsewhere: admitting a
+/// device here or by an invitation, joining a group, a hub and sync away
+/// from home.
+pub const EACH_TIME: [&str; 13] = [
+    op::NEW,
+    op::LEAVE,
+    op::TAKE_OVER,
+    op::RECOVER,
+    op::HAND_OVER,
+    op::KEY_LEVEL,
+    op::TAKEOVER_DELAY,
+    op::MAKE_ADMIN,
+    "pair",
+    "join",
+    "invite",
+    "away",
+    "hubs",
+];
 
 /// The group's everyday changes, which one confirmation covers for five
-/// minutes. Every other operation, also one added later and not listed
-/// here, is confirmed each time.
-pub const KEPT: [&str; 26] = [
+/// minutes: none of them lets a device in or sends copies anywhere new.
+/// Every other operation, also one added later and not listed here, is
+/// confirmed each time.
+pub const KEPT: [&str; 21] = [
     "sync",
     "mute",
     "unmute",
@@ -67,12 +84,7 @@ pub const KEPT: [&str; 26] = [
     "thaw",
     "resolve",
     "incoming",
-    "pair",
-    "join",
-    "invite",
     "network",
-    "away",
-    "hubs",
     "paste_on",
     "paste_receive",
     "keyboard",
@@ -116,6 +128,99 @@ pub fn prompt(right: &str) -> &'static str {
 const PROMPT_KEPT: &str = "Confirm a change to your CBB group.";
 const PROMPT_EACH: &str = "Confirm an important change to your CBB group: it cannot be undone.";
 
+/// What the prompt names besides its text: the action and the device or
+/// value it is for, as cbb's command line would put them, so that the user
+/// sees what they confirm. Only printable characters, at most 80 of them:
+/// the names come from the caller.
+pub fn action(h: &Header) -> String {
+    let mut out = format!("cbb {}", h.op.replace('_', "-"));
+    for part in [&h.name, &h.device] {
+        if !part.is_empty() {
+            out.push(' ');
+            out.push_str(part);
+        }
+    }
+    let mut clean: String = out.chars().filter(|c| !c.is_control()).collect();
+    if clean.chars().count() > 80 {
+        clean = clean.chars().take(79).collect();
+        clean.push('…');
+    }
+    clean
+}
+
+/// The prompt's text for h in the user's language, and on a line of its
+/// own the action it confirms.
+#[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
+pub fn prompt_for(h: &Header) -> String {
+    let text = prompt(right(&h.op));
+    format!("{}\n\n{}", crate::l10n::text(text), action(h))
+}
+
+/// How a user's prompts are paced: one at a time, and after a cancelled
+/// one a pause that doubles up to five minutes, so that a program cannot
+/// show prompt after prompt until one is answered by mistake.
+pub struct Pace {
+    users: std::sync::Mutex<std::collections::HashMap<String, PaceState>>,
+}
+
+#[derive(Default)]
+struct PaceState {
+    busy: bool,
+    until: Option<std::time::Instant>,
+    pause: std::time::Duration,
+}
+
+/// The first pause after a cancelled prompt, and the longest.
+const FIRST_PAUSE: std::time::Duration = std::time::Duration::from_secs(5);
+const LONGEST_PAUSE: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// What the service says while a user's prompt waits, or pauses.
+pub const BUSY: &str = "another confirmation is waiting, or one was just cancelled; try again in a moment";
+
+impl Default for Pace {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Pace {
+    pub fn new() -> Self {
+        Pace { users: std::sync::Mutex::new(std::collections::HashMap::new()) }
+    }
+
+    /// Starts a prompt for user, or says BUSY.
+    pub fn begin(&self, user: &str, now: std::time::Instant) -> Result<()> {
+        let mut g = self.users.lock().unwrap_or_else(|e| e.into_inner());
+        // Users whose pause is over and who wait for nothing are forgotten.
+        g.retain(|_, s| s.busy || s.until.is_some_and(|t| now < t + LONGEST_PAUSE));
+        let s = g.entry(user.to_string()).or_default();
+        if s.busy || s.until.is_some_and(|t| now < t) {
+            return Err(Error::msg(BUSY));
+        }
+        s.busy = true;
+        Ok(())
+    }
+
+    /// Ends user's prompt with its result: a cancelled one pauses the
+    /// next, a confirmed one ends the pauses.
+    pub fn end(&self, user: &str, res: &Result<()>, now: std::time::Instant) {
+        let mut g = self.users.lock().unwrap_or_else(|e| e.into_inner());
+        let s = g.entry(user.to_string()).or_default();
+        s.busy = false;
+        match res {
+            Ok(()) => {
+                s.until = None;
+                s.pause = std::time::Duration::ZERO;
+            }
+            Err(e) if e.message() == CANCELLED => {
+                s.pause = if s.pause.is_zero() { FIRST_PAUSE } else { (s.pause * 2).min(LONGEST_PAUSE) };
+                s.until = Some(now + s.pause);
+            }
+            Err(_) => {}
+        }
+    }
+}
+
 /// Marks the prompts for the catalogs, which take what tr! names
 /// (l10n.rs, catalogs_are_complete).
 #[cfg(test)]
@@ -144,17 +249,28 @@ pub fn supported() -> bool {
 }
 
 /// The service's check of the admin request h, which came on the control
-/// socket on conn: Ok when the user at the screen confirmed it.
-#[cfg_attr(not(any(target_os = "linux", windows)), allow(unused_variables))]
-pub fn check(conn: &UnixStream, h: &Header) -> Result<()> {
+/// socket on conn, accepted at `accepted` (clock()): Ok when the user at
+/// the screen confirmed it.
+#[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
+pub fn check(conn: &UnixStream, h: &Header, accepted: u64) -> Result<()> {
     #[cfg(target_os = "macos")]
     return mac::check(&h.auth, right(&h.op));
     #[cfg(target_os = "linux")]
-    return linux::check(conn, right(&h.op));
+    return linux::check(conn, h, accepted);
     #[cfg(all(windows, feature = "tunnel"))]
     return win::check(conn, h);
     #[cfg(not(any(target_os = "macos", target_os = "linux", all(windows, feature = "tunnel"))))]
     Err(Error::msg(UNAVAILABLE))
+}
+
+/// When a connection came, for check: on Linux the clock ticks after boot,
+/// as a process's start time counts them; 0 elsewhere, where it is not
+/// needed.
+pub fn clock() -> u64 {
+    #[cfg(target_os = "linux")]
+    return linux::now_ticks();
+    #[cfg(not(target_os = "linux"))]
+    0
 }
 
 /// The operations of confirming on the control socket that take no admin:
@@ -186,37 +302,73 @@ pub fn install(log: &dyn Fn(&str), state: &std::path::Path) {
         log(&format!("cbb: the rights that confirm admin actions: {}", e.for_log()));
     }
     #[cfg(target_os = "linux")]
-    if let Err(e) = linux::install(std::path::Path::new(linux::ACTIONS_DIR)) {
+    if let Err(e) = linux::install(std::path::Path::new(linux::ACTIONS_DIR), &linux::service_user()) {
         log(&format!("cbb: the polkit actions that confirm admin actions: {}", e.for_log()));
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let _ = log;
 }
 
+/// cbb confirm-setup [USER], which the installer runs as root: writes the
+/// rights on a Mac and the polkit actions on Linux, for a service that
+/// runs as USER (cbb unless named) and so cannot write them itself.
+pub fn setup_cli(args: &[String]) -> Result<()> {
+    let user = match args {
+        [] => "cbb".to_string(),
+        [u] if !u.is_empty() && u.chars().all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c)) => u.clone(),
+        _ => return Err(Error::msg("usage: cbb confirm-setup [USER]")),
+    };
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    #[cfg(unix)]
+    if unsafe { libc::geteuid() } != 0 {
+        return Err(Error::msg("cbb confirm-setup writes the system's settings, so it runs as root"));
+    }
+    #[cfg(target_os = "linux")]
+    return linux::install(std::path::Path::new(linux::ACTIONS_DIR), &user);
+    // A Mac's rights name no owner: the service checks a caller's own
+    // authorization.
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = user;
+        #[cfg(target_os = "macos")]
+        mac::install()?;
+        Ok(())
+    }
+}
+
 /// Fills in h.auth before cbb sends an admin request on the control socket:
 /// on a Mac it asks for the right first, so the prompt comes from cbb
 /// itself, in the user's session; on Windows it signs the service's
 /// challenge with Windows Hello, which ask sends for (a request on the
-/// control socket). On Linux there is nothing to add.
+/// control socket); on Linux it says when cbb started, which polkit checks.
 #[cfg_attr(not(all(windows, feature = "tunnel")), allow(unused_variables))]
 pub fn prepare(h: &mut Header, ask: &dyn Fn(Header) -> Result<Header>) -> Result<()> {
     #[cfg(target_os = "macos")]
     {
-        h.auth = mac::authorize(right(&h.op))?;
+        h.auth = mac::authorize(right(&h.op), &prompt_for(h))?;
     }
     #[cfg(all(windows, feature = "tunnel"))]
     win::prepare(h, ask)?;
-    #[cfg(not(any(target_os = "macos", all(windows, feature = "tunnel"))))]
-    let _ = h;
+    #[cfg(target_os = "linux")]
+    {
+        h.auth = linux::start_time(std::process::id() as i32)
+            .ok_or_else(|| Error::msg("cannot read when cbb started").context(UNAVAILABLE))?
+            .to_string();
+    }
     Ok(())
 }
 
 /// cbb confirm-key SID KEY, which cbb runs as the administrator through
-/// UAC to register the user's Windows Hello key (OP_REGISTER).
+/// UAC to register the user's Windows Hello key (OP_REGISTER), and cbb
+/// confirm-key -remove SID, which removes it.
 #[cfg_attr(not(all(windows, feature = "tunnel")), allow(unused_variables))]
 pub fn register_cli(args: &[String], request: &dyn Fn(Header) -> Result<Header>) -> Result<()> {
-    let [sid, key] = args else { return Err(Error::msg("usage: cbb confirm-key SID KEY")) };
-    request(Header { op: OP_REGISTER.into(), name: sid.clone(), value: key.clone(), ..Default::default() })?;
+    let (sid, key) = match args {
+        [flag, sid] if flag == "-remove" => (sid, String::new()),
+        [sid, key] if !key.is_empty() && !sid.starts_with('-') => (sid, key.clone()),
+        _ => return Err(Error::msg("usage: cbb confirm-key SID KEY\n       cbb confirm-key -remove SID")),
+    };
+    request(Header { op: OP_REGISTER.into(), name: sid.clone(), value: key, ..Default::default() })?;
     Ok(())
 }
 
@@ -231,27 +383,38 @@ pub fn hello_message(op: &str, challenge: &[u8]) -> Vec<u8> {
     m
 }
 
-/// polkit's action file, with one action for each right.
+/// polkit's action file, with one action for each right. Each message
+/// ends with the action it confirms ($(cbb_action), the detail the service
+/// passes), and the service's user `owner` may ask polkit about another
+/// user's process (org.freedesktop.policykit.owner), which polkit allows
+/// only root otherwise.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-pub fn polkit_policy() -> String {
+pub fn polkit_policy(owner: &str) -> String {
     let mut out = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <!DOCTYPE policyconfig PUBLIC \"-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN\"\n \
          \"http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd\">\n\
-         <!-- Written by the cbb service (docs/design.md, \"Confirming admin actions\"). -->\n\
+         <!-- Written by cbb (docs/design.md, \"Confirming admin actions\"). -->\n\
          <policyconfig>\n  <vendor>CBB</vendor>\n  <vendor_url>https://cbb.tools</vendor_url>\n",
     );
     for (right, keep) in [(RIGHT_KEPT, true), (RIGHT_EACH, false)] {
         out.push_str(&format!("  <action id=\"{right}\">\n"));
         for (lang, text) in prompts(right) {
             let attr = if lang.is_empty() { String::new() } else { format!(" xml:lang=\"{lang}\"") };
-            out.push_str(&format!("    <message{attr}>{}</message>\n", xml_escape(text)));
+            out.push_str(&format!("    <message{attr}>{} $(cbb_action)</message>\n", xml_escape(text)));
         }
         let active = if keep { "auth_admin_keep" } else { "auth_admin" };
         out.push_str(&format!(
             "    <defaults>\n      <allow_any>no</allow_any>\n      <allow_inactive>no</allow_inactive>\n      \
-             <allow_active>{active}</allow_active>\n    </defaults>\n  </action>\n"
+             <allow_active>{active}</allow_active>\n    </defaults>\n"
         ));
+        if !owner.is_empty() {
+            out.push_str(&format!(
+                "    <annotate key=\"org.freedesktop.policykit.owner\">unix-user:{}</annotate>\n",
+                xml_escape(owner)
+            ));
+        }
+        out.push_str("  </action>\n");
     }
     out.push_str("</policyconfig>\n");
     out
@@ -278,12 +441,12 @@ mod linux {
 
     /// Writes the actions where polkit reads them, unless they are there
     /// already; nothing on a system without polkit.
-    pub fn install(dir: &Path) -> Result<()> {
+    pub fn install(dir: &Path, owner: &str) -> Result<()> {
         if !dir.is_dir() {
             return Ok(());
         }
         let path = dir.join(FILE);
-        let want = super::polkit_policy();
+        let want = super::polkit_policy(owner);
         if std::fs::read_to_string(&path).is_ok_and(|have| have == want) {
             return Ok(());
         }
@@ -297,13 +460,22 @@ mod linux {
 
     /// Asks polkit whether the process at the other end of conn may take
     /// the action, letting it ask the user in the session: pkcheck with the
-    /// process's ID, start time and user, which polkit checks against the
-    /// process itself, so another process cannot pass for it.
-    pub fn check(conn: &UnixStream, action: &str) -> Result<()> {
+    /// process's ID and user, which the kernel gives, and the start time
+    /// the process sent in its request (prepare). polkit checks all three
+    /// against the process itself, so another process cannot pass for it;
+    /// and a start time after the connection came is refused, so a process
+    /// that took the ID of one that connected and left is never asked
+    /// about. The service reads nothing of another user's process: its
+    /// unit hides them (ProtectProc=invisible).
+    pub fn check(conn: &UnixStream, h: &super::Header, accepted: u64) -> Result<()> {
         let Some((pid, uid)) = peer(conn) else { return Err(Error::msg(UNAVAILABLE)) };
-        let Some(start) = start_time(pid) else { return Err(Error::msg(UNAVAILABLE)) };
+        let Some(start) = h.auth.parse::<u64>().ok().filter(|&s| s > 0 && s <= accepted) else {
+            return Err(Error::msg("the request did not say when its process started").context(UNAVAILABLE));
+        };
+        let action = super::right(&h.op);
         let out = match Command::new(pkcheck())
-            .args(["--action-id", action, "--process", &format!("{pid},{start},{uid}"), "--allow-user-interaction"])
+            .args(["--action-id", action, "--process", &format!("{pid},{start},{uid}")])
+            .args(["--detail", DETAIL, &super::action(h), "--allow-user-interaction"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -313,6 +485,46 @@ mod linux {
             Err(e) => return Err(Error::msg(format!("pkcheck: {e}")).context(UNAVAILABLE)),
         };
         verdict(out.status.code(), &String::from_utf8_lossy(&out.stderr))
+    }
+
+    /// The user the service runs as, who owns the actions; none for root,
+    /// which polkit lets ask anyway.
+    pub fn service_user() -> String {
+        // SAFETY: geteuid has no preconditions; getpwuid_r writes into pw
+        // and buf, which live for the call, and the name it points at lies
+        // in buf.
+        unsafe {
+            let uid = libc::geteuid();
+            if uid == 0 {
+                return String::new();
+            }
+            let mut pw: libc::passwd = std::mem::zeroed();
+            let mut buf = vec![0 as libc::c_char; 4096];
+            let mut out: *mut libc::passwd = std::ptr::null_mut();
+            if libc::getpwuid_r(uid, &mut pw, buf.as_mut_ptr(), buf.len(), &mut out) != 0 || out.is_null() {
+                return String::new();
+            }
+            std::ffi::CStr::from_ptr(pw.pw_name).to_string_lossy().into_owned()
+        }
+    }
+
+    /// The detail that names the action in polkit's dialog, as $(cbb_action)
+    /// in the actions' messages.
+    pub const DETAIL: &str = "cbb_action";
+
+    /// Now, in the clock ticks after boot that a process's start time
+    /// counts (CLOCK_BOOTTIME, as /proc/PID/stat).
+    pub fn now_ticks() -> u64 {
+        let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+        // SAFETY: ts is valid for the call to write; sysconf has no
+        // preconditions.
+        let (ok, hz) =
+            unsafe { (libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut ts) == 0, libc::sysconf(libc::_SC_CLK_TCK)) };
+        if !ok || hz <= 0 {
+            return 0;
+        }
+        // Rounded up: a process that started in this tick is not after now.
+        ts.tv_sec as u64 * hz as u64 + (ts.tv_nsec as u64 * hz as u64).div_ceil(1_000_000_000)
     }
 
     /// pkcheck's answer: 0 authorized, 3 the dialog dismissed; 1 and 2 not
@@ -430,7 +642,11 @@ mod mac {
             bundle: CFTypeRef,
             table: CFStringRef,
         ) -> OSStatus;
+        fn AuthorizationRightGet(right: *const c_char, definition: *mut CFDictionaryRef) -> OSStatus;
     }
+
+    /// The environment item that gives the prompt's text.
+    const ENV_PROMPT: &[u8] = b"prompt\0";
 
     #[link(name = "CoreFoundation", kind = "framework")]
     unsafe extern "C" {
@@ -582,7 +798,7 @@ mod mac {
     /// the system's prompt in the user's session, as its external form. The
     /// authorization stays for as long as cbb runs, so that the service
     /// finds it.
-    pub fn authorize(right: &str) -> Result<String> {
+    pub fn authorize(right: &str, prompt: &str) -> Result<String> {
         let mut auth: AuthorizationRef = std::ptr::null_mut();
         // SAFETY: an empty authorization of this process.
         status(
@@ -593,12 +809,22 @@ mod mac {
         let mut item =
             AuthorizationItem { name: std::ptr::null(), value_length: 0, value: std::ptr::null_mut(), flags: 0 };
         let rights = rights_of(&name, &mut item);
-        // SAFETY: rights points at one item whose name lives for the call.
+        // The prompt names the action (kAuthorizationEnvironmentPrompt).
+        let mut text = prompt.as_bytes().to_vec();
+        let mut shown = AuthorizationItem {
+            name: ENV_PROMPT.as_ptr().cast(),
+            value_length: text.len(),
+            value: text.as_mut_ptr().cast(),
+            flags: 0,
+        };
+        let env = AuthorizationRights { count: 1, items: &mut shown };
+        // SAFETY: rights points at one item whose name lives for the call,
+        // and env at one whose name and text do too.
         let st = unsafe {
             AuthorizationCopyRights(
                 auth,
                 &rights,
-                std::ptr::null(),
+                (&raw const env).cast(),
                 INTERACTION_ALLOWED | EXTEND_RIGHTS,
                 std::ptr::null_mut(),
             )
@@ -610,10 +836,32 @@ mod mac {
         Ok(base64::engine::general_purpose::STANDARD.encode(form.bytes))
     }
 
+    /// Whether the right is in the authorization database, as the installer
+    /// wrote it; a right that is not would fall to the system's default
+    /// rule, which is not CBB's.
+    fn defined(name: &CString) -> bool {
+        let mut def: CFDictionaryRef = std::ptr::null();
+        // SAFETY: name is NUL-terminated; def is valid for the call to
+        // write, and what it gets is released once.
+        let st = unsafe { AuthorizationRightGet(name.as_ptr(), &mut def) };
+        if !def.is_null() {
+            // SAFETY: the definition was copied for this call.
+            unsafe { CFRelease(def) };
+        }
+        st == 0
+    }
+
     /// The service's side: the caller's authorization, from its external
-    /// form, must hold the right. It may ask the user again, where the
-    /// right's five minutes have passed meanwhile.
+    /// form, must hold the right, which the installer defined. The service
+    /// shows no prompt of its own (it has no screen): a right whose five
+    /// minutes passed meanwhile is refused, and cbb asks again.
     pub fn check(auth: &str, right: &str) -> Result<()> {
+        let name = CString::new(right).map_err(|_| Error::msg("a right with a NUL"))?;
+        if !defined(&name) {
+            return Err(
+                Error::msg(format!("the right {right} is not set up; run sudo cbb confirm-setup")).context(UNAVAILABLE)
+            );
+        }
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(auth)
             .ok()
@@ -624,21 +872,12 @@ mod mac {
         let mut a: AuthorizationRef = std::ptr::null_mut();
         // SAFETY: form holds 32 bytes, as the API reads.
         status(unsafe { AuthorizationCreateFromExternalForm(&form, &mut a) }, "AuthorizationCreateFromExternalForm")?;
-        let name = CString::new(right).map_err(|_| Error::msg("a right with a NUL"))?;
         let mut item =
             AuthorizationItem { name: std::ptr::null(), value_length: 0, value: std::ptr::null_mut(), flags: 0 };
         let rights = rights_of(&name, &mut item);
         // SAFETY: a is live, rights points at one item whose name lives for
         // the call.
-        let st = unsafe {
-            AuthorizationCopyRights(
-                a,
-                &rights,
-                std::ptr::null(),
-                INTERACTION_ALLOWED | EXTEND_RIGHTS,
-                std::ptr::null_mut(),
-            )
-        };
+        let st = unsafe { AuthorizationCopyRights(a, &rights, std::ptr::null(), EXTEND_RIGHTS, std::ptr::null_mut()) };
         // SAFETY: a was made above and is freed once; the caller's own
         // authorization stays.
         unsafe { AuthorizationFree(a, 0) };
@@ -676,17 +915,23 @@ mod win {
     /// At most this many challenges wait at once; the oldest go first.
     const MAX_CHALLENGES: usize = 32;
 
+    /// At most this many challenges for one user a minute: each shows a
+    /// prompt, and a program of the user must not show one after another.
+    const CHALLENGES_A_MINUTE: usize = 6;
+
     struct State {
         dir: PathBuf,
         challenges: Vec<(Vec<u8>, String, String, Instant)>,
         kept: HashMap<String, Instant>,
+        /// When each user was last given challenges, within the minute.
+        asked: HashMap<String, Vec<Instant>>,
     }
 
     static STATE: Mutex<Option<State>> = Mutex::new(None);
 
     pub fn install(dir: &Path) {
         *STATE.lock().unwrap_or_else(|e| e.into_inner()) =
-            Some(State { dir: dir.to_path_buf(), challenges: Vec::new(), kept: HashMap::new() });
+            Some(State { dir: dir.to_path_buf(), challenges: Vec::new(), kept: HashMap::new(), asked: HashMap::new() });
     }
 
     fn with<T>(f: impl FnOnce(&mut State) -> Result<T>) -> Result<T> {
@@ -722,6 +967,16 @@ mod win {
             if !keys(&st.dir).contains_key(&sid) {
                 return Ok(("register", String::new()));
             }
+            let now = Instant::now();
+            st.asked.retain(|_, t| {
+                t.retain(|t| now.duration_since(*t) < Duration::from_secs(60));
+                !t.is_empty()
+            });
+            let asked = st.asked.entry(sid.clone()).or_default();
+            if asked.len() >= CHALLENGES_A_MINUTE {
+                return Err(Error::msg(super::BUSY));
+            }
+            asked.push(now);
             let mut nonce = vec![0u8; 32];
             getrandom::fill(&mut nonce).map_err(|e| Error::msg(format!("no random numbers: {e}")))?;
             st.challenges.retain(|c| c.3.elapsed() < CHALLENGE_TIME);
@@ -740,6 +995,20 @@ mod win {
     /// the key the user registered.
     pub fn check(conn: &UnixStream, h: &Header) -> Result<()> {
         let sid = user(conn)?;
+        // An administrator of this PC now, not only when the key was
+        // registered: a user taken out of the Administrators loses it, and
+        // the key goes.
+        if !administrator(&sid) {
+            let _ = with(|st| {
+                st.kept.remove(&sid);
+                let mut all = keys(&st.dir);
+                if all.remove(&sid).is_some() {
+                    save(&st.dir, &all)?;
+                }
+                Ok(())
+            });
+            return Err(Error::msg("this user is no administrator of this PC").context(UNAVAILABLE));
+        }
         with(|st| {
             if kept(st, &sid, &h.op) {
                 return Ok(());
@@ -768,28 +1037,121 @@ mod win {
         })
     }
 
-    /// Registers the user h.name's key h.value, on the admin socket.
+    fn save(dir: &Path, all: &HashMap<String, String>) -> Result<()> {
+        let data = serde_json::to_vec_pretty(all).map_err(|e| Error::with("encoding the keys", e))?;
+        crate::files::write_atomic(&dir.join(FILE), &data, 0o600)
+    }
+
+    /// Registers the user h.name's key h.value, on the admin socket, or
+    /// with no key removes the user's.
     pub fn register(h: &Header) -> Result<Message> {
         if !h.name.starts_with("S-1-") || h.name.len() > 200 {
             return Err(Error::msg("cbb confirm-key takes the user's SID"));
         }
+        if h.value.is_empty() {
+            with(|st| {
+                st.kept.remove(&h.name);
+                let mut all = keys(&st.dir);
+                if all.remove(&h.name).is_some() {
+                    save(&st.dir, &all)?;
+                }
+                Ok(())
+            })?;
+            return Ok(crate::control::reply(Header { done: true, ..Default::default() }, Vec::new()));
+        }
         let key = base64::engine::general_purpose::STANDARD
             .decode(&h.value)
             .ok()
-            .filter(|k| (64..=2048).contains(&k.len()))
-            .ok_or_else(|| Error::msg("cbb confirm-key takes the key in base64"))?;
+            .filter(|k| cbb_core::tls::web::rsa_public_key_ok(k))
+            .ok_or_else(|| Error::msg("cbb confirm-key takes an RSA key of 2048 bits or more, in base64"))?;
+        // Only an administrator's key confirms an admin action, as an
+        // administrator's password does on a Mac and polkit on Linux.
+        if !administrator(&h.name) {
+            return Err(Error::msg("only an administrator of this PC confirms admin actions of CBB"));
+        }
         with(|st| {
             let mut all = keys(&st.dir);
             all.insert(h.name.clone(), base64::engine::general_purpose::STANDARD.encode(key));
-            let path = st.dir.join(FILE);
-            let tmp = st.dir.join(format!(".{FILE}.tmp"));
-            std::fs::write(&tmp, serde_json::to_vec_pretty(&all).unwrap_or_default())
-                .context(format!("cannot write {}", tmp.display()))?;
-            std::fs::rename(&tmp, &path).context(format!("cannot write {}", path.display()))?;
+            save(&st.dir, &all)?;
             st.kept.remove(&h.name);
             Ok(())
         })?;
         Ok(crate::control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+    }
+
+    /// Whether the user sid is a member of this PC's Administrators group,
+    /// whose name the system gives for its well-known SID. A member through
+    /// a domain's group is not counted: such a user confirms as the
+    /// administrator, through UAC.
+    fn administrator(sid: &str) -> bool {
+        use windows_sys::Win32::Foundation::LocalFree;
+        use windows_sys::Win32::NetworkManagement::NetManagement::{
+            LOCALGROUP_MEMBERS_INFO_0, MAX_PREFERRED_LENGTH, NetApiBufferFree, NetLocalGroupGetMembers,
+        };
+        use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+        use windows_sys::Win32::Security::{
+            CreateWellKnownSid, LookupAccountSidW, SID_NAME_USE, WinBuiltinAdministratorsSid,
+        };
+        // SAFETY: every buffer is as large as the call is told; the list
+        // NetLocalGroupGetMembers allocates is read within its count and
+        // freed, and so is each string the conversion allocates.
+        unsafe {
+            let mut group = [0u8; 68];
+            let mut size = group.len() as u32;
+            if CreateWellKnownSid(
+                WinBuiltinAdministratorsSid,
+                std::ptr::null_mut(),
+                group.as_mut_ptr().cast(),
+                &mut size,
+            ) == 0
+            {
+                return false;
+            }
+            let (mut name, mut domain) = ([0u16; 256], [0u16; 256]);
+            let (mut nlen, mut dlen) = (name.len() as u32, domain.len() as u32);
+            let mut kind: SID_NAME_USE = 0;
+            if LookupAccountSidW(
+                std::ptr::null(),
+                group.as_ptr().cast_mut().cast(),
+                name.as_mut_ptr(),
+                &mut nlen,
+                domain.as_mut_ptr(),
+                &mut dlen,
+                &mut kind,
+            ) == 0
+            {
+                return false;
+            }
+            let mut buf: *mut u8 = std::ptr::null_mut();
+            let (mut read, mut total, mut resume) = (0u32, 0u32, 0usize);
+            if NetLocalGroupGetMembers(
+                std::ptr::null(),
+                name.as_ptr(),
+                0,
+                &mut buf,
+                MAX_PREFERRED_LENGTH,
+                &mut read,
+                &mut total,
+                &mut resume,
+            ) != 0
+                || buf.is_null()
+            {
+                return false;
+            }
+            let members = std::slice::from_raw_parts(buf as *const LOCALGROUP_MEMBERS_INFO_0, read as usize);
+            let mut found = false;
+            for m in members {
+                let mut p: *mut u16 = std::ptr::null_mut();
+                if ConvertSidToStringSidW(m.lgrmi0_sid, &mut p) == 0 {
+                    continue;
+                }
+                let len = (0..).take_while(|&i| *p.add(i) != 0).count();
+                found |= String::from_utf16_lossy(std::slice::from_raw_parts(p, len)) == sid;
+                LocalFree(p.cast());
+            }
+            NetApiBufferFree(buf.cast());
+            found
+        }
     }
 
     // cbb's side, as the user.
@@ -804,6 +1166,11 @@ mod win {
                     let b64 = &base64::engine::general_purpose::STANDARD;
                     let nonce =
                         b64.decode(&a.value).map_err(|_| Error::msg("the service's challenge is not base64"))?;
+                    // Windows Hello's prompt cannot say what it confirms:
+                    // CBB says it first.
+                    if !agree(&super::prompt_for(h))? {
+                        return Err(Error::msg(CANCELLED));
+                    }
                     match sign(&super::hello_message(&h.op, &nonce))? {
                         Some(sig) => {
                             h.auth = format!("{}.{}", a.value, b64.encode(sig));
@@ -821,6 +1188,32 @@ mod win {
             elevate_register(&key)?;
             registered = true;
         }
+    }
+
+    /// Shows text in a dialog of CBB's, with OK and Cancel; whether the
+    /// user chose OK.
+    fn agree(text: &str) -> Result<bool> {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            IDOK, MB_ICONQUESTION, MB_OKCANCEL, MB_SETFOREGROUND, MB_TOPMOST, MessageBoxW,
+        };
+        let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
+        let (text, title) = (wide(text), wide("CBB"));
+        // SAFETY: both strings are NUL-terminated and outlive the call; no
+        // owner window.
+        let r = unsafe {
+            MessageBoxW(
+                std::ptr::null_mut(),
+                text.as_ptr(),
+                title.as_ptr(),
+                MB_OKCANCEL | MB_ICONQUESTION | MB_TOPMOST | MB_SETFOREGROUND,
+            )
+        };
+        if r == 0 {
+            return Err(
+                Error::msg(format!("cannot show the dialog: {}", std::io::Error::last_os_error())).context(UNAVAILABLE)
+            );
+        }
+        Ok(r == IDOK)
     }
 
     fn status(s: KeyCredentialStatus) -> Result<()> {
@@ -1014,16 +1407,20 @@ mod tests {
     }
 
     /// The prompts come in every language of the project, and polkit's file
-    /// names both actions with them.
+    /// names both actions with them, the action they confirm, and the
+    /// service's user as their owner.
     #[test]
     fn policy() {
-        let p = polkit_policy();
+        let p = polkit_policy("cbb");
         assert!(p.contains("<action id=\"tools.cbb.admin\">") && p.contains("<action id=\"tools.cbb.admin.each\">"));
         assert!(
             p.contains("<allow_active>auth_admin_keep</allow_active>")
                 && p.contains("<allow_active>auth_admin</allow_active>")
         );
         assert_eq!(p.matches("<allow_any>no</allow_any>").count(), 2);
+        assert_eq!(p.matches("<annotate key=\"org.freedesktop.policykit.owner\">unix-user:cbb</annotate>").count(), 2);
+        assert_eq!(p.matches(" $(cbb_action)</message>").count(), p.matches("<message").count());
+        assert!(!polkit_policy("").contains("policykit.owner"), "root needs no owner");
         for lang in crate::l10n::LANGS {
             assert!(p.contains(&format!("xml:lang=\"{lang}\"")), "{lang}");
             assert_ne!(crate::l10n::lookup(lang, PROMPT_KEPT), None, "{lang}");
@@ -1032,20 +1429,113 @@ mod tests {
         assert_eq!(_catalog_marks(), [PROMPT_KEPT, PROMPT_EACH]);
     }
 
+    /// The prompt names the action and its device, without what could
+    /// change how it reads, and the most it shows.
+    #[test]
+    fn prompt_names_the_action() {
+        let h = Header { op: "make_admin".into(), device: "Laptop".into(), ..Default::default() };
+        assert_eq!(action(&h), "cbb make-admin Laptop");
+        assert!(prompt_for(&h).starts_with(PROMPT_EACH) && prompt_for(&h).ends_with("\n\ncbb make-admin Laptop"));
+        let h = Header { op: "away".into(), name: "relay".into(), ..Default::default() };
+        assert_eq!(action(&h), "cbb away relay");
+        let h = Header {
+            op: "rename".into(),
+            device: "a\nb\u{1b}[2Jc".into(),
+            name: "x".repeat(200),
+            ..Default::default()
+        };
+        let a = action(&h);
+        assert!(!a.chars().any(char::is_control), "{a:?}");
+        assert_eq!(a.chars().count(), 80);
+        assert!(a.ends_with('…'));
+    }
+
+    /// One prompt of a user at a time; after a cancelled one a pause that
+    /// doubles up to five minutes; a confirmed one ends the pauses; other
+    /// users are not held up.
+    #[test]
+    fn prompts_are_paced() {
+        let p = Pace::new();
+        let t = std::time::Instant::now();
+        let s = std::time::Duration::from_secs;
+        p.begin("1000", t).unwrap();
+        assert_eq!(p.begin("1000", t).unwrap_err().message(), BUSY);
+        p.begin("1001", t).unwrap();
+        p.end("1001", &Ok(()), t);
+        p.end("1000", &Err(Error::msg(CANCELLED)), t);
+        assert_eq!(p.begin("1000", t + s(4)).unwrap_err().message(), BUSY);
+        p.begin("1000", t + s(5)).unwrap();
+        p.end("1000", &Err(Error::msg(CANCELLED)), t + s(5));
+        assert!(p.begin("1000", t + s(14)).is_err(), "the pause doubles");
+        p.begin("1000", t + s(15)).unwrap();
+        let mut now = t + s(15);
+        for _ in 0..10 {
+            p.end("1000", &Err(Error::msg(CANCELLED)), now);
+            now += s(300);
+            p.begin("1000", now).unwrap();
+        }
+        p.end("1000", &Err(Error::msg(CANCELLED)), now);
+        assert!(p.begin("1000", now + s(299)).is_err(), "at most five minutes");
+        p.begin("1000", now + s(300)).unwrap();
+        p.end("1000", &Ok(()), now + s(300));
+        p.begin("1000", now + s(300)).unwrap();
+        // An error that is no cancel pauses nothing.
+        p.end("1000", &Err(Error::msg(UNAVAILABLE)), now + s(300));
+        p.begin("1000", now + s(300)).unwrap();
+    }
+
+    #[test]
+    fn confirm_key_cli() {
+        let sent = std::cell::RefCell::new(Vec::new());
+        let req = |h: Header| {
+            sent.borrow_mut().push((h.op.clone(), h.name.clone(), h.value.clone()));
+            Ok(h)
+        };
+        register_cli(&["S-1-5-21-1".into(), "a2V5".into()], &req).unwrap();
+        register_cli(&["-remove".into(), "S-1-5-21-1".into()], &req).unwrap();
+        assert!(register_cli(&["S-1-5-21-1".into()], &req).is_err());
+        assert!(register_cli(&["S-1-5-21-1".into(), String::new()], &req).is_err());
+        assert_eq!(
+            *sent.borrow(),
+            [
+                (OP_REGISTER.to_string(), "S-1-5-21-1".to_string(), "a2V5".to_string()),
+                (OP_REGISTER.to_string(), "S-1-5-21-1".to_string(), String::new())
+            ]
+        );
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn polkit() {
         assert_eq!(linux::parse_start("42 (a b) c) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 777 19"), Some(777));
-        assert!(linux::start_time(std::process::id() as i32).is_some());
+        let own = linux::start_time(std::process::id() as i32).unwrap();
+        // This process started before now, in the same clock.
+        assert!(own <= linux::now_ticks() && linux::now_ticks() > 0);
         assert!(linux::verdict(Some(0), "").is_ok());
         assert_eq!(linux::verdict(Some(3), "").unwrap_err().message(), CANCELLED);
         assert_eq!(linux::verdict(Some(1), "not authorized").unwrap_err().message(), UNAVAILABLE);
         let dir = std::env::temp_dir().join(format!("cbb-polkit-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        linux::install(&dir).unwrap();
-        assert_eq!(std::fs::read_to_string(dir.join("tools.cbb.admin.policy")).unwrap(), polkit_policy());
-        linux::install(&dir).unwrap();
+        linux::install(&dir, "cbb").unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join("tools.cbb.admin.policy")).unwrap(), polkit_policy("cbb"));
+        linux::install(&dir, "cbb").unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
-        linux::install(&dir).unwrap();
+        linux::install(&dir, "cbb").unwrap();
+    }
+
+    /// The service asks polkit only about a process that says when it
+    /// started, and started before its connection came: a process that
+    /// took the ID of one that connected and left is never asked about.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn polkit_subject_started_before_the_connection() {
+        let (a, _b) = crate::sys::UnixStream::pair().unwrap();
+        let own = linux::start_time(std::process::id() as i32).unwrap();
+        for auth in [String::new(), "x".into(), "0".into(), (own + 1).to_string()] {
+            let h = Header { op: "remove".into(), auth, ..Default::default() };
+            let e = linux::check(&a, &h, own).unwrap_err();
+            assert_eq!(e.message(), UNAVAILABLE, "{:?}", h.auth);
+            assert!(e.for_log().contains("did not say when its process started"), "{}", e.for_log());
+        }
     }
 }

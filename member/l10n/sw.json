@@ -133,5 +133,8 @@
  "Handing this device's tunnel key to the hub...": "Inakabidhi ufunguo wa handaki wa kifaa hiki kwa kitovu...",
  "The hub took it: this device syncs from afar now.": "Kitovu kimeupokea: kifaa hiki sasa kinasawazisha kikiwa mbali.",
  "The hub has not answered yet; the service keeps trying for a day.": "Kitovu bado hakijajibu; huduma itaendelea kujaribu kwa siku moja.",
- "Start the service (cbb service) within a day: it hands this device's key to the hub.": "Anzisha huduma (cbb service) ndani ya siku moja: inakabidhi ufunguo wa kifaa hiki kwa kitovu."
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "Anzisha huduma (cbb service) ndani ya siku moja: inakabidhi ufunguo wa kifaa hiki kwa kitovu.",
+ "Paste the invitation: ": "Bandika mwaliko: ",
+ "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "mwaliko ni siri, kwa hiyo cbb huuchukua kutoka faili lake au, kwa cbb pair -invite -, ukibandikwa kwenye ingizo la kawaida, kamwe si kwenye mstari wa amri",
+ "cannot find this user's settings folder, so the agent of the user's session would not run the command": "haiwezi kupata folda ya mipangilio ya mtumiaji huyu, kwa hiyo wakala wa kipindi chake hangeendesha amri"
 }

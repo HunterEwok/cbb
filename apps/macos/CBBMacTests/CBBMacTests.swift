@@ -8,6 +8,20 @@ import XCTest
 final class CBBMacTests: XCTestCase {
     /// A message goes out as the Go service reads it: a JSON line with the
     /// payload's length, then the payload.
+    /// A file fetched for a remote paste carries the quarantine mark, as
+    /// cbb's own files do.
+    func testFetchedFileIsQuarantined() throws {
+        XCTAssertEqual(FetchedCopy.quarantine(at: Date(timeIntervalSince1970: 0x654321ab)), "0083;654321ab;CBB;")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-mark-\(UUID().uuidString)")
+        XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data("x".utf8)))
+        defer { try? FileManager.default.removeItem(at: url) }
+        try FetchedCopy.markDownloaded(url)
+        var buf = [CChar](repeating: 0, count: 64)
+        let n = url.withUnsafeFileSystemRepresentation { getxattr($0!, "com.apple.quarantine", &buf, buf.count, 0, 0) }
+        XCTAssertGreaterThan(n, 0)
+        XCTAssertTrue(String(cString: Array(buf[0..<max(0, n)]) + [0]).hasPrefix("0083;"))
+    }
+
     func testEncode() throws {
         let data = try Control.encode(.init(op: "copy"), payload: Data("hi".utf8))
         let text = String(decoding: data, as: UTF8.self)

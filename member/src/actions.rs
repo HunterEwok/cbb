@@ -548,3 +548,134 @@ mod tests {
         assert!(!denied("Failed to connect to bus: No such file or directory"));
     }
 }
+
+/// The user's own commands, which the agent of the user's session runs
+/// only when they are here, in a file the user owns (internal/actions,
+/// own.go, reads the same): the service names the command, but an account
+/// of the service cannot make the user's session run one the user did not
+/// set (docs/design.md, "Quick actions").
+pub const OWN_FILE: &str = "own-actions.json";
+
+/// The folder of the user's settings, as Go's os.UserConfigDir: on Linux
+/// $XDG_CONFIG_HOME or ~/.config, on a Mac ~/Library/Application Support,
+/// on Windows %AppData%; under sudo the folder of the user who ran it.
+pub fn user_config_dir() -> Option<PathBuf> {
+    #[cfg(unix)]
+    if let Some(home) = sudo_home() {
+        return Some(if cfg!(target_os = "macos") {
+            home.join("Library/Application Support")
+        } else {
+            home.join(".config")
+        });
+    }
+    #[cfg(windows)]
+    return std::env::var_os("APPDATA").filter(|v| !v.is_empty()).map(PathBuf::from);
+    #[cfg(target_os = "macos")]
+    return std::env::var_os("HOME")
+        .filter(|v| !v.is_empty())
+        .map(|h| Path::new(&h).join("Library/Application Support"));
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if let Some(x) = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
+            return Some(PathBuf::from(x));
+        }
+        std::env::var_os("HOME").filter(|v| !v.is_empty()).map(|h| Path::new(&h).join(".config"))
+    }
+}
+
+/// The home of the user who ran cbb with sudo, when cbb runs as root.
+#[cfg(unix)]
+fn sudo_home() -> Option<PathBuf> {
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    if unsafe { libc::geteuid() } != 0 {
+        return None;
+    }
+    let user = std::env::var("SUDO_USER").ok().filter(|u| !u.is_empty() && u != "root")?;
+    let c = std::ffi::CString::new(user).ok()?;
+    // SAFETY: getpwnam_r writes into pw and buf, which live for the call;
+    // the home it points at lies in buf.
+    unsafe {
+        let mut pw: libc::passwd = std::mem::zeroed();
+        let mut buf = vec![0 as libc::c_char; 4096];
+        let mut out: *mut libc::passwd = std::ptr::null_mut();
+        if libc::getpwnam_r(c.as_ptr(), &mut pw, buf.as_mut_ptr(), buf.len(), &mut out) != 0 || out.is_null() {
+            return None;
+        }
+        let home = std::ffi::CStr::from_ptr(pw.pw_dir).to_string_lossy().into_owned();
+        (!home.is_empty()).then(|| PathBuf::from(home))
+    }
+}
+
+/// The user's own commands in dir (the user's settings' cbb folder), by
+/// the action's name.
+pub fn own_commands(dir: &Path) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
+    match std::fs::read(dir.join(OWN_FILE)) {
+        Ok(d) => serde_json::from_slice(&d).context(OWN_FILE),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Default::default()),
+        Err(e) => Err(e).context(format!("cannot read {}", dir.join(OWN_FILE).display())),
+    }
+}
+
+/// Sets the user's own command of the action name in dir, or with none
+/// removes it; the folder and the file are the user's (under sudo, given
+/// to the user who ran it).
+pub fn set_own_command(dir: &Path, name: &str, command: &[String]) -> Result<()> {
+    let mut all = own_commands(dir)?;
+    if command.is_empty() {
+        if all.remove(name).is_none() {
+            return Ok(());
+        }
+    } else {
+        all.insert(name.to_string(), command.to_vec());
+    }
+    std::fs::create_dir_all(dir).context(format!("cannot create {}", dir.display()))?;
+    let data = serde_json::to_vec_pretty(&all).map_err(|e| Error::with("encoding the commands", e))?;
+    let path = dir.join(OWN_FILE);
+    files::write_atomic(&path, &data, 0o600)?;
+    #[cfg(unix)]
+    give_to_sudo_user(&[dir, &path]);
+    Ok(())
+}
+
+/// Under sudo, gives the paths to the user who ran it.
+#[cfg(unix)]
+fn give_to_sudo_user(paths: &[&Path]) {
+    let id = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<u32>().ok());
+    let (Some(uid), Some(gid)) = (id("SUDO_UID"), id("SUDO_GID")) else { return };
+    if sudo_home().is_none() {
+        return;
+    }
+    for p in paths {
+        let _ = std::os::unix::fs::chown(p, Some(uid), Some(gid));
+    }
+}
+
+#[cfg(test)]
+mod own_tests {
+    use super::*;
+
+    /// cbb action add writes the user's own command where the session's
+    /// agent reads it (Go's actions.OwnFile), only the user may read it,
+    /// and removing the action takes it away.
+    #[test]
+    fn own_commands_for_the_agent() {
+        let dir = std::env::temp_dir().join(format!("cbb-own-{}", std::process::id())).join("cbb");
+        let cmd = vec!["/usr/local/bin/backup".to_string(), "--quick".to_string()];
+        set_own_command(&dir, "backup", &cmd).unwrap();
+        set_own_command(&dir, "notes", &["/usr/bin/true".to_string()]).unwrap();
+        let all = own_commands(&dir).unwrap();
+        assert_eq!(all.get("backup"), Some(&cmd));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(dir.join(OWN_FILE)).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+        let raw: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join(OWN_FILE)).unwrap()).unwrap();
+        assert_eq!(raw["backup"], serde_json::json!(["/usr/local/bin/backup", "--quick"]));
+        set_own_command(&dir, "backup", &[]).unwrap();
+        assert!(!own_commands(&dir).unwrap().contains_key("backup"));
+        assert!(own_commands(&dir).unwrap().contains_key("notes"));
+        std::fs::remove_dir_all(dir.parent().unwrap()).unwrap();
+    }
+}

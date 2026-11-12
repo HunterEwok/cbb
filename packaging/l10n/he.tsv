@@ -255,3 +255,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	ל־cbb עבור 
 --no-helper is for Linux	‏--no-helper מיועד ל־Linux בלבד
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	כאן cbb פועל עם העוזר שלו, שעשוי להחזיק את המפתחות שלו; בלעדיו cbb לא יכול להשתמש בהם. הסירו אותו קודם: %s
 --uinput needs cbb's helper, which runs the desktop connector	‏--uinput דורש את העוזר של cbb, שמריץ את המחבר של שולחן העבודה
+the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	פעולות polkit שמאשרות פעולות ניהול לא נכתבו; היישומים יבקשו במקום זאת את סיסמת המנהל
+the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	ההרשאות שמאשרות פעולות ניהול לא נכתבו; יישום ה-Mac יבקש במקום זאת את סיסמת המנהל

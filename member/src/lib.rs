@@ -208,8 +208,8 @@ Commands:
   pair -qr [-admin]       In a group: admit the new device that shows a code and waits;
                           type its code, or paste its QR code's text.
   pair -code [address]    Join with the code from cbb pair on the root or an admin.
-  pair -invite file       Join from afar with an invitation from cbb invite
-                          (its file, or its text cbb://invite#...).
+  pair -invite file|-     Join from afar with an invitation from cbb invite
+                          (its file, or with - its text pasted on standard input).
   invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]
                           Invite a device from afar, on the root or an admin: shows a QR
                           code for the app and writes a file for a computer. Through the
@@ -341,6 +341,8 @@ pub fn main() {
                 "confirm-key" => confirm::register_cli(rest, &|q| {
                     request(&g, &control::Message::new(q, Vec::new())).map(|m| m.header)
                 }),
+                // Run by the installer as root.
+                "confirm-setup" => confirm::setup_cli(rest),
                 "version" | "-version" | "--version" => {
                     // Never to be mistaken for a release: its certificates
                     // last minutes.
@@ -705,13 +707,26 @@ pub(crate) fn watch_app_file(path: String) {
     });
 }
 
-/// Reads a remote invitation for cbb pair -invite, its file or its text
-/// (cbb://invite#..., as a scanned code gives it), and asks the user to
-/// agree that sync away from home goes on with the join; returns the path,
-/// empty for a text, and the invitation's text.
+/// Reads a remote invitation for cbb pair -invite, its file or with "-"
+/// its text (cbb://invite#..., as a scanned code gives it) on the first
+/// line of standard input, and asks the user to agree that sync away from
+/// home goes on with the join; returns the path, empty for a text, and the
+/// invitation's text. The text itself is never taken on the command line,
+/// where other users of the computer and the system's log see it.
 fn invite_consent(path: &str) -> Result<(String, String)> {
-    let (path, text) = if path.trim_start().starts_with(cbb_core::invite::PREFIX) {
-        (String::new(), path.to_string())
+    use std::io::IsTerminal;
+    let (path, text) = if path == "-" {
+        if std::io::stdin().is_terminal() {
+            print!("{}", tr!("Paste the invitation: "));
+            std::io::stdout().flush().ok();
+        }
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line).context("cannot read the invitation")?;
+        (String::new(), line.trim().to_string())
+    } else if path.trim_start().starts_with(cbb_core::invite::PREFIX) {
+        return Err(Error::msg(tr!(
+            "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line"
+        )));
     } else {
         (path.to_string(), std::fs::read_to_string(path).context(format!("cannot read {path}"))?)
     };
@@ -960,8 +975,26 @@ fn in_group(g: &Global) -> bool {
 pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
     let mut m = m.clone();
     let conn = open(g, &mut m.header)?;
+    let res = send(conn, &m);
+    // Ending a mute another admin set is not this device's own matter: the
+    // service asks for the confirmation, which cbb gives and sends again.
+    match res {
+        Err(e)
+            if e.message() == confirm::UNAVAILABLE
+                && control::is_own_device_op(&m.header.op)
+                && m.header.auth.is_empty()
+                && confirm::supported() =>
+        {
+            confirm::prepare(&mut m.header, &|q| request(g, &control::Message::new(q, Vec::new())).map(|m| m.header))?;
+            send(connect(g)?, &m)
+        }
+        res => res,
+    }
+}
+
+fn send(conn: UnixStream, m: &control::Message) -> Result<control::Message> {
     let mut w = conn.try_clone().context("cannot reach the service")?;
-    control::write(&mut w, &m)?;
+    control::write(&mut w, m)?;
     let answer = control::Reader::new(conn).read()?.ok_or_else(|| Error::msg("the service closed the connection"))?;
     check(answer)
 }
@@ -1423,6 +1456,9 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             let h = control::Header { op: "action_remove".into(), name: name.clone(), ..Default::default() };
             let m = request(g, &control::Message::new(h, Vec::new()))?;
             grant(&m)?;
+            if !actions::PRESETS.contains(&name.as_str()) {
+                own_command(name, &[])?;
+            }
             println!("{}", tr!("{} is removed.", name));
             return Ok(());
         }
@@ -1476,8 +1512,23 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
         }
         return Err(e.context(format!("giving the service the right to {}", a.name)));
     }
+    // The session's agent runs a command only when its user set it here.
+    if !a.command.is_empty() {
+        own_command(&a.name, &a.command)?;
+    }
     println!("{}: {}.", a.name, action_line(&a));
     Ok(())
+}
+
+/// Sets, or with none removes, this user's own command of the action name,
+/// which the agent of the user's session then runs.
+fn own_command(name: &str, command: &[String]) -> Result<()> {
+    let Some(dir) = actions::user_config_dir() else {
+        return Err(Error::msg(tr!(
+            "cannot find this user's settings folder, so the agent of the user's session would not run the command"
+        )));
+    };
+    actions::set_own_command(&dir.join("cbb"), name, command)
 }
 
 /// Writes or removes the polkit rule for the actions a status says are on;

@@ -1661,11 +1661,25 @@ All notable changes to cbb are documented in this file. The format follows
   with the system's own prompt, checked by the service: Touch ID or the password on a Mac,
   polkit on Linux (with the fingerprint where it is set up), Windows Hello on Windows. One
   confirmation lasts five minutes for the group's everyday changes; making, leaving, taking
-  over or handing on a group, and making a device an admin, ask each time; muting or unmuting
-  the computer itself asks nothing. `cbb` run without `sudo` does the same, and the apps fall
-  back to the administrator's prompt where nothing else confirms. On Android one fingerprint,
-  face or screen lock now lets a new admin key sign for five minutes; the group's root key,
-  and keys made before, keep asking for each signature.
+  over or handing on a group, making a device an admin, admitting a device, joining a group,
+  a hub and sync away from home ask each time; muting the computer itself, or ending a mute it
+  set, asks nothing of the user at its screen. Each prompt names the action and its device,
+  a user has one prompt at a time, and a cancelled one makes the next wait. The installers
+  write the rights on a Mac and the polkit actions on Linux (`cbb confirm-setup`); on Windows
+  only an administrator of the PC confirms, checked at every confirmation, and
+  `cbb confirm-key -remove SID` removes a user's key. `cbb` run without `sudo` does the same,
+  and the apps fall back to the administrator's prompt where nothing else confirms. On
+  Android the app's own fingerprint, face or PIN prompt lets a new admin key sign for five
+  minutes, never on a locked phone; the group's root key, and keys made before, keep asking
+  for each signature.
+- `cbb pair -invite` takes the invitation from its file, or with `-` its text pasted on
+  standard input, never on the command line; `cbb remote code` reads the TV's code from
+  standard input.
+- A user's own quick action runs in the user's session only as that user set it:
+  `cbb action add` also writes the command to `own-actions.json` in the user's settings, and
+  the agent refuses any other. Own actions added before need `cbb action add` again.
+- Files that `cbb paste -o` saves, and those the Mac app fetches for a remote paste, carry the
+  quarantine mark on a Mac and the Mark of the Web on Windows, as the Go member's did.
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program
@@ -2209,6 +2223,8 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The tray app runs `pkexec` and Windows PowerShell from the system's own folders, never by
+  their names; the service's `panic.json` is readable by the service alone.
 - Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
   Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
   backslash in the same languages on its pairing screen.

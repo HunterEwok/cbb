@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,7 +32,7 @@ func runAdmin(args []string, input string, details bool) error {
 		return &adminError{msg: "cbb is not installed where the installer puts it, owned by root: install it again, or run the command with sudo in a terminal.",
 			detail: "sudo cbb " + strings.Join(args, " ") + "; none of " + strings.Join(cbbPlaces, ", ") + " is a file that root owns and only root may change"}
 	}
-	pkexec, err := exec.LookPath("pkexec")
+	pkexec, err := pkexecPath(pkexecPlaces)
 	if err != nil {
 		return &adminError{msg: "pkexec is not installed: run sudo cbb " + strings.Join(args, " ") + " in a terminal instead.", detail: err.Error()}
 	}
@@ -98,4 +99,18 @@ func rootOnly(p string) bool {
 		}
 		p = up
 	}
+}
+
+// pkexecPlaces are where the system keeps pkexec.
+var pkexecPlaces = []string{"/usr/bin/pkexec", "/bin/pkexec"}
+
+// pkexecPath is pkexec from the system's own folders, never from PATH,
+// where a program of the user could stand in for it and see the password.
+func pkexecPath(places []string) (string, error) {
+	for _, p := range places {
+		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("none of %s", strings.Join(places, ", "))
 }

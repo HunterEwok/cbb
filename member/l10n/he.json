@@ -133,5 +133,8 @@
  "Handing this device's tunnel key to the hub...": "מוסר את מפתח המנהרה של המכשיר הזה לרכזת...",
  "The hub took it: this device syncs from afar now.": "הרכזת קיבלה אותו: המכשיר הזה מסתנכרן עכשיו מרחוק.",
  "The hub has not answered yet; the service keeps trying for a day.": "הרכזת עוד לא ענתה; השירות ממשיך לנסות במשך יום.",
- "Start the service (cbb service) within a day: it hands this device's key to the hub.": "הפעילו את השירות (cbb service) בתוך יום: הוא מוסר את המפתח של המכשיר הזה לרכזת."
+ "Start the service (cbb service) within a day: it hands this device's key to the hub.": "הפעילו את השירות (cbb service) בתוך יום: הוא מוסר את המפתח של המכשיר הזה לרכזת.",
+ "Paste the invitation: ": "הדביקו את ההזמנה: ",
+ "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "ההזמנה היא סוד, לכן cbb לוקח אותה מהקובץ שלה או, עם cbb pair -invite -, מודבקת בקלט התקני, ולעולם לא משורת הפקודה",
+ "cannot find this user's settings folder, so the agent of the user's session would not run the command": "תיקיית ההגדרות של המשתמש לא נמצאה, ולכן הסוכן של ההפעלה שלו לא יריץ את הפקודה"
 }

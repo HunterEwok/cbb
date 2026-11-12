@@ -255,3 +255,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	cbb ya MIPS bado 
 --no-helper is for Linux	--no-helper ni kwa Linux pekee
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	hapa cbb inaendeshwa pamoja na msaidizi wake, ambaye huenda anashikilia funguo zake; bila msaidizi cbb haiwezi kuzitumia. Iondoe kwanza: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput inahitaji msaidizi wa cbb, unaoendesha kiunganishi cha eneo-kazi
+the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	vitendo vya polkit vinavyothibitisha vitendo vya msimamizi havikuandikwa; programu zitauliza nenosiri la msimamizi badala yake
+the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	haki zinazothibitisha vitendo vya msimamizi hazikuandikwa; programu ya Mac itauliza nenosiri la msimamizi badala yake
