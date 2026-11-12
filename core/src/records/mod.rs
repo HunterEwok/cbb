@@ -43,6 +43,10 @@
 //!     records above the claim's cut do not count, nor does a later claim
 //!     of that root's epoch rival it. When the device holds a record that
 //!     would have undone it, the state says so (`owner_split`).
+//! 13. `seen` names each signer's head with its seq and record ID, and a
+//!     takeover's cut is the claim's entry for the old root: a record at
+//!     or below a seen seq counts as seen only on the chain ending at that
+//!     ID, and a cut root keeps only that chain.
 //!
 //! The bytes are the format's (`crate::format`): a record is read from its
 //! envelope with [`Record::decode`] and written with [`Record::envelope`].

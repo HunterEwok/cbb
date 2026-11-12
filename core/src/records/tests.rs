@@ -101,7 +101,13 @@ impl G {
     }
 
     fn seen(&self) -> Vec<Seen> {
-        self.heads.iter().map(|(k, (s, _))| Seen { key: *k, seq: *s }).collect()
+        self.heads.iter().map(|(k, (s, id))| Seen { key: *k, seq: *s, id: *id }).collect()
+    }
+
+    /// The entry of a seen list for key's record at seq.
+    fn seen_at(&self, key: &KeyHash, seq: u64) -> Seen {
+        let r = self.recs.iter().find(|r| r.body().signer == *key && r.body().seq == seq).unwrap();
+        Seen { key: *key, seq, id: r.id() }
     }
 
     fn state(&self) -> State {
@@ -928,7 +934,8 @@ fn many_claims_evaluate_quickly() {
         g.admin(&p, &a, POWER_TAKEOVER);
         admins.push(a);
     }
-    let seen = vec![Seen { key: g.root.hash, seq: g.heads[&g.root.hash].0 }];
+    let (seq, id) = g.heads[&g.root.hash];
+    let seen = vec![Seen { key: g.root.hash, seq, id }];
     for (i, a) in admins.iter().enumerate() {
         g.rec(a, Kind::Claim { root: k(&format!("n{i}")).key.clone(), seen: seen.clone() });
     }
@@ -1668,7 +1675,7 @@ mod vectors {
 fn seen_names_each_key_once() {
     let g = G::new();
     let a = k("a").hash;
-    let twice = vec![Seen { key: a, seq: 2 }, Seen { key: a, seq: 3 }];
+    let twice = vec![Seen { key: a, seq: 2, id: RecordId([2; 32]) }, Seen { key: a, seq: 3, id: RecordId([3; 32]) }];
     let body = g.body(&k("root"), Kind::Revoke(removal(&[a], twice.clone())));
     assert!(body.check().unwrap_err().is("records/revoke/seen"));
     let body = g.body(&k("root"), Kind::Claim { root: k("n").key.clone(), seen: twice });
@@ -1761,7 +1768,11 @@ fn a_record_counts_the_same_in_every_envelope() {
     let bytes = crate::format::cbor::Value::Map(entries).encode();
     let sig = key::sign_es256(&a, LABEL_RECORD, &bytes).unwrap();
     let two = |n: usize| Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; n]))).unwrap();
-    let (short, long) = (two(1), two(60_000));
+    let max = crate::format::envelope::MAX_SIG2;
+    let (short, long) = (two(1), two(max));
+    assert!(Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; max + 1])))
+        .unwrap_err()
+        .is("env/sig2"));
     assert_eq!(short.id(), long.id());
     assert_eq!(short.size(), long.size());
     assert_eq!(short.size(), bytes.len() + ENVELOPE_ALLOWANCE + SIG2_ALLOWANCE);
@@ -1857,7 +1868,7 @@ fn a_later_claim_does_not_rival_a_counted_takeover() {
     let (t, n) = (k("admin t"), k("new root"));
     let seen = g.seen();
     let t_removed = g.rec(&n, Kind::Revoke(removal(&[t.hash, k("phone t").hash], seen)));
-    let seen = vec![Seen { key: g.root.hash, seq: 1 }];
+    let seen = vec![g.seen_at(&g.root.hash, 1)];
     let rival = g.rec(&t, Kind::Claim { root: k("other root").key.clone(), seen });
     let mut held2 = held.clone();
     held2.insert(rival.id(), DEFAULT_DELAY_MS);
@@ -1880,7 +1891,7 @@ fn a_later_claim_does_not_rival_a_counted_takeover() {
 fn counted_claims_give_one_state_in_any_order() {
     let (mut g, held, claim) = taken_over_group();
     let late = g.root_rec(Kind::Resolve(vec![claim.id()]));
-    let seen = vec![Seen { key: g.root.hash, seq: 1 }];
+    let seen = vec![g.seen_at(&g.root.hash, 1)];
     g.rec(&k("admin t"), Kind::Claim { root: k("other root").key.clone(), seen });
     let mut want = None;
     for turn in 0..6u64 {
@@ -1947,4 +1958,60 @@ fn only_the_path_roots_checkpoints_are_tried() {
     assert_eq!(sa.devices.len(), 7);
     assert!(sa.counting.contains(&late.id()));
     assert_eq!(sa.devices, sb.devices);
+}
+
+/// A takeover's cut names the old root's record: on a device that counted
+/// the claim, a record the old root signs later at a seq the claim saw is
+/// off that chain and does not count, nor does a resolve that hangs on it.
+#[test]
+fn a_takeover_s_cut_holds_the_old_root_to_the_chain_it_saw() {
+    let (mut g, held, claim) = taken_over_group();
+    let root = k("root");
+    let n = k("new root");
+    let before = counted_state(&g, &held, &[claim.id()]);
+    let true_first = g.seen_at(&root.hash, 1).id;
+    let other = k("other phone");
+    let mut d = Device::new(other.key.clone(), "other", ROLE_PHONE);
+    d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
+    d.holds_root = true;
+    let twin = Record::sign(Body { seq: 1, prev: None, ..g.body(&root, Kind::Device(d)) }, &root).unwrap();
+    let resolve = Record::sign(
+        Body { seq: 2, prev: Some(twin.id()), ..g.body(&root, Kind::Resolve(vec![true_first])) },
+        &root,
+    )
+    .unwrap();
+    g.recs.push(twin.clone());
+    g.recs.push(resolve.clone());
+    let s = counted_state(&g, &held, &[claim.id()]);
+    assert_eq!(s.roots, vec![root.hash, n.hash]);
+    assert!(!s.counting.contains(&twin.id()) && !s.counting.contains(&resolve.id()));
+    assert!(s.device(&other.key.device_id()).is_none());
+    assert_eq!(s.devices, before.devices);
+}
+
+/// A removal's seen names the head it saw: a record its key signs later
+/// at a seq at or below it, off that chain, is cut off.
+#[test]
+fn a_record_off_the_chain_a_removal_saw_is_cut_off() {
+    let mut g = G::new();
+    let (pt, t) = (k("phone t"), k("admin t"));
+    g.admin(&pt, &t, POWER_ADMIT | POWER_REMOVE);
+    for name in ["d1", "d2"] {
+        g.device(&k("root"), &k(name), name, |_| {});
+    }
+    let first = g.rec(&t, Kind::Revoke(removal(&[k("d1").hash], g.seen())));
+    g.root_rec(Kind::Resolve(vec![first.id()]));
+    let seen = g.seen();
+    g.root_rec(Kind::Revoke(removal(&[t.hash, pt.hash], seen)));
+    let s = g.state();
+    assert!(s.revoked.contains(&t.hash) && s.device(&k("d1").key.device_id()).is_some());
+    let again = Record::sign(
+        Body { seq: 1, prev: None, ..g.body(&t, Kind::Revoke(removal(&[k("d2").hash], vec![]))) },
+        &t,
+    )
+    .unwrap();
+    g.recs.push(again.clone());
+    let s = g.state();
+    assert!(!s.counting.contains(&again.id()));
+    assert!(s.device(&k("d2").key.device_id()).is_some());
 }
