@@ -15,6 +15,8 @@
 //	release-sign channel -seq 7 [-days 30] release.json >stable.body
 //	release-sign sign -key SIGNER BODY >FILE.json
 //	release-sign public -key SIGNER >key.pem
+//	release-sign pq-new -key CLASSICAL (-to RECIPIENT -identity ID | -out -) [-public PUB.pem] [-name NAME]
+//	release-sign pq-check -key SIGNER -public PUB.pem
 //	release-sign verify [-roots ROOTS.pem,...] [-channel stable] DIR
 //	release-sign drill -version 0.6.0 [-channel-key] DIR ROOTS.pem
 //
@@ -65,7 +67,7 @@ func main() {
 		"manifest": manifest, "keys": keys, "channel": channel,
 		"sign": sign, "public": public, "verify": verify, "drill": drill,
 		"publish": publish, "renew": renew, "extend": extend, "take": take, "due": due, "mirror": mirror, "entries": entries,
-		"pq-new": pqNew,
+		"pq-new": pqNew, "pq-check": pqCheck,
 	}
 	cmd, ok := cmds[os.Args[1]]
 	if !ok {
@@ -78,7 +80,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: release-sign publish|renew|extend|entries|mirror|take|due|manifest|keys|channel|sign|public|pq-new|verify|drill ... (see the comment in tools/release-sign/main.go)")
+	fmt.Fprintln(os.Stderr, "usage: release-sign publish|renew|extend|entries|mirror|take|due|manifest|keys|channel|sign|public|pq-new|pq-check|verify|drill ... (see the comment in tools/release-sign/main.go)")
 	os.Exit(2)
 }
 

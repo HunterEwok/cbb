@@ -97,6 +97,23 @@ func TestPQNew(t *testing.T) {
 	if _, err := release.VerifyKeys(f, roots, now(), release.Seen{}); err != nil {
 		t.Errorf("the two signatures do not verify under the printed roots: %v", err)
 	}
+	// pq-check signs with both halves and checks them under the public file.
+	pubPath := write(t, filepath.Join(dir, "root-9.pem"), pubs)
+	hw := "file:" + ec + "+age:" + filepath.Join(dir, "pq", must(pqName(c))+".identity") + ":" + filepath.Join(dir, "pq", must(pqName(c))+".age")
+	if out := call(t, pqCheck, "-key", hw, "-public", pubPath); !bytes.Contains(out, []byte("both halves sign")) {
+		t.Errorf("pq-check printed %q", out)
+	}
+	// Under another key's public halves it fails.
+	other := write(t, filepath.Join(dir, "other.pem"), must(release.PublicPEM(must(release.GenerateSigner()), "root-8")))
+	if pqCheck([]string{"-key", hw, "-public", other}) == nil {
+		t.Error("pq-check passed under another key")
+	}
+	// A file with one half is no proof.
+	classical, _, _ := bytes.Cut(pubs, []byte("-----END PUBLIC KEY-----\n"))
+	half := write(t, filepath.Join(dir, "half.pem"), append(classical, []byte("-----END PUBLIC KEY-----\n")...))
+	if pqCheck([]string{"-key", hw, "-public", half}) == nil {
+		t.Error("pq-check passed with one half")
+	}
 	// Another hardware does not open it.
 	write(t, filepath.Join(dir, "pq", must(pqName(c))+".identity"), []byte("age1yubikey1other\n"))
 	if _, err := pqOf(c, ""); err == nil {
@@ -133,6 +150,9 @@ func TestPQNewForAServer(t *testing.T) {
 	// A classical key where the SLH-DSA half belongs is refused.
 	if _, err := signer("file:" + ec + "+slh:" + ec); err == nil {
 		t.Error("a P-256 key served as the post-quantum half")
+	}
+	if out := call(t, pqCheck, "-key", "file:"+ec+"+slh:"+pq, "-public", pubPath); !bytes.Contains(out, []byte("both halves sign")) {
+		t.Errorf("pq-check printed %q", out)
 	}
 	if pqNew([]string{"-key", "file:" + ec, "-out", "-"}) == nil {
 		t.Error("-out - without -public")

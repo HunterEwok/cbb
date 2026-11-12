@@ -202,3 +202,54 @@ func sameRoots(got [][]byte) bool {
 	}
 	return true
 }
+
+func TestCompleteRoots(t *testing.T) {
+	var keys [3][]Key
+	for i := range keys {
+		s, err := GenerateSigner()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if keys[i], err = s.Keys("root-"+strconv.Itoa(i+1), UseRoot); err != nil {
+			t.Fatal(err)
+		}
+	}
+	two := append(append([]Key{}, keys[0]...), keys[1]...)
+	if err := CompleteRoots(two); err != nil {
+		t.Fatalf("two whole roots: %v", err)
+	}
+	classicalOnly := func(k []Key) []Key {
+		var out []Key
+		for _, h := range k {
+			if h.Alg == AlgES256 {
+				out = append(out, h)
+			}
+		}
+		return out
+	}
+	for name, roots := range map[string][]Key{
+		"one root":              keys[0],
+		"none":                  nil,
+		"classical halves only": append(classicalOnly(keys[0]), classicalOnly(keys[1])...),
+		"one root half missing": append(append([]Key{}, keys[0]...), classicalOnly(keys[1])...),
+		"a half twice":          append(append([]Key{}, two...), keys[1][0]),
+		"another root's half under its name": append(append([]Key{}, two...),
+			Key{Alg: keys[2][0].Alg, Key: keys[2][0].Key, Name: "root-1", Use: UseRoot}),
+	} {
+		if CompleteRoots(roots) == nil {
+			t.Errorf("%s: complete", name)
+		}
+	}
+}
+
+// TestPinnedRootsComplete runs in the release workflow on a tag
+// (CBB_RELEASE_TAG set): a release whose pinned roots lack a half would
+// build devices that take no keys.json.
+func TestPinnedRootsComplete(t *testing.T) {
+	if os.Getenv("CBB_RELEASE_TAG") == "" {
+		t.Skip("only for a release tag (CBB_RELEASE_TAG)")
+	}
+	if err := CompleteRoots(Roots); err != nil {
+		t.Fatalf("roots/roots.pem: %v", err)
+	}
+}

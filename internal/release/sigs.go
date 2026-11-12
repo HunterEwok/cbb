@@ -272,6 +272,11 @@ func (f File) verify(keys []Key) error {
 	return ErrSignature
 }
 
+// VerifyWith checks that f is signed by one key among keys, as a device
+// checks a file under the keys that may sign it: a signature for every
+// algorithm of Required by that key's halves.
+func (f File) VerifyWith(keys []Key) error { return f.verify(keys) }
+
 // signData signs data with each half of s.
 func signData(data []byte, s Signer) (File, error) {
 	pubs, err := s.PublicKeys()

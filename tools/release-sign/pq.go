@@ -198,3 +198,52 @@ func pqNew(args []string) error {
 	}
 	return os.WriteFile(*public, pubs, 0o644)
 }
+
+// pqCheck proves that a key's two halves work and match a public file:
+// it signs a test body with both, as a release is signed (the hardware
+// asks twice), and checks the signatures under the keys -public holds,
+// as a device would. Run after pq-new while the hardware is still in.
+func pqCheck(args []string) error {
+	fs := flag.NewFlagSet("pq-check", flag.ExitOnError)
+	key := fs.String("key", "", "the signer, as for sign: piv:SLOT, se:KEY, file:KEY.pem or CLASSICAL+slh:FILE")
+	public := fs.String("public", "", "the key's public halves (PEM), as pq-new wrote them")
+	fs.Parse(args)
+	if *key == "" || *public == "" || fs.NArg() != 0 {
+		return errors.New("pq-check needs -key and -public")
+	}
+	data, err := os.ReadFile(*public)
+	if err != nil {
+		return err
+	}
+	halves, err := release.ReadHalves(data)
+	if err != nil {
+		return fmt.Errorf("%s: %w", *public, err)
+	}
+	var keys []release.Key
+	for _, alg := range release.Required {
+		if halves[alg] == nil {
+			return fmt.Errorf("%s has no half of algorithm %d", *public, alg)
+		}
+		keys = append(keys, release.Key{Alg: alg, Key: halves[alg], Name: "checked"})
+	}
+	s, err := signer(*key)
+	if err != nil {
+		return err
+	}
+	// A body no device takes for anything, signed as a release file is.
+	body := []byte(`{"type":"pq-check"}`)
+	for _, h := range s {
+		if t, ok := h.(*tool); ok {
+			t.data = body
+		}
+	}
+	f, err := signRaw(body, s)
+	if err != nil {
+		return err
+	}
+	if err := f.VerifyWith(keys); err != nil {
+		return fmt.Errorf("the key's signatures do not check out under %s: %w", *public, err)
+	}
+	fmt.Fprintf(stdout, "both halves sign, and the signatures check out under %s\n", *public)
+	return nil
+}

@@ -72,6 +72,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # a release builds from scratch
+      # Devices built from a tag take keys.json only under the roots it pins;
+      # a root missing its post-quantum half would sign nothing they take
+      # (docs/maintaining.md, "Two signatures"). fail-fast stops the others.
+      - name: the pinned roots carry both halves of each root
+        if: github.event_name == 'push' && matrix.goos == 'linux' && matrix.name == 'amd64'
+        env:
+          CBB_RELEASE_TAG: ${{ github.ref_name }}
+        run: env -u GOOS -u GOARCH go test -count=1 -run '^TestPinnedRootsComplete$' ./internal/release
       - name: zig, which links cbb for FreeBSD and Windows, and the nightly Rust of the routers' builds
         if: matrix.goos == 'freebsd' || matrix.goos == 'windows' || matrix.gomips
         run: |

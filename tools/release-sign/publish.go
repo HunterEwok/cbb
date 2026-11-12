@@ -107,6 +107,11 @@ func publish(args []string) error {
 	}
 	tag := "v" + v
 	pre := strings.Contains(v, "-")
+	// Devices built from this tree take keys.json only under these roots,
+	// both halves of each (docs/maintaining.md, "Two signatures").
+	if err := release.CompleteRoots(pinnedRoots()); err != nil {
+		return fmt.Errorf("the pinned roots (internal/release/roots/roots.pem) cannot sign a release: %w", err)
+	}
 
 	var view struct {
 		IsDraft bool   `json:"isDraft"`

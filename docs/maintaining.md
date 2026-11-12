@@ -336,6 +336,16 @@ the post-quantum half of a key in hardware is a file encrypted with `age` to a k
 same hardware, opened for one signature and dropped: the file alone signs nothing, and
 neither does the P-256 half alone.
 
+Only the roots are pinned: both halves of `root-1` and `root-2` in
+`internal/release/roots/roots.pem` (and `get.sh`'s copy; `get.ps1` takes the P-256 halves).
+The release, channel and status keys are certified by a root in `keys.json`. Until each
+root's post-quantum half is made and committed there, a build pins P-256 halves only and
+takes no `keys.json`, so that commit must be merged before the first release candidate.
+Three checks stop a release with incomplete roots: `release-sign publish` refuses at once
+(`release.CompleteRoots`), the release workflow runs `TestPinnedRootsComplete` on the tag
+before it builds, and `publish` checks everything it signed under the pinned roots as a
+device would.
+
 - **Tools**, on the Mac: `brew install age age-plugin-yubikey age-plugin-se`.
 - **A YubiKey's age key**, once per YubiKey, in another free retired PIV slot (one that
   `ykman piv keys info` finds empty; the root and the release key hold 82 and 83, and
@@ -353,13 +363,32 @@ neither does the P-256 half alone.
   once with the hardware to check it, and prints both public keys with the `Name` that
   `roots.pem` takes. From then on `piv:82`, `piv:83` and `se:...` sign with both halves:
   the hardware asks once for the P-256 signature and once more to open the other half.
+  Right after it, with the same hardware still in, `release-sign pq-check -key piv:82
+  -public root-K-public.pem` signs a test body with both halves and checks the signatures
+  under the public file as a device would; it prints `both halves sign, and the signatures
+  check out under root-K-public.pem`.
 - **A key on a server** (the channel key, the status key): `release-sign pq-new -key
   file:KEY.pem -out - -public KEY-public.pem` writes the half as PEM to the standard output,
   for `systemd-creds encrypt --name=channel-pq.pem - /etc/cbb-channel/channel-pq.cred`, and
-  `release-sign` signs with `file:KEY.pem+slh:PQ.pem`.
-- **Back up** `~/.config/cbb-release/pq` with the Mac's other release files: without it the
-  hardware's P-256 half signs nothing devices take, and a lost half is replaced like a lost
-  key (a new key, certified by a root, or for a root a new root in the next release).
+  `release-sign` signs with `file:KEY.pem+slh:PQ.pem`; `pq-check -key
+  file:KEY.pem+slh:PQ.pem -public KEY-public.pem` proves the pair (for the channel key,
+  with the credential decrypted by `systemd-creds decrypt` into `/dev/shm` and removed
+  after). The channel key's unit, `site/deploy/cbb-channel.service`, is copied to
+  `/etc/systemd/system/` and loaded with `systemctl daemon-reload`; it is a oneshot its
+  timer starts, so nothing is restarted, and `systemctl cat cbb-channel.service | grep
+  LoadCredentialEncrypted` shows the credential. The status key's timer unit
+  (`attest-status.service`, on the server only) gets `-key status-key.pem,status-pq.pem` in
+  its `ExecStart=` (`systemctl edit --full`), with a new `attest-status` built from this
+  tree; after the first release `jq -c '[.sigs[].alg]'` on the served
+  `attest-status.json` prints `[1,4]`.
+- **Back up** `~/.config/cbb-release/pq`, the identities and the public files like the
+  other release files: an encrypted disk image (`pq-keys.dmg`, AES-256) beside them with a
+  copy in iCloud. Without `pq` the hardware's P-256 half signs nothing devices take; `pq`
+  alone signs nothing. A lost YubiKey takes its post-quantum halves with it, since they are
+  encrypted to its own slot and no backup opens them: the other YubiKey's root signs a new
+  `keys.json`, and the next release pins a new second root, both halves, as before. A lost
+  half is replaced like a lost key (a new key, certified by a root, or for a root a new
+  root in the next release).
 
 ## Watching cbb.tools
 

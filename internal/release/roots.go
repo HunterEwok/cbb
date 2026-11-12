@@ -59,6 +59,37 @@ func ParseRoots(data []byte) ([]Key, error) {
 	}
 }
 
+// CompleteRoots checks that roots can sign a keys.json devices take: two
+// roots or more, each with exactly one half for every algorithm of
+// Required. The pinned roots must pass it before a release
+// (docs/maintaining.md, "Two signatures"): a root missing a half signs
+// nothing a device of that build takes.
+func CompleteRoots(roots []Key) error {
+	halves := map[string]map[int]int{}
+	var names []string
+	for _, r := range roots {
+		if halves[r.Name] == nil {
+			halves[r.Name] = map[int]int{}
+			names = append(names, r.Name)
+		}
+		halves[r.Name][r.Alg]++
+	}
+	if len(names) < 2 {
+		return fmt.Errorf("%d root keys, not two or more", len(names))
+	}
+	for _, n := range names {
+		for _, alg := range Required {
+			if c := halves[n][alg]; c != 1 {
+				return fmt.Errorf("the root %s has %d halves of algorithm %d, not one", n, c, alg)
+			}
+		}
+		if len(halves[n]) != len(Required) {
+			return fmt.Errorf("the root %s has a half of an algorithm devices do not require", n)
+		}
+	}
+	return nil
+}
+
 // spkiAlg returns the algorithm of a SubjectPublicKeyInfo this version
 // knows.
 func spkiAlg(spki []byte) (int, error) {
