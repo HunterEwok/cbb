@@ -145,13 +145,18 @@ environment secret**.
   windows-latest;
 - **phone kit**: CBBKit's tests on Linux and macOS, and its cross tests with the Go
   code (pairing over plain TCP on Linux; pairing and a member connection over TLS on macOS);
-- **iPhone app**: the Xcode project from XcodeGen, built and tested on an iPhone simulator
-  without signing;
+- **iPhone app**: the Xcode project from XcodeGen, built and tested without signing on an
+  iPhone and an iPad simulator, one job for each, at the same time;
 - **Android app**: the Kotlin kit's tests and its cross tests with the Go code, and the app
   built, unit-tested and linted;
-- **cbb (Rust)**: `cargo fmt`, `clippy` and the tests of the Rust workspace, the ARM64 and
-  ARMv6 builds, the installers without the helper (`get.sh --no-helper`, rootless) and
-  `cbb update` there, and the tests of cbb without its helper among other members;
+- **cbb (Rust), the checks and the Raspberry Pi builds**: `cargo check` on the oldest Rust,
+  `cargo fmt`, `clippy` for each system, and the ARM64 and ARMv6 builds;
+- **cbb (Rust)**: the tests of the Rust workspace, the installers without the helper
+  (`get.sh --no-helper`, rootless) and `cbb update` there, and the tests of cbb without its
+  helper among other members;
+- **service tests on the Rust cbb**: the build, six parts of `internal/service` and the part
+  `others` at the same time, and their coverage (docs/testing.md, "Running tests in
+  parallel");
 - **the core on the ESP32**: the protocol core with its TLS built for the ESP32-C6 (RISC-V) and the
   ESP32-S3 (Xtensa), and the Nano ESP32 firmware (`esp32/`) built, its console and
   flash settings tested and its self-test run in Espressif's QEMU (both downloaded by hash);

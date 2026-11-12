@@ -1579,17 +1579,22 @@ jobs:
           retention-days: 7
 
   app:
-    name: iPhone app
+    name: iPhone app (${{ matrix.device }})
     needs: changes
     if: needs.changes.outputs.ios == 'true'
+    # The iPhone and the iPad run their UI tests on machines of their own at
+    # the same time (docs/testing.md, "Running tests in parallel"); one after
+    # the other they took some 40 minutes.
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iPhone, iPad]
     runs-on: macos-latest
     # The libraries and the build take about 15 minutes, and a slow runner
     # can spend 5 minutes booting a simulator for each of the retries
-    # below: 45 minutes cut off a run whose tests had passed on the iPhone
-    # while the iPad's first try was being retried. The languages' and
-    # accessibility's UI tests (ReadersUITests) launch the app eighteen
-    # times on each simulator.
-    timeout-minutes: 95
+    # below. The languages' and accessibility's UI tests (ReadersUITests)
+    # launch the app eighteen times on the simulator.
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1607,6 +1612,8 @@ jobs:
           xcodegen generate
       - name: build and test on the simulator, signed ad hoc
         working-directory: apps/ios
+        env:
+          DEVICE: ${{ matrix.device }}
         run: |
           set -o pipefail
           # The first available iPhone and iPad simulators: the app is universal.
@@ -1616,8 +1623,7 @@ jobs:
           devices = json.load(sys.stdin)["devices"]
           print(next(d["udid"] for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith(sys.argv[1])))' "$1"
           }
-          iphone=$(pick iPhone)
-          ipad=$(pick iPad)
+          device=$(pick "$DEVICE")
           # Ad hoc signing needs no Apple account, and without a signature the
           # simulator gives the app no keychain (-34018), which its TLS tests use.
           sign=(CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=)
@@ -1707,10 +1713,9 @@ jobs:
             return 1
           }
           # Built once, then tested on one simulator at a time.
-          xcodebuild build-for-testing -project CBB.xcodeproj -scheme CBB -destination "id=$iphone" \
+          xcodebuild build-for-testing -project CBB.xcodeproj -scheme CBB -destination "id=$device" \
             "${sign[@]}" | tail -n 50
-          test_on "$iphone"
-          test_on "$ipad"
+          test_on "$device"
       # The screens' pictures in every language (ReadersUITests), to look at
       # what the accessibility audit found; the English ones, the failed
       # audits' and the screens a lost tap met (ReadersUITests.lostTap) also
@@ -1735,7 +1740,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: ios-screens
+          name: ios-screens-${{ matrix.device }}
           path: ${{ runner.temp }}/ios-screens
           retention-days: 7
           if-no-files-found: ignore
@@ -2502,12 +2507,15 @@ jobs:
           name: coverage-rust-service
           path: coverage-rust-service.json
 
-  rust:
-    name: cbb (Rust)
+  # The Rust workspace's checks and cross builds, and its tests with what
+  # runs them, are two jobs that run at the same time (docs/testing.md,
+  # "Running tests in parallel").
+  rustcheck:
+    name: cbb (Rust), the checks and the Raspberry Pi builds
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2515,14 +2523,13 @@ jobs:
       - name: apt packages for the next step
         uses: ./.github/actions/apt # zizmor: ignore[self-repository]
         with:
-          packages: gcc-aarch64-linux-gnu libc6-dev-arm64-cross swtpm xvfb xclip
-          cache: lite
+          packages: gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+          cache: rust-cross
           no-recommends: "true"
-      - name: the Rust toolchain, a cross compiler for the Raspberry Pi, and swtpm for the key in a TPM
+      - name: the Rust toolchain, with the targets of the cross builds and of clippy, and a cross compiler for the Raspberry Pi
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt,clippy,llvm-tools-preview --target aarch64-unknown-linux-gnu,arm-unknown-linux-musleabihf,x86_64-pc-windows-gnu,aarch64-apple-darwin,x86_64-unknown-freebsd
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy --target aarch64-unknown-linux-gnu,arm-unknown-linux-musleabihf,x86_64-pc-windows-gnu,aarch64-apple-darwin,x86_64-unknown-freebsd
           rustup default stable
-          echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
       - name: cargo check on the oldest Rust the crates declare (rust-version)
         # Every crate of the workspace declares 1.95; the lock file must build there.
         run: |
@@ -2543,6 +2550,47 @@ jobs:
           for t in x86_64-pc-windows-gnu aarch64-apple-darwin x86_64-unknown-freebsd; do
             cargo clippy --locked -p cbb-member --target "$t" --all-targets -- -D warnings
           done
+      - name: cargo build for the Raspberry Pi
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --locked --release --target aarch64-unknown-linux-gnu
+      - name: cargo build for the Raspberry Pi Zero (ARMv6, static; see .cargo/config.toml)
+        run: cargo build --locked --release --target arm-unknown-linux-musleabihf
+      - name: the crates' licenses, as the release archives carry them
+        run: sh member/packaging/notices.sh arm-unknown-linux-musleabihf | grep -q '^rustls '
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cbb-linux-arm64
+          path: target/aarch64-unknown-linux-gnu/release/cbb
+          retention-days: 14
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cbb-linux-armv6
+          path: target/arm-unknown-linux-musleabihf/release/cbb
+          retention-days: 14
+
+
+  rust:
+    name: cbb (Rust)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: swtpm xvfb xclip
+          cache: rust-tests
+          no-recommends: "true"
+      - name: the Rust toolchain, and swtpm for the key in a TPM
+        run: |
+          rustup toolchain install stable --profile minimal --component llvm-tools-preview
+          rustup default stable
+          echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
       - name: cargo-llvm-cov, for the tests' coverage
         run: cargo install --locked cargo-llvm-cov@0.9.1
       - name: cargo test (the interop vectors in testdata/interop too), with coverage
@@ -2556,14 +2604,6 @@ jobs:
         run: |
           cargo build --locked --release
           cargo build --locked --release -p cbb-embassy --features host
-      - name: cargo build for the Raspberry Pi
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        run: cargo build --locked --release --target aarch64-unknown-linux-gnu
-      - name: cargo build for the Raspberry Pi Zero (ARMv6, static; see .cargo/config.toml)
-        run: cargo build --locked --release --target arm-unknown-linux-musleabihf
-      - name: the crates' licenses, as the release archives carry them
-        run: sh member/packaging/notices.sh arm-unknown-linux-musleabihf | grep -q '^rustls '
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -2716,17 +2756,6 @@ jobs:
             go test -race ./internal/tunnel -run TestRustPhone -v
       - name: the relay in Rust, checked from outside by a device's side in Go
         run: CBB_TEST_RUST_RELAY="$PWD/target/release/cbb-relay" go test -race -count=1 ./internal/relay -v
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: cbb-linux-arm64
-          path: target/aarch64-unknown-linux-gnu/release/cbb
-          retention-days: 14
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: cbb-linux-armv6
-          path: target/arm-unknown-linux-musleabihf/release/cbb
-          retention-days: 14
-
   esp32:
     name: the core on the ESP32
     needs: changes
@@ -3158,7 +3187,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service-build, service, service-coverage, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service-build, service, service-coverage, rustcheck, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
