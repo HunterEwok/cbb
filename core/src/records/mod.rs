@@ -149,7 +149,7 @@ pub const MAX_SEEN: usize = 1024;
 
 /// A record body, and a checkpoint's. A recovery record is small: its list
 /// rides beside it.
-pub const MAX_BODY: usize = 8 << 10;
+pub const MAX_BODY: usize = 16 << 10;
 /// A checkpoint names records of a full set: at most one head per key that
 /// signs (the roots on the path and 256 admin keys, about 76 bytes each)
 /// and the other records it keeps, one per seq of a key, all of them in

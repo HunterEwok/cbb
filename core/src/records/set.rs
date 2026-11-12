@@ -612,16 +612,7 @@ impl RecordSet {
         // The roots the chain's records name that have not applied yet: a
         // record off the chain (one side of a fork, past a gap, after a
         // void one) has nothing kept aside.
-        let mut early_roots: BTreeMap<KeyHash, (u64, Key)> = BTreeMap::new();
-        for (seq, root) in &chain.pending {
-            let h = root.hash();
-            if chain.promoted().contains(&h) || h == self.root.hash() {
-                continue;
-            }
-            let slot = early_roots.entry(h).or_insert((*seq, root.clone()));
-            slot.0 = slot.0.min(*seq);
-        }
-        self.early_roots = if self.halted.is_some() { BTreeMap::new() } else { early_roots };
+        self.early_roots = if self.halted.is_some() { BTreeMap::new() } else { chain.waiting_roots(&self.root.hash()) };
         if let (Some(old), Some(new)) = (self.cuts.values().next(), cuts.values().next())
             && old.record == new.record
         {
@@ -1020,14 +1011,34 @@ impl RecordSet {
         let mut keys: Vec<KeyHash> = remove.to_vec();
         keys.sort();
         keys.dedup();
-        if !keys.is_empty() {
-            // What the writer saw of every key, as an ordinary removal
-            // carries: what the removed keys signed up to it still counts.
-            let seen = self.heads_seen();
-            if seen.is_empty() {
-                return Err(Error::msg("a removal needs the heads the writer holds"));
+        // What the writer saw of the keys a removal concerns (the keys it
+        // names and their admin or member key), as an ordinary removal
+        // carries: what they signed up to it still counts. A key it does
+        // not name is untouched, so its heads are not listed. As many
+        // removals as their bodies need.
+        let mut rest = keys.as_slice();
+        while !rest.is_empty() {
+            let mut n = rest.len();
+            loop {
+                let part = rest.get(..n).unwrap_or_default();
+                let rm = super::body::Removal { keys: part.to_vec(), seen: self.heads_of(state, part) };
+                // Sized with the widest seq and prev the record can have.
+                let widest = Body {
+                    group: self.group,
+                    signer: h,
+                    seq: super::MAX_SEQ,
+                    prev: Some(RecordId([0; 32])),
+                    time_ms,
+                    kind: Kind::Revoke(rm),
+                    held: false,
+                };
+                if widest.encode().len() <= super::MAX_BODY || n == 1 {
+                    first.push(sign(widest.kind)?);
+                    break;
+                }
+                n = n.div_ceil(2);
             }
-            first.push(sign(Kind::Revoke(super::body::Removal { keys, seen }))?);
+            rest = rest.get(n..).unwrap_or_default();
         }
         // The new root's first checkpoint, signed now so that the pruning
         // of the old root's counting checkpoint never lapses: the heads it
@@ -1078,12 +1089,31 @@ impl RecordSet {
         Ok(Written { record, list, first })
     }
 
-    /// The heads the set holds of every key but the recovery key: of each
-    /// signer its highest seq (of two at one seq, the smaller ID), as a
-    /// removal's `seen`.
-    fn heads_seen(&self) -> Vec<super::body::Seen> {
+    /// The heads the set holds of the keys a removal of `keys` concerns:
+    /// each key and its device's admin key or its admin key's device key;
+    /// of each its highest seq (of two at one seq, the smaller ID).
+    fn heads_of(&self, state: &State, keys: &[KeyHash]) -> Vec<super::body::Seen> {
+        let mut concerned: BTreeSet<KeyHash> = keys.iter().copied().collect();
+        for d in &state.devices {
+            let member = d.key.hash();
+            match &d.admin {
+                Some(a) if keys.contains(&member) => {
+                    concerned.insert(*a);
+                }
+                Some(a) if keys.contains(a) => {
+                    concerned.insert(member);
+                }
+                _ => {}
+            }
+        }
+        self.heads_where(|k| concerned.contains(k))
+    }
+
+    /// The heads of the keys want takes, but the recovery key's.
+    fn heads_where(&self, want: impl Fn(&KeyHash) -> bool) -> Vec<super::body::Seen> {
         let mut out: BTreeMap<KeyHash, super::body::Seen> = BTreeMap::new();
-        for e in self.records.values().filter(|e| e.role != Role::Recovery && !e.held) {
+        for e in self.records.values().filter(|e| e.role != Role::Recovery && !e.held && want(&e.record.body().signer))
+        {
             let b = e.record.body();
             let s = super::body::Seen { key: b.signer, seq: b.seq, id: e.record.id() };
             let better = out

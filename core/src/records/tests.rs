@@ -815,6 +815,53 @@ fn a_full_root_checkpoints_and_goes_on() {
     assert!(s.counting.contains(&next.id()) && s.device(&k("laptop").key.device_id()).is_some());
 }
 
+/// A root whose room is full writes the checkpoint that frees it even
+/// when that checkpoint is large (here it keeps the records of twelve
+/// admins, about 200 units): a checkpoint is kept before the root's other
+/// records, so it takes room from them, counts, and prunes them.
+#[test]
+fn a_full_root_writes_a_large_checkpoint_that_frees_it() {
+    let mut g = G::new();
+    let root = k("root");
+    let admins: Vec<K> = (0..12).map(|i| k(&format!("admin {i}"))).collect();
+    for (i, a) in admins.iter().enumerate() {
+        g.admin(&k(&format!("admin device {i}")), a, POWER_ADMIT | POWER_MANAGE);
+    }
+    for a in &admins {
+        for _ in 0..240 {
+            g.rec(a, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+        }
+    }
+    while g.heads[&root.hash].0 < MAX_ROOT_RECORDS as u64 {
+        g.root_rec(Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+    }
+    let mut set = set_of(&g.root.key.clone());
+    set.insert_all(g.recs.clone());
+    let late = Record::sign(g.body(&root, Kind::Copies { incoming_ms: 9_999, seen: vec![] }), &root).unwrap();
+    assert_eq!(set.insert(late), Ok(Added::NoRoom), "the root's room is full");
+    let mut keep: Vec<RecordId> =
+        set.ids().filter(|id| set.get(id).is_some_and(|r| r.body().signer != root.hash)).copied().collect();
+    keep.sort();
+    let mut heads: Vec<Head> = admins
+        .iter()
+        .chain([&root])
+        .map(|a| Head { key: a.hash, seq: g.heads[&a.hash].0, id: g.heads[&a.hash].1 })
+        .collect();
+    heads.sort_by_key(|h| h.key);
+    let cp = g.root_rec(Kind::Checkpoint { heads, keep });
+    let units = super::keep::units(cp.size());
+    assert!(units > 150, "{units} units");
+    assert_eq!(set.insert(cp.clone()), Ok(Added::Stored));
+    let s = set.state();
+    assert_eq!(s.checkpoint, Some(cp.id()));
+    let next = g.device(&root, &k("phone"), "phone", |_| {});
+    assert_eq!(set.insert(next.clone()), Ok(Added::Stored));
+    assert!(set.state().counting.contains(&next.id()));
+    let mut fresh = set_of(&g.root.key.clone());
+    fresh.insert_all(g.recs.clone());
+    assert_eq!(fresh.digest(), set.digest());
+}
+
 #[test]
 fn the_set_stays_within_its_bytes_whatever_the_order() {
     // Root checkpoints of nearly 64 KiB each fill 2 MiB quickly.
