@@ -2191,6 +2191,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A manifest whose SHA-256 is base64 with bits after its last byte is refused by the Go
+  reader too, as by the Rust core and the kits, so every member reads it alike. The nightly
+  run's unstable tests run against the Rust service with its helper, and cargo fuzz starts
+  a target with no seed from an empty corpus.
 - Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
   Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
   backslash in the same languages on its pairing screen.

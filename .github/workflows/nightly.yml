@@ -109,7 +109,11 @@ jobs:
       - name: fuzz for ten minutes
         env:
           TARGET: ${{ matrix.target }}
-        run: cargo +nightly fuzz run "$TARGET" "fuzz/corpus/$TARGET" -- -max_total_time=600 -rss_limit_mb=2048
+        # A target with no seed among the vectors, such as vless, starts
+        # from an empty corpus.
+        run: |
+          mkdir -p "fuzz/corpus/$TARGET"
+          cargo +nightly fuzz run "$TARGET" "fuzz/corpus/$TARGET" -- -max_total_time=600 -rss_limit_mb=2048
       - name: the input that failed
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -322,8 +326,8 @@ jobs:
           CBB_TEST_RUST_SERVICE="$bin/cbb" CBB_TEST_ALONE="$bin/cbb" go test -timeout 60m ./internal/service
 
   # A test that fails one run in ten never shows on a pull request's single run
-  # until it blocks one. Each test of the members runs ten times here, with the
-  # Go service and with the Rust cbb, and the summary lists every test that
+  # until it blocks one. Each test of the members runs ten times here, against
+  # the Rust service with its helper and alone, and the summary lists every test that
   # failed and how often; docs/testing.md, "Unstable tests", keeps the list.
   unstable:
     name: unstable tests (${{ matrix.member }})
@@ -332,7 +336,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        member: [go, rust]
+        member: [service, alone]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -341,20 +345,21 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: the Rust cbb
-        if: matrix.member == 'rust'
+      - name: the Rust cbb and its helper
         run: |
           rustup toolchain install stable --profile minimal && rustup default stable
           cargo build --locked --release -p cbb-member
+          CGO_ENABLED=0 go build -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
       - name: each test ten times
         env:
           MEMBER: ${{ matrix.member }}
         run: |
-          if [ "$MEMBER" = rust ]; then
-            export CBB_TEST_ALONE="$PWD/target/release/cbb"
+          export CBB_TEST_ALONE="$PWD/target/release/cbb"
+          if [ "$MEMBER" = alone ]; then
             set -- ./internal/service -run 'TestAlone'
           else
-            set -- ./internal/service ./internal/node ./internal/tunnel ./internal/pair
+            export CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb"
+            set -- ./internal/service ./internal/tunnel -skip 'TestAlone'
           fi
           go test -json -count=10 -timeout 100m "$@" >"$RUNNER_TEMP/tests.json" || true
           jq -r 'select(.Action == "fail" and .Test != null) | "\(.Package) \(.Test)"' "$RUNNER_TEMP/tests.json" |

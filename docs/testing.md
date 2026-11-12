@@ -184,8 +184,8 @@ never skipped, disabled or retried until green to make CI pass.
 
 A test that fails only now and then is a red test too, with a cause to find: a race in the
 code, a wait too short for a slow runner, or an order the test assumes. The nightly
-workflow's `unstable` job runs the members' tests ten times over, with the Go service and
-with the Rust `cbb`, and its summary lists every test that failed and how often. A test
+workflow's `unstable` job runs the members' tests ten times over, against the Rust service with
+its helper and with `cbb` alone, and its summary lists every test that failed and how often. A test
 found there goes into this table with what is known of its cause, and leaves it with the
 fix that removes the cause. The bench finds them too: `go run ./tools/bench -repeat 5
 -scenario NAME fleet` lists in `flaky.txt` the cases that both passed and failed
