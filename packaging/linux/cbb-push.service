@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+
+# cbb-push, the project's push service on cbb.tools (format section 20.4): it passes
+# sealed bodies from the members of a group to a phone's platform (APNs), to wake an
+# app that is closed. It holds no group's keys and keeps nothing on disk but its own
+# TLS key; the platforms' keys are given to it read-only, and no log names a token,
+# a group or an address.
+[Unit]
+Description=CBB push service
+Documentation=https://github.com/HunterEwok/cbb/blob/main/docs/admin/self-hosting.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# The platforms' keys: /etc/cbb/push/apns.p8 and apns-sandbox.p8 (root:root 0600,
+# given to the service by systemd's credentials, never readable by its user
+# otherwise), and in /etc/cbb/push.env
+# CBB_PUSH_FLAGS="-apns-team TEAM -apns-key-id KEYID -apns-sandbox-key-id KEYID".
+Environment=CBB_PUSH_FLAGS=
+EnvironmentFile=-/etc/cbb/push.env
+LoadCredential=apns.p8:/etc/cbb/push/apns.p8
+LoadCredential=apns-sandbox.p8:/etc/cbb/push/apns-sandbox.p8
+ExecStart=/usr/local/bin/cbb-push -apns-key ${CREDENTIALS_DIRECTORY}/apns.p8 -apns-sandbox-key ${CREDENTIALS_DIRECTORY}/apns-sandbox.p8 $CBB_PUSH_FLAGS
+DynamicUser=yes
+StateDirectory=cbb-push
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=2s
+
+# It needs no privileges: it listens on port 8767.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+DevicePolicy=closed
+PrivateUsers=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+MemorySwapMax=0
+# No accounting of the addresses it talks to.
+IPAccounting=no
+
+[Install]
+WantedBy=multi-user.target

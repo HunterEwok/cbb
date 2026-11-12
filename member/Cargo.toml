@@ -33,6 +33,11 @@ required-features = ["tunnel"]
 # cbbw.exe, the same program without a console window, which Windows starts
 # at sign-in for the agent (packaging/windows/install.ps1).
 [[bin]]
+name = "cbb-push"
+path = "src/push_main.rs"
+required-features = ["tunnel"]
+
+[[bin]]
 name = "cbbw"
 path = "src/windowless.rs"
 required-features = ["windowless"]

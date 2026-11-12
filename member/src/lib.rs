@@ -73,10 +73,13 @@ pub mod peer;
 mod peripheral;
 pub mod phone;
 mod piv;
+#[cfg(feature = "tunnel")]
+pub mod push;
+#[cfg(feature = "tunnel")]
+pub mod pushd;
 pub mod records;
 #[cfg(feature = "tunnel")]
 pub mod relay;
-#[cfg(feature = "tunnel")]
 pub mod relayd;
 pub mod releases;
 mod remotepaste;
