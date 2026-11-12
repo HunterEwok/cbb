@@ -26,6 +26,11 @@ All notable changes to cbb are documented in this file. The format follows
   flash store and in the service's state files, must come back whole and act on nothing
   twice (docs/testing.md, "Power loss"). The service removes the temporary files a write cut
   short left behind, once they are an hour old.
+- Recovery drills that run by themselves (`tools/e2e/drills.sh`): the root lost and taken back
+  with the recovery key, a new phone restoring the group, a device restored from yesterday's
+  backup getting back in, a removed device restored from an older backup staying out.
+- A soak stand (`tools/soak/soak.sh`): a small group runs for weeks, its members killed at
+  random moments, with one line a day of what arrived and what started whole.
 - The apps are tested in all eight languages and for every reader (docs/testing.md, "The
   apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
   Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text

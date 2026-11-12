@@ -124,6 +124,25 @@ what it has not saved.
   with their held times, the command counters, the freshness marks) join the same cut at
   every step through the whole service.
 
+## Recovery drills
+
+What a person does after a loss, played on whole members by `sh tools/e2e/drills.sh`: the root
+lost and the group taken back with the recovery key, then handed to an admin
+(`TestRecovery`); a new phone restoring the group with the recovery sheet (`TestFFIPhoneRestore`,
+the phone's member on Linux); a device restored from yesterday's backup that gets back in while
+the group went on (`TestDrillRestoreFromYesterday`); a removed device restored from a backup made
+before its removal that stays out (`TestDrillRemovedStaysOut`). What a real iPhone's Secure
+Enclave and Face ID add is a hand checklist in the bench's test plan, run once before a release.
+
+## Soak
+
+`tools/soak/soak.sh` runs a small group of a build's `cbb` for weeks on one machine, on
+127.0.0.1 only: it copies a line every two minutes and checks it arrives everywhere, kills a
+member with SIGKILL at a random moment every 10 to 60 minutes and checks it starts whole, and
+writes one line a day to `soak.log` (copies, arrived, missed, kills, whole and broken starts,
+the largest RSS and open files). It runs on the shared bench's Raspberry Pi 4 in its own
+folder; `soak.sh stop` prints the log and removes everything.
+
 ## Bench scenarios
 
 Unit and CI tests cannot show that a copy on an iPhone reaches a Windows PC through a café's
