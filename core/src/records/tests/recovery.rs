@@ -607,3 +607,49 @@ fn a_fetch_proof_and_a_head_are_not_one_signature() {
     assert!(crate::records::verify_fetch(&rk(), &body, head.sig()).is_err());
     assert!(head.verify(&rk()).is_ok());
 }
+
+/// Two changes of root: the phone the first new root holds is not
+/// removed by the second, so it stays a device, listed and counting.
+#[test]
+fn the_first_new_roots_phone_stays_after_a_second_change() {
+    let mut g = base();
+    let all = g.recs.clone();
+    let w1 = write(&mut g, &all, &k("n1"), &k("p1"), &[]);
+    assert!(has(&g.state(), &k("p1")));
+    let all = g.recs.clone();
+    let w2 = write(&mut g, &all, &k("n2"), &k("p2"), &[]);
+    let p1 = w1.first.iter().find(|r| matches!(&r.body().kind, Kind::Device(d) if d.key == k("p1").key)).unwrap();
+    assert!(w2.list.0.contains(&p1.id()), "the second list names it");
+    let s = g.state();
+    assert_eq!(s.roots.len(), 3);
+    assert!(has(&s, &k("p1")) && has(&s, &k("p2")) && has(&s, &k("laptop")));
+}
+
+/// A writer whose set took the first new root's records before that
+/// root's head had its list did not keep them (their signer was no key
+/// yet), so its list leaves them out; after its change they are cut, and
+/// the state says so (cut, not a ceiling). A writer syncs records, lists,
+/// records, as `set_with` does.
+#[test]
+fn a_writer_that_took_one_round_leaves_out_what_it_lacked() {
+    let mut g = base();
+    let all = g.recs.clone();
+    let w1 = write(&mut g, &all, &k("n1"), &k("p1"), &[]);
+    let mut set = set_of(&g.root.key);
+    let refused: Vec<_> = g.recs.iter().filter_map(|r| set.insert(r.clone()).err()).collect();
+    assert_eq!(refused, vec![Refused::UnknownSigner; w1.first.len()]);
+    for l in &g.lists {
+        set.insert_list(l).unwrap();
+    }
+    let st = set.state();
+    assert!(!has(&st, &k("p1")));
+    let w2 = set.write_change(&st, &k("recovery"), &k("n2"), phone(&k("p2")), &[], false, 0).unwrap();
+    for r in w2.first.iter().chain([&w2.record]) {
+        g.push(r.clone());
+    }
+    g.lists.push(w2.list.encode());
+    let s = g.state();
+    let p1 = w1.first.iter().find(|r| matches!(&r.body().kind, Kind::Device(d) if d.key == k("p1").key)).unwrap();
+    assert!(!has(&s, &k("p1")));
+    assert!(s.ignored.iter().any(|i| i.record == p1.id() && i.why == Why::Cut));
+}

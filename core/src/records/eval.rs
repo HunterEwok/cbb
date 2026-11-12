@@ -1049,7 +1049,10 @@ impl<'a> Evaluation<'a> {
         let mut failed = failed;
         for c in &checked {
             if !kept.contains(&c.r.id()) {
-                fail(&mut failed, c.r.id(), Why::Limit);
+                // A record of a root the path left that the newest list
+                // does not name is cut, not over a ceiling.
+                let why = if off_cut(cuts, c.r) { Why::Cut } else { Why::Limit };
+                fail(&mut failed, c.r.id(), why);
             }
         }
         // The recovery keys' records are the chain's alone (`chain`).
