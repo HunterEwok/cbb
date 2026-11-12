@@ -37,7 +37,7 @@ out=$repo/target/parallel
 mkdir -p "$out"
 tag=cbb-part-$$
 
-# shellcheck disable=SC2317 # called by the trap
+# shellcheck disable=SC2317,SC2329 # called by the trap
 cleanup() {
 	for i in $(seq 1 "$parts"); do
 		docker rm -f "$tag-$i" >/dev/null 2>&1 || true
