@@ -122,6 +122,10 @@ module records_v3 {
     heads: Key -> List[Id],
     keep: Set[Id],
     units: int,
+    // recover: the ID of the new root's first checkpoint, which its writer signs before the
+    // head (format 20.3, field 13). Every head the model signs names one; 0 only in the
+    // writer's own look ahead at what it will count.
+    first: Id,
   }
 
   // What a member that drops records remembers of them (core keep::Cut): the level, which only
@@ -185,6 +189,8 @@ module records_v3 {
   pure val MAXREC = 16
   pure val MAXCHAIN = 3
 
+  // An ID no record ever has: a first checkpoint named and never released.
+  pure val NEVER = 99
   pure val NOCUT: Cut = { level: TOP, marks: Map() }
 
   // A root's removal stands when its key signs a second record at the same seq.
@@ -262,7 +268,7 @@ module records_v3 {
     not(rootRemoval(r)) and c.heads.keys().contains(r.signer) and r.seq <= c.heads.get(r.signer).length() and not(anchorsOf(c).contains(r.id))
 
   pure val NONEREC: Record = {
-    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0,
+    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0, first: 0,
   }
 
   // --- The recovery chain (rule 33) -------------------------------------------------------
@@ -271,6 +277,11 @@ module records_v3 {
   // key signed it, and its new root differs from every root before it.
   pure def validAt(r: Record, path: List[Key]): bool =
     r.kind == "recover" and r.signer == RECOVERY and ROOT_KEYS.contains(r.target) and not(onList(path, r.target))
+  // A head applies only with the new root's first checkpoint, signed by that root, which the
+  // set keeps beside the chain (outside the rooms; nothing prunes it).
+  pure def namesFirst(h: Record, c: Record): bool =
+    isChain(h) and c.kind == "checkpoint" and c.id == h.first and c.signer == h.target
+  pure def hasFirst(r: Record, rs: Set[Record]): bool = r.first == 0 or rs.exists(c => namesFirst(r, c))
   // The chain a member follows among the recovery records rs: from seq 1, a valid record
   // whose previous ID is the member's tip extends it; a gap ends the chain. Any two records the
   // recovery key signed at one seq, at any depth, valid or not, are a fork: the member stops
@@ -280,7 +291,8 @@ module records_v3 {
       if (not(acc.open)) acc
       else {
         val path = pathCutsOf(acc.recs)._1
-        val cands = rs.filter(r => isChain(r) and r.seq == i and validAt(r, path) and r.line.slice(0, i - 1) == acc.ids)
+        val cands = rs.filter(r => isChain(r) and r.seq == i and validAt(r, path) and r.line.slice(0, i - 1) == acc.ids
+          and hasFirst(r, rs))
         if (cands.size() != 1) { ...acc, open: false }
         else {
           val c = cands.fold(NONEREC, (a, r) => r)
@@ -386,7 +398,7 @@ module records_v3 {
     val path = keptPath(s, db)
     val cuts = keptCuts(s, db)
     val admins = learned(got, path, cuts)
-    not(isChain(r))
+    not(isChain(r)) and not(s.chain.contains(r.id))
       and (admins.contains(r.signer) or onList(path, r.signer))
       and within(cuts, r)
       and (s.checkpoint == 0 or replaced(cuts, db.get(s.checkpoint).signer) or not(prunedBy(db.get(s.checkpoint), r)))
@@ -415,9 +427,24 @@ module records_v3 {
     val s = { ...s0, got: s0.got.union(Set(r.id)) }
     // The set cuts its rooms by the new path at once, so that a record offered next is judged by
     // the path the set holds now, not the one it last cut by.
-    if (isChain(r)) pathed({ ...s, chain: s.chain.union(Set(r.id)) }, db)
-    else if (s.recs.contains(r.id) or past(s.cut, r, last(keptPath(s, db)), orderOf(s, db)) or not(storable(s, r, db))) s
+    // A head takes its first checkpoint along if the set got it before; a first checkpoint goes
+    // beside the chain once its head is held. Either may apply the change.
+    if (isChain(r))
+      applyChain({ ...s, chain: s.chain.union(Set(r.id)).union(idsOf(recsOf(s.got, db).filter(c => namesFirst(r, c)))) }, db)
+    else {
+      val isFirst = recsOf(s.got, db).exists(h => namesFirst(h, r))
+      storeOne(if (isFirst) applyChain({ ...s, chain: s.chain.union(Set(r.id)) }, db) else s, r, db)
+    }
+  }
+  pure def storeOne(s: Store, r: Record, db: Id -> Record): Store =
+    if (s.recs.contains(r.id) or past(s.cut, r, last(keptPath(s, db)), orderOf(s, db)) or not(storable(s, r, db))) s
     else recut({ ...s, recs: s.recs.union(Set(r.id)) }, db)
+  // The set cuts by the path its chain gives; the records of a root the change made, which the
+  // set got while the change waited, it takes now (format 20.3, records of a waiting root).
+  pure def applyChain(s: Store, db: Id -> Record): Store = {
+    val s2 = pathed({ ...s, recs: s.recs.exclude(s.chain) }, db)
+    val fresh = recsOf(s2.got, db).filter(x => not(isChain(x)) and onList(s2.path, x.signer) and not(onList(s.path, x.signer)))
+    toList(idsOf(fresh)).foldl(s2, (x, i) => storeOne(x, db.get(i), db))
   }
 
   // When the chain changes the path, the set cuts its rooms again by the new path: the new
@@ -625,12 +652,15 @@ module records_v3 {
 
   // A member's state: its set evaluated (the evaluation keeps again what the set holds).
   pure def storeView(s: Store, db: Id -> Record): View =
-    fullEvaluate(recsOf(settle(s, recsOf(s.recs, db), NOCUT, db)._1, db), chainState(s, db))
+    fullEvaluate(recsOf(settle(s, recsOf(s.recs, db), NOCUT, db)._1, db).union(firstsHeld(s, db)), chainState(s, db))
+  // The first checkpoints of held heads, kept beside the chain and counted with the rooms.
+  pure def firstsHeld(s: Store, db: Id -> Record): Set[Record] = recsOf(s.chain, db).filter(c => not(isChain(c)))
 
   // What a member given every record of got at once keeps, and its state.
   pure def pureKept(s: Store, db: Id -> Record): Set[Id] =
     settle(s, recsOf(s.got, db).filter(r => storable(s, r, db)), NOCUT, db)._1
-  pure def pureView(s: Store, db: Id -> Record): View = fullEvaluate(recsOf(pureKept(s, db), db), chainState(s, db))
+  pure def pureView(s: Store, db: Id -> Record): View =
+    fullEvaluate(recsOf(pureKept(s, db), db).union(firstsHeld(s, db)), chainState(s, db))
 
   // --- The system ------------------------------------------------------------------------
 
@@ -693,7 +723,7 @@ module records_v3 {
   pure def rec(id: Id, signer: Key, line: List[Id], kind: str, target: Key, kit: str, targetRec: Id,
       seen: Key -> List[Id], heads: Key -> List[Id], keep: Set[Id], units: int): Record =
     { id: id, signer: signer, seq: line.length(), line: line, kind: kind, target: target, kit: kit, targetRec: targetRec,
-      seen: seen, heads: heads, keep: keep, units: units }
+      seen: seen, heads: heads, keep: keep, units: units, first: 0 }
 
   // The group as the root made it: A a phone admin, C a computer admin, W a watch admin; the
   // recovery key K is the group's own, known to every member from its admission.
@@ -777,20 +807,29 @@ module records_v3 {
     val held = recsOf(s.recs, db).filter(r => onList(before, r.signer) or r.signer == target)
     val oldCp = if (v.checkpoint != 0 and db.get(v.checkpoint).signer == cur) db.get(v.checkpoint) else NONEREC
     val cp = oldCp.heads.keys().filter(k => oldCp.heads.get(k).length() > 0)
-      .map(k => lastId(oldCp.heads.get(k))).filter(i => onList(before, db.get(i).signer))
-    val honest = idsOf(held.filter(r => (v.counting.contains(r.id) and r.kind != "checkpoint") or rootRemoval(r))).union(cp)
+      .map(k => lastId(oldCp.heads.get(k))).filter(i => onList(before, db.get(i).signer) and db.get(i).kind != "checkpoint")
+    // A root's removal is listed only when it names a key some other held record names; a
+    // checkpoint is never listed (format 20.3).
+    def named(x: Record): bool = held.exists(y => y.id != x.id and y.kind != "revoke"
+      and (y.target == x.target or y.signer == x.target))
+    val honest = idsOf(held.filter(r => (v.counting.contains(r.id) and r.kind != "checkpoint") or (rootRemoval(r) and named(r)))).union(cp)
     val keep = if (mode == "honest" or mode == "nocp" or mode == "from1") honest
       else if (mode == "literal") honest.filter(i => db.get(i).signer == cur or rootRemoval(db.get(i)) or cp.contains(i))
       else if (mode == "none") Set()
       else db.keys().filter(i => onList(before, db.get(i).signer))
     val own = headLine(db.keys().map(i => db.get(i)), target)
     val from = if (mode == "from1") 1 else own.length() + 1
-    val r = rec(nextId, k, base.append(nextId), kind, target, "", from, Map(), Map(), keep, 0)
+    // "nocp": the head names a first checkpoint that is never released.
+    val withCp = mode != "nocp"
+    val r = { ...rec(nextId, k, base.append(nextId), kind, target, "", from, Map(), Map(), keep, 0),
+      first: if (withCp) nextId + 1 else NEVER }
     val db2 = db.put(nextId, r)
     val s1 = insertInto(s, r, db2)
-    val withCp = mode == "honest" or mode == "from1"
-    // The new root's first checkpoint: what the writer counts once the head applies.
-    val v1 = finish(s1, db2)._2
+    // The new root's first checkpoint: what the writer counts once the head applies (a look
+    // ahead with the head as if its checkpoint were held).
+    val r0 = { ...r, first: 0 }
+    val db20 = db.put(nextId, r0)
+    val v1 = finish(insertInto(s, r0, db20), db20)._2
     val c = rec(nextId + 1, target, own.append(nextId + 1), "checkpoint", "", "", 0, oldCp.heads, oldCp.heads,
       v1.counting.filter(i => db2.get(i).kind != "checkpoint"), 2)
     val db3 = if (withCp) db2.put(nextId + 1, c) else db2
@@ -799,7 +838,7 @@ module records_v3 {
       at >= 1,
       at <= ch.ids.length() + 1,
       nextId + 1 <= FIRST + MAXREC,
-      commit(db3, if (withCp) nextId + 2 else nextId + 1, h, if (withCp) insertInto(pathed(s1, db3), c, db3) else s1),
+      commit(db3, if (withCp) nextId + 2 else nextId + 1, h, if (withCp) insertInto(s1, c, db3) else s1),
     }
   }
 
@@ -875,13 +914,19 @@ module records_v3 {
   }
 
   // Member m is offered record i.
-  action give(m: str, i: Id): bool = commit(db, nextId, m, insertInto(st.get(m), db.get(i), db))
+  action giveOnly(m: str, i: Id): bool = commit(db, nextId, m, insertInto(st.get(m), db.get(i), db))
+  // In the scenarios a head comes with its first checkpoint, when that was released.
+  action give(m: str, i: Id): bool = {
+    val r = db.get(i)
+    val s1 = insertInto(st.get(m), r, db)
+    commit(db, nextId, m, if (isChain(r) and db.keys().contains(r.first)) insertInto(s1, db.get(r.first), db) else s1)
+  }
 
   // Sync: a member is offered a record it does not keep (again, perhaps).
   action deliver = nondet m = MEMBERS.oneOf() nondet i = db.keys().oneOf() all {
     not(st.get(m).recs.contains(i)),
     not(st.get(m).chain.contains(i)),
-    give(m, i),
+    giveOnly(m, i),
   }
 
   // A member compacts: it takes its state's checkpoint.
@@ -908,6 +953,8 @@ module records_v3 {
       not(ch.stop),
       not(onList(views.get("k").path, t)),
       not(knownTo(st.get("k"), t, db)),
+      // No change while the set holds a recovery record it has not applied (format 20.3).
+      recsOf(st.get("k").got, db).filter(r => isChain(r)).forall(r => ch.ids.indices().exists(j => ch.ids[j] == r.id)),
       signChain(RECOVERY, "recover", t, ch.ids.length() + 1, "honest"),
     }
   }
@@ -1070,10 +1117,11 @@ module records_v3 {
   })
 
   // 7. A member follows the recovery chain it holds: its path is the first root and the new
-  // roots of that chain, and its replaced roots keep what the chain's records list.
+  // roots of that chain (each head with its first checkpoint), and its replaced roots keep
+  // what the chain's records list.
   val followsRecovery = MEMBERS.forall(m => {
     val v = views.get(m)
-    val pc = pathCutsOf(chainOf(recsOf(st.get(m).got, db).filter(r => isChain(r))).recs)
+    val pc = pathCutsOf(chainOf(recsOf(st.get(m).got, db)).recs)
     v.path == pc._1 and v.cuts == pc._2
   })
 
@@ -1146,6 +1194,30 @@ module records_v3 {
     sign(k, kind, target, "", targetRec, false, false, if (kind == "checkpoint") 2 else 1)
   // The recovery key's member changes the root to t at the end of its chain.
   action recoverAs(k: Key, t: Key): bool = signChain(k, "recover", t, chainState(st.get("k"), db).ids.length() + 1, "honest")
+
+  // A head waits for the new root's first checkpoint: until the member holds it the path
+  // stays, and the new root's records it got meanwhile wait beside; with the checkpoint the
+  // change applies and they are taken.
+  run headWaitsForFirstTest =
+    init
+      .then(recoverAs(RECOVERY, "NK"))
+      .then(signAs("NK", "copies", "", 0))
+      .then(giveOnly("m", 4))
+      .then(giveOnly("m", 6))
+      .expect(views.get("m").path == [ROOT] and not(st.get("m").recs.contains(6)) and promises)
+      .then(giveOnly("m", 5))
+      .expect(views.get("m").path == [ROOT, "NK"] and st.get("m").chain == Set(4, 5)
+        and st.get("m").recs.contains(6) and promises)
+
+  // A head whose first checkpoint is never released changes nothing anywhere, and the honest
+  // writer signs no further change over it.
+  run headWithoutFirstTest =
+    init
+      .then(signChain(RECOVERY, "recover", "NK", 1, "nocp"))
+      .expect(db.get(4).first == NEVER and not(db.keys().contains(5)))
+      .then(syncAll)
+      .expect(MEMBERS.forall(x => views.get(x).path == [ROOT]) and promises)
+      .then(fail(signChange))
 
   // The recovery key changes the root: a member that holds the record follows it at once.
   run recoveryChangesRootTest =
@@ -1516,7 +1588,8 @@ module records_v3 {
       .expect(not(views.get("m").frozen.contains(COMPUTER)) and views.get("m").devices.contains(DEVICE) and promises)
 
   // After a change of root, other keys fill the room and push out some of what the list kept
-  // of the old root; the change stays, since the recovery record is outside the rooms.
+  // of the old root; the change stays, since the recovery record and the new root's first
+  // checkpoint are outside the rooms.
   run fullRoomAfterChangeTest =
     init
       .then(recoverAs(RECOVERY, "NK"))
@@ -1530,9 +1603,9 @@ module records_v3 {
       .then(sign(WATCH, "copies", "", "", 0, false, false, 2))
       .then(sign("NK", "copies", "", "", 0, false, false, 2))
       .then(sign("NK", "copies", "", "", 0, false, false, 2))
-      .then(give("m", 5)).then(give("m", 6)).then(give("m", 7)).then(give("m", 8))
-      .then(give("m", 9)).then(give("m", 10)).then(give("m", 11)).then(give("m", 12))
-      .expect(st.get("m").chain == Set(4) and views.get("m").path == [ROOT, "NK"] and promises)
+      .then(give("m", 6)).then(give("m", 7)).then(give("m", 8)).then(give("m", 9))
+      .then(give("m", 10)).then(give("m", 11)).then(give("m", 12)).then(give("m", 13))
+      .expect(st.get("m").chain == Set(4, 5) and views.get("m").path == [ROOT, "NK"] and promises)
 
   // The root keeps back a twin of its newest record and checkpoints naming it. The checkpoint
   // never counts (a named record off its chain), and the twin, handed in after a change of
@@ -1552,7 +1625,7 @@ module records_v3 {
       .then(compactAt("m"))
       .then(give("m", 5))
       .expect(views.get("m").path == [ROOT, "NK"] and not(views.get("m").admins.keys().contains(MINTED))
-        and views.get("m").checkpoint == 0 and promises)
+        and views.get("m").checkpoint != 6 and promises)
 
   // A newcomer takes the chain from its admitter's Welcome and has its path.
   run newcomerTest =
@@ -1609,7 +1682,7 @@ module records_v3 {
         and not(views.get("m").devices.contains(DEVICE)) and promises)
       .then(give("a", 6))
       .then(signAs("NA", "device", DEVICE, 0))
-      .then(give("m", 7))
+      .then(give("m", 8))
       .expect(views.get("m").devices.contains(DEVICE) and promises)
 
   // The same with the writer's full list, by hand (the honest writer refuses a known key): the
