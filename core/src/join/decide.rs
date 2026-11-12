@@ -138,6 +138,20 @@ pub fn joiner_record(
     if state.id_taken(&key.device_id()) || state.revoked.contains(&key.hash()) {
         return Err(Refusal::Taken);
     }
+    // An admin key it offers is new too: not its member key, not removed,
+    // not named by a record the member keeps.
+    if let Some(a) = info.admin_key() {
+        let h = a.hash();
+        if a.public == key.public
+            || state.revoked.contains(&h)
+            || state.id_taken(&a.device_id())
+            || state.roots.contains(&h)
+            || state.recovery == Some(h)
+            || state.devices.iter().any(|d| d.admin == Some(h) || d.key.hash() == h)
+        {
+            return Err(Refusal::Taken);
+        }
+    }
     if info.role != profile.role || (info.caps & CAP_HUB != 0 && profile.rights & RIGHT_HUB == 0) {
         return Err(Refusal::AsksMore);
     }

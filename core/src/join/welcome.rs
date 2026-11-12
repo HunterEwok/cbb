@@ -21,6 +21,7 @@ use alloc::vec::Vec;
 
 use crate::format::{Alg, GroupId, Rule, Value, cbor};
 use crate::records::body::{Kind, POWER_ADMIT};
+use crate::records::eval::ClaimState;
 use crate::records::set::RecordSet;
 use crate::records::{Key, KeyHash, Record, RecordId, State};
 
@@ -70,6 +71,10 @@ pub enum Refusal {
     NotAdmitter,
     /// The Welcome is damaged.
     Damaged,
+    /// A takeover the admitter counted does not stand in the Welcome's own
+    /// records (its signer may not take over, its key is void, it was
+    /// cancelled), or counting it puts the joiner at odds with them.
+    Takeover,
 }
 
 impl Welcome {
@@ -243,10 +248,27 @@ impl Welcome {
         }
         let mut set = RecordSet::new(root);
         set.insert_all(self.records.iter().cloned());
-        // A takeover the admitter counted is final for the joiner too.
-        set.remember_counted(self.counted.iter().copied());
         let held: BTreeMap<RecordId, u64> = self.claim_ages.iter().copied().collect();
+        // A takeover the admitter counted is final for the joiner too, once
+        // the records leave it at least waiting: its signer may take over,
+        // its key is not void, nobody cancelled it.
+        if !self.counted.is_empty() {
+            let plain = set.state(&held);
+            let stands = |id: &RecordId| {
+                plain
+                    .claims
+                    .iter()
+                    .any(|c| c.record == *id && matches!(c.state, ClaimState::Pending | ClaimState::Effective))
+            };
+            if !self.counted.iter().all(stands) {
+                return Err(Refusal::Takeover);
+            }
+        }
+        set.remember_counted(self.counted.iter().copied());
         let state = set.state(&held);
+        if state.owner_split {
+            return Err(Refusal::Takeover);
+        }
         let own_key = Key::es256(own.to_vec());
         let me = own_key.hash();
         if state.device_by_key(&me).is_none() {
