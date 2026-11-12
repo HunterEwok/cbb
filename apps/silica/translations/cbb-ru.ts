@@ -27,14 +27,6 @@
         <translation>Подключаюсь к устройству…</translation>
     </message>
     <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>Для телефона, который вступает как админ</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>Сделать админом</translation>
-    </message>
-    <message>
         <source>On the device to add, choose to join a group, then point the camera at the code it shows.</source>
         <translation>На добавляемом устройстве выберите «Вступить в группу» и наведите камеру на код, который оно покажет.</translation>
     </message>
@@ -124,6 +116,17 @@
     <message>
         <source>devices unknown here</source>
         <translation>устройства, неизвестные здесь</translation>
+    </message>
+</context>
+<context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>В буфере обмена нет текста.</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>Нечего отправлять: ни один файл не удалось прочитать.</translation>
     </message>
 </context>
 <context>
@@ -260,6 +263,29 @@
     <message>
         <source>Version %1 fixes this: update CBB.</source>
         <translation>Это исправлено в версии %1: обновите CBB.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change</source>
+        <translation>Сменить</translation>
+    </message>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Сменить PIN администратора</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>Текущий PIN</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>Новый PIN</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>Новый PIN ещё раз</translation>
     </message>
 </context>
 <context>
@@ -404,6 +430,10 @@
         <translation>Заглушение: %1</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>Вставить на нём…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>Удалить</translation>
     </message>
@@ -475,6 +505,10 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>Чтобы добавить устройство, нужен PIN администратора.</translation>
+    </message>
+    <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>По адресу из кода ответило другое устройство. Отсканируйте код ещё раз.</translation>
     </message>
@@ -503,12 +537,20 @@
         <translation>Отсканируйте QR-код листа восстановления: на новом телефоне введённого ключа недостаточно.</translation>
     </message>
     <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>Семь неверных PIN навсегда заблокировали ключ администратора; телефон остаётся в группе участником.</translation>
+    </message>
+    <message>
         <source>Something in CBB broke. It starts again.</source>
         <translation>Что-то в CBB сломалось. Запускаем заново.</translation>
     </message>
     <message>
         <source>That phone asks to be an admin. Only the group's root makes admins; on that phone, join without being an admin.</source>
         <translation>Этот телефон просит стать админом. Админов назначает только корень группы; на том телефоне вступите без прав админа.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>Сначала нужен PIN администратора.</translation>
     </message>
     <message>
         <source>The claim to restore the group became void.</source>
@@ -521,6 +563,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>Код не совпал. Отсканируйте код, который другое устройство показывает сейчас.</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>Устройство не вставило текст.</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -547,8 +593,8 @@
         <translation>Срок приглашения истёк. Попросите новое.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>Другое устройство не приняло этот телефон как админа. Админов назначает только корень группы: там примите его как админа (cbb pair -qr -admin) или войдите в группу не как админ.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>Другое устройство не приняло этот телефон как админа. Админов назначает только устройство, которое создало группу: отсканируйте код на нём или войдите в группу не как админ.</translation>
     </message>
     <message>
         <source>The other device did not join.</source>
@@ -635,6 +681,10 @@
         <translation>Защищённый элемент телефона не подписал данные.</translation>
     </message>
     <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>Защищённый модуль телефона не принял PIN.</translation>
+    </message>
+    <message>
         <source>The phone's secure element holds a broken key.</source>
         <translation>В защищённом элементе телефона повреждённый ключ.</translation>
     </message>
@@ -673,6 +723,10 @@
     <message>
         <source>This phone keeps no keys for apps.</source>
         <translation>Этот телефон не хранит ключи приложений.</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>Ключ администратора на этом телефоне старше PIN администратора. Покиньте группу и вступите в неё снова.</translation>
     </message>
 </context>
 <context>
@@ -807,10 +861,6 @@
         <translation>Войти в группу</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>Войти как админ</translation>
-    </message>
-    <message>
         <source>Join with an invitation</source>
         <translation>Вступить по приглашению</translation>
     </message>
@@ -825,10 +875,6 @@
     <message>
         <source>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</source>
         <translation>На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте этот экран.</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>На корневом компьютере группы примите этот телефон как админа по этому коду: в приложении CBB добавьте устройство и выберите «принять как админа» или выполните cbb pair -qr -admin. Не закрывайте этот экран.</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>
@@ -1017,10 +1063,6 @@
         <translation>Войти в группу</translation>
     </message>
     <message>
-        <source>Join a group as an admin</source>
-        <translation>Войти в группу как админ</translation>
-    </message>
-    <message>
         <source>Join with an invitation</source>
         <translation>Вступить по приглашению</translation>
     </message>
@@ -1029,8 +1071,8 @@
         <translation>Потеряли телефон?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>Сделайте второй телефон админом: на нём нажмите «Войти в группу как админ», затем отсканируйте его код здесь через «Сканировать код». Нажмите, чтобы закрыть.</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>Сделайте второй телефон админом: добавьте его в группу, затем откройте его здесь и нажмите «Сделать админом». Нажмите, чтобы закрыть.</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1140,6 +1182,10 @@
         <translation>Видео</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>Админ заглушил этот телефон, поэтому его копии остаются на нём.</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>Изображение</translation>
     </message>
@@ -1200,6 +1246,100 @@
     <message>
         <source>a file</source>
         <translation>файл</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>Вставка подходит большинству приложений, а набор по клавишам нужен тем, что вставку не принимают, и только до 4 КБ. Enter в терминале запускает команду, поэтому компьютер примет его, только если его пользователь это разрешил. Секрет не остаётся ни в журнале компьютера, ни в его буфере.</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>Картинка или файлы уходят в группу копией, и компьютер вставляет их туда, где фокус, как Ctrl+V: в чат, документ или папку. Enter, если включён, отправляет их в чате.</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>Секрет</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>Текст попадёт туда, где фокус клавиатуры устройства %1, если его пользователь включил там удалённую вставку. Если поле пустое, «Вставить» отправит то, что в буфере обмена.</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>Вставить</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>Вставить картинку или файлы…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>Вставить на %1</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>Нажать Enter после него</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>Текст</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>Набрать по клавишам</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Admin PIN</source>
+        <translation>PIN администратора</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>Собственный PIN CBB, не короче четырёх цифр. Не используйте код разблокировки телефона. Защищённый модуль телефона проверяет его перед каждым действием администратора; семь неверных PIN навсегда блокируют ключ администратора, и разблокировать его нельзя.</translation>
+    </message>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>Выберите PIN администратора</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Подтвердить</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>Задать</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>PIN ещё раз</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN проверяет защищённый модуль телефона; семь неверных PIN навсегда блокируют ключ администратора.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>С PIN администратора корень группы сможет позже сделать этот телефон админом. Отмените, чтобы войти просто участником.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>С PIN администратора корень группы сможет сделать этот телефон админом.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>Неверный PIN. Осталась одна попытка: следующий неверный PIN навсегда заблокирует ключ администратора.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>Неверный PIN. Осталось попыток: %1.</translation>
     </message>
 </context>
 <context>
@@ -1362,6 +1502,10 @@
         <translation>Как на телефоне</translation>
     </message>
     <message>
+        <source>Change the admin PIN</source>
+        <translation>Сменить PIN администратора</translation>
+    </message>
+    <message>
         <source>Checking…</source>
         <translation>Проверка…</translation>
     </message>
@@ -1380,6 +1524,10 @@
     <message>
         <source>Devices join or leave</source>
         <translation>Устройства вступают или уходят</translation>
+    </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>Подготовиться стать админом</translation>
     </message>
     <message>
         <source>Group</source>
@@ -1482,6 +1630,10 @@
         <translation>Настройки</translation>
     </message>
     <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>Семь неверных PIN навсегда заблокировали ключ администратора. Телефон остаётся в группе участником; чтобы снова стать администратором, переустановите CBB и вступите как новое устройство.</translation>
+    </message>
+    <message>
         <source>Show error details</source>
         <translation>Показывать подробности ошибок</translation>
     </message>
@@ -1494,8 +1646,24 @@
         <translation>Система</translation>
     </message>
     <message>
+        <source>The admin PIN is changed.</source>
+        <translation>PIN администратора изменён.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>PIN администратора не изменён.</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>Корень группы может сделать этот телефон админом: на корне откройте этот телефон и нажмите «Сделать админом».</translation>
+    </message>
+    <message>
         <source>Version</source>
         <translation>Версия</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>Неверный PIN. Осталось попыток: %1.</translation>
     </message>
 </context>
 <context>

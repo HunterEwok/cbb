@@ -266,9 +266,6 @@
     <string name="invite_share">Отправить приглашение</string>
     <string name="invite_title">Пригласить устройство издалека</string>
     <string name="invite_too_many">Приглашение закрыто после трёх неудачных попыток. Создайте новое.</string>
-    <string name="join_admin">Войти как админ</string>
-    <string name="join_admin_hint">На корневом телефоне группы нажмите + и отсканируйте этот код: добавить телефон админом может только корень. Не закрывайте этот экран.</string>
-    <string name="join_admin_title">Войти как админ</string>
     <string name="join_group">Войти в группу</string>
     <string name="join_hint">На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте этот экран.</string>
     <string name="join_hint_tv">На телефоне откройте CBB, нажмите + и отсканируйте этот код. Не закрывайте этот экран.</string>
@@ -346,6 +343,7 @@
     <string name="make_admin_body">Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb remove. Его ключи лежат в файле на компьютере: кто скопирует этот файл, сможет действовать как админ, пока другой админ его не удалит. Делайте так только для компьютера, который надёжно защищён.</string>
     <string name="make_admin_files_body">Тогда группа разрешит ключи в файлах для админов и хабов (Настройки, «Ключи админов»).</string>
     <string name="make_admin_hardware_body">Тогда он сможет добавлять и удалять устройства командами cbb pair и cbb remove. Его ключи хранятся в его железе и никогда его не покидают.</string>
+    <string name="make_admin_phone_body">Тогда он сможет добавлять и удалять устройства, а если этот телефон потеряется, забрать группу себе.</string>
     <string name="make_admin_title">Сделать %1$s админом?</string>
     <string name="make_hub">Сделать хабом</string>
     <string name="make_hub_body">Вне дома ваши устройства будут связываться с группой через него, через пересыльщик проекта на cbb.tools. Синхронизация вне дома должна быть уже включена на нём: включает её только его пользователь.</string>
@@ -424,7 +422,7 @@
     <string name="reason_incoming">Изменить, сколько живёт копия с другого устройства</string>
     <string name="reason_join">Войти в группу как администратор</string>
     <string name="reason_key_level">Изменить, какие ключи могут быть у админов</string>
-    <string name="reason_make_admin">Сделать компьютер админом</string>
+    <string name="reason_make_admin">Сделать устройство админом</string>
     <string name="reason_make_hub">Сделать компьютер хабом</string>
     <string name="reason_make_recovery">Сделать ключ восстановления</string>
     <string name="reason_move_hub">Перенести хаб на компьютер</string>

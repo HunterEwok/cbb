@@ -760,7 +760,9 @@ function renderDetail() {
     actions.push(["rename", t("Rename")]);
     if (d.frozen && me.root) actions.push(["unfreeze", t("Unfreeze")]);
     if (!d.self && d.admin && !d.root && !d.frozen && d.role === "member") actions.push(["freeze", t("Freeze"), true]);
-    if (me.root && !d.admin && !d.frozen && can(d, "admin")) actions.push(["admin", t("Make it an admin")]);
+    // A phone joins as a member, and the root makes it an admin here as a
+    // computer, with the admin key its hello offers.
+    if (me.root && !d.admin && !d.frozen && (can(d, "admin") || d.role === "phone")) actions.push(["admin", t("Make it an admin")]);
     if (!d.self) actions.push(["remove", t("Remove"), true]);
   }
   // Any computer leaves by itself; the root only when it is alone, which the service checks.
@@ -839,9 +841,13 @@ async function deviceAction(action) {
     case "leave":
       await leave();
       break;
-    case "admin":
-      if (await ask(t("Make %s an admin?", d.name), t("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe."), t("Make it an admin"))) await act("MakeAdmin", d.id);
+    case "admin": {
+      const text = d.role === "phone"
+        ? t("It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.")
+        : t("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.");
+      if (await ask(t("Make %s an admin?", d.name), text, t("Make it an admin"))) await act("MakeAdmin", d.id);
       break;
+    }
     case "hub": {
       // This computer turns sync away from home on with its hub, by its
       // user's word here; another one must have it on already.

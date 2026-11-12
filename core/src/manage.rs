@@ -367,7 +367,7 @@ fn level_allows(level: &str, store: &str, consent: bool) -> bool {
     }
 }
 
-/// What making a computer an admin gives: the admin CA for the admin key
+/// What making a device an admin gives: the admin CA for the admin key
 /// its hello offered, for the admin message, and its device record again
 /// naming that CA, to add and send.
 pub struct NewAdmin {
@@ -375,12 +375,13 @@ pub struct NewAdmin {
     pub record: Record,
 }
 
-/// Makes the computer device an admin, as the group's root
-/// (docs/protocol.md, section 10, "Admins"): admin_key is the
-/// SubjectPublicKeyInfo its hello offered and key_store where its hello
-/// says its keys live; a computer that keeps them in a file becomes one
-/// only when the group's key level allows files and the user consented
-/// (allow_file_key).
+/// Makes device an admin, as the group's root (docs/protocol.md, section
+/// 10, "Admins"): a phone, which joined as a member, or
+/// a member with the cap admin. admin_key is the SubjectPublicKeyInfo its
+/// hello offered and key_store where its hello says its keys live; a
+/// computer that keeps them in a file becomes one only when the group's
+/// key level allows files and the user consented (allow_file_key). A
+/// phone's keys stay `hardware`, as its record says.
 pub fn make_admin(
     rs: &Records,
     s: &Signer,
@@ -394,22 +395,35 @@ pub fn make_admin(
         return Err(Error::msg("only the group's root makes admins"));
     }
     let d = find(rs, device)?;
-    if !d.can(authority::CAP_ADMIN) {
-        return Err(Error::msg("only a member with the cap admin is made an admin this way"));
+    if d.id == s.me || d.id == rs.state().root_device {
+        return Err(Error::msg("the group's root is more than an admin"));
+    }
+    let phone = d.role == authority::ROLE_PHONE;
+    if !phone && !d.can(authority::CAP_ADMIN) {
+        return Err(Error::msg("only a phone or a member with the cap admin is made an admin"));
     }
     if d.frozen {
-        return Err(Error::msg("the computer is frozen: unfreeze it or remove it"));
+        return Err(Error::msg("the device is frozen: unfreeze it or remove it"));
     }
     if d.admin_key.is_some() {
-        return Err(Error::msg("the computer is an admin already"));
+        return Err(Error::msg("the device is an admin already"));
     }
     let point = certs::p256_spki(admin_key)
-        .ok_or_else(|| Error::msg("the computer offers no P-256 admin key"))?
+        .ok_or_else(|| Error::msg("the device offers no P-256 admin key"))?
         .to_sec1_point(false)
         .as_bytes()
         .to_vec();
+    // A key another device holds, or a root's, would give its holder a
+    // second device's admin CA.
+    let hash = certs::sha256(admin_key);
+    let state = rs.state();
+    if rs.devices().iter().any(|o| o.admin_key == Some(hash) || o.keys.contains(&hash))
+        || state.roots.contains(&Hash(hash))
+    {
+        return Err(Error::msg("the admin key the device offers belongs to another key of the group"));
+    }
     let proven = d.store == "proven";
-    let store = if proven { d.store.clone() } else { command::store_of(key_store, &d.role).to_string() };
+    let store = if proven || phone { d.store.clone() } else { command::store_of(key_store, &d.role).to_string() };
     if store == "rootless" || d.store == "rootless" {
         return Err(Error::msg("a computer that runs without root keeps no admin key"));
     }

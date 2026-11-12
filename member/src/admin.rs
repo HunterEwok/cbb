@@ -819,11 +819,11 @@ impl Admin<'_> {
         Ok(who)
     }
 
-    /// Makes the computer target names an admin, on the group's root, as
-    /// Go's makeAdmin: the admin CA for the admin key its hello offers, its
-    /// device record naming it, and the admin message. A computer whose
-    /// keys sit in a file becomes one only with allow_file_key. It returns
-    /// its name.
+    /// Makes the phone or computer target names an admin, on the group's
+    /// root, as Go's makeAdmin: the admin CA for the admin key its hello
+    /// offers, its device record naming it, and the admin message. A
+    /// computer whose keys sit in a file becomes one only with
+    /// allow_file_key. It returns its name.
     pub fn make_admin(&self, target: &str, allow_file_key: bool) -> Result<String> {
         let d = find_device(self.node, target)?;
         let root_only = || {
@@ -838,9 +838,10 @@ impl Admin<'_> {
         if d.id == self.me() {
             return Err(Error::msg("this device is the group's root, which is more than an admin"));
         }
-        if !d.can(authority::CAP_ADMIN) {
+        let phone = d.role == authority::ROLE_PHONE;
+        if !phone && !d.can(authority::CAP_ADMIN) {
             return Err(Error::msg(format!(
-                "{} cannot hold an admin key; only a member with the cap admin can be an admin",
+                "{} cannot hold an admin key; only a phone or a member with the cap admin can be an admin",
                 d.name
             )));
         }
@@ -865,7 +866,24 @@ impl Admin<'_> {
                 d.name
             )));
         };
-        let (store, kind, proof) = if d.store == "proven" {
+        // A key another device holds, or a root's, would give its holder a
+        // second device's admin CA.
+        let hash = cbb_core::certs::sha256(&admin_key);
+        let taken = {
+            let rs = self.node.records();
+            let rs = rs.lock().unwrap();
+            rs.devices().iter().any(|o| o.admin_key == Some(hash) || o.keys.contains(&hash))
+                || rs.state().roots.contains(&Hash(hash))
+        };
+        if taken {
+            return Err(Error::msg(format!(
+                "the admin key that {} offers belongs to another key of the group",
+                d.name
+            )));
+        }
+        // A phone's keys stay where its record says (hardware); a
+        // computer's are where its hello says.
+        let (store, kind, proof) = if d.store == "proven" || phone {
             (d.store.clone(), d.kind.clone(), d.proof.clone())
         } else {
             (
@@ -915,6 +933,10 @@ impl Admin<'_> {
                 os: d.os.clone(),
                 key: Some(Hash(d.key)),
                 admin: Some(admin),
+                // A phone admin has every power, as one admitted as an
+                // admin; a computer's come from computer_admin_powers.
+                powers: if phone { authority::POWERS.iter().map(|p| (*p).into()).collect() } else { Vec::new() },
+                commands: if phone { authority::COMMANDS.iter().map(|c| (*c).into()).collect() } else { Vec::new() },
                 store,
                 hardware: kind,
                 proof,

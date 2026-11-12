@@ -126,6 +126,11 @@ void Member::start(const Membership &membership, const QString &name, const QByt
     };
     if (!membership.issuer.isEmpty())
         req.insert(QStringLiteral("issuer"), b64(membership.issuer));
+    // The admin key the hellos offer the root, as a SubjectPublicKeyInfo:
+    // P-256's fixed prefix before the point.
+    if (!membership.isAdmin() && membership.adminOffer.size() == 65)
+        req.insert(QStringLiteral("admin_key"),
+                   b64(QByteArray::fromHex("3059301306072a8648ce3d020106082a8648ce3d030107034200") + membership.adminOffer));
     const QByteArray bytes = QJsonDocument(req).toJson(QJsonDocument::Compact);
     current.store(this);
     uint8_t *answer = nullptr;
@@ -263,6 +268,34 @@ void Member::sendFiles(const QStringList &paths)
 {
     if (!m_member || m_muted || paths.isEmpty())
         return;
+    Failure failure;
+    const int count = copyMedia(paths, &failure).isEmpty() ? 0 : paths.size();
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+        return;
+    }
+    m_error.clear();
+    m_last = count == 1 ? QFileInfo(paths.first()).fileName() : tr("%1 files").arg(count);
+    emit changed();
+}
+
+QString Member::copyFiles(const QStringList &paths, Failure *failure)
+{
+    if (!m_member) {
+        *failure = Failure{QCoreApplication::translate("Errors", "Only an admin of the group changes its devices."),
+                           QStringLiteral("paste: no member")};
+        return QString();
+    }
+    if (m_muted) {
+        *failure = Failure{tr("An admin muted this phone, so its copies stay on it."), QStringLiteral("paste: muted")};
+        return QString();
+    }
+    return copyMedia(paths, failure);
+}
+
+QString Member::copyMedia(const QStringList &paths, Failure *failure)
+{
     QMimeDatabase mimes;
     QJsonArray parts;
     qint64 total = 0;
@@ -279,22 +312,17 @@ void Member::sendFiles(const QStringList &paths)
             part = QJsonObject{{QStringLiteral("type"), type}, {QStringLiteral("file"), fi.absoluteFilePath()}};
         parts.append(part);
     }
-    Failure failure;
-    if (parts.isEmpty())
-        failure = Failure{tr("There is nothing to send: no file could be read."), QStringLiteral("share: no readable file")};
-    else if (total > maxSendBytes)
-        failure = Failure{tr("The files are too large: up to 50 MB go together."),
-                          QStringLiteral("share: %1 bytes").arg(total)};
-    else
-        call(m_member, QStringLiteral("copy_media"), QJsonObject{{QStringLiteral("parts"), parts}}, &failure);
-    if (!failure.isNull()) {
-        m_error = Errors::shown(failure);
-        emit changed();
-        return;
+    if (parts.isEmpty()) {
+        *failure = Failure{tr("There is nothing to send: no file could be read."), QStringLiteral("share: no readable file")};
+        return QString();
     }
-    m_error.clear();
-    m_last = parts.size() == 1 ? QFileInfo(paths.first()).fileName() : tr("%1 files").arg(parts.size());
-    emit changed();
+    if (total > maxSendBytes) {
+        *failure = Failure{tr("The files are too large: up to 50 MB go together."),
+                           QStringLiteral("share: %1 bytes").arg(total)};
+        return QString();
+    }
+    const QJsonObject a = call(m_member, QStringLiteral("copy_media"), QJsonObject{{QStringLiteral("parts"), parts}}, failure);
+    return failure->isNull() ? a.value(QStringLiteral("copy")).toObject().value(QStringLiteral("id")).toString() : QString();
 }
 
 void Member::take(const QJsonObject &copy)
@@ -421,7 +449,21 @@ void Member::event(const QByteArray &json)
         const QJsonObject copy = e.value(QStringLiteral("copy")).toObject();
         if (copy.value(QStringLiteral("kind")).toString() == QStringLiteral("media") && !m_paused)
             take(copy);
+    } else if (type == QStringLiteral("message")) {
+        const QJsonObject m = e.value(QStringLiteral("message")).toObject();
+        if (m.value(QStringLiteral("t")).toString() == QStringLiteral("admin"))
+            emit adminCaArrived(QByteArray::fromBase64(m.value(QStringLiteral("admin_ca")).toString().toLatin1()));
     }
+}
+
+bool Member::takeAdminCa(const QByteArray &ca, Failure *failure)
+{
+    if (!m_member) {
+        *failure = {QCoreApplication::translate("Errors", "The phone is not connected to its group yet. Try again in a moment."), QStringLiteral("member: not running")};
+        return false;
+    }
+    call(m_member, QStringLiteral("take_admin_ca"), QJsonObject{{QStringLiteral("key"), b64(ca)}}, failure);
+    return failure->isNull();
 }
 
 void Member::command(double token, const QString &from, const QJsonObject &record)

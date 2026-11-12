@@ -266,9 +266,6 @@
     <string name="invite_share">Shiriki mwaliko</string>
     <string name="invite_title">Alika kifaa kilicho mbali</string>
     <string name="invite_too_many">Mwaliko ulifungwa baada ya majaribio matatu yaliyoshindwa. Unda mpya.</string>
-    <string name="join_admin">Jiunge kama msimamizi</string>
-    <string name="join_admin_hint">Kwenye simu ya mzizi ya kikundi, gusa + na uchanganue msimbo huu: mzizi pekee ndio huongeza simu kama msimamizi. Acha skrini hii wazi.</string>
-    <string name="join_admin_title">Jiunge kama msimamizi</string>
     <string name="join_group">Jiunge na kikundi</string>
     <string name="join_hint">Kwenye simu ya kikundi, gusa + na uchanganue msimbo huu. Kwenye kompyuta ya kikundi, gusa + na uandike nambari. Acha skrini hii wazi.</string>
     <string name="join_hint_tv">Kwenye simu yako, fungua CBB, gusa + na uchanganue msimbo huu. Acha skrini hii wazi.</string>
@@ -346,6 +343,7 @@
     <string name="make_admin_body">Kisha kitaweza kuongeza na kuondoa vifaa kwa cbb pair na cbb remove. Funguo zake ziko kwenye faili kwenye kompyuta: yeyote anayenakili faili hilo anaweza kutenda kama msimamizi hadi msimamizi mwingine akiondoe. Fanya hivi tu kwa kompyuta unayoilinda.</string>
     <string name="make_admin_files_body">Kisha kikundi huruhusu funguo zilizo kwenye faili kuwa wasimamizi na vitovu (Mipangilio, Funguo za msimamizi).</string>
     <string name="make_admin_hardware_body">Kisha kitaweza kuongeza na kuondoa vifaa kwa cbb pair na cbb remove. Funguo zake ziko kwenye maunzi yake, ambayo hayaziachi zitoke kamwe.</string>
+    <string name="make_admin_phone_body">Kisha itaweza kuongeza na kuondoa vifaa, na kuchukua kikundi simu hii ikipotea.</string>
     <string name="make_admin_title">Ufanye %1$s kuwa msimamizi?</string>
     <string name="make_hub">Kifanye kitovu</string>
     <string name="make_hub_body">Kisha vifaa vyako hufikia kikundi kupitia hicho vikiwa mbali na nyumbani, kupitia kisambazaji cha mradi kwenye cbb.tools. Kusawazisha ukiwa mbali na nyumbani lazima kuwe kumewashwa huko tayari; mtumiaji wake pekee ndiye hukuwasha.</string>
@@ -424,7 +422,7 @@
     <string name="reason_incoming">Badilisha muda ambao nakala kutoka kifaa kingine hudumu</string>
     <string name="reason_join">Jiunge na kikundi kama msimamizi</string>
     <string name="reason_key_level">Badilisha funguo zinazoweza kuwa wasimamizi</string>
-    <string name="reason_make_admin">Fanya kompyuta kuwa msimamizi</string>
+    <string name="reason_make_admin">Fanya kifaa kuwa msimamizi</string>
     <string name="reason_make_hub">Fanya kompyuta kuwa kitovu</string>
     <string name="reason_make_recovery">Unda ufunguo wa urejeshaji</string>
     <string name="reason_move_hub">Hamisha kitovu kwenye kompyuta</string>
