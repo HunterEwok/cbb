@@ -1587,6 +1587,13 @@ mod props {
             let mut b = RecordSet::new(root.clone());
             b.insert_all(shuffled);
             prop_assert_eq!(a.digest(), b.digest());
+            // evaluate acts as a member that has compacted: one that keeps
+            // nothing of an old root off its takeover's cut.
+            let st = a.state(&held);
+            a.compact(&st);
+            let st = b.state(&held);
+            b.compact(&st);
+            prop_assert_eq!(a.digest(), b.digest());
             // The set refuses what it cannot verify; its state is that of
             // the records it kept.
             let kept: Vec<Record> = a.ids().map(|id| a.get(id).unwrap().clone()).collect();
@@ -1844,7 +1851,9 @@ fn a_counted_takeover_is_final_on_the_device() {
     let st = set.state(&held);
     set.compact(&st);
     assert!(set.counted().contains(&claim.id()));
-    assert_eq!(set.insert(late.clone()), Ok(Added::Stored));
+    // It keeps nothing of the old root above the cut, and says so.
+    assert_eq!(set.insert(late.clone()), Ok(Added::NoRoom));
+    assert!(!set.contains(&late.id()));
     let st = set.state(&held);
     assert_eq!(st.roots, vec![g.root.hash, n.hash]);
     assert!(st.owner_split);
@@ -2014,4 +2023,48 @@ fn a_record_off_the_chain_a_removal_saw_is_cut_off() {
     let s = g.state();
     assert!(!s.counting.contains(&again.id()));
     assert!(s.device(&k("d2").key.device_id()).is_some());
+}
+
+/// Once a takeover counts, the old root keeps nothing above the claim's
+/// cut and its checkpoints do not come first: large checkpoints it signs
+/// later take none of its room, and its history stays.
+#[test]
+fn an_old_root_keeps_nothing_above_its_cut() {
+    let (mut g, held, claim) = taken_over_group();
+    let root = k("root");
+    let mut m = RecordSet::new(g.root.key.clone());
+    m.insert_all(g.recs.iter().cloned());
+    let st = m.state(&held);
+    m.compact(&st);
+    assert_eq!(st.cuts.len(), 1);
+    let before = m.state(&held);
+    let history: Vec<RecordId> = g.recs.iter().filter(|r| r.body().signer == root.hash).map(Record::id).collect();
+    let mut more = Vec::new();
+    for i in 0..9u8 {
+        let keep: Vec<RecordId> = (0..1900u32)
+            .map(|j| {
+                let mut id = [i; 32];
+                id[..4].copy_from_slice(&j.to_be_bytes());
+                RecordId(id)
+            })
+            .collect();
+        let body = Body {
+            seq: 1000 + u64::from(i),
+            prev: Some(RecordId([7; 32])),
+            ..g.body(&root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: 1, id: RecordId([8; 32]) }], keep })
+        };
+        more.push(Record::sign(body, &root).unwrap());
+    }
+    let (stored, _) = m.insert_all(more.clone());
+    assert_eq!(stored, 0);
+    assert!(history.iter().all(|id| m.contains(id)));
+    let after = m.state(&held);
+    assert_eq!(after.roots, before.roots);
+    assert_eq!(after.devices, before.devices);
+    assert!(after.owner_split);
+    // The same from evaluate, for a device that counted the claim.
+    g.recs.extend(more);
+    let s = counted_state(&g, &held, &[claim.id()]);
+    assert_eq!(s.roots, before.roots);
+    assert_eq!(s.devices, before.devices);
 }

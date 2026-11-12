@@ -46,7 +46,9 @@
 //! 13. `seen` names each signer's head with its seq and record ID, and a
 //!     takeover's cut is the claim's entry for the old root: a record at
 //!     or below a seen seq counts as seen only on the chain ending at that
-//!     ID, and a cut root keeps only that chain.
+//!     ID, and a cut root keeps only that chain: a member that promoted
+//!     its successor stores nothing of it off the cut, and its checkpoints
+//!     no longer come first in its order.
 //!
 //! The bytes are the format's (`crate::format`): a record is read from its
 //! envelope with [`Record::decode`] and written with [`Record::envelope`].

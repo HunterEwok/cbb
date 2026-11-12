@@ -10,6 +10,7 @@ use alloc::vec::Vec;
 
 use super::eval::{self, Checked, ClaimState, Keys, Role, State, Why};
 use super::key::{Key, KeyHash, RecordId};
+use super::body::Seen;
 use super::{Kind, Record, Rule, keep};
 
 /// What inserting a record did.
@@ -55,6 +56,12 @@ pub struct RecordSet {
     promoted: BTreeSet<KeyHash>,
     /// The claims the member has counted: final here (`Input::counted`).
     counted: BTreeSet<RecordId>,
+    /// The takeovers' cuts of the roots before the promoted ones (`compact`):
+    /// such a root keeps nothing off its cut.
+    cuts: BTreeMap<KeyHash, Seen>,
+    /// A record off a cut came after the cuts were known: its root still
+    /// signs, and this member and that root disagree about the owner.
+    split: bool,
     records: BTreeMap<RecordId, Entry>,
     bytes: usize,
 }
@@ -70,6 +77,8 @@ impl RecordSet {
             cut: keep::Cut::default(),
             promoted: BTreeSet::new(),
             counted: BTreeSet::new(),
+            cuts: BTreeMap::new(),
+            split: false,
             records: BTreeMap::new(),
             bytes: 0,
         }
@@ -126,7 +135,16 @@ impl RecordSet {
         let Some((key, role)) = self.keys.signer(&r.body().signer) else { return Err(Refused::UnknownSigner) };
         let held = r.verify(key).map_err(Refused::Broken)?;
         let signer = r.body().signer;
-        if self.cut.past(&eval::item(&r, role)) {
+        if let Some(cut) = self.cuts.get(&signer) {
+            let cuts = BTreeMap::from([(signer, *cut)]);
+            let mine = self.records.values().map(|e| &e.record).filter(|x| x.body().signer == signer);
+            if eval::off_cuts(&cuts, mine.chain([&r])).contains(&id) {
+                // Its root signed it off the chain the takeover saw.
+                self.split = true;
+                return Ok(Added::NoRoom);
+            }
+        }
+        if self.cut.past(&eval::item_cut(&r, role, &self.cuts)) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
@@ -180,7 +198,12 @@ impl RecordSet {
     /// changes nothing, so the set is the same whatever order the records
     /// came in.
     fn cut(&mut self) {
-        let items: Vec<keep::Item> = self.records.values().map(|e| eval::item(&e.record, self.role_of(e))).collect();
+        let off = eval::off_cuts(&self.cuts, self.records.values().map(|e| &e.record));
+        for id in &off {
+            self.remove(id);
+        }
+        let items: Vec<keep::Item> =
+            self.records.values().map(|e| eval::item_cut(&e.record, self.role_of(e), &self.cuts)).collect();
         let ceilings: BTreeMap<KeyHash, Option<u64>> =
             items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
         let (kept, cut) = keep::keep_after(&items, |k| ceilings.get(k).copied().flatten(), &self.cut);
@@ -267,7 +290,17 @@ impl RecordSet {
     /// The group's state. held_ms is how long the device has held each
     /// claim (rule 7).
     pub fn state(&self, held_ms: &BTreeMap<RecordId, u64>) -> State {
-        eval::evaluate_checked(&self.root, self.checked(), BTreeMap::new(), held_ms, &self.counted, &self.promoted)
+        let mut state = eval::evaluate_checked(
+            &self.root,
+            self.checked(),
+            BTreeMap::new(),
+            held_ms,
+            &self.counted,
+            &self.promoted,
+            &self.cuts,
+        );
+        state.owner_split |= self.split;
+        state
     }
 
     /// The claims the member has counted, which its caller keeps across
@@ -294,8 +327,10 @@ impl RecordSet {
     pub fn compact(&mut self, state: &State) -> usize {
         self.counted.extend(state.claims.iter().filter(|c| c.state == ClaimState::Effective).map(|c| c.record));
         let promoted: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
-        if promoted != self.promoted {
+        let cuts: BTreeMap<KeyHash, Seen> = state.cuts.iter().map(|c| (c.key, *c)).collect();
+        if promoted != self.promoted || cuts != self.cuts {
             self.promoted = promoted;
+            self.cuts = cuts;
             self.cut = keep::Cut::default();
             self.cut();
         }

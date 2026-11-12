@@ -212,6 +212,9 @@ pub struct State {
     /// have cancelled, disputed or rivalled: it and the group may
     /// disagree about the owner, and the app asks to join again.
     pub owner_split: bool,
+    /// The takeovers' cuts of the roots before the current one: each the
+    /// claim's seen entry for the root it cut.
+    pub cuts: Vec<Seen>,
 }
 
 impl State {
@@ -431,16 +434,67 @@ pub(crate) fn item(r: &Record, role: Role) -> super::keep::Item {
 /// The records of checked the set keeps: each key within its ceiling, the
 /// set's room shared between keys. promoted are the roots the member's
 /// evaluation put on the path after the first: they have a root's room; a
-/// root only claims name has none of its own.
+/// root only claims name has none of its own. cuts are the takeovers'
+/// cuts of the roots before them: such a root keeps nothing off its cut
+/// (`off_cuts`), and its checkpoints do not come first in its order.
 pub(crate) fn kept_of(
     group_root: &KeyHash,
     promoted: &BTreeSet<KeyHash>,
+    cuts: &BTreeMap<KeyHash, Seen>,
     checked: &[Checked<'_>],
 ) -> BTreeSet<RecordId> {
     let admins: BTreeSet<KeyHash> =
         checked.iter().filter(|c| c.role == Role::Admin).map(|c| c.r.body().signer).collect();
-    let items: Vec<super::keep::Item> = checked.iter().map(|c| item(c.r, c.role)).collect();
+    let off = off_cuts(cuts, checked.iter().map(|c| c.r));
+    let items: Vec<super::keep::Item> =
+        checked.iter().filter(|c| !off.contains(&c.r.id())).map(|c| item_cut(c.r, c.role, cuts)).collect();
     super::keep::keep(&items, |k| ceiling_of(group_root, promoted, &admins, k))
+}
+
+/// A record's place in its key's order, where a root a takeover cut has
+/// no checkpoint first.
+pub(crate) fn item_cut(r: &Record, role: Role, cuts: &BTreeMap<KeyHash, Seen>) -> super::keep::Item {
+    let mut it = item(r, role);
+    if cuts.contains_key(&r.body().signer) {
+        it.checkpoint = false;
+    }
+    it
+}
+
+/// The records off the cut of their signer: above the cut's seq, or at or
+/// below it and not on the chain that ends at the cut's ID, as far as the
+/// records show that chain (below a record the set does not hold, a
+/// record is kept).
+pub(crate) fn off_cuts<'r>(
+    cuts: &BTreeMap<KeyHash, Seen>,
+    records: impl Iterator<Item = &'r Record> + Clone,
+) -> BTreeSet<RecordId> {
+    let mut off = BTreeSet::new();
+    if cuts.is_empty() {
+        return off;
+    }
+    let by_id: BTreeMap<RecordId, &Record> =
+        records.clone().filter(|r| cuts.contains_key(&r.body().signer)).map(|r| (r.id(), r)).collect();
+    for (signer, cut) in cuts {
+        // The chain from the cut's ID down, while the records show it.
+        let mut chain: BTreeMap<u64, RecordId> = BTreeMap::new();
+        let mut at = Some(cut.id);
+        while let Some(r) = at.and_then(|id| by_id.get(&id)) {
+            let b = r.body();
+            if b.signer != *signer || chain.first_key_value().is_some_and(|(s, _)| b.seq >= *s) {
+                break;
+            }
+            chain.insert(b.seq, r.id());
+            at = b.prev;
+        }
+        for r in records.clone().filter(|r| r.body().signer == *signer) {
+            let b = r.body();
+            if b.seq > cut.seq || chain.get(&b.seq).is_some_and(|id| *id != r.id()) {
+                off.insert(r.id());
+            }
+        }
+    }
+    off
 }
 
 /// A key's ceiling in the keeping: a root's on the path, an admin key's,
@@ -467,13 +521,19 @@ pub(crate) fn ceiling_of(
 /// first is on the path, that root has a root's room.
 pub fn evaluate(input: &Input) -> State {
     let (checked, failed) = check_all(input.root, input.records);
-    let none = BTreeSet::new();
-    let first = evaluate_checked(input.root, checked.clone(), failed.clone(), input.held_ms, input.counted, &none);
+    let (none, no_cuts) = (BTreeSet::new(), BTreeMap::new());
+    let first =
+        evaluate_checked(input.root, checked.clone(), failed.clone(), input.held_ms, input.counted, &none, &no_cuts);
     let promoted: BTreeSet<KeyHash> = first.roots.iter().skip(1).copied().collect();
     if promoted.is_empty() {
         return first;
     }
-    evaluate_checked(input.root, checked, failed, input.held_ms, input.counted, &promoted)
+    let cuts = first.cuts.iter().map(|c| (c.key, *c)).collect();
+    let mut state = evaluate_checked(input.root, checked, failed, input.held_ms, input.counted, &promoted, &cuts);
+    // A compacted member keeps nothing off the cuts; what it held there
+    // before still tells it that the records dispute what it counted.
+    state.owner_split |= first.owner_split;
+    state
 }
 
 pub(crate) fn evaluate_checked(
@@ -483,9 +543,10 @@ pub(crate) fn evaluate_checked(
     held_ms: &BTreeMap<RecordId, u64>,
     counted: &BTreeSet<RecordId>,
     promoted: &BTreeSet<KeyHash>,
+    cuts: &BTreeMap<KeyHash, Seen>,
 ) -> State {
     let group_root = root.hash();
-    let full = Evaluation::new(root, checked.clone(), failed.clone(), BTreeSet::new(), promoted);
+    let full = Evaluation::new(root, checked.clone(), failed.clone(), BTreeSet::new(), promoted, cuts);
     // The set a root's checkpoint prunes is evaluated as if the member had
     // dropped what it leaves out; the checkpoint that counts is the newest
     // that still counts there.
@@ -496,7 +557,7 @@ pub(crate) fn evaluate_checked(
         let (Kind::Checkpoint { heads, keep }, id) = (&x.b().kind, x.id) else { continue };
         let anchors = anchors_of(heads, keep);
         let pruned: Vec<Checked> = checked.iter().copied().filter(|c| !pruned_by(c.r, heads, &anchors)).collect();
-        let e = Evaluation::new(root, pruned, failed.clone(), anchors, promoted);
+        let e = Evaluation::new(root, pruned, failed.clone(), anchors, promoted, cuts);
         let ep = e.run(held_ms, counted);
         let Some(i) = e.recs.iter().position(|r| r.id == id) else { continue };
         if !ep.root_record(i) {
@@ -634,9 +695,10 @@ impl<'a> Evaluation<'a> {
         failed: BTreeMap<RecordId, Why>,
         anchors: BTreeSet<RecordId>,
         promoted: &BTreeSet<KeyHash>,
+        cuts: &BTreeMap<KeyHash, Seen>,
     ) -> Evaluation<'a> {
         let group_root = root.hash();
-        let kept = kept_of(&group_root, promoted, &checked);
+        let kept = kept_of(&group_root, promoted, cuts, &checked);
         let mut failed = failed;
         for c in &checked {
             if !kept.contains(&c.r.id()) {
@@ -2124,6 +2186,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
     fn finish(&self) -> State {
         let mut state = self.state();
         state.owner_split = self.split;
+        state.cuts = self.cuts.values().copied().collect();
         let admins: BTreeSet<KeyHash> = state.devices.iter().filter_map(|d| d.admin).chain(state.recovery).collect();
         let cur = state.roots.last().copied();
         let mut newer: BTreeSet<RecordId> = BTreeSet::new();
