@@ -5,7 +5,8 @@
 // app's: how many devices are online, the house (the phone's sync) and the
 // globe (sync away from home) with where it stands, each device with its
 // glyph and live dot, the latest events; the last state when the phone is
-// out of reach.
+// out of reach. As an admin, each device's emergency actions, each asked
+// once before the watch signs it, and the root's ask for the admin key.
 
 import { t } from '../core/Text';
 import { WatchDevice, WatchState } from '../common/WatchState';
@@ -34,9 +35,64 @@ function awayLine(away: string): string {
   return away === 'connecting' ? t('away_connecting') : t('away_off');
 }
 
+// The label of an emergency action and its question.
+function actLabel(action: string): string {
+  return t(`act_${action.replace('-', '_').replace('-', '_')}`);
+}
+
+// A device's actions; a state kept from an older phone has none.
+function actionsOf(d: WatchDevice): string[] {
+  return Array.isArray(d.actions) ? d.actions.filter((a: string) => a !== 'action') : [];
+}
+
+function askOf(action: string, name: string): string {
+  return t(`ask_${action.replace('-', '_').replace('-', '_')}`, name);
+}
+
 @Entry
 @ComponentV2
 struct Watch {
+  // The action the wearer picked and is asked to confirm: action, device's
+  // ID and name; '' when none.
+  @Local confirmAction: string = '';
+  @Local confirmDevice: string = '';
+  @Local confirmName: string = '';
+
+  @Builder
+  question(text: string, yes: string, answer: (yes: boolean) => void) {
+    Column({ space: 6 }) {
+      Text(text).fontSize(13).fontColor($r('app.color.text')).textAlign(TextAlign.Center)
+      Row({ space: 6 }) {
+        Button(t('cancel'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          .fontSize(12).layoutWeight(1)
+          .onClick(() => answer(false))
+        Button(yes, { type: ButtonType.Capsule })
+          .fontSize(12).layoutWeight(1).backgroundColor($r('app.color.accent'))
+          .onClick(() => answer(true))
+      }
+      .width('100%')
+    }
+    .width('100%')
+  }
+
+  @Builder
+  actions(d: WatchDevice) {
+    if ((link.state as WatchState).admin === true && actionsOf(d).length > 0) {
+      Flex({ wrap: FlexWrap.Wrap }) {
+        ForEach(actionsOf(d), (a: string) => {
+          Button(actLabel(a), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+            .fontSize(11).margin(2)
+            .enabled(link.reachable && link.acting.length === 0)
+            .onClick(() => {
+              this.confirmAction = a;
+              this.confirmDevice = d.id;
+              this.confirmName = d.name;
+            })
+        }, (a: string) => a)
+      }
+      .width('100%')
+    }
+  }
   @Builder
   switchRow(label: string, note: string, on: boolean, enabled: boolean, change: (on: boolean) => void) {
     Row() {
@@ -73,6 +129,26 @@ struct Watch {
     Scroll() {
       Column({ space: 8 }) {
         Text($r('app.string.app_name')).fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.accent'))
+        if (link.makeKeyAsked) {
+          this.question(t('make_admin'), t('sign'), (yes: boolean) => {
+            link.answerMakeKey(yes);
+          })
+        }
+        if (this.confirmAction.length > 0) {
+          Text(t('sign_title')).fontSize(12).fontColor($r('app.color.accent'))
+          this.question(askOf(this.confirmAction, this.confirmName), t('sign'), (yes: boolean) => {
+            if (yes) {
+              link.act(this.confirmAction, this.confirmDevice);
+            }
+            this.confirmAction = '';
+          })
+        }
+        if (link.acting.length > 0) {
+          LoadingProgress().width(24).height(24).color($r('app.color.accent'))
+        }
+        if (link.result.length > 0) {
+          Text(link.result).fontSize(12).fontColor($r('app.color.secondary')).textAlign(TextAlign.Center)
+        }
         if (link.state === undefined) {
           Text(link.reachable ? $r('app.string.devices') : $r('app.string.no_phone'))
             .fontSize(13).fontColor($r('app.color.secondary')).textAlign(TextAlign.Center)
@@ -88,6 +164,9 @@ struct Watch {
             link.reachable && !link.asking, (on: boolean) => {
               link.ask('away', on);
             })
+          if ((link.state as WatchState).admin === true) {
+            Text(t('watch_admin')).fontSize(11).fontColor($r('app.color.secondary'))
+          }
           if (link.failed) {
             Text($r('app.string.no_phone')).fontSize(12).fontColor($r('app.color.error'))
           }
@@ -96,7 +175,8 @@ struct Watch {
               Text(d.collection).fontSize(12).fontColor($r('app.color.accent')).width('100%')
             }
             this.deviceRow(d)
-          }, (d: WatchDevice) => d.id)
+            this.actions(d)
+          }, (d: WatchDevice) => `${d.id}-${actionsOf(d).join(',')}`)
           if ((link.state as WatchState).events.length > 0) {
             Text($r('app.string.latest')).fontSize(12).fontColor($r('app.color.accent')).width('100%')
             ForEach((link.state as WatchState).events, (e: string) => {

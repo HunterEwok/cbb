@@ -1088,6 +1088,27 @@ impl Member {
         Ok(())
     }
 
+    /// Makes a watch an admin of the group as its root (cbb_core::manage::
+    /// add_watch): its record, added and passed to the group, and the admin
+    /// CA for the key point the watch made and the group's tag, which this
+    /// answers for the app to hand to the watch.
+    pub fn add_watch(&self, s: &Signer, device: &str, name: &str, os: &str, point: &[u8]) -> Result<(Vec<u8>, String)> {
+        let records = self.node.records();
+        let made = manage::add_watch(&records.lock().unwrap(), s, device, name, os, point, uptime::wall_ms())?;
+        self.node.add_own_records(std::slice::from_ref(&made.record));
+        if !records.lock().unwrap().devices().iter().any(|d| d.id == device && d.admin) {
+            return Err(Error::msg("the group's records did not take the watch as an admin; the log says why"));
+        }
+        let tag = records.lock().unwrap().tag().to_string();
+        Ok((made.admin_ca, tag))
+    }
+
+    /// What a watch may do to device from the wrist (cbb_core::manage::
+    /// watch_actions).
+    pub fn watch_actions(&self, device: &str) -> Vec<&'static str> {
+        manage::watch_actions(&self.node.records().lock().unwrap(), device)
+    }
+
     /// Renews the member certificates that are due, as an admin: each
     /// connected member's, sent to it, and this phone's own, kept; as the
     /// current root also each connected admin's CA from an earlier root,

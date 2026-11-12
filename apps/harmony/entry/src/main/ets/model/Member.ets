@@ -242,6 +242,10 @@ interface Started {
   device?: string;
 }
 
+interface WatchActions {
+  actions?: string[];
+}
+
 @ObservedV2
 export class Member {
   @Trace running: boolean = false;
@@ -441,6 +445,30 @@ export class Member {
       return Result.failed<T>(new Failure(t('error_not_running'), 'member: manage: not running'));
     }
     const r = read<T>(await cbb.memberManage(h, JSON.stringify(request), 'admin'), `member: ${String(request['action'])}`);
+    await this.pollDevices();
+    return r;
+  }
+
+  // What the app's watch, an admin, may do to device from the wrist
+  // (manage watch_actions, which signs nothing).
+  async watchActions(device: string): Promise<string[]> {
+    const h = this.handle;
+    if (h === null) {
+      return [];
+    }
+    const request: Record<string, Object> = { 'action': 'watch_actions', 'device': device, 'public': '' };
+    const r = read<WatchActions>(await cbb.memberManage(h, JSON.stringify(request), 'admin'), 'member: watch_actions');
+    return r.ok?.actions ?? [];
+  }
+
+  // What the watch asked from the wrist, signed on the watch through the
+  // function setWatch gave the core (cbb_member_manage_watch).
+  async manageWatch<T>(request: Record<string, Object>): Promise<Result<T>> {
+    const h = this.handle;
+    if (h === null) {
+      return Result.failed<T>(new Failure(t('error_not_running'), 'member: watch: not running'));
+    }
+    const r = read<T>(await cbb.memberManageWatch(h, JSON.stringify(request)), `watch: ${String(request['action'])}`);
     await this.pollDevices();
     return r;
   }

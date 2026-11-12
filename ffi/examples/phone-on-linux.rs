@@ -60,7 +60,7 @@ use cbb_ffi::{
     cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_invite_answer,
     cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_join_accept, cbb_join_answered, cbb_join_feed,
     cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call, cbb_member_manage,
-    cbb_member_manage_card, cbb_member_servers, cbb_member_start, cbb_piv, cbb_restore,
+    cbb_member_manage_card, cbb_member_manage_watch, cbb_member_servers, cbb_member_start, cbb_piv, cbb_restore,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -462,6 +462,36 @@ fn run_member(
                 n,
             );
             println!("MANAGED {got}");
+        } else if let Some(name) = line.strip_prefix("WATCH ADD ") {
+            // The root makes its watch an admin with the key the watch made
+            // (add_watch); the watch keeps its device ID and admin CA.
+            match admin {
+                Some((k, public)) => {
+                    let req = serde_json::json!({
+                        "action": "add_watch", "name": name, "os": "harmonyos",
+                        "key": STANDARD.encode(watch::spki()),
+                    })
+                    .to_string();
+                    let got = manage(m, k, public, &joined["admin_ca"], &req);
+                    watch::admitted(&got["ok"]);
+                    println!("WATCH ADDED {got}");
+                }
+                None => println!("WATCH ADDED {{\"error\":{{\"message\":\"this phone is not an admin\"}}}}"),
+            }
+        } else if let Some(req) = line.strip_prefix("WATCH ") {
+            // What the watch asked from the wrist, signed on the watch
+            // (cbb_member_manage_watch); "refuse" makes the watch refuse.
+            let mut r: serde_json::Value = serde_json::from_str(req).unwrap_or_default();
+            watch::fill(&mut r);
+            let refuse = r["refuse"].as_bool().unwrap_or(false);
+            let req = r.to_string();
+            let mut n = 0usize;
+            let ctx = usize::from(refuse) as *mut core::ffi::c_void;
+            // SAFETY: m runs; req and n live for the call; the callback's
+            // context is a flag, no pointer.
+            let got = take(unsafe { cbb_member_manage_watch(m, req.as_ptr(), req.len(), watch::sign, ctx, &mut n) }, n);
+            println!("WATCH SAW {}", watch::seen());
+            println!("WATCHED {got}");
         } else if let Some(req) = line.strip_prefix("MANAGE ") {
             match admin {
                 Some((k, public)) => println!("MANAGED {}", manage(m, k, public, &joined["admin_ca"], req)),
@@ -847,5 +877,82 @@ mod card {
         let mut n = 0usize;
         // SAFETY: req and n live for the call; carry needs no context.
         super::take(unsafe { super::cbb_piv(req.as_ptr(), req.len(), carry, std::ptr::null_mut(), &mut n) }, n)
+    }
+}
+
+/// The app's watch as an admin: its key, its device ID and admin CA, and
+/// what it was shown to sign.
+mod watch {
+    use std::sync::Mutex;
+
+    use p256::ecdsa::SigningKey;
+    use p256::ecdsa::signature::hazmat::PrehashSigner as _;
+
+    /// The watch's admin key; fixed, as a test's.
+    fn key() -> SigningKey {
+        SigningKey::from_slice(&[7u8; 32]).unwrap()
+    }
+
+    static ADMITTED: Mutex<Option<serde_json::Value>> = Mutex::new(None);
+    static SEEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+    /// The key point the watch hands the phone, SEC1 uncompressed.
+    fn point() -> Vec<u8> {
+        key().verifying_key().to_sec1_point(false).as_bytes().to_vec()
+    }
+
+    pub fn spki() -> Vec<u8> {
+        cbb_core::certs::p256_spki_of(&point())
+    }
+
+    pub fn admitted(ok: &serde_json::Value) {
+        if !ok.is_null() {
+            *ADMITTED.lock().unwrap() = Some(ok.clone());
+        }
+    }
+
+    /// Adds the watch's own fields to a request from the wrist.
+    pub fn fill(r: &mut serde_json::Value) {
+        use base64::Engine as _;
+        let a = ADMITTED.lock().unwrap().clone().unwrap_or_default();
+        r["watch"] = a["device"].clone();
+        r["admin_ca"] = a["admin_ca"].clone();
+        r["public"] = base64::engine::general_purpose::STANDARD.encode(point()).into();
+    }
+
+    /// The types of the records and commands the watch was shown, since
+    /// the last call.
+    pub fn seen() -> String {
+        std::mem::take(&mut *SEEN.lock().unwrap()).join(",")
+    }
+
+    /// The watch's side of the link: it reads what it is shown and signs
+    /// it, unless ctx says it refuses.
+    pub unsafe extern "C" fn sign(
+        ctx: *mut core::ffi::c_void,
+        body: *const u8,
+        len: usize,
+        sig: *mut u8,
+        sig_len: *mut usize,
+    ) -> i32 {
+        // SAFETY: body is len readable bytes, as cbb_core.h says.
+        let body = unsafe { std::slice::from_raw_parts(body, len) };
+        let v: serde_json::Value = serde_json::from_slice(body).unwrap_or_default();
+        let kind = v["type"].as_str().or(v["command"]["action"].as_str()).unwrap_or("?");
+        SEEN.lock().unwrap().push(kind.to_string());
+        if !ctx.is_null() {
+            return 1;
+        }
+        let Ok(s): Result<p256::ecdsa::Signature, _> = key().sign_prehash(&cbb_core::certs::sha256(body)) else {
+            return 1;
+        };
+        let der = s.to_der();
+        let b = der.as_bytes();
+        // SAFETY: sig has 72 bytes of room and sig_len is writable.
+        unsafe {
+            std::ptr::copy_nonoverlapping(b.as_ptr(), sig, b.len());
+            sig_len.write(b.len());
+        }
+        0
     }
 }

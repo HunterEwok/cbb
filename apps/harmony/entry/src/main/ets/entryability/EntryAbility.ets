@@ -21,14 +21,12 @@ import { osVersion } from '../core/Phone';
 import { setResources, t } from '../core/Text';
 import { sharedOf } from '../common/Share';
 import { app } from '../model/AppModel';
-import { Watch } from '../model/Watch';
+import { watch } from '../model/Watch';
 import { glance } from '../model/Glance';
 
 export default class EntryAbility extends UIAbility {
   private delayId: number = -1;
   private running: boolean = false;
-  // The HarmonyOS watch, while one with CBB is connected.
-  private watch: Watch = new Watch();
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     const prefs = preferences.getPreferencesSync(this.context, { name: 'settings' });
@@ -45,7 +43,7 @@ export default class EntryAbility extends UIAbility {
     setPrompt(t('auth_title'));
     app.init(this.context.filesDir, prefs);
     app.keyboard.init(prefs, this.context);
-    this.watch.start(this.context);
+    watch.start(this.context);
     glance.start(this.context);
     this.takeShared(want);
     this.takeAction(want);
@@ -141,7 +139,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onDestroy(): void {
-    this.watch.stop();
+    watch.stop();
     glance.stop();
     if (this.running) {
       this.running = false;

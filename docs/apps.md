@@ -1071,7 +1071,20 @@ device with its glyph and live dot by collection, the latest events.
   Connect in `module.json5`, and the signing certificate's fingerprint in
   `WatchState.FINGERPRINT`; all three come with the Huawei developer account.
 
-Not yet: a run on a watch, and the watch as an admin with the emergency actions.
+- The watch as an admin (docs/protocol.md, section 10, "Watches"): with a watch connected, the
+  root's Settings offer "Make the watch an admin". The watch asks its wearer, makes a P-256 key
+  in HUKS that needs the watch's screen lock (`model/AdminKey.ets`) and hands the phone its
+  public key; the root key certifies it (manage `add_watch`), and the phone keeps the watch's
+  device ID and admin CA and tells the watch its device ID, the group's tag and its key's hash.
+  The phone's state then carries, for each device, what the watch may do to it (manage
+  `watch_actions`: freeze an admin without `remove-admins`, remove a device that is no admin,
+  turn remote paste, quick actions and sync away from home off); the watch shows them under
+  the device, asks once, and sends `act`. The phone has the core sign it on the watch
+  (`cbb_member_manage_watch`): the record or command goes to the watch whole, in parts of 600
+  bytes, and the watch signs it only when it is that action, for that device, by this watch,
+  in this group; a second watch is replaced only after the first is removed.
+
+Not yet: a run on a watch.
 
 ## Releasing the Android app
 

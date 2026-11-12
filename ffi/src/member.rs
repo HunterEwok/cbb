@@ -342,7 +342,7 @@ fn hardware() -> String {
     "hardware".into()
 }
 
-fn ten_seconds() -> u64 {
+pub(crate) fn ten_seconds() -> u64 {
     10_000
 }
 
@@ -1066,6 +1066,9 @@ impl Member {
                 // A new phone that restored the group (cbb_restore) claims
                 // it with the recovery key from the sheet, which signs the
                 // claim here and is not kept.
+                // What the watch may do to device from the wrist, for the
+                // watch's list (cbb_core::manage::watch_actions).
+                "watch_actions" => return Ok(json!({ "actions": self.node.watch_actions(&a.device) })),
                 "recover_with_sheet" => {
                     let sheet = cbb_core::recovery::read(&a.sheet).map_err(|r| Error::msg(r.message()))?;
                     let der = sheet.cert.as_deref().ok_or_else(|| Error::msg(cbb_member::restore::NEEDS_QR))?;
@@ -1138,6 +1141,26 @@ impl Member {
                     })?;
                     return Ok(json!({ "admin_ca": b64(&ca.into_inner()) }));
                 }
+                // A watch made an admin with the key it made, given as
+                // key (SubjectPublicKeyInfo): its device ID, new unless the
+                // request names one, the admin CA, and the group's tag and
+                // the watch's admin key's hash as records and commands name
+                // them, which the watch checks before it signs.
+                "add_watch" => {
+                    let spki = a.key.as_deref().ok_or_else(|| Error::msg("the action needs key"))?;
+                    let point = certs::p256_spki(spki)
+                        .ok_or_else(|| Error::msg("the watch's key is no P-256 key"))?
+                        .to_sec1_point(false)
+                        .as_bytes()
+                        .to_vec();
+                    let device = if a.device.is_empty() { DeviceId::random().to_string() } else { a.device.clone() };
+                    let name = if a.name.trim().is_empty() { "Watch" } else { a.name.trim() };
+                    let (ca, group) = self.node.add_watch(&s, &device, name, &a.os, &point)?;
+                    let signer = cbb_core::authority::Hash(Cert::parse(&ca)?.key_hash());
+                    return Ok(
+                        json!({ "device": device, "admin_ca": b64(&ca), "group": group, "signer": signer.text() }),
+                    );
+                }
                 _ => {}
             }
             let order = |o: Order| -> Result<Value> {
@@ -1148,6 +1171,7 @@ impl Member {
                 "remove" => self.node.change(&s, &a.device, &Change::Remove)?,
                 "rename" => self.node.change(&s, &a.device, &Change::Rename(&a.name))?,
                 "thaw" => self.node.change(&s, &a.device, &Change::Thaw)?,
+                "freeze" => self.node.change(&s, &a.device, &Change::Freeze)?,
                 "resolve" => self.node.change(&s, "", &Change::Resolve(a.records.clone()))?,
                 "make_admin" => self.node.make_admin(&s, &a.device, a.allow_file_key)?,
                 "renew" => return Ok(json!({ "renewed": self.node.renew(&s)? })),
@@ -1166,7 +1190,48 @@ impl Member {
                 "sync_off" => return order(Order::Sync(false)),
                 "paste" => return order(paste_order(&a)?),
                 "paste_off" => return order(Order::PasteOff),
+                "actions_off" => return order(Order::ActionsOff),
+                "away_off" => return order(Order::AwayOff),
+                "action" => return order(Order::Action(a.name.clone())),
                 other => return Err(Error::msg(format!("there is no action {other:?}"))),
+            }
+            Ok(json!({}))
+        })())
+    }
+
+    /// Does what the app's watch asked from the wrist, signed by the watch's
+    /// admin key, which sees each record or command it signs: sign_body
+    /// with ctx is the link to the watch (src/watch.rs). The request is
+    /// `{"action","device","watch","public","admin_ca","name"}`: action one
+    /// of watch_actions for device (with `-` as `_`), watch the watch's
+    /// device ID, public its key point, admin_ca the CA add_watch made,
+    /// name a quick action's. It answers as manage does.
+    pub fn manage_watch(&self, request: &[u8], sign_body: crate::watch::SignBodyFn, ctx: usize) -> Vec<u8> {
+        answer((|| -> Result<Value> {
+            let a: crate::watch::WatchArgs = serde_json::from_slice(request)
+                .map_err(|e| Error::msg(format!("the watch's request does not decode: {e}")))?;
+            let ca = Cert::parse(&a.admin_ca)?;
+            if ca.public_key() != a.public.as_slice() {
+                return Err(Error::msg("the watch's key does not belong to its admin CA"));
+            }
+            let allowed = self.node.watch_actions(&a.device);
+            if !allowed.iter().any(|w| w.replace('-', "_") == a.action) {
+                return Err(Error::msg(format!("the watch may not {} this device", a.action)));
+            }
+            let key = crate::watch::BodyKey { public: a.public.clone(), f: sign_body, ctx };
+            let s = Signer { ca: &ca, key: &key, me: &a.watch };
+            let order = |o: Order| -> Result<Value> {
+                let res = self.node.order(&s, &a.device, &o, Duration::from_millis(a.timeout_ms.min(60_000)))?;
+                Ok(json!({ "result": res }))
+            };
+            match a.action.as_str() {
+                "freeze" => self.node.change(&s, &a.device, &Change::Freeze)?,
+                "remove" => self.node.change(&s, &a.device, &Change::Remove)?,
+                "paste_off" => return order(Order::PasteOff),
+                "actions_off" => return order(Order::ActionsOff),
+                "away_off" => return order(Order::AwayOff),
+                "action" => return order(Order::Action(a.name.clone())),
+                other => return Err(Error::msg(format!("there is no watch action {other:?}"))),
             }
             Ok(json!({}))
         })())

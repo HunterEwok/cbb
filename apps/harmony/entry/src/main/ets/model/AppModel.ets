@@ -46,12 +46,12 @@ interface SealKey {
   key: string;
 }
 
-interface CommandResult {
+export interface CommandResult {
   status?: string;
   reason?: string;
 }
 
-interface ManageAnswer {
+export interface ManageAnswer {
   result?: CommandResult;
   root_ca?: string;
   renewed?: number;
@@ -63,6 +63,9 @@ interface ManageAnswer {
   left_ms?: number;
   cert?: string;
   admin_ca?: string;
+  device?: string;
+  group?: string;
+  signer?: string;
 }
 
 interface Restored extends Joined {
@@ -533,6 +536,16 @@ export class AppModel {
     }
     Errors.log('yubikey: the recovery key is on the YubiKey');
     this.cardDone = true;
+  }
+
+  // Makes the watch an admin as the root (manage add_watch) with the admin
+  // key it made, key its SubjectPublicKeyInfo: the watch's device ID, its
+  // admin CA, the group's tag and the key's hash as the records name it.
+  async addWatch(key: string, name: string): Promise<ManageAnswer | undefined> {
+    if (!this.isRoot()) {
+      return undefined;
+    }
+    return this.runManage('add_watch', '', { 'key': key, 'name': name, 'os': 'harmonyos' } as Record<string, Object>);
   }
 
   // Signs action for device with extra in the request; fallback is tried

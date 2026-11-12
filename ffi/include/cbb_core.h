@@ -150,7 +150,8 @@ void cbb_member_stop(cbb_member *m);
  * action remove, rename, thaw, make_admin (the root, for a computer
  * connected), mute, unmute, sync_on, sync_off (the device's house, a mode
  * command), paste (method paste or type, kind text, secret or media: text is
- * then a copy_media copy's ID), paste_off, renew (every
+ * then a copy_media copy's ID), paste_off, actions_off, away_off, action
+ * (name the quick action), freeze (an admin that removes no admins), renew (every
  * member certificate due, and as the root every admin CA from an earlier root;
  * no device) or resolve (the root voids the records an alert of the member's
  * alerts op names); the answer {}, {"result"} for a command, or {"renewed":
@@ -166,7 +167,11 @@ void cbb_member_stop(cbb_member *m);
  * sheet's key signs the claim, sign is not called. period, on the root of a
  * member that serves the servers (cbb_member_servers), signs the next period
  * of the server credentials with the root key, when one is due, and answers
- * {"period_due"}.
+ * {"period_due"}. add_watch, the root with "key" (the watch's admin key's
+ * SubjectPublicKeyInfo), "name", "os" and an optional "device", makes a watch
+ * an admin and answers {"device","admin_ca","group","signer"} for the watch;
+ * watch_actions (nothing signed) answers {"actions"}, what a watch may do to
+ * device: freeze, remove, paste-off, actions-off, away-off, action.
  */
 uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                            size_t *answer_len);
@@ -215,6 +220,26 @@ uint8_t *cbb_piv(const uint8_t *request, size_t len, cbb_transmit_fn transmit, v
  */
 uint8_t *cbb_member_manage_card(const cbb_member *m, const uint8_t *request, size_t len, cbb_transmit_fn transmit,
                                 void *ctx, size_t *answer_len);
+
+/*
+ * The app's link to its watch (src/watch.rs), only with the feature member:
+ * sends body (len bytes), a record or command the watch is shown whole, to
+ * the watch and writes its ECDSA P-256 signature over the body's SHA-256,
+ * DER, to sig (72 bytes of room) and the length to sig_len; returns 0, or
+ * another value when the watch refused or went away.
+ */
+typedef int32_t (*cbb_sign_body_fn)(void *ctx, const uint8_t *body, size_t len, uint8_t *sig, size_t *sig_len);
+
+/*
+ * Does what the app's watch asked from the wrist, signed by the watch's admin
+ * key through sign_body during this call only: request is {"action","device",
+ * "watch","public","admin_ca","name","timeout_ms"}, action one of
+ * watch_actions for device (freeze, remove, paste_off, actions_off, away_off,
+ * action), watch the watch's device ID, public its key point and admin_ca
+ * what add_watch made. The answer is as cbb_member_manage's.
+ */
+uint8_t *cbb_member_manage_watch(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_body_fn sign_body,
+                                 void *ctx, size_t *answer_len);
 
 /*
  * The texts of the QR codes in a grey camera frame (src/qr.rs), only with the

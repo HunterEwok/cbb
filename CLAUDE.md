@@ -148,7 +148,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   pane, `Orbit` the devices on orbits), `common/` (the devices' words, Scan
   Kit, sharing in, the clipboard, `YubiKey` the recovery key over NFC, `Widgets`,
   `WatchState` and `Wear`, shared with the watch); `wearable/` the
-  watch app (`model/Link.ets`, `pages/Watch.ets`), through the phone over Wear Engine; its strings come from `apps/l10n` (`harmony:NAME`,
+  watch app (`model/Link.ets`, `model/AdminKey.ets` its admin key in HUKS, `pages/Watch.ets`),
+  through the phone over Wear Engine, an admin with the emergency actions (`ffi/src/watch.rs`); its strings come from `apps/l10n` (`harmony:NAME`,
   the watch's `harmony-wear:NAME`), its colours from `tools/tokens`; `build.sh` and `ffi/bind.sh harmony` build the core with OpenHarmony's
   native SDK (`ffi/ohos-sdk.sh`), `check.sh` compiles and lints the ArkTS with OpenHarmony's
   compiler, the abilities and widgets through a page of its own (stubs of the HarmonyOS-only kits in `check/`); CI's `HarmonyOS app` job.

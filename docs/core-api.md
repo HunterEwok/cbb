@@ -301,6 +301,17 @@ key's `pin`, `slot`, `admin_ca` and its point as `public`, the card's error answ
 refused. `TestFFIPhoneYubiKey` puts the key on a fake card in `phone-on-linux` and restores and
 claims a phone's group with it.
 
+A root phone makes its watch an admin with manage's `add_watch` (`key`, the watch's admin key
+as a SubjectPublicKeyInfo; `name`, `os`): the core issues the watch's admin CA and adds its
+`device` record (role `watch`, `cbb_core::manage::add_watch`) and answers `{"device",
+"admin_ca", "group", "signer"}`; `watch_actions` (`device`, nothing signed) answers what the
+watch may do to a device. The watch signs on itself: `cbb_member_manage_watch` takes the
+watch's `action` for `device`, its device ID as `watch`, its key's point as `public` and its
+`admin_ca`, checks the action against `watch_actions`, and has the app's `cbb_sign_body_fn`
+carry each record or command whole to the watch, which checks it before it signs
+(`ExternalKey::sign_data`, `ffi/src/watch.rs`). `TestFFIPhoneWatch` makes a watch an admin in
+`phone-on-linux` and turns remote paste off on the laptop and removes it from the wrist.
+
 An admin phone makes a remote invitation with `cbb_invite_new` (`ffi/src/invite.rs`): the
 request names the public point of the key it issues with and its admin CA (none on the root),
 how long the invitation is valid and optionally the hub; the member opens the guest tunnel on

@@ -3,7 +3,7 @@
 
 // Settings: the language, the error details, the notifications, the
 // advanced settings with the lab, this phone as the hub or at a relay, the root's settings of the group (how long a claim waits, which keys an admin
-// may keep), leaving the group, and what this app and its core are.
+// may keep, the watch as an admin), leaving the group, and what this app and its core are.
 
 import { router } from '@kit.ArkUI';
 import { i18n } from '@kit.LocalizationKit';
@@ -13,6 +13,7 @@ import { osVersion } from '../core/Phone';
 import { t } from '../core/Text';
 import { app } from '../model/AppModel';
 import { EVENT_KINDS } from '../model/Events';
+import { watch } from '../model/Watch';
 import { BusyLine, ErrorText, PageTitle } from '../components/Common';
 import { WhySection } from '../components/WhySection';
 
@@ -234,6 +235,25 @@ struct Settings {
             .onClick(() => {
               router.pushUrl({ url: 'pages/Recovery' });
             })
+            // The watch as an admin (model/Watch.ets): shown while a watch
+            // with CBB is connected, or once it is an admin.
+            if (watch.linked || watch.admin) {
+              Column({ space: 6 }) {
+                Text($r('app.string.watch_admin_title')).fontColor($r('app.color.text'))
+                Text(watch.admin ? $r('app.string.watch_made_admin') : $r('app.string.watch_admin_body'))
+                  .fontSize(12).fontColor($r('app.color.secondary'))
+                if (!watch.admin) {
+                  Button($r('app.string.watch_make_admin'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+                    .enabled(!watch.making && !app.busy)
+                    .onClick(() => {
+                      watch.makeAdmin();
+                    })
+                  BusyLine({ busy: watch.making })
+                }
+              }
+              .alignItems(HorizontalAlign.Start)
+              .width('100%')
+            }
           }
           Button($r('app.string.settings_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
             .width('100%')

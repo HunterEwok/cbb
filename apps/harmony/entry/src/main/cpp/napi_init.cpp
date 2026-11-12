@@ -394,6 +394,30 @@ int32_t transmitCard(void *, const uint8_t *apdu, size_t len, uint8_t *out, size
     return 0;
 }
 
+// ---- the watch as an admin ----
+
+// The app's function that sends a record or command to the watch, which
+// shows it and signs it with its admin key, and answers a Promise of the
+// signature, DER (setWatch).
+napi_threadsafe_function watchFn = nullptr;
+
+// How long the watch's wearer has to look at what it signs and confirm.
+constexpr auto watchTimeout = std::chrono::minutes(2);
+
+// The core's cbb_sign_body_fn over the app's function; ctx is ignored.
+int32_t signOnWatch(void *, const uint8_t *body, size_t len, uint8_t *sig, size_t *sigLen)
+{
+    if (!watchFn)
+        return 2;
+    std::string why;
+    const std::vector<uint8_t> s = askApp(watchFn, std::vector<uint8_t>(body, body + len), "watch", watchTimeout, &why);
+    if (s.empty() || s.size() > 72)
+        return 1;
+    std::memcpy(sig, s.data(), s.size());
+    *sigLen = s.size();
+    return 0;
+}
+
 // ---- the core ----
 
 napi_value abi(napi_env env, napi_callback_info)
@@ -489,6 +513,19 @@ napi_value setCard(napi_env env, napi_callback_info info)
     napi_value name = str(env, "cbb-card");
     napi_create_threadsafe_function(env, a.v[0], nullptr, name, 0, 1, nullptr, nullptr, nullptr, callAuth, &cardFn);
     napi_unref_threadsafe_function(env, cardFn);
+    return undefined(env);
+}
+
+// setWatch(fn: (body: ArrayBuffer) => Promise<ArrayBuffer>): void, the
+// watch that memberManageWatch has sign.
+napi_value setWatch(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    if (watchFn)
+        napi_release_threadsafe_function(watchFn, napi_tsfn_release);
+    napi_value name = str(env, "cbb-watch");
+    napi_create_threadsafe_function(env, a.v[0], nullptr, name, 0, 1, nullptr, nullptr, nullptr, callAuth, &watchFn);
+    napi_unref_threadsafe_function(env, watchFn);
     return undefined(env);
 }
 
@@ -593,6 +630,22 @@ napi_value memberManageCard(napi_env env, napi_callback_info info)
             return errorAnswer({"", "member: no handle"});
         size_t len = 0;
         return take(cbb_member_manage_card(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), transmitCard, nullptr, &len),
+                    len);
+    });
+}
+
+// memberManageWatch(handle, request: string): Promise<string>, what the
+// watch asked from the wrist, signed on the watch (cbb_member_manage_watch).
+napi_value memberManageWatch(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    Member *member = handleOf<Member>(env, a.v[0]);
+    const std::string req = stringOf(env, a.v[1]);
+    return laterString(env, [member, req]() {
+        if (!member)
+            return errorAnswer({"", "member: no handle"});
+        size_t len = 0;
+        return take(cbb_member_manage_watch(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), signOnWatch, nullptr, &len),
                     len);
     });
 }
@@ -881,12 +934,14 @@ napi_value init(napi_env env, napi_value exports)
         {"groupNew", nullptr, groupNew, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"restore", nullptr, restore, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"setCard", nullptr, setCard, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"setWatch", nullptr, setWatch, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"piv", nullptr, piv, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"qrRead", nullptr, qrRead, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberStart", nullptr, memberStart, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberCall", nullptr, memberCall, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberManage", nullptr, memberManage, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberManageCard", nullptr, memberManageCard, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"memberManageWatch", nullptr, memberManageWatch, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberServers", nullptr, memberServers, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberStop", nullptr, memberStop, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"joinNew", nullptr, joinNew, nullptr, nullptr, nullptr, napi_default, nullptr},

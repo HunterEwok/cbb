@@ -35,6 +35,9 @@ export const restore: (request: string) => Promise<string>;
 // IsoDep tag and answers the card's answer, its status word last; piv runs a
 // step of cbb_piv on it.
 export const setCard: (transmit: (apdu: ArrayBuffer) => Promise<ArrayBuffer>) => void;
+// The watch that memberManageWatch has sign: it is shown the body and
+// answers its signature, DER.
+export const setWatch: (sign: (body: ArrayBuffer) => Promise<ArrayBuffer>) => void;
 export const piv: (request: string) => Promise<string>;
 export const qrRead: (gray: ArrayBuffer, width: number, height: number, stride: number) => string;
 
@@ -42,6 +45,7 @@ export const memberStart: (request: string, onEvent: (event: string) => void) =>
 export const memberCall: (member: Handle, request: string) => Promise<string>;
 export const memberManage: (member: Handle, request: string, which: Which) => Promise<string>;
 export const memberManageCard: (member: Handle, request: string) => Promise<string>;
+export const memberManageWatch: (member: Handle, request: string) => Promise<string>;
 export const memberServers: (member: Handle, index: string) => Promise<string>;
 export const memberStop: (member: Handle) => Promise<void>;
 

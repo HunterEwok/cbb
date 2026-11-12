@@ -531,7 +531,7 @@ depends on a version number.
 | `current` | Event or absent | the sender's current event with its age as of sending; for a secret a reader sends only its mark (section 5, "Secrets"), whatever its age; absent when there is none |
 | `records` | string or absent | the digest of the sender's records (section 10) |
 | `name` | string or absent | the sender's device name, 1-64 bytes; a receiver ignores an invalid one |
-| `os` | string or absent | the sender's operating system: `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `harmonyos` or `none` (firmware without one); shown, never trusted; a receiver ignores an unknown one. A watch's device record says `watchos` or `wearos` (section 10) |
+| `os` | string or absent | the sender's operating system: `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `harmonyos` or `none` (firmware without one); shown, never trusted; a receiver ignores an unknown one. A watch's device record says `watchos`, `wearos` or `harmonyos` (section 10) |
 | `admin_key` | string or absent | from a member with the capability `admin` that is neither the root nor an admin yet, or an admin whose admin CA is from a root before the current one: the SubjectPublicKeyInfo of its admin key, DER in base64 (section 10, "Admins") |
 | `tunnel_key` | string or absent | the sender's WireGuard public key, 32 bytes in base64, for the group's hubs (section 11) |
 | `tunnel_psk` | string or absent | always with `tunnel_key`, which a receiver ignores without it: the WireGuard preshared key the sender chose for its tunnels, 32 bytes in base64, which every hub of the group uses for it (section 11, "Several hubs") |
@@ -1591,7 +1591,7 @@ makes the admin, not by each member from other records.
 
 #### Watches
 
-A watch's admin key sits in its Secure Enclave or Keystore, but a watch on the wrist signs
+A watch's admin key sits in its Secure Enclave, Keystore or HUKS, but a watch on the wrist signs
 without Face ID or a fingerprint, so its powers are few: the root's `device` record for it
 has role `watch`, `powers` `freeze` and `remove`, and `commands` `paste-off`, `actions-off`,
 `away-off` and `action` (the table above). So it removes devices but no admin, freezes

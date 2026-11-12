@@ -5,8 +5,11 @@
 // Engine's messages (docs/apps.md, "HarmonyOS watches"), as WatchState does
 // for the Wear OS watch: the phone tells the group as it sees it, never the
 // clipboard; the watch asks for it and turns the phone's sync and sync away
-// from home on or off. The same file is in the phone's module and the
-// watch's; check.sh keeps the two the same.
+// from home on or off. A watch the root made an admin also signs, with its
+// own key, the emergency actions its wearer picks: the phone shows it each
+// record or command whole, in parts, and the watch checks it before it
+// signs. The same file is in the phone's module and the watch's; check.sh
+// keeps the two the same.
 
 import { util } from '@kit.ArkTS';
 
@@ -30,6 +33,9 @@ export interface WatchDevice {
   collection: string;
   // The watch's own phone.
   phone: boolean;
+  // What the watch, an admin, may do to it from the wrist: freeze,
+  // remove, paste-off, actions-off, away-off.
+  actions: string[];
 }
 
 // The phone's state: type is state.
@@ -47,15 +53,45 @@ export interface WatchState {
   away: string;
   // The latest events, newest first.
   events: string[];
+  // The watch is an admin of the group.
+  admin: boolean;
 }
 
-// The watch's ask: hello (send the state), sync or away with on.
+// The watch's ask: hello (send the state), sync or away with on; key, the
+// admin key the phone asked for (its SubjectPublicKeyInfo, base64, empty
+// when the wearer said no); act, an emergency action for device; signed,
+// the signature of what the phone showed (DER, base64, empty when the
+// wearer said no).
 export interface WatchAsk {
   type: string;
   on: boolean;
+  key?: string;
+  action?: string;
+  device?: string;
+  sig?: string;
 }
 
-export function encode(o: WatchState | WatchAsk): Uint8Array {
+// The phone's note to the watch: make_key (the root asks for an admin
+// key); admitted (the watch is an admin: its device ID, the group's tag
+// and its admin key's hash as the records name it); sign, one part of a
+// record or command to sign (data base64, part of parts); done, how an
+// action ended (ok, and message, the reason when it did not).
+export interface WatchNote {
+  type: string;
+  device?: string;
+  group?: string;
+  signer?: string;
+  part?: number;
+  parts?: number;
+  data?: string;
+  ok?: boolean;
+  message?: string;
+}
+
+// The bytes of a record or command in one sign note, before base64.
+export const PART_BYTES: number = 600;
+
+export function encode(o: WatchState | WatchAsk | WatchNote): Uint8Array {
   return new util.TextEncoder().encodeInto(JSON.stringify(o));
 }
 
@@ -71,10 +107,31 @@ export function decodeState(data: Uint8Array): WatchState | undefined {
 export function decodeAsk(data: Uint8Array): WatchAsk | undefined {
   try {
     const a = JSON.parse(util.TextDecoder.create('utf-8').decodeToString(data)) as WatchAsk;
-    return ['hello', 'sync', 'away'].includes(a.type) ? a : undefined;
+    return ['hello', 'sync', 'away', 'key', 'act', 'signed'].includes(a.type) ? a : undefined;
   } catch (e) {
     return undefined;
   }
+}
+
+export function decodeNote(data: Uint8Array): WatchNote | undefined {
+  try {
+    const n = JSON.parse(util.TextDecoder.create('utf-8').decodeToString(data)) as WatchNote;
+    return ['make_key', 'admitted', 'sign', 'done'].includes(n.type) ? n : undefined;
+  } catch (e) {
+    return undefined;
+  }
+}
+
+// A record or command in sign notes, each small enough for one message.
+export function signNotes(body: Uint8Array): WatchNote[] {
+  const b64 = new util.Base64Helper();
+  const parts = Math.max(1, Math.ceil(body.length / PART_BYTES));
+  const out: WatchNote[] = [];
+  for (let i = 0; i < parts; i++) {
+    const data = b64.encodeToStringSync(body.subarray(i * PART_BYTES, (i + 1) * PART_BYTES));
+    out.push({ type: 'sign', part: i, parts: parts, data: data });
+  }
+  return out;
 }
 
 // The state as one message: the events go first, then the devices from the
@@ -91,7 +148,7 @@ export function fit(s: WatchState): Uint8Array {
     }
     const t: WatchState = {
       type: s.type, group: s.group, devices: devices, more: s.devices.length - devices.length, online: s.online,
-      total: s.total, sync: s.sync, away: s.away, events: events
+      total: s.total, sync: s.sync, away: s.away, events: events, admin: s.admin
     };
     out = encode(t);
   }

@@ -142,6 +142,8 @@ pub mod qr;
 pub mod restore;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
+#[cfg(feature = "member")]
+pub mod watch;
 
 /// Hands an answer to C: its bytes, which the caller gives back with
 /// `cbb_free`, their length written to `answer_len` when not null.
@@ -574,6 +576,36 @@ pub unsafe extern "C" fn cbb_member_manage_card(
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
     to_c(guard::answer(|| piv::manage(m, req, transmit, ctx as usize)), answer_len)
+}
+
+/// Does what the app's watch asked from the wrist (src/watch.rs): as
+/// `cbb_member_manage`, signed by the watch's admin key, which `sign_body`
+/// with `ctx` reaches over the app's link to the watch and which is shown
+/// each record or command whole. `request` is
+/// `{"action","device","watch","public","admin_ca","name"}`.
+///
+/// # Safety
+///
+/// As `cbb_member_manage`, with `sign_body` callable with `ctx` until the
+/// call returns.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_manage_watch(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    sign_body: watch::SignBodyFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if request.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(guard::answer(|| m.manage_watch(req, sign_body, ctx as usize)), answer_len)
 }
 
 /// Starts admitting a device by its QR code, as an admin of the group

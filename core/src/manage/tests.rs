@@ -442,3 +442,72 @@ fn the_root_records_what_an_attestation_shows() {
     let laptop_key = device(&g.rs, &g.laptop).key;
     assert!(evidence(&g.rs, &a, &g.laptop, &laptop_key, &proven, now_ms()).is_err());
 }
+
+/// A key whose holder sees what it signs, as a watch's does.
+struct SeeingKey(SoftKey, std::sync::Mutex<Vec<Vec<u8>>>);
+
+impl ExternalKey for SeeingKey {
+    fn public(&self) -> Vec<u8> {
+        self.0.public()
+    }
+
+    fn sign_digest(&self, _: &[u8; 32]) -> Result<Vec<u8>> {
+        Err(Error::msg("the watch signs only what it sees"))
+    }
+
+    fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>> {
+        self.1.lock().unwrap().push(data.to_vec());
+        self.0.sign_digest(&certs::sha256(data))
+    }
+}
+
+#[test]
+fn a_watch_freezes_and_removes_from_the_wrist() {
+    let mut g = group();
+    let root = Signer { ca: &g.root, key: &*g.root_key, me: &g.root_phone };
+    let watch = DeviceId::random().to_string();
+    let key =
+        SeeingKey(SoftKey(SigningKey::from_bytes(&certs::random_bytes::<32>().into()).unwrap()), Default::default());
+    let admin = Signer { ca: &g.admin_ca, key: &*g.admin_key, me: &g.admin_phone };
+    assert!(add_watch(&g.rs, &admin, &watch, "Watch", "harmonyos", &key.public(), now_ms()).is_err());
+    assert!(add_watch(&g.rs, &root, &watch, "Watch", "linux", &key.public(), now_ms()).is_err());
+    assert!(add_watch(&g.rs, &root, &g.laptop, "Watch", "harmonyos", &key.public(), now_ms()).is_err());
+    let made = add_watch(&g.rs, &root, &watch, "Watch", "harmonyos", &key.public(), now_ms()).unwrap();
+    assert!(g.rs.add(&made.record).unwrap());
+    let w = g.rs.devices().into_iter().find(|d| d.id == watch).unwrap();
+    assert!(w.admin && w.role == "watch");
+    let ca = Cert::parse(&made.admin_ca).unwrap();
+
+    // Nothing to the root's phone, a phone or the watch; the laptop, no
+    // admin, is removed but not frozen.
+    assert!(watch_actions(&g.rs, &g.root_phone).is_empty());
+    assert!(watch_actions(&g.rs, &g.admin_phone).is_empty());
+    assert_eq!(watch_actions(&g.rs, &g.laptop), ["remove", "paste-off", "actions-off", "away-off", "action"]);
+
+    let s = Signer { ca: &ca, key: &key, me: &watch };
+    let off = order(&g.rs, &s, &g.laptop, &Order::PasteOff, now_ms()).unwrap();
+    assert!(!off.body.is_empty());
+    let seen = key.1.lock().unwrap().last().cloned().unwrap();
+    assert!(!seen.is_empty(), "the watch saw the command it signed");
+
+    // The laptop made a full admin is neither frozen nor removed from the
+    // wrist: only the root takes back an admin that removes admins.
+    let lkey = soft();
+    let spki = certs::p256_spki_of(&lkey.public());
+    let made = make_admin(&g.rs, &root, &g.laptop, &spki, "hardware", false, now_ms()).unwrap();
+    assert!(g.rs.add(&made.record).unwrap());
+    assert!(!watch_actions(&g.rs, &g.laptop).contains(&"freeze"));
+    assert!(!watch_actions(&g.rs, &g.laptop).contains(&"remove"));
+    assert!(change(&g.rs, &s, &g.laptop, &Change::Freeze, now_ms()).is_err());
+
+    // A second watch, lost, is frozen by the first.
+    let lost = DeviceId::random().to_string();
+    let made = add_watch(&g.rs, &root, &lost, "Old watch", "wearos", &soft().public(), now_ms()).unwrap();
+    assert!(g.rs.add(&made.record).unwrap());
+    assert_eq!(watch_actions(&g.rs, &lost), ["freeze"]);
+    apply(&mut g.rs, &s, &lost, &Change::Freeze, now_ms()).unwrap();
+    let body = Body::parse(key.1.lock().unwrap().last().unwrap()).unwrap();
+    assert_eq!((body.kind.as_str(), body.signer), ("freeze", Hash(ca.key_hash())));
+    assert!(g.rs.devices().into_iter().find(|d| d.id == lost).unwrap().frozen);
+    assert!(watch_actions(&g.rs, &lost).is_empty());
+}
