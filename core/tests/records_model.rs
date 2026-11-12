@@ -249,7 +249,7 @@ fn any_order_gives_one_state() {
     let ca = g.claim("A", "NA");
     g.device("C");
     g.revoke("R", "D");
-    g.sign("NA", Kind::Copies { incoming_ms: 5_000 });
+    g.sign("NA", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
     let ck = g.claim("K", "NK");
     g.sign("R", Kind::Resolve(vec![ca.id()]));
     let h = held(&[&ca, &ck], DEFAULT_DELAY_MS);
@@ -318,7 +318,7 @@ impl Group {
 /// A member that took every record so far and counted these claims.
 fn counting_member(g: &Group, counted: &[&Record]) -> RecordSet {
     let mut m = g.member(&g.all());
-    m.remember_counted(counted.iter().map(|c| c.id()));
+    m.remember_counted(counted.iter().map(|c| c.id())).unwrap();
     m
 }
 
@@ -375,9 +375,8 @@ fn a_removal_of_the_member_key_removes_the_admin_key() {
     let s = g.member(&g.all()).state(&held(&[&c], DEFAULT_DELAY_MS));
     assert!(s.revoked.contains(&k("A").hash));
     assert!(!s.may_command(&k("A").hash));
-    // The model calls it cancelled (the root's removal names both keys of the
-    // claimant's device); the core calls it void. Either way it never counts.
-    assert!(matches!(claim_state(&s, &c), Some(ClaimState::Cancelled | ClaimState::Void)));
+    // The removal did not see the claim (it came first): void.
+    assert_eq!(claim_state(&s, &c), Some(ClaimState::Void));
     assert_eq!(s.roots, vec![g.root.hash]);
 }
 
@@ -469,7 +468,7 @@ fn counted_claims_and_records_in_any_order_give_one_state() {
     g.device("C");
     let c = g.claim("K", "NK");
     g.sign("R", Kind::Resolve(vec![c.id()]));
-    g.sign("NK", Kind::Copies { incoming_ms: 5_000 });
+    g.sign("NK", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
     g.freeze("W", "C", Vec::new());
     let h = held(&[&c], DEFAULT_DELAY_MS);
     let all = g.all();
@@ -480,11 +479,126 @@ fn counted_claims_and_records_in_any_order_give_one_state() {
         .iter()
         .map(|order| {
             let mut m = g.member(order);
-            m.remember_counted(counted.iter().copied());
+            m.remember_counted(counted.iter().copied()).unwrap();
             m
         })
         .collect();
     assert_eq!(sets[0].digest(), sets[1].digest());
     assert_eq!(sets[0].state(&h), sets[1].state(&h));
     assert_eq!(sets[0].state(&h).roots, vec![g.root.hash, k("NK").hash]);
+}
+
+impl Group {
+    /// The root's record of an admin's device again: with another admin key,
+    /// or none, and the heads it saw of the old one.
+    fn admin_again(&mut self, member: &str, admin: Option<(&str, AdminKind)>) -> Record {
+        let mut d = Device::new(k(member).key, member, ROLE_PHONE);
+        d.rights = RIGHT_READ | RIGHT_SEND;
+        if let Some((a, kind)) = admin {
+            d.admin = Some(k(a).key);
+            (d.powers, d.commands) = kind.grants();
+        }
+        d.seen = self.seen();
+        self.sign("R", Kind::Device(d))
+    }
+}
+
+/// demotedAdminTest: the root takes the admin key off A's device; what A
+/// signs after, unseen by that record, does not count.
+#[test]
+fn an_admin_key_the_root_took_off_signs_nothing() {
+    let mut g = Group::new();
+    g.admin_again("A phone", None);
+    let c = g.claim("A", "NA");
+    let s = g.member(&g.all()).state(&held(&[&c], DEFAULT_DELAY_MS));
+    assert_ne!(claim_state(&s, &c), Some(ClaimState::Effective));
+    assert_eq!(s.roots, vec![g.root.hash]);
+    assert!(!s.may_command(&k("A").hash));
+}
+
+/// countedClaimKeptTest: a counted claim is kept outside the rooms:
+/// records the claimant signs beside it at its seq never push it out,
+/// before or after compaction.
+#[test]
+fn a_counted_claim_is_never_pushed_out() {
+    let mut g = Group::new();
+    let c = g.claim("K", "NK");
+    for _ in 0..40 {
+        g.sign_twin("K", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    }
+    let h = held(&[&c], DEFAULT_DELAY_MS);
+    let mut m = counting_member(&g, &[&c]);
+    assert!(m.contains(&c.id()));
+    let s = m.state(&h);
+    m.compact(&s);
+    assert!(m.contains(&c.id()));
+    assert_eq!(m.state(&h).roots, vec![g.root.hash, k("NK").hash]);
+}
+
+/// thawTest and thawSeenTest: a thaw revives only what it saw of the
+/// frozen key; the rest stays cut off.
+#[test]
+fn a_thaw_revives_only_what_it_saw() {
+    for saw in [false, true] {
+        let mut g = Group::new();
+        let seen = g.seen();
+        let f = g.freeze("A", "C", seen);
+        let before = g.seen();
+        g.device("C");
+        let seen = if saw { g.seen() } else { before };
+        g.sign("R", Kind::Thaw { ids: vec![f.id()], seen });
+        let s = g.member(&g.all()).state(&BTreeMap::new());
+        assert!(s.may_command(&k("C").hash), "saw {saw}");
+        assert_eq!(s.device_by_key(&k("D").hash).is_some(), saw, "saw {saw}");
+    }
+}
+
+/// claimantRemovedTest: the live old root removes the claimant after
+/// seeing its claim. A member that was off during the delay and gets both
+/// sees the claim cancelled; one that counted first keeps the takeover.
+#[test]
+fn a_claimant_removed_after_its_claim_is_cancelled_where_not_counted() {
+    let mut g = Group::new();
+    let c = g.claim("K", "NK");
+    let h = held(&[&c], DEFAULT_DELAY_MS);
+    let counted = counting_member(&g, &[&c]);
+    g.revoke("R", "K");
+    let s = g.member(&g.all()).state(&h);
+    assert_eq!(claim_state(&s, &c), Some(ClaimState::Cancelled));
+    assert_eq!(s.roots, vec![g.root.hash]);
+    let mut counted = counted;
+    counted.insert_all(g.recs.iter().cloned());
+    assert_eq!(counted.state(&h).roots, vec![g.root.hash, k("NK").hash]);
+}
+
+/// claimantRemovedAfterNewRootTest: a removal of the claimant that saw the
+/// new root's records disputes nothing.
+#[test]
+fn a_removal_that_saw_the_new_root_changes_nothing() {
+    let mut g = Group::new();
+    let c = g.claim("K", "NK");
+    g.device_by_new_root();
+    g.revoke("R", "K");
+    let s = g.member(&g.all()).state(&held(&[&c], DEFAULT_DELAY_MS));
+    assert_eq!(claim_state(&s, &c), Some(ClaimState::Effective));
+    assert_eq!(s.roots, vec![g.root.hash, k("NK").hash]);
+}
+
+/// fullRoomAfterTakeoverTest: after a takeover counts, other keys fill the
+/// room; the old root keeps its records from the head the claim saw
+/// downward, and the takeover stays.
+#[test]
+fn a_full_room_after_a_takeover_keeps_it() {
+    let mut g = Group::new();
+    let c = g.claim("K", "NK");
+    for by in ["A", "C", "W", "NK"] {
+        for _ in 0..300 {
+            g.sign(by, Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+        }
+    }
+    let h = held(&[&c], DEFAULT_DELAY_MS);
+    let m = counting_member(&g, &[&c]);
+    let s = m.state(&h);
+    assert_eq!(s.roots, vec![g.root.hash, k("NK").hash]);
+    assert_eq!(claim_state(&s, &c), Some(ClaimState::Effective));
 }

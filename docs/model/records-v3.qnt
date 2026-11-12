@@ -254,7 +254,7 @@ module records_v3 {
       else if (l.indices().exists(i => l[i] == r.id)) 10000 + (l.length() - r.seq) * 100 + hid(r.id)
       else 200000 + r.seq * 100 + hid(r.id)
     }
-    else if (cp) (if (EARLY_BEFORE_CHECKPOINTS) 10000 else 0) + r.seq * 100 + hid(r.id)
+    else if (cp) (if (EARLY_BEFORE_CHECKPOINTS) 10000 else 0) + (MAXREC + 4 - r.seq) * 100 + hid(r.id)
     else if (early) (if (EARLY_BEFORE_CHECKPOINTS) 0 else 10000) + r.seq * 100 + hid(r.id)
     else 100000 + r.seq * 100 + hid(r.id)
   }
@@ -536,7 +536,7 @@ module records_v3 {
     pure def sawNewRoot(r: Record, c: Record): bool = lineOf(r.seen, c.target).length() > 0
     pure def cancelled(c: Record): bool = rs.exists(r => r.signer == cur and rootRec(r)
       and ((r.kind == "resolve" and r.targetRec == c.id)
-        or (r.kind == "revoke" and withPair(r.target).contains(c.signer) and not(sawNewRoot(r, c)))))
+        or (r.kind == "revoke" and withPair(r.target).contains(c.signer) and saw(r, c) and not(sawNewRoot(r, c)))))
     pure def voidRoot(c: Record): bool =
       c.target == c.signer or onList(path, c.target)
         or rs.exists(r => r.signer == c.target and isAdmin(r))
@@ -645,26 +645,29 @@ module records_v3 {
 
   // The state with the checkpoint c tried, or fallback when c is 0 or does not count in the
   // set it prunes.
-  pure def tryCheckpoint(rs: Set[Record], held: Id -> int, counted: List[Counted], c: Id, fallback: View): View =
-    if (c == 0 or fallback.checkpoint != 0) fallback
+  // One root's checkpoint applied on what the ones before it left: it counts when it still
+  // counts in the set it prunes; then that pruned set goes on.
+  pure def applyCheckpoint(held: Id -> int, counted: List[Counted], c: Id,
+      acc: (Set[Record], Set[Id], View)): (Set[Record], Set[Id], View) =
+    if (c == 0) acc
     else {
-      val cp = rs.filter(r => r.id == c).fold(NONEREC, (a, r) => r)
-      val v = evaluate(rs.filter(r => not(prunedBy(cp, r))), held, counted, anchorsOf(cp))
-      if (v.counting.contains(c)) { ...v, checkpoint: c } else fallback
+      val cp = acc._1.filter(r => r.id == c).fold(NONEREC, (a, r) => r)
+      val pruned = acc._1.filter(r => not(prunedBy(cp, r)))
+      val anchors = acc._2.union(anchorsOf(cp))
+      val v = evaluate(pruned, held, counted, anchors)
+      if (cp != NONEREC and v.counting.contains(c)) (pruned, anchors, { ...v, checkpoint: c }) else acc
     }
 
-  // The state: only the path roots' newest checkpoints within their cuts are tried, the
-  // newest root's first; the first that counts in the set it prunes gives the state.
+  // The state: the path roots' newest checkpoints within their cuts apply in the path's
+  // order, each on what the ones before it pruned (decision 22, rule 12).
   pure def fullEvaluate(rs: Set[Record], held: Id -> int, counted: List[Counted]): View = {
     val plain = evaluate(rs, held, counted, Set())
     val p = plain.path
-    val c3 = if (p.length() > 2) newestCheckpoint(rs, plain, p[2]) else 0
-    val c2 = if (p.length() > 1) newestCheckpoint(rs, plain, p[1]) else 0
-    val c1 = newestCheckpoint(rs, plain, p[0])
-    val none = { ...plain, checkpoint: 0 }
-    val v3 = tryCheckpoint(rs, held, counted, c3, none)
-    val v2 = tryCheckpoint(rs, held, counted, c2, v3)
-    tryCheckpoint(rs, held, counted, c1, v2)
+    val a0 = (rs, Set(), { ...plain, checkpoint: 0 })
+    val a1 = applyCheckpoint(held, counted, newestCheckpoint(rs, plain, p[0]), a0)
+    val a2 = if (p.length() > 1) applyCheckpoint(held, counted, newestCheckpoint(a1._1, plain, p[1]), a1) else a1
+    val a3 = if (p.length() > 2) applyCheckpoint(held, counted, newestCheckpoint(a2._1, plain, p[2]), a2) else a2
+    a3._3
   }
 
   // A member's state: its set evaluated (the evaluation keeps again what the set holds).
@@ -1141,7 +1144,8 @@ module records_v3 {
       .then(give("m", 6))
       .expect(not(views.get("m").stop) and views.get("m").commanders.contains(PHONE) and promises)
 
-  // A removal of an admin's member key removes its admin key: its later claim is cancelled.
+  // A removal of an admin's member key removes its admin key: its later claim, which the
+  // removal did not see, is void.
   run bothKeysRemovedTest =
     init
       .then(signAs(ROOT, "revoke", "dA", 0))
@@ -1151,7 +1155,7 @@ module records_v3 {
       .then(tickAt("m"))
       .then(tickAt("m"))
       .expect(views.get("m").revoked.contains(PHONE) and not(views.get("m").admins.keys().contains(PHONE))
-        and claimState("m", 6) == "cancelled" and views.get("m").path == [ROOT] and promises)
+        and claimState("m", 6) == "void" and views.get("m").path == [ROOT] and promises)
 
   // What the old root resolved stays resolved after a takeover.
   run oldRootResolveStaysTest =
