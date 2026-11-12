@@ -46,11 +46,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# The caches go where the image's user keeps them.
+home=$(docker run --rm "$image" sh -c 'echo "$HOME"')
+
 # run NAME ARGS... runs a container of IMAGE with the repository at /src.
 run() {
 	name=$1
 	shift
-	docker run --name "$name" -v "$repo:/src" -v cbb-cargo:/root/.cargo/registry -v cbb-go:/root/go \
+	docker run --name "$name" -v "$repo:/src" -v "cbb-cargo:$home/.cargo/registry" -v "cbb-go:$home/go" \
 		-e GOFLAGS=-buildvcs=false -e CARGO_TARGET_DIR=/src/target/parallel/cargo -w /src "$@"
 }
 
@@ -68,7 +71,7 @@ run "$tag-build" --rm "$image" sh -ec '
 	go build -o "$b/shard" ./tools/shard
 '
 
-tests=$(run "$tag-list" --rm -w /src/internal/service "$image" ../target/parallel/bin/service.test -test.list "$filter")
+tests=$(run "$tag-list" --rm -w /src/internal/service "$image" ../../target/parallel/bin/service.test -test.list "$filter")
 echo "$(echo "$tests" | grep -c '^Test') tests in $parts parts"
 for i in $(seq 1 "$parts"); do
 	expr=$(echo "$tests" | run "$tag-shard" --rm -i "$image" target/parallel/bin/shard -n "$parts" -i "$i" -durations tools/shard/service.txt)
@@ -81,7 +84,7 @@ for i in $(seq 1 "$parts"); do
 		-e PART_RUN="$expr" "$image" sh -c '
 			Xvfb :5 -screen 0 640x480x24 -noreset >/tmp/xvfb.log 2>&1 &
 			for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
-			exec ../target/parallel/bin/service.test -test.run "$PART_RUN" -test.timeout 30m -test.v' >/dev/null
+			exec ../../target/parallel/bin/service.test -test.run "$PART_RUN" -test.timeout 30m -test.v' >/dev/null
 	echo "part $i started"
 done
 
