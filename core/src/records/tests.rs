@@ -1577,6 +1577,25 @@ fn seen_names_each_key_once() {
     assert!(body.check().unwrap_err().is("records/claim/seen"));
 }
 
+/// Two removals of an admin's own key, whatever they saw: the first
+/// counts, the second is cut off by it, and the group goes on.
+#[test]
+fn two_removals_of_ones_own_key() {
+    let mut g = G::new();
+    let (pw, w, pa, a) = (k("watch"), k("admin w"), k("phone a"), k("admin a"));
+    let (watch, _) = AdminKind::Watch.grants();
+    let (phone, _) = AdminKind::Phone.grants();
+    g.admin(&pw, &w, watch);
+    g.admin(&pa, &a, phone);
+    let f1 = g.rec(&w, Kind::Freeze(removal(&[w.hash], vec![])));
+    let f2 = g.rec(&w, Kind::Freeze(removal(&[w.hash], vec![])));
+    let s = g.state();
+    assert_eq!(s.stop, Stop::None);
+    assert!(s.conflicts.is_empty());
+    assert!(s.counting.contains(&f1.id()) && !s.counting.contains(&f2.id()));
+    assert!(s.may_command(&a.hash) && !s.may_command(&w.hash));
+}
+
 /// A record of by with kind, its body's map edited before it is signed.
 fn raw(
     g: &G,

@@ -1240,13 +1240,15 @@ impl<'e, 'a> Epoch<'e, 'a> {
 
     /// Reports whether a, a revoke or freeze, cuts off b: it names b's
     /// signer and saw fewer of its records than b's seq. A removal of its
-    /// own signer's key cuts off what that key signs after it too, but
-    /// never itself.
+    /// own signer's key cuts off only what that key signs after it, so
+    /// that two of them never cut each other.
     fn cuts_off(&self, a: usize, b: usize) -> bool {
         let (ra, rb) = (self.r(a), self.r(b));
+        let own = ra.b().signer == rb.b().signer;
         a != b
             && ra.removal().is_some_and(|rm| {
-                rm.keys.binary_search(&rb.b().signer).is_ok() && rm.seen_of(&rb.b().signer) < rb.b().seq
+                rm.keys.binary_search(&rb.b().signer).is_ok()
+                    && if own { rb.b().seq > ra.b().seq } else { rm.seen_of(&rb.b().signer) < rb.b().seq }
             })
     }
 
