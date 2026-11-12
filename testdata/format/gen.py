@@ -417,7 +417,7 @@ def record_vectors():
     add("recovery", ROOT, 11, {10: Signer("recovery").key})
     add("handover", ROOT, 12, {10: ADMIN.hash})
     add("checkpoint", ROOT, 9, {10: srt([[ADMIN.hash, 3, bytes.fromhex(take[-2]["id"])],
-                                         [ROOT.hash, 11, bytes.fromhex(take[-1]["id"])]]),
+                                         [ROOT.hash, 10, bytes.fromhex(take[-1]["id"])]]),
                                 11: srt([bytes.fromhex(take[0]["id"]), bytes.fromhex(take[1]["id"])])})
     add("device with an optional field from a later version", ROOT, 1,
         {10: Signer("tv").key, 11: "TV", 12: 1, 13: 0b0011},

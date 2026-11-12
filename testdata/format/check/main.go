@@ -516,7 +516,7 @@ func main() {
 				return nil, errors.New("grants/admin")
 			}
 			kh, pub, err := keyHash(r[uint64(20)])
-			if err != nil || !bytes.Equal(kh, h) {
+			if err != nil || !bytes.Equal(kh, h) || !onCurve(pub) {
 				return nil, errors.New("grants/admin")
 			}
 			if p, _ := r[uint64(21)].(uint64); p&1 != 1 {
@@ -1234,7 +1234,17 @@ func adminRecord(r map[any]any, group []byte) bool {
 	k, _ := r[uint64(10)].([]any)
 	alg, _ := keyAlg(k)
 	return typ == 1 && bytes.Equal(g, group) && seq >= 1 && seq < 1<<31 && prevOK && nameOK(r[uint64(11)]) &&
-		role >= 1 && role <= 4 && err == nil && alg == 1 && len(pub) == 65
+		role >= 1 && role <= 4 && err == nil && alg == 1 && onCurve(pub)
+}
+
+// onCurve reports whether pub is an uncompressed P-256 point, as the Rust
+// reader checks a member key and an admin key.
+func onCurve(pub []byte) bool {
+	if len(pub) != 65 {
+		return false
+	}
+	x, _ := elliptic.Unmarshal(elliptic.P256(), pub) //nolint:staticcheck
+	return x != nil
 }
 
 func seenEntry(e any) bool {

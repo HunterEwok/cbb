@@ -469,7 +469,13 @@ impl Body {
             }
             Kind::Checkpoint { heads, keep } => {
                 let keys: Vec<KeyHash> = heads.iter().map(|h| h.key).collect();
-                if heads.is_empty() || !strictly_sorted(&keys) || heads.iter().any(|h| h.seq == 0 || h.seq > MAX_SEQ) {
+                // A head of its own key is below the checkpoint itself.
+                let own_above = heads.iter().any(|h| h.key == self.signer && h.seq >= self.seq);
+                if heads.is_empty()
+                    || !strictly_sorted(&keys)
+                    || heads.iter().any(|h| h.seq == 0 || h.seq > MAX_SEQ)
+                    || own_above
+                {
                     return Err(field(t, "heads"));
                 }
                 if !strictly_sorted(keep) {
