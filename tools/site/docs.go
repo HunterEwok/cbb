@@ -373,9 +373,9 @@ var (
 )
 
 // boards puts each picture of a page, which is an SVG drawn for GitHub, on a
-// board of the site: inline in a walnut frame on the slate, where the
-// stylesheet (.diagram) draws it in chalk in place of its own colours. The
-// file stays as it is, so GitHub shows it as before.
+// drawing sheet of the site: inline, with the sheet's corner marks, where the
+// stylesheet (.diagram) draws it in the site's lines in place of its own
+// colours. The file stays as it is, so GitHub shows it as before.
 func (l linker) boards(html string) string {
 	html = tableOpen.ReplaceAllString(html, `<div class="tablewrap"><table>`)
 	html = strings.ReplaceAll(html, "</table>", "</table></div>")
@@ -389,7 +389,7 @@ func (l linker) boards(html string) string {
 		svg = svgStyle.ReplaceAllString(svg, "")
 		svg = svgSize.ReplaceAllString(svg, "$1")
 		svg = svgShape.ReplaceAllString(svg, "<path pathLength=\"1\"")
-		return `<div class="frame diagram"><i class="rail t"></i><i class="rail b"></i><i class="rail l"></i><i class="rail r"></i><div class="surface">` +
+		return `<div class="frame diagram"><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i><div class="surface">` +
 			strings.TrimSpace(svg) + `</div></div>`
 	})
 }

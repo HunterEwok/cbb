@@ -120,8 +120,8 @@ only its key and a table of hashed tags (see [What the server keeps](#what-the-s
 ### VLESS on the forwarder
 
 For networks that block VPNs ([Networks that block VPNs](../guide/blocked-networks.md)),
-the forwarder also takes VLESS over XHTTP, behind the web server of a site of yours. The
-hub asks for VLESS with `-vless` and gets the rest from the forwarder.
+the forwarder also takes VLESS over XHTTP, behind the web server of a site of yours. A hub
+asks for VLESS unless it runs with `-no-vless`, and gets the rest from the forwarder.
 
 The server needs a website with its certificate on TCP 443, as `cbb.tools` has: the web server passes one path to the forwarder, which listens only on the loopback
 address; to the network it is HTTPS to your site. The site's name must point at the

@@ -139,7 +139,7 @@ func TestReleaseKeysAttested(t *testing.T) {
 }
 
 // TestRootCopies checks the copies of the roots that the installers, the
-// lite member and the phone kits carry.
+// Rust cbb and the phone kits carry.
 func TestRootCopies(t *testing.T) {
 	read := func(p string) string {
 		data, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(p)))

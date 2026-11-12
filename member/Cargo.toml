@@ -2,21 +2,27 @@
 # Copyright (C) 2026 HunterEwok
 
 [package]
-name = "cbb-lite"
+name = "cbb-member"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 license = "AGPL-3.0-only"
-description = "The lite member of cbb, for small Linux devices"
+description = "cbb, the member of a group on computers and small devices"
 publish = false
 
 [lib]
-name = "cbb_lite"
+name = "cbb_member"
 path = "src/lib.rs"
 
 [[bin]]
 name = "cbb"
 path = "src/main.rs"
+
+# The receiver of bug reports at bug.cbb.tools (src/bugd.rs).
+[[bin]]
+name = "cbb-bug"
+path = "src/bug_main.rs"
+required-features = ["tunnel"]
 
 # The blind relay, a service of its own (src/relayd).
 [[bin]]

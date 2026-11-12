@@ -19,10 +19,8 @@ chown cbb:cbb /etc/cbb/state
 
 # An image being built: the service starts at its first boot, after NTP.
 [ -z "$IPKG_INSTROOT" ] || exit 0
-# apk updates the package, not cbb update (the lite member has none yet).
-if ! /usr/bin/cbb version 2>/dev/null | grep -q "lite member"; then
-	/usr/bin/cbb update -installed-by package || true
-fi
+# apk updates the package, not cbb update.
+/usr/bin/cbb update -installed-by package || true
 /etc/init.d/cbb enable
 ubus call service list >/dev/null 2>&1 || exit 0
 # The router has set its clock long ago; the wait is for the next boot.

@@ -62,6 +62,49 @@ class CoreMemberTest {
         assertFailsWith<IllegalStateException> { m.current() }
     }
 
+    /** A lone phone says why it does not sync: sync off first, then no other device; the app's own tunnel adds its reasons. */
+    @Test
+    fun saysWhyItDoesNotSync() {
+        val root = SoftwareSigner()
+        val key = SoftwareSigner()
+        val g = PhoneGroup.create(root, key.publicKeyDER, now, seal = Core.sealPublic(seal))
+        val m = start(g.device, key, g.memberCert, g.groupCA)
+        m.addRecords(g.records.records)
+        assertEquals(listOf("only_device"), m.why().map { it.code })
+        m.setSync(false)
+        assertEquals(listOf("sync_off", "only_device"), m.why().map { it.code })
+        assertEquals(listOf("sync_off", "only_device"), m.view().warnings.map { it.code }, "the view carries the same reasons")
+        m.setSync(true)
+        val away = WhyAway(hub = true, forwarder = true, error = "no answer")
+        val r = m.why(away)
+        assertEquals("no answer", r.first { it.code == "forwarder_down" }.detail)
+        assertTrue(m.view(away = away).warnings.any { it.code == "forwarder_down" })
+        m.close()
+    }
+
+    /** The member keeps the tiles' order: a change shows in its view, and one that does not fit throws and changes nothing. */
+    @Test
+    fun keepsTheTilesOrder() {
+        val root = SoftwareSigner()
+        val keyA = SoftwareSigner()
+        val g = PhoneGroup.create(root, keyA.publicKeyDER, now, seal = Core.sealPublic(seal))
+        val keyB = SoftwareSigner()
+        val idB = SyncEngine.newID()
+        g.record(idB, "Phone two", "phone", Records.keyHash(keyB.publicKeyDER), root, now, os = "android", store = Records.HARDWARE, seal = Core.sealPublic(seal))
+        val m = start(g.device, keyA, g.memberCert, g.groupCA)
+        m.addRecords(g.records.records)
+        val v = m.view()
+        assertTrue(!v.custom)
+        assertEquals(listOf(Arrangement.Item.Device(g.device), Arrangement.Item.Device(idB)), v.tiles)
+        val after = m.view(Arrangement.Op.New("Desk", listOf(idB)))
+        assertTrue(after.custom)
+        val desk = after.tiles.last() as Arrangement.Item.Collection
+        assertEquals(listOf(idB), desk.devices)
+        assertFailsWith<Core.Refusal> { m.view(Arrangement.Op.Rename(desk.id, "x".repeat(65))) }
+        m.view(Arrangement.Op.Move(Arrangement.Ref.Collection(desk.id), Arrangement.Ref.Device(g.device)))
+        assertEquals(desk.id, (m.view().tiles.first() as Arrangement.Item.Collection).id)
+    }
+
     @Test
     fun refusesAnIdentityThatDoesNotCheck() {
         val root = SoftwareSigner()

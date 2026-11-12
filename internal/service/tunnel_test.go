@@ -21,7 +21,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
@@ -137,7 +136,7 @@ func TestTunnelKeys(t *testing.T) {
 	}
 
 	// Removing the laptop drops it from the hub.
-	if _, err := pi.do(t, control.Header{Op: control.OpRevoke, Name: "laptop"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Device: "laptop"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the hub drops the laptop", func() bool {
@@ -369,7 +368,7 @@ func TestAwayObfuscated(t *testing.T) {
 		}
 	}
 	port := freeUDP(t)
-	hubAt := control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}, Obfuscate: true}
+	hubAt := control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}}
 	m, err := pi.do(t, hubAt, "")
 	if err != nil {
 		t.Fatal(err)
@@ -388,7 +387,7 @@ func TestAwayObfuscated(t *testing.T) {
 		t.Error("setting the hub again made new obfuscation settings")
 	}
 	// The apps' switch sets only how the tunnel hides and keeps the rest.
-	keep := control.Header{Op: control.OpAway, Name: "hub", Keep: true, Obfuscate: true}
+	keep := control.Header{Op: control.OpAway, Name: "hub", Keep: true}
 	if _, err := pi.do(t, keep, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -417,12 +416,12 @@ func TestAwayObfuscated(t *testing.T) {
 	}
 	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "hidden on the way" })
 
-	keep.Obfuscate = false
+	keep.ObfuscateOff = true
 	if _, err := pi.do(t, keep, ""); err != nil {
 		t.Fatal(err)
 	}
 	if st := tunnelState(t, pi); st.Obfuscation != nil || st.ListenPort != port || len(st.Endpoints) != 1 {
-		t.Errorf("-keep without -obfuscate: obfuscation %+v, port %d, endpoints %v", st.Obfuscation, st.ListenPort, st.Endpoints)
+		t.Errorf("-keep -no-obfuscate: obfuscation %+v, port %d, endpoints %v", st.Obfuscation, st.ListenPort, st.Endpoints)
 	}
 	if _, err := deck.do(t, keep, ""); err == nil {
 		t.Error("-keep made a device that is no hub one")
@@ -431,27 +430,58 @@ func TestAwayObfuscated(t *testing.T) {
 
 // TestAwayThroughForwarder makes the pi a hub that only a forwarder
 // reaches, as behind carrier-grade NAT, and checks that the deck syncs with
-// it through the forwarder, with plain WireGuard and obfuscated.
+// it through the forwarder: with plain WireGuard, with AmneziaWG, and with
+// VLESS as a hub offers by default.
 func TestAwayThroughForwarder(t *testing.T) {
-	t.Run("plain", func(t *testing.T) { testAwayThroughForwarder(t, false, false) })
-	t.Run("obfuscated", func(t *testing.T) { testAwayThroughForwarder(t, true, false) })
+	t.Run("plain", func(t *testing.T) {
+		testAwayThroughForwarder(t, awayWay{obfuscateOff: true, vlessOff: true})
+	})
+	t.Run("obfuscated", func(t *testing.T) {
+		testAwayThroughForwarder(t, awayWay{vlessOff: true, obfuscated: true})
+	})
 	// VLESS comes with AmneziaWG, which goes first over UDP.
-	t.Run("vless", func(t *testing.T) { testAwayThroughForwarder(t, false, true) })
+	t.Run("vless", func(t *testing.T) {
+		testAwayThroughForwarder(t, awayWay{vless: "xhttp", obfuscated: true, overVLESS: true})
+	})
+	// A forwarder without VLESS registers a hub that asked for it, which
+	// then offers AmneziaWG over UDP alone.
+	t.Run("a forwarder without VLESS", func(t *testing.T) {
+		testAwayThroughForwarder(t, awayWay{obfuscated: true})
+	})
 	// Where no UDP passes, the deck, whose hub hides its tunnel with
 	// AmneziaWG and tries UDP first, falls back to VLESS.
 	t.Run("vless without UDP", func(t *testing.T) {
-		dead, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { dead.Close() })
-		testAwayThroughForwarder(t, true, true, "CBB_TEST_DEAD_UDP="+dead.LocalAddr().String())
+		testAwayThroughForwarder(t, awayWay{vless: "xhttp", obfuscated: true, overVLESS: true}, "CBB_TEST_DEAD_UDP="+deadUDP(t))
 	})
+	// A hub set with no switch at all, at a forwarder behind a web server,
+	// is reached over XHTTP where no UDP passes.
+	t.Run("a default hub over XHTTP without UDP", func(t *testing.T) {
+		testAwayThroughForwarder(t, awayWay{vless: "xhttp", obfuscated: true, overVLESS: true}, "CBB_TEST_DEAD_UDP="+deadUDP(t))
+	})
+}
+
+// deadUDP is a UDP address that nobody answers.
+func deadUDP(t *testing.T) string {
+	dead, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { dead.Close() })
+	return dead.LocalAddr().String()
+}
+
+// awayWay is how testAwayThroughForwarder's hub hides its tunnel: its
+// off-switches, the forwarder's VLESS ("" or "xhttp"), and what
+// the deck's offer then says.
+type awayWay struct {
+	obfuscateOff, vlessOff bool
+	vless                  string
+	obfuscated, overVLESS  bool
 }
 
 // testAwayThroughForwarder runs the deck, with deckEnv, away from home
 // through the hub's forwarder.
-func testAwayThroughForwarder(t *testing.T, obfuscate, overVLESS bool, deckEnv ...string) {
+func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 	t.Setenv("CBB_DEBUG", "1")
 	cert, err := forward.NewCert()
 	if err != nil {
@@ -459,7 +489,7 @@ func testAwayThroughForwarder(t *testing.T, obfuscate, overVLESS bool, deckEnv .
 	}
 	state := filepath.Join(t.TempDir(), "state.json")
 	cfg := forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: state}
-	if overVLESS {
+	if way.vless != "" {
 		// VLESS over XHTTP behind a TLS web server whose CA the deck
 		// trusts through SSL_CERT_FILE.
 		path, err := tunnel.NewVLESSPath()
@@ -508,7 +538,7 @@ func testAwayThroughForwarder(t *testing.T, obfuscate, overVLESS bool, deckEnv .
 		t.Error("a forwarder with a bad key")
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf),
-		Obfuscate: obfuscate, VLESS: overVLESS}, ""); err != nil {
+		ObfuscateOff: way.obfuscateOff, VLESSOff: way.vlessOff}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the hub registers with the forwarder", func() bool {
@@ -530,8 +560,8 @@ func testAwayThroughForwarder(t *testing.T, obfuscate, overVLESS bool, deckEnv .
 	piID := pi.status(t).Device
 	waitFor(t, "the deck keeps the hub's offer", func() bool {
 		a := deck.status(t).Away
-		return a != nil && a.HubDevice == piID && len(a.Endpoints) == 1 && a.Endpoints[0] == f.Addr().String() && a.Obfuscated == (obfuscate || overVLESS) &&
-			a.VLESS == overVLESS
+		return a != nil && a.HubDevice == piID && len(a.Endpoints) == 1 && a.Endpoints[0] == f.Addr().String() && a.Obfuscated == way.obfuscated &&
+			a.VLESS == way.overVLESS
 	})
 
 	deckID := deck.status(t).Device
@@ -562,24 +592,7 @@ func TestAwayThroughRelay(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
-	keys, err := relay.NewKeys()
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := relay.Listen(relay.Config{Listen: "127.0.0.1:0", Keys: keys, Groups: []string{pi.status(t).Group}, Logf: t.Logf})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	served := make(chan struct{})
-	go func() {
-		defer close(served)
-		r.Serve(ctx)
-	}()
-	defer func() {
-		cancel()
-		<-served
-	}()
+	r, keys := startRelay(t, pi.status(t).Group)
 
 	// The relay turns sync away from home on by itself (pi), or takes the
 	// place of its hubs (deck).

@@ -6,7 +6,7 @@ import Crypto
 import Foundation
 
 /// The phone as a member of its group, run by the Rust core inside the app
-/// (ffi/, docs/core-api.md, "The member"): the lite member's node on
+/// (ffi/, docs/core-api.md, "The member"): the Rust member's node on
 /// threads of its own, with the phone's member key where the app keeps it,
 /// which signs through a callback. It dials the members the app hands in
 /// (Bonjour, the tunnel's and the relay's loopback ports), syncs with them,
@@ -213,6 +213,10 @@ public final class CoreMember: @unchecked Sendable {
         /// admin lifts it), or ended its mute (muted false): the member
         /// carried the command out and keeps it.
         case mute(muted: Bool, forMS: Int64, by: String)
+        /// Something in the member broke (docs/core-api.md, "Panics"):
+        /// details say what and where. The app logs it, shows it and
+        /// starts the member again.
+        case panic(details: String)
     }
 
     /// A part of images or files the app hands in: clipboard data with its
@@ -410,8 +414,8 @@ public final class CoreMember: @unchecked Sendable {
     /// Sends a text the user handed to the app; board says it came from the
     /// phone's clipboard, which the button then compares with it.
     public func copy(_ text: String, secret: Bool = false, board: Bool = true) throws {
-        struct A: Encodable { var text: String, secret: Bool, board: Bool }
-        try run("copy", A(text: text, secret: secret, board: board))
+        struct A: Encodable { var text: String, kind: String, board: Bool }
+        try run("copy", A(text: text, kind: secret ? "secret" : "text", board: board))
     }
 
     /// Sends images or files: clipboard data (board true when it came from
@@ -545,7 +549,16 @@ public final class CoreMember: @unchecked Sendable {
             }
             enum CodingKeys: CodingKey { case until_ms }
         }
-        try run("mute", A(until_ms: untilMS))
+        try run("set_mute", A(until_ms: untilMS))
+    }
+
+    /// Why the phone does not sync, the reason that stops the most first
+    /// (docs/apps.md, "Why it does not sync"); empty when everything syncs.
+    /// away is where the app's own tunnel stands, nil while it is off.
+    public func why(away: WhyAway? = nil) throws -> [WhyReason] {
+        struct A: Encodable { var away: WhyAway? }
+        struct R: Decodable { var why: [WhyReason] }
+        return try run("why", A(away: away), as: R.self).why
     }
 
     /// The members connected now; all adds those that carry records only.
@@ -553,6 +566,22 @@ public final class CoreMember: @unchecked Sendable {
         struct A: Encodable { var all: Bool }
         struct R: Decodable { var peers: [Peer] }
         return try run("peers", A(all: all), as: R.self).peers
+    }
+
+    /// A device as a tile of the member's view names it.
+    public struct TileDevice: Decodable, Sendable, Equatable {
+        public var id: String
+        public init(id: String) { self.id = id }
+    }
+
+    /// The device tiles in the user's order, with the user's change op
+    /// applied and kept first (docs/apps.md, "What the member shows"); a
+    /// change that does not fit throws and changes nothing. Its warnings
+    /// are `why(away:)`'s reasons, with away the app's own tunnel.
+    public func view(_ op: Arrangement.Op? = nil, away: WhyAway? = nil) throws -> Arrangement.View<TileDevice> {
+        struct A: Encodable { var arrange: Arrangement.Op?; var away: WhyAway? }
+        struct R: Decodable { var view: Arrangement.View<TileDevice> }
+        return try run(op == nil ? "view" : "arrange", A(arrange: op, away: away), as: R.self).view
     }
 
     /// The group's records the core holds.
@@ -838,6 +867,7 @@ public final class CoreMember: @unchecked Sendable {
         var muted: Bool?
         var for_ms: Int64?
         var by: String?
+        var details: String?
     }
 
     struct WireMessage: Decodable {
@@ -872,6 +902,7 @@ public final class CoreMember: @unchecked Sendable {
         case "mute":
             guard let muted = w.muted else { return nil }
             return .mute(muted: muted, forMS: w.for_ms ?? 0, by: w.by ?? "")
+        case "panic": return .panic(details: w.details ?? "")
         case "caller":
             guard let token = w.token, let port = w.port, let device = w.device else { return nil }
             return .caller(token: token, port: port, device: device)

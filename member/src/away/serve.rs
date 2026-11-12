@@ -90,16 +90,22 @@ impl Away {
         if endpoints.is_empty() && fw.is_none() {
             return Err(Error::msg("the hub needs an address away from home or a forwarder"));
         }
-        if let Some(f) = fw.as_mut() {
-            vless_for(f, h.vless, st.forwarder.as_ref());
-        } else if h.vless {
-            return Err(Error::msg("VLESS goes to a forwarder; give one with -forwarder and -forwarder-key"));
+        // A hub offers AmneziaWG and, with a forwarder, VLESS unless the
+        // request turns them off. VLESS comes with AmneziaWG: the clients
+        // try it over UDP first, and inside VLESS it hides WireGuard's sizes
+        // (docs/protocol.md, section 11, "VLESS").
+        let vless = fw.is_some() && !h.vless_off;
+        if vless && h.obfuscate_off {
+            return Err(Error::msg(
+                "VLESS carries AmneziaWG, so plain WireGuard goes with no VLESS at the forwarder: add -no-vless",
+            ));
         }
-        // VLESS comes with AmneziaWG: the clients try it over UDP first,
-        // and inside VLESS it hides WireGuard's sizes (docs/protocol.md,
-        // section 11, "VLESS"). Kept as they are when the hub is set again,
-        // so its clients' offers stay good.
-        let obfuscation = match (h.obfuscate || h.vless, st.obfuscation.take()) {
+        if let Some(f) = fw.as_mut() {
+            vless_for(f, vless, st.forwarder.as_ref());
+        }
+        // Kept as they are when the hub is set again, so its clients'
+        // offers stay good.
+        let obfuscation = match (!h.obfuscate_off, st.obfuscation.take()) {
             (false, _) => None,
             (true, Some(o)) => Some(o),
             (true, None) => Some(crate::awg::Obfuscation::random()?.to_value()),
@@ -366,13 +372,21 @@ impl Away {
 
     /// Keeps the forwarder's VLESS settings the hub learned as it
     /// registered, as Go's vlessLearnedLocked, and has the members connect
-    /// again, so that each gets the offer with them.
+    /// again, so that each gets the offer with them. A forwarder that
+    /// registered the hub without VLESS has none: the hub then offers UDP
+    /// alone rather than wait for settings that never come.
     pub(super) fn vless_learned(&self, node: &Node) {
-        let got = {
+        let (registered, got) = {
             let serving = self.serving.lock().unwrap();
-            serving.as_ref().and_then(|s| s.forwarding.as_ref()).and_then(|f| f.report.lock().unwrap().vless.clone())
+            let report = serving.as_ref().and_then(|s| s.forwarding.as_ref()).map(|f| f.report.lock().unwrap().clone());
+            report.map_or((false, None), |r| (r.registered, r.vless))
         };
-        let Some(v) = got else { return };
+        let Some(v) = got else {
+            if registered {
+                self.no_vless(node);
+            }
+            return;
+        };
         let mut cur = self.st.lock().unwrap();
         let Some(st) = cur.as_mut() else { return };
         if st.forwarder.as_ref().is_none_or(|f| f.vless_id.is_empty() || f.vless.as_ref() == Some(&v)) {
@@ -390,6 +404,28 @@ impl Away {
         drop(cur);
         let at = v.get("endpoint").and_then(|e| e.as_str()).unwrap_or_default();
         (self.log)(&format!("cbb: sync away from home: the hub's clients come over VLESS to the forwarder at {at}"));
+        node.reconnect();
+    }
+
+    /// Forgets the VLESS user ID of a forwarder that has no VLESS, so that
+    /// the hub's offer goes out without it.
+    fn no_vless(&self, node: &Node) {
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return };
+        if st.forwarder.as_ref().is_none_or(|f| f.vless_id.is_empty()) {
+            return;
+        }
+        let mut next = st.clone();
+        if let Some(f) = next.forwarder.as_mut() {
+            (f.vless_id, f.vless) = (String::new(), None);
+        }
+        if let Err(e) = next.save(&self.dir) {
+            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
+            return;
+        }
+        *st = next;
+        drop(cur);
+        (self.log)("cbb: sync away from home: the forwarder has no VLESS, so the hub's clients come over UDP alone");
         node.reconnect();
     }
 

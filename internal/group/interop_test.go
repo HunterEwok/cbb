@@ -587,10 +587,10 @@ type hubVectors struct {
 
 // TestGoHubVectors writes (with -update) and checks
 // testdata/interop/v2-hubs.json: the order of a group's hubs
-// (docs/protocol.md, section 11, "Several hubs"), the phones first and the
-// root's own device first among them, then the admin computers by device
-// ID, without a plain computer or a removed admin, for the phone kits and
-// the lite member to agree with.
+// (docs/protocol.md, section 11, "Several hubs"), the admin computers
+// first by device ID, then the phones with the root's own device first,
+// without a plain computer or a removed admin, for the phone kits and the
+// Rust core to agree with.
 func TestGoHubVectors(t *testing.T) {
 	var file hubVectors
 	pg := newPhoneGroup(t)
@@ -642,10 +642,10 @@ func TestGoHubVectors(t *testing.T) {
 	for _, d := range got {
 		gotNames = append(gotNames, names[d])
 	}
-	if len(gotNames) != 4 || gotNames[0] != "root phone" || gotNames[1] != "admin phone" || !slices.Contains(gotNames[2:], "pc one") || !slices.Contains(gotNames[2:], "pc two") {
+	if len(gotNames) != 4 || gotNames[2] != "root phone" || gotNames[3] != "admin phone" || !slices.Contains(gotNames[:2], "pc one") || !slices.Contains(gotNames[:2], "pc two") {
 		t.Errorf("the hubs are %v", gotNames)
 	}
-	if string(got[2]) > string(got[3]) {
+	if string(got[0]) > string(got[1]) {
 		t.Error("the computers are not in the order of their device IDs")
 	}
 
@@ -692,7 +692,7 @@ type commandVector struct {
 // the root, an admin phone and admin computers (one frozen, one removed),
 // or for another device or group, expired, from the future or altered, and
 // whether each counts (docs/protocol.md, section 15), for the phone kits
-// and the lite member to agree with.
+// and the Rust core to agree with.
 func TestGoCommandVectors(t *testing.T) {
 	var file commandVectors
 	{

@@ -148,7 +148,7 @@ pub fn join_invite(
 
 /// Why sync away from home is off in this build.
 fn off() -> Error {
-    Error::msg("this build of the lite member has no tunnel for sync away from home (MIPS); it syncs at home only")
+    Error::msg("this build of cbb has no tunnel for sync away from home (MIPS); it syncs at home only")
 }
 
 /// A build without the tunnel keeps no invitation: it cannot join by one.

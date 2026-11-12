@@ -2,11 +2,9 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The arrangement of the device tiles (docs/apps.md, "Collections and the
-//! order of the tiles"): the user's own order and collections, kept in the
-//! app's settings and never sent to the group. The twin of the tray app's
-//! arrange.go and the kits' Arrangement.kt and Arrangement.swift, all
-//! checked against testdata/arrangement/vectors.json; the Aurora app uses
-//! it through the core's `arrange` call.
+//! order of the tiles"): the user's own order and collections, kept by the
+//! member on its device (member/src/view.rs) and never sent to the group,
+//! checked against testdata/arrangement/vectors.json.
 
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
