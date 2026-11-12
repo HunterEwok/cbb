@@ -44,13 +44,15 @@ type pushFile struct {
 		Sealed  string `json:"sealed"`
 	} `json:"bodies"`
 	Sends []struct {
-		Name    string `json:"name"`
-		Verdict string `json:"verdict"`
-		Key     string `json:"key"`
-		Sig     string `json:"sig"`
-		Env     uint64 `json:"env"`
-		Token   string `json:"token"`
-		Seq     uint64 `json:"seq"`
+		Name      string `json:"name"`
+		Verdict   string `json:"verdict"`
+		Key       string `json:"key"`
+		Sig       string `json:"sig"`
+		Env       uint64 `json:"env"`
+		Token     string `json:"token"`
+		Slot      string `json:"slot"`
+		Seq       uint64 `json:"seq"`
+		Challenge string `json:"challenge"`
 	} `json:"sends"`
 	UnifiedPush []struct {
 		Name    string `json:"name"`
@@ -118,6 +120,17 @@ func pushBodyVerdict(plain []byte) string {
 		}
 	}
 	kind := m[uint64(0)].(uint64)
+	// A copy carries age 0, written by leaving it out: age is outside the
+	// origin's signature, so one copy has one plaintext.
+	if c, isBytes := m[uint64(2)].([]byte); kind == 1 && isBytes {
+		if cv, err := strict(c); err == nil {
+			if cm, isMap := cv.(map[any]any); isMap {
+				if _, there := cm[uint64(2)]; there {
+					return "pushbody/age"
+				}
+			}
+		}
+	}
 	needs := map[uint64][]uint64{1: {2}, 2: {3, 4}, 3: {3, 5}}[kind]
 	names := map[uint64]string{2: "pushbody/copy", 3: "pushbody/id", 4: "pushbody/origin", 5: "pushbody/event"}
 	for _, n := range needs {
@@ -179,10 +192,10 @@ func pushOpen(labels map[string]string, pk []byte, seq uint64, sealed []byte) st
 	return pushBodyVerdict(plain)
 }
 
-// pushSendVerdict checks the send key's signature over [env, token, seq]
-// as the service does: good, held (an algorithm 0.6 does not know) or the
-// rule.
-func pushSendVerdict(label string, keyEnc, sig []byte, env uint64, token []byte, seq uint64) string {
+// pushSendVerdict checks the send key's signature over [env, token, slot,
+// seq] and the service's challenge when there is one, as the service does:
+// good, held (an algorithm 0.6 does not know) or the rule.
+func pushSendVerdict(label string, keyEnc, sig []byte, env uint64, token, slot []byte, seq uint64, challenge []byte) string {
 	k, err := strict(keyEnc)
 	if err != nil || !tyOK("signer 1..4096", k) {
 		return "push/send-sig"
@@ -191,7 +204,11 @@ func pushSendVerdict(label string, keyEnc, sig []byte, env uint64, token []byte,
 	if key[0].(uint64) != 1 {
 		return "held"
 	}
-	if es256(key[1].([]byte), label, []byte(encOf([]any{env, token, seq})), sig) != nil {
+	signed := []any{env, token, slot, seq}
+	if challenge != nil {
+		signed = append(signed, challenge)
+	}
+	if es256(key[1].([]byte), label, []byte(encOf(signed)), sig) != nil {
 		return "push/send-sig"
 	}
 	return "good"
@@ -203,16 +220,17 @@ func pushRegistration(m any) string {
 	}
 	mm := m.(map[any]any)
 	n := 0
-	for _, k := range []uint64{2, 3, 4, 7, 8} {
+	for _, k := range []uint64{2, 3, 4, 7, 8, 9} {
 		if _, there := mm[k]; there {
 			n++
 		}
 	}
 	kinds := mm[uint64(6)].(uint64)
+	_, challenge := mm[uint64(10)]
 	switch {
-	case kinds == 0 && n == 0:
+	case kinds == 0 && n == 0 && !challenge:
 		return "off"
-	case kinds != 0 && n == 5:
+	case kinds != 0 && n == 6:
 		if bytes.Equal(mm[uint64(4)].([]byte), make([]byte, 32)) {
 			return "push/key"
 		}
@@ -281,8 +299,10 @@ func pushUpURL(u string) bool {
 			}
 		}
 	}
+	// No top-level name starts with a digit: a resolver may read such a
+	// last label as part of an address.
 	last := labels[len(labels)-1]
-	return strings.Trim(last, "0123456789") != ""
+	return last[0] < '0' || last[0] > '9'
 }
 
 func pushFrame(b []byte) (map[any]any, bool) {
@@ -338,7 +358,8 @@ func checkPush(dir string) {
 		count++
 	}
 	for _, x := range f.Sends {
-		got := pushSendVerdict(f.Labels["send"], unhex(x.Key), unhex(x.Sig), x.Env, unhex(x.Token), x.Seq)
+		got := pushSendVerdict(f.Labels["send"], unhex(x.Key), unhex(x.Sig), x.Env, unhex(x.Token), unhex(x.Slot), x.Seq,
+			challengeOf(x.Challenge))
 		if got != x.Verdict {
 			fail("push send key %s: %q, want %q", x.Name, got, x.Verdict)
 		}
@@ -394,7 +415,7 @@ func checkPush(dir string) {
 	}
 	for t := range f.Types {
 		n, _ := strconv.ParseUint(t, 10, 64)
-		if n != 28 && (n < 100 || n > 104) {
+		if (n < 28 || n > 29) && (n < 100 || n > 104) {
 			fail("push type %d outside what architecture reserved", n)
 		}
 	}
@@ -402,4 +423,12 @@ func checkPush(dir string) {
 		fail("push.json has no vectors")
 	}
 	fmt.Printf("push.json          %d checked\n", count)
+}
+
+// challengeOf is the challenge of a send vector, nil when it has none.
+func challengeOf(h string) []byte {
+	if h == "" {
+		return nil
+	}
+	return unhex(h)
 }

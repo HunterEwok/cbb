@@ -57,6 +57,10 @@ use crate::records::key::Key;
 
 /// Member message `push`: a phone's registration, to a member.
 pub const T_PUSH: u64 = 28;
+/// Member message `push-renew` (t 29), member → phone: the push service
+/// answered `stale` to a send under the phone's registration with this
+/// slot; the phone registers again.
+pub const T_RENEW: u64 = 29;
 /// The push service's messages.
 pub const T_HELLO: u64 = 100;
 pub const T_READY: u64 = 101;
@@ -162,8 +166,13 @@ pub static PUSH: Table = Table {
         f(6, "push/kinds", Ty::Uint { min: 0, max: u32::MAX as u64 }, true),
         f(7, "push/send-key", Ty::Signer(MAX_SEND_KEY), false),
         f(8, "push/send-sig", Ty::BytesUpTo(MAX_SEND_SIG), false),
+        f(9, "push/slot", Ty::Bytes(16), false),
+        f(10, "push/challenge", Ty::Bytes(16), false),
     ],
 };
+
+/// Member message `push-renew` (t 29).
+pub static RENEW: Table = Table { shape: "push-renew/shape", fields: &[f(2, "push-renew/slot", Ty::Bytes(16), true)] };
 
 /// The token of env 4 (UnifiedPush, RFC 8030 and 8291): the endpoint and
 /// the phone's keys for the message's encryption.
@@ -199,6 +208,8 @@ pub static SEND: Table = Table {
         f(8, "push/send/key", Ty::Signer(MAX_SEND_KEY), true),
         f(9, "push/send/sig", Ty::BytesUpTo(MAX_SEND_SIG), true),
         f(10, "push/send/seq", SEQ, true),
+        f(11, "push/send/slot", Ty::Bytes(16), true),
+        f(12, "push/send/challenge", Ty::Bytes(16), false),
     ],
 };
 /// `push/sent` (t 103).
@@ -229,12 +240,13 @@ pub static BODY: Table = Table {
 };
 
 /// Every table of this file, for the vectors.
-pub static ALL: [&Table; 8] = [&PUSH, &PUSH_UP, &HELLO, &READY, &SEND, &SENT_TABLE, &ERROR, &BODY];
+pub static ALL: [&Table; 9] = [&PUSH, &RENEW, &PUSH_UP, &HELLO, &READY, &SEND, &SENT_TABLE, &ERROR, &BODY];
 
 /// The table of message type t, if this file numbers it.
 pub fn of(t: u64) -> Option<&'static Table> {
     Some(match t {
         T_PUSH => &PUSH,
+        T_RENEW => &RENEW,
         T_HELLO => &HELLO,
         T_READY => &READY,
         T_SEND => &SEND,
@@ -252,6 +264,10 @@ pub const RULE_BODY_SHAPE: Rule = Rule::field("pushbody/shape");
 pub const RULE_BODY_PAD: Rule = Rule::field("pushbody/pad");
 pub const RULE_BODY_OPEN: Rule = Rule::field("pushbody/open");
 pub const RULE_BODY_SIZE: Rule = Rule::field("pushbody/size");
+/// The body's nonce is not the one its plaintext gives.
+pub const RULE_BODY_NONCE: Rule = Rule::field("pushbody/nonce");
+/// A copy in a body has an age: every sender writes it with age 0.
+pub const RULE_BODY_AGE: Rule = Rule::field("pushbody/age");
 pub const RULE_UP_URL: Rule = Rule::field("push-up/url");
 /// `push-up/p256dh` is not an uncompressed point of P-256.
 pub const RULE_UP_KEY: Rule = Rule::field("push-up/p256dh");
@@ -281,6 +297,21 @@ pub struct On {
     pub send_key: Key,
     /// Its signature over [`send_message`].
     pub send_sig: Vec<u8>,
+    /// 16 random bytes the phone draws per group registration (never the
+    /// group's ID): the service keeps the highest seq per (token, slot),
+    /// so one group's registrations never silence another's.
+    pub slot: [u8; 16],
+    /// The last challenge the push service sent to the token, which the
+    /// send key's signature then covers: possession of the token, proved
+    /// to the service, confirms its binding to this send key.
+    pub challenge: Option<[u8; 16]>,
+}
+
+impl On {
+    /// What its signature covers, under registration number `seq`.
+    pub fn signed(&self, seq: u64) -> Signed<'_> {
+        Signed { env: self.env, token: &self.token, slot: &self.slot, seq, challenge: self.challenge.as_ref() }
+    }
 }
 
 impl core::fmt::Debug for Registration {
@@ -295,12 +326,23 @@ impl core::fmt::Debug for Registration {
 }
 
 /// What the send key signs, under the label `cbb push send v1`: the
-/// platform, the token and the registration's number.
-pub fn send_message(env: u64, token: &[u8], seq: u64) -> Vec<u8> {
-    Value::Array(alloc::vec![Value::Uint(env), Value::Bytes(token), Value::Uint(seq)]).encode()
+/// platform, the token, the registration's slot and its number, and the
+/// last challenge the service sent to the token when the phone has one.
+pub fn send_message(env: u64, token: &[u8], slot: &[u8; 16], seq: u64, challenge: Option<&[u8; 16]>) -> Vec<u8> {
+    let mut a = alloc::vec![Value::Uint(env), Value::Bytes(token), Value::Bytes(slot), Value::Uint(seq)];
+    if let Some(c) = challenge {
+        a.push(Value::Bytes(c));
+    }
+    Value::Array(a).encode()
 }
 
 const LABEL_SEND: &str = "cbb push send v1";
+
+/// The latest clock a phone numbers a registration with: 2100-01-01. A
+/// clock past it (a unit mistake) is read as this, so seq keeps room.
+pub const MAX_CLOCK_MS: u64 = 4_102_444_800_000;
+/// How far ahead of its own clock the service takes a seq.
+pub const MAX_SEQ_AHEAD_MS: u64 = 86_400_000;
 
 /// What checking a send key's signature found.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -312,34 +354,50 @@ pub enum SendCheck {
     Unknown,
 }
 
-/// Checks the send key's signature over (env, token, seq).
-pub fn check_send(key: &Key, sig: &[u8], env: u64, token: &[u8], seq: u64) -> Result<SendCheck, Rule> {
+/// What a send or a registration says the send key signed.
+#[derive(Clone, Copy, Debug)]
+pub struct Signed<'a> {
+    pub env: u64,
+    pub token: &'a [u8],
+    pub slot: &'a [u8; 16],
+    pub seq: u64,
+    pub challenge: Option<&'a [u8; 16]>,
+}
+
+impl Signed<'_> {
+    fn message(&self) -> Vec<u8> {
+        send_message(self.env, self.token, self.slot, self.seq, self.challenge)
+    }
+}
+
+/// Checks the send key's signature over what `s` names.
+pub fn check_send(key: &Key, sig: &[u8], s: &Signed<'_>) -> Result<SendCheck, Rule> {
     match key.check_signer().map_err(|_| RULE_SEND_SIG)? {
         crate::records::key::KeyCheck::Unknown => Ok(SendCheck::Unknown),
         crate::records::key::KeyCheck::Good => {
-            crate::records::key::verify_es256(key, LABEL_SEND, &send_message(env, token, seq), sig)
-                .map_err(|_| RULE_SEND_SIG)?;
+            crate::records::key::verify_es256(key, LABEL_SEND, &s.message(), sig).map_err(|_| RULE_SEND_SIG)?;
             Ok(SendCheck::Good)
         }
     }
 }
 
-/// Signs (env, token, seq) with the phone's send key.
-pub fn sign_send(
-    key: &dyn crate::identity::ExternalKey,
-    env: u64,
-    token: &[u8],
-    seq: u64,
-) -> crate::error::Result<[u8; 64]> {
-    crate::records::key::sign_es256(key, LABEL_SEND, &send_message(env, token, seq))
+/// Signs what `s` names with the phone's send key.
+pub fn sign_send(key: &dyn crate::identity::ExternalKey, s: &Signed<'_>) -> crate::error::Result<[u8; 64]> {
+    crate::records::key::sign_es256(key, LABEL_SEND, &s.message())
 }
 
 /// The number a phone gives its next registration: one more than the one
-/// it saved, and never less than its clock in milliseconds, so a phone
-/// restored from a backup with an older number still moves forward at the
-/// service.
+/// it saved, and never less than its clock in milliseconds (a clock past
+/// [`MAX_CLOCK_MS`] read as that), so a phone restored from a backup with
+/// an older number still moves forward at the service.
 pub fn next_seq(saved: Option<u64>, now_ms: u64) -> u64 {
-    saved.map_or(1, |s| s.saturating_add(1)).max(now_ms).clamp(1, 1 << 53)
+    saved.map_or(1, |s| s.saturating_add(1)).max(now_ms.min(MAX_CLOCK_MS)).clamp(1, 1 << 53)
+}
+
+/// Whether the service takes `seq` at its clock `now_ms`: seq is a clock
+/// by rule, so one more than a day ahead is never honest.
+pub fn seq_in_time(seq: u64, now_ms: u64) -> bool {
+    seq <= now_ms.saturating_add(MAX_SEQ_AHEAD_MS)
 }
 
 impl Registration {
@@ -351,16 +409,29 @@ impl Registration {
         let bytes = |n| m.get(n).and_then(Value::as_bytes);
         let seq = uint(5).ok_or(RULE_PUSH_SHAPE)?;
         let kinds = uint(6).ok_or(RULE_PUSH_SHAPE)?;
-        let on = match (kinds, bytes(2), uint(3), bytes(4), m.get(7), bytes(8)) {
-            (0, None, None, None, None, None) => None,
-            (k, Some(token), Some(env), Some(key), Some(send_key), Some(send_sig)) if k != 0 => {
+        let challenge = match bytes(10) {
+            None => None,
+            Some(c) => Some(<[u8; 16]>::try_from(c).map_err(|_| RULE_PUSH_SHAPE)?),
+        };
+        let on = match (kinds, bytes(2), uint(3), bytes(4), m.get(7), bytes(8), bytes(9)) {
+            (0, None, None, None, None, None, None) if challenge.is_none() => None,
+            (k, Some(token), Some(env), Some(key), Some(send_key), Some(send_sig), Some(slot)) if k != 0 => {
                 let key: [u8; 32] = key.try_into().map_err(|_| RULE_PUSH_SHAPE)?;
                 // A key of zeros is no key a phone drew.
                 if key == [0; 32] {
                     return Err(RULE_PUSH_KEY);
                 }
                 let send_key = Key::read(send_key).map_err(|_| RULE_PUSH_SHAPE)?;
-                Some(On { token: token.to_vec(), env, key: Zeroizing::new(key), send_key, send_sig: send_sig.to_vec() })
+                let slot = <[u8; 16]>::try_from(slot).map_err(|_| RULE_PUSH_SHAPE)?;
+                Some(On {
+                    token: token.to_vec(),
+                    env,
+                    key: Zeroizing::new(key),
+                    send_key,
+                    send_sig: send_sig.to_vec(),
+                    slot,
+                    challenge,
+                })
             }
             _ => return Err(RULE_PUSH_SHAPE),
         };
@@ -380,6 +451,10 @@ impl Registration {
         if let Some(on) = &self.on {
             m.push((7, on.send_key.to_value()));
             m.push((8, Value::Bytes(&on.send_sig)));
+            m.push((9, Value::Bytes(&on.slot)));
+            if let Some(c) = &on.challenge {
+                m.push((10, Value::Bytes(c)));
+            }
         }
         let f = frame::write(&Value::Map(m));
         let back = frame::read(&f, frame::LIMIT_MEMBER).ok().and_then(|msg| Registration::read(&msg.map).ok());
@@ -396,6 +471,17 @@ impl Registration {
     pub fn replaced_by(&self, newer: &Registration) -> bool {
         newer.seq > self.seq
     }
+}
+
+/// Message `push-renew` (t 29) for the registration with `slot`.
+pub fn renew(slot: &[u8; 16]) -> Vec<u8> {
+    frame::write(&Value::Map(alloc::vec![(frame::FIELD_T, Value::Uint(T_RENEW)), (2, Value::Bytes(slot))]))
+}
+
+/// Reads message `push-renew`: the slot of the registration to make again.
+pub fn read_renew(m: &Value<'_>) -> Result<[u8; 16], Rule> {
+    check_map(&RENEW, m)?;
+    m.get(2).and_then(Value::as_bytes).and_then(|b| <[u8; 16]>::try_from(b).ok()).ok_or(Rule::field("push-renew/shape"))
 }
 
 /// Who may register: the device itself over its own member connection, and
@@ -473,7 +559,9 @@ pub fn up_url(url: &str) -> bool {
     host.len() <= 253
         && labels.len() >= 2
         && labels.iter().all(label)
-        && labels.last().is_some_and(|l| !l.bytes().all(|b| b.is_ascii_digit()))
+        // No top-level name starts with a digit; a resolver may read such a
+        // last label as part of an address (hex, octal or decimal).
+        && labels.last().is_some_and(|l| !l.starts_with(|c: char| c.is_ascii_digit()))
 }
 
 // ----------------------------------------------------------------- keys
@@ -617,7 +705,15 @@ impl Body {
         let kind = v.get(0).and_then(Value::as_uint).ok_or(RULE_BODY_SHAPE)?;
         let need = |r: &'static str| Rule::field(r);
         let body = match kind {
-            BODY_COPY => Body::Copy(v.get(2).and_then(Value::as_bytes).ok_or(need("pushbody/copy"))?.to_vec()),
+            BODY_COPY => {
+                let c = v.get(2).and_then(Value::as_bytes).ok_or(need("pushbody/copy"))?;
+                // Age is outside the origin's signature: every sender
+                // writes 0 (left out), so one copy has one plaintext.
+                if cbor::decode(c).is_ok_and(|cv| cv.get(crate::format::copy::FIELD_AGE).is_some()) {
+                    return Err(RULE_BODY_AGE);
+                }
+                Body::Copy(c.to_vec())
+            }
             BODY_WAITS => {
                 Body::Waits { id: id16(3).ok_or(need("pushbody/id"))?, origin: id16(4).ok_or(need("pushbody/origin"))? }
             }
@@ -686,6 +782,11 @@ pub fn open(pk: &[u8; 32], seq: u64, sealed: &[u8]) -> Result<Body, Rule> {
     let ad = associated(seq);
     let plain =
         Zeroizing::new(aead.decrypt(&Nonce::from(nonce), Payload { msg: ct, aad: &ad }).map_err(|_| RULE_BODY_OPEN)?);
+    // One plaintext has one body: a nonce of the sender's choosing would
+    // make the same copy anew for the service's check of repeats.
+    if nonce_for(pk, &ad, &plain) != nonce {
+        return Err(RULE_BODY_NONCE);
+    }
     Body::read(&plain)
 }
 
@@ -733,6 +834,9 @@ pub struct Send<'a> {
     pub key: Key,
     pub sig: &'a [u8],
     pub seq: u64,
+    pub slot: [u8; 16],
+    /// The challenge the registration's signature covers, if it has one.
+    pub challenge: Option<[u8; 16]>,
 }
 
 impl<'a> Send<'a> {
@@ -749,6 +853,11 @@ impl<'a> Send<'a> {
             key: m.get(8).map(Key::read).ok_or(bad)?.map_err(|_| bad)?,
             sig: m.get(9).and_then(Value::as_bytes).ok_or(bad)?,
             seq: m.get(10).and_then(Value::as_uint).ok_or(bad)?,
+            slot: m.get(11).and_then(Value::as_bytes).and_then(|b| <[u8; 16]>::try_from(b).ok()).ok_or(bad)?,
+            challenge: match m.get(12) {
+                None => None,
+                Some(c) => Some(c.as_bytes().and_then(|b| <[u8; 16]>::try_from(b).ok()).ok_or(bad)?),
+            },
         })
     }
 
@@ -767,9 +876,18 @@ impl<'a> Send<'a> {
         m.push((8, self.key.to_value()));
         m.push((9, Value::Bytes(self.sig)));
         m.push((10, Value::Uint(self.seq)));
+        m.push((11, Value::Bytes(&self.slot)));
+        if let Some(c) = &self.challenge {
+            m.push((12, Value::Bytes(c)));
+        }
         let f = frame::write(&Value::Map(m));
         let msg = frame::read(&f, MAX_SERVICE_FRAME).ok()?;
         (Send::read(&msg.map).ok().as_ref() == Some(self)).then_some(f)
+    }
+
+    /// What its signature covers.
+    pub fn signed(&self) -> Signed<'_> {
+        Signed { env: self.env, token: self.token, slot: &self.slot, seq: self.seq, challenge: self.challenge.as_ref() }
     }
 
     /// Whether the body has its env's size. The service answers a body of

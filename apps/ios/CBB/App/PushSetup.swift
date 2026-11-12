@@ -20,7 +20,7 @@ final class PushSetup {
     static let onKey = "push.on"
     /// The notification's category with the Copy button, and the button.
     static let copyCategory = "copy"
-    static let copyAction = "copy"
+    nonisolated static let copyAction = "copy"
 
     private static let log = Logger(subsystem: "tools.cbb", category: "push")
 

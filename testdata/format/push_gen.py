@@ -41,7 +41,10 @@ TABLES = {
         (6, "push/kinds", "uint 0..4294967295", True),
         (7, "push/send-key", "signer 1..4096", False),
         (8, "push/send-sig", "bytes 1..4096", False),
+        (9, "push/slot", "bytes 16", False),
+        (10, "push/challenge", "bytes 16", False),
     ],
+    "push-renew": [(2, "push-renew/slot", "bytes 16", True)],
     "push-up": [
         (1, "push-up/url", "text 1..4000", True),
         (2, "push-up/p256dh", "bytes 65", True),
@@ -58,6 +61,8 @@ TABLES = {
         (8, "push/send/key", "signer 1..4096", True),
         (9, "push/send/sig", "bytes 1..4096", True),
         (10, "push/send/seq", "uint 1..9007199254740992", True),
+        (11, "push/send/slot", "bytes 16", True),
+        (12, "push/send/challenge", "bytes 16", False),
     ],
     "push/sent": [
         (2, "push/sent/n", "uint 1..4294967295", True),
@@ -75,7 +80,7 @@ TABLES = {
         (7, "pushbody/time_ms", "uint 0..9223372036854775807", False),
     ],
 }
-TYPES = {28: "push", 100: "push/hello", 101: "push/ready", 102: "push/send", 103: "push/sent", 104: "push/error"}
+TYPES = {28: "push", 29: "push-renew", 100: "push/hello", 101: "push/ready", 102: "push/send", 103: "push/sent", 104: "push/error"}
 gen.TABLES.update(TABLES)
 
 MAX_BODY = 2972
@@ -83,6 +88,7 @@ PLAIN = MAX_BODY - 28
 ENVS = {1: "APNs", 2: "APNs sandbox", 3: "FCM", 4: "UnifiedPush", 5: "Push Kit", 6: "Aurora"}
 LABEL_BODY, LABEL_NONCE, LABEL_AD = b"cbb push body v1", b"cbb push nonce v1", b"cbb push v1"
 LABEL_SEND = "cbb push send v1"
+COPY_AGE = 2  # the copy's field age (format section 10)
 SEND_KEY = Signer("push send key")
 
 
@@ -100,17 +106,18 @@ def nonce_for(pk, seq, plain):
     return hmac.new(derive(pk, LABEL_NONCE), ad(seq) + plain, hashlib.sha256).digest()[:12]
 
 
-def send_message(env, token, seq):
-    return enc([env, token, seq])
+def send_message(env, token, slot, seq, challenge=None):
+    """[env, token, slot, seq], and the service's challenge when there is one."""
+    return enc([env, token, slot, seq] + ([challenge] if challenge is not None else []))
 
 
-def send_verdict(key, sig, env, token, seq):
+def send_verdict(key, sig, env, token, slot, seq, challenge=None):
     """good, held (an algorithm 0.6 does not know) or the rule."""
     if not gen.ty_ok("signer 1..4096", key):
         return "push/send-sig"
     if key[0] != 1:
         return "held"
-    return "good" if verify(key, LABEL_SEND, send_message(env, token, seq), sig) else "push/send-sig"
+    return "good" if verify(key, LABEL_SEND, send_message(env, token, slot, seq, challenge), sig) else "push/send-sig"
 
 
 def ad(seq):
@@ -152,6 +159,15 @@ def read_body(b):
     if 1 in v and (not isinstance(v[1], bytes) or any(v[1])):
         return "pushbody/pad"
     kind = v[0]
+    # A copy carries age 0, written by leaving it out: age is outside the
+    # origin's signature, so one copy has one plaintext.
+    if kind == 1 and 2 in v:
+        try:
+            c = dec(v[2])
+            if isinstance(c, dict) and COPY_AGE in c:
+                return "pushbody/age"
+        except Bad:
+            pass
     needs = {1: [2], 2: [3, 4], 3: [3, 5]}.get(kind, [])
     names = {2: "pushbody/copy", 3: "pushbody/id", 4: "pushbody/origin", 5: "pushbody/event"}
     for n in needs:
@@ -176,6 +192,9 @@ def open_body(pk, seq, sealed):
         plain = ChaCha20Poly1305(derive(pk, LABEL_BODY)).decrypt(sealed[:12], sealed[12:], ad(seq))
     except Exception:
         return "pushbody/open"
+    # The nonce is the plaintext's own: any other is refused.
+    if nonce_for(pk, seq, plain) != sealed[:12]:
+        return "pushbody/nonce"
     return read_body(plain)
 
 
@@ -184,8 +203,8 @@ def registration(m):
     r = check_map("push", m)
     if r:
         return r
-    have = [n in m for n in (2, 3, 4, 7, 8)]
-    if m[6] == 0 and not any(have):
+    have = [n in m for n in (2, 3, 4, 7, 8, 9)]
+    if m[6] == 0 and not any(have) and 10 not in m:
         return "off"
     if m[6] != 0 and all(have):
         return "push/key" if m[4] == bytes(32) else "on"
@@ -236,12 +255,14 @@ def up_url(url):
     labels = host.split(".")
     ok = lambda lab: (1 <= len(lab) <= 63 and all(c.isascii() and (c.isalnum() or c == "-") for c in lab)
                       and not lab.startswith("-") and not lab.endswith("-"))
-    return len(host) <= 253 and len(labels) >= 2 and all(ok(lab) for lab in labels) and not labels[-1].isdigit()
+    return len(host) <= 253 and len(labels) >= 2 and all(ok(lab) for lab in labels) and not labels[-1][:1].isdigit()
 
 
 def main():
     pk = fake("push key", 32)
     token = fake("apns token", 32)
+    slot = fake("slot", 16)
+    challenge = fake("challenge", 16)
     out = {
         "draft": "format-0.6-bytes.md section 20.4, 2026-11-12",
         "labels": {"body": LABEL_BODY.decode(), "nonce": LABEL_NONCE.decode(), "ad": LABEL_AD.decode(),
@@ -263,11 +284,15 @@ def main():
         regs.append(e)
 
     def signed(m):
-        """m with the send key and its signature over (env, token, seq)."""
-        return {**m, 7: SEND_KEY.key, 8: SEND_KEY.sign(LABEL_SEND, send_message(m[3], m[2], m[5]))}
+        """m with the send key and its signature over (env, token, slot, seq[, challenge])."""
+        return {**m, 7: SEND_KEY.key, 8: SEND_KEY.sign(LABEL_SEND, send_message(m[3], m[2], m[9], m[5], m.get(10)))}
 
-    on = signed({2: token, 3: 1, 4: pk, 5: 3, 6: 3})
+    on = signed({2: token, 3: 1, 4: pk, 5: 3, 6: 3, 9: slot})
     reg("on, copies and events, APNs", on)
+    reg("on with the service's challenge", signed({**on, 10: challenge}))
+    reg("on without the slot", {k: v for k, v in on.items() if k != 9})
+    reg("a slot of 15 bytes", {**on, 9: slot[:15]})
+    reg("off with a challenge", {5: 4, 6: 0, 10: challenge})
     reg("on without the send key", {k: v for k, v in on.items() if k != 7})
     reg("on without the send key's signature", {k: v for k, v in on.items() if k != 8})
     reg("off with a send key", {5: 4, 6: 0, 7: SEND_KEY.key})
@@ -292,23 +317,32 @@ def main():
     reg("env 0", {**on, 3: 0})
     reg("env 256", {**on, 3: 256})
     reg("without seq", {k: v for k, v in on.items() if k != 5})
-    reg("a field of a later version is skipped", {**on, 9: b"x"})
+    reg("a field of a later version is skipped", {**on, 11: b"x"})
     out["registrations"] = regs
 
     # the send key's signature, as the service checks it
     sends = []
     good = on[8]
-    for name, key, sig, env, tok, seq in [
-        ("the phone's", SEND_KEY.key, good, 1, token, 3),
-        ("another number", SEND_KEY.key, good, 1, token, 4),
-        ("another token", SEND_KEY.key, good, 1, fake("other token", 32), 3),
-        ("another platform", SEND_KEY.key, good, 3, token, 3),
-        ("another key", Signer("not the phone").key, good, 1, token, 3),
-        ("a later algorithm", [9, fake("later key", 2000)], fake("later sig", 3000), 1, token, 3),
-        ("a key exchange's algorithm", [3, fake("x25519", 32)], good, 1, token, 3),
+    with_ch = SEND_KEY.sign(LABEL_SEND, send_message(1, token, slot, 3, challenge))
+    other_slot = fake("other slot", 16)
+    for name, key, sig, env, tok, sl, seq, ch in [
+        ("the phone's", SEND_KEY.key, good, 1, token, slot, 3, None),
+        ("another number", SEND_KEY.key, good, 1, token, slot, 4, None),
+        ("another token", SEND_KEY.key, good, 1, fake("other token", 32), slot, 3, None),
+        ("another platform", SEND_KEY.key, good, 3, token, slot, 3, None),
+        ("another slot", SEND_KEY.key, good, 1, token, other_slot, 3, None),
+        ("a challenge the signature does not cover", SEND_KEY.key, good, 1, token, slot, 3, challenge),
+        ("the phone's, over the service's challenge", SEND_KEY.key, with_ch, 1, token, slot, 3, challenge),
+        ("over a challenge, the challenge left out", SEND_KEY.key, with_ch, 1, token, slot, 3, None),
+        ("another key", Signer("not the phone").key, good, 1, token, slot, 3, None),
+        ("a later algorithm", [9, fake("later key", 2000)], fake("later sig", 3000), 1, token, slot, 3, None),
+        ("a key exchange's algorithm", [3, fake("x25519", 32)], good, 1, token, slot, 3, None),
     ]:
-        sends.append({"name": name, "key": enc(key).hex(), "sig": sig.hex(), "env": env, "token": tok.hex(),
-                      "seq": seq, "verdict": send_verdict(key, sig, env, tok, seq)})
+        e = {"name": name, "key": enc(key).hex(), "sig": sig.hex(), "env": env, "token": tok.hex(),
+             "slot": sl.hex(), "seq": seq, "verdict": send_verdict(key, sig, env, tok, sl, seq, ch)}
+        if ch is not None:
+            e["challenge"] = ch.hex()
+        sends.append(e)
     out["sends"] = sends
 
     # bodies
@@ -327,6 +361,7 @@ def main():
         ("a hint without its id", {0: 2, 4: fake("origin", 16)}),
         ("an event without its event", {0: 3, 3: fake("record id", 16)}),
         ("kind 0", {0: 0}),
+        ("a copy with an age", {0: 1, 2: enc({COPY_AGE: 1, 9: fake("reduced copy", 32)})}),
     ]
     for name, m in cases:
         plain = pad_to(m, PLAIN)
@@ -341,8 +376,11 @@ def main():
     bent_pad[20] = 1
     long_pad = dict(cases[1][1])
     other = enc({**long_pad, 1: bytes(10)})  # a smaller body, padded for its own size: read
+    chosen = b"\x5a" * 12
+    own_nonce = chosen + ChaCha20Poly1305(derive(pk, LABEL_BODY)).encrypt(chosen, good_plain, ad(3))
     for name, sealed, seq in [
         ("under another registration's number", good, 4),
+        ("a nonce of the sender's choosing", own_nonce, 3),
         ("a byte bent", good[:100] + bytes([good[100] ^ 1]) + good[101:], 3),
         ("27 bytes", good[:27], 3),
         ("a pad byte not zero", seal(pk, 3, bytes(bent_pad)), 3),
@@ -367,6 +405,9 @@ def main():
         ("an endpoint of 4001 bytes", {**up, 1: "https://up.example.org/" + "a" * (MAX_UP_URL - 22)}),
         ("a single label", {**up, 1: "https://localhost/x"}),
         ("an IPv4 address", {**up, 1: "https://10.0.0.1/x"}),
+        ("a last label of hex digits", {**up, 1: "https://up.0x7f/x"}),
+        ("a last label starting with a digit", {**up, 1: "https://up.example.9org/x"}),
+        ("a first label starting with a digit", {**up, 1: "https://9up.example.org/x"}),
         ("an IPv6 address", {**up, 1: "https://[::1]/x"}),
         ("port 8080", {**up, 1: "https://up.example.org:8080/x"}),
         ("a user", {**up, 1: "https://user@up.example.org/x"}),
@@ -394,11 +435,14 @@ def main():
             e["sized"] = sized
         msgs.append(e)
 
-    send = {0: 102, 2: 1, 3: token, 4: 1, 6: body, 8: SEND_KEY.key, 9: on[8], 10: 3}
+    send = {0: 102, 2: 1, 3: token, 4: 1, 6: body, 8: SEND_KEY.key, 9: on[8], 10: 3, 11: slot}
     msg("send to APNs", send, True)
     msg("send with the longest token and a ttl", {**send, 2: 4294967295, 3: fake("long token", 4096), 4: 4, 7: 4}, True)
     msg("send with the longest token, send key and signature",
-        {**send, 3: fake("long token", 4096), 4: 4, 8: [9, fake("long key", 4096)], 9: fake("long sig", 4096)}, True)
+        {**send, 3: fake("long token", 4096), 4: 4, 8: [9, fake("long key", 4096)], 9: fake("long sig", 4096),
+         12: challenge}, True)
+    msg("send with the service's challenge", {**send, 9: with_ch, 12: challenge}, True)
+    msg("send without the slot", {k: v for k, v in send.items() if k != 11})
     msg("send without the send key", {k: v for k, v in send.items() if k != 8})
     msg("send without seq", {k: v for k, v in send.items() if k != 10})
     msg("send with a field 5 of an earlier draft", {**send, 5: bytes(16)})
@@ -407,6 +451,8 @@ def main():
     msg("send of a body over 2972", {**send, 6: bytes(MAX_BODY + 1)})
     msg("send with ttl 5", {**send, 7: 5})
     msg("ready", {0: 101, 2: 1200})
+    msg("renew", {0: 29, 2: slot})
+    msg("renew with a slot of 15 bytes", {0: 29, 2: slot[:15]})
     msg("sent", {0: 103, 2: 1, 3: 1})
     msg("sent over budget with a retry", {0: 103, 2: 2, 3: 3, 4: 60000})
     msg("sent with a retry of a day and a millisecond", {0: 103, 2: 2, 3: 3, 4: 86_400_001})

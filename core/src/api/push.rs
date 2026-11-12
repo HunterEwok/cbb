@@ -43,16 +43,18 @@ fn refused(e: impl core::fmt::Display, message: &str) -> Refusal {
     refuse(Code::Push, Error::msg(e.to_string()).context(message.to_string()))
 }
 
-/// `push_key`: a new push key, 32 random bytes, and a new send key (P-256,
-/// PKCS #8). The phone draws a push key per group and a new one whenever
-/// it registers again after a membership change; a send key with each new
-/// token.
+/// `push_key`: a new push key, 32 random bytes, a new send key (P-256,
+/// PKCS #8) and a new slot, 16 random bytes. The phone draws a push key
+/// and a slot per group (a new key whenever it registers again after a
+/// membership change; the slot kept), and a send key with each new token.
 fn new_key() -> Result<Vec<u8>, Refusal> {
     let key = Zeroizing::new(crate::certs::random_bytes::<32>());
     let send = Zeroizing::new(crate::identity::new_key().map_err(|e| refuse(Code::Push, e))?);
+    let slot = crate::certs::random_bytes::<16>();
     let mut m = Map::new();
     m.insert("key".into(), b64_value(&key[..]));
     m.insert("send_key".into(), b64_value(&send[..]));
+    m.insert("slot".into(), b64_value(&slot));
     Ok(json(Value::Object(m)))
 }
 
@@ -101,6 +103,13 @@ struct RegistrationArgs {
     /// The send key, PKCS #8.
     #[serde(default, with = "b64::secret::opt")]
     send_key: Option<Zeroizing<Vec<u8>>>,
+    /// The group's slot, 16 bytes.
+    #[serde(default, with = "b64::opt")]
+    slot: Option<Vec<u8>>,
+    /// The last challenge the push service sent to the token, 16 bytes,
+    /// which the registration's signature then covers.
+    #[serde(default, with = "b64::opt")]
+    challenge: Option<Vec<u8>>,
 }
 
 /// `push_registration`: the frame of message `push` (t 28) the phone sends
@@ -135,8 +144,26 @@ fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
         let pkcs8 = a.send_key.as_ref().ok_or_else(|| refused("the send key is missing", BAD))?;
         let signer = crate::identity::signing_key(pkcs8).map_err(|e| refused(e, BAD))?;
         let public = signer.verifying_key().to_sec1_point(false).as_bytes().to_vec();
-        let sig = push::sign_send(&Pkcs8Signer(signer), env, &token, seq).map_err(|e| refused(e, BAD))?;
-        Some(On { token, env, key: Zeroizing::new(key), send_key: Key::es256(public), send_sig: sig.to_vec() })
+        let slot: [u8; 16] = a
+            .slot
+            .as_deref()
+            .and_then(|s| s.try_into().ok())
+            .ok_or_else(|| refused("the slot is not 16 bytes", BAD))?;
+        let challenge: Option<[u8; 16]> = match a.challenge.as_deref() {
+            None => None,
+            Some(c) => Some(c.try_into().map_err(|_| refused("the challenge is not 16 bytes", BAD))?),
+        };
+        let signed = push::Signed { env, token: &token, slot: &slot, seq, challenge: challenge.as_ref() };
+        let sig = push::sign_send(&Pkcs8Signer(signer), &signed).map_err(|e| refused(e, BAD))?;
+        Some(On {
+            token,
+            env,
+            key: Zeroizing::new(key),
+            send_key: Key::es256(public),
+            send_sig: sig.to_vec(),
+            slot,
+            challenge,
+        })
     };
     // The writer gives no frame its reader would refuse.
     let frame =
@@ -189,12 +216,15 @@ struct OpenArgs {
     sealing: Vec<SealingArgs>,
     #[serde(default)]
     too_old: bool,
+    /// The group is halted: nothing but the neutral hint. Needed, as are
+    /// `hints_only`, `now_ms` and `window_ms`: with one left out the body
+    /// is the neutral hint.
     #[serde(default)]
-    halted: bool,
+    halted: Option<bool>,
     /// The phone heard of a membership change (event 2, 4 or 6) since its
     /// last registration: a copy is shown only as a hint.
     #[serde(default)]
-    hints_only: bool,
+    hints_only: Option<bool>,
     /// The phone's clock, and the group's window for an incoming copy: an
     /// older copy is a hint, an event older than a day the neutral hint.
     #[serde(default)]
@@ -203,8 +233,10 @@ struct OpenArgs {
     window_ms: Option<u64>,
 }
 
-/// How old an event may be and still be named.
+/// How old an event may be and still be named, and how far ahead of the
+/// phone's clock its time may be.
 const EVENT_AGE_MS: u64 = 86_400_000;
+const EVENT_AHEAD_MS: u64 = 5 * 60_000;
 
 /// The send key in a file, as the phone keeps it.
 struct Pkcs8Signer(p256::ecdsa::SigningKey);
@@ -271,6 +303,18 @@ fn open(a: OpenArgs) -> Result<Vec<u8>, Refusal> {
     let (key_index, body) = opened.ok_or_else(|| refused("no push key opens it", BAD))?;
     let mut m = Map::new();
     m.insert("key_index".into(), Value::from(key_index));
+    // Every input the rules need, or the neutral hint.
+    let (Some(now), Some(_), Some(halted), Some(_)) = (a.now_ms, a.window_ms, a.halted, a.hints_only) else {
+        m.insert("kind".into(), Value::from("hint"));
+        return Ok(json(Value::Object(m)));
+    };
+    if halted {
+        m.insert("kind".into(), Value::from("hint"));
+        return Ok(json(Value::Object(m)));
+    }
+    let fresh = |t: Option<u64>| {
+        t.is_some_and(|t| now.saturating_sub(t) <= EVENT_AGE_MS && t <= now.saturating_add(EVENT_AHEAD_MS))
+    };
     match body {
         Body::Copy(reduced) => copy(&a, &me, &reduced, &mut m),
         Body::Waits { id, origin } => {
@@ -278,7 +322,7 @@ fn open(a: OpenArgs) -> Result<Vec<u8>, Refusal> {
             m.insert("id".into(), b64_value(&id));
             m.insert("origin".into(), b64_value(&origin));
         }
-        Body::Event { time_ms: Some(t), .. } if a.now_ms.is_some_and(|now| now.saturating_sub(t) > EVENT_AGE_MS) => {
+        Body::Event { time_ms, .. } if !fresh(time_ms) => {
             m.insert("kind".into(), Value::from("hint"));
         }
         Body::Event { id, event, device, time_ms } => {
@@ -333,10 +377,10 @@ fn copy(a: &OpenArgs, me: &DeviceId, reduced: &[u8], m: &mut Map<alloc::string::
     let wall = u64::try_from(checked.time.wall).unwrap_or(0);
     let stale = match (a.now_ms, a.window_ms) {
         (Some(now), Some(window)) => now.saturating_sub(wall) > window,
-        _ => false,
+        _ => true,
     };
-    let content =
-        if a.halted || a.hints_only || stale { None } else { copies::open(&checked, me, &store, &state).ok() };
+    let hold = a.halted != Some(false) || a.hints_only != Some(false);
+    let content = if hold || stale { None } else { copies::open(&checked, me, &store, &state).ok() };
     match content {
         Some(Opened::Content { content, .. }) if !content.unknown => {
             m.insert("kind".into(), Value::from("copy"));

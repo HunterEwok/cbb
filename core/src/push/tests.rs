@@ -15,10 +15,11 @@ use crate::records::body::{RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF, ROL
 use crate::testkit::{G, T0, k, sealing, store};
 
 const PK: [u8; 32] = [7; 32];
+const SLOT: [u8; 16] = [9; 16];
 
 fn on_with(env: u64, seq: u64, token: &[u8]) -> Registration {
     let send = k("send key");
-    let sig = sign_send(&send, env, token, seq).unwrap();
+    let sig = sign_send(&send, &Signed { env, token, slot: &SLOT, seq, challenge: None }).unwrap();
     Registration {
         seq,
         kinds: KIND_COPIES | KIND_EVENTS,
@@ -28,6 +29,8 @@ fn on_with(env: u64, seq: u64, token: &[u8]) -> Registration {
             key: Zeroizing::new(PK),
             send_key: send.key.clone(),
             send_sig: sig.to_vec(),
+            slot: SLOT,
+            challenge: None,
         }),
     }
 }
@@ -72,38 +75,43 @@ fn a_registration_is_on_with_all_it_carries_or_off_with_none() {
     let r = on(ENV_APNS);
     let o = r.on.as_ref().unwrap();
     let kv = o.send_key.to_value();
-    let m = |kinds: u64, have: [bool; 5]| {
-        let mut v = vec![(0, Value::Uint(T_PUSH))];
-        let fields: [(u16, Value<'_>); 5] = [
+    // The fields push on needs, in key order around seq (5) and kinds (6).
+    let m = |kinds: u64, have: [bool; 6], challenge: bool| {
+        let fields: [(u16, Value<'_>); 6] = [
             (2, Value::Bytes(&o.token)),
             (3, Value::Uint(1)),
             (4, Value::Bytes(&o.key[..])),
             (7, kv.clone()),
             (8, Value::Bytes(&o.send_sig)),
+            (9, Value::Bytes(&SLOT)),
         ];
+        let mut v = vec![(0, Value::Uint(T_PUSH))];
+        let mut late = vec![];
         for (i, (n, x)) in fields.into_iter().enumerate() {
-            if have[i] && n < 5 {
-                v.push((n, x));
+            if have[i] {
+                if n < 5 { v.push((n, x)) } else { late.push((n, x)) }
             }
         }
         v.push((5, Value::Uint(1)));
         v.push((6, Value::Uint(kinds)));
-        for (i, n) in [(3usize, 7u16), (4, 8)] {
-            if have[i] {
-                v.push((n, if n == 7 { kv.clone() } else { Value::Bytes(&o.send_sig) }));
-            }
+        v.extend(late);
+        if challenge {
+            v.push((10, Value::Bytes(&[3; 16])));
         }
         Value::Map(v)
     };
-    assert!(Registration::read(&m(1, [true; 5])).is_ok());
-    assert!(Registration::read(&m(0, [false; 5])).is_ok());
-    for i in 0..5 {
-        let mut have = [true; 5];
+    assert!(Registration::read(&m(1, [true; 6], false)).is_ok());
+    assert!(Registration::read(&m(1, [true; 6], true)).is_ok());
+    assert!(Registration::read(&m(0, [false; 6], false)).is_ok());
+    // A challenge belongs to push on only.
+    assert_eq!(Registration::read(&m(0, [false; 6], true)).err(), Some(RULE_PUSH_SHAPE));
+    for i in 0..6 {
+        let mut have = [true; 6];
         have[i] = false;
-        assert_eq!(Registration::read(&m(1, have)).err(), Some(RULE_PUSH_SHAPE), "without field {i}");
-        let mut only = [false; 5];
+        assert_eq!(Registration::read(&m(1, have, false)).err(), Some(RULE_PUSH_SHAPE), "without field {i}");
+        let mut only = [false; 6];
         only[i] = true;
-        assert_eq!(Registration::read(&m(0, only)).err(), Some(RULE_PUSH_SHAPE), "off with field {i}");
+        assert_eq!(Registration::read(&m(0, only, false)).err(), Some(RULE_PUSH_SHAPE), "off with field {i}");
     }
 }
 
@@ -111,17 +119,55 @@ fn a_registration_is_on_with_all_it_carries_or_off_with_none() {
 fn the_send_key_signs_the_token_and_the_number_and_a_later_algorithm_is_held() {
     let r = on(ENV_APNS);
     let o = r.on.as_ref().unwrap();
-    assert_eq!(check_send(&o.send_key, &o.send_sig, ENV_APNS, &o.token, 3), Ok(SendCheck::Good));
+    assert_eq!(
+        check_send(
+            &o.send_key,
+            &o.send_sig,
+            &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, seq: 3, challenge: None }
+        ),
+        Ok(SendCheck::Good)
+    );
     // Another number, token or platform: the signature does not hold.
-    assert_eq!(check_send(&o.send_key, &o.send_sig, ENV_APNS, &o.token, 4), Err(RULE_SEND_SIG));
-    assert_eq!(check_send(&o.send_key, &o.send_sig, ENV_APNS, &[2; 32], 3), Err(RULE_SEND_SIG));
-    assert_eq!(check_send(&o.send_key, &o.send_sig, ENV_FCM, &o.token, 3), Err(RULE_SEND_SIG));
+    assert_eq!(
+        check_send(
+            &o.send_key,
+            &o.send_sig,
+            &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, seq: 4, challenge: None }
+        ),
+        Err(RULE_SEND_SIG)
+    );
+    assert_eq!(
+        check_send(
+            &o.send_key,
+            &o.send_sig,
+            &Signed { env: ENV_APNS, token: &[2; 32], slot: &SLOT, seq: 3, challenge: None }
+        ),
+        Err(RULE_SEND_SIG)
+    );
+    assert_eq!(
+        check_send(
+            &o.send_key,
+            &o.send_sig,
+            &Signed { env: ENV_FCM, token: &o.token, slot: &SLOT, seq: 3, challenge: None }
+        ),
+        Err(RULE_SEND_SIG)
+    );
     // A key exchange's algorithm is refused where a send key is wanted; an
     // algorithm this version does not know is held.
     let later = Key { alg: 9, public: vec![1; 2000] };
-    assert_eq!(check_send(&later, &[1; 3000], ENV_APNS, &o.token, 3), Ok(SendCheck::Unknown));
+    assert_eq!(
+        check_send(
+            &later,
+            &[1; 3000],
+            &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, seq: 3, challenge: None }
+        ),
+        Ok(SendCheck::Unknown)
+    );
     let kem = Key { alg: crate::records::key::ALG_X25519, public: vec![1; 32] };
-    assert_eq!(check_send(&kem, &o.send_sig, ENV_APNS, &o.token, 3), Err(RULE_SEND_SIG));
+    assert_eq!(
+        check_send(&kem, &o.send_sig, &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, seq: 3, challenge: None }),
+        Err(RULE_SEND_SIG)
+    );
     let mut held = on(ENV_APNS);
     if let Some(x) = held.on.as_mut() {
         x.send_key = later.clone();
@@ -321,6 +367,8 @@ fn a_unifiedpush_token_holds_the_endpoint_and_the_keys_within_its_bound() {
         key: o.send_key.clone(),
         sig: &o.send_sig,
         seq: 1 << 53,
+        slot: SLOT,
+        challenge: Some([3; 16]),
     };
     assert_eq!(s.write().unwrap().len() - 4, 4096);
     // The longest token, send key and signature still fit one frame.
@@ -349,7 +397,12 @@ fn the_services_messages_follow_their_tables() {
         let v = read_frame(&f);
         check_map(of(t).unwrap(), &v).unwrap();
     }
-    assert!(of(T_PUSH).is_some() && of(29).is_none());
+    assert!(of(T_PUSH).is_some() && of(T_RENEW).is_some() && of(30).is_none());
+    // Renew names the registration's slot, and nothing else.
+    let r = renew(&SLOT);
+    assert_eq!(read_renew(&read_frame(&r)), Ok(SLOT));
+    let short = frame::write(&Value::Map(vec![(0, Value::Uint(T_RENEW)), (2, Value::Bytes(&[1; 15]))]));
+    assert!(read_renew(&read_frame(&short)).is_err());
 }
 
 /// A group of a phone and `others` computers, each with its statement.
@@ -525,16 +578,19 @@ fn the_vectors_are_what_the_readers_say() {
     }
     for r in v["sends"].as_array().unwrap() {
         let key = Key::read(&cbor::decode(&unhex(&r["key"])).unwrap()).unwrap();
-        let got = verdict(
-            check_send(
-                &key,
-                &unhex(&r["sig"]),
-                r["env"].as_u64().unwrap(),
-                &unhex(&r["token"]),
-                r["seq"].as_u64().unwrap(),
-            ),
-            |c| if c == SendCheck::Good { "good".into() } else { "held".into() },
-        );
+        let token = unhex(&r["token"]);
+        let slot: [u8; 16] = unhex(&r["slot"]).try_into().unwrap();
+        let challenge: Option<[u8; 16]> = r.get("challenge").map(|c| unhex(c).try_into().unwrap());
+        let signed = Signed {
+            env: r["env"].as_u64().unwrap(),
+            token: &token,
+            slot: &slot,
+            seq: r["seq"].as_u64().unwrap(),
+            challenge: challenge.as_ref(),
+        };
+        let got = verdict(check_send(&key, &unhex(&r["sig"]), &signed), |c| {
+            if c == SendCheck::Good { "good".into() } else { "held".into() }
+        });
         assert_eq!(got, want(r), "send key {}", name(r));
     }
     for u in v["unifiedpush"].as_array().unwrap() {
@@ -578,6 +634,13 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     let pk_b64 = key["ok"]["key"].as_str().unwrap().to_string();
     assert_eq!(pk_b64.len(), 44);
     let send_key = key["ok"]["send_key"].as_str().unwrap().to_string();
+    let slot_b64 = key["ok"]["slot"].as_str().unwrap().to_string();
+    let slot: [u8; 16] = {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.decode(&slot_b64).unwrap().try_into().unwrap()
+    };
+    // Each call draws a new slot.
+    assert_ne!(call("push_key", serde_json::Value::Null)["ok"]["slot"].as_str().unwrap(), slot_b64);
     let limits = call("push_limits", serde_json::json!({ "env": ENV_APNS }));
     assert_eq!(limits["ok"]["body"], MAX_BODY);
     assert_eq!(limits["ok"]["token"], MAX_TOKEN);
@@ -586,7 +649,7 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     let reg = call(
         "push_registration",
         serde_json::json!({ "saved_seq": 1, "now_ms": 0, "kinds": 3, "env": ENV_APNS, "token": b64(&[5; 32]),
-            "key": b64(&PK), "send_key": send_key }),
+            "key": b64(&PK), "send_key": send_key, "slot": slot_b64 }),
     );
     let frame = {
         use base64::Engine as _;
@@ -597,7 +660,48 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     let o = r.on.as_ref().unwrap();
     assert_eq!((r.seq, r.kinds, o.env), (2, 3, ENV_APNS));
     // The service can check the send key's signature.
-    assert_eq!(check_send(&o.send_key, &o.send_sig, ENV_APNS, &[5; 32], 2), Ok(SendCheck::Good));
+    assert_eq!(o.slot, slot);
+    assert_eq!(check_send(&o.send_key, &o.send_sig, &o.signed(2)), Ok(SendCheck::Good));
+    assert_eq!(
+        check_send(
+            &o.send_key,
+            &o.send_sig,
+            &Signed { env: ENV_APNS, token: &[5; 32], slot: &slot, seq: 2, challenge: None }
+        ),
+        Ok(SendCheck::Good)
+    );
+    // Another slot: the signature does not hold.
+    assert_eq!(
+        check_send(
+            &o.send_key,
+            &o.send_sig,
+            &Signed { env: ENV_APNS, token: &[5; 32], slot: &SLOT, seq: 2, challenge: None }
+        ),
+        Err(RULE_SEND_SIG)
+    );
+    // The challenge the service sent is in the registration and under its
+    // signature; without it the signature does not hold.
+    let ch = call(
+        "push_registration",
+        serde_json::json!({ "saved_seq": 2, "now_ms": 0, "kinds": 3, "env": ENV_APNS, "token": b64(&[5; 32]),
+            "key": b64(&PK), "send_key": send_key, "slot": slot_b64, "challenge": b64(&[4; 16]) }),
+    );
+    let chf = {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.decode(ch["ok"]["frame"].as_str().unwrap()).unwrap()
+    };
+    let cr = Registration::read(&read_frame(&chf)).unwrap();
+    let co = cr.on.as_ref().unwrap();
+    assert_eq!(co.challenge, Some([4; 16]));
+    assert_eq!(check_send(&co.send_key, &co.send_sig, &co.signed(3)), Ok(SendCheck::Good));
+    assert_eq!(check_send(&co.send_key, &co.send_sig, &Signed { challenge: None, ..co.signed(3) }), Err(RULE_SEND_SIG));
+    // Push on without a slot is refused.
+    let noslot = call(
+        "push_registration",
+        serde_json::json!({ "now_ms": 0, "kinds": 3, "env": ENV_APNS, "token": b64(&[5; 32]),
+            "key": b64(&PK), "send_key": send_key }),
+    );
+    assert_eq!(noslot["error"]["code"], 18, "{noslot}");
     // A restored phone whose saved number went back still moves forward.
     let restored = call("push_registration", serde_json::json!({ "saved_seq": 1, "now_ms": T0, "kinds": 0 }));
     assert_eq!(restored["ok"]["seq"], T0);
@@ -605,7 +709,7 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
         "push_registration",
         serde_json::json!({ "now_ms": 0, "kinds": 1, "env": ENV_UNIFIEDPUSH,
             "unifiedpush": { "url": "http://up.example/x", "p256dh": b64(&point()), "auth": b64(&[1; 16]) },
-            "key": b64(&PK), "send_key": send_key }),
+            "key": b64(&PK), "send_key": send_key, "slot": slot_b64 }),
     );
     assert_eq!(up["error"]["name"], "push", "a plain-HTTP endpoint is refused: {up}");
     let bad = call("push_registration", serde_json::json!({ "now_ms": 0, "kinds": 1, "env": 1, "token": b64(&[1]) }));
@@ -632,7 +736,8 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     let origins = serde_json::json!([{ "key": b64(&od.key.encode()), "rights": od.rights }]);
     let args = |origins: &serde_json::Value, keys: serde_json::Value| {
         serde_json::json!({ "keys": keys, "body": b64(&sealed), "me": b64(&phone.0), "origins": origins,
-            "sealing": [{ "epoch": epoch, "secret": b64(&secret) }] })
+            "sealing": [{ "epoch": epoch, "secret": b64(&secret) }], "now_ms": T0 + 5, "window_ms": 120_000,
+            "halted": false, "hints_only": false })
     };
     let old = serde_json::json!({ "key": b64(&[1; 32]), "seq": 1 });
     let current = serde_json::json!({ "key": b64(&PK), "seq": 2 });
@@ -648,11 +753,19 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     let got = call("push_open", args(&serde_json::json!([]), serde_json::json!([current])));
     assert_eq!(got["ok"]["kind"], "hint", "{got}");
     assert!(got["ok"].get("text").is_none());
-    // A halted group opens nothing: a hint that the copy waits.
+    // Any input the rules need left out: the neutral hint.
+    for missing in ["now_ms", "window_ms", "halted", "hints_only"] {
+        let mut a = args(&origins, serde_json::json!([current]));
+        a.as_object_mut().unwrap().remove(missing);
+        let got = call("push_open", a);
+        assert_eq!(got["ok"]["kind"], "hint", "without {missing}: {got}");
+        assert!(got["ok"].get("text").is_none());
+    }
+    // A halted group opens nothing: the neutral hint.
     let mut halted = args(&origins, serde_json::json!([current]));
     halted["halted"] = true.into();
     let got = call("push_open", halted);
-    assert_eq!(got["ok"]["kind"], "waits", "{got}");
+    assert_eq!(got["ok"]["kind"], "hint", "{got}");
     // After a membership change, or past the group's window: a hint.
     let mut changed = args(&origins, serde_json::json!([current]));
     changed["hints_only"] = true.into();
@@ -669,12 +782,68 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     // An event is a hint with its number.
     let ev = Body::Event { id: [8; 16], event: EVENT_ROOT, device: None, time_ms: Some(T0) };
     let sealed_ev = seal(&PK, 2, ENV_APNS, &ev).unwrap();
-    let got = call("push_open", serde_json::json!({ "keys": [current], "body": b64(&sealed_ev), "me": b64(&phone.0) }));
+    let event_at = |body: &[u8], now: u64| {
+        call(
+            "push_open",
+            serde_json::json!({ "keys": [current], "body": b64(body), "me": b64(&phone.0), "now_ms": now,
+                "window_ms": 120_000, "halted": false, "hints_only": false }),
+        )
+    };
+    let got = event_at(&sealed_ev, T0 + 10);
     assert_eq!((got["ok"]["kind"].as_str(), got["ok"]["event"].as_u64()), (Some("event"), Some(EVENT_ROOT)), "{got}");
-    // An event older than a day is the neutral hint.
-    let got = call(
-        "push_open",
-        serde_json::json!({ "keys": [current], "body": b64(&sealed_ev), "me": b64(&phone.0), "now_ms": T0 + 86_400_001 }),
-    );
-    assert_eq!(got["ok"]["kind"], "hint", "{got}");
+    // An event older than a day, or more than five minutes ahead of the
+    // phone's clock, is the neutral hint; so is one with no time.
+    assert_eq!(event_at(&sealed_ev, T0 + 86_400_001)["ok"]["kind"], "hint");
+    assert_eq!(event_at(&sealed_ev, T0 - 300_000)["ok"]["kind"], "event");
+    assert_eq!(event_at(&sealed_ev, T0 - 300_001)["ok"]["kind"], "hint");
+    let timeless = Body::Event { id: [8; 16], event: EVENT_ROOT, device: None, time_ms: None };
+    assert_eq!(event_at(&seal(&PK, 2, ENV_APNS, &timeless).unwrap(), T0)["ok"]["kind"], "hint");
+}
+
+#[test]
+fn a_body_whose_nonce_is_not_its_own_is_refused() {
+    let body = Body::Waits { id: [1; 16], origin: [2; 16] };
+    let sealed = seal(&PK, 5, ENV_APNS, &body).unwrap();
+    assert_eq!(open(&PK, 5, &sealed), Ok(body.clone()));
+    // The same plaintext under a nonce of the sender's choosing: the AEAD
+    // holds, the nonce does not.
+    let plain = body.plaintext().unwrap();
+    let ad = associated(5);
+    let k = derive(&PK, LABEL_BODY);
+    let aead = ChaCha20Poly1305::new_from_slice(&k[..]).unwrap();
+    let nonce = [0x5a; NONCE_LEN];
+    let ct = aead.encrypt(&Nonce::from(nonce), Payload { msg: &plain, aad: &ad }).unwrap();
+    let mut other = nonce.to_vec();
+    other.extend_from_slice(&ct);
+    assert_eq!(other.len(), MAX_BODY);
+    assert_eq!(open(&PK, 5, &other), Err(RULE_BODY_NONCE));
+}
+
+#[test]
+fn a_copy_in_a_body_carries_no_age() {
+    let with_age = Value::Map(vec![(crate::format::copy::FIELD_AGE, Value::Uint(1))]).encode();
+    let plain = Value::Map(vec![(0, Value::Uint(BODY_COPY)), (2, Value::Bytes(&with_age))]).encode();
+    assert_eq!(Body::read(&plain), Err(RULE_BODY_AGE));
+}
+
+#[test]
+fn the_clock_is_bounded_both_ways() {
+    // A phone clock past 2100 (a unit mistake) numbers as 2100, so seq
+    // keeps room to move forward.
+    assert_eq!(next_seq(None, u64::MAX / 2), MAX_CLOCK_MS);
+    assert_eq!(next_seq(Some(MAX_CLOCK_MS), u64::MAX), MAX_CLOCK_MS + 1);
+    // The service takes a seq up to a day ahead of its clock, no more.
+    assert!(seq_in_time(T0 + MAX_SEQ_AHEAD_MS, T0));
+    assert!(!seq_in_time(T0 + MAX_SEQ_AHEAD_MS + 1, T0));
+    assert!(seq_in_time(1, T0));
+}
+
+#[test]
+fn a_host_whose_last_label_starts_with_a_digit_is_refused() {
+    for bad in ["https://up.0x7f/x", "https://up.1/x", "https://example.0177/x", "https://a.9example/x"] {
+        assert!(!up_url(bad), "{bad}");
+    }
+    for good in ["https://up.example.org/x", "https://1up.example.org/x", "https://up.example.o1/x"] {
+        assert!(up_url(good), "{good}");
+    }
 }
