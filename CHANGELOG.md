@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The iPad has a Home of its own (docs/apps.md, "Big screens"): a sidebar with the group's
+  line and its switches, the devices' sections (all, needs attention, each collection) and the
+  settings' parts, the devices as tiles with the chosen one's card beside them, Command-1 to 9,
+  the arrows and Escape, a tile's menu that pastes and mutes, and text, pictures or files
+  dropped on a tile pasted on that device. A narrow window keeps the phone's page. The app is
+  no longer offered on a Mac or a Vision Pro as an iPad app.
 - The Aurora app asks for a PIN of its own before its root or admin key signs, since Aurora OS
   gives an app neither its authentication service nor the fingerprint. The key moves to a
   second token of the app in the TEE, whose PIN the user chooses (at least four digits) and

@@ -117,6 +117,11 @@ A9 and U14 to U18).
   button's) contrast is measured on the screen's picture instead: its darkest and lightest
   pixels at least 4.5:1. The iPhone's Start screen scrolls rather than squeeze its texts. The
   audit looks only at what a person can reach.
+- The iPad (`PadUITests`, skipped on an iPhone): Home with a made-up group, which a debug
+  build starts with when launched with `-showcase` (`App/Showcase.swift`; nothing leaves the
+  app): the sidebar's sections, a tile's card beside the tiles, the arrows and Escape, a
+  settings part, Command-1, portrait, the card at the left in Arabic, and clipped text at the
+  largest size; each screen's picture is attached.
 
 Screenshots are compared where a picture is the same on every machine that draws it: the
 tray window on Linux in the Noto fonts (`fonts-noto-core`, `fonts-noto-mono`,

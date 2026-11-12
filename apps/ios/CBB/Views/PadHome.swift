@@ -2,6 +2,7 @@
 
 import CBBKit
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 /// What the big screen's sidebar opens: the devices (all of them, those
@@ -28,15 +29,12 @@ struct PadHome: View {
     @Environment(\.palette) private var palette
     @State private var section: PadSection? = .all
     @State private var selected: AppModel.Computer.ID?
-    @State private var columns = NavigationSplitViewVisibility.all
+    @State private var columns = NavigationSplitViewVisibility.automatic
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
             PadSidebar(section: $section)
                 .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) { AddMenu(adding: $adding, inviting: $inviting) }
-                }
         } detail: {
             NavigationStack {
                 detail
@@ -65,10 +63,9 @@ struct PadHome: View {
         case let devices:
             PadDevices(section: devices, selected: $selected)
                 .toolbar {
-                    // In portrait the sidebar is folded away, with its "+".
-                    if columns == .detailOnly {
-                        ToolbarItem(placement: .primaryAction) { AddMenu(adding: $adding, inviting: $inviting) }
-                    }
+                    // In the detail's toolbar, which stays in portrait while
+                    // the sidebar folds away.
+                    ToolbarItem(placement: .primaryAction) { AddMenu(adding: $adding, inviting: $inviting) }
                 }
         }
     }
@@ -286,7 +283,7 @@ struct PadDevices: View {
     }
 
     @ViewBuilder private var list: some View {
-        let tiles = layout == .orbit ? .tiles : layout
+        let tiles: DeviceLayout = layout == .orbit ? .tiles : layout
         if !query.isEmpty {
             let found = shown.filter { $0.matches(query) }
             if found.isEmpty {
@@ -363,7 +360,8 @@ struct PasteDrop: ViewModifier {
     @Environment(\.palette) private var palette
     @State private var over = false
 
-    func body(content: Content) -> some View {
+    // Self.Content: the kit has a type Content of its own.
+    func body(content: Self.Content) -> some View {
         if model.isAdmin, device.takesPaste {
             content
                 .onDrop(of: [.image, .plainText, .fileURL, .data], isTargeted: $over) { providers in

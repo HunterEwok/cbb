@@ -286,20 +286,51 @@ forwarder show only with the advanced settings on, on every app.
 
 ## Big screens
 
-- **iPad** (the same app, universal): an iPad is a phone for the group. It joins as an
-  admin, or makes its own group, and its root key lives in its Secure Enclave. Its Home
-  shows the devices on **orbits** around it, or as tiles or a list (the "…" menu switches
-  them). Its centre is the sync button, the toolbar holds the sync button too, and a device
-  opens its details in a pane beside the devices, which a cross closes. With a keyboard,
-  Command-R sends or fetches, Command-N adds a device, Command-comma opens Settings from
-  the "…" menu, and Escape closes the details. An iPad pairs with no Apple Watch, so its
-  Settings leave the watch out.
+The layout follows the window's width, never the kind of device or its rights; the rights
+follow how the device keeps its key (docs/design.md: a key in a secure chip with strong
+biometrics gets a phone's set, else a computer's). An Android or HarmonyOS tablet whose key
+is in software gets the same big-screen layout with a computer's rights.
+
+- **iPad** (the same app, universal; `Views/PadHome.swift`): an iPad is a phone for the
+  group, with a phone's rights: it joins as an admin, or makes its own group, and its root
+  key lives in its Secure Enclave. On Start, under "Create a group", it says that the device
+  that makes the group holds its main key, best one always at hand, such as a phone. In a
+  regular-width window Home is a split view:
+  - **The sidebar** (280 to 400 points, 320 by default): the group's line, how many devices
+    are online with the two switches (the house and the globe, which go under the count when
+    the two do not fit); **Devices**: "All devices", "Needs attention" while a device does,
+    and each collection, each with its count (a collection's menu renames or ungroups it);
+    **Settings**: Appearance, Notifications, the recovery key (on the root), away from home
+    (the hub, moving it, Everywhere, the relay), the group's rules (for admins), why it does
+    not sync, and About with leaving the group. A part opens in the detail column; there is no
+    switch for the advanced settings, each has its own part. In portrait the sidebar folds
+    away behind its button, and "+" moves to the detail's toolbar.
+  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+    orbits (the toolbar's view menu; the orbits only for all devices), with a search in the
+    toolbar. A tap chooses a device: its card stands at the trailing edge, 400 points wide
+    (growing with the text size, at most 520), and the chosen tile is outlined; when the window
+    leaves less than 360 points for the devices beside it, the card is the next page instead.
+    Another section closes the card.
+  - **The keyboard**: Command-1 to 9 open the sidebar's sections in its order, Command-comma
+    the settings, Command-N adds a device; the arrows choose the device before or after, as
+    they stand; Escape closes the card. Holding Command lists them.
+  - **The pointer**: a tile lifts under it; its menu (a right-click, or touch and hold) pastes
+    on the device and mutes or unmutes it for an admin, besides Arrange's moves.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there, as from its card (an admin's); text or a picture dropped beside the
+    tiles goes to the group, as a copy on the iPad would.
+  - **A narrow window** (Slide Over, a third of the screen, a compact width in Stage Manager)
+    gets the phone's page, the card as the next page.
+  - Start and Join stand in a column at most 560 points wide. One window; the app is not
+    offered on a Mac or a Vision Pro as an iPad app (the Mac has its own). An iPad pairs with no
+    Apple Watch, so its Settings leave the watch out; nothing can paste on an iPad, as on an
+    iPhone.
 - **A foldable iPhone** (the iPhone duo): the outer screen is the phone's page. The inner
-  screen is a big screen like the iPad's: the orbits, the details beside them, and in
-  landscape the system moves the toolbar (sync, "+", the menu) to the strip at the right
-  edge. A phone's screen stays upright; a big one turns.
+  screen is a big screen like the iPad's: the sidebar, the devices and the card beside them,
+  and in landscape the system moves the toolbar to the strip at the right edge. A phone's screen stays upright; a big one turns.
 - **Android tablets and foldables** do the same from 720 dp wide: the orbits (or tiles or a
-  list, which the view button switches), and a device's details in a pane beside them.
+  list, which the view button switches), and a device's details in a pane beside them; the
+  iPad's sidebar, sections and keys above are the reference they are to follow.
   Android draws the device icons itself (`DeviceGlyph`), on the same 24-unit grid as the
   system's line icons.
 

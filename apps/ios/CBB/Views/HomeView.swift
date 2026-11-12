@@ -201,9 +201,9 @@ extension Optional where Wrapped == DeviceFilter {
     /// Whether a device passes the filter, or there is none.
     func passes(_ d: AppModel.Computer) -> Bool {
         switch self {
-        case .online: d.online
-        case .attention: d.needsAttention
-        case nil: true
+        case .some(.online): d.online
+        case .some(.attention): d.needsAttention
+        case .none: true
         }
     }
 }
