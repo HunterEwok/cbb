@@ -33,6 +33,8 @@
 //     (version.go);
 //   - the apps' translations are what tools/strings makes of apps/l10n
 //     (l10n.go);
+//   - every job of the release workflows that reads a secret runs in the
+//     deployment environment release (secrets.go);
 //   - no compiled program (ELF, Mach-O, PE) and no file over 1 MiB is
 //     committed: build output belongs outside the repository, and a large
 //     file stays in git's history for good;
@@ -142,6 +144,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 	problems = append(problems, checkPlanned(contents)...)
 	problems = append(problems, checkAndroidVersion(contents)...)
 	problems = append(problems, checkSpecVersions(contents)...)
+	problems = append(problems, checkReleaseSecrets(contents)...)
 	problems = append(problems, checkInstallerL10n(contents)...)
 	problems = append(problems, checkAppStrings(contents)...)
 	if testsSince != "" {
