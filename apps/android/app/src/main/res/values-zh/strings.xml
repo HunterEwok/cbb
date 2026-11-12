@@ -219,8 +219,8 @@
     <string name="hub_paused">等待应用：应用打开时中心节点才工作。</string>
     <string name="hub_registered">已在转发器注册：离家的设备可以连接到这部手机。</string>
     <string name="hub_registering">正在向转发器注册…</string>
-    <string name="hub_strict_vpn">屏蔽 VPN 的网络（AmneziaWG）</string>
-    <string name="hub_strict_web">只允许网页通行的网络（VLESS）</string>
+    <string name="hub_strict_vpn">屏蔽 VPN 的网络 (AmneziaWG)</string>
+    <string name="hub_strict_web">只允许网页通行的网络 (VLESS)</string>
     <string name="hub_suggest">%1$s 一直开机。要让它成为中心节点，以便此应用关闭时离家同步仍能工作吗？</string>
     <string name="hub_suggest_keep">保留这部手机</string>
     <string name="hub_suggest_yes">设为该中心节点</string>
@@ -537,7 +537,7 @@
     <string name="share_unknown_app">应用</string>
     <string name="signature_n">签名 %1$d</string>
     <string name="signature_of">签名 %1$d/%2$d</string>
-    <string name="source">源代码和许可证（AGPL-3.0）</string>
+    <string name="source">源代码和许可证 (AGPL-3.0)</string>
     <string name="sync">同步</string>
     <string name="sync_off">同步已关闭</string>
     <string name="sync_off_until">同步关闭至 %1$s</string>

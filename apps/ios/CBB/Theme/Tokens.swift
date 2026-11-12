@@ -235,12 +235,12 @@ enum Tokens {
             name: "ruby",
             dark: Palette(
                 dark: true,
-                background: Color(rgb: 0x180E13),
-                surface: Color(rgb: 0x2C1D25),
-                grid: Color(rgb: 0x3E232D),
+                background: Color(rgb: 0x180F13),
+                surface: Color(rgb: 0x2C1E26),
+                grid: Color(rgb: 0x3E242E),
                 text: Color(rgb: 0xECEEF5),
                 textDim: Color(rgb: 0x9EA2B0),
-                accent: Color(rgb: 0xFF5C7A),
+                accent: Color(rgb: 0xFF6681),
                 onAccent: Color(rgb: 0x0A0B0F),
                 danger: Color(rgb: 0xFF7A7A)
             ),
