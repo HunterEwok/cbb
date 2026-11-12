@@ -29,7 +29,9 @@ page by its reader, and CONTRIBUTING's "Documentation" says where a change is wr
   version in a PR first.
 - Apple signing must never block development: CI signs the app ad hoc
   (`CODE_SIGN_IDENTITY=-`, no team), which needs no account and gives the simulator a
-  keychain. TestFlight waits for the owner's Apple developer account.
+  keychain. The project's Apple developer account exists: the release workflow signs and
+  notarizes with it and sends the iPhone app to TestFlight (docs/maintaining.md, "Signing
+  for macOS"). Never register anything in the account yourself; give the owner the steps.
 - Commit messages: imperative summary, blank line, details; no model names. The owner's
   personal notes and testing guides stay out of the repository.
 - Follow [CONTRIBUTING.md](CONTRIBUTING.md): license headers, CHANGELOG under *Unreleased*,
@@ -182,7 +184,8 @@ tunnel (`cbb global`; `TestAloneMemberAway`).
 
 Next steps, roughly in order:
 
-1. TestFlight (needs the Apple account), a signed macOS `.pkg`, a run of remote invitations
+1. The first TestFlight build and signed macOS `.pkg` of a release (the account and the
+   release jobs are there, docs/maintaining.md), a run of remote invitations
    on real phones (built on every device, docs/protocol.md section 12; e2e through
    `phone-on-linux`), `cbb` on the ESP32 (see docs/roadmap.md).
 
