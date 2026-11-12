@@ -34,6 +34,7 @@
     <string name="alert_stopped">群组已停止：在群组根设备做出决定之前，其设备只交换记录，不交换剪贴板。</string>
     <string name="alert_two_histories">%1$s 用同一个密钥签署了两份历史，就像被盗密钥或从备份恢复时那样。</string>
     <string name="alert_unknown_devices">此处未知的设备</string>
+    <string name="all_devices">所有设备</string>
     <string name="app_info">应用信息</string>
     <string name="appearance">外观</string>
     <string name="arrange">整理</string>
@@ -105,7 +106,9 @@
     <string name="copies">副本</string>
     <string name="copies_forward_only">只转发，不读取</string>
     <string name="create_group">创建群组</string>
+    <string name="create_group_main_hint">创建群组的设备保存群组的主密钥：最好是随身携带的设备，比如手机。</string>
     <string name="device_id">设备 ID</string>
+    <string name="devices">设备</string>
     <string name="error_action_refused">设备未运行该操作。</string>
     <string name="error_arrangement">磁贴保持原样：该更改不适用。</string>
     <string name="error_below_key_level">群组的管理员密钥设置不允许此设备的密钥成为管理员。请在“设置”>“管理员密钥”中更改。</string>
@@ -172,6 +175,7 @@
     <string name="files_sent">已发送到电脑，它们现在正从这部手机获取。</string>
     <string name="filter_online">在线</string>
     <string name="frozen">已冻结</string>
+    <string name="group">群组</string>
     <string name="group_hub">群组的中心节点</string>
     <string name="group_hub_in_use">群组的中心节点，正在使用</string>
     <string name="handed_body">持有群组的电脑已将它交给这部手机。接管后这部手机将成为群组的根设备；电脑仍留在群组中。</string>
@@ -273,6 +277,7 @@
     <string name="join_title">加入群组</string>
     <string name="join_tv">加入手机的群组</string>
     <string name="join_tv_hint">这台电视加入你手机的群组：它显示一个二维码，由手机扫描。</string>
+    <string name="key_guard_weak">此设备没有安全密钥芯片，或没有可靠的指纹或面部传感器：作为群组的主设备，它对群组的保护不如同时具备两者的手机。</string>
     <string name="key_level_body">哪些设备可以成为群组的管理员和中心节点。硬件中的密钥永远不会离开设备；任何获得文件中密钥的人都能复制它。已在群组中的管理员会保留，直到你移除他们。</string>
     <string name="key_level_files">密钥也可在文件中</string>
     <string name="key_level_hardware">密钥在硬件中</string>
@@ -352,6 +357,7 @@
     <string name="make_hub_reads">读取副本的中心节点</string>
     <string name="make_hub_refused">电脑没有成为中心节点。</string>
     <string name="make_hub_title">让 %1$s 成为中心节点？</string>
+    <string name="menu">菜单</string>
     <string name="more">更多</string>
     <string name="move_earlier">前移</string>
     <string name="move_end">移到末尾</string>
@@ -533,6 +539,7 @@
     <string name="share_files_title">发送到你的电脑？</string>
     <string name="share_forget">重新询问每个应用</string>
     <string name="share_unknown_app">应用</string>
+    <string name="shortcuts_hint">Ctrl+1 至 9 打开这些分区，Ctrl+N 添加设备，方向键选择设备，Esc 关闭其详情。</string>
     <string name="signature_n">签名 %1$d</string>
     <string name="signature_of">签名 %1$d/%2$d</string>
     <string name="source">源代码和许可证 (AGPL-3.0)</string>

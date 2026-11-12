@@ -34,6 +34,7 @@
     <string name="alert_stopped">Группа остановлена: устройства обмениваются только записями, без буфера обмена, пока корень группы не решит.</string>
     <string name="alert_two_histories">%1$s: две истории, подписанные одним ключом. Так бывает при краже ключа или после восстановления из резервной копии.</string>
     <string name="alert_unknown_devices">устройства, неизвестные здесь</string>
+    <string name="all_devices">Все устройства</string>
     <string name="app_info">О приложении</string>
     <string name="appearance">Оформление</string>
     <string name="arrange">Упорядочить</string>
@@ -105,7 +106,9 @@
     <string name="copies">Копии</string>
     <string name="copies_forward_only">Пересылает, не читает</string>
     <string name="create_group">Создать группу</string>
+    <string name="create_group_main_hint">Устройство, которое создаёт группу, хранит её главный ключ: лучше то, что всегда с вами, например телефон.</string>
     <string name="device_id">ID устройства</string>
+    <string name="devices">Устройства</string>
     <string name="error_action_refused">Устройство не выполнило действие.</string>
     <string name="error_arrangement">Плитки остались как были: такое изменение не подходит.</string>
     <string name="error_below_key_level">Настройка группы «Ключи админов» не позволяет ключам этого устройства быть админом. Измените её в Настройках, раздел «Ключи админов».</string>
@@ -172,6 +175,7 @@
     <string name="files_sent">Отправлено на компьютеры, они сейчас заберут это с телефона.</string>
     <string name="filter_online">В сети</string>
     <string name="frozen">заморожен</string>
+    <string name="group">Группа</string>
     <string name="group_hub">Хаб группы</string>
     <string name="group_hub_in_use">Хаб группы, используется сейчас</string>
     <string name="handed_body">Компьютер, который держал группу, передал её этому телефону. Возьмите её, чтобы этот телефон стал корнем группы; компьютер останется в группе.</string>
@@ -273,6 +277,7 @@
     <string name="join_title">Войти в группу</string>
     <string name="join_tv">Войти в группу телефона</string>
     <string name="join_tv_hint">Телевизор входит в группу вашего телефона: он показывает QR-код, а телефон его сканирует.</string>
+    <string name="key_guard_weak">У этого устройства нет защищённого чипа для ключей или надёжного датчика отпечатка или лица: главным устройством группы оно защищает её хуже, чем телефон, у которого есть и то и другое.</string>
     <string name="key_level_body">Какие устройства могут быть админами и хабами группы. Ключи в железе никогда не покидают устройство, а ключ в файле может скопировать любой, кто получит файл. Уже назначенные админы остаются, пока вы их не удалите.</string>
     <string name="key_level_files">Ключи и в файлах</string>
     <string name="key_level_hardware">Ключи в железе</string>
@@ -352,6 +357,7 @@
     <string name="make_hub_reads">Хаб, который читает копии</string>
     <string name="make_hub_refused">Компьютер не стал хабом.</string>
     <string name="make_hub_title">Сделать %1$s хабом?</string>
+    <string name="menu">Меню</string>
     <string name="more">Ещё</string>
     <string name="move_earlier">Переместить раньше</string>
     <string name="move_end">В конец</string>
@@ -533,6 +539,7 @@
     <string name="share_files_title">Отправить на компьютеры?</string>
     <string name="share_forget">Снова спрашивать все приложения</string>
     <string name="share_unknown_app">Приложение</string>
+    <string name="shortcuts_hint">Ctrl+1…9 открывают эти разделы, Ctrl+N добавляет устройство, стрелки выбирают устройство, Esc закрывает его карточку.</string>
     <string name="signature_n">Подпись %1$d</string>
     <string name="signature_of">Подпись %1$d из %2$d</string>
     <string name="source">Исходный код и лицензия (AGPL-3.0)</string>

@@ -328,9 +328,41 @@ is in software gets the same big-screen layout with a computer's rights.
 - **A foldable iPhone** (the iPhone duo): the outer screen is the phone's page. The inner
   screen is a big screen like the iPad's: the sidebar, the devices and the card beside them,
   and in landscape the system moves the toolbar to the strip at the right edge. A phone's screen stays upright; a big one turns.
-- **Android tablets and foldables** do the same from 720 dp wide: the orbits (or tiles or a
-  list, which the view button switches), and a device's details in a pane beside them; the
-  iPad's sidebar, sections and keys above are the reference they are to follow.
+- **Android tablets, foldables and wide windows** (`TabletHome.kt`) follow the iPad from
+  600 dp wide (Material's medium width class): a tablet's half of a split screen at less gets
+  the phone's page.
+  - **The sidebar** (300 dp, a little wider with a larger font): the group's line with the two
+    switches; **Devices**: "All devices", "Needs attention" while a device does, each
+    collection, each with its count; **Settings**: Appearance, Notifications (with sending by
+    itself and the watch), the recovery key (on the root), away from home (the hub, the
+    relay), remote paste (what may paste here, Share's question and the lab), the group (the
+    copies' time, the admin keys, leaving), why it does not sync, and About with the update. A
+    part opens beside the sidebar; the phone's Settings page shows them all, the advanced ones
+    behind their switch. The sidebar stands while the window has room for it, 360 dp of devices
+    and the details (as in landscape); else it slides in from the edge behind ☰ (as in
+    portrait). A short line at its foot names the keys.
+  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+    orbits (⋯; the orbits only for all devices; a collection's ⋯ also renames or ungroups it),
+    with + beside it on an admin. A tap chooses a device: its details stand at the trailing
+    edge, 400 dp wide (growing with the font, at most 520), and the chosen tile is outlined;
+    when the window leaves less than 360 dp for the devices beside them, the details are a
+    page of their own, which back closes. Another section closes them.
+  - **The keyboard**: Ctrl+1 to 9 open the sidebar's sections in its order, Ctrl+, the settings,
+    Ctrl+N adds a device, Ctrl+F finds one (once the search is offered); the arrows choose the
+    device before or after; Esc closes the details.
+  - **The pointer**: a right click on a tile (or a touch and hold, on a phone too) opens its
+    menu, which for an admin pastes on the device and mutes or unmutes it, besides Arrange's
+    moves.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there (an admin's), as from its details; dropped beside the tiles they go
+    to the group, as Share sends them.
+  - **The rights** follow the keys, one rule for phones and tablets (`Keys.guardsLikeAPhone`):
+    the keys in secure hardware (StrongBox or the TEE) and a strong fingerprint or face sensor
+    make it a phone for the group; without one of them Start says, under "Create a group",
+    restoring with the recovery key and a handed-over group say, before it becomes the group's
+    main device, that it guards the group less well than a phone with both. A tablet that has
+    both says on Start, as an iPad does, that the main device is best one always at hand.
+
   Android draws the device icons itself (`DeviceGlyph`), on the same 24-unit grid as the
   system's line icons.
 

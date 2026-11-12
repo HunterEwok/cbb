@@ -32,7 +32,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -46,7 +45,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +57,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -89,14 +89,14 @@ enum class DeviceLayout(val key: String, val symbol: String, @StringRes val titl
     }
 }
 
-private enum class HomePage { MAIN, DEVICE, SETTINGS, ADD, INVITE, COLLECTION }
+internal enum class HomePage { MAIN, DEVICE, SETTINGS, ADD, INVITE, COLLECTION }
 
 /**
  * The one page (docs/apps.md, Home): the house and the globe beside how
  * many devices are online, an alert only when there is one, and every
  * device of the group as tiles or a list; a device opens its details. On a big
- * screen (a tablet, a foldable's inner screen) the devices may stand on
- * orbits around this phone, and the details open beside them.
+ * screen (a tablet, a foldable's inner screen, a wide window) the sidebar
+ * and the devices with the details beside them (TabletHome).
  */
 @Composable
 internal fun HomeScreen(model: AppModel) {
@@ -118,7 +118,9 @@ internal fun HomeScreen(model: AppModel) {
         model.group.signDue()
     }
     BackgroundSync()
-    val wide = LocalConfiguration.current.screenWidthDp >= 720
+    // The window's width decides, as Material's medium and expanded
+    // classes do: a tablet's half of a split screen gets the phone's page.
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
     val main = { page = if (collection != null) HomePage.COLLECTION else HomePage.MAIN }
     CompositionLocalProvider(LocalArrange provides arrange) {
         when (page) {
@@ -146,10 +148,9 @@ internal fun HomeScreen(model: AppModel) {
                     page = HomePage.MAIN
                 }
                 BackHandler { leave() }
-                if (id == null) {
+                if (id == null || wide) {
+                    // A big screen opens a collection from its sidebar.
                     LaunchedEffect(Unit) { leave() }
-                } else if (wide) {
-                    Beside(model, selected, { selected = it }) { CollectionPage(model, id, leave) { selected = it } }
                 } else {
                     CollectionPage(model, id, leave) {
                         selected = it
@@ -164,7 +165,7 @@ internal fun HomeScreen(model: AppModel) {
                     page = HomePage.COLLECTION
                 }
                 if (wide) {
-                    WideHome(model, selected, select = { selected = it }, open = { page = it }, openCollection)
+                    TabletHome(model, open = { page = it })
                 } else {
                     HomeMain(model, open = { page = it }, openCollection) {
                         selected = it
@@ -196,59 +197,17 @@ private fun HomeMain(model: AppModel, open: (HomePage) -> Unit, openCollection: 
     }
 }
 
-/** The big screen's page: the devices, and the chosen one's details beside them. */
-@Composable
-private fun WideHome(model: AppModel, selected: String?, select: (String?) -> Unit, open: (HomePage) -> Unit, openCollection: (String) -> Unit) {
-    var layout by remember { mutableStateOf(model.settings.wideLayout) }
-    val search = rememberDeviceSearch(model)
-    val arrange = LocalArrange.current
-    Beside(model, selected, select) {
-        Column(Modifier.fillMaxSize().padding(Tokens.spacingLarge), verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-            TopBar(model, layout, DeviceLayout.entries.sortedBy { it != DeviceLayout.ORBIT }, open) {
-                layout = it
-                model.settings.wideLayout = it
-            }
-            Summary(model)
-            Alerts(model)
-            LostPhoneCard(model)
-            model.message?.let { NoteText(it, dim = true) }
-            FallbackSend(model)
-            // The orbit keeps the group's order; Arrange mode and a search show tiles.
-            if (layout == DeviceLayout.ORBIT && !arrange.on && !search.active) {
-                Orbit(
-                    model.devices,
-                    selected,
-                    select = { select(it) },
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                )
-            } else {
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-                    Devices(model, search, if (layout == DeviceLayout.ORBIT) DeviceLayout.TILES else layout, { select(it) }, openCollection)
-                }
-            }
-        }
-    }
-}
-
-/** A big screen's page, and the chosen device's details beside it. */
-@Composable
-private fun Beside(model: AppModel, selected: String?, select: (String?) -> Unit, content: @Composable () -> Unit) {
-    Row(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxHeight()) { content() }
-        if (selected != null) {
-            VerticalDivider(color = LocalPalette.current.line)
-            Column(Modifier.width(400.dp).fillMaxHeight()) {
-                DeviceDetail(model, selected, close = { select(null) }, back = { select(null) })
-            }
-        }
-    }
-}
-
 /** Home's search and filters, offered once there are more devices than fit a screen. */
 @Stable
-private class DeviceSearch {
+internal class DeviceSearch {
     var query by mutableStateOf("")
     var filter by mutableStateOf<DeviceFilter?>(null)
+
+    /** The search field's focus, which Ctrl+F asks for on a big screen. */
+    val field = FocusRequester()
+    fun focus() {
+        runCatching { field.requestFocus() }
+    }
 
     /** Whether Home offers them: more than 12 devices. */
     var offered = false
@@ -264,10 +223,10 @@ private class DeviceSearch {
     }
 }
 
-private enum class DeviceFilter { ONLINE, ATTENTION }
+internal enum class DeviceFilter { ONLINE, ATTENTION }
 
 @Composable
-private fun rememberDeviceSearch(model: AppModel): DeviceSearch {
+internal fun rememberDeviceSearch(model: AppModel): DeviceSearch {
     val search = remember { DeviceSearch() }
     search.offered = model.devices.size > 12
     // Arrange mode is off while a search or a filter is on.
@@ -281,7 +240,7 @@ private fun rememberDeviceSearch(model: AppModel): DeviceSearch {
  * search or a filter is on.
  */
 @Composable
-private fun Devices(model: AppModel, search: DeviceSearch, layout: DeviceLayout, select: (String) -> Unit, openCollection: (String) -> Unit) {
+internal fun Devices(model: AppModel, search: DeviceSearch, layout: DeviceLayout, select: (String) -> Unit, openCollection: (String) -> Unit) {
     if (LocalArrange.current.on) ArrangeBar()
     if (search.offered) SearchBar(search)
     if (search.active) {
@@ -305,7 +264,7 @@ private fun SearchBar(search: DeviceSearch) {
             onValueChange = { search.query = it },
             singleLine = true,
             label = { Text(stringResource(R.string.search_devices)) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().focusRequester(search.field),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
             for ((f, text) in listOf(DeviceFilter.ONLINE to R.string.filter_online, DeviceFilter.ATTENTION to R.string.needs_attention)) {
@@ -387,7 +346,7 @@ private fun TopBar(model: AppModel, layout: DeviceLayout, layouts: List<DeviceLa
 
 /** How many devices are online, of how many, beside the house and the globe; under them what stands out. */
 @Composable
-private fun Summary(model: AppModel) {
+internal fun Summary(model: AppModel) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
             stringResource(R.string.online_count, model.devices.count { it.online }, model.devices.size),
@@ -548,7 +507,7 @@ private fun SwitchFace(
  * cancelling a claim, or removing one of two admins that removed each other.
  */
 @Composable
-private fun Alerts(model: AppModel) {
+internal fun Alerts(model: AppModel) {
     RemovedCard(model)
     Handed(model)
     if (model.alerts.isEmpty()) return
@@ -598,6 +557,9 @@ private fun Handed(model: AppModel) {
     Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
         Text(stringResource(R.string.handed_title), style = MaterialTheme.typography.titleMedium, color = palette.text)
         Text(stringResource(R.string.handed_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+        // Taking the group makes this device its main one: a device that guards its keys less well than a phone says so first.
+        LaunchedEffect(Unit) { model.checkKeys() }
+        if (model.guardsLikeAPhone == false) Text(stringResource(R.string.key_guard_weak), style = MaterialTheme.typography.bodySmall, color = palette.danger)
         AccentButton(stringResource(R.string.handed_take), enabled = !busy, onClick = {
             busy = true
             scope.launch {
@@ -656,7 +618,7 @@ private fun alertText(alert: GroupAlert): String {
  * second phone becomes an admin. Closed once, it stays closed.
  */
 @Composable
-private fun LostPhoneCard(model: AppModel) {
+internal fun LostPhoneCard(model: AppModel) {
     if (!model.isAdmin || model.devices.count { it.admin } != 1) return
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("tips", android.content.Context.MODE_PRIVATE) }
@@ -681,7 +643,7 @@ private fun LostPhoneCard(model: AppModel) {
  * one small button sends it.
  */
 @Composable
-private fun FallbackSend(model: AppModel) {
+internal fun FallbackSend(model: AppModel) {
     if (!model.sendFailed) return
     val scope = rememberCoroutineScope()
     QuietButton(stringResource(R.string.send_copy), enabled = !model.busy, onClick = { scope.launch { model.sync() } })
@@ -689,7 +651,7 @@ private fun FallbackSend(model: AppModel) {
 
 /** The devices as tiles or as a list; each one opens its details. */
 @Composable
-private fun DeviceCollection(devices: List<LiveGroup.Device>, layout: DeviceLayout, select: (String) -> Unit) {
+internal fun DeviceCollection(devices: List<LiveGroup.Device>, layout: DeviceLayout, select: (String) -> Unit) {
     if (devices.isEmpty()) {
         Text(stringResource(R.string.no_computers), color = LocalPalette.current.textDim)
         return
@@ -717,7 +679,7 @@ private fun DeviceCollection(devices: List<LiveGroup.Device>, layout: DeviceLayo
 @Composable
 internal fun DeviceTile(d: LiveGroup.Device, modifier: Modifier, open: (() -> Unit)?, menu: (() -> Unit)? = null) {
     Column(
-        modifier.glassTile().focusRing().tap(open, menu).padding(Tokens.spacingMedium).liveState(d),
+        modifier.chosen(d).pasteDrop(d).glassTile().focusRing().tap(open, menu).padding(Tokens.spacingMedium).liveState(d),
         verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall),
     ) {
         Row(verticalAlignment = Alignment.Top) {
@@ -735,7 +697,7 @@ internal fun DeviceTile(d: LiveGroup.Device, modifier: Modifier, open: (() -> Un
 internal fun DeviceRow(d: LiveGroup.Device, modifier: Modifier = Modifier, open: (() -> Unit)?, menu: (() -> Unit)? = null) {
     val palette = LocalPalette.current
     Row(
-        modifier.fillMaxWidth().heightIn(min = 60.dp).card().focusRing().tap(open, menu)
+        modifier.fillMaxWidth().heightIn(min = 60.dp).chosen(d).pasteDrop(d).card().focusRing().tap(open, menu)
             .padding(horizontal = Tokens.spacingMedium, vertical = Tokens.spacingSmall).liveState(d),
         verticalAlignment = Alignment.CenterVertically,
     ) {

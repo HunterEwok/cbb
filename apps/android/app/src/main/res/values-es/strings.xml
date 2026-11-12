@@ -34,6 +34,7 @@
     <string name="alert_stopped">El grupo está detenido: sus dispositivos solo intercambian sus registros, sin portapapeles, hasta que la raíz del grupo decida.</string>
     <string name="alert_two_histories">%1$s firmó dos historiales con una misma clave, como haría una clave robada o una restauración desde una copia de seguridad.</string>
     <string name="alert_unknown_devices">dispositivos desconocidos aquí</string>
+    <string name="all_devices">Todos los dispositivos</string>
     <string name="app_info">Información de la app</string>
     <string name="appearance">Apariencia</string>
     <string name="arrange">Ordenar</string>
@@ -105,7 +106,9 @@
     <string name="copies">Copias</string>
     <string name="copies_forward_only">Las reenvía, no lee ninguna</string>
     <string name="create_group">Crear un grupo</string>
+    <string name="create_group_main_hint">El dispositivo que crea el grupo guarda su clave principal: mejor uno que siempre lleves contigo, como tu teléfono.</string>
     <string name="device_id">ID del dispositivo</string>
+    <string name="devices">Dispositivos</string>
     <string name="error_action_refused">El dispositivo no ejecutó la acción.</string>
     <string name="error_arrangement">Los mosaicos se quedan como estaban: ese cambio no encaja.</string>
     <string name="error_below_key_level">El ajuste de claves de administrador del grupo no permite que las claves de este dispositivo sean de administrador. Cámbialo en Ajustes, Claves de administrador.</string>
@@ -172,6 +175,7 @@
     <string name="files_sent">Enviado a los ordenadores, que lo obtienen ahora de este teléfono.</string>
     <string name="filter_online">En línea</string>
     <string name="frozen">congelado</string>
+    <string name="group">Grupo</string>
     <string name="group_hub">El hub del grupo</string>
     <string name="group_hub_in_use">El hub del grupo, en uso ahora</string>
     <string name="handed_body">El ordenador que tenía el grupo se lo entregó a este teléfono. Tómalo para que este teléfono sea la raíz del grupo; el ordenador sigue en el grupo.</string>
@@ -273,6 +277,7 @@
     <string name="join_title">Unirse a un grupo</string>
     <string name="join_tv">Unirse al grupo de un teléfono</string>
     <string name="join_tv_hint">Este televisor se une al grupo de tu teléfono: muestra un código QR y el teléfono lo escanea.</string>
+    <string name="key_guard_weak">Este dispositivo no tiene un chip seguro para las claves o un sensor fiable de huella o de rostro: como dispositivo principal del grupo lo protege peor que un teléfono que tenga ambos.</string>
     <string name="key_level_body">Qué dispositivos pueden ser administradores y hubs del grupo. Las claves en hardware nunca salen del dispositivo; quien consiga una clave en un archivo puede copiarla. Los administradores que ya están en el grupo siguen hasta que los quites.</string>
     <string name="key_level_files">Claves también en archivos</string>
     <string name="key_level_hardware">Claves en hardware</string>
@@ -352,6 +357,7 @@
     <string name="make_hub_reads">Un hub que lee las copias</string>
     <string name="make_hub_refused">El ordenador no se convirtió en hub.</string>
     <string name="make_hub_title">¿Convertir %1$s en hub?</string>
+    <string name="menu">Menú</string>
     <string name="more">Más</string>
     <string name="move_earlier">Mover antes</string>
     <string name="move_end">Mover al final</string>
@@ -533,6 +539,7 @@
     <string name="share_files_title">¿Enviar a tus ordenadores?</string>
     <string name="share_forget">Volver a preguntar a cada app</string>
     <string name="share_unknown_app">Una app</string>
+    <string name="shortcuts_hint">Ctrl+1 a 9 abren estas secciones, Ctrl+N añade un dispositivo, las flechas eligen un dispositivo y Esc cierra sus detalles.</string>
     <string name="signature_n">Firma %1$d</string>
     <string name="signature_of">Firma %1$d de %2$d</string>
     <string name="source">Código fuente y licencia (AGPL-3.0)</string>

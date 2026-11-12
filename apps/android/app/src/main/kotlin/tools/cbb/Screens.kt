@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -204,6 +205,7 @@ private fun StartScreen(model: AppModel) {
         }
         Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
         AccentButton(stringResource(R.string.create_group), onClick = { adding = true }, modifier = Modifier.widthIn(max = 480.dp))
+        MainKeyNote(model)
         QuietButton(stringResource(R.string.join_group), onClick = { model.startJoining() })
         QuietButton(stringResource(R.string.invitation_join), onClick = { invited = true })
         TextButton(onClick = { restoring = true }) {
@@ -211,6 +213,30 @@ private fun StartScreen(model: AppModel) {
         }
         model.message?.let { NoteText(it) }
     }
+}
+
+/**
+ * Under Create a group (docs/apps.md, "Big screens"): the device that makes
+ * the group holds its main key. One that guards its keys less well than a
+ * phone says so; a tablet that guards them well says which device is best.
+ */
+@Composable
+internal fun MainKeyNote(model: AppModel, hint: Boolean = true) {
+    LaunchedEffect(Unit) { model.checkKeys() }
+    val palette = LocalPalette.current
+    val tablet = LocalConfiguration.current.smallestScreenWidthDp >= 600
+    val text = when {
+        model.guardsLikeAPhone == false -> R.string.key_guard_weak
+        hint && tablet && model.guardsLikeAPhone == true -> R.string.create_group_main_hint
+        else -> return
+    }
+    Text(
+        stringResource(text),
+        textAlign = TextAlign.Center,
+        style = MaterialTheme.typography.bodySmall,
+        color = if (text == R.string.key_guard_weak) palette.danger else palette.textDim,
+        modifier = Modifier.widthIn(max = 480.dp),
+    )
 }
 
 /** The language menu across from the gear: the system's language or one of the translations. */
@@ -543,6 +569,8 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
     // recent apps' preview.
     if (restore) SecureWindow()
     Page(stringResource(if (restore) R.string.restore_title else R.string.add_device), close) {
+        // Restoring makes this device the group's root, as making the group does.
+        if (restore) MainKeyNote(model, hint = false)
         if (hasCamera && allowed && cameraError == null) {
             QrScanner(
                 onCode = { text -> scope.launch { if (!model.busy) add(text) } },
@@ -614,19 +642,35 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
  */
 @Composable
 internal fun SettingsScreen(model: AppModel, back: () -> Unit) {
+    BackHandler { back() }
+    Page(stringResource(R.string.settings), back) { SettingsContent(model, null) }
+}
+
+/**
+ * Settings' sections: all of them on their page, or one part of them,
+ * which a big screen opens beside its sidebar (docs/apps.md, "Big
+ * screens"); a part shows its sections whether the advanced ones are on or
+ * not.
+ */
+@Composable
+internal fun ColumnScope.SettingsContent(model: AppModel, part: SettingsPart?) {
     val palette = LocalPalette.current
     val context = LocalContext.current
     val home = model.phase == AppModel.Phase.HOME
     var advanced by remember { mutableStateOf(model.settings.advanced) }
-    BackHandler { back() }
-    Page(stringResource(R.string.settings), back) {
-        Section(stringResource(R.string.appearance)) { Appearance(model) }
-        if (home) Notifications(model.notifier)
-        // A TV sends no copies of its own: the service there is only the paste target.
-        if (home && !model.isTv) AutoSend()
-        if (WatchLink.available && home && model.devices.any { it.isSelf && it.isRoot }) WatchSection(model)
-        if (home && model.isRoot) RecoverySection(model)
-        if (home) {
+    fun shows(p: SettingsPart) = part == null || part == p
+    // An advanced section: on the page while the switch is on, or in its part.
+    fun more(p: SettingsPart) = if (part == null) home && advanced else part == p
+    run {
+        if (shows(SettingsPart.LOOK)) Section(stringResource(R.string.appearance)) { Appearance(model) }
+        if (shows(SettingsPart.NOTIFICATIONS)) {
+            if (home) Notifications(model.notifier)
+            // A TV sends no copies of its own: the service there is only the paste target.
+            if (home && !model.isTv) AutoSend()
+            if (WatchLink.available && home && model.devices.any { it.isSelf && it.isRoot }) WatchSection(model)
+        }
+        if (shows(SettingsPart.RECOVERY) && home && model.isRoot) RecoverySection(model)
+        if (part == null && home) {
             Row(
                 Modifier.fillMaxWidth().card().focusRing().clickable(role = Role.Switch) {
                     advanced = !advanced
@@ -638,26 +682,31 @@ internal fun SettingsScreen(model: AppModel, back: () -> Unit) {
                 Switch(checked = advanced, onCheckedChange = null)
             }
         }
-        if (home && advanced) {
-            WhySection(model, model.settings.showsErrorDetails)
+        if (more(SettingsPart.WHY)) WhySection(model, model.settings.showsErrorDetails)
+        if (more(SettingsPart.AWAY)) {
             model.hub?.let { HubSection(model, it) }
             model.blindRelay?.let { BlindRelaySection(model, it) }
+        }
+        if (more(SettingsPart.PASTE)) {
             if (!model.isTv) ShareAsk(model)
             RemotePasteSection(model.group.pastes, model.isTv)
+        }
+        if (more(SettingsPart.GROUP)) {
             model.incomingMS?.let { IncomingSection(model, it) }
             model.keyLevel?.let { KeyLevelSection(model, it) }
-            // The lab: what works but is no promise of 1.0 (docs/apps.md,
-            // "The lab"). A TV has nothing near it to type into.
-            if (!model.isTv) {
-                Text(
-                    stringResource(R.string.lab),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.semantics { heading() }.testTag("lab"),
-                )
-                KeyboardSection(model.group.keyboard, model.settings.showsErrorDetails)
-            }
         }
-        if (home) LeaveSection(model)
+        // The lab: what works but is no promise of 1.0 (docs/apps.md,
+        // "The lab"). A TV has nothing near it to type into.
+        if (more(SettingsPart.PASTE) && !model.isTv) {
+            Text(
+                stringResource(R.string.lab),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.semantics { heading() }.testTag("lab"),
+            )
+            KeyboardSection(model.group.keyboard, model.settings.showsErrorDetails)
+        }
+        if (home && (part == null || part == SettingsPart.GROUP)) LeaveSection(model)
+        if (!shows(SettingsPart.ABOUT)) return@run
         UpdateSection(model)
         Section(stringResource(R.string.about)) {
             val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "" }

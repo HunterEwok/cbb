@@ -34,6 +34,7 @@
     <string name="alert_stopped">הקבוצה עצורה: המכשירים שלה מחליפים רק את הרשומות שלהם, בלי לוח, עד שהשורש של הקבוצה יחליט.</string>
     <string name="alert_two_histories">%1$s חתם על שתי היסטוריות עם מפתח אחד, כמו שמפתח גנוב או שחזור מגיבוי היו עושים.</string>
     <string name="alert_unknown_devices">מכשירים שאינם מוכרים כאן</string>
+    <string name="all_devices">כל המכשירים</string>
     <string name="app_info">פרטי האפליקציה</string>
     <string name="appearance">מראה</string>
     <string name="arrange">סידור</string>
@@ -105,7 +106,9 @@
     <string name="copies">העתקות</string>
     <string name="copies_forward_only">מעבירה הלאה, לא קוראת</string>
     <string name="create_group">יצירת קבוצה</string>
+    <string name="create_group_main_hint">המכשיר שיוצר את הקבוצה שומר את המפתח הראשי שלה: עדיף מכשיר שתמיד איתך, כמו הטלפון.</string>
     <string name="device_id">מזהה מכשיר</string>
+    <string name="devices">מכשירים</string>
     <string name="error_action_refused">המכשיר לא הפעיל את הפעולה.</string>
     <string name="error_arrangement">האריחים נשארים כמו שהיו: השינוי הזה לא מתאים.</string>
     <string name="error_below_key_level">הגדרת מפתחות המנהל של הקבוצה לא מאפשרת למפתחות של המכשיר הזה להיות מנהל. שנו אותה בהגדרות, מפתחות מנהל.</string>
@@ -172,6 +175,7 @@
     <string name="files_sent">נשלח למחשבים, שמביאים אותו עכשיו מהטלפון הזה.</string>
     <string name="filter_online">מחובר</string>
     <string name="frozen">מוקפא</string>
+    <string name="group">קבוצה</string>
     <string name="group_hub">הרכזת של הקבוצה</string>
     <string name="group_hub_in_use">הרכזת של הקבוצה, בשימוש כעת</string>
     <string name="handed_body">המחשב שהחזיק את הקבוצה העביר אותה לטלפון הזה. קבלו אותה כדי להפוך את הטלפון הזה לשורש הקבוצה; המחשב נשאר בקבוצה.</string>
@@ -273,6 +277,7 @@
     <string name="join_title">הצטרפות לקבוצה</string>
     <string name="join_tv">הצטרפות לקבוצה של טלפון</string>
     <string name="join_tv_hint">הטלוויזיה הזו מצטרפת לקבוצה של הטלפון שלכם: היא מציגה קוד QR, והטלפון סורק אותו.</string>
+    <string name="key_guard_weak">למכשיר הזה אין שבב מאובטח למפתחות או חיישן אמין של טביעת אצבע או פנים: כמכשיר הראשי של הקבוצה הוא מגן עליה פחות טוב מטלפון שיש לו את שניהם.</string>
     <string name="key_level_body">אילו מכשירים יכולים להיות המנהלים והרכזות של הקבוצה. מפתחות בחומרה לעולם לא יוצאים מהמכשיר; מי שמשיג מפתח בקובץ יכול להעתיק אותו. מנהלים שכבר בקבוצה נשארים עד שתסירו אותם.</string>
     <string name="key_level_files">מפתחות גם בקבצים</string>
     <string name="key_level_hardware">מפתחות בחומרה</string>
@@ -352,6 +357,7 @@
     <string name="make_hub_reads">רכזת שקוראת את ההעתקות</string>
     <string name="make_hub_refused">המחשב לא הפך לרכזת.</string>
     <string name="make_hub_title">להפוך את %1$s לרכזת?</string>
+    <string name="menu">תפריט</string>
     <string name="more">עוד</string>
     <string name="move_earlier">הזזה קדימה</string>
     <string name="move_end">העברה לסוף</string>
@@ -533,6 +539,7 @@
     <string name="share_files_title">לשלוח למחשבים שלכם?</string>
     <string name="share_forget">לשאול שוב כל אפליקציה</string>
     <string name="share_unknown_app">אפליקציה</string>
+    <string name="shortcuts_hint">Ctrl+1 עד 9 פותחים את המדורים האלה, Ctrl+N מוסיף מכשיר, החצים בוחרים מכשיר ו־Esc סוגר את פרטיו.</string>
     <string name="signature_n">חתימה %1$d</string>
     <string name="signature_of">חתימה %1$d מתוך %2$d</string>
     <string name="source">קוד מקור ורישיון (AGPL-3.0)</string>

@@ -242,7 +242,7 @@ private fun IconRow(model: AppModel, d: LiveGroup.Device) {
     var muting by remember { mutableStateOf(false) }
     Row(horizontalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
         // Members and Android and Aurora phones take pastes; iPhones cannot.
-        if (!d.isSelf && (d.role == "member" || (d.role == "phone" && d.os in setOf("android", "aurora", "sailfish")))) {
+        if (d.takesPaste) {
             IconLabel("⌨", stringResource(R.string.paste_on_it)) { pasting = true }
         }
         // An admin mutes any device for the whole group, or ends its mute (docs/design.md, "Muting a device").
@@ -383,7 +383,7 @@ private fun HubChoice(d: LiveGroup.Device, dismiss: () -> Unit, choose: (forward
  * computer takes it only when its user turned remote paste on there.
  */
 @Composable
-private fun PasteOn(model: AppModel, d: LiveGroup.Device, dismiss: () -> Unit) {
+internal fun PasteOn(model: AppModel, d: LiveGroup.Device, dismiss: () -> Unit) {
     val palette = LocalPalette.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -552,7 +552,7 @@ private fun Switch(title: String, on: Boolean, change: (Boolean) -> Unit) {
 
 /** How long an admin mutes a device: its copies then reach no device of the group, and it still takes theirs. */
 @Composable
-private fun MuteChoice(dismiss: () -> Unit, choose: (Long) -> Unit) {
+internal fun MuteChoice(dismiss: () -> Unit, choose: (Long) -> Unit) {
     val palette = LocalPalette.current
     AlertDialog(
         onDismissRequest = dismiss,

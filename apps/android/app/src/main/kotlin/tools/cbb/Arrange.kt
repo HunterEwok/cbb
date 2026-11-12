@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -34,6 +35,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -46,6 +48,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -60,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import kotlinx.coroutines.launch
 import tools.cbb.kit.Arrangement as Tiles
 
 /**
@@ -314,8 +320,28 @@ private fun Modifier.dashedOutline(color: Color): Modifier = drawBehind {
 private fun ArrangeMenu(model: AppModel, ref: Tiles.Ref, level: List<Tiles.Ref>, open: Boolean, close: () -> Unit) {
     val arrange = LocalArrange.current
     val moves = Moves(ref, level, model)
+    val scope = rememberCoroutineScope()
     var into by remember { mutableStateOf(false) }
+    var pasting by remember { mutableStateOf(false) }
+    var muting by remember { mutableStateOf(false) }
+    if (ref is Tiles.Ref.Device) {
+        val d = model.devices.firstOrNull { it.id == ref.id }
+        if (d != null && pasting) PasteOn(model, d, dismiss = { pasting = false })
+        if (d != null && muting) MuteChoice(dismiss = { muting = false }) { ms -> scope.launch { model.setMuted(d.id, true, ms) } }
+    }
     DropdownMenu(expanded = open && !into, onDismissRequest = close) {
+        if (ref is Tiles.Ref.Device) {
+            // What an admin does with the device at once: paste on it, mute it or end its mute.
+            model.devices.firstOrNull { it.id == ref.id }?.takeIf { model.isAdmin }?.let { d ->
+                if (d.takesPaste) MenuItem(R.string.paste_on_it, close) { pasting = true }
+                if (d.muted != null) {
+                    MenuItem(R.string.unmute, close) { scope.launch { model.setMuted(d.id, false) } }
+                } else {
+                    MenuItem(R.string.mute, close) { muting = true }
+                }
+                HorizontalDivider(color = LocalPalette.current.grid)
+            }
+        }
         if (!arrange.on) MenuItem(R.string.arrange, close) { arrange.on = true }
         when (ref) {
             is Tiles.Ref.Device -> {
@@ -444,20 +470,40 @@ private fun CollectionSection(
     }
 }
 
-/** A tap opens, a long press shows the menu; neither in Arrange mode, where open is null. */
+/**
+ * A tap opens, a long press or a right click (a mouse, a touchpad) shows
+ * the menu; neither in Arrange mode, where open is null.
+ */
 @Composable
 internal fun Modifier.tap(open: (() -> Unit)?, menu: (() -> Unit)?): Modifier =
     if (open == null) {
         this
     } else {
-        combinedClickable(role = Role.Button, onClick = open, onLongClick = menu, onLongClickLabel = menu?.let { stringResource(R.string.arrange) })
+        rightClick(menu).combinedClickable(role = Role.Button, onClick = open, onLongClick = menu, onLongClickLabel = menu?.let { stringResource(R.string.arrange) })
+    }
+
+/** The secondary button's press shows the menu, as a long press does. */
+internal fun Modifier.rightClick(menu: (() -> Unit)?): Modifier =
+    if (menu == null) {
+        this
+    } else {
+        pointerInput(menu) {
+            awaitPointerEventScope {
+                while (true) {
+                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                    if (e.type == PointerEventType.Press && e.buttons.isSecondaryPressed) {
+                        e.changes.forEach { it.consume() }
+                        menu()
+                    }
+                }
+            }
+        }
     }
 
 /** A collection's own page: its devices in their order, its menu, and Arrange mode for them. */
 @Composable
 internal fun CollectionPage(model: AppModel, id: String, back: () -> Unit, select: (String) -> Unit) {
     val arrange = LocalArrange.current
-    val palette = LocalPalette.current
     val item = model.collection(id)
     // A collection that a move emptied goes away, and so does its page.
     if (item == null) {
@@ -465,7 +511,6 @@ internal fun CollectionPage(model: AppModel, id: String, back: () -> Unit, selec
         return
     }
     val layout = model.settings.layout.takeIf { it != DeviceLayout.ORBIT } ?: DeviceLayout.TILES
-    val level = item.devices.map { Tiles.Ref.Device(it.id) }
     var menu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Tokens.spacingLarge), verticalArrangement = Arrangement.spacedBy(Tokens.spacingLarge)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -496,24 +541,32 @@ internal fun CollectionPage(model: AppModel, id: String, back: () -> Unit, selec
                 }
             }
         }
-        if (arrange.on) ArrangeBar()
         model.message?.let { NoteText(it, dim = true) }
-        if (item.devices.isEmpty()) {
-            Text(stringResource(R.string.collection_empty), color = palette.textDim)
-        } else if (layout == DeviceLayout.LIST) {
-            Column(verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-                for (d in item.devices) {
-                    Arrangeable(model, Tiles.Ref.Device(d.id), level, d.name, Modifier.fillMaxWidth()) { m, open, more ->
-                        DeviceRow(d, m, open = if (open) ({ select(d.id) }) else null, menu = more)
-                    }
+        CollectionDevices(model, id, layout, select)
+    }
+}
+
+/** A collection's devices in their order, as tiles or a list, with Arrange mode's bar while it is on. */
+@Composable
+internal fun CollectionDevices(model: AppModel, id: String, layout: DeviceLayout, select: (String) -> Unit) {
+    val item = model.collection(id) ?: return
+    val level = item.devices.map { Tiles.Ref.Device(it.id) }
+    if (LocalArrange.current.on) ArrangeBar()
+    if (item.devices.isEmpty()) {
+        Text(stringResource(R.string.collection_empty), color = LocalPalette.current.textDim)
+    } else if (layout == DeviceLayout.LIST) {
+        Column(verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
+            for (d in item.devices) {
+                Arrangeable(model, Tiles.Ref.Device(d.id), level, d.name, Modifier.fillMaxWidth()) { m, open, more ->
+                    DeviceRow(d, m, open = if (open) ({ select(d.id) }) else null, menu = more)
                 }
             }
-        } else {
-            TileGrid(item.devices.map { "d:" + it.id }) { key, m ->
-                val d = item.devices.first { "d:" + it.id == key }
-                Arrangeable(model, Tiles.Ref.Device(d.id), level, d.name, m) { inner, open, more ->
-                    DeviceTile(d, inner, open = if (open) ({ select(d.id) }) else null, menu = more)
-                }
+        }
+    } else {
+        TileGrid(item.devices.map { "d:" + it.id }) { key, m ->
+            val d = item.devices.first { "d:" + it.id == key }
+            Arrangeable(model, Tiles.Ref.Device(d.id), level, d.name, m) { inner, open, more ->
+                DeviceTile(d, inner, open = if (open) ({ select(d.id) }) else null, menu = more)
             }
         }
     }

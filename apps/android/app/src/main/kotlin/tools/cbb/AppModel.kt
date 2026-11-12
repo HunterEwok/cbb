@@ -352,6 +352,17 @@ class AppModel(private val app: Context) {
         }
     }
 
+    /**
+     * Whether this device guards its keys as a phone does (Keys.guardsLikeAPhone):
+     * null until checkKeys has asked, or when the Keystore cannot tell.
+     */
+    var guardsLikeAPhone by mutableStateOf<Boolean?>(null)
+        private set
+
+    suspend fun checkKeys() {
+        guardsLikeAPhone = withContext(Dispatchers.IO) { Keys.guardsLikeAPhone(app) }
+    }
+
     /** Opens the screen that joins another device's group, always as a member. */
     fun startJoining() {
         message = null

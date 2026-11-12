@@ -13,6 +13,14 @@ All notable changes to cbb are documented in this file. The format follows
   the arrows and Escape, a tile's menu that pastes and mutes, and text, pictures or files
   dropped on a tile pasted on that device. A narrow window keeps the phone's page. The app is
   no longer offered on a Mac or a Vision Pro as an iPad app.
+- Android tablets, foldables and wide windows get the iPad's Home: the sidebar (standing in
+  landscape, sliding in from the edge in portrait) with the devices' sections and the parts of
+  Settings, the tiles with the chosen device's details beside them, Ctrl+1 to 9, Ctrl+N,
+  Ctrl+F, the arrows and Esc, a right click for a tile's menu (which now also pastes on the
+  device and mutes it), and text, pictures or files dropped on a tile pasted there or beside
+  the tiles sent to the group. It starts from 600 dp instead of 720. An Android device
+  without its keys in secure hardware or without a strong fingerprint or face sensor says so
+  before it makes a group, restores one or takes one handed over.
 - The Aurora app asks for a PIN of its own before its root or admin key signs, since Aurora OS
   gives an app neither its authentication service nor the fingerprint. The key moves to a
   second token of the app in the TEE, whose PIN the user chooses (at least four digits) and
