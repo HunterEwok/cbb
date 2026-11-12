@@ -68,7 +68,10 @@
 //
 // with --invariant set to oneState, removedStayOut, oneRoot, claimWaits, stopRootOnly,
 // fairRoom, countedFinal or pathGrows for one promise. The typescript backend takes a few
-// traces a second here, so a long run takes many samples and several seeds.
+// traces a second here, so a long run takes many samples and several seeds. Random steps seldom
+// reach a second takeover; --step=guided weights the steps towards takeovers one after
+// another and compaction, and --witnesses secondTakeover compactedGap counts the traces that
+// reach them (with --max-steps=40, about a quarter and a sixth).
 module records_v3 {
   type Key = str
   type Id = int
@@ -161,15 +164,20 @@ module records_v3 {
 
   pure val NOCUT: Cut = { level: TOP, marks: Map(), future: Map() }
 
-  // An open question for the owner, one switch: whether a root's removal stands when its key
-  // signs a second record at the same seq (true, as decision 14 reads), or counts for nothing
-  // from that seq on with the key's other records (false, as the code does).
+  // Decided for the design (12.11): a root's removal stands when its key signs a second record
+  // at the same seq (true); false is the code at 6386e41, kept to compare until it changes.
   pure val ROOT_REMOVAL_SURVIVES_FORK = true
 
-  // A second open question, one switch: in a full root's order, its removals, freezes and
-  // resolves before its checkpoints (true), or its checkpoints first (false, as the code
-  // does), where checkpoints the root signs before members compact push its removals out.
+  // Decided for the design (12.11): in a full root's order, its removals, freezes and resolves
+  // before its checkpoints (true); false is the code at 6386e41, where checkpoints push its
+  // removals out.
   pure val EARLY_BEFORE_CHECKPOINTS = true
+
+  // An open question, one switch: whether a counted claim is checked again against the records
+  // a member keeps (false: the record that gave the claimant takeover must still be kept, so
+  // when other keys' records push the cut root's records out, the takeover is undone and
+  // promise 7 breaks), or only when it is counted (true).
+  pure val COUNTED_CHECKED_ONCE = false
   pure val NONE = 10000000
   // A record's ID as the hash orders it: not the order it was signed in.
   pure def hid(i: Id): int = (i * 7) % 23
@@ -314,12 +322,22 @@ module records_v3 {
   // root keeps nothing above it), and the checkpoint the set compacted on does not prune it.
   pure def storable(s: Store, r: Record, db: Id -> Record): bool = {
     val got = recsOf(s.got, db)
-    val admins = learned(got, s.path, s.cuts)
-    (admins.contains(r.signer) or knownRoots(got, s.path, admins).contains(r.signer))
-      and within(s.cuts, r)
+    val admins = learned(got, keptPath(s), keptCuts(s))
+    (admins.contains(r.signer) or knownRoots(got, keptPath(s), admins).contains(r.signer))
+      and within(keptCuts(s), r)
       and (s.checkpoint == 0 or not(prunedBy(db.get(s.checkpoint), r)))
   }
 
+  // The path and cuts a set keeps by: those it compacted on, carried on by the claims it counted
+  // since (each counted claim names its new root and how far the root before it counts).
+  pure def keptPath(s: Store): List[Key] =
+    if (s.counted.length() + 1 <= s.path.length()) s.path
+    else s.counted.foldl([ROOT], (l, c) => l.append(c.target))
+  pure def keptCuts(s: Store): Key -> List[Id] =
+    s.counted.indices().fold(s.cuts, (m, i) => {
+      val k = if (i == 0) ROOT else s.counted[i - 1].target
+      if (m.keys().contains(k)) m else m.put(k, s.counted[i].cut)
+    })
   pure def countedIds(s: Store): Set[Id] = s.counted.indices().map(i => s.counted[i].id)
   pure def countedRoots(s: Store): Set[Key] = s.counted.indices().map(i => s.counted[i].target)
   pure def storeAnchors(s: Store, db: Id -> Record): Set[Id] = if (s.checkpoint == 0) Set() else anchorsOf(db.get(s.checkpoint))
@@ -328,13 +346,15 @@ module records_v3 {
   // rooms keep; then, of a root a takeover cut, only what its chain shows (down from the head
   // the claim saw, through records held or named by the checkpoint).
   pure def settle(s: Store, items: Set[Record], cut: Cut, db: Id -> Record): (Set[Id], Cut) = {
-    val admins = learned(recsOf(s.got, db), s.path, s.cuts)
+    val path = keptPath(s)
+    val cuts = keptCuts(s)
+    val admins = learned(recsOf(s.got, db), path, cuts)
     val pinned = items.filter(r => countedIds(s).contains(r.id))
-    val res = keepAfter(items.exclude(pinned), ceilings(s.path, admins), cut, last(s.path), rootsOf(s.path), countedRoots(s))
+    val res = keepAfter(items.exclude(pinned), ceilings(path, admins), cut, last(path), rootsOf(path), countedRoots(s))
     val anchors = storeAnchors(s, db)
     val k0 = res._1.union(idsOf(pinned))
-    val k1 = k0.filter(i => withinIn(s.cuts, db.get(i), k0, anchors))
-    val k2 = k1.filter(i => withinIn(s.cuts, db.get(i), k1, anchors))
+    val k1 = k0.filter(i => withinIn(cuts, db.get(i), k0, anchors))
+    val k2 = k1.filter(i => withinIn(cuts, db.get(i), k1, anchors))
     (k2, res._2)
   }
 
@@ -349,7 +369,7 @@ module records_v3 {
   pure def insertInto(s0: Store, r: Record, db: Id -> Record): Store = {
     val s = { ...s0, got: s0.got.union(Set(r.id)) }
     val pinned = countedIds(s).contains(r.id)
-    if (s.recs.contains(r.id) or (past(s.cut, r, last(s.path), rootsOf(s.path)) and not(pinned)) or not(storable(s, r, db))) s
+    if (s.recs.contains(r.id) or (past(s.cut, r, last(keptPath(s)), rootsOf(keptPath(s))) and not(pinned)) or not(storable(s, r, db))) s
     else recut({ ...s, recs: s.recs.union(Set(r.id)) }, db)
   }
 
@@ -503,8 +523,11 @@ module records_v3 {
     pure def rootFrozen(k: Key): bool = rootActs.exists(a => a.kind == "freeze" and withPair(a.target).contains(k))
     val currentAdmins = adm.keys().filter(a => current(a) and not(revoked.contains(a)))
     // The claims under this root.
+    // A removal that saw the new root's records disputes nothing (decision 20).
+    pure def sawNewRoot(r: Record, c: Record): bool = lineOf(r.seen, c.target).length() > 0
     pure def cancelled(c: Record): bool = rs.exists(r => r.signer == cur and rootRec(r)
-      and ((r.kind == "resolve" and r.targetRec == c.id) or (r.kind == "revoke" and withPair(r.target).contains(c.signer))))
+      and ((r.kind == "resolve" and r.targetRec == c.id)
+        or (r.kind == "revoke" and withPair(r.target).contains(c.signer) and not(sawNewRoot(r, c)))))
     pure def voidRoot(c: Record): bool =
       c.target == c.signer or onList(path, c.target)
         or rs.exists(r => r.signer == c.target and isAdmin(r))
@@ -523,7 +546,7 @@ module records_v3 {
     val kept = one.exclude(seenRemoved)
     val later = kept.filter(c => kept.exists(o => o != c and saw(c, o)))
     val first = kept.exclude(later)
-    pure def disputed(c: Record): bool = removalsOf(c.signer).exists(rm => not(saw(c, rm)))
+    pure def disputed(c: Record): bool = removalsOf(c.signer).exists(rm => not(saw(c, rm)) and not(sawNewRoot(rm, c)))
     pure def heldOf(c: Record): int = if (held.keys().contains(c.id)) held.get(c.id) else 0
     val voidIds = idsOf(voided.union(again).union(seenRemoved).union(later))
     val competing = first.size() > 1
@@ -578,7 +601,7 @@ module records_v3 {
         and ((r.kind == "admin" and r.kit == "phone") or r.kind == "recovery"))
       val fit = e.target != e.signer and not(onList(path, e.target)) and e.cut.length() > 0
         and not(rs.exists(r => (r.kind == "device" or r.kind == "admin") and withPair(r.target).contains(e.target)))
-      if (mayTake and fit)
+      if ((COUNTED_CHECKED_ONCE or mayTake) and fit)
         { view: { ...NOVIEW, path: path, claims: Map(e.id -> "effective"), counting: Set(e.id) }, next: e.target, cut: e.cut }
       else epoch(rs, held, path, cuts, anchors)
     } else epoch(rs, held, path, cuts, anchors)
@@ -670,24 +693,34 @@ module records_v3 {
     recsOf(v.counting, db).filter(r => r.kind == "revoke" and onList(v.path, r.signer))
       .fold(Set(), (s, r) => s.union(withPair(r.target)))
 
-  // Member m's set becomes s2; the claims its state counts it remembers as counted.
-  action commit(db2: Id -> Record, n2: int, m: str, s2: Store): bool = {
+  // A set and the claims its state counts: those that put the path's roots past the counted
+  // ones there, appended in the path's order.
+  pure def withCounted(s2: Store, db2: Id -> Record): (Store, View) = {
     val v2 = storeView(s2, db2)
-    // The claims that put the path's roots past the counted ones there, in the path's order.
     val add = range(0, v2.path.length()).foldl(NOCOUNTED, (l, i) =>
       if (i == 0 or i <= s2.counted.length()) l
       else {
         val cs = v2.claims.keys().filter(c => v2.claims.get(c) == "effective" and db2.get(c).target == v2.path[i])
         cs.fold(l, (l2, c) => l2.append({ id: c, signer: db2.get(c).signer, target: v2.path[i], cut: lineOf(db2.get(c).seen, v2.path[i - 1]) }))
       })
-    val s3 = if (add.length() == 0) s2 else { ...s2, counted: s2.counted.concat(add) }
-    val v3 = if (add.length() == 0) v2 else storeView(s3, db2)
+    if (add.length() == 0) (s2, v2)
+    else {
+      // Its new roots get a root's room: like compaction, the set forgets the cut it kept by
+      // the old path and asks again for what it dropped.
+      val s3 = recut({ ...s2, counted: s2.counted.concat(add), cut: NOCUT }, db2)
+      (s3, storeView(s3, db2))
+    }
+  }
+
+  // Member m's set becomes s2; the claims its state counts it remembers as counted.
+  action commit(db2: Id -> Record, n2: int, m: str, s2: Store): bool = {
+    val sv = withCounted(s2, db2)
     all {
       db' = db2,
       nextId' = n2,
-      st' = st.put(m, s3),
-      views' = views.put(m, v3),
-      gone' = gone.put(m, gone.get(m).union(rootRemoved(v3, db2))),
+      st' = st.put(m, sv._1),
+      views' = views.put(m, sv._2),
+      gone' = gone.put(m, gone.get(m).union(rootRemoved(sv._2, db2))),
       before' = before.put(m, views.get(m).path),
     }
   }
@@ -787,6 +820,25 @@ module records_v3 {
     commit(db, nextId, m, { ...s, held: held })
   }
 
+  // Every member's own count goes on at once (a guided run's shortcut through the delay).
+  pure def ticked(s: Store, db: Id -> Record): Store = {
+    val cs = s.recs.filter(i => db.get(i).kind == "claim")
+    val held = s.held.keys().union(cs).mapBy(i =>
+      if (cs.contains(i)) min2(DELAY + 1, (if (s.held.keys().contains(i)) s.held.get(i) else 0) + 1) else s.held.get(i))
+    { ...s, held: held }
+  }
+  action tickAll = {
+    val nx = MEMBERS.mapBy(m => withCounted(ticked(st.get(m), db), db))
+    all {
+      db' = db,
+      nextId' = nextId,
+      st' = MEMBERS.mapBy(m => nx.get(m)._1),
+      views' = MEMBERS.mapBy(m => nx.get(m)._2),
+      gone' = MEMBERS.mapBy(m => gone.get(m).union(rootRemoved(nx.get(m)._2, db))),
+      before' = MEMBERS.mapBy(m => views.get(m).path),
+    }
+  }
+
   // A member compacts: it takes its state's path and checkpoint.
   action compact = nondet m = MEMBERS.oneOf() compactAt(m)
   action compactAt(m: str): bool = commit(db, nextId, m, compactStore(st.get(m), views.get(m), db))
@@ -795,6 +847,60 @@ module records_v3 {
     signDevice, signDemote, signAdmin, signRevoke, signFreeze, signThaw, signResolve, signClaim, signCheckpoint, signCopies,
     deliver, deliver, deliver, deliver, tick, compact,
   }
+
+  // A guided run: the same steps, weighted towards takeovers one after another, records of
+  // the new roots for the next claimant to see, filling the room and compacting, so that many
+  // traces reach a second takeover and a compaction that leaves a gap.
+  action signNewRoot = nondet k = Set("NA", "NK").oneOf() nondet u = Set(1, 2).oneOf() all {
+    views.get(HOLDER.get(k)).path.length() > 1,
+    sign(k, "copies", "", "", 0, false, false, u),
+  }
+  // K takes over while its own member has only R as root; A takes over once its member counts
+  // NK and holds a record of NK's, so its claim is one under the last root.
+  action signTakeover = any {
+    all {
+      views.get("k").path == [ROOT],
+      not(db.keys().exists(i => db.get(i).signer == RECOVERY and db.get(i).kind == "claim")),
+      sign(RECOVERY, "claim", "NK", "", 0, false, false, CLAIMU),
+    },
+    all {
+      views.get("a").path == [ROOT, "NK"],
+      not(db.keys().exists(i => db.get(i).signer == PHONE and db.get(i).kind == "claim" and lineOf(db.get(i).seen, "NK") != [])),
+      recsOf(st.get("a").recs, db).exists(r => r.signer == "NK"),
+      sign(PHONE, "claim", "NA", "", 0, false, false, CLAIMU),
+    },
+  }
+  // Every member is offered one record at once: any record, or the newest.
+  action offerEveryone(i: Id): bool = {
+    val nx = MEMBERS.mapBy(m => withCounted(insertInto(st.get(m), db.get(i), db), db))
+    all {
+      db' = db,
+      nextId' = nextId,
+      st' = MEMBERS.mapBy(m => nx.get(m)._1),
+      views' = MEMBERS.mapBy(m => nx.get(m)._2),
+      gone' = MEMBERS.mapBy(m => gone.get(m).union(rootRemoved(nx.get(m)._2, db))),
+      before' = MEMBERS.mapBy(m => views.get(m).path),
+    }
+  }
+  action broadcast = nondet i = db.keys().oneOf() offerEveryone(i)
+  action broadcastNewest = offerEveryone(nextId - 1)
+  action guided = any {
+    step, signTakeover, signTakeover, signTakeover, signNewRoot, signNewRoot, signNewRoot, signCopies, signCheckpoint,
+    broadcast, broadcastNewest, broadcastNewest, broadcastNewest, broadcastNewest, deliver,
+    tickAll, tickAll, tickAll, tickAll, compact, compact,
+  }
+
+  // Witnesses of a run (quint run --witnesses): how many traces reach these.
+  val firstTakeover = MEMBERS.exists(m => st.get(m).counted.length() >= 1)
+  val secondTakeover = MEMBERS.exists(m => st.get(m).counted.length() >= 2)
+  // A member that compacted on a checkpoint and dropped a record it was offered.
+  val compactedDrop = MEMBERS.exists(m => st.get(m).checkpoint != 0 and st.get(m).got.exclude(st.get(m).recs) != Set())
+  // A member that compacted on a checkpoint dropped a record below one it kept of the same key.
+  val compactedGap = MEMBERS.exists(m => {
+    val s = st.get(m)
+    s.checkpoint != 0 and recsOf(s.got.exclude(s.recs), db).exists(r =>
+      recsOf(s.recs, db).exists(k => k.signer == r.signer and k.seq > r.seq))
+  })
 
   // --- Promises --------------------------------------------------------------------------
 
@@ -849,10 +955,10 @@ module records_v3 {
     val s = st.get(m)
     val rs0 = recsOf(s.recs, db)
     val got = recsOf(s.got, db)
-    val admins = learned(got, s.path, s.cuts)
-    val ceil = ceilings(s.path, admins)
+    val admins = learned(got, keptPath(s), keptCuts(s))
+    val ceil = ceilings(keptPath(s), admins)
     // Only the first root, the promoted roots and the admin keys their records name.
-    val legit = rootsOf(s.path).union(got.filter(r => onList(s.path, r.signer) and (r.kind == "admin" or r.kind == "recovery")).map(r => r.target))
+    val legit = rootsOf(keptPath(s)).union(got.filter(r => onList(keptPath(s), r.signer) and (r.kind == "admin" or r.kind == "recovery")).map(r => r.target))
     val owners = got.map(r => r.signer).filter(k => ceil.keys().contains(k))
     val fair = if (owners.size() == 0) ROOM else ROOM / owners.size()
     // Counted claims are kept outside the rooms.
@@ -1213,4 +1319,62 @@ module records_v3 {
       .then(give("m", 6))
       .then(give("m", 7))
       .expect(not(views.get("m").frozen.contains(COMPUTER)) and views.get("m").devices.contains(DEVICE) and promises)
+  // The live old root honestly removes the claimant after seeing its claim. A member that
+  // counted the claim first keeps the takeover; a member that was off during the delay and
+  // gets the claim and the removal together sees the claim cancelled.
+  run claimantRemovedTest =
+    init
+      .then(signAs(RECOVERY, "claim", "NK", 0))
+      .then(give("m", 5))
+      .then(tickAt("m"))
+      .then(tickAt("m"))
+      .expect(views.get("m").path == [ROOT, "NK"])
+      .then(give("r", 5))
+      .then(signAs(ROOT, "revoke", RECOVERY, 0))
+      .then(give("m", 6))
+      .then(give("c", 5))
+      .then(give("c", 6))
+      .then(tickAt("c"))
+      .then(tickAt("c"))
+      .then(tickAt("c"))
+      .expect(views.get("m").path == [ROOT, "NK"] and views.get("c").path == [ROOT]
+        and claimState("c", 5) == "cancelled" and promises)
+
+  // A removal of the claimant that saw the new root's records disputes nothing: a member off
+  // during the delay counts the claim all the same.
+  run claimantRemovedAfterNewRootTest =
+    init
+      .then(signAs(RECOVERY, "claim", "NK", 0))
+      .then(signAs("NK", "device", DEVICE, 0))
+      .then(give("r", 5))
+      .then(give("r", 6))
+      .then(signAs(ROOT, "revoke", RECOVERY, 0))
+      .then(give("c", 5))
+      .then(give("c", 6))
+      .then(give("c", 7))
+      .then(tickAt("c"))
+      .then(tickAt("c"))
+      .expect(views.get("c").path == [ROOT, "NK"] and claimState("c", 5) == "effective" and promises)
+  // After a takeover counts, other keys fill the room and push out the old root's records,
+  // the record that gave the claimant takeover with them. Whether the takeover stays depends
+  // on the open question COUNTED_CHECKED_ONCE: checked again, it is undone.
+  run fullRoomAfterTakeoverTest =
+    init
+      .then(signAs(RECOVERY, "claim", "NK", 0))
+      .then(give("m", 5))
+      .then(tickAt("m"))
+      .then(tickAt("m"))
+      .expect(views.get("m").path == [ROOT, "NK"])
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 2))
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 2))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2))
+      .then(sign("NK", "copies", "", "", 0, false, false, 2))
+      .then(sign("NK", "copies", "", "", 0, false, false, 2))
+      .then(give("m", 6)).then(give("m", 7)).then(give("m", 8)).then(give("m", 9))
+      .then(give("m", 10)).then(give("m", 11)).then(give("m", 12)).then(give("m", 13))
+      .expect(not(st.get("m").recs.contains(4))
+        and views.get("m").path == (if (COUNTED_CHECKED_ONCE) [ROOT, "NK"] else [ROOT]))
 }
