@@ -1991,7 +1991,14 @@ impl<'e, 'a> Epoch<'e, 'a> {
     fn best(&self, want: impl Fn(&Kind) -> bool) -> Option<usize> {
         let mut best: Option<usize> = None;
         for i in self.all() {
-            if !self.r(i).held && want(&self.r(i).b().kind) && self.counts(i) && best.is_none_or(|b| self.beats(i, b)) {
+            // A removed admin's record is left out, whatever it saw.
+            let removed = self.r(i).admin() && self.revoked.contains(&self.r(i).b().signer);
+            if !self.r(i).held
+                && !removed
+                && want(&self.r(i).b().kind)
+                && self.counts(i)
+                && best.is_none_or(|b| self.beats(i, b))
+            {
                 best = Some(i);
             }
         }

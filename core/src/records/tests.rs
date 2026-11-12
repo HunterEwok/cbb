@@ -2422,3 +2422,30 @@ fn device_fields_are_the_format_s() {
     let mine: Vec<u16> = body::COMMON_FIELDS.iter().chain(body::DEVICE_OWN).copied().collect();
     assert_eq!(mine, crate::format::DEVICE_FIELDS);
 }
+
+/// A removed admin's hubs and copies window are left out: another
+/// admin's later records take their place.
+#[test]
+fn a_removed_admin_s_hubs_and_copies_are_left_out() {
+    let mut g = G::new();
+    let (x, y) = (k("admin x"), k("admin y"));
+    let (lo, hi, plo, phi) = if x.hash < y.hash { (x, y, k("pc x"), k("pc y")) } else { (y, x, k("pc y"), k("pc x")) };
+    let computer = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_FREEZE | POWER_HUB;
+    let (pp, p) = (k("phone p"), k("admin p"));
+    g.admin(&plo, &lo, computer);
+    g.admin(&phi, &hi, computer);
+    g.admin(&pp, &p, POWER_ADMIT | POWER_REMOVE | POWER_REMOVE_ADMINS);
+    let (h1, h2) = (k("hub 1"), k("hub 2"));
+    g.device(&k("root"), &h1, "hub 1", |d| d.rights |= RIGHT_HUB);
+    g.device(&k("root"), &h2, "hub 2", |d| d.rights |= RIGHT_HUB);
+    g.rec(&lo, Kind::Hubs(vec![h1.key.device_id()]));
+    g.rec(&lo, Kind::Copies { incoming_ms: MIN_INCOMING_MS });
+    let seen = g.seen();
+    g.rec(&p, Kind::Revoke(removal(&[lo.hash, plo.hash], seen)));
+    g.rec(&hi, Kind::Hubs(vec![h2.key.device_id()]));
+    g.rec(&hi, Kind::Copies { incoming_ms: 600_000 });
+    let s = g.state();
+    assert!(s.revoked.contains(&lo.hash));
+    assert_eq!(s.hubs, vec![h2.key.device_id()]);
+    assert_eq!(s.incoming_ms, Some(600_000));
+}
