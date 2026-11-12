@@ -457,10 +457,14 @@ pub fn redact(line: &str, names: &[String]) -> String {
     // Whether the word before was a field of a name, `host:` or `peer=`,
     // with only spaces since: the next word is its value.
     let mut field = false;
+    // Whether a field's value has begun: its further words, up to the end
+    // of the field (a `,`, `;`, bracket or quote, or the line's end), go
+    // into the same placeholder (`wifi: Home Net 5G`).
+    let mut in_value = false;
     // Whether the word before was a name's key alone, `server` in
     // `server = name`.
     let mut key = false;
-    let mut flush = |word: &mut String, out: &mut String, field: &mut bool| {
+    let mut flush = |word: &mut String, out: &mut String, field: &mut bool, in_value: &mut bool| {
         if word.is_empty() {
             return;
         }
@@ -472,9 +476,18 @@ pub fn redact(line: &str, names: &[String]) -> String {
             return;
         }
         key = name_key(word);
+        if *in_value {
+            // One placeholder for the whole value: the space before goes too.
+            if out.ends_with(' ') {
+                out.pop();
+            }
+            word.clear();
+            return;
+        }
         let value = core::mem::take(field);
         if value && !word.bytes().all(|b| b.is_ascii_digit()) {
             out.push_str("<name>");
+            *in_value = true;
         } else {
             match redact_word(word) {
                 Some(r) => out.push_str(&r),
@@ -489,7 +502,10 @@ pub fn redact(line: &str, names: &[String]) -> String {
             word.push(c);
         } else {
             let was = !word.is_empty();
-            flush(&mut word, &mut out, &mut field);
+            flush(&mut word, &mut out, &mut field, &mut in_value);
+            if c != ' ' {
+                in_value = false;
+            }
             if !(c == ' ' || (was && c == ':')) {
                 field = false;
             }
@@ -500,7 +516,7 @@ pub fn redact(line: &str, names: &[String]) -> String {
             out.push(if c.is_control() { ' ' } else { c });
         }
     }
-    flush(&mut word, &mut out, &mut field);
+    flush(&mut word, &mut out, &mut field, &mut in_value);
     out
 }
 
@@ -879,7 +895,9 @@ mod tests {
         assert_eq!(redact("dial https://192.168.1.5:7300/x", &[]), "dial https://<address>/x");
         // Paths, files and the program's words stay readable.
         assert_eq!(redact("wrote state/bug.json, kept=3", &[]), "wrote state/bug.json, kept=3");
-        assert_eq!(redact("host: dimas-macbook answered", &[]), "host: <name> answered");
+        assert_eq!(redact("host: dimas-macbook answered", &[]), "host: <name>");
+        assert_eq!(redact("wifi: Home Net 5G, joined at 10.0.0.2", &[]), "wifi: <name>, joined at <address>");
+        assert_eq!(redact("(host: my nas) up", &[]), "(host: <name>) up");
         assert_eq!(redact("peer:10.0.0.2:7300 closed", &[]), "peer:<address> closed");
         assert_eq!(redact("addr:10.0.0.2:7300 closed", &[]), "addr:<address> closed");
         assert_eq!(redact("retry: 3 times, sync: off", &[]), "retry: 3 times, sync: off");

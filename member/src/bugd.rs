@@ -18,8 +18,9 @@
 //! the day (`PER_SOURCE` for an IPv4 address or an IPv6 /64, `PER_WIDE`
 //! for an IPv6 /48), past which it answers 503 too, so that no one source
 //! fills the day; and a day's reports go after `KEEP_DAYS`. The source is
-//! the prefix nginx names in `X-CBB-Source` and `X-CBB-Source-Wide`; it is
-//! counted in memory for the day only, never written or logged.
+//! the prefix nginx names in `X-CBB-Source` and `X-CBB-Source-Wide`, and
+//! every report without it shares one source; it is counted in memory for
+//! the day only, never written or logged.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -217,7 +218,10 @@ impl Receiver {
             if d.all >= PER_DAY || d.total.saturating_add(body.len() as u64) > MAX_TOTAL {
                 return Answer::error(503, "no more reports are taken now");
             }
-            let narrow = (!from.narrow.is_empty()).then(|| format!("n {}", from.narrow));
+            // A report whose source nginx did not name counts against one
+            // shared share, never against none.
+            let narrow =
+                Some(if from.narrow.is_empty() { "unknown".to_string() } else { format!("n {}", from.narrow) });
             let wide = (!from.wide.is_empty() && from.wide != from.narrow).then(|| format!("w {}", from.wide));
             let over = |k: &Option<String>, max: usize| {
                 k.as_ref().is_some_and(|k| d.sources.get(k).copied().unwrap_or(0) >= max)
@@ -409,8 +413,9 @@ pub fn read(secret: &Path, paths: &[PathBuf], out: &mut impl Write, err: &mut im
     Ok(opened)
 }
 
-/// cbb-bug's command line: `cbb-bug [-listen ADDRESS:PORT] [-dir FOLDER]`
-/// serves; `cbb-bug keygen SECRET` makes the robot's key and
+/// cbb-bug's command line: `cbb-bug [-listen ADDRESS:PORT] [-dir FOLDER]
+/// [-not-loopback]` serves, on a loopback address unless `-not-loopback`
+/// allows another (nginx in front gives the source of each report); `cbb-bug keygen SECRET` makes the robot's key and
 /// `cbb-bug read SECRET FOLDER...` opens the reports, both on the robot's
 /// own computer.
 pub fn command(args: &[String], err: &mut impl Write) -> i32 {
@@ -445,9 +450,14 @@ pub fn command(args: &[String], err: &mut impl Write) -> i32 {
     }
     let mut listen: SocketAddr = ([127, 0, 0, 1], 8791).into();
     let mut dir = PathBuf::from("/var/lib/cbb-bug");
+    let mut not_loopback = false;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         let flag = a.trim_start_matches('-');
+        if flag == "not-loopback" {
+            not_loopback = true;
+            continue;
+        }
         let value = it.next();
         match (flag, value) {
             ("listen", Some(v)) => match v.parse() {
@@ -459,10 +469,18 @@ pub fn command(args: &[String], err: &mut impl Write) -> i32 {
             },
             ("dir", Some(v)) => dir = PathBuf::from(v),
             _ => {
-                let _ = writeln!(err, "usage: cbb-bug [-listen 127.0.0.1:8791] [-dir /var/lib/cbb-bug]");
+                let _ =
+                    writeln!(err, "usage: cbb-bug [-listen 127.0.0.1:8791] [-dir /var/lib/cbb-bug] [-not-loopback]");
                 return 2;
             }
         }
+    }
+    if !listen.ip().is_loopback() && !not_loopback {
+        let _ = writeln!(
+            err,
+            "cbb-bug: {listen} is not a loopback address: it takes reports only from nginx on this host, which names their source; -not-loopback allows another"
+        );
+        return 2;
     }
     match serve(listen, &dir) {
         Ok(()) => 0,
@@ -528,6 +546,28 @@ mod tests {
 
     /// Past the day's count or the bytes in all it answers 503, so that the
     /// apps keep their reports; a restart keeps the day's count; old days go.
+    /// Reports without a source share one share; cbb-bug listens only on a
+    /// loopback address unless told otherwise.
+    #[test]
+    fn unknown_sources_share_one_share() {
+        let tmp = std::env::temp_dir().join(format!("cbb-bugd-unknown-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let rx = Receiver::new(&tmp).unwrap();
+        let day = 1_762_646_400_000;
+        let fp = |i: usize| format!("{:016x}", 0x3000_0000_0000_0000u64 + i as u64);
+        for i in 0..PER_SOURCE {
+            assert_eq!(rx.take(&post(&fp(i), "0.6.0"), day).status, 200);
+        }
+        assert_eq!(rx.take(&post(&fp(PER_SOURCE), "0.6.0"), day).status, 503);
+        let known = Source { narrow: "198.51.100.7".into(), wide: "198.51.100.7".into() };
+        assert_eq!(rx.take_from(&post(&fp(PER_SOURCE + 1), "0.6.0"), day, &known).status, 200);
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        let mut err = Vec::new();
+        assert_eq!(command(&["-listen".into(), "0.0.0.0:8791".into()], &mut err), 2);
+        assert!(String::from_utf8_lossy(&err).contains("not a loopback address"));
+    }
+
     #[test]
     fn full_store_asks_to_send_later() {
         let tmp = std::env::temp_dir().join(format!("cbb-bugd-full-{}", std::process::id()));

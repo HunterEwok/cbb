@@ -124,7 +124,6 @@ jobs:
       - name: tag the signed image
         env:
           GH_TOKEN: ${{ github.token }}
-          PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           set -o pipefail
           rel="$RUNNER_TEMP/release"
@@ -157,18 +156,34 @@ jobs:
           image=${want%@*}
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           set -- -t "$image:$version"
-          # latest only moves forward: a maintenance release of an older line
-          # gets its version, not latest.
-          if [ "$PRERELEASE" != true ]; then
-            current=$(docker buildx imagetools inspect "$image:latest" --format '{{json .Image}}' 2>/dev/null |
-              jq -r 'if has("config") then .config.Labels["org.opencontainers.image.version"] else ([.[]][0].config.Labels["org.opencontainers.image.version"]) end // empty' 2>/dev/null || true)
-            newest=$(printf '%s\n%s\n' "$current" "$version" | sed '/^$/d' | sort -V | tail -n 1)
+          # latest only moves forward, and never to a pre-release (any version
+          # with a "-", whatever the release says): a maintenance release of an
+          # older line gets its version, not latest.
+          case $version in
+          *-*) echo "latest stays: $version is a pre-release" ;;
+          *)
+            if inspected=$(docker buildx imagetools inspect "$image:latest" --format '{{json .Image}}' 2>"$RUNNER_TEMP/inspect.err"); then
+              current=$(printf '%s' "$inspected" |
+                jq -er 'if has("config") then .config.Labels["org.opencontainers.image.version"] else ([.[]][0].config.Labels["org.opencontainers.image.version"]) end')
+              case $current in
+              [0-9]*.[0-9]*.[0-9]*) ;;
+              *) echo "::error::the current latest names no version ($current)" >&2; exit 1 ;;
+              esac
+            elif grep -qi 'not found' "$RUNNER_TEMP/inspect.err"; then
+              current=
+            else
+              cat "$RUNNER_TEMP/inspect.err" >&2
+              echo "::error::cannot read the current latest" >&2
+              exit 1
+            fi
+            newest=$(printf '%s\n%s\n' "${current%%-*}" "$version" | sed '/^$/d' | sort -V | tail -n 1)
             if [ -z "$current" ] || { [ "$newest" = "$version" ] && [ "$current" != "$version" ]; }; then
               set -- "$@" -t "$image:latest"
             else
-              echo "latest stays at $current, newer than $version"
+              echo "latest stays at $current, not older than $version"
             fi
-          fi
+            ;;
+          esac
           docker buildx imagetools create "$@" "$want"
           echo "tagged $want as $*"
 
