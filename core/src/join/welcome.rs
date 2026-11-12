@@ -53,8 +53,9 @@ pub struct Welcome {
     pub grant: Option<Vec<u8>>,
     /// The current period's server credentials, as envelopes.
     pub credentials: Vec<Vec<u8>>,
-    /// The claims the admitter has counted, sorted: a takeover a member
-    /// counted is final for it, and the joiner takes them as its own.
+    /// The claims the admitter has counted, in the order it counted them: a
+    /// takeover a member counted is final for it, and the joiner takes them
+    /// as its own.
     pub counted: Vec<RecordId>,
 }
 
@@ -118,7 +119,7 @@ impl Welcome {
             time_ms,
             grant: None,
             credentials: Vec::new(),
-            counted: set.counted().iter().copied().collect(),
+            counted: set.counted(),
         }
     }
 
@@ -153,11 +154,8 @@ impl Welcome {
         if !self.credentials.is_empty() {
             m.push((7, Value::Array(values(&self.credentials).unwrap_or_default())));
         }
-        let mut counted = self.counted.clone();
-        counted.sort();
-        counted.dedup();
-        if !counted.is_empty() {
-            m.push((8, Value::Array(counted.iter().map(|id| Value::Bytes(&id.0)).collect())));
+        if !self.counted.is_empty() {
+            m.push((8, Value::Array(self.counted.iter().map(|id| Value::Bytes(&id.0)).collect())));
         }
         Value::Map(m).encode()
     }
@@ -266,17 +264,22 @@ impl Welcome {
         // the Welcome's records and its own ages put it in effect: its
         // signer may take over, its key is not void, nobody cancelled it,
         // and it waited the root's delay.
+        // The records check each counted claim once (its claimant held the
+        // takeover power and was not removed); the path with them must not
+        // part from the path the Welcome's records and ages give alone.
+        let plain = set.state(&held);
         if !self.counted.is_empty() {
-            let plain = set.state(&held);
             let stands =
                 |id: &RecordId| plain.claims.iter().any(|c| c.record == *id && c.state == ClaimState::Effective);
             if !self.counted.iter().all(stands) {
                 return Err(Refusal::Takeover);
             }
         }
-        set.remember_counted(self.counted.iter().copied());
+        if set.remember_counted(self.counted.iter().copied()).is_err() {
+            return Err(Refusal::Takeover);
+        }
         let state = set.state(&held);
-        if state.owner_split {
+        if state.disagrees(&plain.roots) {
             return Err(Refusal::Takeover);
         }
         let own_key = Key::es256(own.to_vec());

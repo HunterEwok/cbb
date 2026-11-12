@@ -583,7 +583,7 @@ fn the_joiner_checks_its_welcome() {
     let mut counted = w.clone();
     counted.counted = vec![RecordId([2; 32]), RecordId([1; 32])];
     let back = Welcome::decode(&counted.encode()).unwrap();
-    assert_eq!(back.counted, vec![RecordId([1; 32]), RecordId([2; 32])], "written sorted");
+    assert_eq!(back.counted, vec![RecordId([2; 32]), RecordId([1; 32])], "in the order of counting");
     // The encoding's parts read back.
     let (root, envs, ages, time) = Welcome::parts(&w.encode()).unwrap();
     assert_eq!(root, g.root.key.public);

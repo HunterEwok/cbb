@@ -76,7 +76,7 @@ pub static WELCOME: Table = Table {
         f(5, "welcome/time", MS, true),
         f(6, "welcome/grant", Ty::Map(&GRANT), false),
         f(7, "welcome/credentials", Ty::Array { of: &ENV, max: 259 }, false),
-        f(8, "welcome/counted", Ty::Set { of: &B32, max: 16 }, false),
+        f(8, "welcome/counted", Ty::Once { of: &B32, max: 16 }, false),
     ],
 };
 

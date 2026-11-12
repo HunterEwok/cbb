@@ -1292,7 +1292,7 @@ TABLES = {
         (5, "welcome/time", "uint 1..9223372036854775807", True),
         (6, "welcome/grant", "map welcome/grant", False),
         (7, "welcome/credentials", "array 1..259 of envelope", False),
-        (8, "welcome/counted", "set 1..16 of bytes 32", False),
+        (8, "welcome/counted", "once 1..16 of bytes 32", False),
     ],
     "welcome/grant": [
         (2, "welcome/grant", "envelope", True),
@@ -1764,7 +1764,7 @@ def wave3_vectors(records_take):
     claims = sorted([fake("claim a", 32), fake("claim b", 32)])
     later = {**welcome, 3: [[claims[0], 3600000], [claims[1], 0]], 8: claims}
     mp("a Welcome with claim ages and the claims the admitter counted", "welcome", later)
-    mp("a Welcome: counted out of order", "welcome", {**later, 8: list(reversed(claims))}, "welcome/counted")
+    mp("a Welcome: claims counted in the admitter's order", "welcome", {**later, 8: list(reversed(claims))})
     mp("a Welcome: a claim counted twice", "welcome", {**later, 8: [claims[0]] * 2}, "welcome/counted")
     mp("a Welcome: 17 claims counted", "welcome", {**later, 8: sorted(fake(f"c{i}", 32) for i in range(17))},
        "welcome/counted")
