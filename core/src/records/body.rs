@@ -5,6 +5,7 @@
 //! types, the checks of each field's row, and their encoding and reading
 //! on the format's codec.
 
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -153,7 +154,8 @@ pub struct Body {
 /// A record's type with its own fields.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Kind {
-    Device(Device),
+    /// Boxed, as Settings, so that a record of any type stays small.
+    Device(Box<Device>),
     Revoke(Removal),
     Freeze(Removal),
     /// A thaw lists what it saw of the frozen keys: only that comes back.
@@ -166,7 +168,7 @@ pub enum Kind {
         seen: Vec<Seen>,
     },
     Resolve(Vec<RecordId>),
-    Settings(Settings),
+    Settings(Box<Settings>),
     Copies {
         incoming_ms: u64,
         seen: Vec<Seen>,
@@ -329,6 +331,16 @@ pub const SERVER_FORWARDER: u64 = 1;
 pub const SERVER_RELAY: u64 = 2;
 
 impl Kind {
+    /// A device record's kind.
+    pub fn device(d: Device) -> Kind {
+        Kind::Device(Box::new(d))
+    }
+
+    /// A settings record's kind.
+    pub fn settings(s: Settings) -> Kind {
+        Kind::Settings(Box::new(s))
+    }
+
     pub fn type_number(&self) -> u64 {
         match self {
             Kind::Device(_) => TYPE_DEVICE,
@@ -577,7 +589,7 @@ impl Body {
         let time_ms = r.opt_uint(6, 0, Rule::new("records/time_ms"))?;
         let f = |name: &'static str| field(t, name);
         let (kind, own, gone): (Kind, &[u16], &[u16]) = match type_number {
-            TYPE_DEVICE => (Kind::Device(read_device(&r)?), DEVICE_OWN, &[15]),
+            TYPE_DEVICE => (Kind::device(read_device(&r)?), DEVICE_OWN, &[15]),
             TYPE_REVOKE | TYPE_FREEZE => {
                 let keys = r.need_list(10, f("keys"), |v| v.as_bytes().and_then(KeyHash::from_slice))?;
                 let seen = read_seen(&r, f("seen"))?;
@@ -596,7 +608,7 @@ impl Body {
                 let root = Key::read(r.need(10, f("root"))?)?;
                 (Kind::Claim { root, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
             }
-            TYPE_SETTINGS => (Kind::Settings(read_settings(&r)?), &[10, 11, 12, 14, 15], &[13]),
+            TYPE_SETTINGS => (Kind::settings(read_settings(&r)?), &[10, 11, 12, 14, 15], &[13]),
             TYPE_COPIES => {
                 let incoming_ms = r.need_uint(10, f("incoming_ms"))?;
                 (Kind::Copies { incoming_ms, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
