@@ -86,7 +86,7 @@ struct Theme {
 }
 
 /// The theme the user picks in Settings, one of Tokens.themes by its name;
-/// Blueprint, the first, by default.
+/// Chalkboard, the first, by default.
 enum ThemeChoice {
     static let key = "theme"
 

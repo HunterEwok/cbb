@@ -185,7 +185,7 @@ final class ReadersUITests: XCTestCase {
                 settings.tap()
             }
             XCTAssertTrue(bar.waitForExistence(timeout: 10), "\(language): Settings did not open")
-            XCTAssertTrue(app.buttons[tr("Ocean", language)].exists, "\(language): the colours are not translated")
+            XCTAssertTrue(app.buttons[tr("Blueprint", language)].exists, "\(language): the colours are not translated")
             picture("settings-\(language)")
             audit(app, checks, "Settings in \(language)")
             app.terminate()
