@@ -25,6 +25,8 @@
 //! Test code: its numbers are small and fixed (at most a few thousand
 //! records), so it counts with plain arithmetic.
 #![allow(clippy::arithmetic_side_effects)]
+// A group it cannot build whole is a fault of the test, which stops there.
+#![allow(clippy::expect_used, clippy::panic)]
 
 use alloc::collections::BTreeMap;
 use alloc::format;
@@ -151,12 +153,15 @@ impl Group {
         (set, state)
     }
 
+    /// Records, lists, then the records again: a new root's first records
+    /// wait for its head's list. A record refused then is a fault.
     fn feed(&self, set: &mut RecordSet) {
         set.insert_all(self.records.iter().cloned());
         for l in &self.lists {
-            // A list whose head the set does not hold yet comes again.
-            let _ = set.insert_list(l);
+            set.insert_list(l).expect("a change's list is taken");
         }
+        let (_, refused) = set.insert_all(self.records.iter().cloned());
+        assert!(refused.is_empty(), "groupgen: records refused: {refused:?}");
     }
 }
 
@@ -236,7 +241,7 @@ impl Builder {
 
 /// Builds the group of spec.
 pub fn build(spec: Spec) -> Group {
-    build_with(spec, true)
+    build_with(spec, false)
 }
 
 /// Builds the group of spec; a later change of root removes the phone
@@ -346,9 +351,9 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
     }
 
     // The changes of root: the recovery key makes a new root, which
-    // records the phone that holds it, as a device writes the change; a
-    // later change removes the phone that held the root before, as the
-    // owner does with a lost phone.
+    // records the phone that holds it, as a device writes the change; the
+    // phone that held the root before stays a device (the owner may
+    // remove it: build_with).
     let mut lists: Vec<Vec<u8>> = Vec::new();
     let mut new_roots = Vec::new();
     let mut holder: Option<KeyHash> = None;
@@ -358,10 +363,14 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
         let mut d = Device::new(phone.key.clone(), &format!("new root phone {t}"), ROLE_PHONE);
         d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
         let mut set = RecordSet::new(root.key.clone(), recovery.key.clone());
+        // Records, lists, then the records again: a new root's first
+        // records wait for its head's list. Nothing may be refused then.
         set.insert_all(b.records.iter().cloned());
         for l in &lists {
-            let _ = set.insert_list(l);
+            set.insert_list(l).expect("a change's list is taken");
         }
+        let (_, refused) = set.insert_all(b.records.iter().cloned());
+        assert!(refused.is_empty(), "groupgen: records refused: {refused:?}");
         let state = set.state();
         // A change written from a valid group never fails.
         let lost: Vec<KeyHash> = holder.take().into_iter().filter(|_| remove_holder).collect();
@@ -479,18 +488,18 @@ mod tests {
         }
     }
 
-    /// A second change of root that does not name the first new root's
-    /// phone in its removals must leave it a device: only the new root's
-    /// removal takes it out. Waiting for the records thread, which looks
-    /// for the limit that drops it today; run with `--ignored`.
+    /// A second change of root keeps the phone the first one made unless
+    /// it names it in its removals, which take it out.
     #[test]
-    #[ignore = "the phone of the first new root drops after a second change; the records thread is on it"]
     fn a_second_change_of_root_keeps_the_phone_it_does_not_remove() {
         let spec = sizes(1)[2];
-        let g = build_with(spec, false);
-        let s = g.evaluate();
         let phone = key(spec.seed, "new root phone 0").hash;
-        assert!(s.device_by_key(&phone).is_some(), "{:?}", s.ignored);
+        let kept = build_with(spec, false);
+        assert!(kept.evaluate().device_by_key(&phone).is_some());
+        let removed = build_with(spec, true);
+        let s = removed.evaluate();
+        check(&removed, &s);
+        assert!(s.device_by_key(&phone).is_none() && s.revoked.contains(&phone));
     }
 
     #[test]
