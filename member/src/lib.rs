@@ -1724,9 +1724,9 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         return Ok(());
     }
     let res = (|| -> Result<()> {
-        let (roots, sources) = match std::env::var_os("CBB_RELEASE_DIR") {
+        let (roots, sources) = match testbuild::env_os("CBB_RELEASE_DIR") {
             Some(d) => {
-                let roots = match std::env::var_os("CBB_RELEASE_ROOTS") {
+                let roots = match testbuild::env_os("CBB_RELEASE_ROOTS") {
                     Some(f) => update::read_roots(std::path::Path::new(&f))?,
                     None => update::ROOTS.iter().map(|r| r.to_vec()).collect(),
                 };

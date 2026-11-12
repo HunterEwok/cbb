@@ -148,6 +148,10 @@ func TestCheck(t *testing.T) {
 			name: "a test hook read around the guard", file: "member/src/x.rs", content: header + "fn f() {\n    std::env::var_os(\"CBB_TEST_X\");\n}\n",
 			want: []string{"member/src/x.rs:5: reads a test hook directly"},
 		},
+		{
+			name: "the update's roots read around the guard", file: "member/src/x.rs", content: header + "fn f() {\n    std::env::var_os(\"CBB_RELEASE_ROOTS\");\n}\n",
+			want: []string{"member/src/x.rs:5: reads a test hook directly"},
+		},
 		{name: "a test hook through the guard", file: "member/src/x.rs", content: header + "fn f() {\n    crate::testbuild::env_os(\"CBB_TEST_X\");\n}\n"},
 		{name: "the Rust guard itself", file: "member/src/testbuild.rs", content: header + "fn f() { std::env::var_os(\"CBB_TEST_X\"); }\n"},
 		{

@@ -862,16 +862,33 @@ jobs:
       - name: cbb update installs a newer signed release, puts the old one back, and sets the timer
         run: |
           # cbb and its helper of one version: a release cbb takes only a
-          # helper of its own release.
+          # helper of its own release. The update takes its release from a
+          # folder and its roots from a file, hooks that only a build for
+          # tests reads (testhooks), so the steps below run such a build.
           version() {
-            CBB_VERSION=$1 cargo build --locked --release -p cbb-member
+            CBB_VERSION=$1 cargo build --locked --release -p cbb-member ${3:+--features "$3"}
             cp target/release/cbb "$2/cbb"
             CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$1" -o "$2/cbb-helper" ./cmd/cbb-helper
           }
-          mkdir -p "$RUNNER_TEMP/v060" "$RUNNER_TEMP/v061"
-          version 0.6.0 "$RUNNER_TEMP/v060"
-          version 0.6.1 "$RUNNER_TEMP/v061"
+          mkdir -p "$RUNNER_TEMP/release060" "$RUNNER_TEMP/v060" "$RUNNER_TEMP/v061"
+          version 0.6.0 "$RUNNER_TEMP/release060"
+          version 0.6.0 "$RUNNER_TEMP/v060" testhooks
+          version 0.6.1 "$RUNNER_TEMP/v061" testhooks
+          # First a release's build: it ignores both hooks, so a release
+          # signed by other roots, in a folder, is never offered.
+          sudo CBB_FIREWALL=no sh packaging/linux/install.sh --auto-update off "$RUNNER_TEMP/release060/cbb"
+          other="$RUNNER_TEMP/other"
+          sh packaging/archive.sh "$RUNNER_TEMP/v061/cbb" linux amd64 "$other"
+          go run ./tools/release-sign drill -version 99.0.0 "$other" "$RUNNER_TEMP/other-roots.pem"
+          out=$(CBB_RELEASE_DIR="$other" CBB_RELEASE_ROOTS="$RUNNER_TEMP/other-roots.pem" cbb update -check 2>&1 || true)
+          echo "$out"
+          case $out in *99.0.0*)
+            echo "a release's cbb update took a release from CBB_RELEASE_DIR and CBB_RELEASE_ROOTS" >&2
+            exit 1
+            ;;
+          esac
           sudo CBB_FIREWALL=no sh packaging/linux/install.sh --auto-update off "$RUNNER_TEMP/v060/cbb"
+          cbb version | grep -q testhooks
           test "$(sudo cbb update -auto)" = off
           # 0.6.1, signed with throwaway keys (tools/release-sign drill),
           # which the pinned roots refuse.
@@ -1437,7 +1454,9 @@ jobs:
             New-Item -ItemType Directory -Force "$dir\packaging" | Out-Null
             $env:CBB_VERSION = $v
             $env:CBB_ARCH = 'amd64'
-            cargo build --locked -p cbb-member --features windowless --target-dir "$env:RUNNER_TEMP\target"
+            # testhooks: the update below takes its release from a folder
+            # and its roots from a file, hooks a release's build ignores.
+            cargo build --locked -p cbb-member --features windowless,testhooks --target-dir "$env:RUNNER_TEMP\target"
             if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
             Copy-Item "$env:RUNNER_TEMP\target\debug\cbb.exe", "$env:RUNNER_TEMP\target\debug\cbbw.exe" $dir
             $ld = "-X github.com/HunterEwok/cbb/internal/version.Version=v$v"
@@ -2386,7 +2405,9 @@ jobs:
       - name: cbb update, of cbb without its helper, installs a newer signed release, puts the old one back, and sets the timer
         run: |
           for v in 0.6.0 0.6.1; do
-            CBB_VERSION=$v cargo build --locked
+            # testhooks: the update takes its release from a folder and its
+            # roots from a file, hooks a release's build ignores.
+            CBB_VERSION=$v cargo build --locked -p cbb-member --features testhooks
             mkdir -p "$RUNNER_TEMP/alone-$v"
             cp target/debug/cbb "$RUNNER_TEMP/alone-$v/cbb"
           done

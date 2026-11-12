@@ -1595,7 +1595,9 @@ All notable changes to cbb are documented in this file. The format follows
 - Builds for tests only never ship: the tests' hooks (`CBB_TEST_*`, the test clock among them)
   are read only by a `cbb` built with the feature `testhooks` and a `cbb-helper` built with
   the tag `testhooks`; `CBB_STANDBY_GRACE`, `CBB_UP_CHECK` and `CBB_HUB_KEY_AHEAD` are now
-  `CBB_TEST_STANDBY_GRACE`, `CBB_TEST_UP_CHECK` and `CBB_TEST_HUB_KEY_AHEAD`, hooks too. A
+  `CBB_TEST_STANDBY_GRACE`, `CBB_TEST_UP_CHECK` and `CBB_TEST_HUB_KEY_AHEAD`, hooks too; a
+  release's `cbb` checks updates only against its pinned roots, whatever `CBB_RELEASE_DIR`
+  and `CBB_RELEASE_ROOTS` say. A
   test build does not compile in the release workflow, names itself in `cbb version` and is
   refused by the release workflow, as is a Go program built with the tag `benchtime` or
   `testhooks` (docs/maintaining.md, "Releases").

@@ -198,10 +198,11 @@ Rules for workflows:
   such a build of `cbb` does not compile; its `cbb version` names its features; and its
   binary carries a marker the release workflow looks for in every Rust program it publishes,
   as it looks for the tags `benchtime` and `testhooks` in the Go programs' build information
-  (`go version -m`). The tests' hooks, the variables `CBB_TEST_*` (docs/reference/config.md),
-  are read only through `testbuild::env` in Rust and `internal/testhook` in Go, which a
-  release build ignores (a Go test binary reads them too); `tools/repocheck` refuses a program
-  that reads one around them.
+  (`go version -m`). The tests' hooks, the variables `CBB_TEST_*` (docs/reference/config.md)
+  and the update's `CBB_RELEASE_DIR` and `CBB_RELEASE_ROOTS`, are read only through
+  `testbuild::env` in Rust and `internal/testhook` in Go, which a release build ignores (a Go
+  test binary reads them too); `tools/repocheck` refuses a program that reads one around
+  them, and CI's `packaging` job checks that a release's `cbb update` ignores the two.
 - The archives are `cbb-<os>-<arch>.tar.gz` without the version, so that
   `releases/latest/download/` has fixed names for `get.sh`; each holds `cbb/` with the
   binary, `LICENSE`, `THIRD_PARTY_NOTICES` (the licenses of the Go modules, the copied code

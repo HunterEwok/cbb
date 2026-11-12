@@ -9,8 +9,8 @@ Most settings are made by a command or an installer flag, which writes the setti
 for you. Edit the files by hand only where this page says so: `CBB_INTERFACES` has no
 option, so it is set by hand, and the installers and `cbb update` keep that line.
 
-The tests' hooks, every `CBB_TEST_*` variable and `CBB_TPM_SIMULATOR`, are read only by a
-build for tests: `cbb` built with the feature `testhooks` (or the bench's `benchtime`),
+The tests' hooks, every `CBB_TEST_*` variable, `CBB_TPM_SIMULATOR` and, in `cbb` itself,
+`CBB_RELEASE_DIR` and `CBB_RELEASE_ROOTS`, are read only by a build for tests: `cbb` built with the feature `testhooks` (or the bench's `benchtime`),
 `cbb-helper` built with the tag `testhooks`, and Go's test binaries. A release ignores them
 ([maintaining](../maintaining.md), "Test builds").
 
@@ -79,8 +79,8 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_OS_RELEASE` | the Linux `install.sh` | For tests: another `/etc/os-release`, whose `ID=steamos` makes it install as on SteamOS. |
 | `CBB_PF_CONF` | the FreeBSD firewall script | Another `pf.conf` than `/etc/pf.conf`, for tests. |
 | `CBB_IMAGE`, `CBB_PREVIEW` | the lite member's tests | For a look by eye at what the ZX Spectrum Next would show: `cargo test -p cbb-member preview -- --ignored` reads the PNG or JPEG `CBB_IMAGE` names and writes what `cbb next image` makes of it to the PNG `CBB_PREVIEW` names. |
-| `CBB_RELEASE_DIR` | `get.sh`, `get.ps1` | For tests: takes the release's files from this directory instead of downloading them. |
-| `CBB_RELEASE_ROOTS` | `get.sh`, `get.ps1` | For tests, with `CBB_RELEASE_DIR`: a file with the root keys to check the release against instead of the project's own. |
+| `CBB_RELEASE_DIR` | `get.sh`, `get.ps1`; `cbb update` built with the feature `testhooks` | For tests: takes the release's files from this directory instead of downloading them. A release's `cbb update` ignores it. |
+| `CBB_RELEASE_ROOTS` | `get.sh`, `get.ps1`; `cbb` built with the feature `testhooks` | For tests, with `CBB_RELEASE_DIR`: a file with the root keys to check the release against instead of the project's own. A release's `cbb` always checks against its pinned roots. |
 
 ### For tests and development
 

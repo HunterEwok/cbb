@@ -279,13 +279,14 @@ func check(name string, data []byte, listed map[string]bool) []string {
 	return append(problems, testHookProblems(name, data)...)
 }
 
-// The tests' hooks (CBB_TEST_*) are read only through the guards that keep
+// The tests' hooks (CBB_TEST_*, and the update's CBB_RELEASE_DIR and
+// CBB_RELEASE_ROOTS) are read only through the guards that keep
 // them out of a release (docs/maintaining.md, "Test builds"): Rust's
 // member/src/testbuild.rs and Go's internal/testhook, or a Go file built only
 // for the bench (the tag benchtime).
 var (
-	rustHookRead = regexp.MustCompile(`env::var(_os)?\(\s*"CBB_TEST_`)
-	goHookRead   = regexp.MustCompile(`os\.(Getenv|LookupEnv)\(\s*"CBB_TEST_`)
+	rustHookRead = regexp.MustCompile(`env::var(_os)?\(\s*"CBB_(TEST_|RELEASE_DIR"|RELEASE_ROOTS")`)
+	goHookRead   = regexp.MustCompile(`os\.(Getenv|LookupEnv)\(\s*"CBB_(TEST_|RELEASE_DIR"|RELEASE_ROOTS")`)
 	benchOnly    = regexp.MustCompile(`(?m)^//go:build .*\bbenchtime\b`)
 )
 
