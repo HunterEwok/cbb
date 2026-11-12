@@ -189,7 +189,7 @@ targets:
     platform: iOS
     sources:
       - CBBUITests
-      # The app's texts, to look up the Russian the screens show.
+      # The app's texts, to look up what the screens show in each language.
       - path: CBB/Resources/Localizable.xcstrings
         buildPhase: resources
     dependencies:

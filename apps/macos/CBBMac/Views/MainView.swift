@@ -301,10 +301,15 @@ struct Notice<Actions: View>: View {
     var body: some View {
         VStack(spacing: Tokens.spacingMedium) {
             Image(systemName: symbol).font(.system(size: 40)).foregroundStyle(palette.accent)
-            Text(title).font(.title3.weight(.semibold))
-            text.foregroundStyle(palette.textDim).multilineTextAlignment(.center).textSelection(.enabled)
+                .accessibilityHidden(true)
+            // The theme's own text colour, not the system's or the dim one:
+            // the audit's contrast holds on every theme's background.
+            Text(title).font(.title3.weight(.semibold)).foregroundStyle(palette.text)
+            text.foregroundStyle(palette.text).multilineTextAlignment(.center).textSelection(.enabled)
             actions
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(title))
         .frame(maxWidth: 420)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
