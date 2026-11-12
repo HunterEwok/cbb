@@ -150,6 +150,13 @@ cargo build --release && CBB_TEST_ALONE=$PWD/target/release/cbb \
   go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
 ```
 
+Every test of `internal/service` at once, in parts that run in Docker containers side by side
+(docs/testing.md, "Running tests in parallel"; IMAGE has Go, Rust, swtpm, Xvfb and xclip):
+
+```sh
+sh tools/e2e/parallel.sh -n 6 IMAGE
+```
+
 The Nano ESP32's network code on Linux (`embassy/`, root for the TAP interface):
 
 ```sh
