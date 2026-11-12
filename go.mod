@@ -13,6 +13,7 @@ tool (
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/amnezia-vpn/amneziawg-go v0.2.20-0.20260724121833-457d920a1a7d
+	github.com/cloudflare/circl v1.6.5
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/google/go-tpm v0.9.8
 	github.com/jezek/xgb v1.3.1
@@ -31,7 +32,6 @@ require (
 	github.com/apernet/quic-go v0.61.1-0.20260806010916-184d081eef3e // indirect
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/cloudflare/circl v1.6.5 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
