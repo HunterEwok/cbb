@@ -63,9 +63,6 @@ pub struct RecordSet {
     /// The takeovers' cuts of the roots before the promoted ones (`compact`):
     /// such a root keeps nothing off its cut.
     cuts: BTreeMap<KeyHash, Seen>,
-    /// A record off a cut came after the cuts were known: its root still
-    /// signs, and this member and that root disagree about the owner.
-    split: bool,
     records: BTreeMap<RecordId, Entry>,
     bytes: usize,
 }
@@ -83,7 +80,6 @@ impl RecordSet {
             counted: Vec::new(),
             pending: Vec::new(),
             cuts: BTreeMap::new(),
-            split: false,
             records: BTreeMap::new(),
             bytes: 0,
         }
@@ -144,10 +140,7 @@ impl RecordSet {
             let cuts = BTreeMap::from([(signer, *cut)]);
             let mine = self.records.values().map(|e| &e.record).filter(|x| x.body().signer == signer);
             if eval::off_cuts(&cuts, mine.chain([&r])).contains(&id) {
-                // Its root signed it off the chain the takeover saw; one
-                // that would have cancelled a counted claim tells the
-                // member that it and that root disagree about the owner.
-                self.split |= self.cancels_counted(&r);
+                // Its root signed it off the chain the takeover saw.
                 return Ok(Added::NoRoom);
             }
         }
@@ -238,16 +231,6 @@ impl RecordSet {
         let (promoted, first) = (&self.promoted, self.root.hash());
         let counted: BTreeSet<KeyHash> = self.counted.iter().map(|c| c.root.hash()).collect();
         self.keys.retain_roots(|h| *h == first || named.contains(h) || promoted.contains(h) || counted.contains(h));
-    }
-
-    /// Reports whether r would cancel a claim the member counted: a
-    /// resolve that names it, or a revoke of its signer.
-    fn cancels_counted(&self, r: &Record) -> bool {
-        match &r.body().kind {
-            Kind::Resolve(ids) => ids.iter().any(|id| self.counted.iter().any(|c| c.claim == *id)),
-            Kind::Revoke(rm) => self.counted.iter().any(|c| rm.keys.binary_search(&c.claimant).is_ok()),
-            _ => false,
-        }
     }
 
     /// Learns the keys again from the stored records for the roots the
@@ -345,7 +328,7 @@ impl RecordSet {
     /// The group's state. held_ms is how long the device has held each
     /// claim (rule 7).
     pub fn state(&self, held_ms: &BTreeMap<RecordId, u64>) -> State {
-        let mut state = eval::evaluate_checked(
+        let state = eval::evaluate_checked(
             &self.root,
             self.checked(),
             BTreeMap::new(),
@@ -354,7 +337,6 @@ impl RecordSet {
             &self.promoted,
             &self.cuts,
         );
-        state.owner_split |= self.split;
         state
     }
 

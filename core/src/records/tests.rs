@@ -1837,7 +1837,7 @@ fn taken_over_group() -> (G, BTreeMap<RecordId, u64>, Record) {
     let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
     let s = state_of(&g.root.key, &g.recs, &held);
     assert_eq!(s.roots, vec![g.root.hash, n.hash]);
-    assert!(s.revoked.contains(&k("gone").hash) && !s.owner_split);
+    assert!(s.revoked.contains(&k("gone").hash));
     (g, held, claim)
 }
 
@@ -1859,24 +1859,25 @@ fn a_counted_takeover_is_final_on_the_device() {
     assert!(!s.counting.contains(&late.id()));
     assert!(s.revoked.contains(&k("gone").hash));
     assert_eq!(s.claims.iter().find(|c| c.record == claim.id()).map(|c| c.state), Some(ClaimState::Effective));
-    assert!(s.owner_split);
+    // A peer that has not counted it does not disagree; one that counted
+    // another owner does.
+    assert!(!s.disagrees(&[g.root.hash]) && s.disagrees(&[g.root.hash, k("other root").hash]));
     // Not counted yet: the resolve cancels it.
     let s = counted_state(&g, &held, &[]);
     assert_eq!(s.roots, vec![g.root.hash]);
     assert_eq!(s.claims.iter().find(|c| c.record == claim.id()).map(|c| c.state), Some(ClaimState::Cancelled));
-    assert!(!s.owner_split);
     // A set remembers what it counted when it compacts, and keeps it.
     let mut set = RecordSet::new(g.root.key.clone());
     set.insert_all(g.recs[..g.recs.len() - 1].iter().cloned());
     let st = set.state(&held);
     set.compact(&st);
     assert!(set.counted().contains(&claim.id()));
-    // It keeps nothing of the old root above the cut, and says so.
+    // It keeps nothing of the old root above the cut.
     assert_eq!(set.insert(late.clone()), Ok(Added::NoRoom));
     assert!(!set.contains(&late.id()));
     let st = set.state(&held);
     assert_eq!(st.roots, vec![g.root.hash, n.hash]);
-    assert!(st.owner_split);
+    assert!(!st.disagrees(&[g.root.hash]) && st.disagrees(&[g.root.hash, k("other root").hash]));
     set.compact(&st);
     assert_eq!(set.state(&held).roots.len(), 2);
     // A set that got the resolve before it counted takes the cancel.
@@ -1907,7 +1908,9 @@ fn a_later_claim_does_not_rival_a_counted_takeover() {
     assert!(s.claims.iter().all(|c| c.state != ClaimState::Competing));
     assert!(s.counting.contains(&t_removed.id()) && s.revoked.contains(&t.hash));
     assert!(s.device(&k("gone").key.device_id()).is_none());
-    assert!(s.owner_split);
+    // A peer that has not counted it does not disagree; one that counted
+    // another owner does.
+    assert!(!s.disagrees(&[g.root.hash]) && s.disagrees(&[g.root.hash, k("other root").hash]));
     // Not counted: the two claims compete, as before.
     let s = counted_state(&g, &held2, &[]);
     assert_eq!(s.stop, Stop::Full);
@@ -2083,8 +2086,6 @@ fn an_old_root_keeps_nothing_above_its_cut() {
     let after = m.state(&held);
     assert_eq!(after.roots, before.roots);
     assert_eq!(after.devices, before.devices);
-    // Checkpoints cancel nothing: no disagreement about the owner.
-    assert!(!after.owner_split);
     // The same from evaluate, for a device that counted the claim.
     g.recs.extend(more);
     let s = counted_state(&g, &held, &[claim.id()]);
@@ -2289,10 +2290,7 @@ mod differential {
             for m in [&m1, &m2] {
                 let kept: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
                 let want = evaluate(&Input { root: &g.root.key, records: &kept, held_ms: &held, counted: m.counted_claims() });
-                // A set also remembers a cancel it did not store.
-                let got = m.state(&held);
-                prop_assert!(got.owner_split || !want.owner_split);
-                prop_assert_eq!(&State { owner_split: false, ..got }, &State { owner_split: false, ..want });
+                prop_assert_eq!(&m.state(&held), &want);
             }
             if m1.counted() == m2.counted() {
                 prop_assert_eq!(m1.state(&held).roots, m2.state(&held).roots);
@@ -2704,4 +2702,30 @@ fn an_admin_key_counts_from_its_device_s_newest_root_record() {
     let s = g.state();
     assert!(!s.counting.contains(&late.id()));
     assert_eq!(s.device(&pt.key.device_id()).and_then(|d| d.admin), Some(t2.hash));
+}
+
+/// A removal of a claimant that saw records of the claim's new root came
+/// after the takeover and disputes nothing, also on a member that had not
+/// counted the claim; one that saw none of them disputes it, as before.
+/// Whether a peer counts another owner comes from its path alone.
+#[test]
+fn a_removal_after_the_new_root_s_records_disputes_nothing() {
+    let (mut g, held, claim) = taken_over_group();
+    let (a, pa, t) = (k("admin a"), k("phone a"), k("admin t"));
+    let seen = g.seen();
+    assert!(seen.iter().any(|s| s.key == k("new root").hash));
+    g.rec(&t, Kind::Revoke(removal(&[a.hash, pa.hash], seen)));
+    for counted in [&[][..], &[claim.id()][..]] {
+        let s = counted_state(&g, &held, counted);
+        assert_eq!(s.roots, vec![g.root.hash, k("new root").hash], "counted {}", counted.len());
+        assert_eq!(s.stop, Stop::None);
+        assert_eq!(s.claims.iter().find(|c| c.record == claim.id()).map(|c| c.state), Some(ClaimState::Effective));
+        assert!(!s.disagrees(&[g.root.hash]) && !s.disagrees(&s.roots));
+    }
+    // Without the new root's records in its seen, it disputes the claim.
+    let (mut g, held, claim) = taken_over_group();
+    let seen: Vec<Seen> = g.seen().into_iter().filter(|s| s.key != k("new root").hash).collect();
+    g.rec(&t, Kind::Revoke(removal(&[a.hash, pa.hash], seen)));
+    let s = counted_state(&g, &held, &[]);
+    assert_eq!(s.claims.iter().find(|c| c.record == claim.id()).map(|c| c.state), Some(ClaimState::Disputed));
 }

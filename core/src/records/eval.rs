@@ -256,10 +256,6 @@ pub struct State {
     /// Every device ID a kept device record names, counting or not, a
     /// removed device's included: a new device never takes one.
     pub named: BTreeSet<DeviceId>,
-    /// This device counted a takeover that records it now holds would
-    /// have cancelled, disputed or rivalled: it and the group may
-    /// disagree about the owner, and the app asks to join again.
-    pub owner_split: bool,
     /// The takeovers' cuts of the roots before the current one: each the
     /// claim's seen entry for the root it cut.
     pub cuts: Vec<Seen>,
@@ -292,6 +288,16 @@ impl State {
     }
 
     /// Reports whether a command signed by key k may be carried out: the
+    /// Reports whether a peer whose path of roots is peer disagrees with
+    /// this device about the owner: neither path starts with the other. A
+    /// peer whose path is shorter and leads to this one's has not counted
+    /// a takeover yet, and one whose path is longer has counted one more;
+    /// only two paths that part say that the two count different owners.
+    /// The paths come from the peers in sync, never from records.
+    pub fn disagrees(&self, peer: &[KeyHash]) -> bool {
+        !(self.roots.starts_with(peer) || peer.starts_with(&self.roots))
+    }
+
     /// current root's, unless it has two histories; an admin's that is
     /// neither removed nor frozen, while the group is not stopped and the
     /// key has one history. Nothing else signs commands.
@@ -601,26 +607,14 @@ pub fn evaluate(input: &Input) -> State {
     // cuts already.
     let mut promoted: BTreeSet<KeyHash> = input.counted.iter().map(|c| c.root.hash()).collect();
     let mut cuts: BTreeMap<KeyHash, Seen> = input.counted.iter().map(|c| (c.cut.key, c.cut)).collect();
-    let mut split = false;
-    if !input.counted.is_empty() {
-        // What the records said before it compacted.
-        let (checked, failed) = check_all(input.root, &BTreeSet::new(), input.counted, input.records);
-        let none = BTreeMap::new();
-        split = evaluate_checked(input.root, checked, failed, input.held_ms, input.counted, &BTreeSet::new(), &none)
-            .owner_split;
-    }
     let mut n = 0usize;
     loop {
         let (checked, failed) = check_all(input.root, &promoted, input.counted, input.records);
-        let mut state = evaluate_checked(input.root, checked, failed, input.held_ms, input.counted, &promoted, &cuts);
-        // What a member held before it compacted still tells it that the
-        // records dispute what it counted.
-        split |= state.owner_split;
+        let state = evaluate_checked(input.root, checked, failed, input.held_ms, input.counted, &promoted, &cuts);
         let p: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
         let c: BTreeMap<KeyHash, Seen> = state.cuts.iter().map(|c| (c.key, *c)).collect();
         n = n.saturating_add(1);
         if (p == promoted && c == cuts) || n > MAX_PATH {
-            state.owner_split = split;
             return state;
         }
         promoted = p;
@@ -958,26 +952,11 @@ impl<'a> Evaluation<'a> {
         let mut path = vec![self.group_root];
         let mut cuts = BTreeMap::new();
         let mut earlier = Vec::new();
-        let mut split = false;
         loop {
             let cur = *path.last().unwrap_or(&KeyHash::default());
             let step = match self.counted_claim(&path, counted) {
                 Some(c) => {
-                    let cut = c.cut;
-                    // What the records alone would decide, to know whether
-                    // they now dispute what the device counted.
-                    let mut plain = Epoch::new(self, path.clone(), cuts.clone());
-                    let decided = plain.decide_claims(held_ms);
-                    let id = c.claim;
-                    let root = Some(c.root.hash());
-                    split |= plain.claims.iter().any(|cl| {
-                        cl.record == id
-                            && matches!(
-                                cl.state,
-                                ClaimState::Cancelled | ClaimState::Competing | ClaimState::Disputed | ClaimState::Void
-                            )
-                    }) || decided.is_some_and(|(next, _)| Some(next) != root);
-                    cuts.insert(cur, cut);
+                    cuts.insert(cur, c.cut);
                     let mut ep = Epoch::new(self, path.clone(), cuts.clone());
                     let step = ep.decide_counted(c);
                     earlier.append(&mut ep.claims);
@@ -1005,7 +984,6 @@ impl<'a> Evaluation<'a> {
                 None => {
                     earlier.append(&mut ep.claims);
                     ep.claims = earlier;
-                    ep.split = split;
                     return ep;
                 }
             }
@@ -1064,8 +1042,6 @@ struct Epoch<'e, 'a> {
     stop_full: bool,
     pending: Option<KeyHash>,
     settings: Settings,
-    /// The device counted a claim that the records alone now dispute.
-    split: bool,
     /// The other key of each admin's device (`with_pair`).
     pairs: BTreeMap<KeyHash, Vec<KeyHash>>,
     /// Admin keys a newer root record of their device no longer names,
@@ -1103,7 +1079,6 @@ impl<'e, 'a> Epoch<'e, 'a> {
             stop_full: false,
             pending: None,
             settings: Settings::default(),
-            split: false,
             pairs: BTreeMap::new(),
             superseded: BTreeMap::new(),
         };
@@ -2085,15 +2060,22 @@ impl<'e, 'a> Epoch<'e, 'a> {
             }
         }
         // An admin's removal or freeze of a claimant that the claimant had
-        // seen voids its claim; one it had not seen disputes it.
+        // seen voids its claim; one it had not seen disputes it, unless it
+        // saw records of the claim's new root: then it came after the
+        // takeover and disputes nothing. (A writer lists a claimed root in
+        // seen only once the takeover counts there.)
         let mut disputes: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         let mut kept = Vec::new();
         for &c in &one {
             let cs = self.r(c).b().signer;
+            let new_root = self.r(c).claim().map(|(root, _)| root.hash());
             let mut void = false;
             for r in self.removals(&cs) {
+                let after = new_root.is_some_and(|n| self.of(&n).iter().any(|&j| self.e.saw(r, j)));
                 if self.e.saw(c, r) {
                     void = true;
+                } else if after {
+                    continue;
                 } else {
                     disputes.entry(c).or_default().push(r);
                 }
@@ -2450,7 +2432,6 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// The state, with the held records and those left out.
     fn finish(&self) -> State {
         let mut state = self.state();
-        state.owner_split = self.split;
         state.cuts = self.cuts.values().copied().collect();
         let admins: BTreeSet<KeyHash> = state.devices.iter().filter_map(|d| d.admin).chain(state.recovery).collect();
         let cur = state.roots.last().copied();

@@ -41,8 +41,9 @@
 //!     freeze that names one names both.
 //! 12. A takeover the device has counted is final there: its old root's
 //!     records above the claim's cut do not count, nor does a later claim
-//!     of that root's epoch rival it. When the device holds a record that
-//!     would have undone it, the state says so (`owner_split`).
+//!     of that root's epoch rival it. Whether a peer counts another owner
+//!     comes from the peers' paths of roots (`State::disagrees`), never
+//!     from records.
 //! 13. `seen` names each signer's head with its seq and record ID, and a
 //!     takeover's cut is the claim's entry for the old root: a record at
 //!     or below a seen seq counts as seen only on the chain ending at that
