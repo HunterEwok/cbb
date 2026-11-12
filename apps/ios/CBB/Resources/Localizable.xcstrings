@@ -2117,52 +2117,6 @@
         }
       }
     },
-    "Amber": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "كهرماني"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ámbar"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ענבר"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "अंबर"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Янтарь"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kahawia"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "琥珀色"
-          }
-        }
-      }
-    },
     "An admin muted this phone until %@: its copies stay on it.": {
       "localizations": {
         "ar": {
@@ -2573,6 +2527,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "整理设备"
+          }
+        }
+      }
+    },
+    "Art Deco": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "آرت ديكو"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Art déco"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ארט דקו"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आर्ट डेको"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ар-деко"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Art Deco"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "装饰艺术"
           }
         }
       }
@@ -3037,6 +3037,52 @@
         }
       }
     },
+    "Blueprint": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مخطط"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plano"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שרטוט"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लूप्रिंट"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чертёж"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ramani"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "蓝图"
+          }
+        }
+      }
+    },
     "Board": {
       "localizations": {
         "ar": {
@@ -3450,6 +3496,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消重启或关机"
+          }
+        }
+      }
+    },
+    "Chalkboard": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سبورة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pizarra"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לוח גיר"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लैकबोर्ड"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доска"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ubao"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑板"
           }
         }
       }
@@ -4692,52 +4784,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "复制内容后打开 CBB，它就会发到你的其他设备。在“设置”>“CBB”中把“从其他 App 粘贴”设为“允许”，这样 iOS 就不会每次询问。"
-          }
-        }
-      }
-    },
-    "Coral": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مرجاني"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Coral"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "אלמוג"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "मूँगिया"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Коралл"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Matumbawe"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "珊瑚色"
           }
         }
       }
@@ -6628,48 +6674,48 @@
         }
       }
     },
-    "Graphite": {
+    "Glass": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "غرافيت"
+            "value": "زجاج"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Grafito"
+            "value": "Cristal"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "גרפיט"
+            "value": "זכוכית"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "ग्रेफ़ाइट"
+            "value": "काँच"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Графит"
+            "value": "Стекло"
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Grafiti"
+            "value": "Kioo"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "石墨"
+            "value": "玻璃"
           }
         }
       }
@@ -6716,6 +6762,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "群组"
+          }
+        }
+      }
+    },
+    "Hardware": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جهاز"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instrumento"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מכשיר"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यंत्र"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прибор"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仪器"
           }
         }
       }
@@ -7594,6 +7686,52 @@
         }
       }
     },
+    "It can then add and remove devices, and take the group over if this phone is lost.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيتمكن بعدها من إضافة الأجهزة وإزالتها، ومن تولّي المجموعة إذا ضاع هذا الهاتف."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Así podrá añadir y quitar dispositivos, y quedarse con el grupo si se pierde este teléfono."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אז הוא יוכל להוסיף ולהסיר מכשירים, ולקחת את הקבוצה אם הטלפון הזה יאבד."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फिर वह डिवाइस जोड़ और हटा सकेगा, और यह फ़ोन खो जाए तो ग्रुप अपने हाथ में ले सकेगा।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тогда он сможет добавлять и удалять устройства, а если этот телефон потеряется, забрать группу себе."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kisha itaweza kuongeza na kuondoa vifaa, na kuchukua kikundi simu hii ikipotea."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "之后它可以添加和移除设备，如果这部手机丢了，还能接管群组。"
+          }
+        }
+      }
+    },
     "It goes where %@'s keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.": {
       "localizations": {
         "ar": {
@@ -8376,98 +8514,6 @@
         }
       }
     },
-    "Join a group as an admin": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الانضمام إلى مجموعة كمشرف"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unirse a un grupo como administrador"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הצטרפות לקבוצה כמנהל"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "एडमिन के रूप में समूह से जुड़ें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Войти в группу как админ"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jiunge na kikundi kama msimamizi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "以管理员身份加入群组"
-          }
-        }
-      }
-    },
-    "Join as an admin": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الانضمام كمشرف"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unirse como administrador"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הצטרפות כמנהל"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "एडमिन के रूप में जुड़ें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Войти как админ"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jiunge kama msimamizi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "以管理员身份加入"
-          }
-        }
-      }
-    },
     "Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.": {
       "localizations": {
         "ar": {
@@ -9158,48 +9204,48 @@
         }
       }
     },
-    "Lime": {
+    "Liquid Glass": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ليموني"
+            "value": "زجاج سائل"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lima"
+            "value": "Cristal líquido"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ליים"
+            "value": "זכוכית נוזלית"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "नींबू"
+            "value": "तरल काँच"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Лайм"
+            "value": "Жидкое стекло"
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ndimu"
+            "value": "Kioo kiowevu"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "青柠"
+            "value": "液态玻璃"
           }
         }
       }
@@ -9802,52 +9848,6 @@
         }
       }
     },
-    "Make a computer an admin": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جعل حاسوب مشرفًا"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hacer administrador a un ordenador"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הפיכת מחשב למנהל"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "किसी कंप्यूटर को एडमिन बनाएँ"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сделать компьютер админом"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fanya kompyuta kuwa msimamizi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "让电脑成为管理员"
-          }
-        }
-      }
-    },
     "Make a computer at home the base, in its advanced settings.": {
       "localizations": {
         "ar": {
@@ -9890,6 +9890,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "在家中某台电脑的高级设置中，将它设为主站。"
+          }
+        }
+      }
+    },
+    "Make a device an admin": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جعل جهاز مشرفًا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer administrador a un dispositivo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפיכת מכשיר למנהל"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी डिवाइस को एडमिन बनाएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать устройство админом"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fanya kifaa kuwa msimamizi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让设备成为管理员"
           }
         }
       }
@@ -10580,52 +10626,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "菜单"
-          }
-        }
-      }
-    },
-    "Midnight": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "منتصف الليل"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Medianoche"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "חצות"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "आधी रात"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Полночь"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Usiku wa manane"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "午夜"
           }
         }
       }
@@ -12240,52 +12240,6 @@
         }
       }
     },
-    "Ocean": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "محيط"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Océano"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "אוקיינוס"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "सागर"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Океан"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bahari"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "海洋"
-          }
-        }
-      }
-    },
     "Off": {
       "localizations": {
         "ar": {
@@ -12788,52 +12742,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "在群组的中心节点上运行 cbb invite，并通过你信任的渠道发送它生成的文件。在新设备上用该文件运行 cbb pair -invite。"
-          }
-        }
-      }
-    },
-    "On the group's root phone, tap + and scan this code: only the root adds a phone as an admin. Keep this screen open.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "على الهاتف الجذر للمجموعة، اضغط + وامسح هذا الرمز: الجذر وحده يضيف هاتفًا كمشرف. أبقِ هذه الشاشة مفتوحة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En el teléfono raíz del grupo, toca + y escanea este código: solo la raíz añade un teléfono como administrador. Mantén esta pantalla abierta."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בטלפון השורש של הקבוצה, הקישו על + וסרקו את הקוד הזה: רק השורש מוסיף טלפון כמנהל. השאירו את המסך הזה פתוח."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "समूह के रूट फ़ोन पर + दबाएँ और यह कोड स्कैन करें: केवल रूट ही किसी फ़ोन को एडमिन के रूप में जोड़ता है। यह स्क्रीन खुली रखें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "На корневом телефоне группы нажмите + и отсканируйте этот код: добавить телефон админом может только корень. Не закрывайте этот экран."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kwenye simu ya mzizi ya kikundi, gusa + na uchanganue msimbo huu: mzizi pekee ndio huongeza simu kama msimamizi. Acha skrini hii wazi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在群组的根手机上轻点 + 并扫描此代码：只有根能将手机添加为管理员。请保持此屏幕打开。"
           }
         }
       }
@@ -14168,6 +14076,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "将相机对准邀请的二维码。"
+          }
+        }
+      }
+    },
+    "Precise": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دقيق"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preciso"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מדויק"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सटीक"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Точный"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sahihi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "精确"
           }
         }
       }
@@ -16196,6 +16150,52 @@
         }
       }
     },
+    "Retro": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ريترو"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retro"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "רטרו"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रेट्रो"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ретро"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zamani"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复古"
+          }
+        }
+      }
+    },
     "Retro computer": {
       "localizations": {
         "ar": {
@@ -16334,52 +16334,6 @@
         }
       }
     },
-    "Rose": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "وردي"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rosa"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ורוד"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "गुलाबी"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Роза"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Waridi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "玫瑰"
-          }
-        }
-      }
-    },
     "Router": {
       "localizations": {
         "ar": {
@@ -16422,52 +16376,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "路由器"
-          }
-        }
-      }
-    },
-    "Ruby": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ياقوتي"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rubí"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "אודם"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "माणिक"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Рубин"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rubi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "红宝石"
           }
         }
       }
@@ -17714,6 +17622,52 @@
         }
       }
     },
+    "Soft": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ناعم"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suave"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "רך"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कोमल"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Мягкий"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laini"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "柔和"
+          }
+        }
+      }
+    },
     "Something in CBB broke. It started again.": {
       "localizations": {
         "ar": {
@@ -18032,6 +17986,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "严格网络"
+          }
+        }
+      }
+    },
+    "Swiss": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سويسري"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suizo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שווייצרי"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्विस"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Швейцарский"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uswisi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "瑞士"
           }
         }
       }
@@ -19186,52 +19186,6 @@
         }
       }
     },
-    "Teal": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أزرق مخضر"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verde azulado"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "טורקיז"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "हरा-नीला"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Бирюза"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kijani-bluu"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "青色"
-          }
-        }
-      }
-    },
     "Technical details": {
       "localizations": {
         "ar": {
@@ -19283,7 +19237,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الطرفية"
+            "value": "طرفية"
           }
         },
         "es": {

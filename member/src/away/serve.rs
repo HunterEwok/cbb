@@ -274,6 +274,14 @@ impl Away {
         if self.serving.lock().unwrap().is_some() {
             return;
         }
+        // The keys for the server credentials' periods are made before the
+        // hub listens: made just after, at the run loop's first check,
+        // rotate_hub_key would end the first clients' connections to give
+        // them the new offer, and a client tries the hubs above this one,
+        // which may be off, before this one again.
+        self.rotate_hub_key(node);
+        let fresh = self.st.lock().unwrap().clone();
+        let st = fresh.as_ref().unwrap_or(st);
         match self.start_hub(node, st) {
             Ok(s) => {
                 *self.serving.lock().unwrap() = Some(s);
@@ -442,6 +450,8 @@ impl Away {
         let mut cur = self.st.lock().unwrap();
         let Some(st) = cur.as_mut() else { return };
         let mut next = st.clone();
+        // Only a hub that serves has clients to give the new offer to.
+        let serving = self.serving.lock().unwrap().is_some();
         let (changed, switched) = match next.rotate(&period, crate::uptime::wall_ms(), ahead) {
             Ok(r) => r,
             Err(e) => {
@@ -455,7 +465,7 @@ impl Away {
         // The hub starts again with the new key before the state says so, so
         // a state on disk never names a key the hub does not serve with yet;
         // a hub that stops in between switches again at its next check.
-        if switched && self.serving.lock().unwrap().is_some() {
+        if switched && serving {
             (self.log)("cbb: the hub serves with its key for the new period from now on");
             self.stop_serving();
         }
@@ -466,7 +476,9 @@ impl Away {
         *st = next;
         drop(cur);
         // The clients take the new offer as they connect again.
-        node.reconnect();
+        if serving {
+            node.reconnect();
+        }
     }
 
     /// Stops the hub, with every connection through it.

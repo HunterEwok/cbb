@@ -545,6 +545,11 @@
       "valid": true
     },
     {
+      "name": "a hash whose base64 has bits after its last byte",
+      "body": "eyJwYXJ0cyI6W3sicGF0aCI6ImYiLCJzaGEyNTYiOiJCd2NIQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIQndkPSIsInNpemUiOjB9XSwic2l6ZSI6MH0=",
+      "valid": false
+    },
+    {
       "name": "a file of negative zero bytes",
       "body": "eyJwYXJ0cyI6W3sicGF0aCI6ImYiLCJzaGEyNTYiOiJCd2NIQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIQndjPSIsInNpemUiOi0wfV0sInNpemUiOjB9",
       "valid": false

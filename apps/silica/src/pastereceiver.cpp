@@ -95,12 +95,13 @@ void PasteReceiver::carryOut(const QJsonObject &checked)
     const QString text = checked.value(QStringLiteral("clean")).toString();
     const QString raw = body.value(QStringLiteral("text")).toString();
     const bool withEnter = body.value(QStringLiteral("enter")).toBool();
-    const bool secret = body.value(QStringLiteral("kind")).toString() == QStringLiteral("secret");
+    const QString kind = body.value(QStringLiteral("kind")).toString();
+    const bool secret = kind == QStringLiteral("secret");
     QString name;
     if (verified) {
         for (const QVariant &d : m_member->devices()) {
             const QVariantMap m = d.toMap();
-            if (m.value(QStringLiteral("device")).toString() == by)
+            if (m.value(QStringLiteral("id")).toString() == by)
                 name = m.value(QStringLiteral("name")).toString();
         }
     }
@@ -109,9 +110,9 @@ void PasteReceiver::carryOut(const QJsonObject &checked)
     bool refused = true;
     if (!on()) {
         reason = QStringLiteral("remote paste is off on this device; its user turns it on in the app's settings");
-    } else if (body.value(QStringLiteral("kind")).toString() == QStringLiteral("media")) {
-        // Its text is the event ID of a copy, which the keyboard must not type.
-        reason = QStringLiteral("this phone pastes text only: its Bluetooth keyboard cannot paste images or files");
+    } else if (kind == QStringLiteral("media")) {
+        // Its text names a copy of images or files, which no keys type.
+        reason = QStringLiteral("this device types text only, through its Bluetooth keyboard; it pastes no pictures or files");
     } else if (withEnter && !enter()) {
         reason = QStringLiteral("this device takes pastes without Enter only; its user allows Enter in the app's settings");
     } else if (!allow(sender, QDateTime::currentMSecsSinceEpoch())) {

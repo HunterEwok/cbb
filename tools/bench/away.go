@@ -325,9 +325,9 @@ func Relay(ctx context.Context, r *Report, inv *Inventory, devices []*Device, ti
 	defer g.end(ctx, r)
 	var met []*Device
 	for _, d := range g.members {
-		// The lite member and the container have no sync away from home
-		// without keys in files.
-		if d.OS == "linux-lite" || d.OS == "docker" {
+		// The container has no sync away from home without keys in files,
+		// and a build without the tunnel (MIPS) has none at all.
+		if d.OS == "docker" || noTunnel(ctx, d) {
 			continue
 		}
 		if r.Do("relay/P12/"+d.Name+"/on", func() error {

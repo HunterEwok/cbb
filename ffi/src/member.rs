@@ -52,6 +52,10 @@ struct StartArgs {
     /// Where the key lives: `hardware` (the default) or `file`.
     #[serde(default = "hardware")]
     key_store: String,
+    /// The SubjectPublicKeyInfo of the phone's admin key, which its hellos
+    /// offer while it is no admin, for the root to make it one.
+    #[serde(with = "certs::b64::opt", default)]
+    admin_key: Option<Vec<u8>>,
     device: String,
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
@@ -158,6 +162,12 @@ struct ToArgs {
 }
 
 #[derive(Deserialize)]
+struct OfferArgs {
+    #[serde(with = "certs::b64::opt", default)]
+    key: Option<Vec<u8>>,
+}
+
+#[derive(Deserialize)]
 struct CommandArgs {
     command: Record,
     #[serde(default = "ten_seconds")]
@@ -165,7 +175,7 @@ struct CommandArgs {
 }
 
 /// What cbb_member_manage does: `action` is remove, rename, thaw,
-/// make_admin (as the root, for a computer connected), mute or unmute, for
+/// make_admin (as the root, for a phone or a computer connected), mute or unmute, for
 /// `device`; renew, which renews every certificate due; or resolve, the
 /// root's decision on an alert, which voids its `records`.
 #[derive(Deserialize)]
@@ -189,6 +199,19 @@ struct ManageArgs {
     /// With mute: how long, 0 for until an unmute.
     #[serde(default)]
     for_ms: i64,
+    /// With paste: the text, or with kind media the event ID of the
+    /// group's copy of images or files, which the phone made just before.
+    #[serde(default)]
+    text: String,
+    /// With paste: `paste` (the default) or `type`.
+    #[serde(default)]
+    mode: String,
+    /// With paste: `text` (the default), `secret` or `media`.
+    #[serde(default)]
+    kind: String,
+    /// With paste: press Enter after it.
+    #[serde(default)]
+    enter: bool,
     /// The public point of the key that signs, SEC1 uncompressed: the
     /// phone's admin key, or the root's key when it holds the root.
     #[serde(with = "certs::b64")]
@@ -479,6 +502,7 @@ impl Member {
                 os_version: a.os_version,
                 version: a.version,
                 key_store: a.key_store,
+                admin_key: a.admin_key.unwrap_or_default(),
                 state_dir: PathBuf::from(a.dir),
                 peers,
                 mdns: a.mdns,
@@ -803,6 +827,20 @@ impl Member {
                 let ca = a.ca.ok_or_else(|| Error::msg("send_admin_ca needs the admin CA"))?;
                 Ok(json!({ "sent": n.send_admin_ca(&device(&a.to)?, &ca) }))
             }
+            // The admin key the hellos offer: the phone's while it is no
+            // admin, none once it is one.
+            "offer_admin_key" => {
+                let a: OfferArgs = args(a)?;
+                n.offer_admin_key(a.key);
+                done()
+            }
+            // The admin CA of the root's admin message, checked against the
+            // offered key, this phone and the current root.
+            "take_admin_ca" => {
+                let a: OfferArgs = args(a)?;
+                n.take_admin_ca(&a.key.ok_or_else(|| Error::msg("take_admin_ca needs the admin CA"))?)?;
+                done()
+            }
             "send_tunnel" => {
                 let a: ToArgs = args(a)?;
                 let offer = a.offer.ok_or_else(|| Error::msg("send_tunnel needs the offer"))?;
@@ -996,6 +1034,17 @@ impl Member {
                 "unmute" => return order(Order::Unmute),
                 "sync_on" => return order(Order::Sync(true)),
                 "sync_off" => return order(Order::Sync(false)),
+                // Remote paste (docs/design.md, "Remote paste"): a text, or
+                // a copy of images or files the phone made just before.
+                "paste" => {
+                    let or = |s: &str, d: &str| if s.is_empty() { d.to_string() } else { s.to_string() };
+                    return order(Order::Paste {
+                        mode: or(&a.mode, "paste"),
+                        kind: or(&a.kind, "text"),
+                        text: a.text.clone(),
+                        enter: a.enter,
+                    });
+                }
                 other => return Err(Error::msg(format!("there is no action {other:?}"))),
             }
             Ok(json!({}))

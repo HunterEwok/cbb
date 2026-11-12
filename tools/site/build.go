@@ -147,7 +147,7 @@ func latestRelease(root string) (Release, error) {
 // browsers may keep it for good and still get each new version.
 func assets(root string) (map[string]string, map[string][]byte, error) {
 	names, out := map[string]string{}, map[string][]byte{}
-	for _, file := range []string{"style.css", "board.css", "theme.js", "site.js"} {
+	for _, file := range []string{"style.css", "theme.js", "site.js"} {
 		data, err := os.ReadFile(filepath.Join(root, "static", file))
 		if err != nil {
 			return nil, nil, err
@@ -251,8 +251,8 @@ var funcs = template.FuncMap{
 		b, err := json.Marshal(v)
 		return template.JS(b), err
 	},
-	// fit is the class that sizes a label to its place on a drawing: a
-	// long name is written smaller, so it stays on the drawing in every
+	// fit is the class that sizes a chalk label to its place on a board: a
+	// long name is written smaller, so it stays on the board in every
 	// language.
 	"fit": func(v any) string {
 		switch n := utf8.RuneCountInString(fmt.Sprint(plain(v))); {
@@ -370,7 +370,7 @@ func render(root string) (map[string][]byte, []*translator, error) {
 		}
 		soon = append(soon, line)
 		parse := func(name string) (*template.Template, error) {
-			// chalk.html holds the line drawings, written by site/chalk.js.
+			// chalk.html holds the chalk drawings, written by site/chalk.js.
 			return template.New("layout.html").Funcs(funcs).Funcs(perLang).Funcs(asset).ParseFiles(
 				filepath.Join(root, "templates", "layout.html"),
 				filepath.Join(root, "templates", "chalk.html"),

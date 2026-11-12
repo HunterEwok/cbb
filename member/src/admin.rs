@@ -326,6 +326,17 @@ pub fn become_admin(dir: &Path, node: &Node, der: &[u8]) -> Result<()> {
 /// level waits for that, as Go does both under one lock.
 static TAKEOVER: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// Holds off a takeover that would finish while the caller signs with the
+/// key signer reads. finish_takeover saves the claim's key as the root key
+/// before it adds the records the new root starts with, so a signer read in
+/// between would sign as the new root ahead of those records, at a number
+/// they take too: two histories of the root key, which stop the group.
+/// What signs on its own, as the service's loop does, holds this from
+/// reading the signer until its records are added.
+pub fn no_takeover_finishing() -> std::sync::MutexGuard<'static, ()> {
+    TAKEOVER.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// The group's key level, hardware when no record sets it, once a takeover
 /// that is finishing has signed the settings again.
 fn settled_level(node: &Node) -> String {
@@ -395,6 +406,7 @@ static ADMIN_CAS_SENT: Mutex<std::collections::BTreeMap<String, crate::takeover:
 /// ADMIN_CAS_SENT remembers, by device, the root each got one from.
 pub fn renew_admin_cas(dir: &Path, node: &Node) {
     let sent = &ADMIN_CAS_SENT;
+    let _settled = no_takeover_finishing();
     let ident = node.identity();
     let Ok(Some(s)) = signer(dir, &ident) else { return };
     if !s.root {
@@ -819,11 +831,11 @@ impl Admin<'_> {
         Ok(who)
     }
 
-    /// Makes the computer target names an admin, on the group's root, as
-    /// Go's makeAdmin: the admin CA for the admin key its hello offers, its
-    /// device record naming it, and the admin message. A computer whose
-    /// keys sit in a file becomes one only with allow_file_key. It returns
-    /// its name.
+    /// Makes the phone or computer target names an admin, on the group's
+    /// root, as Go's makeAdmin: the admin CA for the admin key its hello
+    /// offers, its device record naming it, and the admin message. A
+    /// computer whose keys sit in a file becomes one only with
+    /// allow_file_key. It returns its name.
     pub fn make_admin(&self, target: &str, allow_file_key: bool) -> Result<String> {
         let d = find_device(self.node, target)?;
         let root_only = || {
@@ -838,9 +850,10 @@ impl Admin<'_> {
         if d.id == self.me() {
             return Err(Error::msg("this device is the group's root, which is more than an admin"));
         }
-        if !d.can(authority::CAP_ADMIN) {
+        let phone = d.role == authority::ROLE_PHONE;
+        if !phone && !d.can(authority::CAP_ADMIN) {
             return Err(Error::msg(format!(
-                "{} cannot hold an admin key; only a member with the cap admin can be an admin",
+                "{} cannot hold an admin key; only a phone or a member with the cap admin can be an admin",
                 d.name
             )));
         }
@@ -865,7 +878,24 @@ impl Admin<'_> {
                 d.name
             )));
         };
-        let (store, kind, proof) = if d.store == "proven" {
+        // A key another device holds, or a root's, would give its holder a
+        // second device's admin CA.
+        let hash = cbb_core::certs::sha256(&admin_key);
+        let taken = {
+            let rs = self.node.records();
+            let rs = rs.lock().unwrap();
+            rs.devices().iter().any(|o| o.admin_key == Some(hash) || o.keys.contains(&hash))
+                || rs.state().roots.contains(&Hash(hash))
+        };
+        if taken {
+            return Err(Error::msg(format!(
+                "the admin key that {} offers belongs to another key of the group",
+                d.name
+            )));
+        }
+        // A phone's keys stay where its record says (hardware); a
+        // computer's are where its hello says.
+        let (store, kind, proof) = if d.store == "proven" || phone {
             (d.store.clone(), d.kind.clone(), d.proof.clone())
         } else {
             (
@@ -915,6 +945,10 @@ impl Admin<'_> {
                 os: d.os.clone(),
                 key: Some(Hash(d.key)),
                 admin: Some(admin),
+                // A phone admin has every power, as one admitted as an
+                // admin; a computer's come from computer_admin_powers.
+                powers: if phone { authority::POWERS.iter().map(|p| (*p).into()).collect() } else { Vec::new() },
+                commands: if phone { authority::COMMANDS.iter().map(|c| (*c).into()).collect() } else { Vec::new() },
                 store,
                 hardware: kind,
                 proof,

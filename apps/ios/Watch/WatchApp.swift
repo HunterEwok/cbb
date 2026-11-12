@@ -13,8 +13,8 @@ struct WatchApp: App {
         WindowGroup {
             WatchHome()
                 .environmentObject(model)
-                .environment(\.palette, AccentChoice.pair(model.state.color).dark)
-                .tint(AccentChoice.pair(model.state.color).dark.accent)
+                .environment(\.palette, ThemeChoice.theme(model.state.theme).dark)
+                .tint(ThemeChoice.theme(model.state.theme).dark.accent)
         }
     }
 }

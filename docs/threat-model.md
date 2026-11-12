@@ -41,7 +41,11 @@ clipboards, which any program of the signed-in user may read.
 
 1. **The device.** The service runs as its own user; the admin socket admits only the
    computer's administrators, the control socket root and the `cbb` group. A
-   phone's keys are behind its secure hardware and biometrics.
+   phone's keys are behind its secure hardware and biometrics; on Aurora OS the root or
+   admin key is behind a PIN of the app's own, which the TEE checks (D-94). Aurora gives an
+   app no trusted input, so the PIN passes through the app's memory on its way to the TEE and
+   is wiped at once; code that runs inside the app, as root or a forged build, could see it,
+   but could as well show a false PIN dialog. The PIN stops whoever holds the unlocked phone.
 2. **The home network.** Every connection between members is mutual TLS 1.3 under the
    group's certificates, on the member port, which takes only private, unique-local and
    link-local addresses (and on routers only the home zones' interfaces).

@@ -36,9 +36,10 @@ they look, so both apps are built to the same plan.
    waits on a screen of its own, with its group, its hub and when it expires, to be joined
    or declined, and declining sends nothing; joined, the phone shows the words the inviting
    admin compares, docs/protocol.md, section 12), and, small, **Restore with the recovery
-   key**. Admin rights come from the device that
-   admits the phone, not from a separate button. On Aurora the settings and the language are
-   in the pull-down menu, as in every Silica app, and the Start screen also has **Join a group
+   key**. A phone always joins as a member; the root makes it an admin later from the
+   phone's device page ("Make it an admin"), with the admin key its hellos offer
+   (docs/protocol.md, section 10, "Admins"). On Aurora the settings and the language are in
+   the pull-down menu, as in every Silica app, and the Start screen also has **Join a group
    as an admin**.
 2. **Home**: how many devices are online, with the two switches beside it: the **house**
    (sync on this phone: a tap turns it off or on, touching and holding it turns it off for
@@ -95,6 +96,17 @@ they look, so both apps are built to the same plan.
    its row and its page. A phone takes both commands: muted, its copies stay on it, and Home
    says so until an admin unmutes it, an admin phone itself on its own page.
 
+   **Muting from the tile**: every tile has a small button in its corner (the end of the
+   line, so on the left in Arabic and Hebrew): a 28 pt face in a 44 pt target, while the rest
+   of the tile still opens the device. On this phone's own tile it is the house: a tap turns
+   sync off until turned on again, or on. On another device's tile it shows only on an admin
+   and mutes the device for the group, or unmutes it. A long press (a right click on a
+   computer) picks the time, as the house does. Muted, the button fills with the warning
+   colour and the tile's line turns dashed; the tile shows the new state at once and goes
+   back, with the error, only when the change is refused, so it never blinks or leaves the
+   list while the command goes out. The Mac, the tray app, Android and Aurora have the same
+   button (Aurora knows another device's mute while it is connected).
+
    **Images and files** (docs/design.md, "Images and files"): the button sends an image on
    the clipboard as PNG or JPEG (HEIC and other formats are converted) and fetches a
    computer's image whole before it writes it, an image by its hash: the same image twice is
@@ -123,14 +135,17 @@ they look, so both apps are built to the same plan.
    "seen 5 min ago" otherwise, and "this phone" on its own row. The list is the group's
    device records (section 10 of [protocol.md](protocol.md)), so every app and
    `cbb status` show the same. On an admin phone, a row opens the device: rename,
-   "Make it an admin" (phones only, on the root phone), "Unfreeze" for an admin computer
+   "Make it an admin" (on the root phone), "Unfreeze" for an admin computer
    that another admin froze (design.md, "Who may remove an admin"), and "Remove", which asks once, then
    needs Face ID, the fingerprint or the passcode, and is done; removing an admin phone shows
-   the devices it had admitted, which stay. On the root phone a computer's row also offers
-   "Make it an admin" when the computer offers an admin key (docs/protocol.md, section 10,
-   "Admins"): it asks once, warns that the key is a file on the computer, needs
-   Face ID, and the computer then adds and removes devices with `cbb pair` and
-   `cbb remove`. If the removed phone held the root, this phone
+   the devices it had admitted, which stay. On the root phone the row of a phone or a computer
+   that is no admin offers "Make it an admin" when its hellos offer an admin key
+   (docs/protocol.md, section 10, "Admins"): it asks once, for a computer whose key is a file
+   it warns of that, needs Face ID, and the device then adds and removes devices (a computer
+   with `cbb pair` and `cbb remove`). A phone offers its admin key from the moment it is in
+   the group, and takes the admin CA from the root's admin message once it names its key, its
+   device and the current root; a TV offers none. On a computer that is the root, the Mac app
+   and the tray offer the same for a phone. If the removed phone held the root, this phone
    takes it over in the same step. On an admin phone a connected computer's house turns its sync
    on or off: the phone signs a `mode` command (docs/protocol.md, section 15) after
    Face ID or the fingerprint and sends it to that computer, which answers done or why it refused.
@@ -157,9 +172,10 @@ they look, so both apps are built to the same plan.
    after which only the device's own user turns them on again. A phone that is not an admin shows the list without
    actions and says which phones are admins.
 5. **Settings**, the same on the iPhone, Android and Aurora: first the basic ones, the theme
-   (System, Dark or Light) as icons with the language in a row and the ten colours, without
+   (System, Dark or Light) as icons with the language in a row and the ten themes, without
    a heading, the notifications, the watch, the recovery key on the root, the switch
-   "Advanced settings", leaving the group, and about (seven taps on the version show the
+   "Advanced settings", the admin PIN on Aurora ("The admin PIN on Aurora" below), leaving
+   the group, and about (seven taps on the version show the
    switch "Show error details", which puts the error itself under each error message; it is
    on in debug builds, and the launch argument or extra `ShowErrorDetails` sets it too).
    The advanced ones: why it does not sync (below), away from home (the hub, moving it to a
@@ -449,9 +465,10 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   problem, a group, another device online), which macOS draws white or black for the menu
   bar. The app makes itself a login item on its first run (`SMAppService`); Settings, "Open
   at sign-in", turns that off.
-- **Settings**: the appearance as icons, the colour and the language in a row (the phones'
-  `Theme.swift` and `Tokens.swift`, shared; the language through `AppleLanguages`, shown once
-  the app opens again), "Open at sign-in", "Advanced settings" (whether the app may press
+- **Settings**, a sheet on the window (the menu bar item's "Settings…" and Command-comma
+  open the window with it): the appearance as icons, the colour and the language in a row
+  (the phones' `Theme.swift` and `Tokens.swift`, shared; the language through
+  `AppleLanguages`, shown once the app opens again), "Open at sign-in", "Advanced settings" (whether the app may press
   keys for remote paste, the recovery key), and about: the version, where seven clicks show
   error details (on in debug builds, off in release ones, and the `ShowErrorDetails` default
   either way).
@@ -498,7 +515,7 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   the second; Cancel removes the first file, and cbb ends the invitation.
 
 Each release carries it in `cbb-X.Y.Z.pkg` with the service, signed with the Developer ID and
-notarized (docs/maintaining.md, "Signing for macOS"). CI's `Mac app` job builds it and runs
+notarized (docs/maintaining.md, "Signing for macOS"). CI's `test and build (macOS), homebrew, Mac app` job builds it and runs
 its tests, signed ad hoc, and installs and removes the package. It runs on a real Mac when built with a
 developer's own team (`apps/ios/device.sh`): the devices, the menu bar and remote paste to it
 from the iPhone, at home and away from home.
@@ -534,7 +551,7 @@ service and its clipboard agent keep syncing without it.
   in the same three states, single-colour: on Windows a black and a white ICO, which the
   system switches with the taskbar's theme; on Linux a white PNG, black when the desktop
   portal says the user prefers a light look (`color-scheme`), read once at start.
-- **Settings**: the appearance and the language as icons and a list, the ten colours
+- **Settings**: the appearance and the language as icons and a list, the ten themes
   (`frontend/tokens.js`, which `go run ./tools/tokens` writes with the Swift and Kotlin
   tokens), "Open at sign-in" (on Linux an entry `cbb-tray.desktop` with `Hidden=true` in the
   user's autostart folder, on Windows the user's `StartupApproved\Run` value, as the Task
@@ -813,6 +830,47 @@ The tests run against a fake Android TV (`androidtv/atvtest`), a fake Apple TV
 (`appletv/atvtest`) and a fake Roku; the Go remotes are not yet tried on real TVs. Samsung
 and LG follow (roadmap item 25).
 
+## The admin PIN on Aurora
+
+Aurora OS 5.1.5 gives a regular app no way to have the user confirm an action: its
+authentication service (authd) is outside the app's sandbox, the phone's unlock code is not
+offered, and the fingerprint has no API (a probe on the R570E, and Open Mobile Platform's
+answer of 2026-11-09). So the Aurora app asks for a PIN of its own wherever the iPhone asks
+for Face ID (D-94, docs/protocol.md section 3):
+
+- **The keys.** The member key stays in the token QCA initializes for the app (label "CBB",
+  PIN `0000`), so sync, copies and the keyboard need no PIN. The app makes that token only on its first
+  run; once it saw the token, or while the phone is in a group, a TEE that does not answer is an
+  error the app retries and shows, never a reason to make the token again, which would wipe the
+  member key. The root or admin key sits in a
+  second token of the app, the TEE's slot "APP", which the app initializes itself
+  (`src/platform/keystore_tee.cpp`): its user PIN is the user's, its SO PIN starts as the same
+  PIN and becomes a random one, kept nowhere, once the PIN has been entered right. Another app
+  sees neither token.
+- **When it asks.** Before the admin key is made or signs: making a group, or joining a
+  group, which makes the admin key the member's hellos offer the root for its "Make an
+  admin" (docs/protocol.md, section 10, "Admins"); the first time it sets the PIN (typed
+  twice, at least four digits). A user who cancels it joins as a member whose hellos offer
+  no key, and Settings' "Get ready to be an admin" makes it later. Then adding a device, an action on a device's
+  page, the root's decision on an alert, the takeover and its finish. The app hands the PIN
+  to the TEE and wipes it at once; the token then stays logged in for five minutes (as the iPhone app trusts one Face ID) after its
+  last use and is logged out when the app leaves the screen; renewals of the members'
+  certificates go only while it is logged in. The dialog asks not to reuse the phone's unlock
+  code. Settings change it ("Change the
+  admin PIN"), after the current one.
+- **Wrong PINs.** The TEE counts them; the dialog says how many of the seven tries are left.
+  The seventh locks the token for good: nothing unlocks it, the phone stays in its group as a
+  member, Settings say so, and an admin phone again needs CBB installed afresh and joined as a
+  new device. A lost root is taken over by an admin phone or with the recovery key.
+- **Leaving the group** deletes the admin key while its token is logged in; otherwise the key stays,
+  useless without the PIN, and the next admin key replaces it.
+- **An admin phone from before the PIN** keeps its admin key in the QCA token, and the group's
+  root certified that key; the app makes no new key beside it but asks to leave the group and
+  join again, which sets the PIN, for the root to make the phone an admin again.
+- **The root's admin CA** comes in its `admin` message once the root made the phone an admin;
+  the member checks it (ffi's `take_admin_ca`) before the app keeps it in `member.json`.
+- Sailfish OS and Aurora 4 keep their keys in files (level `file`) and ask for no PIN.
+
 ## Collections and the order of the tiles
 
 The user can put the device tiles in their own order and gather devices into
@@ -1039,19 +1097,33 @@ the app on real devices.
 
 ## Themes
 
-- Colours, type, spacing and corner radii are design tokens, defined once in
-  `apps/design/tokens.json` and generated into Swift and Kotlin, so both apps match.
-- One style, **Glass**, in ten colours: Terminal (the default, green), Midnight, Amber,
-  Ocean, Teal, Coral, Rose, Lime, Graphite and Ruby. Each colour has a dark and a light
-  palette; the theme is System (the system's light or dark mode), Dark or Light.
-- `tokens.json` holds each colour's accent for dark and light and the two neutral bases; the
-  generator mixes a little of the accent into the background and the surfaces, so adding a
-  colour is one line of data.
+- Eleven themes, each a full set of design tokens defined once in `apps/design/tokens.json` and
+  generated into Swift, Kotlin and JavaScript, so every app matches: **Chalkboard** (the
+  default, the look of the website: chalk on slate over felt in the dark, graphite on pale
+  slate over sand-coloured cloth in the light, walnut lines, a faint grid), **Blueprint** (a
+  drawing sheet, blue lines on white or a blueprint in the dark, IBM Plex),
+  **Precise**, **Glass** (the look of the first versions: a deep background, a glow of the
+  accent, glass tiles), **Soft**, **Swiss**, **Hardware**, **Art Deco**, **Liquid Glass**,
+  **Terminal** and **Retro**.
+- A theme is its style (the faces, the corners of buttons, cards, tiles and chips, the width
+  of its lines, its material: flat, glass, liquid or metal, whether large surfaces show a
+  grid, whether something off or waiting is dashed, whether small labels are in capitals)
+  and a palette for the dark and the light appearance. The appearance is System (the
+  system's light or dark mode), Dark or Light.
+- `tokens.json` names the default theme in one field, `default`; the generated files list it
+  first and every app starts with it, so changing the default is one word.
+- A theme draws only the app's own surfaces: the background, the tiles, the cards, the
+  lines, the type and the accent. The system's controls (switches, menus, sheets, the
+  keyboard, dialogs, Face ID) keep the system's look in every theme.
+- Glass and Liquid Glass use Liquid Glass from iOS 26 on Apple's systems; the flat themes
+  draw their surface with their line instead. Android has no Liquid Glass: its glass tiles
+  are the palette's glass colour with a hairline, over the same glow of the accent.
 - On Android 12 and later a further choice, **Wallpaper** (Material You), takes the colours
-  from the wallpaper through dynamic colour, in place of one of the ten.
-- Android has no Liquid Glass: its tiles and cards are the palette's glass colour with a
-  hairline, as the iPhone app draws them before iOS 26, over the same glow of the accent.
-- Contrast meets WCAG AA for text in every palette; the generator checks it.
+  from the wallpaper through dynamic colour, in the Precise theme's shape.
+- The watches and the Live Activity take only the theme's dark colours.
+- Contrast meets WCAG AA for text in every palette, 4.5:1 on the background and on a
+  surface, the dim text, the danger colour and the accent (badges and links) included; the
+  generator checks it.
 
 ## Layout of the repository
 
@@ -1077,11 +1149,9 @@ the app on real devices.
   waits it announces itself by Bonjour (NsdManager on Android, mDNS through the core on
   Aurora) with the TXT `j=1` and its fingerprint (`Discovery.joinerTXT`), so that a computer
   of the group admits it by the digits typed there (`cbb pair -qr`). An admin phone scans it
-  in "Add a device". The screen has two buttons on both phones (docs/protocol.md, section 6): "Join"
-  ("I already use CBB on another phone" on the iPhone), answered by any admin of the group,
-  which admits the phone as a plain member, and "Join as an admin", which makes an admin key
-  and offers it, answered only by the root phone, which makes the phone an admin. Both
-  phones make the group, admit and join through the Rust core's admission (each kit's
+  in "Add a device". The Start screen has one button for it on every phone, "Join a group",
+  answered by any admin of the group, which admits the phone as a member; the root makes it
+  an admin later ("Make it an admin" on its device page). The phones make the group, admit and join through the Rust core's admission (each kit's
   `CorePairing` over ffi's `cbb_group_new`, `cbb_admit_*` and `cbb_join_*`; the Swift
   kit's `CorePairing.Listener` and `Connection` are the plain TCP sockets around it). An
   admin phone that removes the root

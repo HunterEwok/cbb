@@ -661,3 +661,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "nettest/vless.rs"]
+mod net_tests;

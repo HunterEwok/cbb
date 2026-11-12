@@ -153,6 +153,8 @@ func TestCheck(t *testing.T) {
 			want: []string{"member/src/x.rs:5: reads a test hook directly"},
 		},
 		{name: "a test hook through the guard", file: "member/src/x.rs", content: header + "fn f() {\n    crate::testbuild::env_os(\"CBB_TEST_X\");\n}\n"},
+		{name: "a Rust test module reads hooks", file: "member/src/x.rs", content: header + "fn f() {}\n\n#[cfg(all(test, target_os = \"linux\"))]\nmod tests {\n    fn t() { std::env::var_os(\"CBB_TEST_X\"); }\n}\n"},
+		{name: "a Rust test-only folder reads hooks", file: "member/src/nettest/ipv6.rs", content: header + "fn t() { std::env::var(\"CBB_TEST_X\"); }\n"},
 		{name: "the Rust guard itself", file: "member/src/testbuild.rs", content: header + "fn f() { std::env::var_os(\"CBB_TEST_X\"); }\n"},
 		{
 			name: "a Go test hook read around the guard", file: "internal/x/x.go", content: header + "package x\n\nvar v = os.Getenv(\"CBB_TEST_X\")\n",

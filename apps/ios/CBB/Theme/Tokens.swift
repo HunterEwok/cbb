@@ -4,15 +4,117 @@
 import SwiftUI
 
 enum Tokens {
-    /// The colours offered in Settings, the default first.
-    static let colors: [PalettePair] = [
-        PalettePair(
-            name: "terminal",
+    /// The themes offered in Settings, the default first.
+    static let themes: [Theme] = [
+        Theme(
+            name: "board",
+            style: ThemeStyle(
+                display: "Forum", body: "Jost", mono: "IBM Plex Mono",
+                radiusButton: 6, radiusCard: 4, radiusTile: 4, radiusChip: 3,
+                stroke: 2, material: .flat, grid: true, dashedOff: true, upperLabels: true
+            ),
+            dark: Palette(
+                dark: true,
+                background: Color(rgb: 0x0B1A20),
+                surface: Color(rgb: 0x141514),
+                grid: Color(rgb: 0x15262C),
+                line: Color(rgb: 0x8E6A44),
+                text: Color(rgb: 0xF2F0EA),
+                textDim: Color(rgb: 0xA8B9B9),
+                accent: Color(rgb: 0xD8B46A),
+                onAccent: Color(rgb: 0x1A1206),
+                danger: Color(rgb: 0xFF9B8A)
+            ),
+            light: Palette(
+                dark: false,
+                background: Color(rgb: 0xDCD3C1),
+                surface: Color(rgb: 0xECE8DF),
+                grid: Color(rgb: 0xD2C8B4),
+                line: Color(rgb: 0x8A6740),
+                text: Color(rgb: 0x2A251E),
+                textDim: Color(rgb: 0x574F43),
+                accent: Color(rgb: 0x6E4D10),
+                onAccent: Color(rgb: 0xFFF8EA),
+                danger: Color(rgb: 0x9E2A1C)
+            )
+        ),
+        Theme(
+            name: "blueprint",
+            style: ThemeStyle(
+                display: "IBM Plex Sans", body: "IBM Plex Sans", mono: "IBM Plex Mono",
+                radiusButton: 3, radiusCard: 3, radiusTile: 3, radiusChip: 2,
+                stroke: 1, material: .flat, grid: true, dashedOff: true, upperLabels: true
+            ),
+            dark: Palette(
+                dark: true,
+                background: Color(rgb: 0x0B2545),
+                surface: Color(rgb: 0x0D2A4F),
+                grid: Color(rgb: 0x163A63),
+                line: Color(rgb: 0x3E6E99),
+                text: Color(rgb: 0xE6F0FF),
+                textDim: Color(rgb: 0x9DB8DA),
+                accent: Color(rgb: 0x7FD1FF),
+                onAccent: Color(rgb: 0x0B2545),
+                danger: Color(rgb: 0xFF9B8A)
+            ),
+            light: Palette(
+                dark: false,
+                background: Color(rgb: 0xF7FAFF),
+                surface: Color(rgb: 0xFFFFFF),
+                grid: Color(rgb: 0xE1EAF6),
+                line: Color(rgb: 0x8FAED3),
+                text: Color(rgb: 0x0B2545),
+                textDim: Color(rgb: 0x3E5A80),
+                accent: Color(rgb: 0x0B5CAD),
+                onAccent: Color(rgb: 0xFFFFFF),
+                danger: Color(rgb: 0xB3261E)
+            )
+        ),
+        Theme(
+            name: "precise",
+            style: ThemeStyle(
+                display: "Geist", body: "Geist", mono: "Geist Mono",
+                radiusButton: 10, radiusCard: 14, radiusTile: 14, radiusChip: 6,
+                stroke: 1, material: .flat, grid: false, dashedOff: false, upperLabels: false
+            ),
+            dark: Palette(
+                dark: true,
+                background: Color(rgb: 0x0D0F12),
+                surface: Color(rgb: 0x16191E),
+                grid: Color(rgb: 0x1C2026),
+                line: Color(rgb: 0x2A2E35),
+                text: Color(rgb: 0xECEEF5),
+                textDim: Color(rgb: 0x9EA2B0),
+                accent: Color(rgb: 0x3DFF8A),
+                onAccent: Color(rgb: 0x0D0F12),
+                danger: Color(rgb: 0xFF7A7A)
+            ),
+            light: Palette(
+                dark: false,
+                background: Color(rgb: 0xF6F7F9),
+                surface: Color(rgb: 0xFFFFFF),
+                grid: Color(rgb: 0xECEEF2),
+                line: Color(rgb: 0xDADDE3),
+                text: Color(rgb: 0x111318),
+                textDim: Color(rgb: 0x555A67),
+                accent: Color(rgb: 0x0A7A3E),
+                onAccent: Color(rgb: 0xFFFFFF),
+                danger: Color(rgb: 0xB3261E)
+            )
+        ),
+        Theme(
+            name: "glass",
+            style: ThemeStyle(
+                display: "system", body: "system", mono: "system-mono",
+                radiusButton: 20, radiusCard: 14, radiusTile: 20, radiusChip: 12,
+                stroke: 1, material: .glass, grid: false, dashedOff: false, upperLabels: false
+            ),
             dark: Palette(
                 dark: true,
                 background: Color(rgb: 0x0B1914),
                 surface: Color(rgb: 0x182D27),
                 grid: Color(rgb: 0x1B4030),
+                line: Color(rgb: 0x2A3A35),
                 text: Color(rgb: 0xECEEF5),
                 textDim: Color(rgb: 0x9EA2B0),
                 accent: Color(rgb: 0x3DFF8A),
@@ -24,6 +126,7 @@ enum Tokens {
                 background: Color(rgb: 0xE8EFEF),
                 surface: Color(rgb: 0xFFFFFF),
                 grid: Color(rgb: 0xE2EFE8),
+                line: Color(rgb: 0xD3DAD8),
                 text: Color(rgb: 0x111318),
                 textDim: Color(rgb: 0x4F5462),
                 accent: Color(rgb: 0x0A7A3E),
@@ -31,235 +134,231 @@ enum Tokens {
                 danger: Color(rgb: 0xB3261E)
             )
         ),
-        PalettePair(
-            name: "midnight",
+        Theme(
+            name: "soft",
+            style: ThemeStyle(
+                display: "Nunito", body: "Nunito", mono: "IBM Plex Mono",
+                radiusButton: 24, radiusCard: 26, radiusTile: 26, radiusChip: 14,
+                stroke: 0, material: .flat, grid: false, dashedOff: false, upperLabels: false
+            ),
             dark: Palette(
                 dark: true,
-                background: Color(rgb: 0x12111C),
-                surface: Color(rgb: 0x222233),
-                grid: Color(rgb: 0x2D2B45),
-                text: Color(rgb: 0xECEEF5),
-                textDim: Color(rgb: 0x9EA2B0),
-                accent: Color(rgb: 0x9D8CFF),
-                onAccent: Color(rgb: 0x0A0B0F),
-                danger: Color(rgb: 0xFF7A7A)
+                background: Color(rgb: 0x17162B),
+                surface: Color(rgb: 0x232142),
+                grid: Color(rgb: 0x1E1C38),
+                line: Color(rgb: 0x33315A),
+                text: Color(rgb: 0xF1EFFF),
+                textDim: Color(rgb: 0xB4B0D6),
+                accent: Color(rgb: 0xA99BFF),
+                onAccent: Color(rgb: 0x17162B),
+                danger: Color(rgb: 0xFF8FA3)
             ),
             light: Palette(
                 dark: false,
-                background: Color(rgb: 0xECEDF6),
+                background: Color(rgb: 0xEEF0FF),
                 surface: Color(rgb: 0xFFFFFF),
-                grid: Color(rgb: 0xEBE9FA),
-                text: Color(rgb: 0x111318),
-                textDim: Color(rgb: 0x4F5462),
+                grid: Color(rgb: 0xE4E6FA),
+                line: Color(rgb: 0xD4D2EC),
+                text: Color(rgb: 0x1C1B3A),
+                textDim: Color(rgb: 0x5E5C80),
                 accent: Color(rgb: 0x5B4BD6),
                 onAccent: Color(rgb: 0xFFFFFF),
-                danger: Color(rgb: 0xB3261E)
+                danger: Color(rgb: 0xB4153A)
             )
         ),
-        PalettePair(
-            name: "amber",
+        Theme(
+            name: "swiss",
+            style: ThemeStyle(
+                display: "Inter Tight", body: "Inter Tight", mono: "IBM Plex Mono",
+                radiusButton: 0, radiusCard: 0, radiusTile: 0, radiusChip: 0,
+                stroke: 2, material: .flat, grid: false, dashedOff: false, upperLabels: false
+            ),
             dark: Palette(
                 dark: true,
-                background: Color(rgb: 0x18140A),
-                surface: Color(rgb: 0x2C2519),
-                grid: Color(rgb: 0x3E3217),
-                text: Color(rgb: 0xECEEF5),
-                textDim: Color(rgb: 0x9EA2B0),
+                background: Color(rgb: 0x0A0A0A),
+                surface: Color(rgb: 0x0A0A0A),
+                grid: Color(rgb: 0x1A1A1A),
+                line: Color(rgb: 0xFFFFFF),
+                text: Color(rgb: 0xFFFFFF),
+                textDim: Color(rgb: 0xA8A8A8),
+                accent: Color(rgb: 0xFF3B4E),
+                onAccent: Color(rgb: 0x0A0A0A),
+                danger: Color(rgb: 0xFF5A6A)
+            ),
+            light: Palette(
+                dark: false,
+                background: Color(rgb: 0xFFFFFF),
+                surface: Color(rgb: 0xFFFFFF),
+                grid: Color(rgb: 0xF0F0F0),
+                line: Color(rgb: 0x111111),
+                text: Color(rgb: 0x111111),
+                textDim: Color(rgb: 0x555555),
+                accent: Color(rgb: 0xD0021B),
+                onAccent: Color(rgb: 0xFFFFFF),
+                danger: Color(rgb: 0xC4001A)
+            )
+        ),
+        Theme(
+            name: "hardware",
+            style: ThemeStyle(
+                display: "Oswald", body: "IBM Plex Sans", mono: "IBM Plex Mono",
+                radiusButton: 8, radiusCard: 10, radiusTile: 10, radiusChip: 4,
+                stroke: 1, material: .metal, grid: false, dashedOff: false, upperLabels: true
+            ),
+            dark: Palette(
+                dark: true,
+                background: Color(rgb: 0x1D1F22),
+                surface: Color(rgb: 0x2A2D32),
+                grid: Color(rgb: 0x25272B),
+                line: Color(rgb: 0x0B0C0D),
+                text: Color(rgb: 0xE9E6DF),
+                textDim: Color(rgb: 0xA29E94),
                 accent: Color(rgb: 0xFFB000),
-                onAccent: Color(rgb: 0x0A0B0F),
+                onAccent: Color(rgb: 0x17181B),
+                danger: Color(rgb: 0xFF7A5C)
+            ),
+            light: Palette(
+                dark: false,
+                background: Color(rgb: 0xDBDAD5),
+                surface: Color(rgb: 0xEEEDEA),
+                grid: Color(rgb: 0xD0CFCA),
+                line: Color(rgb: 0xA9A79F),
+                text: Color(rgb: 0x1F1F1D),
+                textDim: Color(rgb: 0x4A4843),
+                accent: Color(rgb: 0x7A4F00),
+                onAccent: Color(rgb: 0xFFFFFF),
+                danger: Color(rgb: 0x962C14)
+            )
+        ),
+        Theme(
+            name: "deco",
+            style: ThemeStyle(
+                display: "Forum", body: "Jost", mono: "IBM Plex Mono",
+                radiusButton: 2, radiusCard: 2, radiusTile: 2, radiusChip: 2,
+                stroke: 1, material: .flat, grid: false, dashedOff: false, upperLabels: true
+            ),
+            dark: Palette(
+                dark: true,
+                background: Color(rgb: 0x0B1615),
+                surface: Color(rgb: 0x102221),
+                grid: Color(rgb: 0x132826),
+                line: Color(rgb: 0x6B5E2A),
+                text: Color(rgb: 0xF2E8D0),
+                textDim: Color(rgb: 0xBBAE8C),
+                accent: Color(rgb: 0xD4AF37),
+                onAccent: Color(rgb: 0x0B1615),
+                danger: Color(rgb: 0xFF9B8A)
+            ),
+            light: Palette(
+                dark: false,
+                background: Color(rgb: 0xF6F2E8),
+                surface: Color(rgb: 0xFFFDF7),
+                grid: Color(rgb: 0xEDE7D8),
+                line: Color(rgb: 0xC4B07A),
+                text: Color(rgb: 0x14211F),
+                textDim: Color(rgb: 0x5A5444),
+                accent: Color(rgb: 0x7A5C0F),
+                onAccent: Color(rgb: 0xFFFFFF),
+                danger: Color(rgb: 0xA9341A)
+            )
+        ),
+        Theme(
+            name: "liquid",
+            style: ThemeStyle(
+                display: "system", body: "system", mono: "system-mono",
+                radiusButton: 24, radiusCard: 24, radiusTile: 24, radiusChip: 14,
+                stroke: 1, material: .liquid, grid: false, dashedOff: false, upperLabels: false
+            ),
+            dark: Palette(
+                dark: true,
+                background: Color(rgb: 0x1C1640),
+                surface: Color(rgb: 0x332D55),
+                grid: Color(rgb: 0x262050),
+                line: Color(rgb: 0x5F5A7D),
+                text: Color(rgb: 0xFFFFFF),
+                textDim: Color(rgb: 0xC9C7D6),
+                accent: Color(rgb: 0xFFFFFF),
+                onAccent: Color(rgb: 0x1C1640),
+                danger: Color(rgb: 0xFFB3C1)
+            ),
+            light: Palette(
+                dark: false,
+                background: Color(rgb: 0xEDEBFF),
+                surface: Color(rgb: 0xF6F5FF),
+                grid: Color(rgb: 0xE2DFFA),
+                line: Color(rgb: 0xFFFFFF),
+                text: Color(rgb: 0x16123A),
+                textDim: Color(rgb: 0x4A4570),
+                accent: Color(rgb: 0x3B2C8F),
+                onAccent: Color(rgb: 0xFFFFFF),
+                danger: Color(rgb: 0xB4153A)
+            )
+        ),
+        Theme(
+            name: "terminal",
+            style: ThemeStyle(
+                display: "JetBrains Mono", body: "JetBrains Mono", mono: "JetBrains Mono",
+                radiusButton: 0, radiusCard: 0, radiusTile: 0, radiusChip: 0,
+                stroke: 1, material: .flat, grid: false, dashedOff: false, upperLabels: false
+            ),
+            dark: Palette(
+                dark: true,
+                background: Color(rgb: 0x000000),
+                surface: Color(rgb: 0x020D06),
+                grid: Color(rgb: 0x0A1F12),
+                line: Color(rgb: 0x1F5F3A),
+                text: Color(rgb: 0xB6FFCB),
+                textDim: Color(rgb: 0x5FBF85),
+                accent: Color(rgb: 0x3DFF8A),
+                onAccent: Color(rgb: 0x000000),
                 danger: Color(rgb: 0xFF7A7A)
             ),
             light: Palette(
                 dark: false,
-                background: Color(rgb: 0xEFEDEC),
+                background: Color(rgb: 0xF3FAF5),
                 surface: Color(rgb: 0xFFFFFF),
-                grid: Color(rgb: 0xF1EBE0),
-                text: Color(rgb: 0x111318),
-                textDim: Color(rgb: 0x4F5462),
-                accent: Color(rgb: 0x8A5A00),
+                grid: Color(rgb: 0xE3F1E8),
+                line: Color(rgb: 0x9CC7AC),
+                text: Color(rgb: 0x08321A),
+                textDim: Color(rgb: 0x2F5E42),
+                accent: Color(rgb: 0x0A6B36),
                 onAccent: Color(rgb: 0xFFFFFF),
                 danger: Color(rgb: 0xB3261E)
             )
         ),
-        PalettePair(
-            name: "ocean",
+        Theme(
+            name: "retro",
+            style: ThemeStyle(
+                display: "Press Start 2P", body: "IBM Plex Mono", mono: "IBM Plex Mono",
+                radiusButton: 0, radiusCard: 0, radiusTile: 0, radiusChip: 0,
+                stroke: 3, material: .flat, grid: false, dashedOff: false, upperLabels: true
+            ),
             dark: Palette(
                 dark: true,
-                background: Color(rgb: 0x0C131C),
-                surface: Color(rgb: 0x1A2533),
-                grid: Color(rgb: 0x1E3045),
-                text: Color(rgb: 0xECEEF5),
-                textDim: Color(rgb: 0x9EA2B0),
-                accent: Color(rgb: 0x4DA8FF),
-                onAccent: Color(rgb: 0x0A0B0F),
-                danger: Color(rgb: 0xFF7A7A)
+                background: Color(rgb: 0x1B1B8F),
+                surface: Color(rgb: 0x000000),
+                grid: Color(rgb: 0x23239E),
+                line: Color(rgb: 0xFFFFFF),
+                text: Color(rgb: 0xFFFFFF),
+                textDim: Color(rgb: 0xC8C8FF),
+                accent: Color(rgb: 0xFFD700),
+                onAccent: Color(rgb: 0x000000),
+                danger: Color(rgb: 0xFF8A8A)
             ),
             light: Palette(
                 dark: false,
-                background: Color(rgb: 0xE8EDF4),
+                background: Color(rgb: 0xD7D7D7),
                 surface: Color(rgb: 0xFFFFFF),
-                grid: Color(rgb: 0xE2EBF5),
-                text: Color(rgb: 0x111318),
-                textDim: Color(rgb: 0x4F5462),
-                accent: Color(rgb: 0x0B5CAD),
+                grid: Color(rgb: 0xCACACA),
+                line: Color(rgb: 0x000000),
+                text: Color(rgb: 0x000000),
+                textDim: Color(rgb: 0x3A3A3A),
+                accent: Color(rgb: 0x0000C8),
                 onAccent: Color(rgb: 0xFFFFFF),
-                danger: Color(rgb: 0xB3261E)
-            )
-        ),
-        PalettePair(
-            name: "teal",
-            dark: Palette(
-                dark: true,
-                background: Color(rgb: 0x0A1818),
-                surface: Color(rgb: 0x172B2D),
-                grid: Color(rgb: 0x193B3B),
-                text: Color(rgb: 0xECEEF5),
-                textDim: Color(rgb: 0x9EA2B0),
-                accent: Color(rgb: 0x2EE6C8),
-                onAccent: Color(rgb: 0x0A0B0F),
-                danger: Color(rgb: 0xFF7A7A)
-            ),
-            light: Palette(
-                dark: false,
-                background: Color(rgb: 0xE8EFF1),
-                surface: Color(rgb: 0xFFFFFF),
-                grid: Color(rgb: 0xE0EEED),
-                text: Color(rgb: 0x111318),
-                textDim: Color(rgb: 0x4F5462),
-                accent: Color(rgb: 0x00756A),
-                onAccent: Color(rgb: 0xFFFFFF),
-                danger: Color(rgb: 0xB3261E)
-            )
-        ),
-        PalettePair(
-            name: "coral",
-            dark: Palette(
-                dark: true,
-                background: Color(rgb: 0x181111),
-                surface: Color(rgb: 0x2C2222),
-                grid: Color(rgb: 0x3E2B28),
-                text: Color(rgb: 0xECEEF5),
-                textDim: Color(rgb: 0x9EA2B0),
-                accent: Color(rgb: 0xFF8A5C),
-                onAccent: Color(rgb: 0x0A0B0F),
-                danger: Color(rgb: 0xFF7A7A)
-            ),
-            light: Palette(
-                dark: false,
-                background: Color(rgb: 0xF0ECED),
-                surface: Color(rgb: 0xFFFFFF),
-                grid: Color(rgb: 0xF5E9E4),
-                text: Color(rgb: 0x111318),
-                textDim: Color(rgb: 0x4F5462),
-                accent: Color(rgb: 0xA9441A),
-                onAccent: Color(rgb: 0xFFFFFF),
-                danger: Color(rgb: 0xB3261E)
-            )
-        ),
-        PalettePair(
-            name: "rose",
-            dark: Palette(
-                dark: true,
-                background: Color(rgb: 0x181018),
-                surface: Color(rgb: 0x2C202D),
-                grid: Color(rgb: 0x3E293B),
-                text: Color(rgb: 0xECEEF5),
-                textDim: Color(rgb: 0x9EA2B0),
-                accent: Color(rgb: 0xFF7EC8),
-                onAccent: Color(rgb: 0x0A0B0F),
-                danger: Color(rgb: 0xFF7A7A)
-            ),
-            light: Palette(
-                dark: false,
-                background: Color(rgb: 0xF0EBF1),
-                surface: Color(rgb: 0xFFFFFF),
-                grid: Color(rgb: 0xF5E5EE),
-                text: Color(rgb: 0x111318),
-                textDim: Color(rgb: 0x4F5462),
-                accent: Color(rgb: 0xA8246E),
-                onAccent: Color(rgb: 0xFFFFFF),
-                danger: Color(rgb: 0xB3261E)
-            )
-        ),
-        PalettePair(
-            name: "lime",
-            dark: Palette(
-                dark: true,
-                background: Color(rgb: 0x14190E),
-                surface: Color(rgb: 0x262C1E),
-                grid: Color(rgb: 0x343E20),
-                text: Color(rgb: 0xECEEF5),
-                textDim: Color(rgb: 0x9EA2B0),
-                accent: Color(rgb: 0xC6F432),
-                onAccent: Color(rgb: 0x0A0B0F),
-                danger: Color(rgb: 0xFF7A7A)
-            ),
-            light: Palette(
-                dark: false,
-                background: Color(rgb: 0xECEEEC),
-                surface: Color(rgb: 0xFFFFFF),
-                grid: Color(rgb: 0xEAEDE0),
-                text: Color(rgb: 0x111318),
-                textDim: Color(rgb: 0x4F5462),
-                accent: Color(rgb: 0x4E6B00),
-                onAccent: Color(rgb: 0xFFFFFF),
-                danger: Color(rgb: 0xB3261E)
-            )
-        ),
-        PalettePair(
-            name: "graphite",
-            dark: Palette(
-                dark: true,
-                background: Color(rgb: 0x17181A),
-                surface: Color(rgb: 0x292B30),
-                grid: Color(rgb: 0x3A3B40),
-                text: Color(rgb: 0xECEEF5),
-                textDim: Color(rgb: 0x9EA2B0),
-                accent: Color(rgb: 0xE6E6E6),
-                onAccent: Color(rgb: 0x0A0B0F),
-                danger: Color(rgb: 0xFF7A7A)
-            ),
-            light: Palette(
-                dark: false,
-                background: Color(rgb: 0xEAEBEE),
-                surface: Color(rgb: 0xFFFFFF),
-                grid: Color(rgb: 0xE6E6E6),
-                text: Color(rgb: 0x111318),
-                textDim: Color(rgb: 0x4F5462),
-                accent: Color(rgb: 0x2B2B2B),
-                onAccent: Color(rgb: 0xFFFFFF),
-                danger: Color(rgb: 0xB3261E)
-            )
-        ),
-        PalettePair(
-            name: "ruby",
-            dark: Palette(
-                dark: true,
-                background: Color(rgb: 0x180F13),
-                surface: Color(rgb: 0x2C1E26),
-                grid: Color(rgb: 0x3E242E),
-                text: Color(rgb: 0xECEEF5),
-                textDim: Color(rgb: 0x9EA2B0),
-                accent: Color(rgb: 0xFF6681),
-                onAccent: Color(rgb: 0x0A0B0F),
-                danger: Color(rgb: 0xFF7A7A)
-            ),
-            light: Palette(
-                dark: false,
-                background: Color(rgb: 0xF1EAEF),
-                surface: Color(rgb: 0xFFFFFF),
-                grid: Color(rgb: 0xF6E3E7),
-                text: Color(rgb: 0x111318),
-                textDim: Color(rgb: 0x4F5462),
-                accent: Color(rgb: 0xB4153A),
-                onAccent: Color(rgb: 0xFFFFFF),
-                danger: Color(rgb: 0xB3261E)
+                danger: Color(rgb: 0xB00000)
             )
         ),
     ]
-    static let radiusButton: CGFloat = 20
-    static let radiusCard: CGFloat = 14
-    static let radiusTile: CGFloat = 20
     static let spacingLarge: CGFloat = 24
     static let spacingMedium: CGFloat = 16
     static let spacingSmall: CGFloat = 8

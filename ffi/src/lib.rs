@@ -3,10 +3,9 @@
 
 //! The Rust core's one entry point as C functions (docs/core-api.md), for
 //! every program that links the core: `cbb_call`, `cbb_free` and `cbb_abi`,
-//! declared in `include/cbb_core.h`. Go links them through cgo, the Swift
-//! kit through that header and the Kotlin kit through JNA, so the phones
-//! do not write the group's rules again and none of them needs generated
-//! bindings. A request and its answer are JSON bytes, so the binding stays
+//! declared in `include/cbb_core.h`. The Swift kit links them through that
+//! header and the Kotlin kit through JNA, so the phones do not write the
+//! group's rules again and none of them needs generated bindings. A request and its answer are JSON bytes, so the binding stays
 //! one function wide and each caller decodes with its own JSON reader.
 
 // As in the core: nothing outside the tests may panic, since a panic here is
@@ -464,7 +463,8 @@ pub unsafe extern "C" fn cbb_member_call(
 
 /// Signs an admin's change to a device of the group, or a command for it
 /// (src/member.rs, manage): `request` is `{"action", "device", "name",
-/// "for_ms", "public", "admin_ca", "timeout_ms"}` and `sign` with `ctx`
+/// "for_ms", "text", "mode", "kind", "enter", "public", "admin_ca",
+/// "timeout_ms"}` and `sign` with `ctx`
 /// signs with the key `public` names, during this call only. A command
 /// waits for its result, so the app calls it off its main thread.
 ///

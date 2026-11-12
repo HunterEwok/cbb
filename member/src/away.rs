@@ -649,3 +649,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "nettest/away.rs"]
+mod net_tests;

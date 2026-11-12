@@ -33,6 +33,8 @@
 //     (version.go);
 //   - the apps' translations are what tools/strings makes of apps/l10n
 //     (l10n.go);
+//   - every job of the release workflows that reads a secret runs in the
+//     deployment environment release (secrets.go);
 //   - no compiled program (ELF, Mach-O, PE) and no file over 1 MiB is
 //     committed: build output belongs outside the repository, and a large
 //     file stays in git's history for good;
@@ -142,6 +144,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 	problems = append(problems, checkPlanned(contents)...)
 	problems = append(problems, checkAndroidVersion(contents)...)
 	problems = append(problems, checkSpecVersions(contents)...)
+	problems = append(problems, checkReleaseSecrets(contents)...)
 	problems = append(problems, checkAppTranslations(contents)...)
 	problems = append(problems, checkInstallerL10n(contents)...)
 	problems = append(problems, checkAppStrings(contents)...)
@@ -289,6 +292,10 @@ var (
 	rustHookRead = regexp.MustCompile(`env::var(_os)?\(\s*"CBB_(TEST_|RELEASE_DIR"|RELEASE_ROOTS")`)
 	goHookRead   = regexp.MustCompile(`os\.(Getenv|LookupEnv)\(\s*"CBB_(TEST_|RELEASE_DIR"|RELEASE_ROOTS")`)
 	benchOnly    = regexp.MustCompile(`(?m)^//go:build .*\bbenchtime\b`)
+	// Rust's test-only files, and the attribute that opens a test module,
+	// which by custom ends the file.
+	rustTestFile = regexp.MustCompile(`(^|/)(tests?|nettest)(/|\.rs$)|_tests?\.rs$`)
+	rustTestMod  = regexp.MustCompile(`^#\[cfg\(.*\btest\b.*\)\]$`)
 )
 
 // testHookProblems reports a program's own code that reads a test hook
@@ -297,7 +304,7 @@ func testHookProblems(name string, data []byte) []string {
 	var re *regexp.Regexp
 	switch {
 	case strings.HasSuffix(name, ".rs") && (strings.HasPrefix(name, "member/src/") || strings.HasPrefix(name, "core/src/") || strings.HasPrefix(name, "ffi/src/")):
-		if name == "member/src/testbuild.rs" {
+		if name == "member/src/testbuild.rs" || rustTestFile.MatchString(name) {
 			return nil
 		}
 		re = rustHookRead
@@ -310,7 +317,11 @@ func testHookProblems(name string, data []byte) []string {
 		return nil
 	}
 	var problems []string
-	for i, line := range strings.Split(string(data), "\n") {
+	lines := strings.Split(string(data), "\n")
+	for i, line := range lines {
+		if re == rustHookRead && rustTestMod.MatchString(line) && i+1 < len(lines) && strings.HasPrefix(lines[i+1], "mod ") {
+			break // the tests at the end of the file
+		}
 		if re.MatchString(line) {
 			problems = append(problems, fmt.Sprintf("%s:%d: reads a test hook directly; read it through the guard (member/src/testbuild.rs's env, internal/testhook), which a release build ignores", name, i+1))
 		}

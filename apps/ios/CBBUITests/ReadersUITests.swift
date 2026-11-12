@@ -52,12 +52,47 @@ final class ReadersUITests: XCTestCase {
         add(a)
     }
 
-    /// Runs Xcode's accessibility audit on the screen as it is, on what a
-    /// person can reach. Only an
+    /// Waits until the screen has stopped changing: its element tree, every
+    /// element's frame and text, the same in three snapshots in a row a
+    /// third of a second apart. A screen still laying out or animating in
+    /// gives the audit a picture of nothing a person sees, so a screen that
+    /// does not settle in 20 seconds fails rather than being audited.
+    private func settle(_ app: XCUIApplication, _ screen: String) {
+        // The tree's lines name each element by an address that can change
+        // between snapshots of the same element.
+        let address = try! NSRegularExpression(pattern: "0x[0-9a-fA-F]+")
+        func tree() -> String {
+            let d = app.debugDescription
+            return address.stringByReplacingMatches(in: d, range: NSRange(d.startIndex..., in: d), withTemplate: "")
+        }
+        let start = Date()
+        let deadline = start.addingTimeInterval(20)
+        var last = tree()
+        var same = 0
+        while Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.33)
+            let now = tree()
+            if now == last {
+                same += 1
+                if same == 2 {
+                    print("ReadersUITests: \(screen) settled in \(String(format: "%.1f", Date().timeIntervalSince(start))) s")
+                    return
+                }
+            } else {
+                same = 0
+                last = now
+            }
+        }
+        XCTFail("\(screen): the screen was still changing after 20 seconds")
+    }
+
+    /// Runs Xcode's accessibility audit on the screen once it has settled
+    /// (`settle`), on what a person can reach. Only an
     /// element of the system's own may fail it: the status bar, and the
     /// navigation bar's buttons, whose text iOS keeps from the largest
     /// sizes. Contrast is measured on the screen's picture (`contrast`).
     private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String) {
+        settle(app, screen)
         do {
             try app.performAccessibilityAudit(for: types) { issue in
                 guard let e = issue.element else {
@@ -153,6 +188,30 @@ final class ReadersUITests: XCTestCase {
     /// The audit's checks that hold in every language and text size.
     private let checks: XCUIAccessibilityAuditType = [.textClipped, .sufficientElementDescription, .hitRegion, .elementDetection]
 
+    /// Taps e once more after a tap on it that did not take, and writes
+    /// that down: a line in the test's output, and an activity with the
+    /// screen's picture and the app's element tree as they were before the
+    /// second tap, which CI keeps for a failed test (ci.yml, "the failed
+    /// tests' activities"). An element that is gone is not tapped.
+    private func lostTap(_ app: XCUIApplication, on e: XCUIElement, _ screen: String) {
+        let exists = e.exists
+        let line = exists
+            ? "\(screen): the tap on '\(e.label)' did not open it in 10 seconds; tapping again"
+            : "\(screen): the tap did not open it in 10 seconds, and the button is gone; not tapping again"
+        print("ReadersUITests: \(line)")
+        XCTContext.runActivity(named: line) { activity in
+            let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            shot.name = "lost-tap-\(screen)"
+            shot.lifetime = .keepAlways
+            activity.add(shot)
+            let tree = XCTAttachment(string: app.debugDescription)
+            tree.name = "elements after a lost tap, \(screen)"
+            tree.lifetime = .keepAlways
+            activity.add(tree)
+            if exists { e.tap() }
+        }
+    }
+
     /// A9, U14: in each language the Start screen and Settings are
     /// translated and pass the audit, and the Start screen's top row runs
     /// with the language's direction.
@@ -179,13 +238,15 @@ final class ReadersUITests: XCTestCase {
             settings.tap()
             // A loaded simulator can lose a tap, as StartUITests'
             // openSettings allows for: one more tap when Settings has not
-            // opened.
+            // opened, written down in the log and the test's activities
+            // with the screen as it was, so that a failure shows what the
+            // tap met.
             let bar = app.navigationBars[tr("Settings", language)]
-            if !bar.waitForExistence(timeout: 10), settings.exists {
-                settings.tap()
+            if !bar.waitForExistence(timeout: 10) {
+                lostTap(app, on: settings, "Settings in \(language)")
             }
             XCTAssertTrue(bar.waitForExistence(timeout: 10), "\(language): Settings did not open")
-            XCTAssertTrue(app.buttons[tr("Ocean", language)].exists, "\(language): the colours are not translated")
+            XCTAssertTrue(app.buttons[tr("Blueprint", language)].exists, "\(language): the colours are not translated")
             picture("settings-\(language)")
             audit(app, checks, "Settings in \(language)")
             app.terminate()

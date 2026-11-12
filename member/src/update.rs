@@ -1267,4 +1267,60 @@ mod tests {
         fs::write(dir.join("e.pem"), "nothing").unwrap();
         assert!(read_roots(&dir.join("e.pem")).is_err());
     }
+
+    /// A download from an address that refuses fails with the tool's
+    /// words and leaves nothing behind; the lists from the relay's server
+    /// likewise.
+    #[test]
+    fn a_refused_download_fails() {
+        let dir = tmp("refused");
+        let path = dir.join("out");
+        let e = fetch_via("https://127.0.0.1:1/release.json", &path, 1000, None, Duration::from_secs(5)).unwrap_err();
+        assert!(!e.for_log().is_empty());
+        let e = fetch_via("https://127.0.0.1:1/r", &path, 1000, Some("x:443:127.0.0.1"), Duration::from_secs(5))
+            .unwrap_err();
+        assert!(!e.for_log().is_empty());
+        #[cfg(feature = "tunnel")]
+        {
+            assert!(fetch_lists_at(std::net::IpAddr::from([127, 0, 0, 1]), &dir).is_err());
+            assert!(fetch_lists_at("::1".parse().unwrap(), &dir).is_err());
+            assert!(!dir.join(".keys.json.relay.part").exists());
+        }
+    }
+
+    #[test]
+    fn waits_for_the_new_version() {
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let status = || -> Result<String> {
+            match calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) {
+                0 => Err(Error::msg("not yet")),
+                1 => Ok("0.6.0".into()),
+                _ => Ok("0.6.1".into()),
+            }
+        };
+        wait_healthy(&status, "0.6.1", Duration::from_secs(10)).unwrap();
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 3);
+        let e = wait_healthy(&|| Ok("0.6.0".into()), "0.6.1", Duration::ZERO).unwrap_err();
+        assert_eq!(e.message(), "it runs 0.6.0");
+        let e = wait_healthy(&|| Err(Error::msg("refused")), "0.6.1", Duration::ZERO).unwrap_err();
+        assert!(e.message().starts_with("it does not answer;"), "{}", e.message());
+    }
+
+    #[test]
+    fn sources_and_damaged_state() {
+        let d = Source::defaults("").unwrap();
+        assert_eq!(d.len(), 2);
+        assert_eq!(d[0].to_string(), GITHUB);
+        assert_eq!(d[1].to_string(), MIRROR);
+        let m = Source::defaults("https://example.org/cbb").unwrap();
+        assert_eq!(m.len(), 1);
+        assert!(Source::defaults("ftp://example.org").is_err());
+        assert_eq!(Source::Dir(PathBuf::from("/r")).to_string(), "/r");
+        let dir = tmp("damaged");
+        fs::write(dir.join(STATE_FILE), b"{").unwrap();
+        assert!(load_state(&dir).unwrap_err().message().contains("is damaged"));
+        let e = prefixed(Error::msg("inner"), "outer");
+        assert_eq!(e.message(), "outer: inner");
+        assert!(paths().0.is_absolute());
+    }
 }

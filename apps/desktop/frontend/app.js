@@ -5,7 +5,7 @@
 // state every few seconds; every action goes through the Go side too.
 
 import { Call } from "/wails/runtime.js";
-import { colors, radius, spacing } from "./tokens.js";
+import { themes, spacing } from "./tokens.js";
 
 const call = (method, ...args) => Call.ByName("main.Desk." + method, ...args);
 const $ = (id) => document.getElementById(id);
@@ -55,18 +55,20 @@ async function loadLanguage(l) {
   }
 }
 
-// The colours: the chosen accent on the dark or light base, as the phones.
+// The colours and the shape of the chosen theme, dark or light, as the phones.
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
 
 function applyTheme() {
   const s = state?.settings ?? {};
-  const pair = colors.find((c) => c.name === s.color) ?? colors[0];
+  const theme = themes.find((th) => th.name === s.theme) ?? themes[0];
   const dark = s.appearance === "dark" || (s.appearance !== "light" && darkQuery.matches);
-  const p = dark ? pair.dark : pair.light;
+  const p = dark ? theme.dark : theme.light;
+  const st = theme.style;
   const root = document.documentElement.style;
   const alpha = (hex, a) => hex + Math.round(a * 255).toString(16).padStart(2, "0");
   root.setProperty("--background", p.background);
   root.setProperty("--surface", p.surface);
+  root.setProperty("--grid", p.grid);
   root.setProperty("--text", p.text);
   root.setProperty("--text-dim", p.textDim);
   root.setProperty("--accent", p.accent);
@@ -74,9 +76,13 @@ function applyTheme() {
   root.setProperty("--danger", p.danger);
   root.setProperty("--glass", dark ? alpha(p.surface, 0.78) : "#FFFFFFDB");
   root.setProperty("--soft", alpha(p.accent, dark ? 0.16 : 0.1));
-  root.setProperty("--line", alpha(p.text, dark ? 0.12 : 0.1));
+  root.setProperty("--line", p.line);
   root.setProperty("color-scheme", dark ? "dark" : "light");
-  for (const [k, v] of Object.entries(radius)) root.setProperty(`--radius-${k}`, v + "px");
+  for (const k of ["button", "card", "tile", "chip"]) root.setProperty(`--radius-${k}`, st["radius" + k[0].toUpperCase() + k.slice(1)] + "px");
+  root.setProperty("--stroke", st.stroke + "px");
+  root.setProperty("--off-style", st.dashedOff ? "dashed" : "solid");
+  document.documentElement.dataset.material = st.material;
+  document.documentElement.dataset.grid = String(st.grid);
   for (const [k, v] of Object.entries(spacing)) root.setProperty(`--spacing-${k}`, v + "px");
 }
 darkQuery.addEventListener("change", applyTheme);
@@ -152,6 +158,9 @@ const icons = {
   // The two switches: sync (a house) and sync away from home (a globe).
   house: '<path d="M3.5 11L12 4l8.5 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5.5h4V20"/>',
   globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.4 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.4-3.6-8.5s1.1-5.9 3.6-8.5z"/>',
+  // The mute button in a tile's corner.
+  speaker: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 9a4 4 0 0 1 0 6"/>',
+  "speaker-off": '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6"/>',
   auto: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/>',
   moon: '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
@@ -522,11 +531,67 @@ function cell(ref, level, name, inner) {
   return `<div class="cell" data-ref="${esc(ref)}" data-level="${esc(level)}" data-name="${esc(name)}" draggable="true">${inner}</div>`;
 }
 
+// The mutes asked for and not yet answered, by device: the tile shows the
+// new state at once and goes back only when the change is refused.
+const pendingMute = new Map();
+
+// shownMuted says whether d's tile shows it muted: the answer still
+// awaited, else its mute; for this computer, its sync turned off.
+function shownMuted(d) {
+  if (pendingMute.has(d.id)) return pendingMute.get(d.id);
+  return d.self ? state.status?.mode === "own" : !!d.muted;
+}
+
+// mayMute says whether this computer mutes d from its tile: its own sync
+// always, another device only as an admin.
+const mayMute = (d) => d.self || !!state.devices.find((x) => x.self)?.admin;
+
+// muteLabel is what the corner button says it is.
+function muteLabel(d, muted) {
+  if (d.self) return !muted ? t("Sync is on") : state.status?.sync_until_ms ? t("Sync off until %s", clock(state.status.sync_until_ms)) : t("Sync off");
+  return muted ? t("Unmute") : t("Mute");
+}
+
+// muteCorner is the small button in a tile's corner (docs/apps.md, "Muting
+// from the tile"): a click holds until undone, a right click or a hold
+// picks a time.
+function muteCorner(d, muted) {
+  const label = muteLabel(d, muted);
+  return `<button class="mute-corner${muted ? " on" : ""}" data-mute="${esc(d.id)}" aria-pressed="${muted}" ` +
+    `aria-label="${esc(label + ", " + d.name)}" title="${esc(label)}"><span>${icon(muted ? "speaker-off" : "speaker", 14)}</span></button>`;
+}
+
+// setMute mutes d, or unmutes it, for ms (0 for until undone): this
+// computer's sync, or another device for the group.
+async function setMute(d, on, ms) {
+  pendingMute.set(d.id, on);
+  try {
+    if (d.self) await act("SetSync", "", !on, ms);
+    else if (on) await act("Mute", d.id, ms);
+    else await act("Unmute", d.id);
+  } finally {
+    pendingMute.delete(d.id);
+    render();
+  }
+}
+
+// muteFor asks for how long, then mutes d.
+async function muteFor(d) {
+  const ms = d.self
+    ? await pickTime(t("Turn sync off?"), t("The clipboard is then this computer's own."), t("Until I turn it on"))
+    : await pickTime(t("Mute %s?", d.name), t("Its copies do not reach the group until then; it still takes the group's copies. Any admin unmutes it."), t("Until an admin unmutes it"));
+  if (ms !== null) await setMute(d, true, ms);
+}
+
 function deviceTile(d, level) {
-  return cell("d:" + d.id, level, d.name, `<button class="tile${d.id === selected ? " selected" : ""}" data-id="${esc(d.id)}">` +
+  const muted = shownMuted(d), corner = mayMute(d);
+  const offText = d.self && muted ? muteLabel(d, true) : null;
+  return cell("d:" + d.id, level, d.name, `<div class="tile-box">` +
+    `<button class="tile${d.id === selected ? " selected" : ""}${muted ? " muted" : ""}${corner ? " cornered" : ""}" data-id="${esc(d.id)}">` +
     `<span class="top">${glyph(d)}${dot(d.online || d.self)}</span><span class="name">${esc(d.name)}</span>` +
-    `<span class="dim small">${esc([systems[d.os], d.muted && t("muted")].filter(Boolean).join(" · "))}</span>` +
-    (d.self ? `<span class="dim small">${esc(t("This computer"))}</span>` : "") + `</button>`);
+    `<span class="dim small">${esc([systems[d.os], d.muted && t("muted")].filter(Boolean).join(" · "))}${offText ? `${systems[d.os] || d.muted ? " · " : ""}<span class="danger-text">${esc(offText)}</span>` : ""}</span>` +
+    (d.self ? `<span class="dim small">${esc(t("This computer"))}</span>` : "") + `</button>` +
+    (corner ? muteCorner(d, muted) : "") + `</div>`);
 }
 
 function deviceRow(d, level, inside) {
@@ -664,6 +729,30 @@ document.addEventListener("drop", async (e) => {
   if (from < 0 || to < 0) return;
   await move(d.ref, from < to ? refs[to + 1] ?? null : target);
 });
+// The corner button: a right click, or a hold, picks how long to mute;
+// it opens no tile menu.
+let muteHold = null, muteHeld = false;
+const cornerDevice = (e) => {
+  const b = e.target.closest?.(".mute-corner");
+  return b ? state.devices.find((x) => x.id === b.dataset.mute) : undefined;
+};
+document.addEventListener("contextmenu", (e) => {
+  const d = cornerDevice(e);
+  if (d === undefined) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  clearTimeout(muteHold);
+  if (!muteHeld && d && !shownMuted(d)) muteFor(d);
+}, true);
+document.addEventListener("pointerdown", (e) => {
+  const d = cornerDevice(e);
+  if (d === undefined) return;
+  e.stopImmediatePropagation();
+  muteHeld = false;
+  if (!d || e.button !== 0 || shownMuted(d)) return;
+  muteHold = setTimeout(() => { muteHeld = true; muteFor(d); }, 600);
+}, true);
+for (const ev of ["pointerup", "pointerleave", "pointercancel"]) document.addEventListener(ev, () => clearTimeout(muteHold), true);
 document.addEventListener("contextmenu", (e) => {
   const c = e.target.closest?.(".cell");
   if (!c) return;
@@ -760,7 +849,9 @@ function renderDetail() {
     actions.push(["rename", t("Rename")]);
     if (d.frozen && me.root) actions.push(["unfreeze", t("Unfreeze")]);
     if (!d.self && d.admin && !d.root && !d.frozen && d.role === "member") actions.push(["freeze", t("Freeze"), true]);
-    if (me.root && !d.admin && !d.frozen && can(d, "admin")) actions.push(["admin", t("Make it an admin")]);
+    // A phone joins as a member, and the root makes it an admin here as a
+    // computer, with the admin key its hello offers.
+    if (me.root && !d.admin && !d.frozen && (can(d, "admin") || d.role === "phone")) actions.push(["admin", t("Make it an admin")]);
     if (!d.self) actions.push(["remove", t("Remove"), true]);
   }
   // Any computer leaves by itself; the root only when it is alone, which the service checks.
@@ -839,9 +930,13 @@ async function deviceAction(action) {
     case "leave":
       await leave();
       break;
-    case "admin":
-      if (await ask(t("Make %s an admin?", d.name), t("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe."), t("Make it an admin"))) await act("MakeAdmin", d.id);
+    case "admin": {
+      const text = d.role === "phone"
+        ? t("It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.")
+        : t("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.");
+      if (await ask(t("Make %s an admin?", d.name), text, t("Make it an admin"))) await act("MakeAdmin", d.id);
       break;
+    }
     case "hub": {
       // This computer turns sync away from home on with its hub, by its
       // user's word here; another one must have it on already.
@@ -921,12 +1016,21 @@ function languageName(l) {
   }
 }
 
+// The themes' names in Settings, as the phones have them.
+const themeTitles = {
+  board: "Chalkboard", blueprint: "Blueprint", precise: "Precise", glass: "Glass", soft: "Soft", swiss: "Swiss",
+  hardware: "Hardware", deco: "Art Deco", liquid: "Liquid Glass", terminal: "Terminal", retro: "Retro",
+};
+
 function renderSettings() {
   const s = state.settings;
-  $("swatches").innerHTML = colors.map((c) => {
-    const dark = s.appearance === "dark" || (s.appearance !== "light" && darkQuery.matches);
-    return `<button type="button" data-color="${c.name}" aria-checked="${c.name === s.color}" style="background:${(dark ? c.dark : c.light).accent}" ` +
-      `title="${esc(t(c.name[0].toUpperCase() + c.name.slice(1)))}"></button>`;
+  const dark = s.appearance === "dark" || (s.appearance !== "light" && darkQuery.matches);
+  const current = themes.some((th) => th.name === s.theme) ? s.theme : themes[0].name;
+  $("swatches").innerHTML = themes.map((th) => {
+    const p = dark ? th.dark : th.light;
+    return `<button type="button" role="radio" data-theme="${th.name}" aria-checked="${th.name === current}" ` +
+      `style="background:linear-gradient(135deg, ${p.background} 50%, ${p.accent} 50%)" ` +
+      `title="${esc(t(themeTitles[th.name] ?? th.name))}" aria-label="${esc(t(themeTitles[th.name] ?? th.name))}"></button>`;
   }).join("");
   for (const b of document.querySelectorAll("[data-appearance]")) b.setAttribute("aria-checked", String(b.dataset.appearance === s.appearance));
   $("language").innerHTML = `<option value="">${esc(t("System language"))}</option>` +
@@ -1241,8 +1345,15 @@ document.addEventListener("click", async (e) => {
   const el = e.target.closest("button, input");
   if (!el || !state) return;
   if (el.dataset.layout) return saveSettings({ layout: el.dataset.layout });
-  if (el.dataset.color) return saveSettings({ color: el.dataset.color });
+  if (el.dataset.theme) return saveSettings({ theme: el.dataset.theme });
   if (el.dataset.appearance) return saveSettings({ appearance: el.dataset.appearance });
+  if (el.dataset.mute !== undefined) {
+    e.stopPropagation();
+    if (muteHeld) { muteHeld = false; return; }
+    const d = state.devices.find((x) => x.id === el.dataset.mute);
+    if (d) return setMute(d, !shownMuted(d), 0);
+    return;
+  }
   if (el.dataset.action) return deviceAction(el.dataset.action);
   if (el.dataset.menu) return openMenu(el.dataset.menu, el.dataset.level);
   if (el.dataset.filter) {

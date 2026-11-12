@@ -6,6 +6,8 @@
 # (docs/core-api.md), for the phone apps and the phone kits' tests:
 #   bind.sh ios OUT       OUT/iphoneos/libcbb_ffi.a and OUT/iphonesimulator/libcbb_ffi.a,
 #                         for the iPhone app (needs Xcode)
+#   bind.sh ios-sim OUT   only OUT/iphonesimulator/libcbb_ffi.a, for this Mac's
+#                         processor: what the simulator's tests link (CI's iPhone app)
 #   bind.sh android OUT   OUT/jniLibs/<abi>/libcbb_ffi.so, for the Android app (needs
 #                         ANDROID_NDK_HOME and cargo-ndk)
 #   bind.sh host OUT      OUT/libcbb_ffi.a, for the Swift kit's tests on this computer:
@@ -19,7 +21,7 @@
 # tunnel), which takes them to the hub away from home.
 set -eu
 if [ $# -ne 2 ]; then
-	echo "usage: bind.sh ios|android|host|aurora OUT" >&2
+	echo "usage: bind.sh ios|ios-sim|android|host|aurora OUT" >&2
 	exit 2
 fi
 target=$1
@@ -55,6 +57,16 @@ ios)
 	cp target/aarch64-apple-ios/release/libcbb_ffi.a "$out/iphoneos/"
 	lipo -create target/aarch64-apple-ios-sim/release/libcbb_ffi.a target/x86_64-apple-ios/release/libcbb_ffi.a \
 		-output "$out/iphonesimulator/libcbb_ffi.a"
+	;;
+ios-sim)
+	case $(uname -m) in
+	arm64) t=aarch64-apple-ios-sim ;;
+	*) t=x86_64-apple-ios ;;
+	esac
+	rustup target add "$t" >/dev/null
+	IPHONEOS_DEPLOYMENT_TARGET=17.0 cargo build --locked -p cbb-ffi --features member,tunnel --release --target "$t"
+	mkdir -p "$out/iphonesimulator"
+	cp "target/$t/release/libcbb_ffi.a" "$out/iphonesimulator/"
 	;;
 android)
 	rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android >/dev/null

@@ -17,6 +17,8 @@
 
 #include <QJsonObject>
 #include <QObject>
+
+#include <functional>
 #include <QString>
 #include <QStringList>
 #include <QTimer>
@@ -38,6 +40,9 @@ class App : public QObject
     Q_PROPERTY(QString device READ device NOTIFY groupChanged)
     Q_PROPERTY(bool admin READ admin NOTIFY groupChanged)
     Q_PROPERTY(bool root READ root NOTIFY groupChanged)
+    // Whether the member's hellos offer the root this phone's admin key,
+    // for the root's "Make an admin".
+    Q_PROPERTY(bool adminOffered READ adminOffered NOTIFY groupChanged)
     // The phone's claim to take the group over: "" without one, else
     // "pending", "competing", "disputed" or "none" (not in the records yet).
     Q_PROPERTY(QString claimState READ claimState NOTIFY claimChanged)
@@ -75,6 +80,10 @@ class App : public QObject
     // group's order".
     Q_PROPERTY(bool hasArrangement READ hasArrangement NOTIFY arrangementChanged)
     Q_PROPERTY(bool languagePending READ languagePending NOTIFY settingsChanged)
+    // The admin key's PIN (KeyStore::adminPin): "none" where the store
+    // needs none, "unknown" until the TEE answered, "not_set", "set" or
+    // "locked".
+    Q_PROPERTY(QString adminPin READ adminPin NOTIFY adminPinChanged)
     // The recovery sheet the root just made, shown once (makeRecovery):
     // the key as groups of four and the QR code's modules, a string of '1'
     // (dark) and '0' a row; empty when there is none to show.
@@ -101,11 +110,12 @@ public:
     // The group's tag and this phone's device ID once it joined, else empty.
     QString group() const { return m_member.groupTag(); }
     QString device() const { return m_member.device; }
-    // Whether the group's root made this phone an admin when it joined.
+    // Whether the group's root made this phone an admin.
     bool admin() const { return m_member.isAdmin(); }
     bool root() const { return m_member.root; }
     QString restoreState() const { return m_restoreState; }
     QString restoreHint() const { return m_restoreHint; }
+    bool adminOffered() const { return !m_member.isAdmin() && !m_member.adminOffer.isEmpty(); }
     QString claimState() const { return m_member.claim.isEmpty() ? QString() : m_claimState; }
     double claimLeftMs() const { return double(m_claimLeftMs); }
     Join *join() { return &m_join; }
@@ -135,10 +145,17 @@ public:
 
     // Finds or makes the phone's key, off the GUI thread.
     Q_INVOKABLE void setUpKey();
-    // Listens for the device that scans this phone's QR code; with admin,
-    // the phone asks to be an admin and offers its admin key, made now the
-    // first time, off the GUI thread.
-    Q_INVOKABLE void startJoin(bool admin = false);
+    // Listens for the device that scans this phone's QR code. The phone
+    // joins as a member; first it finds its admin key, or makes it behind
+    // the admin PIN unless the user cancels, off the GUI thread, for its
+    // member's hellos to offer the root, which may make it an admin later.
+    Q_INVOKABLE void startJoin();
+    // Stops listening, and drops a join that waits for the admin key.
+    Q_INVOKABLE void stopJoin();
+    // For a member phone whose hellos offer no admin key (it joined
+    // without one): makes the key behind the admin PIN and restarts the
+    // member, whose hellos then offer it.
+    Q_INVOKABLE void prepareAdmin();
     // Adds the device whose join code (a cbb://join link) the camera read,
     // with the admin key, found off the GUI thread.
     // makeAdmin: the root makes a phone that asks an admin.
@@ -157,6 +174,16 @@ public:
     // forMinutes: how long a mute lasts, 0 for until an unmute.
     Q_INVOKABLE void manage(const QString &action, const QString &device, const QString &name = QString(),
                             int forMinutes = 0);
+    // Remote paste (docs/design.md, "Remote paste"): text, or the
+    // clipboard's when it is empty, put where device's focus is, pasted or
+    // typed, with Enter after it if asked; a paste command signed as
+    // manage's, and managed("paste", device, ok) tells when the device
+    // took it or why not.
+    Q_INVOKABLE void paste(const QString &device, const QString &text, bool typing, bool enter, bool secret);
+    // Images or files (paths or file URLs) go to the group as a copy, then
+    // a paste command of kind media names it; the device pastes them with
+    // its paste keys.
+    Q_INVOKABLE void pasteFiles(const QString &device, const QStringList &files, bool enter);
     // The member's devices (Member::devices) in the user's order and
     // collections as the member keeps them (docs/apps.md, "What the member
     // shows"): each item is {kind: "device", device} or {kind: "collection",
@@ -206,6 +233,15 @@ public:
     // Leaves the group on this phone: stops the member and deletes the
     // membership. The group still lists the phone until an admin removes it.
     Q_INVOKABLE void leave();
+    // The admin key's PIN, which the TEE checks (docs/protocol.md, section
+    // 3): pinNeeded asks for it before the admin key signs; enterPin hands
+    // it over, sets it when fresh, and then does what waited for it;
+    // cancelPin drops that.
+    Q_INVOKABLE void enterPin(const QString &pin);
+    Q_INVOKABLE void cancelPin();
+    // Changes the PIN; pinChanged tells how it went.
+    Q_INVOKABLE void changePin(const QString &old, const QString &pin);
+    QString adminPin() const { return m_adminPin; }
 
 signals:
     void keyChanged();
@@ -216,10 +252,25 @@ signals:
     void managed(const QString &action, const QString &device, bool ok);
     void claimChanged();
     void arrangementChanged();
+    void adminPinChanged();
+    // fresh: no PIN yet, so the user chooses one and types it twice;
+    // reason: why it is asked, when the dialog should say.
+    void pinNeeded(bool fresh, const QString &reason);
+    // A wrong PIN, with the tries left, or locked for good.
+    void pinRefused(bool locked, int triesLeft);
+    void pinAccepted();
+    void pinChanged(bool ok, bool locked, int triesLeft);
     void recoveryChanged();
     void restoreChanged();
 
 private:
+    // Before the admin key signs: true when the PIN is asked first, run
+    // then running once it is right and cancel when the user cancels;
+    // reason, when given, is shown in the dialog.
+    bool askPin(std::function<void()> run, std::function<void()> cancel = std::function<void()>(),
+                const QString &reason = QString());
+    void refreshAdminPin();
+    void setAdminPin(const QString &state);
     void show(const QString &error);
     // Signs action for device with extra in the request (manage's), then
     // calls done with the member's answer when it worked.
@@ -265,9 +316,13 @@ private:
     QString m_error;
     QString m_startLanguage;
     int m_arrangement = 0;
+    QString m_adminPin = QStringLiteral("unknown");
+    std::function<void()> m_pinRun, m_pinCancel;
     QString m_recoveryText;
     QStringList m_recoveryModules;
     QStringList m_belowLevel;
     QString m_restoreState;
     QString m_restoreHint;
+    QByteArray m_joinOffer; // the admin key the joining phone's hellos will offer
+    int m_joinSerial = 0;   // bumped by each start and stop of a join
 };
