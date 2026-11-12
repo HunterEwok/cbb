@@ -543,6 +543,7 @@ pub(crate) fn item(r: &Record, role: Role) -> super::keep::Item {
     super::keep::Item {
         early,
         down: false,
+        tier: 0,
         signer: r.body().signer,
         seq: r.body().seq,
         id: r.id(),
@@ -569,19 +570,23 @@ pub(crate) fn kept_of(
 ) -> BTreeSet<RecordId> {
     let admins: BTreeSet<KeyHash> =
         checked.iter().filter(|c| c.role == Role::Admin).map(|c| c.r.body().signer).collect();
-    let off = off_cuts(cuts, checked.iter().map(|c| c.r));
-    let items: Vec<super::keep::Item> =
-        checked.iter().filter(|c| !off.contains(&c.r.id())).map(|c| item_cut(c.r, c.role, cuts)).collect();
+    let lines = lines(cuts, checked.iter().map(|c| c.r));
+    let items: Vec<super::keep::Item> = checked
+        .iter()
+        .filter(|c| !lines.get(&c.r.body().signer).is_some_and(|l| l.off(c.r)))
+        .map(|c| item_cut(c.r, c.role, &lines))
+        .collect();
     super::keep::keep(&items, |k| ceiling_of(group_root, promoted, &admins, k))
 }
 
-/// A record's place in its key's order, where a root a takeover cut has
-/// no checkpoint first.
-pub(crate) fn item_cut(r: &Record, role: Role, cuts: &BTreeMap<KeyHash, Seen>) -> super::keep::Item {
+/// A record's place in its key's order, where a root a takeover cut (one
+/// lines has) follows its line, its removals first.
+pub(crate) fn item_cut(r: &Record, role: Role, lines: &BTreeMap<KeyHash, Line>) -> super::keep::Item {
     let mut it = item(r, role);
-    if cuts.contains_key(&r.body().signer) {
+    if let Some(line) = lines.get(&r.body().signer) {
         it.checkpoint = false;
         it.down = true;
+        it.tier = line.tier(r);
     }
     it
 }
@@ -595,18 +600,57 @@ pub(crate) fn off_cuts<'r>(
     cuts: &BTreeMap<KeyHash, Seen>,
     records: impl Iterator<Item = &'r Record> + Clone,
 ) -> BTreeSet<RecordId> {
-    let mut off = BTreeSet::new();
-    if cuts.is_empty() {
-        return off;
+    let lines = lines(cuts, records.clone());
+    records.filter(|r| lines.get(&r.body().signer).is_some_and(|l| l.off(r))).map(Record::id).collect()
+}
+
+/// The line of a root a takeover cut, as the records show it.
+pub(crate) struct Line {
+    cut: Seen,
+    /// The chain from the cut's ID down by prev, while the records show it.
+    chain: BTreeMap<u64, RecordId>,
+    /// The seq of the newest checkpoint on it that may count.
+    cp: Option<u64>,
+    /// What that checkpoint names (its heads and keep).
+    named: Option<BTreeSet<RecordId>>,
+}
+
+impl Line {
+    /// Whether r, of the line's root, is off the cut (`off_cuts`).
+    pub(crate) fn off(&self, r: &Record) -> bool {
+        let b = r.body();
+        let low = self.chain.first_key_value().map(|(s, _)| *s);
+        let below = low.is_some_and(|low| b.seq < low) && self.named.as_ref().is_some_and(|n| !n.contains(&r.id()));
+        b.seq > self.cut.seq || self.chain.get(&b.seq).is_some_and(|id| *id != r.id()) || below
     }
-    let all: BTreeMap<RecordId, &Record> = records.clone().map(|r| (r.id(), r)).collect();
-    let by_id: BTreeMap<RecordId, &Record> =
-        all.iter().filter(|(_, r)| cuts.contains_key(&r.body().signer)).map(|(id, r)| (*id, *r)).collect();
+
+    /// r's part of the line in the keeping (`keep::Item::tier`).
+    fn tier(&self, r: &Record) -> u8 {
+        let b = r.body();
+        if self.chain.get(&b.seq) == Some(&r.id()) && self.cp.is_none_or(|cp| b.seq >= cp) {
+            1
+        } else if self.named.as_ref().is_some_and(|n| n.contains(&r.id())) {
+            2
+        } else {
+            3
+        }
+    }
+}
+
+/// The lines of the roots cuts names.
+pub(crate) fn lines<'r>(
+    cuts: &BTreeMap<KeyHash, Seen>,
+    records: impl Iterator<Item = &'r Record> + Clone,
+) -> BTreeMap<KeyHash, Line> {
+    let mut out = BTreeMap::new();
+    if cuts.is_empty() {
+        return out;
+    }
+    let all: BTreeMap<RecordId, &Record> = records.map(|r| (r.id(), r)).collect();
     for (signer, cut) in cuts {
-        // The chain from the cut's ID down, while the records show it.
         let mut chain: BTreeMap<u64, RecordId> = BTreeMap::new();
         let mut at = Some(cut.id);
-        while let Some(r) = at.and_then(|id| by_id.get(&id)) {
+        while let Some(r) = at.and_then(|id| all.get(&id)) {
             let b = r.body();
             if b.signer != *signer || chain.first_key_value().is_some_and(|(s, _)| b.seq >= *s) {
                 break;
@@ -616,25 +660,19 @@ pub(crate) fn off_cuts<'r>(
         }
         // The newest checkpoint of that chain: below the chain, only what
         // it names stays.
-        let named: Option<BTreeSet<RecordId>> = chain.values().rev().find_map(|id| {
-            let cp = by_id.get(id)?;
+        let found = chain.iter().rev().find_map(|(seq, id)| {
+            let cp = all.get(id)?;
             match &cp.body().kind {
                 Kind::Checkpoint { heads, keep } if checkpoint_ok(cp, |x| all.get(x).copied()) => {
-                    Some(anchors_of(heads, keep))
+                    Some((*seq, anchors_of(heads, keep)))
                 }
                 _ => None,
             }
         });
-        let low = chain.first_key_value().map(|(s, _)| *s);
-        for r in records.clone().filter(|r| r.body().signer == *signer) {
-            let b = r.body();
-            let below = low.is_some_and(|low| b.seq < low) && named.as_ref().is_some_and(|n| !n.contains(&r.id()));
-            if b.seq > cut.seq || chain.get(&b.seq).is_some_and(|id| *id != r.id()) || below {
-                off.insert(r.id());
-            }
-        }
+        let (cp, named) = found.map_or((None, None), |(s, n)| (Some(s), Some(n)));
+        out.insert(*signer, Line { cut: *cut, chain, cp, named });
     }
-    off
+    out
 }
 
 /// A key's ceiling in the keeping: a root's on the path, an admin key's,
@@ -755,6 +793,20 @@ pub(crate) fn evaluate_checked(
     // when it still counts in the set the ones before it pruned.
     let plain = full.run(held_ms, counted);
     let mut cands = full.checkpoints(&plain.path, &plain.cuts);
+    if let Some(w) = plain.waiting {
+        // A checkpoint above the head a waiting claim saw waits with it,
+        // unless the set already pruned by it.
+        cands.retain(|&c| {
+            full.recs.get(c).is_some_and(|x| match &x.b().kind {
+                Kind::Checkpoint { heads, keep } => {
+                    x.b().signer != w.key
+                        || full.within(&w, c)
+                        || proven.iter().any(|(h, a)| h == heads && *a == anchors_of(heads, keep))
+                }
+                _ => false,
+            })
+        });
+    }
     cands.sort_by_key(|&c| full.recs.get(c).map(|x| plain.on_path.get(&x.b().signer).copied().unwrap_or(0)));
     let mut kept: Vec<Checked> = checked.clone();
     let mut anchors_all: BTreeSet<RecordId> = BTreeSet::new();
@@ -774,7 +826,7 @@ pub(crate) fn evaluate_checked(
         }
         let mut all = anchors_all.clone();
         all.extend(anchors.iter().copied());
-        let pruned: Vec<Checked> = kept.iter().copied().filter(|c| !pruned_by(c.r, heads, &anchors)).collect();
+        let pruned: Vec<Checked> = kept.iter().copied().filter(|c| !pruned_by(c.r, c.role, heads, &anchors)).collect();
         let known = still_known(root, promoted, counted, pruned.clone());
         let e = Evaluation::new(root, known, failed.clone(), all.clone(), promoted, cuts, counted);
         let ep = e.run(held_ms, counted);
@@ -796,10 +848,14 @@ pub(crate) fn evaluate_checked(
 }
 
 /// Reports whether checkpoint heads (with anchors, its heads' and keep's
-/// IDs) prune r: a record at or below its signer's head that is neither a
-/// head nor kept.
-pub(crate) fn pruned_by(r: &Record, heads: &[Head], anchors: &BTreeSet<RecordId>) -> bool {
+/// IDs) prune r, which role signed: a record at or below its signer's
+/// head that is neither a head nor kept, and not a root's removal.
+pub(crate) fn pruned_by(r: &Record, role: Role, heads: &[Head], anchors: &BTreeSet<RecordId>) -> bool {
     let b = r.body();
+    if role == Role::Root && matches!(b.kind, Kind::Revoke(_)) {
+        // A root's removal is final: no checkpoint prunes it.
+        return false;
+    }
     heads
         .binary_search_by(|h| h.key.cmp(&b.signer))
         .ok()
@@ -1237,6 +1293,10 @@ struct Epoch<'e, 'a> {
     claims: Vec<Claim>,
     stop_full: bool,
     pending: Option<KeyHash>,
+    /// The head a claim that waits only for the current root's line saw
+    /// (`line_whole`), the lowest: that root's checkpoints above it do not
+    /// count while it waits, since the claim cuts them off once it counts.
+    waiting: Option<Cut>,
     settings: Settings,
     /// The other key of each admin's device (`with_pair`).
     pairs: BTreeMap<KeyHash, Vec<KeyHash>>,
@@ -1276,6 +1336,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             claims: Vec::new(),
             stop_full: false,
             pending: None,
+            waiting: None,
             settings: Settings::default(),
             pairs: BTreeMap::new(),
             superseded: BTreeMap::new(),
@@ -2307,6 +2368,45 @@ impl<'e, 'a> Epoch<'e, 'a> {
         })
     }
 
+    /// Reports whether the current root's line is held whole from the head
+    /// claim c saw down to an anchor: the root's first record, a
+    /// checkpoint of it on that line that counts, or a record a checkpoint
+    /// the member pruned by names. A takeover cuts the root
+    /// there, so its claim waits until the line is held.
+    fn line_whole(&self, c: usize) -> bool {
+        let Some(head) = self.r(c).seen_entry(&self.cur) else { return false };
+        let get = |x: &RecordId| self.e.by_id.get(x).map(|&j| self.r(j).r);
+        let (mut at, mut want) = (Some(head.id), head.seq);
+        while let Some(id) = at {
+            let Some(&i) = self.e.by_id.get(&id) else {
+                // A record a checkpoint the member pruned by left out: one
+                // it names at or above that seq stands for it.
+                return self.e.anchors.iter().filter_map(|a| self.e.by_id.get(a)).any(|&j| {
+                    let b = self.r(j).b();
+                    b.signer == self.cur && b.seq >= want
+                });
+            };
+            let b = self.r(i).b();
+            if b.signer != self.cur || b.seq != want {
+                return false;
+            }
+            if b.prev.is_none() || self.e.anchors.contains(&id) {
+                // Its first record, or one a checkpoint the member pruned
+                // by names: it stands for the chain below it (`wholes`).
+                return true;
+            }
+            if let Kind::Checkpoint { heads, .. } = &b.kind {
+                let applied = heads.iter().any(|h| h.key == self.cur && self.e.anchors.contains(&h.id));
+                if applied || checkpoint_ok(self.r(i).r, get) {
+                    return true;
+                }
+            }
+            at = b.prev;
+            want = want.saturating_sub(1);
+        }
+        false
+    }
+
     fn decide_claims(&mut self, held_ms: &BTreeMap<RecordId, u64>) -> Option<(KeyHash, Cut)> {
         let mut delay = self.settings.delay_ms();
         let mut live = Vec::new();
@@ -2436,7 +2536,14 @@ impl<'e, 'a> Epoch<'e, 'a> {
             delay = 0;
         }
         let held = held_ms.get(&r.id).copied().unwrap_or(0);
-        if self.label[c] != Label::In || self.root_frozen(&r.b().signer) || held < delay {
+        let ready = self.label[c] == Label::In && !self.root_frozen(&r.b().signer) && held >= delay;
+        if !ready || !self.line_whole(c) {
+            if ready
+                && let Some(seen) = r.seen_entry(&self.cur)
+                && self.waiting.is_none_or(|w| seen.seq < w.seq)
+            {
+                self.waiting = Some(seen);
+            }
             cl.left_ms = delay.saturating_sub(held);
             self.claims.push(cl);
             self.pending = Some(r.b().signer);

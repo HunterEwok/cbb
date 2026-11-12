@@ -158,24 +158,28 @@ impl RecordSet {
         // What the set would not keep is turned away before its signature
         // is verified: a record offered again after the set dropped it
         // costs no verification, and none of these steps stores it.
-        if self.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&r, heads, anchors)) {
+        if self.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&r, role, heads, anchors)) {
             // A counting checkpoint left it out.
             return Ok(Added::NoRoom);
         }
-        if let Some(cut) = self.cuts.get(&signer) {
-            let cuts = BTreeMap::from([(signer, *cut)]);
-            let mine = self.records.values().map(|e| &e.record).filter(|x| x.body().signer == signer);
-            if eval::off_cuts(&cuts, mine.chain([&r])).contains(&id) {
-                // Its root signed it off the chain the takeover saw.
-                return Ok(Added::NoRoom);
+        let lines = match self.cuts.get(&signer) {
+            Some(cut) => {
+                let cuts = BTreeMap::from([(signer, *cut)]);
+                let mine = self.records.values().map(|e| &e.record).filter(|x| x.body().signer == signer);
+                eval::lines(&cuts, mine.chain([&r]))
             }
+            None => BTreeMap::new(),
+        };
+        if lines.get(&signer).is_some_and(|l| l.off(&r)) {
+            // Its root signed it off the chain the takeover saw.
+            return Ok(Added::NoRoom);
         }
         if self.ceiling(&signer).is_some() {
             // It depends on the key alone: one with room of its own has
             // no place where it stopped without.
             self.cut.forget_future(&signer);
         }
-        if self.cut.past(&eval::item_cut(&r, role, &self.cuts)) {
+        if self.cut.past(&eval::item_cut(&r, role, &lines)) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
@@ -261,8 +265,9 @@ impl RecordSet {
         for id in &off {
             self.remove(id);
         }
+        let lines = eval::lines(&self.cuts, self.records.values().map(|e| &e.record));
         let items: Vec<keep::Item> =
-            self.records.values().map(|e| eval::item_cut(&e.record, self.role_of(e), &self.cuts)).collect();
+            self.records.values().map(|e| eval::item_cut(&e.record, self.role_of(e), &lines)).collect();
         let ceilings: BTreeMap<KeyHash, Option<u64>> =
             items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
         let (kept, cut) = keep::keep_after(&items, |k| ceilings.get(k).copied().flatten(), &self.cut);
@@ -530,7 +535,11 @@ impl RecordSet {
         let drop: Vec<RecordId> = self
             .records
             .values()
-            .filter(|e| self.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&e.record, heads, anchors)))
+            .filter(|e| {
+                self.checkpoints
+                    .iter()
+                    .any(|(heads, anchors)| eval::pruned_by(&e.record, self.role_of(e), heads, anchors))
+            })
             .map(|e| e.record.id())
             .collect();
         for id in &drop {
