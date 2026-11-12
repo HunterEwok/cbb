@@ -40,8 +40,10 @@ The maintainer follows these rules; they are written down to keep the history co
   A file that cannot carry them, such as an image or a JSON file, takes its license from
   [REUSE.toml](REUSE.toml); `reuse lint` checks that every file has one.
 
-- **Copied code** lives in its own directory below `internal/third_party`, with its
-  `LICENSE` and a `README.md` that names the source and version; its files keep their own
+- **Copied code** lives in its own directory below a `third_party` directory beside the
+  code that uses it (`internal/third_party`, `core/src/third_party`,
+  `member/src/third_party`), with its `LICENSE` and a `README.md` that names the source and
+  version, which `repocheck` checks; its files keep their own
   copyright notices, and REUSE.toml names its copyright and license for the whole directory.
 
 - **Pull requests.** Every change goes into `main` through a pull request and is merged with

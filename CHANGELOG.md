@@ -1569,6 +1569,10 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The notes for coding agents are in `AGENTS.md`, short and pointing to the documents
+  instead of repeating them; `CLAUDE.md` only includes it.
+- Copied code may sit in a `third_party` directory beside the code that uses it, and
+  `tools/repocheck` asks each copied directory for its `README.md` as well as its `LICENSE`.
 - The maintainers' pages moved to `docs/maintainers/`: maintaining, the test bench, its
   catalogue, functions and cases, and the security audit's plan. `tools/bench` reads the
   catalogue there by default (`-docs`).

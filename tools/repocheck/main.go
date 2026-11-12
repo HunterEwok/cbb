@@ -269,6 +269,9 @@ func check(name string, data []byte, listed map[string]bool) []string {
 		if !listed[dir+"/LICENSE"] {
 			problems = append(problems, fmt.Sprintf("%s:1: copied code without %s/LICENSE", name, dir))
 		}
+		if !listed[dir+"/README.md"] {
+			problems = append(problems, fmt.Sprintf("%s:1: copied code without %s/README.md, which names its source, version and changes", name, dir))
+		}
 		if !generated && !strings.HasPrefix(string(data), "// Copyright ") {
 			problems = append(problems, fmt.Sprintf("%s:1: copied code must keep its copyright notice on the first line", name))
 		}
