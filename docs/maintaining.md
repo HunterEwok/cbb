@@ -218,8 +218,10 @@ Rules for workflows:
   CI's `packaging` and `Android app` jobs make them on every change, as the release does.
 - After the draft, the `docker` job builds the image of `packaging/docker` from the
   release's own Linux archives for amd64, arm64 and armv7, pushes it to
-  `ghcr.io/hunterewok/cbb` as `X.Y.Z` (and `latest`, but not for a pre-release),
-  attests it in the registry and adds its digest to the release notes. The first push makes
+  `ghcr.io/hunterewok/cbb` as `X.Y.Z-unsigned`, attests it in the registry and adds its
+  digest to the release notes. Only after the release is signed and published does
+  `published.yml` tag the digest that the signed `release.json` names as `X.Y.Z` (and
+  `latest`, but not for a pre-release), so no unsigned image reaches them. The first push makes
   the package private: once, in the package's settings on GitHub, make it public.
 
 ## Signed releases
@@ -264,7 +266,9 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
 - **Each release**: once the release workflow has made the draft (its `docker` job adds the
   image's digest to the notes), `release-sign publish -version X.Y.Z [-min-from X.Y.Z]` on
   the Mac, with `gh` signed in. It downloads the draft's files, checks each one's build
-  attestation against the tag (`gh attestation verify --source-ref refs/tags/vX.Y.Z`), keeps
+  attestation against the tag (`gh attestation verify --source-ref refs/tags/vX.Y.Z`), and
+  the image's in the registry (the notes are not signed, so the digest they name counts only
+  with that attestation), keeps
   the branch's `keys.json` when it is valid for 45 more days and certifies the release key
   and the keys asked for (otherwise a root signs a new one, numbered above it, with the same
   keys: the YubiKey's PIN and a touch), signs `release.json` and `stable.json` (numbered
@@ -272,8 +276,8 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   pinned roots as a device would, uploads `release.json` to the draft and, after a yes,
   publishes it and commits `keys.json` and `stable.json` to the branch. `-no-publish` stops
   before publishing, `-docker none` signs a release without the image; a pre-release
-  changes no `stable.json`. `published.yml` then checks what GitHub serves and updates the
-  Homebrew tap. The steps by hand: `release-sign manifest`, `sign`, `channel`, `keys` and
+  changes no `stable.json`. `published.yml` then checks what GitHub serves, tags the signed
+  image and updates the Homebrew tap. The steps by hand: `release-sign manifest`, `sign`, `channel`, `keys` and
   `verify` (the comment in `tools/release-sign/main.go`).
 - **The entry points** (docs/protocol.md, section 16, "Entry points"): the ways in to the
   project's servers that are not built in. On the Mac, in a checkout of the branch `channel`,
@@ -447,9 +451,14 @@ every pull request and installs and removes the package from it. Setting it up, 
 - [ ] In the environment **release**: `CBB_OPENWRT_FEED_KEY`, the contents of
   `feed.pem`. Keep a copy offline; a new key means every router fetches the new public key.
 
-For each release, unpack `openwrt-feed.tar.gz` into the site's `openwrt/` directory on
-cbb.tools (routers read `https://cbb.tools/openwrt/<arch>/packages.adb`). Without the
-secret the release still succeeds and warns that there is no feed.
+For each release, once it is signed and published, unpack `openwrt-feed.tar.gz` into the
+site's `openwrt/` directory on cbb.tools (routers read
+`https://cbb.tools/openwrt/<arch>/packages.adb`). The feed's key is in CI, so a feed counts
+only as a file of a release the offline release key signed: take it from the published
+release, check that release with `release-sign verify` (under the pinned roots, with the
+branch `channel`'s `keys.json` and `stable.json`, as `published.yml` does), and unpack only
+the `openwrt-feed.tar.gz` it checked; never one from a draft. Without the secret the release
+still succeeds and warns that there is no feed.
 
 ## The ZX Spectrum Next's files
 

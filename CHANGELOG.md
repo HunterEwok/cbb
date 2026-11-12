@@ -1627,6 +1627,18 @@ All notable changes to cbb are documented in this file. The format follows
 - A phone's port for a call it dialed through a relay takes connections of its own user only,
   and the relay's tunnel port closes connections it did not make without holding up the
   others.
+- Updates, bug reports and releases are hardened: the updater makes its work folder anew
+  unless it is its own and closed to others, and unpacks the archive as root's files; bug
+  reports filter more (addresses and host names inside a word, names in any case and as host
+  names, words in other scripts) and send a panic's kind and place without the values in its
+  message; `bug.cbb.tools` keeps 30 days of reports, answers 503 when full so the apps send
+  later, gives each IPv6 /64 and /48 a share of the day and limits each /64's rate; the Docker image gets its version, and `latest` only for a
+  newer release, after the release is signed with the offline key, and `release-sign publish` takes the image only
+  with the release workflow's attestation; OpenWrt's init script writes the interface list to
+  `/var/run/cbb.interfaces`; `get.ps1` downloads into a folder only administrators may change;
+  a kept revocation list of Android attestations still counts after a restart once it ran out;
+  test roots in `CBB_RELEASE_ROOTS` are taken only from a file others cannot change. The
+  cryptography page lists the sealed messages (HPKE with X-Wing) and their keys.
 - The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on

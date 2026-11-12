@@ -167,6 +167,7 @@ a key is not P-256	ufunguo si P-256
 %s is not signed by the project's key; not installing	%s haijasainiwa kwa ufunguo wa mradi; haisakinishwi
 keys.json holds a key whose use is empty; not installing	keys.json ina ufunguo ambao matumizi yake ni tupu; haisakinishwi
 checking for administrator rights	inakagua haki za msimamizi
+making a private folder for the download	kuunda folda ya faragha kwa upakuaji
 run it in a PowerShell opened with "Run as administrator"	iendeshe katika PowerShell iliyofunguliwa kwa "Run as administrator"
 finding the architecture	inatambua usanifu
 finding the latest release	inatafuta toleo la hivi karibuni

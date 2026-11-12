@@ -68,7 +68,7 @@ pub fn install(dir: &Path) {
         let details = describe(info);
         let log: Vec<String> = RECENT.try_lock().map(|r| r.iter().cloned().collect()).unwrap_or_default();
         let body = json!({ "details": details, "log": log, "at_ms": crate::uptime::wall_ms() });
-        let _ = std::fs::write(dir.join(PANIC_FILE), body.to_string());
+        let _ = crate::files::write_atomic(&dir.join(PANIC_FILE), body.to_string().as_bytes(), 0o600);
         earlier(info);
     }));
 }

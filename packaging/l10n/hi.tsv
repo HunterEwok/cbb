@@ -167,6 +167,7 @@ a key is not P-256	एक कुंजी P-256 नहीं है
 %s is not signed by the project's key; not installing	%s प्रोजेक्ट की कुंजी से हस्ताक्षरित नहीं है; इंस्टॉल नहीं किया जा रहा
 keys.json holds a key whose use is empty; not installing	keys.json में एक कुंजी है जिसका उपयोग खाली है; इंस्टॉल नहीं किया जा रहा
 checking for administrator rights	व्यवस्थापक अधिकार जाँचे जा रहे हैं
+making a private folder for the download	डाउनलोड के लिए निजी फ़ोल्डर बनाया जा रहा है
 run it in a PowerShell opened with "Run as administrator"	इसे "Run as administrator" से खोले गए PowerShell में चलाएँ
 finding the architecture	आर्किटेक्चर पता किया जा रहा है
 finding the latest release	नवीनतम रिलीज़ खोजी जा रही है

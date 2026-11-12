@@ -140,6 +140,18 @@ func publish(args []string) error {
 	case "none":
 		*docker = ""
 	}
+	if *docker != "" {
+		// The notes are not signed: the image is taken only with the release
+		// workflow's attestation for this tag.
+		step("checking the build attestation of %s", *docker)
+		if !dockerRE.MatchString(*docker) {
+			return fmt.Errorf("%q is not ghcr.io/hunterewok/cbb@sha256:DIGEST", *docker)
+		}
+		if _, err := gh("attestation", "verify", "oci://"+*docker, "--repo", s.repo,
+			"--source-ref", "refs/tags/"+tag, "--signer-workflow", s.repo+"/.github/workflows/release.yml"); err != nil {
+			return fmt.Errorf("the image %s was not built by the release workflow from %s: %w", *docker, tag, err)
+		}
+	}
 
 	dir := *dirFlag
 	if dir == "" {

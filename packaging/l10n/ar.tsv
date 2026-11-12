@@ -167,6 +167,7 @@ a key is not P-256	أحد المفاتيح ليس P-256
 %s is not signed by the project's key; not installing	%s غير موقّع بمفتاح المشروع؛ لن يُثبَّت
 keys.json holds a key whose use is empty; not installing	يحتوي keys.json على مفتاح استخدامه فارغ؛ لن يُثبَّت
 checking for administrator rights	التحقق من صلاحيات المسؤول
+making a private folder for the download	إنشاء مجلد خاص للتنزيل
 run it in a PowerShell opened with "Run as administrator"	شغّله في PowerShell مفتوح عبر "تشغيل كمسؤول"
 finding the architecture	تحديد المعمارية
 finding the latest release	البحث عن أحدث إصدار

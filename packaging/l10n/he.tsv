@@ -167,6 +167,7 @@ a key is not P-256	מפתח אינו P-256
 %s is not signed by the project's key; not installing	%s אינו חתום במפתח של הפרויקט; לא מתקין
 keys.json holds a key whose use is empty; not installing	keys.json מכיל מפתח שהשימוש שלו ריק; לא מתקין
 checking for administrator rights	בודק הרשאות מנהל
+making a private folder for the download	יצירת תיקייה פרטית להורדה
 run it in a PowerShell opened with "Run as administrator"	הרץ אותו ב-PowerShell שנפתח עם "Run as administrator"
 finding the architecture	מזהה את הארכיטקטורה
 finding the latest release	מחפש את הגרסה האחרונה

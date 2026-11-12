@@ -140,7 +140,43 @@ fn cut(s: &str, max: usize) -> String {
 
 /// A character that a word of the filter is made of.
 fn word_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '=' | '_' | '-' | '.' | ':' | '@' | '%' | '[' | ']')
+    c.is_alphanumeric() || matches!(c, '+' | '/' | '=' | '_' | '-' | '.' | ':' | '@' | '%' | '[' | ']')
+}
+
+/// What splits a word into the parts an address or a host name can hide
+/// in: `peer=10.0.0.2:7300`, `https://10.0.0.2:7300/x`.
+const PART_SPLIT: [char; 2] = ['=', '/'];
+
+/// The keys of `key=value` whose value is a name that may not leave the
+/// device.
+const NAME_KEYS: [&str; 13] = [
+    "ssid", "bssid", "essid", "wifi", "network", "host", "hostname", "device", "name", "user", "username", "peer",
+    "server",
+];
+
+/// The endings of the home network's host names, which often carry the
+/// owner's name (`dens-macbook.local`).
+const LOCAL_HOSTS: [&str; 13] = [
+    ".local",
+    ".lan",
+    ".home",
+    ".internal",
+    ".home.arpa",
+    ".localdomain",
+    ".box",
+    ".router",
+    ".intranet",
+    ".corp",
+    ".private",
+    ".localhost",
+    ".domain",
+];
+
+/// A host name of the home network, with a port or not.
+fn local_host(w: &str) -> bool {
+    let host = w.rsplit_once(':').filter(|(_, p)| p.bytes().all(|b| b.is_ascii_digit())).map_or(w, |(h, _)| h);
+    let lower = host.to_ascii_lowercase();
+    LOCAL_HOSTS.iter().any(|end| lower.len() > end.len() && lower.ends_with(end))
 }
 
 fn is_hex(s: &str) -> bool {
@@ -171,10 +207,9 @@ fn mac(w: &str) -> bool {
     parts.len() == 6 && parts.iter().all(|p| p.len() == 2 && is_hex(p))
 }
 
-/// What a word of a log line becomes: itself, or a placeholder for what
-/// may not leave the device.
-fn redact_word(w: &str) -> Option<&'static str> {
-    let core = w.trim_end_matches(['.', ':', ',']);
+/// What a part of a word becomes when it is an address, a host name of
+/// the home network, an e-mail address or a MAC address; None otherwise.
+fn redact_place(core: &str) -> Option<&'static str> {
     if core.contains('@') && core.rsplit('@').next().is_some_and(|d| d.contains('.')) {
         return Some("<email>");
     }
@@ -186,6 +221,80 @@ fn redact_word(w: &str) -> Option<&'static str> {
     }
     if ipv6(core) {
         return Some("<address>");
+    }
+    if local_host(core) {
+        return Some("<host>");
+    }
+    None
+}
+
+/// What a word of a log line becomes: itself, or with what may not leave
+/// the device replaced.
+fn redact_word(w: &str) -> Option<String> {
+    if let Some(p) = redact_whole(w) {
+        return Some(p.to_string());
+    }
+    // A name in `key=value` or `key:value`: a network's, a host's, a peer's,
+    // a device's or a user's.
+    for sep in ['=', ':'] {
+        if let Some((key, value)) = w.split_once(sep)
+            && !value.is_empty()
+            && name_key(key)
+        {
+            let p = redact_place(value.trim_end_matches(['.', ','])).unwrap_or("<name>");
+            return Some(alloc::format!("{key}{sep}{p}"));
+        }
+    }
+    // An address after another key: `addr:10.0.0.2:7300`.
+    if let Some((key, value)) = w.split_once(':')
+        && key.bytes().all(|b| b.is_ascii_alphabetic() || b == b'_')
+        && key.bytes().any(|b| !b.is_ascii_hexdigit())
+        && let Some(p) = redact_place(value.trim_end_matches(['.', ',']))
+    {
+        return Some(alloc::format!("{key}:{p}"));
+    }
+    // An address or a host name inside a word: `peer=...`, a URL.
+    if !w.contains(PART_SPLIT) {
+        return None;
+    }
+    let mut out = String::new();
+    let mut changed = false;
+    let mut rest = w;
+    loop {
+        let (part, sep, next) = match rest.find(PART_SPLIT) {
+            Some(i) => {
+                let sep = rest.get(i..).and_then(|r| r.chars().next()).unwrap_or('/');
+                (rest.get(..i).unwrap_or_default(), Some(sep), rest.get(i.saturating_add(1)..).unwrap_or_default())
+            }
+            None => (rest, None, ""),
+        };
+        let core = part.trim_end_matches(['.', ':', ',']);
+        match redact_place(core) {
+            Some(p) if !core.is_empty() => {
+                out.push_str(p);
+                changed = true;
+            }
+            _ => out.push_str(part),
+        }
+        match sep {
+            Some(c) => out.push(c),
+            None => break,
+        }
+        rest = next;
+    }
+    changed.then_some(out)
+}
+
+/// What a whole word becomes when it may not leave the device.
+fn redact_whole(w: &str) -> Option<&'static str> {
+    let core = w.trim_end_matches(['.', ':', ',']);
+    // A word in another script than Latin is the user's text: the
+    // programs log in English.
+    if !core.is_ascii() {
+        return Some("<text>");
+    }
+    if let Some(p) = redact_place(core) {
+        return Some(p);
     }
     if core.len() >= 16 && is_hex(core) {
         return Some("<id>");
@@ -229,35 +338,200 @@ fn redact_homes(s: &str) -> String {
     out
 }
 
+/// A device's name as its host name: lower case, with a dash for each run
+/// of anything but letters and digits (`Den's MacBook` is `den-s-macbook`).
+fn slug(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.chars().flat_map(char::to_lowercase) {
+        if c.is_alphanumeric() {
+            out.push(c);
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    out.trim_end_matches('-').to_string()
+}
+
+/// Whether two characters are the same letter in any case.
+fn same_letter(a: char, b: char) -> bool {
+    a == b || a.to_lowercase().eq(b.to_lowercase())
+}
+
+/// s with every occurrence of what, in any case, replaced by with.
+fn replace_any_case(s: &str, what: &str, with: &str) -> String {
+    let want: Vec<char> = what.chars().collect();
+    let have: Vec<char> = s.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < have.len() {
+        let end = i.saturating_add(want.len());
+        let hit =
+            !want.is_empty() && have.get(i..end).is_some_and(|w| w.iter().zip(&want).all(|(&a, &b)| same_letter(a, b)));
+        if hit {
+            out.push_str(with);
+            i = end;
+        } else {
+            if let Some(&c) = have.get(i) {
+                out.push(c);
+            }
+            i = i.saturating_add(1);
+        }
+    }
+    out
+}
+
+/// The part of a panic's message that says what kind of break it was,
+/// without the values the standard library puts in it: up to the first
+/// `: ` (`called ... on an Err value: <the error>`), quote, or ` of `
+/// before a backtick (`... of` and the text in backticks).
+/// A message the program wrote itself (`panic!`, `expect`) may hold any
+/// value, so only the standard library's own kinds are kept, and any other
+/// is "a panic": its file and line say where it is.
+pub fn panic_kind(what: &str) -> String {
+    let mut end = what.len();
+    for stop in [": ", "'", "\"", " of `", "\n"] {
+        if let Some(i) = what.find(stop) {
+            end = end.min(i);
+        }
+    }
+    let kind = what.get(..end).unwrap_or_default().trim_end();
+    if STD_PANICS.iter().any(|p| kind.starts_with(p)) { kind.to_string() } else { "a panic".to_string() }
+}
+
+/// The beginnings of the standard library's panic messages.
+const STD_PANICS: [&str; 18] = [
+    "called `Option::unwrap()`",
+    "called `Option::expect()`",
+    "called `Result::unwrap()`",
+    "called `Result::unwrap_err()`",
+    "index out of bounds",
+    "attempt to ",
+    "byte index ",
+    "range end index ",
+    "range start index ",
+    "slice index ",
+    "assertion failed",
+    "assertion `left",
+    "already borrowed",
+    "already mutably borrowed",
+    "capacity overflow",
+    "explicit panic",
+    "not yet implemented",
+    "internal error: entered unreachable code",
+];
+
+/// A panic's details with only the kind of its message kept:
+/// `panic: <message> at <file:line:col>[ in thread <name>]` becomes
+/// `panic: <kind> at ...`. Details of another shape stay as they are.
+fn panic_details(details: &str) -> String {
+    let first = details.lines().next().unwrap_or_default();
+    let Some(body) = first.strip_prefix("panic: ") else { return details.to_string() };
+    let (what, at) = match body.rsplit_once(" at ") {
+        Some((w, a)) => (w, alloc::format!(" at {a}")),
+        None => (body, String::new()),
+    };
+    alloc::format!("panic: {}{at}", panic_kind(what))
+}
+
 /// A line of text with everything that may not leave the device replaced:
 /// the given names, addresses, MAC addresses, IDs and hashes, long numbers
 /// (codes), e-mail addresses, base64 data and the users' names in paths.
 pub fn redact(line: &str, names: &[String]) -> String {
     let mut s = line.to_string();
-    let mut sorted: Vec<&String> = names.iter().filter(|n| n.chars().count() >= 2).collect();
-    sorted.sort_by_key(|n| core::cmp::Reverse(n.len()));
-    for n in sorted {
-        s = s.replace(n.as_str(), "<name>");
+    // Each name as it is and as a host name (`office-pc`), in any case.
+    let mut forms: Vec<String> = Vec::new();
+    for n in names.iter().filter(|n| n.chars().count() >= 2) {
+        forms.push(n.clone());
+        let slug = slug(n);
+        if slug.chars().count() >= 2 && !forms.contains(&slug) {
+            forms.push(slug);
+        }
+    }
+    forms.sort_by_key(|n| core::cmp::Reverse(n.len()));
+    for n in &forms {
+        s = replace_any_case(&s, n, "<name>");
     }
     s = redact_homes(&s);
     let mut out = String::new();
     let mut word = String::new();
-    let flush = |word: &mut String, out: &mut String| {
-        if !word.is_empty() {
-            out.push_str(redact_word(word).unwrap_or(word));
-            word.clear();
+    // Whether the word before was a field of a name, `host:` or `peer=`,
+    // with only spaces since: the next word is its value.
+    let mut field = false;
+    // Whether a field's value has begun: its further words, up to the end
+    // of the field (a `,`, `;`, bracket or quote, or the line's end), go
+    // into the same placeholder (`wifi: Home Net 5G`).
+    let mut in_value = false;
+    // Whether the word before was a name's key alone, `server` in
+    // `server = name`.
+    let mut key = false;
+    let mut flush = |word: &mut String, out: &mut String, field: &mut bool, in_value: &mut bool| {
+        if word.is_empty() {
+            return;
         }
+        if (word == "=" || word == ":") && (key || *field) {
+            out.push_str(word);
+            word.clear();
+            *field = true;
+            key = false;
+            return;
+        }
+        key = name_key(word);
+        if *in_value {
+            // One placeholder for the whole value: the space before goes too.
+            if out.ends_with(' ') {
+                out.pop();
+            }
+            word.clear();
+            return;
+        }
+        let value = core::mem::take(field);
+        if value && !word.bytes().all(|b| b.is_ascii_digit()) {
+            out.push_str("<name>");
+            *in_value = true;
+        } else {
+            match redact_word(word) {
+                Some(r) => out.push_str(&r),
+                None => out.push_str(word),
+            }
+        }
+        *field = name_field(word);
+        word.clear();
     };
     for c in s.chars() {
         if word_char(c) {
             word.push(c);
         } else {
-            flush(&mut word, &mut out);
+            let was = !word.is_empty();
+            flush(&mut word, &mut out, &mut field, &mut in_value);
+            if c != ' ' {
+                in_value = false;
+            }
+            if !(c == ' ' || (was && c == ':')) {
+                field = false;
+            }
+            if c == ':' && was {
+                // `host: name`: the colon ends the field's word.
+                field = field || out.rsplit([' ', '\t']).next().is_some_and(name_key);
+            }
             out.push(if c.is_control() { ' ' } else { c });
         }
     }
-    flush(&mut word, &mut out);
+    flush(&mut word, &mut out, &mut field, &mut in_value);
     out
+}
+
+/// Whether w is a field whose value is a name: `host:` or `peer=` with
+/// nothing after it.
+fn name_field(w: &str) -> bool {
+    match w.strip_suffix([':', '=']) {
+        Some(key) => name_key(key),
+        None => false,
+    }
+}
+
+/// Whether key names a name (NAME_KEYS), in any case.
+fn name_key(key: &str) -> bool {
+    NAME_KEYS.contains(&key.to_ascii_lowercase().as_str())
 }
 
 /// Where a panic's details say it broke: the `file:line:col` after the
@@ -318,7 +592,10 @@ pub fn report(i: &Input) -> Result<Report, Error> {
         return Err(Error::msg(alloc::format!("a report names the app, not {:?}", i.app)));
     }
     let f = |s: &str| redact(&cut(s, MAX_FIELD), &i.names);
-    let details = redact(&cut(&i.details, MAX_DETAILS), &i.names);
+    // A panic's message may carry the values it broke on, the user's
+    // text among them: only its kind and place go.
+    let shaped = if i.kind == "panic" { panic_details(&i.details) } else { i.details.clone() };
+    let details = redact(&cut(&shaped, MAX_DETAILS), &i.names);
     let at = redact(&where_of(&i.details), &i.names);
     let mut r = Report {
         v: 1,
@@ -580,6 +857,77 @@ mod tests {
         // A file and a line stay readable.
         assert_eq!(redact("at member/src/sync.rs:120:9", &[]), "at member/src/sync.rs:120:9");
         assert_eq!(redact("sync is off for 15m", &[]), "sync is off for 15m");
+    }
+
+    /// Addresses and host names inside words, names in another case or as
+    /// host names, the user's text in another script, and the values in a
+    /// panic's message do not leave either.
+    #[test]
+    fn nothing_private_leaves_from_inside_words() {
+        let names = alloc::vec![String::from("Office PC"), String::from("Den's MacBook")];
+        for (line, gone) in [
+            ("dial https://192.168.1.5:7300/x failed", "192.168.1.5"),
+            ("peer=192.168.1.5:7300 closed", "192.168.1.5"),
+            ("dial http://[fe80::1]:7300/ failed", "fe80::1"),
+            ("host dimas-macbook-pro.local answered", "dimas-macbook-pro"),
+            ("host=nas.lan:445 down", "nas.lan"),
+            ("ssid=HomeNet-5G joined", "HomeNet-5G"),
+            (
+                "from \u{43c}\u{43e}\u{439} \u{43f}\u{430}\u{440}\u{43e}\u{43b}\u{44c} \u{43e}\u{442} \u{431}\u{430}\u{43d}\u{43a}\u{430} 4276 1234",
+                "\u{43f}\u{430}\u{440}\u{43e}\u{43b}\u{44c}",
+            ),
+            ("office pc dialed", "office pc"),
+            ("OFFICE PC dialed", "OFFICE PC"),
+            ("office-pc.local answered", "office-pc"),
+            ("den-s-macbook dialed", "den-s-macbook"),
+            ("peer:192.168.1.5:7300 closed", "192.168.1.5"),
+            ("addr:10.0.0.9 refused", "10.0.0.9"),
+            ("peer:dimas-macbook closed", "dimas-macbook"),
+            ("host: dimas-macbook answered", "dimas-macbook"),
+            ("server = nas-of-den down", "nas-of-den"),
+            ("Peer: kitchen-pi dialed", "kitchen-pi"),
+            ("router fritz.box answered", "fritz.box"),
+        ] {
+            let out = redact(line, &names);
+            assert!(!out.contains(gone), "{gone} left in {out}");
+        }
+        assert_eq!(redact("peer=192.168.1.5:7300 closed", &[]), "peer=<address> closed");
+        assert_eq!(redact("dial https://192.168.1.5:7300/x", &[]), "dial https://<address>/x");
+        // Paths, files and the program's words stay readable.
+        assert_eq!(redact("wrote state/bug.json, kept=3", &[]), "wrote state/bug.json, kept=3");
+        assert_eq!(redact("host: dimas-macbook answered", &[]), "host: <name>");
+        assert_eq!(redact("wifi: Home Net 5G, joined at 10.0.0.2", &[]), "wifi: <name>, joined at <address>");
+        assert_eq!(redact("(host: my nas) up", &[]), "(host: <name>) up");
+        assert_eq!(redact("peer:10.0.0.2:7300 closed", &[]), "peer:<address> closed");
+        assert_eq!(redact("addr:10.0.0.2:7300 closed", &[]), "addr:<address> closed");
+        assert_eq!(redact("retry: 3 times, sync: off", &[]), "retry: 3 times, sync: off");
+        assert_eq!(redact("name: 42", &[]), "name: 42");
+        assert_eq!(redact("at member/src/sync.rs:120:9", &[]), "at member/src/sync.rs:120:9");
+
+        let mut i = input();
+        i.kind = "panic".into();
+        for (what, gone) in [
+            (
+                "byte index 3 is not a char boundary; it is inside 'x' (bytes 2..4) of `my bank password hunter2`",
+                "hunter2",
+            ),
+            ("called `Result::unwrap()` on an `Err` value: Io(\"/srv/secret-plan.txt\")", "secret-plan"),
+            ("wrote my secret password hunter2: done", "hunter2"),
+        ] {
+            i.details = alloc::format!("panic: {what} at member/src/net.rs:7:3 in thread main");
+            let r = report(&i).unwrap();
+            assert!(!r.details.contains(gone), "{gone} left in {}", r.details);
+            assert!(r.details.ends_with(" at member/src/net.rs:7:3 in thread main"), "{}", r.details);
+            assert_eq!(r.at, "member/src/net.rs:7:3");
+        }
+        assert_eq!(panic_kind("index out of bounds: the len is 3 but the index is 5"), "index out of bounds");
+        assert_eq!(panic_kind("attempt to subtract with overflow"), "attempt to subtract with overflow");
+        assert_eq!(panic_kind("the store is damaged: hunter2"), "a panic");
+        // An error's details are the app's own and stay, filtered.
+        let mut i = input();
+        i.kind = "error".into();
+        i.details = "sync: refused at 10.0.0.2".into();
+        assert_eq!(report(&i).unwrap().details, "sync: refused at <address>");
     }
 
     #[test]

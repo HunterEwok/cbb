@@ -51,7 +51,7 @@ func groupUpdate(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[
 			if _, err := Run(ctx, d, "mkdir -p /feed /etc/systemd/system/cbb.service.d && printf '[Service]\\nEnvironment=CBB_RELEASE_ROOTS=/feed/roots.pem\\n' >/etc/systemd/system/cbb.service.d/bench-roots.conf && systemctl daemon-reload", ""); err != nil {
 				return err
 			}
-			if _, err := docker(ctx, "cp", fd.roots, d.Container+":/feed/roots.pem"); err != nil {
+			if err := fd.rootsTo(ctx, d); err != nil {
 				return err
 			}
 			if _, err := Run(ctx, d, "systemctl restart cbb", ""); err != nil {
