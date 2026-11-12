@@ -59,6 +59,33 @@ pub struct Welcome {
     pub counted: Vec<RecordId>,
 }
 
+/// How the joiner took its Welcome, which says what of the admitter's
+/// word about takeovers it takes (A-50, A-69).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Joining {
+    /// An ordinary joiner: it takes the claims its admitter counted and
+    /// the claims' ages.
+    Ordinary,
+    /// A guarded leaf over the session its short code confirmed in person:
+    /// it takes the claims that device counted (the new root after a
+    /// takeover), never a claim by its age.
+    GuardedByCode,
+    /// A guarded leaf any other way: neither counted claims nor ages.
+    Guarded,
+}
+
+impl Joining {
+    fn guarded(self) -> bool {
+        self != Joining::Ordinary
+    }
+    fn takes_counted(self) -> bool {
+        self != Joining::Guarded
+    }
+    fn takes_ages(self) -> bool {
+        self == Joining::Ordinary
+    }
+}
+
 /// Why the joiner does not take a Welcome.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Refusal {
@@ -226,15 +253,16 @@ impl Welcome {
     /// joiner's member key. Returns the joiner's record set, its state and
     /// the claims' held times, which it keeps as its own (A-69).
     ///
-    /// `guarded`: the joiner is a guarded leaf (A-50). It takes only a record
-    /// the root signed itself, and no claim by its admitter's word: none
-    /// counted, no claim's age.
+    /// `joining`: how it came (`Joining`). A guarded leaf (A-50) takes only
+    /// a record the root signed itself and no claim by its age; the claims
+    /// its admitter counted only over the session its short code confirmed
+    /// in person.
     pub fn check(
         &self,
         group: &GroupId,
         admitter: &[u8; 65],
         own: &[u8; 65],
-        guarded: bool,
+        joining: Joining,
     ) -> Result<(RecordSet, State, BTreeMap<RecordId, u64>), Refusal> {
         let root = Key::es256(self.root.clone());
         if root.check().is_err() {
@@ -243,7 +271,7 @@ impl Welcome {
         if root.device_id().0 != group.0 {
             return Err(Refusal::OtherGroup);
         }
-        if guarded && !self.counted.is_empty() {
+        if !joining.takes_counted() && !self.counted.is_empty() {
             return Err(Refusal::Takeover);
         }
         // The counted claims and the claim ages name only claims among the
@@ -254,7 +282,7 @@ impl Welcome {
             return Err(Refusal::Damaged);
         }
         let held: BTreeMap<RecordId, u64> =
-            if guarded { BTreeMap::new() } else { self.claim_ages.iter().copied().collect() };
+            if joining.takes_ages() { self.claim_ages.iter().copied().collect() } else { BTreeMap::new() };
         // The counted claims go to the set before the records: a counted
         // root's records then come with the room and keys it gives, and a
         // later root's records are not refused. Each is checked once, when
@@ -268,16 +296,19 @@ impl Welcome {
         if set.counted_claims().iter().map(|c| c.claim).ne(self.counted.iter().copied()) {
             return Err(Refusal::Takeover);
         }
-        // A guarded leaf takes no claim by the admitter's word, neither
-        // counted nor by its age: only the root's own record of it counts,
-        // and a takeover reaches it later, by its own clock.
+        // A guarded leaf takes no claim by its age: only the root's own
+        // record of it counts, and the takeover the device it met in person
+        // counted; any other takeover reaches it later, by its own clock.
         // A takeover the admitter counted is final for the joiner too, once
         // the Welcome's records and its own ages put it in effect: its
         // signer may take over, its key is not void, nobody cancelled it,
         // and it waited the root's delay. The path with the counted claims
         // must not part from the path the records and ages give alone.
         let plain = eval::evaluate(&eval::Input { root: &root, records: &self.records, held_ms: &held, counted: &[] });
-        if !self.counted.is_empty() {
+        // A guarded leaf has no ages to put a claim in effect: the word of
+        // the device it met in person stands for them, and the records
+        // still prove each claim.
+        if joining.takes_ages() && !self.counted.is_empty() {
             let stands =
                 |id: &RecordId| plain.claims.iter().any(|c| c.record == *id && c.state == ClaimState::Effective);
             if !self.counted.iter().all(stands) {
@@ -309,7 +340,7 @@ impl Welcome {
         }
         let by_root = state.is_root(&signer) && state.root_device == Some(adm.id);
         let by_admin = adm.admin == Some(signer) && adm.powers & POWER_ADMIT != 0;
-        if !(by_root || by_admin) || (guarded && !by_root) {
+        if !(by_root || by_admin) || (joining.guarded() && !by_root) {
             return Err(Refusal::NotAdmitter);
         }
         Ok((set, state, held))
