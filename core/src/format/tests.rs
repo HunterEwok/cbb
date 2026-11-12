@@ -227,10 +227,12 @@ fn grants() {
     })]
         .clone();
     let g = load("grants.json");
+    let group = DeviceId(unhex(s(&g, "group")).try_into().unwrap());
+    let leaf_of = |t: &Json| DeviceId(unhex(s(t, "leaf")).try_into().unwrap());
     for t in g["take"].as_array().unwrap() {
         let msg = unhex(s(t, "message"));
         let v = cbor::decode(&msg).unwrap();
-        let got = grant::read(&v, &root, None).unwrap_or_else(|r| panic!("{}: {r}", s(t, "name")));
+        let got = grant::read(&v, &root, &leaf_of(t), &group, None).unwrap_or_else(|r| panic!("{}: {r}", s(t, "name")));
         assert_eq!(got.guarded, s(t, "name").contains("guarded"));
         assert_eq!(got.admin.is_some(), s(t, "name").contains("admin"));
         assert_eq!(hex(got.grant.body), s(t, "grant"));
@@ -239,12 +241,12 @@ fn grants() {
         let fb = unhex(s(t, "frame"));
         let f = frame::read(&fb, frame::LIMIT_LEAF).unwrap();
         assert_eq!(f.t, 20);
-        grant::read(&f.map, &root, None).unwrap();
+        grant::read(&f.map, &root, &leaf_of(t), &group, None).unwrap();
     }
     for t in g["refuse"].as_array().unwrap() {
         let mb = unhex(s(t, "message"));
         let v = cbor::decode(&mb).unwrap();
-        let got = grant::read(&v, &root, None);
+        let got = grant::read(&v, &root, &leaf_of(t), &group, None);
         assert_eq!(got.err().map(Rule::name), Some(s(t, "rule")), "{}", s(t, "name"));
     }
     for q in g["sequences"].as_array().unwrap() {
@@ -253,7 +255,7 @@ fn grants() {
             let name = format!("{}: {}", s(q, "name"), s(t, "name"));
             let mb = unhex(s(t, "message"));
             let v = cbor::decode(&mb).unwrap();
-            match grant::read(&v, &root, kept.as_ref()) {
+            match grant::read(&v, &root, &leaf_of(q), &group, kept.as_ref()) {
                 Ok(got) => {
                     assert_eq!(s(t, "verdict"), "take", "{name}");
                     kept = Some(got.keep(kept.as_ref()));
@@ -291,6 +293,11 @@ fn record_sets_hold(m: &Value<'_>) -> bool {
     let typ = m.get(1).and_then(Value::as_uint).unwrap_or(0);
     let (sorted, once) = record_sets(typ);
     let arr = |f: u16| m.get(f).and_then(Value::as_array).unwrap_or(&[]);
+    // seen (removal, freeze, claim): [key hash, seq >= 1, record ID]
+    let seen_ok = |e: &Value<'_>| matches!(e.as_array(), Some([Value::Bytes(k), Value::Uint(s), Value::Bytes(id)]) if k.len() == 32 && *s >= 1 && id.len() == 32);
+    if matches!(typ, 2 | 3 | 5) && !arr(11).iter().all(seen_ok) {
+        return false;
+    }
     sorted.iter().all(|f| cbor::is_set(arr(*f)))
         && once.iter().all(|f| {
             let a = arr(*f);
@@ -328,7 +335,7 @@ fn sets_keep_their_order() {
             refused += 1;
         }
     }
-    assert_eq!(refused, 9);
+    assert_eq!(refused, 11);
     let fr = load("frames.json");
     for t in fr["refuse_fields"].as_array().unwrap() {
         let b = unhex(s(t, "message"));
@@ -352,7 +359,7 @@ fn sets_keep_their_order() {
         }
     }
     let c = load("copy.json");
-    for t in c["refuse_readers"].as_array().unwrap() {
+    for t in c["refuse_copies"].as_array().unwrap().iter().chain(c["refuse_readers"].as_array().unwrap()) {
         let b = unhex(s(t, "copy"));
         let v = cbor::decode(&b).unwrap();
         assert_eq!(copy::Copy::from_value(&v).err().map(Rule::name), Some(s(t, "rule")), "{}", s(t, "name"));

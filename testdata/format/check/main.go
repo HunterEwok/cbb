@@ -198,6 +198,14 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	if !ok1 || !ok2 {
 		return nil, nil, errors.New("env/shape")
 	}
+	if len(a) == 3 {
+		// sig2 is not fixed: a later algorithm's signature, up to 4 KiB.
+		if s2, ok := a[2].([]byte); !ok {
+			return nil, nil, errors.New("env/shape")
+		} else if len(s2) > 4096 {
+			return nil, nil, errors.New("env/sig2")
+		}
+	}
 	bv, err := strict(body)
 	if err != nil {
 		return nil, nil, fmt.Errorf("body cbor: %w", err)
@@ -399,13 +407,16 @@ func main() {
 	// grants: one signed envelope, by the root, or by an admin whose key
 	// the root's record in field 3 makes an admin with admit
 	var g struct {
-		Take []struct {
+		Group string `json:"group"`
+		Take  []struct {
 			Name    string `json:"name"`
+			Leaf    string `json:"leaf"`
 			Message string `json:"message"`
 		} `json:"take"`
 		Refuse []struct {
 			Name    string `json:"name"`
 			Rule    string `json:"rule"`
+			Leaf    string `json:"leaf"`
 			Message string `json:"message"`
 		} `json:"refuse"`
 	}
@@ -414,11 +425,17 @@ func main() {
 		guarded       bool
 		rootC, adminC uint64
 		commanders    map[string][]byte // key hash in hex to point
+		grantHash     []byte            // SHA-256 of the kept grant's body
 	}
 	rootHash := mustHashOf("root", keys.Keys)
 	// grant reads message grant for a leaf that keeps st (nil before its
 	// first grant) and returns what the leaf keeps after taking it.
-	grant := func(msg []byte, st *leafState) (*leafState, error) {
+	group := unhex(g.Group)
+	allowed := map[uint64]bool{1: true, 2: true, 3: true, 4: true, 6: true}
+	for k := uint64(10); k <= 18; k++ {
+		allowed[k] = true
+	}
+	grant := func(msg []byte, leaf []byte, st *leafState) (*leafState, error) {
 		v, err := strict(msg)
 		if err != nil {
 			return nil, err
@@ -431,6 +448,27 @@ func main() {
 		envb, err := em.Marshal(ge)
 		if err != nil {
 			return nil, err
+		}
+		// the body's form before its signature: no unknown critical field,
+		// type 1, this group, this leaf
+		if ea, ok := ge.([]any); ok && len(ea) >= 2 {
+			if bb, ok := ea[0].([]byte); ok {
+				if bv, err := strict(bb); err == nil {
+					if pre, ok := bv.(map[any]any); ok {
+						for k := range pre {
+							if n := k.(uint64); n < 256 && !allowed[n] {
+								return nil, errors.New("form/critical")
+							}
+						}
+						typ, _ := pre[uint64(1)].(uint64)
+						gr, _ := pre[uint64(2)].([]byte)
+						lf, _ := pre[uint64(10)].([]byte)
+						if typ != 1 || !bytes.Equal(gr, group) || !bytes.Equal(lf, leaf) {
+							return nil, errors.New("grants/shape")
+						}
+					}
+				}
+			}
 		}
 		byRoot := false
 		signerKey := func(body map[any]any) ([]byte, error) {
@@ -470,11 +508,8 @@ func main() {
 			}
 			return pub, nil
 		}
-		body, _, err := envelope(envb, "cbb grant v1", signerKey)
+		body, gbody, err := envelope(envb, "cbb grant v1", signerKey)
 		if err != nil {
-			return nil, err
-		}
-		if err := grantSets(body); err != nil {
 			return nil, err
 		}
 		counter, _ := body[uint64(4)].(uint64)
@@ -498,6 +533,28 @@ func main() {
 				return nil, errors.New("grants/counter")
 			}
 		}
+		// an admin grant after the first names the kept grant it replaces
+		rep, hasRep := body[uint64(18)].([]byte)
+		_, anyRep := body[uint64(18)]
+		switch {
+		case byRoot || st == nil:
+			if anyRep {
+				return nil, errors.New("grants/replaces")
+			}
+		case !hasRep || !bytes.Equal(rep, st.grantHash):
+			return nil, errors.New("grants/replaces")
+		}
+		if life, ok := body[uint64(11)]; ok {
+			n, isInt := life.(uint64)
+			if !guarded || !isInt || n < 1 || n > 3456000000 {
+				return nil, errors.New("grants/life")
+			}
+		}
+		if err := grantSets(body); err != nil {
+			return nil, err
+		}
+		gh := sha256.Sum256(gbody)
+		next.grantHash = gh[:]
 		if byRoot {
 			next.rootC, next.adminC = counter, 0
 		} else {
@@ -514,32 +571,26 @@ func main() {
 		return next, nil
 	}
 	for _, t := range g.Take {
-		if _, err := grant(unhex(t.Message), nil); err != nil {
+		if _, err := grant(unhex(t.Message), unhex(t.Leaf), nil); err != nil {
 			fail("grants %s: %v", t.Name, err)
 		}
 	}
 	checkedRefuse := 0
 	for _, r := range g.Refuse {
-		switch r.Rule {
-		case "grants/commanders", "grants/readers", "grants/neighbors":
-			checkedRefuse++
-			if _, err := grant(unhex(r.Message), nil); err == nil || err.Error() != r.Rule {
-				fail("grants %s: %v", r.Name, err)
-			}
-			continue
-		}
-		if !strings.HasPrefix(r.Rule, "sig/") && r.Rule != "grants/shape" && r.Rule != "grants/admin" &&
-			r.Rule != "grants/guarded" {
-			continue
-		}
 		checkedRefuse++
-		if _, err := grant(unhex(r.Message), nil); err == nil {
+		_, err := grant(unhex(r.Message), unhex(r.Leaf), nil)
+		switch {
+		case err == nil:
 			fail("grants %s: taken", r.Name)
+		case strings.HasPrefix(r.Rule, "sig/"):
+		case err.Error() != r.Rule:
+			fail("grants %s: %v, want %s", r.Name, err, r.Rule)
 		}
 	}
 	var gq struct {
 		Sequences []struct {
 			Name  string `json:"name"`
+			Leaf  string `json:"leaf"`
 			Steps []struct {
 				Name    string `json:"name"`
 				Message string `json:"message"`
@@ -552,7 +603,7 @@ func main() {
 	for _, q := range gq.Sequences {
 		var st *leafState
 		for _, t := range q.Steps {
-			next, err := grant(unhex(t.Message), st)
+			next, err := grant(unhex(t.Message), unhex(q.Leaf), st)
 			switch {
 			case err == nil && t.Verdict == "take":
 				st = next
@@ -975,11 +1026,42 @@ func grantSets(body map[any]any) error {
 			return errors.New("grants/commanders")
 		}
 	}
-	if rs, _ := body[uint64(13)].([]any); len(rs) > 4 || !sortedSet(rs) {
+	var rs, ns []any
+	if v, ok := body[uint64(13)]; ok {
+		if rs, ok = v.([]any); !ok {
+			return errors.New("grants/readers")
+		}
+	}
+	if len(rs) > 4 || !sortedSet(rs) {
 		return errors.New("grants/readers")
 	}
-	if ns, _ := body[uint64(14)].([]any); len(ns) > 8 || !sortedSet(ns) {
+	for _, r := range rs {
+		e, _ := r.([]any)
+		if len(e) != 2 {
+			return errors.New("grants/readers")
+		}
+		id, _ := e[0].([]byte)
+		k, _ := e[1].([]any)
+		var pub []byte
+		if len(k) == 2 {
+			pub, _ = k[1].([]byte)
+		}
+		if alg, _ := keyAlg(k); len(id) != 16 || alg != 1 || len(pub) != 65 {
+			return errors.New("grants/readers")
+		}
+	}
+	if v, ok := body[uint64(14)]; ok {
+		if ns, ok = v.([]any); !ok {
+			return errors.New("grants/neighbors")
+		}
+	}
+	if len(ns) > 8 || !sortedSet(ns) {
 		return errors.New("grants/neighbors")
+	}
+	for _, n := range ns {
+		if b, _ := n.([]byte); len(b) != 32 {
+			return errors.New("grants/neighbors")
+		}
 	}
 	return nil
 }
@@ -1008,6 +1090,14 @@ func recordSets(m map[any]any) (int, bool) {
 		}
 		ok = ok && sortedSet(a)
 	}
+	// seen (field 11 of revoke, freeze and claim): every entry is
+	// [key hash, seq, record ID].
+	if typ == 2 || typ == 3 || typ == 5 {
+		a, _ := m[uint64(11)].([]any)
+		for _, e := range a {
+			ok = ok && seenEntry(e)
+		}
+	}
 	for _, f := range once {
 		a, _ := m[f].([]any)
 		if len(a) >= 2 {
@@ -1016,6 +1106,93 @@ func recordSets(m map[any]any) (int, bool) {
 		ok = ok && onceSet(a)
 	}
 	return n, ok
+}
+
+func seenEntry(e any) bool {
+	t, ok := e.([]any)
+	if !ok || len(t) != 3 {
+		return false
+	}
+	h, ok1 := t[0].([]byte)
+	seq, ok2 := t[1].(uint64)
+	id, ok3 := t[2].([]byte)
+	return ok1 && ok2 && ok3 && len(h) == 32 && seq >= 1 && len(id) == 32
+}
+
+// copyRule reads a copy's outer map and header and gives the rule they
+// break, or "" when they hold.
+func copyRule(c []byte) string {
+	v, err := strict(c)
+	if err != nil {
+		return "cbor"
+	}
+	m, ok := v.(map[any]any)
+	if !ok {
+		return "copy/shape"
+	}
+	hb, ok := m[uint64(1)].([]byte)
+	if !ok {
+		return "copy/shape"
+	}
+	hv, err := strict(hb)
+	if err != nil {
+		return "cbor"
+	}
+	h, ok := hv.(map[any]any)
+	if !ok {
+		return "copy/shape"
+	}
+	if _, ok := h[uint64(7)]; ok {
+		return "copy/reuse"
+	}
+	for k := range h {
+		if n, ok := k.(uint64); ok && n < 256 && (n < 1 || n > 6) {
+			return "form/critical"
+		}
+	}
+	sized := func(f uint64, n int) bool {
+		b, ok := h[f].([]byte)
+		return ok && len(b) == n
+	}
+	timeOK := false
+	if t, ok := h[uint64(3)].([]any); ok && len(t) == 2 {
+		w, ok1 := t[0].(uint64)
+		l, ok2 := t[1].(uint64)
+		timeOK = ok1 && ok2 && l <= 1<<32-1 && (w != 0 || l != 0)
+	}
+	blobOK := true
+	if b, ok := h[uint64(5)]; ok {
+		t, ok := b.([]any)
+		blobOK = ok && len(t) == 2
+		if blobOK {
+			_, ok1 := t[0].(uint64)
+			x, ok2 := t[1].([]byte)
+			blobOK = ok1 && ok2 && len(x) == 32
+		}
+	}
+	if !sized(1, 16) || !sized(2, 16) || !sized(6, 32) || !timeOK || !blobOK {
+		return "copy/shape"
+	}
+	rs, ok := h[uint64(4)].([]any)
+	if !ok || len(rs) == 0 || len(rs) > 256 || !sortedSet(rs) || !onceSet(rs) {
+		return "copy/readers"
+	}
+	for _, r := range rs {
+		t, ok := r.([]any)
+		if !ok || len(t) != 2 {
+			return "copy/readers"
+		}
+		id, ok1 := t[0].([]byte)
+		_, ok2 := t[1].(uint64)
+		if !ok1 || !ok2 || len(id) != 16 {
+			return "copy/readers"
+		}
+	}
+	ws, ok := m[uint64(3)].([]any)
+	if !ok || len(ws) != len(rs) {
+		return "copy/shape"
+	}
+	return ""
 }
 
 // checkSets reads every set the vectors hold and checks its order by
@@ -1119,6 +1296,11 @@ func checkSets(dir string) {
 			Name string `json:"name"`
 			Copy string `json:"copy"`
 		} `json:"refuse_readers"`
+		RefuseCopies []struct {
+			Name string `json:"name"`
+			Rule string `json:"rule"`
+			Copy string `json:"copy"`
+		} `json:"refuse_copies"`
 	}
 	load(dir, "copy.json", &cp)
 	readers := func(c string) []any {
@@ -1132,11 +1314,32 @@ func checkSets(dir string) {
 	if r := readers(cp.Copy); len(r) < 2 || !sortedSet(r) {
 		fail("copy: readers out of order")
 	}
+	if r := copyRule(unhex(cp.Copy)); r != "" {
+		fail("copy: refused by its rows (%s)", r)
+	}
+	for _, t := range cp.RefuseCopies {
+		refused++
+		if r := copyRule(unhex(t.Copy)); r != t.Rule {
+			fail("copy %s: %q, want %s", t.Name, r, t.Rule)
+		}
+	}
 	for _, t := range cp.RefuseReaders {
 		refused++
+		if r := copyRule(unhex(t.Copy)); r != "copy/readers" {
+			fail("copy %s: %q, want copy/readers", t.Name, r)
+		}
 		if sortedSet(readers(t.Copy)) {
 			fail("copy %s: readers hold", t.Name)
 		}
 	}
 	fmt.Printf("%-18s %d sets of two or more taken, %d refused\n", "sets", twos, refused)
+}
+
+// keyAlg gives a Key's algorithm number, or 0 when k is not a Key.
+func keyAlg(k []any) (uint64, bool) {
+	if len(k) != 2 {
+		return 0, false
+	}
+	a, ok := k[0].(uint64)
+	return a, ok
 }

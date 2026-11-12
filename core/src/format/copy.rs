@@ -43,6 +43,42 @@ pub const RULE_SHAPE: Rule = Rule::field("copy/shape");
 pub const RULE_READERS: Rule = Rule::field("copy/readers");
 /// The header's field of its readers.
 pub const HDR_READERS: u16 = 4;
+/// The header's reserved field `reuse`, refused in 0.6.
+pub const HDR_REUSE: u16 = 7;
+/// A header with `reuse`, which 0.6 refuses.
+pub const RULE_REUSE: Rule = Rule::field("copy/reuse");
+
+/// Checks a header's rows (section 10.2) and gives the number of its
+/// readers: `id` and `origin` bytes 16, `time` a hybrid time, `readers`
+/// 1 to 256 `[device ID, epoch]` in a set, `blob` `[size, bytes 32]` when
+/// present, `commit` bytes 32; `reuse` refused; no other critical field.
+fn check_header(h: &Value<'_>) -> Result<usize, Rule> {
+    let m = h.as_map().ok_or(RULE_SHAPE)?;
+    if h.get(HDR_REUSE).is_some() {
+        return Err(RULE_REUSE);
+    }
+    if m.iter().any(|(k, _)| *k < 256 && !(1..=6).contains(k)) {
+        return Err(Rule::FORM_CRITICAL);
+    }
+    let sized = |f, n| h.get(f).and_then(Value::as_bytes).is_some_and(|b| b.len() == n);
+    let time_ok = match h.get(3).and_then(Value::as_array) {
+        Some([Value::Uint(w), Value::Uint(l)]) => *l <= u64::from(u32::MAX) && (*w, *l) != (0, 0),
+        _ => false,
+    };
+    let blob_ok = match h.get(5) {
+        None => true,
+        Some(b) => matches!(b.as_array(), Some([Value::Uint(_), Value::Bytes(x)]) if x.len() == 32),
+    };
+    if !(sized(1, 16) && sized(2, 16) && sized(6, 32) && time_ok && blob_ok) {
+        return Err(RULE_SHAPE);
+    }
+    let readers = h.get(HDR_READERS).and_then(Value::as_array).ok_or(RULE_READERS)?;
+    let reader_ok = |r: &Value<'_>| matches!(r.as_array(), Some([Value::Bytes(id), Value::Uint(_)]) if id.len() == 16);
+    if readers.is_empty() || readers.len() > MAX_READERS || !cbor::is_set(readers) || !readers.iter().all(reader_ok) {
+        return Err(RULE_READERS);
+    }
+    Ok(readers.len())
+}
 /// The most readers of a copy.
 pub const MAX_READERS: usize = 256;
 /// The rule a commitment that does not match K breaks.
@@ -136,10 +172,7 @@ impl<'a> Copy<'a> {
         if header.as_map().is_none() {
             return Err(RULE_SHAPE);
         }
-        let readers = header.get(HDR_READERS).and_then(Value::as_array).ok_or(RULE_READERS)?;
-        if readers.is_empty() || readers.len() > MAX_READERS || !cbor::is_set(readers) {
-            return Err(RULE_READERS);
-        }
+        let readers = check_header(&header)?;
         let age_ms = match v.get(FIELD_AGE) {
             None => 0,
             Some(Value::Uint(0)) => return Err(Rule::FORM_DEFAULT),
@@ -151,6 +184,9 @@ impl<'a> Copy<'a> {
             let w = w.as_bytes().ok_or(RULE_SHAPE)?;
             hashes.push(wrap_hash(w)?);
             wraps.push(w);
+        }
+        if wraps.len() != readers {
+            return Err(RULE_SHAPE);
         }
         let (payload, p) = match (v.get(FIELD_PAYLOAD), v.get(FIELD_PAYLOAD_HASH)) {
             (Some(Value::Bytes(pl)), None) => (Some(*pl), sha256(&[pl])),

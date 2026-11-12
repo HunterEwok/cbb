@@ -22,8 +22,8 @@
 //! 4. The sealing key is in the device's own keys statement (`statement`).
 //! 5. Unknown critical fields hold a record (kept, passed on, not applied);
 //!    `min_rules` in the settings stops older devices from secrets.
-//! 6. The kept set and the state depend on the set alone, never on the
-//!    order it came in; its ceilings are the format's, with no working
+//! 6. The kept set and the state depend on the set and the claims the
+//!    device counted alone, never on the order they came in; its ceilings are the format's, with no working
 //!    limits under them. A claim pays ahead for its root's first records,
 //!    which have no room of their own.
 //! 7. No rule reads a clock: the takeover delay is the time the device
@@ -37,9 +37,30 @@
 //! 10. A takeover cuts the old root at the claim's `seen`: what that root
 //!     signs after it, removals included, does not count once the claim
 //!     does; a live root cancels the claim within the delay instead.
+//! 11. A device's member key and its admin key go together: a removal or
+//!     freeze that names one names both.
+//! 12. A takeover the device has counted is final there: its old root's
+//!     records above the claim's cut do not count, nor does a later claim
+//!     of that root's epoch rival it. When the device holds a record that
+//!     would have undone it, the state says so (`owner_split`).
+//! 13. `seen` names each signer's head with its seq and record ID, and a
+//!     takeover's cut is the claim's entry for the old root: a record at
+//!     or below a seen seq counts as seen only on the chain ending at that
+//!     ID, and a cut root keeps only that chain: a member that promoted
+//!     its successor stores nothing of it off the cut, and its checkpoints
+//!     no longer come first in its order.
 //!
 //! The bytes are the format's (`crate::format`): a record is read from its
 //! envelope with [`Record::decode`] and written with [`Record::envelope`].
+
+/// The bytes a record is counted for beyond its body: the envelope's
+/// array head, the heads of body and sig, and the 64-byte signature.
+pub const ENVELOPE_ALLOWANCE: usize = 1 + 9 + 9 + 64;
+
+/// The bytes counted for a second signature, whatever its length: its head
+/// and 64 bytes. A body that names `signer2` is held in 0.6, so this only
+/// keeps such records from being counted as smaller than they are.
+pub const SIG2_ALLOWANCE: usize = 9 + 64;
 
 pub mod body;
 pub mod eval;
@@ -223,15 +244,14 @@ impl Record {
         crate::format::envelope::write(&self.bytes, &self.sig, self.sig2.as_deref())
     }
 
-    /// The bytes the record takes in a set: its envelope's.
+    /// The bytes the record is counted for in a set: its body's and one
+    /// fixed allowance for the rest of its envelope ([`ENVELOPE_ALLOWANCE`],
+    /// and [`SIG2_ALLOWANCE`] when the body names `signer2`). The count
+    /// depends on the body alone, so every envelope of one record ID counts
+    /// the same.
     pub fn size(&self) -> usize {
-        // body and sig heads (at most 9 bytes each) and the array's head.
-        let heads = 1usize.saturating_add(9).saturating_add(9).saturating_add(if self.sig2.is_some() { 9 } else { 0 });
-        self.bytes
-            .len()
-            .saturating_add(self.sig.len())
-            .saturating_add(self.sig2.as_ref().map_or(0, |s| s.len()))
-            .saturating_add(heads)
+        let rest = if self.sig2.is_some() { ENVELOPE_ALLOWANCE + SIG2_ALLOWANCE } else { ENVELOPE_ALLOWANCE };
+        self.bytes.len().saturating_add(rest)
     }
 
     /// The ceiling on its body: a checkpoint's is larger.
