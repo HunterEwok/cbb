@@ -2657,20 +2657,9 @@ impl Service {
                     // A code alone: the device that shows it waits on the
                     // network, as Go's pairFind.
                     cbb_core::pair::normalize_code(&h.code)?;
-                    let waiting = crate::discovery::find_joiners(crate::discovery::PAIRING_BROWSE)?;
-                    let mut tried = Vec::new();
-                    let mut name = None;
-                    for (addrs, fp) in waiting {
-                        let addrs: Vec<String> = addrs.iter().map(|a| a.to_string()).collect();
-                        match self.admin(|a| a.admit_by_qr(&h.code, &addrs, &fp, h.admins)) {
-                            Ok(n) => {
-                                name = Some(n);
-                                break;
-                            }
-                            Err(e) => tried.push(e.for_log()),
-                        }
-                    }
-                    name.ok_or_else(|| Error::msg(tried.join("; ")))?
+                    let (addrs, fp) = crate::discovery::find_joiner(crate::discovery::PAIRING_BROWSE)?;
+                    let addrs: Vec<String> = addrs.iter().map(|a| a.to_string()).collect();
+                    self.admin(|a| a.admit_by_qr(&h.code, &addrs, &fp, h.admins))?
                 } else {
                     self.admin(|a| a.admit_by_qr(&h.code, &h.addrs, &h.fingerprint, h.admins))?
                 };

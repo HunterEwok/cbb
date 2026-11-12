@@ -317,6 +317,14 @@ fn write_new(path: &str, text: &str) -> std::io::Result<()> {
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
     let mut f = o.open(path)?;
+    // On Windows the file would take its folder's access list: it is
+    // narrowed to its owner before the invitation goes in.
+    #[cfg(windows)]
+    if let Err(e) = crate::sys::owner_only(std::path::Path::new(path)) {
+        drop(f);
+        let _ = std::fs::remove_file(path);
+        return Err(std::io::Error::other(e.for_log()));
+    }
     f.write_all(text.as_bytes())?;
     f.sync_all()
 }

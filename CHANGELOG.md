@@ -2245,6 +2245,29 @@ All notable changes to cbb are documented in this file. The format follows
   remote paste: its pages read a device's ID from a field the core's list does not have. An
   Aurora phone refuses a paste of pictures or files, which its Bluetooth keyboard cannot type,
   in place of typing the copy's ID.
+- Pairing and the member port hold up better on a busy home network: the member port
+  limits connections in their handshake per device as well as in all, and closes one that
+  sends nothing for 3 s; a pairing connection with no window open is answered after one small
+  frame; a pairing window counts only attempts that tried a code against its three, takes no
+  more guesses from one device once it is one short of closing, and lets an attempt that sends
+  nothing give way to the next; a device that listens to join takes no more attempts from a
+  device whose attempts keep ending without a code, gives a dialing member 10 s to prove the
+  code, and lets an attempt that proved nothing give way to the next (the Nano ESP32 has the
+  10 s too); a device's addresses count as one only within a global IPv6 /64, never the home
+  network's shared ones;
+  `cbb pair` with the six digits alone admits only when one device waits to join, and stops at
+  its first attempt; a device that joins by an invitation joins only the group the invitation
+  names (computers and phones); a connection that carries records only takes small frames;
+  commands run a few at a time per connection, and a command that fails badly frees its
+  place; the mDNS cache is checked ten times a second and starts again empty when it grows
+  past 1024 records or mDNS stops answering, pausing longer each time while that goes on; the
+  addresses of a connected member are kept as they are, new addresses never push out all
+  those known, and a goodbye by mDNS no longer stops dialing a device of the group
+  (docs/protocol.md, sections 4, 6 and 12).
+- A pairing code is drawn so that every code is as likely as any other; an admin key at
+  pairing must be new to the group's device keys, every root's key (the group CA's too) and
+  the recovery key; an admission
+  whose Welcome cannot be sent adds no device record.
 - Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
   Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
   backslash in the same languages on its pairing screen.

@@ -191,7 +191,7 @@ final class PhoneJoinTests: XCTestCase {
         let (sid, t0) = (sid, t0)
         let memberSide = Task {
             try await PairingMember.admit(over: m, code: "123456", memberCert: root.memberCert, joinerCert: l.cert, sessionID: sid,
-                                          memberAD: .init(device: root.device, group: root.tag)) { dev, _, _ in
+                                          memberAD: .init(device: root.device, group: root.tag), taken: { _ in false }) { dev, _, _ in
                 Pairing.Welcome(cert: try GroupCertificates.member(device: dev, publicKey: SoftwareSigner().publicKeyDER, ca: root.groupCA,
                                                                    caSigner: rootKey, now: t0), groupCA: root.groupCA)
             }
@@ -226,7 +226,7 @@ final class PhoneJoinTests: XCTestCase {
                                (Certs([l.cert, root.memberCert]), l.cert, "the joining device must send exactly one certificate")] {
             do {
                 _ = try await PairingMember.admit(over: t, code: "123456", memberCert: root.memberCert, joinerCert: cert, sessionID: sid,
-                                                  memberAD: .init(device: root.device, group: root.tag)) { _, _, _ in
+                                                  memberAD: .init(device: root.device, group: root.tag), taken: { _ in false }) { _, _, _ in
                     throw CancellationError()
                 }
                 XCTFail("admitted: \(why)")

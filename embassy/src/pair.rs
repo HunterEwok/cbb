@@ -32,6 +32,37 @@ pub const PORT: u16 = 8764;
 const WAIT: Duration = Duration::from_secs(5 * 60);
 /// How long one attempt may take.
 const ATTEMPT: Duration = Duration::from_secs(30);
+/// How long the phone has, from its connection, for the TLS handshake and
+/// to prove that it knows the code: it sends its CPace message and its tag
+/// right after the handshake.
+const PROVE: Duration = Duration::from_secs(10);
+/// How many attempts from one address may end without a wrong code before
+/// the device takes none from it.
+const MAX_IDLE: u32 = 5;
+/// How many addresses it counts one by one; the others share one count.
+const MAX_SOURCES: usize = 64;
+
+/// The attempts of each address that ended without a wrong code, so that
+/// no device on the network holds the pairing for its whole wait.
+#[derive(Default)]
+struct Idle(alloc::collections::BTreeMap<[u8; 4], u32>);
+
+impl Idle {
+    fn key(&self, a: IpAddress) -> [u8; 4] {
+        #[allow(irrefutable_let_patterns)]
+        let k = if let IpAddress::Ipv4(v4) = a { v4.octets() } else { [0; 4] };
+        if self.0.contains_key(&k) || self.0.len() < MAX_SOURCES { k } else { [0; 4] }
+    }
+
+    fn spent(&self, a: IpAddress) -> bool {
+        self.0.get(&self.key(a)).is_some_and(|n| *n >= MAX_IDLE)
+    }
+
+    fn count(&mut self, a: IpAddress) {
+        let k = self.key(a);
+        *self.0.entry(k).or_insert(0) += 1;
+    }
+}
 
 /// Keeps the identity a pairing gave, before the phone hears that it worked.
 pub trait Saver {
@@ -72,6 +103,7 @@ impl Pairing {
     ) -> Result<Identity> {
         let end = Instant::now() + WAIT;
         let mut failures = 0;
+        let mut idle = Idle::default();
         let mut rx = vec![0u8; 4096];
         let mut tx = vec![0u8; 4096];
         loop {
@@ -87,10 +119,10 @@ impl Pairing {
                 Ok(Ok(())) => {}
             }
             let from = sock.remote_endpoint().map(|e| e.addr);
-            if !from.is_some_and(home_address) {
+            let Some(from) = from.filter(|a| home_address(*a) && !idle.spent(*a)) else {
                 sock.abort();
                 continue;
-            }
+            };
             let res = self.attempt(&mut sock, clock, saver).await;
             let _ = sock.flush().await;
             sock.close();
@@ -98,11 +130,13 @@ impl Pairing {
                 Ok(id) => return Ok(id),
                 Err(e) => {
                     log(&format!("a pairing attempt failed: {}", e.for_user()));
-                    if e.details().contains(Refusal::WrongCode.message()) {
+                    if Refusal::is_wrong_code(&e) {
                         failures += 1;
                         if failures >= MAX_FAILURES {
                             return Err(Error::with("the pairing failed", Refusal::TooMany));
                         }
+                    } else {
+                        idle.count(from);
                     }
                 }
             }
@@ -114,6 +148,27 @@ impl Pairing {
         let j = &self.joiner;
         let (cfg, exporter) = tls::pair_server(&j.cert, &j.key, clock)?;
         let mut link = Link { session: Session::server(Arc::new(cfg))?, sock, buf: vec![0u8; 2048] };
+        let (ex, confirm) = match with_timeout(PROVE, self.prove(&mut link, &exporter)).await {
+            Ok(r) => r?,
+            Err(_) => return Err(Error::msg("the phone did not prove that it knows the code in time")),
+        };
+        link.send(&confirm).await?;
+        // The board keeps no wall clock: it takes none of the member's claim
+        // times, which only a group handed over by waiting needs.
+        let res = match ex.welcome(&link.read_frame().await?, 0) {
+            Ok(id) if saver.save(&id).await => Ok(id),
+            Ok(_) => Err(Error::msg("cannot save the group's identity")),
+            Err(e) => Err(e),
+        };
+        let _ = link.send(&pair::done(res.is_ok())).await;
+        link.close().await;
+        res
+    }
+
+    /// The TLS handshake and the exchange until the phone proved that it
+    /// knows the code: the exchange and the frame that answers it.
+    async fn prove(&self, link: &mut Link<'_, '_>, exporter: &tls::Exporter) -> Result<(pair::Exchange, Vec<u8>)> {
+        let j = &self.joiner;
         link.handshake().await.wrap("the TLS handshake failed")?;
         if link.session.alpn_protocol() != Some(tls::PAIR_PROTOCOL) {
             return Err(Error::msg("the device does not offer pairing"));
@@ -129,26 +184,15 @@ impl Pairing {
 
         let (mut ex, first) = j.start(&self.code, &member_der, &sid, true)?;
         link.send(&first).await?;
-        let confirm = match ex.reply(&link.read_frame().await?) {
-            Ok(f) => f,
+        match ex.reply(&link.read_frame().await?) {
+            Ok(f) => Ok((ex, f)),
             Err(Failure { error, send }) => {
                 if let Some(f) = send {
                     let _ = link.send(&f).await;
                 }
-                return Err(error);
+                Err(error)
             }
-        };
-        link.send(&confirm).await?;
-        // The board keeps no wall clock: it takes none of the member's claim
-        // times, which only a group handed over by waiting needs.
-        let res = match ex.welcome(&link.read_frame().await?, 0) {
-            Ok(id) if saver.save(&id).await => Ok(id),
-            Ok(_) => Err(Error::msg("cannot save the group's identity")),
-            Err(e) => Err(e),
-        };
-        let _ = link.send(&pair::done(res.is_ok())).await;
-        link.close().await;
-        res
+        }
     }
 }
 

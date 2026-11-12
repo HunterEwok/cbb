@@ -646,13 +646,9 @@ pub fn decode(body: &[u8]) -> Result<Message> {
 /// version, counts as none.
 pub fn decode_hello(v: Option<&Value>) -> Result<(Hello, HelloBody)> {
     let v = v.filter(|v| v.is_object()).ok_or_else(|| Error::msg("the hello does not decode"))?;
-    let b: HelloBody = serde_json::from_value(v.clone()).context("the hello does not decode")?;
-    let current = b
-        .current
-        .as_ref()
-        .filter(|c| !c.is_null())
-        .and_then(|c| serde_json::from_value::<Sealed>(c.clone()).ok())
-        .map(Event::of);
+    // Decoded from the value in place, never from a copy of it.
+    let b = HelloBody::deserialize(v).context("the hello does not decode")?;
+    let current = b.current.as_ref().filter(|c| !c.is_null()).and_then(|c| Sealed::deserialize(c).ok()).map(Event::of);
     Ok((Hello { wall: b.wall, current }, b))
 }
 

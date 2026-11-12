@@ -186,6 +186,70 @@ fn the_root_makes_a_phone_an_admin() {
     assert!(text(member_err).contains("another device"));
 }
 
+/// A new admin key is none of the keys the group has already: not a
+/// device's key, not a root's, not the recovery key.
+#[test]
+fn an_admin_key_is_new_to_the_group() {
+    let (mut admitter, mut rs) = root_group();
+    admitter.make_admins = true;
+    let phone_key = soft();
+    let joiner = Joiner::with_key("phone", "aurora", phone_key.clone()).unwrap();
+    let code = pair::new_code();
+    let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
+    let mut adm =
+        Admission::dial(admitter.clone(), GroupView::of(&rs), &code, &joiner.fingerprint(), &clock()).unwrap();
+    let (admitted, _, member_err, joiner_err, _) = run(&mut adm, &mut joining);
+    assert!(member_err.is_none() && joiner_err.is_none(), "{member_err:?} {joiner_err:?}");
+    let a = admitted.unwrap();
+    assert!(rs.add(&device_record(&rs, &admitter, &a, now_ms()).unwrap()).unwrap());
+
+    let view = GroupView::of(&rs);
+    assert!(view.admin_keys.contains(&Cert::parse(&a.cert).unwrap().key_hash()), "a device's key");
+    assert!(view.admin_keys.contains(&admitter.ca.key_hash()), "the root's key");
+    // The recovery key, as the records would name it.
+    let recovery = soft();
+    let now = now_ms() / 1000;
+    let rc = issue::member(&DeviceId::random(), &recovery.public(), &admitter.ca, now, &mut admitter.sign()).unwrap();
+    let mut with_recovery = view.clone();
+    with_recovery.admin_keys.insert(Cert::parse(&rc).unwrap().key_hash());
+
+    for (key, view) in [(phone_key, view.clone()), (admitter.ca_key.clone(), view), (recovery, with_recovery)] {
+        let again = Joiner::with_key("phone 2", "aurora", soft()).unwrap().offering_admin_key(key).unwrap();
+        let mut joining = Attempt::listening(&again, &code, &clock()).unwrap();
+        let mut adm = Admission::dial(admitter.clone(), view, &code, &again.fingerprint(), &clock()).unwrap();
+        let (admitted, joined, member_err, _, _) = run(&mut adm, &mut joining);
+        assert!(admitted.is_none() && joined.is_none());
+        assert!(text(member_err).contains("another device"));
+    }
+}
+
+/// A Welcome too large to send admits no device: the member reports it,
+/// and no Admitted comes for which a device record would be made.
+#[test]
+fn a_welcome_that_cannot_be_sent_admits_no_one() {
+    let (mut admitter, mut rs) = root_group();
+    let first = Joiner::new("first").unwrap();
+    let code = pair::new_code();
+    let mut joining = Attempt::listening(&first, &code, &clock()).unwrap();
+    let mut adm = Admission::dial(admitter.clone(), GroupView::of(&rs), &code, &first.fingerprint(), &clock()).unwrap();
+    let (admitted, ..) = run(&mut adm, &mut joining);
+    let record = device_record(&rs, &admitter, &admitted.unwrap(), now_ms()).unwrap();
+    assert!(rs.add(&record).unwrap());
+
+    // A group handed over keeps its records in the Welcome, which then
+    // cannot fit in a pairing frame.
+    admitter.identity.roots = vec![admitter.ca.clone()];
+    let mut view = GroupView::of(&rs);
+    let one = serde_json::to_vec(&record).unwrap().len();
+    view.records = vec![record; pair::MAX_FRAME / one + 1];
+    let joiner = Joiner::new("router").unwrap();
+    let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
+    let mut adm = Admission::dial(admitter, view, &code, &joiner.fingerprint(), &clock()).unwrap();
+    let (admitted, joined, member_err, _, _) = run(&mut adm, &mut joining);
+    assert!(admitted.is_none() && joined.is_none());
+    assert!(text(member_err).contains("do not fit in a Welcome"));
+}
+
 #[test]
 fn an_admin_admits_with_its_admin_ca() {
     let (root_admitter, _) = root_group();
@@ -332,18 +396,19 @@ fn dial_window(
     joiner: &Joiner,
     code: &str,
 ) -> (Option<Admitted>, Result<Identity>, Option<Error>, bool) {
-    let (a, j, e, started, _) = dial_with(adm, joiner, code.as_bytes(), None);
+    let (a, j, e, started, _) = dial_with(adm, joiner, code.as_bytes(), None, "");
     (a, j, e, started)
 }
 
 /// dial_window with a remote invitation's secret in place of a code when
 /// answer is set: the admin's answer to the confirmation it is asked,
-/// which the last value returns.
+/// which the last value returns; group is then the invitation's group.
 fn dial_with(
     adm: &mut Admission,
     joiner: &Joiner,
     password: &[u8],
     answer: Option<bool>,
+    group: &str,
 ) -> (Option<Admitted>, Result<Identity>, Option<Error>, bool, Option<Request>) {
     let mut asked = None;
     let (cfg, exporter) = tls::pair_client(&joiner.cert, &joiner.key, &clock()).unwrap();
@@ -377,7 +442,7 @@ fn dial_with(
             exporter.export(EXPORTER_LABEL, &[], &mut sid).unwrap();
             let member_der = client.peer_certificates().unwrap()[0].to_vec();
             let (e, first) = match answer {
-                Some(_) => joiner.start_secret(password, &member_der, &sid).unwrap(),
+                Some(_) => joiner.start_secret(password, group, &member_der, &sid).unwrap(),
                 None => joiner.start(core::str::from_utf8(password).unwrap(), &member_der, &sid, false).unwrap(),
             };
             client.write(&first).unwrap();
@@ -478,6 +543,7 @@ fn random_secret() -> [u8; pair::MIN_SECRET] {
 #[test]
 fn an_invitation_asks_the_admin() {
     let (admitter, rs) = root_group();
+    let tag = admitter.identity.tag();
     let secret = random_secret();
     let secret_window = |rs: &Records| {
         let (cfg, exporter) =
@@ -487,7 +553,7 @@ fn an_invitation_asks_the_admin() {
     };
     let joiner = Joiner::new("laptop").unwrap();
     let mut adm = secret_window(&rs);
-    let (admitted, joined, member_err, _, asked) = dial_with(&mut adm, &joiner, &secret, Some(true));
+    let (admitted, joined, member_err, _, asked) = dial_with(&mut adm, &joiner, &secret, Some(true), &tag);
     assert!(member_err.is_none(), "{member_err:?}");
     let r = asked.unwrap();
     assert_eq!((r.device, r.name.as_str(), r.fingerprint), (joiner.id.clone(), "laptop", joiner.fingerprint()));
@@ -495,14 +561,14 @@ fn an_invitation_asks_the_admin() {
 
     let other = Joiner::new("other").unwrap();
     let mut adm = secret_window(&rs);
-    let (admitted, joined, member_err, _, asked) = dial_with(&mut adm, &other, &secret, Some(false));
+    let (admitted, joined, member_err, _, asked) = dial_with(&mut adm, &other, &secret, Some(false), &tag);
     assert!(asked.is_some() && admitted.is_none());
     assert!(text(member_err).contains(Refusal::Declined.message()));
     assert!(text(joined.err()).contains(Refusal::Declined.message()));
 
     // A wrong secret asks nobody.
     let mut adm = secret_window(&rs);
-    let (admitted, _, member_err, _, asked) = dial_with(&mut adm, &other, &random_secret(), Some(true));
+    let (admitted, _, member_err, _, asked) = dial_with(&mut adm, &other, &random_secret(), Some(true), &tag);
     assert!(asked.is_none() && admitted.is_none());
     assert!(text(member_err).contains(Refusal::WrongCode.message()));
     assert!(
@@ -526,14 +592,15 @@ fn an_invitation_asks_the_admin() {
 #[test]
 fn a_dialing_attempt_joins_by_an_invitation() {
     let (admitter, rs) = root_group();
+    let tag = admitter.identity.tag();
     let secret = random_secret();
-    let run_one = |phone: &Joiner, answer: bool| {
+    let run_one = |phone: &Joiner, answer: bool, group: &str| {
         let (cfg, exporter) =
             tls::member_or_pair_server(&admitter.identity, Arc::new(|_: &[Cert]| None), &clock()).unwrap();
         let session = Session::server(Arc::new(cfg)).unwrap();
         let mut adm =
             Admission::accept_secret(admitter.clone(), GroupView::of(&rs), &secret, session, exporter).unwrap();
-        let mut joining = Attempt::dialing_secret(phone, &secret, &clock()).unwrap();
+        let mut joining = Attempt::dialing_secret(phone, &secret, group, &clock()).unwrap();
         let (mut asked, mut admitted, mut joined, mut joiner_err, mut member_err) = (None, None, None, None, None);
         let mut to_member = joining.feed(&[], now_ms()).send;
         assert!(!to_member.is_empty(), "the first step sends the client hello");
@@ -568,15 +635,26 @@ fn a_dialing_attempt_joins_by_an_invitation() {
     };
 
     let phone = Joiner::with_key("phone", "ios", soft()).unwrap();
-    let (asked, admitted, joined, joiner_err, member_err) = run_one(&phone, true);
+    let (asked, admitted, joined, joiner_err, member_err) = run_one(&phone, true, &tag);
     assert!(joiner_err.is_none() && member_err.is_none(), "{joiner_err:?} {member_err:?}");
     assert_eq!(asked.unwrap().fingerprint, phone.fingerprint());
     assert_eq!(admitted.unwrap().device, joined.unwrap().identity.id);
 
     let other = Joiner::with_key("other", "android", soft()).unwrap();
-    let (asked, admitted, joined, joiner_err, _) = run_one(&other, false);
+    let (asked, admitted, joined, joiner_err, _) = run_one(&other, false, &tag);
     assert!(asked.is_some() && admitted.is_none() && joined.is_none());
     assert!(text(joiner_err).contains(Refusal::Declined.message()));
 
-    assert!(Attempt::dialing_secret(&phone, &secret[..8], &clock()).is_err());
+    // A window of a group other than the invitation's: the phone stops
+    // before it proves the secret, so nobody is asked and nothing is
+    // admitted, though the window knows the secret.
+    let elsewhere = Joiner::with_key("elsewhere", "ios", soft()).unwrap();
+    let (other_admitter, _) = root_group();
+    let (asked, admitted, joined, joiner_err, _) = run_one(&elsewhere, true, &other_admitter.identity.tag());
+    assert!(asked.is_none() && admitted.is_none() && joined.is_none());
+    let why = text(joiner_err);
+    assert!(why.contains("not of the group the invitation names"), "{why}");
+
+    assert!(Attempt::dialing_secret(&phone, &secret[..8], &tag, &clock()).is_err());
+    assert!(Attempt::dialing_secret(&phone, &secret, &tag, &clock()).is_ok());
 }

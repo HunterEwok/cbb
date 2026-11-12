@@ -354,9 +354,13 @@ and lifetimes. The installer enables what the device needs.
   dials the other, so they make one connection; a member keeps dialing a member it finds,
   waiting up to 30 seconds between attempts, at the addresses and port that discovery last
   saw. It notices that the machine slept when the clock that counts sleep moves further than
-  the one that does not, and then rejoins. At most 32 connections to the member port may be
-  in their TLS handshake or a pairing attempt at once; errors such as running out of file
-  descriptors only pause the accept loops. On stop it sends the mDNS goodbyes first, then
+  the one that does not, and then rejoins. At most 16 connections to the member port may be
+  in their TLS handshake or a pairing attempt at once, at most 4 of them from one device's
+  address (docs/protocol.md, section 4). These limits count addresses, which a device on
+  the home network may hold several of: such a device can still fill the slots for as long
+  as it keeps doing so, which delays members and pairing on that network but gives it no
+  access, and the member's own dial loops and connections already up are not affected.
+  Errors such as running out of file descriptors only pause the accept loops. On stop it sends the mDNS goodbyes first, then
   the member goodbyes.
 - Local control socket `/run/cbb/control.sock`, mode 0660, group `cbb`: the
   kernel admits only root and members of that group. It is made in a private directory and

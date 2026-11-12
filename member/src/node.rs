@@ -61,12 +61,66 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const QUEUE_LEN: usize = 256;
 const RECORDS_CHUNK: usize = 1 << 20;
+/// The largest frame on a connection that carries records only (a removed
+/// device's, one no record names yet): its hello and its records, in
+/// chunks of about RECORDS_CHUNK.
+const RECORDS_FRAME: usize = 2 << 20;
 /// The slowest transfer a frame is given time for.
 const MIN_RATE: usize = 16 << 10;
 /// The most gets a peer may have waiting on a connection.
 /// How long a hub command waits for its receiver to connect again.
 const RECONNECT_WAIT: Duration = Duration::from_secs(5);
 const MAX_GETS: usize = 64;
+/// The commands of one connection that may run at once.
+const MAX_COMMANDS: usize = 4;
+/// The commands one connection may send in COMMAND_PERIOD; past them,
+/// each is refused unread until the period ends.
+const COMMANDS_PER_PERIOD: u32 = 32;
+const COMMAND_PERIOD: Duration = Duration::from_secs(10);
+
+/// The commands of a connection: those running, and those of the current
+/// period.
+struct Commands {
+    running: usize,
+    since: Instant,
+    taken: u32,
+}
+
+impl Commands {
+    fn new() -> Commands {
+        Commands { running: 0, since: Instant::now(), taken: 0 }
+    }
+
+    /// Takes one more command at now, or says why not.
+    fn take(&mut self, now: Instant) -> std::result::Result<(), &'static str> {
+        if now.saturating_duration_since(self.since) >= COMMAND_PERIOD {
+            self.since = now;
+            self.taken = 0;
+        }
+        if self.running >= MAX_COMMANDS {
+            return Err("too many commands at once");
+        }
+        if self.taken >= COMMANDS_PER_PERIOD {
+            return Err("too many commands in a short time");
+        }
+        self.running += 1;
+        self.taken += 1;
+        Ok(())
+    }
+
+    fn done(&mut self) {
+        self.running = self.running.saturating_sub(1);
+    }
+}
+
+/// A running command, which counts as done when dropped.
+struct Running<'a>(&'a Mutex<Commands>);
+
+impl Drop for Running<'_> {
+    fn drop(&mut self) {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).done();
+    }
+}
 /// The most peers whose release archive a member keeps.
 const MAX_ARCHIVES: usize = 256;
 /// How far ahead a fetch asks, and how long it waits for a chunk.
@@ -398,6 +452,8 @@ struct Conn {
     lower_dialed: bool,
     /// The gets the peer asked for, served in order a chunk at a time.
     gets: Mutex<VecDeque<wire::Get>>,
+    /// The peer's commands, which are bounded.
+    commands: Mutex<Commands>,
     /// The fetches waiting for the peer's chunks, by blob.
     sinks: Mutex<HashMap<[u8; 32], SyncSender<Piece>>>,
     /// The reach message last sent to it, a phone (send_reach).
@@ -1742,8 +1798,11 @@ impl Node {
             && conn.alpn_protocol() == Some(tls::PAIR_PROTOCOL)
             && let Some(serve) = pairing
         {
+            // A pairing connection keeps its handshake slot until it ends,
+            // so pairing connections count against the listener's limits.
+            let res = serve(sock, conn, exporter, addr);
             handshaken();
-            return serve(sock, conn, exporter, addr);
+            return res;
         }
         let res = res.and_then(|()| self.check(conn, addr, Usage::Client));
         handshaken();
@@ -1847,6 +1906,7 @@ impl Node {
             bye: AtomicBool::new(false),
             lower_dialed,
             gets: Mutex::new(VecDeque::new()),
+            commands: Mutex::new(Commands::new()),
             sinks: Mutex::new(HashMap::new()),
             reach_sent: Mutex::new(None),
             serial: {
@@ -1941,8 +2001,9 @@ impl Node {
     fn reader(&self, c: &Arc<Conn>) -> Result<()> {
         let mut r = TlsReader { c, buf: Vec::new() };
         let mut first = true;
+        let max = if c.records_only { RECORDS_FRAME } else { wire::MAX_FRAME };
         loop {
-            let m: Message = match read_any(&mut r) {
+            let m: Message = match read_any(&mut r, max) {
                 Ok(Frame::Message(m)) => *m,
                 Ok(Frame::Chunk(ch)) if !first => {
                     // A chunk nothing waits for is left from a cancelled fetch.
@@ -2106,21 +2167,36 @@ impl Node {
                         self.pass(cmd, &head, &c.id);
                         continue;
                     }
-                    match self.on_command.read().unwrap().clone() {
-                        Some(f) => {
+                    let handler = self.on_command.read().unwrap().clone();
+                    let taken = handler.as_ref().map(|_| c.commands.lock().unwrap().take(Instant::now()));
+                    match (handler, taken) {
+                        (Some(_), Some(Err(why))) => self.enqueue(
+                            c,
+                            Out::Result(wire::CommandResult {
+                                id: CommandHead::of(&cmd).map(|h| h.id).unwrap_or_default(),
+                                by: me.to_string(),
+                                status: "refused".into(),
+                                reason: why.into(),
+                                tunnel: None,
+                            }),
+                        ),
+                        (Some(f), _) => {
                             // The reader goes on meanwhile, so the peer's
                             // copies still come in while a paste waits for
                             // its target.
                             let c = c.clone();
                             std::thread::spawn(move || {
+                                // Counted done even if the handler panics.
+                                let done = Running(&c.commands);
                                 let mut res = f(&c.id, &cmd);
                                 res.by = me.to_string();
+                                drop(done);
                                 if !c.closed.load(Ordering::SeqCst) {
                                     let _ = c.tx.try_send(Out::Result(res));
                                 }
                             });
                         }
-                        None => self.enqueue(
+                        (None, _) => self.enqueue(
                             c,
                             Out::Result(wire::CommandResult {
                                 id: CommandHead::of(&cmd).map(|h| h.id).unwrap_or_default(),
@@ -2706,9 +2782,10 @@ fn queue_get(gets: &mut VecDeque<wire::Get>, g: wire::Get) -> Result<bool> {
     Ok(true)
 }
 
-/// Reads one frame: a message, or a chunk frame, whose length word has its
-/// top bit set ("Content" in docs/protocol.md, section 4).
-fn read_any(r: &mut impl Read) -> Result<Frame> {
+/// Reads one frame: a message of at most max bytes, or a chunk frame,
+/// whose length word has its top bit set ("Content" in docs/protocol.md,
+/// section 4).
+fn read_any(r: &mut impl Read, max: usize) -> Result<Frame> {
     let mut head = [0u8; 4];
     r.read_exact(&mut head).context("the connection broke")?;
     if head[0] & 0x80 != 0 {
@@ -2720,7 +2797,7 @@ fn read_any(r: &mut impl Read) -> Result<Frame> {
         r.read_exact(&mut b).context("the connection broke in the middle of a chunk")?;
         return Ok(Frame::Chunk(wire::decode_chunk(&b)?));
     }
-    let size = wire::frame_len(head, wire::MAX_FRAME)?;
+    let size = wire::frame_len(head, max.min(wire::MAX_FRAME))?;
     let mut data = Vec::new();
     r.take(size as u64).read_to_end(&mut data).context("the connection broke")?;
     if data.len() != size {
@@ -2839,7 +2916,10 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
-    use super::{MAX_GETS, MAX_HOME, queue_get, read_any, remember_found};
+    use super::{
+        COMMAND_PERIOD, COMMANDS_PER_PERIOD, Commands, MAX_COMMANDS, MAX_GETS, MAX_HOME, RECORDS_FRAME, Running,
+        queue_get, read_any, remember_found,
+    };
     use crate::certs::DeviceId;
     use crate::wire;
 
@@ -2868,13 +2948,50 @@ mod tests {
     /// A frame's length is checked before its body is read: a message frame
     /// past MAX_FRAME and a chunk frame past MAX_CHUNK_FRAME end the
     /// connection, as does one cut short.
+    /// A connection runs at most MAX_COMMANDS commands at once, and takes
+    /// at most COMMANDS_PER_PERIOD in a period.
+    #[test]
+    fn commands_are_bounded() {
+        let mut c = Commands::new();
+        let t = c.since;
+        for _ in 0..MAX_COMMANDS {
+            c.take(t).unwrap();
+        }
+        assert!(c.take(t).is_err());
+        c.done();
+        c.take(t).unwrap();
+        for _ in 0..MAX_COMMANDS {
+            c.done();
+        }
+        while c.take(t).is_ok() {
+            c.done();
+        }
+        assert_eq!(c.taken, COMMANDS_PER_PERIOD);
+        // The next period takes them again.
+        c.take(t + COMMAND_PERIOD).unwrap();
+        assert_eq!(c.taken, 1);
+
+        // A handler that panics still gives its place back.
+        let m = std::sync::Arc::new(std::sync::Mutex::new(Commands::new()));
+        m.lock().unwrap().take(t).unwrap();
+        let m2 = m.clone();
+        let res = std::thread::spawn(move || {
+            let _done = Running(&m2);
+            panic!("a handler that panics");
+        })
+        .join();
+        assert!(res.is_err());
+        assert_eq!(m.lock().unwrap().running, 0);
+    }
+
     #[test]
     fn frames_are_bounded() {
-        let read = |head: u32, body: &[u8]| {
+        let read_max = |head: u32, body: &[u8], max: usize| {
             let mut b = head.to_be_bytes().to_vec();
             b.extend_from_slice(body);
-            read_any(&mut std::io::Cursor::new(b))
+            read_any(&mut std::io::Cursor::new(b), max)
         };
+        let read = |head: u32, body: &[u8]| read_max(head, body, wire::MAX_FRAME);
         let ping = br#"{"t":"ping"}"#;
         assert!(matches!(read(ping.len() as u32, ping), Ok(super::Frame::Message(_))));
         assert!(read(ping.len() as u32 + 1, ping).is_err());
@@ -2886,6 +3003,14 @@ mod tests {
         assert!(read(big.len() as u32, &big).is_err());
         assert!(read(0x8000_0000 | (wire::MAX_CHUNK_FRAME as u32 + 1), &[]).is_err());
         assert!(read(u32::MAX, &[]).is_err());
+
+        // A connection that carries records only takes no frame past
+        // RECORDS_FRAME, refused by its length before its body is read.
+        let mut records = ping.to_vec();
+        records.resize(RECORDS_FRAME, b' ');
+        assert!(matches!(read_max(records.len() as u32, &records, RECORDS_FRAME), Ok(super::Frame::Message(_))));
+        assert!(read_max(RECORDS_FRAME as u32 + 1, &[], RECORDS_FRAME).is_err());
+        assert!(read_max((wire::MAX_FRAME - 1) as u32, &[], RECORDS_FRAME).is_err());
     }
     #[test]
     fn found_is_bounded() {

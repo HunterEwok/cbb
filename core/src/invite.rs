@@ -120,8 +120,9 @@ pub struct Obfuscation {
     pub header_protection_key: [u8; 32],
 }
 
-/// An invitation that parse took.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// An invitation that parse took. Its Debug leaves the keys and the
+/// secret out.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Invitation {
     pub group: String,
     pub hub: String,
@@ -139,9 +140,22 @@ pub struct Invitation {
     pub vless: Option<Vless>,
 }
 
+impl core::fmt::Debug for Invitation {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Invitation")
+            .field("group", &self.group)
+            .field("hub", &self.hub)
+            .field("endpoints", &self.endpoints)
+            .field("expires", &self.expires)
+            .field("obfuscation", &self.obfuscation.is_some())
+            .field("vless", &self.vless)
+            .finish_non_exhaustive()
+    }
+}
+
 /// The VLESS settings of an invitation: those of the hub's offer, with
-/// XHTTP only.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// XHTTP only. Its Debug leaves the group's user ID out.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Vless {
     /// The web server's address, `ip:port`.
     pub endpoint: String,
@@ -151,6 +165,16 @@ pub struct Vless {
     pub path: String,
     /// The group's VLESS user ID, a UUID in lowercase.
     pub id: String,
+}
+
+impl core::fmt::Debug for Vless {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Vless")
+            .field("endpoint", &self.endpoint)
+            .field("server_name", &self.server_name)
+            .field("path", &self.path)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Vless {
@@ -538,6 +562,23 @@ mod tests {
             let name = c["name"].as_str().unwrap();
             let got = parse(c["text"].as_str().unwrap());
             assert_eq!(got.map_err(Reason::name), Err(c["reason"].as_str().unwrap()), "{name}");
+        }
+    }
+
+    #[test]
+    fn debug_leaves_the_keys_out() {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/invites.json");
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        for c in v["valid"].as_array().unwrap() {
+            let inv = parse(c["text"].as_str().unwrap()).unwrap();
+            let text = format!("{inv:?}");
+            assert!(text.contains(&inv.group), "{text}");
+            for secret in [&inv.secret[..], &inv.guest_key[..], &inv.guest_psk[..]] {
+                assert!(!text.contains(&format!("{secret:?}")), "{text}");
+            }
+            if let Some(x) = &inv.vless {
+                assert!(!text.contains(&x.id), "{text}");
+            }
         }
     }
 

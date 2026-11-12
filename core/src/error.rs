@@ -66,6 +66,24 @@ impl Error {
         &self.msg
     }
 
+    /// The first cause of type E under this error and its contexts, as
+    /// a typed value rather than words: a pairing's [`crate::pair::Refusal`],
+    /// for example.
+    pub fn find<E: core::error::Error + 'static>(&self) -> Option<&E> {
+        let mut cur: Option<&(dyn core::error::Error + 'static)> = self.cause.as_deref().map(|e| e as _);
+        while let Some(e) = cur {
+            if let Some(Cause(inner)) = e.downcast_ref::<Cause>() {
+                cur = inner.cause.as_deref().map(|e| e as _);
+                continue;
+            }
+            if let Some(found) = e.downcast_ref::<E>() {
+                return Some(found);
+            }
+            cur = e.source();
+        }
+        None
+    }
+
     /// The underlying causes, one per line, each with its type where known.
     pub fn details(&self) -> String {
         let mut out = String::new();
@@ -178,6 +196,18 @@ pub fn show_details() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn find_takes_a_typed_cause() {
+        use crate::pair::Refusal;
+        let e = Error::with("pair: wrong code", Refusal::WrongCode).context("the attempt failed").context("join");
+        assert_eq!(e.find::<Refusal>(), Some(&Refusal::WrongCode));
+        // Words alone are no refusal.
+        let e = Error::msg(Refusal::WrongCode.message()).context("join");
+        assert_eq!(e.find::<Refusal>(), None);
+        let io = std::io::Error::other("x");
+        assert!(Error::with("read", io).find::<Refusal>().is_none());
+    }
 
     #[test]
     fn details_name_the_causes() {
