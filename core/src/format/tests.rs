@@ -514,6 +514,17 @@ fn copies() {
     let twin = unhex(s(&c, "copy_high_s_twin"));
     let tv = cbor::decode(&twin).unwrap();
     assert_eq!(copy::Copy::from_value(&tv).unwrap().verify(&laptop), Err(Rule::SIG_LOW_S));
+    for r in c["refuse_commit"].as_array().unwrap() {
+        let other: [u8; 32] = unhex(s(r, "K")).try_into().unwrap();
+        let b = unhex(s(&c, "copy"));
+        let v = cbor::decode(&b).unwrap();
+        let got = copy::Copy::from_value(&v).unwrap().check_commit(&other).err().map(Rule::name);
+        assert_eq!(got, Some(s(r, "rule")), "{}", s(r, "name"));
+    }
+    for r in c["refuse_contents"].as_array().unwrap() {
+        let b = unhex(s(r, "content"));
+        assert_eq!(copy::read_content(&b).err().map(Rule::name), Some(s(r, "rule")), "{}", s(r, "name"));
+    }
     let content = unhex(s(&c, "content_plaintext"));
     let v = copy::read_content(&content).unwrap();
     let without: Vec<(u16, Value<'_>)> = v.as_map().unwrap().iter().filter(|(k, _)| *k != 1).cloned().collect();
