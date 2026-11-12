@@ -130,20 +130,28 @@ pub fn message(envelope: &[u8]) -> Result<Vec<u8>, Rule> {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Beacons(pub BTreeMap<KeyHash, Beacon>);
 
+/// How far ahead of the receiver's clock a beacon's time may be.
+pub const ALLOWANCE_MS: u64 = crate::copies::fresh::ALLOWANCE_MS;
+
 /// What a device can tell of its records from the beacons it holds.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Freshness {
     /// The latest time an admin saw exactly the set this device holds.
     pub current_at_ms: Option<u64>,
-    /// An admin saw more records, at a later time than that, than this
-    /// device holds: it asks for them.
+    /// Some admin's newest beacon names another, larger set than this
+    /// device holds: it asks for the records. Judged for each admin by its
+    /// own beacon, so one admin's time never hides another's.
     pub behind: bool,
 }
 
 impl Beacons {
-    /// Keeps a checked beacon when its `n` is above the signer's last one;
-    /// reports whether it kept it.
-    pub fn take(&mut self, b: Beacon) -> bool {
+    /// Keeps a checked beacon when its `n` is above the signer's last one
+    /// and, on a receiver with a clock, its time is not more than
+    /// [`ALLOWANCE_MS`] ahead of it; reports whether it kept it.
+    pub fn take(&mut self, b: Beacon, now_ms: Option<u64>) -> bool {
+        if now_ms.is_some_and(|now| b.time_ms > now.saturating_add(ALLOWANCE_MS)) {
+            return false;
+        }
         if self.0.get(&b.signer).is_some_and(|old| b.n <= old.n) {
             return false;
         }
@@ -160,10 +168,7 @@ impl Beacons {
     /// How fresh a set with this digest and count is, by the beacons held.
     pub fn freshness(&self, digest: &[u8; 32], count: u64) -> Freshness {
         let current_at_ms = self.0.values().filter(|b| &b.digest == digest).map(|b| b.time_ms).max();
-        let behind = self
-            .0
-            .values()
-            .any(|b| &b.digest != digest && b.count > count && current_at_ms.is_none_or(|t| b.time_ms > t));
+        let behind = self.0.values().any(|b| &b.digest != digest && b.count > count);
         Freshness { current_at_ms, behind }
     }
 }
@@ -248,11 +253,11 @@ mod tests {
             digest: [d; 32],
             count,
         };
-        assert!(bs.take(b("phone", 2, T0, 1, 10)));
-        assert!(!bs.take(b("phone", 2, T0 + 5, 9, 10)), "n must rise");
+        assert!(bs.take(b("phone", 2, T0, 1, 10), Some(T0)));
+        assert!(!bs.take(b("phone", 2, T0 + 5, 9, 10), Some(T0)), "n must rise");
         assert_eq!(bs.freshness(&[1; 32], 10), Freshness { current_at_ms: Some(T0), behind: false });
         // Another admin saw more records later.
-        assert!(bs.take(b("desk", 1, T0 + 1000, 2, 11)));
+        assert!(bs.take(b("desk", 1, T0 + 1000, 2, 11), Some(T0)));
         assert_eq!(bs.freshness(&[1; 32], 10), Freshness { current_at_ms: Some(T0), behind: true });
         assert_eq!(bs.freshness(&[3; 32], 12), Freshness { current_at_ms: None, behind: false });
         // A signer no longer a witness is forgotten.
@@ -260,5 +265,33 @@ mod tests {
         g.admin("phone", "phone admin", AdminKind::Phone);
         bs.retain(&g.state());
         assert_eq!(bs.0.len(), 1);
+    }
+
+    /// A beacon dated ahead of the receiver's clock is not used, and each
+    /// admin's evidence counts by itself, whatever the times of others.
+    #[test]
+    fn one_admins_time_never_hides_anothers_evidence() {
+        let b = |who: &str, t, d: u8, count| Beacon {
+            group: k("root").key.device_id(),
+            signer: k(who).hash,
+            n: 1,
+            time_ms: t,
+            digest: [d; 32],
+            count,
+        };
+        let mut bs = Beacons::default();
+        assert!(bs.take(b("phone", T0, 2, 11), Some(T0)));
+        assert!(bs.freshness(&[1; 32], 10).behind);
+        // Far ahead of the clock: not taken.
+        assert!(!bs.take(b("desk", T0 + ALLOWANCE_MS + 1, 1, 10), Some(T0)));
+        assert!(bs.take(b("desk", T0 + ALLOWANCE_MS, 1, 10), Some(T0)));
+        // A later beacon that saw this set does not hide the larger one.
+        let f = bs.freshness(&[1; 32], 10);
+        assert_eq!(f, Freshness { current_at_ms: Some(T0 + ALLOWANCE_MS), behind: true });
+        // Without a clock the time is not judged; the evidence still holds.
+        let mut nc = Beacons::default();
+        assert!(nc.take(b("desk", u64::MAX / 2, 1, 10), None));
+        assert!(nc.take(b("phone", T0, 2, 11), None));
+        assert!(nc.freshness(&[1; 32], 10).behind);
     }
 }

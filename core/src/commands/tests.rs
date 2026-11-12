@@ -54,9 +54,13 @@ impl World {
 
     fn take(&self, env: &[u8], counters: &mut Counters, now: Option<u64>) -> Result<Option<Vec<u8>>, Rule> {
         let c = Command::read(env)?;
+        self.accept(&c, counters, now).map_err(|r| r.rule)
+    }
+
+    fn accept(&self, c: &Command<'_>, counters: &mut Counters, now: Option<u64>) -> Result<Option<Vec<u8>>, Refusal> {
         let state = self.g.state();
         let at = Member { me: self.laptop.key.device_id(), state: &state, set: &self.g.set, now_ms: now };
-        accept_member(&c, &at, counters, &self.laptop_store)
+        accept_member(c, &at, counters, &self.laptop_store)
     }
 }
 
@@ -121,10 +125,10 @@ fn a_late_command_is_refused_back_with_its_rule() {
     let w = World::new();
     let env = make(&w.draft(COMMAND_PASTE_OFF, 1, None), &k("root")).unwrap();
     let c = Command::read(&env).unwrap();
-    let rule = w.take(&env, &mut Counters::default(), Some(T0 + LIFETIME_MS + SKEW_MS + 1)).unwrap_err();
-    assert_eq!(rule, RULE_LATE);
+    let r = w.accept(&c, &mut Counters::default(), Some(T0 + LIFETIME_MS + SKEW_MS + 1)).unwrap_err();
+    assert_eq!(r, Refusal { rule: RULE_LATE, answer: true });
     let me = w.laptop.key.device_id();
-    let r = refusal(&c.id, &me, rule);
+    let r = refusal(&c.id, &me, r).unwrap();
     let m = frame::read(&r, frame::LIMIT_LEAF).unwrap();
     assert_eq!(m.t, crate::msg::tables::T_RESULT);
     assert_eq!(crate::msg::check(&m.map.encode()), Ok(crate::msg::tables::T_RESULT));
@@ -360,7 +364,7 @@ fn a_leaf_obeys_its_grant() {
     let take = |env: &[u8], kept: &Kept, stale: bool, ctr: &mut Counters, nonces: &mut Nonces| {
         let c = Command::read(env)?;
         let at = Leaf { me: kettle, group: g.gid, kept, stale, now_ms: None };
-        accept_leaf(&c, &at, ctr, nonces, &kettle_store)
+        accept_leaf(&c, &at, ctr, nonces, &kettle_store).map_err(|r| r.rule)
     };
     let (mut ctr, mut nonces) = (Counters::default(), Nonces::default());
     let env = make(&draft(1, None), &phone).unwrap();
@@ -405,6 +409,69 @@ fn a_leaf_obeys_its_grant() {
     assert_eq!(frame::read(&nonce_message(None), frame::LIMIT_LEAF).unwrap().get(2), None);
     // A command message fits the leaf's frame.
     assert!(message(&good).unwrap().len() <= frame::LIMIT_LEAF);
+}
+
+/// A guarded lock's number is used up only by a signed command that shows
+/// it after its counter passed: an old command sent again leaves it.
+#[test]
+fn an_old_command_sent_again_leaves_the_number() {
+    let g = G::new();
+    let (lock_store, lst) = store("lock", &g.gid);
+    let lock = k("lock").key.device_id();
+    let phone = k("phone");
+    let point: [u8; 65] = phone.key.public.clone().try_into().unwrap();
+    let kept = Kept { commanders: vec![(phone.hash, point)], guarded: true, ..Kept::default() };
+    let open = orders(vec![(10, Value::Text("open"))]);
+    let draft = |n, nonce| Draft {
+        kind: COMMAND_DEVICE,
+        group: g.gid,
+        to: lock,
+        n,
+        time_ms: T0,
+        nonce,
+        orders: Some(&open),
+        seal_to: Some((lst.body().epoch, &lst.body().seal.public)),
+    };
+    let take = |env: &[u8], ctr: &mut Counters, nonces: &mut Nonces| {
+        let c = Command::read(env).unwrap();
+        let at = Leaf { me: lock, group: g.gid, kept: &kept, stale: false, now_ms: None };
+        accept_leaf(&c, &at, ctr, nonces, &lock_store)
+    };
+    let (mut ctr, mut nonces) = (Counters::default(), Nonces::default());
+    let n1 = nonces.issue(&phone.hash).unwrap();
+    let first = make(&draft(1, Some(n1)), &phone).unwrap();
+    assert_eq!(take(&first, &mut ctr, &mut nonces), Ok(Some(open.clone())));
+    // The person confirms the next command: the lock gives n2. The old
+    // command is sent again on the way: refused by its counter, n2 stays.
+    let n2 = nonces.issue(&phone.hash).unwrap();
+    assert_eq!(take(&first, &mut ctr, &mut nonces), Err(Refusal { rule: RULE_COUNTER, answer: true }));
+    // A signed command with another number leaves n2 too.
+    let wrong = make(&draft(2, Some([7; 16])), &phone).unwrap();
+    assert_eq!(take(&wrong, &mut ctr, &mut nonces), Err(Refusal { rule: RULE_NONCE, answer: true }));
+    let confirmed = make(&draft(3, Some(n2)), &phone).unwrap();
+    assert_eq!(take(&confirmed, &mut ctr, &mut nonces), Ok(Some(open.clone())));
+}
+
+/// A forged command gets no answer and the same refusal whatever it
+/// claims: the signature is checked before the signer's rights.
+#[test]
+fn a_forged_command_gets_no_answer() {
+    let w = World::new();
+    let paste = orders(vec![(10, Value::Uint(1)), (12, Value::Uint(1)), (13, Value::Text("hi"))]);
+    // A stranger's command in the watch admin's name: it may not paste,
+    // but nobody learns that from a forgery.
+    let mut forged = make(&w.draft(COMMAND_PASTE, 1, Some(&paste)), &k("stranger")).unwrap();
+    let c = Command::read(&forged).unwrap();
+    assert_eq!(w.accept(&c, &mut Counters::default(), Some(T0)), Err(Refusal::SILENT));
+    let real = make(&w.draft(COMMAND_PASTE, 1, Some(&paste)), &k("watch admin")).unwrap();
+    let rc = Command::read(&real).unwrap();
+    let body = rc.envelope.body.to_vec();
+    forged = crate::format::envelope::write(&body, &[1; 64], None);
+    let fc = Command::read(&forged).unwrap();
+    assert_eq!(w.accept(&fc, &mut Counters::default(), Some(T0)), Err(Refusal::SILENT));
+    assert_eq!(refusal(&fc.id, &w.laptop.key.device_id(), Refusal::SILENT), None);
+    // The watch admin's own command: refused with its rule, answered.
+    assert_eq!(w.accept(&rc, &mut Counters::default(), Some(T0)), Err(Refusal { rule: RULE_RIGHT, answer: true }));
 }
 
 fn load(name: &str) -> Json {

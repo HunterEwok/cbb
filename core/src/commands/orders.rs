@@ -48,6 +48,11 @@ fn hidden(c: char) -> bool {
 }
 
 /// A name of 1 to 32 bytes of `a-z 0-9 -`, starting with a letter.
+/// A hub's endpoint or forwarder: 1 to 255 bytes, nothing hidden.
+fn plain_text(t: &str) -> bool {
+    (1..=255).contains(&t.len()) && !t.chars().any(hidden)
+}
+
 fn action_name(t: &str) -> bool {
     (1..=32).contains(&t.len())
         && t.starts_with(|c: char| c.is_ascii_lowercase())
@@ -73,16 +78,14 @@ pub fn check(t: u64, b: &[u8]) -> Result<(), Rule> {
                 return Ok(());
             }
             match m.get(10).and_then(Value::as_array) {
-                Some([Value::Text(e), Value::Bytes(k)]) if !e.is_empty() && e.len() <= 255 && k.len() == 32 => {}
+                Some([Value::Text(e), Value::Bytes(k)]) if plain_text(e) && k.len() == 32 => {}
                 None if m.get(10).is_none() => {}
                 _ => return Err(RULE_HUB),
             }
             if let Some(v) = m.get(11) {
                 let a = v.as_array().ok_or(RULE_HUB)?;
-                if a.is_empty()
-                    || a.len() > 8
-                    || !a.iter().all(|x| x.as_text().is_some_and(|t| !t.is_empty() && t.len() <= 255))
-                {
+                let distinct = a.iter().enumerate().all(|(i, x)| a.get(..i).is_some_and(|p| !p.contains(x)));
+                if a.is_empty() || a.len() > 8 || !distinct || !a.iter().all(|x| x.as_text().is_some_and(plain_text)) {
                     return Err(RULE_HUB);
                 }
             }

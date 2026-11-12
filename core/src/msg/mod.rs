@@ -18,6 +18,8 @@ pub mod tables;
 pub mod wave4;
 
 #[cfg(test)]
+mod mutants;
+#[cfg(test)]
 mod tests;
 
 use crate::format::{Alg, Rule, Value, cbor, frame};

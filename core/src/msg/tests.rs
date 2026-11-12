@@ -182,7 +182,7 @@ fn the_wave4_vectors_are_what_the_readers_say() {
             verdict(crate::commands::orders::check(o["type"].as_u64().unwrap(), &unhex(&o["orders"])), |()| "take");
         assert_eq!(got, want(o), "orders {}", name(o));
     }
-    for h in v["statements_held"].as_array().unwrap() {
+    for h in v["statements"].as_array().unwrap() {
         let got = verdict(read_statement(&unhex(&h["envelope"])), |r| match r {
             ReadStatement::Held { .. } => "hold",
             ReadStatement::Take(_) => "take",

@@ -332,9 +332,29 @@ pub struct Member<'a> {
     pub now_ms: Option<u64>,
 }
 
-/// Takes a command at a member: for its group and for this device, from a
-/// signer that may command (the current root, or an admin whose record
-/// lists the type, by [`State::may_command`]), signed by that key, in time,
+/// A command refused: the rule, and whether the receiver answers it with
+/// `result` ([`refusal`]). Every refusal before the signature verified is
+/// [`RULE_SIGNER`] and unanswered, so a stranger learns nothing; every one
+/// after it is answered with its own rule.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Refusal {
+    pub rule: Rule,
+    pub answer: bool,
+}
+
+impl Refusal {
+    /// A refusal before the signature verified.
+    pub const SILENT: Refusal = Refusal { rule: RULE_SIGNER, answer: false };
+
+    fn signed(rule: Rule) -> Refusal {
+        Refusal { rule, answer: true }
+    }
+}
+
+/// Takes a command at a member: signed by the key it names (an unknown key
+/// or a bad signature is [`Refusal::SILENT`]), then for its group and for
+/// this device, from a signer that may command (the current root, or an
+/// admin whose record lists the type, by [`State::may_command`]), in time,
 /// above the signer's last counter, and with its orders sealed to this
 /// device and within their rows. On success it keeps the counter and gives
 /// the opened orders.
@@ -343,15 +363,18 @@ pub fn accept_member(
     at: &Member<'_>,
     counters: &mut Counters,
     store: &dyn KeyStore,
-) -> Result<Option<Vec<u8>>, Rule> {
+) -> Result<Option<Vec<u8>>, Refusal> {
+    let key = key_of(at.set, &c.signer).ok_or(Refusal::SILENT)?;
+    c.envelope.verify(&key.public, sig::LABEL_COMMAND).map_err(|_| Refusal::SILENT)?;
+    let refuse = |r| Err(Refusal::signed(r));
     if c.group != at.state.group {
-        return Err(RULE_GROUP);
+        return refuse(RULE_GROUP);
     }
     if c.to != at.me {
-        return Err(RULE_TO);
+        return refuse(RULE_TO);
     }
     if !at.state.may_command(&c.signer) {
-        return Err(RULE_SIGNER);
+        return refuse(RULE_SIGNER);
     }
     if !at.state.is_root(&c.signer) {
         let listed = at
@@ -360,14 +383,12 @@ pub fn accept_member(
             .iter()
             .any(|d| d.admin.as_ref() == Some(&c.signer) && d.commands & command_bit(c.kind) != 0);
         if !listed {
-            return Err(RULE_RIGHT);
+            return refuse(RULE_RIGHT);
         }
     }
-    let key = key_of(at.set, &c.signer).ok_or(RULE_SIGNER)?;
-    c.envelope.verify(&key.public, sig::LABEL_COMMAND)?;
-    c.in_time(at.now_ms)?;
-    counters.check(&c.signer, c.n)?;
-    let orders = c.open(store)?;
+    c.in_time(at.now_ms).map_err(Refusal::signed)?;
+    counters.check(&c.signer, c.n).map_err(Refusal::signed)?;
+    let orders = c.open(store).map_err(Refusal::signed)?;
     counters.take(c.signer, c.n);
     Ok(orders)
 }
@@ -389,38 +410,41 @@ pub fn stale(guarded: bool, life_ms: Option<u64>, ran_ms: u64) -> bool {
     guarded && ran_ms >= life_ms.unwrap_or(DEFAULT_LIFE_MS)
 }
 
-/// Takes a command at a leaf: for its group and for it, from a commander of
-/// its grant, signed by that key, above the commander's last counter, with
-/// its orders sealed to the leaf. A guarded leaf also wants a grant that is
-/// not stale and the one-time number it gave that commander, which is used
-/// up whatever the outcome.
+/// Takes a command at a leaf: from a commander of its grant, signed by
+/// that key (else [`Refusal::SILENT`]), for its group and for it, in time,
+/// above the commander's last counter, with its orders sealed to the leaf.
+/// A guarded leaf also wants a grant that is not stale and the one-time
+/// number it gave that commander; the number is used up only by a signed
+/// command that shows it, after its counter passed, so an old command sent
+/// again leaves it as it is.
 pub fn accept_leaf(
     c: &Command<'_>,
     at: &Leaf<'_>,
     counters: &mut Counters,
     nonces: &mut Nonces,
     store: &dyn KeyStore,
-) -> Result<Option<Vec<u8>>, Rule> {
+) -> Result<Option<Vec<u8>>, Refusal> {
+    let point = at.kept.commander(&c.signer).ok_or(Refusal::SILENT)?;
+    c.envelope.verify(point, sig::LABEL_COMMAND).map_err(|_| Refusal::SILENT)?;
+    let refuse = |r| Err(Refusal::signed(r));
     if c.group != at.group {
-        return Err(RULE_GROUP);
+        return refuse(RULE_GROUP);
     }
     if c.to != at.me {
-        return Err(RULE_TO);
+        return refuse(RULE_TO);
     }
-    let point = at.kept.commander(&c.signer).ok_or(RULE_SIGNER)?;
-    c.envelope.verify(point, sig::LABEL_COMMAND)?;
+    c.in_time(at.now_ms).map_err(Refusal::signed)?;
+    counters.check(&c.signer, c.n).map_err(Refusal::signed)?;
     if at.kept.guarded {
         if at.stale {
-            return Err(RULE_STALE);
+            return refuse(RULE_STALE);
         }
-        let n = c.nonce.ok_or(RULE_NONCE)?;
+        let n = c.nonce.ok_or(Refusal::signed(RULE_NONCE))?;
         if !nonces.take(&c.signer, &n) {
-            return Err(RULE_NONCE);
+            return refuse(RULE_NONCE);
         }
     }
-    c.in_time(at.now_ms)?;
-    counters.check(&c.signer, c.n)?;
-    let orders = c.open(store)?;
+    let orders = c.open(store).map_err(Refusal::signed)?;
     counters.take(c.signer, c.n);
     Ok(orders)
 }
@@ -430,7 +454,7 @@ pub const MAX_NONCES: usize = 16;
 
 /// The one-time numbers a guarded leaf gave out: one per commander, for
 /// its next command; a new one replaces the old, and a number is used up
-/// the first time a command shows it. They live in memory only: after a
+/// by the first signed command that shows it. They live in memory only: after a
 /// restart the commander asks again.
 #[derive(Clone, Debug, Default)]
 pub struct Nonces {
@@ -452,11 +476,14 @@ impl Nonces {
         Ok(n)
     }
 
-    /// Uses up peer's number; reports whether n was it.
+    /// Uses up peer's number when n is it; reports whether it was. Another
+    /// number leaves it as it is.
     pub fn take(&mut self, peer: &KeyHash, n: &[u8; 16]) -> bool {
-        match self.out.remove(peer) {
-            Some((m, _)) => m == *n,
-            None => false,
+        if self.out.get(peer).is_some_and(|(m, _)| m == n) {
+            self.out.remove(peer);
+            true
+        } else {
+            false
         }
     }
 }
@@ -477,16 +504,19 @@ pub const STATUS_REFUSED: u64 = 2;
 /// Message `result` (t 10) to the sender of a command this device refused:
 /// the command's ID, this device, status refused, and the rule's name as
 /// the reason, so the sender's app can say why (`commands/late`: one of the
-/// two clocks is off). A receiver answers so only a command whose signature
-/// it verified; it says nothing to a stranger.
-pub fn refusal(id: &[u8; 16], me: &DeviceId, rule: Rule) -> Vec<u8> {
-    frame::write(&Value::Map(alloc::vec![
-        (frame::FIELD_T, Value::Uint(crate::msg::tables::T_RESULT)),
-        (2, Value::Bytes(id)),
-        (3, Value::Bytes(&me.0)),
-        (4, Value::Uint(STATUS_REFUSED)),
-        (5, Value::Text(rule.name())),
-    ]))
+/// two clocks is off). None for a refusal before the signature verified: a
+/// stranger gets no answer.
+pub fn refusal(id: &[u8; 16], me: &DeviceId, r: Refusal) -> Option<Vec<u8>> {
+    let rule = r.rule;
+    r.answer.then(|| {
+        frame::write(&Value::Map(alloc::vec![
+            (frame::FIELD_T, Value::Uint(crate::msg::tables::T_RESULT)),
+            (2, Value::Bytes(id)),
+            (3, Value::Bytes(&me.0)),
+            (4, Value::Uint(STATUS_REFUSED)),
+            (5, Value::Text(rule.name())),
+        ]))
+    })
 }
 
 /// Message `command` (t 9) carrying a command's envelope.

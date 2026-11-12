@@ -68,6 +68,8 @@ pub const RULE_WRAP: Rule = Rule::field("copy/wrap");
 pub const RULE_PAYLOAD: Rule = Rule::field("copy/payload");
 /// A copy to a leaf whose frame would be larger than the leaf's.
 pub const RULE_LEAF_FRAME: Rule = Rule::field("copy/leaf-frame");
+/// A copy's time no clock reaches (past `hlc::MAX_WALL`).
+pub const RULE_TIME: Rule = Rule::field("copy/time");
 /// A request to seal again from a device that was not a reader of the copy.
 pub const RULE_RESEAL_READER: Rule = Rule::field("reseal/reader");
 /// A request to seal again to an epoch that is not the asker's current one.
@@ -99,19 +101,27 @@ pub struct Made {
     pub blob: Option<(u64, [u8; 32])>,
 }
 
+/// How old a keys statement may be, by its time on the sender's clock,
+/// and still be sealed to: 35 days. A device whose newest statement is
+/// older is asleep; it asks for the copy sealed again when it is back.
+pub const STATEMENT_MAX_AGE_MS: u64 = 35 * 86_400_000;
+
 /// The devices a copy of this content is sealed to: each device of the
 /// state that reads (and, for a secret, takes secrets, while the group's
 /// rules allow secrets here), does not skip the content's type, is not a
 /// watch (it reads through its phone) and not a leaf, and has a keys
-/// statement that counts; the origin itself is left out. A leaf is a
-/// reader only when the origin names it in `leaves` (the leaves whose
-/// grants name the origin). At most 256, in the order of their IDs.
+/// statement that counts and, on a sender with a clock (`now_ms`), is not
+/// older than [`STATEMENT_MAX_AGE_MS`] (a statement without a time, from a
+/// device without a clock, has no age); the origin itself is left out. A
+/// leaf is a reader only when the origin names it in `leaves` (the leaves
+/// whose grants name the origin). At most 256, in the order of their IDs.
 pub fn readers(
     state: &State,
     sealing: &BTreeMap<DeviceId, Sealing>,
     content: &Content,
     origin: &DeviceId,
     leaves: &[DeviceId],
+    now_ms: Option<u64>,
 ) -> Vec<Reader> {
     let secret = content.is_secret();
     let skip_bit = content.kind.checked_sub(1).filter(|b| *b < 64).map_or(0, |b| 1u64 << b);
@@ -131,6 +141,9 @@ pub fn readers(
         }
         let Some(s) = sealing.get(&d.id) else { continue };
         let body = s.statement.body();
+        if body.time_ms != 0 && now_ms.is_some_and(|now| now.saturating_sub(body.time_ms) > STATEMENT_MAX_AGE_MS) {
+            continue;
+        }
         out.push(Reader { id: d.id, epoch: body.epoch, seal: body.seal.public.clone() });
         if out.len() == fcopy::MAX_READERS {
             break;
@@ -261,6 +274,9 @@ pub fn check<'a>(v: &Value<'a>, state: &State) -> Result<Checked<'a>, Rule> {
         },
         _ => return Err(fcopy::RULE_SHAPE),
     };
+    if !time.valid() {
+        return Err(RULE_TIME);
+    }
     let readers = h
         .get(fcopy::HDR_READERS)
         .and_then(Value::as_array)
@@ -292,12 +308,16 @@ pub enum Opened {
     Reseal { epoch: u64 },
     /// A mark or a reduced copy without the payload: the reader fetches it.
     NoPayload,
+    /// A secret while this device's rules are too old for the group
+    /// (format 3.3): opened only to learn that, then dropped.
+    TooOld,
 }
 
 /// Opens a checked copy as the reader me: its own wrap with the sealing
 /// secret of the wrap's epoch, then `commit` against K before anything
-/// else, then the payload under `h`, then the content's rows.
-pub fn open(c: &Checked<'_>, me: &DeviceId, store: &dyn KeyStore) -> Result<Opened, Rule> {
+/// else, then the payload under `h`, then the content's rows. A secret is
+/// never given while the state says this device's rules are too old.
+pub fn open(c: &Checked<'_>, me: &DeviceId, store: &dyn KeyStore, state: &State) -> Result<Opened, Rule> {
     let Some(i) = c.readers.iter().position(|(d, _)| d == me) else { return Ok(Opened::NotForMe) };
     let (_, epoch) = c.readers.get(i).copied().ok_or(fcopy::RULE_SHAPE)?;
     let wrap = c.copy.wraps.get(i).copied().ok_or(fcopy::RULE_SHAPE)?;
@@ -313,6 +333,9 @@ pub fn open(c: &Checked<'_>, me: &DeviceId, store: &dyn KeyStore) -> Result<Open
         .decrypt(&Nonce::default(), Payload { msg: payload, aad: &c.copy.h })
         .map_err(|_| RULE_PAYLOAD)?;
     let content = Content::read(&plain)?;
+    if content.is_secret() && state.too_old {
+        return Ok(Opened::TooOld);
+    }
     let blob_key = c.copy.header.get(5).map(|_| fcopy::blob_key(&k, &c.copy.h));
     Ok(Opened::Content { content, blob_key })
 }
@@ -457,7 +480,7 @@ pub fn reseal(
         return Err(RULE_RESEAL_LIMIT);
     }
     let me = rkey::Key::es256(origin.public()).device_id();
-    let now = readers(state, sealing, &kept.content, &me, ask.leaves);
+    let now = readers(state, sealing, &kept.content, &me, ask.leaves, ask.now_ms);
     let r = now.into_iter().find(|r| r.id == ask.asker).ok_or(RULE_RESEAL_READER)?;
     if r.epoch != ask.epoch {
         return Err(RULE_RESEAL_EPOCH);
@@ -468,10 +491,14 @@ pub fn reseal(
 }
 
 /// What a member that holds a copy does with a second one of the same ID.
+/// A copy is known by its origin and ID: a copy of another origin with
+/// that ID is another copy, held on its own.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Second {
-    /// The same copy again, or one that claims the ID with another origin
-    /// or time: dropped. The first stays as it is.
+    /// Another origin's copy: not this one, held and judged on its own.
+    Another,
+    /// The same copy again, or one that claims its origin and ID at another
+    /// time: dropped. The first stays as it is.
     Drop,
     /// The copy sealed again for these readers: passed on to them, and
     /// never written over the first, which stays for its other readers.
@@ -481,11 +508,10 @@ pub enum Second {
 /// Judges a second checked copy with the ID of a first one held here. Both
 /// passed [`check`], so both are signed by their origin.
 pub fn second(first: &Checked<'_>, again: &Checked<'_>) -> Second {
-    if first.id != again.id
-        || first.origin != again.origin
-        || first.time != again.time
-        || first.copy.hdr == again.copy.hdr
-    {
+    if first.origin != again.origin || first.id != again.id {
+        return Second::Another;
+    }
+    if first.time != again.time || first.copy.hdr == again.copy.hdr {
         return Second::Drop;
     }
     Second::Pass { to: again.readers.iter().map(|(d, _)| *d).collect() }
