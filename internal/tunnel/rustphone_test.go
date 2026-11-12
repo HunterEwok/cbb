@@ -440,6 +440,87 @@ func TestRustPhoneHubForwarder(t *testing.T) {
 	h.p.call(t, map[string]any{"op": "hub_stop", "id": h.id})
 }
 
+// TestRustPhoneHubCredentials: the phone's hub registers with a Go
+// forwarder by the period's hubs' credential that lists its server key, in
+// place of its member certificate and the records (docs/protocol.md,
+// section 18), as a computer's hub does: the forwarder then knows neither
+// the device nor the group. A credential that does not list the key is
+// refused, and a client gets through the forwarder.
+func TestRustPhoneHubCredentials(t *testing.T) {
+	bin := os.Getenv("CBB_TUNNEL_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_TUNNEL_ON_LINUX is not set")
+	}
+	fcert, err := forward.NewCert()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: fcert, Logf: t.Logf})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		f.Serve(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-served
+	}()
+
+	h := startRustRootHub(t, startRustPhone(t, bin))
+	pin, _ := base64.StdEncoding.DecodeString(forward.Pin(fcert.Leaf))
+	// Without records the member certificate does not make it a hub.
+	h.register(f.Addr().String(), pin, nil, "")
+	h.waitFor("a hub that is no admin", func(r map[string]any) bool {
+		e, _ := r["error"].(string)
+		return strings.Contains(e, "neither")
+	})
+
+	now := time.Now()
+	tag, _ := group.NewPeriodTag()
+	periodKey, _ := group.NewKey()
+	period, err := group.SignPeriod(group.Tag(h.root.Cert), tag, &periodKey.PublicKey, 1, now, h.root.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pb, _ := period.Open()
+	server, _ := group.NewKey()
+	other, _ := group.NewKey()
+	hubs, err := group.SignHubs(pb, []group.KeyHash{group.PublicKeyHash(&server.PublicKey)}, nil, 1, periodKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notListed, err := group.SignHubs(pb, []group.KeyHash{group.PublicKeyHash(&other.PublicKey)}, nil, 2, periodKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkcs8, err := x509.MarshalPKCS8PrivateKey(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	point, err := server.PublicKey.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	creds := func(c group.Credential) map[string]any {
+		return map[string]any{"op": "hub_credentials", "id": h.id, "public": point, "test_key": pkcs8, "credentials": []group.Credential{c}}
+	}
+	if _, err := h.p.try(t, creds(notListed)); err == nil {
+		t.Error("a hubs' credential that does not list the hub's server key")
+	}
+	h.p.call(t, creds(hubs))
+	h.waitFor("the forwarder never saw the hub registered by its credential", func(r map[string]any) bool {
+		seen, _ := r["seen"].(string)
+		ap, err := netip.ParseAddrPort(seen)
+		return err == nil && ap.Port() == h.udpPort
+	})
+	h.echoThrough(f.Addr(), "through the forwarder, registered by the credential")
+	h.p.call(t, map[string]any{"op": "hub_stop", "id": h.id})
+}
+
 // TestRustPhoneHubOverXHTTP runs the phone's hub in Rust against a Go
 // forwarder with VLESS over XHTTP behind a web server: the hub learns the
 // way over VLESS from its registration; when the forwarder's TCP port no

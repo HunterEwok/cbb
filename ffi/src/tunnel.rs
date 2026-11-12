@@ -90,6 +90,15 @@
 //! devices stands for; the events then name the devices by those IDs. An
 //! empty `credentials` goes back to the member certificate.
 //!
+//! `cbb_tunnel_hub_credentials` makes a hub's registration with the
+//! forwarder show the period's hubs' credential in place of the member
+//! certificate and the records (docs/protocol.md, section 18), as a
+//! computer's hub does, and register again at once, signing with the
+//! period's server key through a callback: `{"id", "public",
+//! "credentials"}`, where `public` is the server key's public point and
+//! `credentials` the hubs' credential, which must list the key. An empty
+//! `credentials` goes back to the member certificate.
+//!
 //! The answer is `{"ok": ...}` or `{"error": {"message", "details"}}`.
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -425,6 +434,9 @@ struct RunningHub {
     /// The VLESS settings of the forwarder's last answer, kept across the
     /// hub's registrations.
     learned: Arc<Mutex<Option<Value>>>,
+    /// The hubs' credential its registration shows
+    /// (`cbb_tunnel_hub_credentials`), asked at each registration.
+    credential: Arc<Mutex<Option<forward::HubCredential>>>,
 }
 
 /// The guest tunnel of a remote invitation (docs/protocol.md, section 12):
@@ -724,6 +736,7 @@ fn hub_start(
                 log,
                 ways: Arc::new(Mutex::new(forward::Ways::default())),
                 learned: Arc::new(Mutex::new(None)),
+                credential: Arc::new(Mutex::new(None)),
             },
         );
         Ok(())
@@ -772,7 +785,11 @@ fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
             vless_id: req.vless_id,
             records: records.clone(),
             send: r.hub.sender(),
-            credential: None,
+            credential: Some({
+                let c = r.credential.clone();
+                let f: forward::CredentialFn = Arc::new(move || c.lock().ok()?.clone());
+                f
+            }),
             ways: r.ways.clone(),
             learned: r.learned.clone(),
         };
@@ -781,6 +798,53 @@ fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
     })?;
     drop(old);
     Ok(json!({}))
+}
+
+/// The hubs' credential for a hub's registration
+/// (`cbb_tunnel_hub_credentials`).
+#[derive(Deserialize)]
+struct HubCredentials {
+    id: u64,
+    #[serde(with = "certs::b64", default)]
+    public: Vec<u8>,
+    #[serde(default)]
+    credentials: Vec<Credential>,
+}
+
+/// Sets what a hub registers with (the module's comment).
+pub fn hub_credentials(request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
+    answer(set_hub_credentials(request, sign, ctx))
+}
+
+fn set_hub_credentials(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
+    let req: HubCredentials =
+        serde_json::from_slice(request).map_err(|e| Error::msg(format!("the hub's credentials do not decode: {e}")))?;
+    let cred = if req.credentials.is_empty() {
+        None
+    } else {
+        let spki = certs::p256_spki_of(&req.public);
+        if certs::p256_spki(&spki).is_none() {
+            return Err(Error::msg("the hub's server key is not a P-256 point"));
+        }
+        // The forwarder takes the hubs' credential only when it lists the
+        // key the hub shows; one that does not is refused here.
+        let hash = certs::sha256(&spki);
+        let lists = req
+            .credentials
+            .iter()
+            .any(|c| c.open().is_ok_and(|b| b.kind == cbb_core::credential::HUBS && b.hubs.contains(&hash)));
+        if !lists {
+            return Err(Error::msg("the hubs' credential does not list the hub's server key"));
+        }
+        let key: Arc<dyn cbb_member::identity::ExternalKey> = Arc::new(AppKey { public: req.public, sign, ctx });
+        let cert = certs::server_cert_by(&key.public(), &mut |tbs| cbb_member::identity::sign_external(&*key, tbs))?;
+        Some(forward::HubCredential { credentials: req.credentials, cert, key })
+    };
+    hubs(|t| {
+        let r = t.get(&req.id).ok_or_else(|| Error::msg(format!("there is no hub {}", req.id)))?;
+        *r.credential.lock().map_err(|_| Error::msg("the hub is broken"))? = cred;
+        Ok(json!({}))
+    })
 }
 
 fn peers(clients: &[Client]) -> Result<Vec<Peer>> {

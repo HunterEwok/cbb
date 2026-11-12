@@ -270,6 +270,30 @@ final class RustHub: HubTunnel, @unchecked Sendable {
         _ = try RustTunnel.call(["op": "hub_set_records", "id": id, "records": try RustTunnel.json(records) ?? [Any]()])
     }
 
+    func setCredentials(serverKey: Data, sign: @escaping @Sendable (Data) throws -> Data, creds: String) throws {
+        var req: [String: Any] = ["id": id, "credentials": try RustTunnel.json(creds) ?? [Any]()]
+        if !creds.isEmpty { req["public"] = try RustTunnel.point(spki: serverKey).base64EncodedString() }
+        let ctx = TunnelCallbacks(sign: sign).retained()
+        do {
+            _ = try RustTunnel.answer(req) { r, n in cbb_tunnel_hub_credentials(r.baseAddress, r.count, tunnelSign, ctx, n) }
+        } catch {
+            TunnelCallbacks.release(ctx)
+            throw error
+        }
+        // The callbacks of the credentials before stay with the library
+        // while a registration may still sign with them: they go with the
+        // hub.
+        lock.withLock {
+            if let old = credentials { retired.append(old) }
+            credentials = ctx
+        }
+    }
+
+    /// The callbacks of the hubs' credential the registration shows, and
+    /// those of credentials replaced, released when the hub stops.
+    private var credentials: UnsafeMutableRawPointer?
+    private var retired: [UnsafeMutableRawPointer] = []
+
     func setProjectWays(_ ways: String) throws {
         _ = try RustTunnel.call(["op": "hub_set_project_ways", "id": id, "ways": try RustTunnel.json(ways) ?? [Any]()])
     }
@@ -296,15 +320,15 @@ final class RustHub: HubTunnel, @unchecked Sendable {
     }
 
     func close() {
-        let (first, ctx): (Bool, UnsafeMutableRawPointer?) = lock.withLock {
-            defer { (closed, registration) = (true, nil) }
-            return (!closed, registration)
+        let (first, ctxs): (Bool, [UnsafeMutableRawPointer]) = lock.withLock {
+            defer { (closed, registration, credentials, retired) = (true, nil, nil, []) }
+            return (!closed, [registration, credentials].compactMap { $0 } + retired)
         }
         guard first else { return }
         _ = try? RustTunnel.call(["op": "hub_stop", "id": id])
         // The hub has stopped, and its registration with it: no callback
         // comes after this.
-        TunnelCallbacks.release(ctx)
+        for ctx in ctxs { TunnelCallbacks.release(ctx) }
     }
 }
 
