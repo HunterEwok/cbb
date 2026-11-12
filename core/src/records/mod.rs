@@ -147,10 +147,18 @@ pub const MAX_SEEN: usize = 1024;
 
 // The ceilings frozen in the format (section 13).
 
-/// A record body, and a checkpoint's (whose list of kept records may name
-/// 1024 IDs). A recovery record is small: its list rides beside it.
+/// A record body, and a checkpoint's. A recovery record is small: its list
+/// rides beside it.
 pub const MAX_BODY: usize = 8 << 10;
-pub const MAX_CHECKPOINT_BODY: usize = 64 << 10;
+/// A checkpoint names records of a full set: at most one head per key that
+/// signs (the roots on the path and 256 admin keys, about 76 bytes each)
+/// and the other records it keeps, one per seq of a key, all of them in
+/// the set's 4096 records or among the first checkpoints outside the
+/// rooms, 34 bytes each: 321 * 76 + (4096 + 65 - 321) * 34 + the fixed
+/// fields is about 155 000 bytes. The new root's first checkpoint, which
+/// keeps the whole list besides what the old root's checkpoint kept, is
+/// such a checkpoint too.
+pub const MAX_CHECKPOINT_BODY: usize = 160 << 10;
 /// Records of one root key.
 pub const MAX_ROOT_RECORDS: usize = 1024;
 /// Records of one admin key.
@@ -230,6 +238,13 @@ impl Record {
             return Err(crate::error::Error::msg("the record's signer is not the key that signs it"));
         }
         let bytes = body.encode();
+        let max = if matches!(body.kind, Kind::Checkpoint { .. }) { MAX_CHECKPOINT_BODY } else { MAX_BODY };
+        if bytes.len() > max {
+            return Err(crate::error::Error::msg(alloc::format!(
+                "a record body of {} bytes is over its ceiling of {max}",
+                bytes.len()
+            )));
+        }
         let sig = key::sign_es256(key, LABEL_RECORD, &bytes)?.to_vec();
         let id = RecordId(sha256(&bytes));
         Ok(Record { bytes, sig, sig2: None, body, id })

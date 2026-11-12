@@ -86,8 +86,9 @@ pub struct RecordSet {
     /// key's records: the IDs the newest list applied below the fork
     /// names (`State::halted`).
     halted: Option<BTreeSet<RecordId>>,
-    /// The first checkpoints the held recovery records name
-    /// (`eval::firsts`): outside the rooms, never cut off or pruned.
+    /// The first checkpoints kept outside the rooms (`eval::Chain::firsts`):
+    /// the newest applied recovery record's and that of the one the chain
+    /// waits for; never cut off or pruned while they are.
     firsts: BTreeSet<RecordId>,
     /// The records set aside that the chain now applies, verified when
     /// they came: taken without verifying again.
@@ -585,18 +586,15 @@ impl RecordSet {
         let promoted = chain.promoted();
         let mut cuts = chain.cuts();
         self.waiting = chain.waiting;
-        self.firsts = eval::firsts(self.records.values().map(|e| (&e.record, e.role)));
+        self.firsts = chain.firsts.clone();
         // Halted: what the set holds besides the recovery key's records is
         // what the newest list applied below the fork names, nothing else,
         // so that every member holding the proof holds the same.
-        // The heads' first checkpoints stay too: the chain below the fork
-        // needs them to apply.
+        // The newest applied record's first checkpoint stays too: the
+        // chain below the fork needs it to apply.
         self.halted = chain.halted().then(|| {
             let mut keep = chain.cut.as_ref().map(|c| c.keep.clone()).unwrap_or_default();
-            keep.extend(self.records.values().filter_map(|e| match &e.record.body().kind {
-                Kind::Recovery { first, .. } => Some(*first),
-                _ => None,
-            }));
+            keep.extend(chain.firsts.iter().copied());
             keep
         });
         if let Some(keep) = self.halted.clone() {
@@ -611,19 +609,17 @@ impl RecordSet {
             }
             self.early.retain(|id, _| keep.contains(id));
         }
-        // The roots a held recovery record names that are not on the path
-        // yet, but for one side of a fork: at most one per seq, 16 in all.
-        let forked: BTreeSet<RecordId> = chain.fork.iter().copied().collect();
+        // The roots the chain's records name that have not applied yet: a
+        // record off the chain (one side of a fork, past a gap, after a
+        // void one) has nothing kept aside.
         let mut early_roots: BTreeMap<KeyHash, (u64, Key)> = BTreeMap::new();
-        for e in self.records.values().filter(|e| e.role == Role::Recovery && !forked.contains(&e.record.id())) {
-            let Kind::Recovery { root, .. } = &e.record.body().kind else { continue };
+        for (seq, root) in &chain.pending {
             let h = root.hash();
             if chain.promoted().contains(&h) || h == self.root.hash() {
                 continue;
             }
-            let seq = e.record.body().seq;
-            let slot = early_roots.entry(h).or_insert((seq, root.clone()));
-            slot.0 = slot.0.min(seq);
+            let slot = early_roots.entry(h).or_insert((*seq, root.clone()));
+            slot.0 = slot.0.min(*seq);
         }
         self.early_roots = if self.halted.is_some() { BTreeMap::new() } else { early_roots };
         if let (Some(old), Some(new)) = (self.cuts.values().next(), cuts.values().next())
