@@ -128,6 +128,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 		problems = append(problems, checkOldName(f.name, f.data)...)
 		problems = append(problems, checkGoneName(f.name, f.data)...)
 		problems = append(problems, checkWorkNotes(f.name, f.data)...)
+		problems = append(problems, checkClock(f.name, f.data)...)
 	}
 	problems = append(problems, checkCommands(contents)...)
 	problems = append(problems, checkFlags(contents)...)
@@ -142,6 +143,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 	problems = append(problems, checkPlanned(contents)...)
 	problems = append(problems, checkAndroidVersion(contents)...)
 	problems = append(problems, checkSpecVersions(contents)...)
+	problems = append(problems, checkAppTranslations(contents)...)
 	problems = append(problems, checkInstallerL10n(contents)...)
 	problems = append(problems, checkAppStrings(contents)...)
 	if testsSince != "" {

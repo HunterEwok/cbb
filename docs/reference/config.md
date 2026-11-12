@@ -51,6 +51,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_TEST_FALLBACK` | the lite member's `cbb service` | For tests only: milliseconds a member waits for one with a lower device ID to dial it before it dials that one itself (30 s otherwise); set, the member also dials the members with a greater device ID at port 1, as if a firewall there dropped the member port. |
 | `CBB_TEST_APPLETV_NAME` | `cbb-helper` | For tests only: the name an Apple TV announces by mDNS, which the helper then takes instead of browsing for it; empty for none. |
 | `CBB_TEST_BLUEZ` | cbb-helper on Linux | For tests only: the D-Bus address of a test's BlueZ (`bluetest`), which the Bluetooth keyboard registers with instead of the system bus. |
+| `CBB_WRITE_MUTANTS` | the core's tests (`cargo test -p cbb-core`) | For development only: `1` writes `testdata/format/wave4-mutants.json` again from what the readers say, instead of failing when the file no longer matches them. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-xhttp vpn.example.org`. |
 | `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |
 | `CBB_TRAFFIC_IFACE` | `site/deploy/cbb-traffic.sh` on cbb.tools | The network interface whose traffic counts for [the servers' budget](../relay-budget.md#money-and-traffic); unset, the default route's. |
@@ -91,6 +92,9 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEST_UINPUT` | Go tests of the uinput helper | `1` makes a missing `/dev/uinput` a failure instead of a skip. |
 | `CBB_TEST_CLIPBOARD` | Go tests of the Windows clipboard | `1` allows the tests to overwrite the clipboard. |
 | `CBB_UI_BROWSER` | Go tests of the tray app's window | The Chrome, Chromium or Edge to run the window in; without it the test looks in the usual places, and skips without a browser outside CI. |
+| `CBB_UPDATE_SCREENSHOTS` | Go tests of the tray app's window | Set (to anything), `TestWindow/screenshots` writes its pictures to `apps/desktop/testdata/screenshots` instead of comparing with them, after a change to the window. |
+| `CBB_SCREENSHOT_OUT` | Go tests of the tray app's window | The folder a failed screenshot comparison leaves the new picture and the difference in; by default `cbb-screenshots` in the system's temporary folder. |
+| `CBB_DANGEROUS_SHEET` | Go tests of the tray app's window, the Android app's unit tests | The folder `DangerousScreensTest` writes the Android pictures to (in `android/`) and `TestWindow/dangerous screens` writes `dangerous-screens.html` to: the dangerous screens in all eight languages (docs/testing.md, "The dangerous screens"); unset, it is skipped. |
 | `CBB_TEST_ACTIONS` | the Rust service, in the Go service's tests | A folder that stands for the system's quick actions: a preset with a file `refuse-NAME` there is refused with its text, any other is noted in the file `ran` and not run. Never set by hand. |
 | `CBB_TEST_CLOCK` | the bench's time-scaled build (the feature `benchtime`) | What the build adds to the wall clock, so that certificates expire on the bench in minutes. Never in a release. |
 | `CBB_TEST_CLOCK_FILE` | the bench's time-scaled build | A file that holds the value of `CBB_TEST_CLOCK` when that is not set, so the bench moves a member's clock with a restart of the service. |
@@ -118,7 +122,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_INTEROP_OUT` | the Swift and Kotlin kits' tests, Go's interop tests | A directory where the kits write fresh interop vectors and Go reads them; without it Go reads `testdata/interop`. |
 | `CBB_VERDICTS` | the verdict tests of all four implementations (`TestVerdicts`, `command::verdicts`, `VerdictTest`, `VerdictTests`) | A corpus of `tools/difffuzz gen` to write the verdicts on ([differential fuzzing](../differential.md)); without it each runs on a small corpus of its own. |
 | `CBB_VERDICTS_OUT` | the same tests | The file the verdicts go to, one line per case. |
-| `CBB_TEST_AHEAD_FILE` | the Rust service, in the Go service's tests | A file holding the milliseconds the service's wall clock is moved by, read each time; the tests write it to move the clock while the service runs (as the Go service's settings for tests). Never set by hand. |
+| `CBB_TEST_AHEAD_FILE` | the Rust service, in the Go service's tests | A file holding the milliseconds the service's wall clock is moved by and, after a space, the milliseconds its running time is moved forward by, read each time; the tests write it to move the clocks while the service runs (as the Go service's settings for tests; docs/testing.md, "Time"). Never set by hand. |
 | `CBB_TEST_RENEW_EVERY` | the Rust service, in the Go service's tests | How often, in milliseconds, the root and the admins look for certificates due for renewal, in place of twice a day. Never set by hand. |
 | `CBB_TEST_ATTEST_ROOTS` | `cbb-helper`, in the service's tests | A PEM file of the public keys (or certificates) of the roots an Android key attestation must chain to, in place of Google's; read at each check. Never set by hand. |
 | `CBB_TEST_TPM_ROOTS` | `cbb-helper`, in the service's tests | A PEM file of the TPM makers' roots an EK certificate must chain to, in place of the built-in ones. Never set by hand. |

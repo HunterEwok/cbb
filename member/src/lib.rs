@@ -491,7 +491,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).context("cannot read the code")?;
         let code = pair::normalize_code(line.trim())?;
-        let h = control::Header { op: "join".into(), code, ..Default::default() };
+        let h = control::Header { op: "join".into(), code: code.to_string(), ..Default::default() };
         request(g, &control::Message::new(h, Vec::new()))?;
         println!("{}", tr!("Joined the group."));
         return Ok(());
@@ -1862,7 +1862,8 @@ impl update::Group for ServiceLink<'_> {
         if first.header.part.as_ref().map(|p| p.size) != Some(size) {
             return Err(Error::msg("the service answered with another file"));
         }
-        let mut f = std::fs::File::create(path).context("cannot keep the archive")?;
+        // Whole or not at all: a download that breaks leaves nothing.
+        let mut f = crate::files::Atomic::create(path, 0o644).map_err(|e| e.context("cannot keep the archive"))?;
         let mut got: i64 = 0;
         loop {
             let m = Self::answer(&mut r)?;
@@ -1878,7 +1879,7 @@ impl update::Group for ServiceLink<'_> {
         if got != size {
             return Err(Error::msg("the service sent less than the archive"));
         }
-        Ok(())
+        f.commit().map_err(|e| e.context("cannot keep the archive"))
     }
 
     fn keep(&self, sha: &str, size: i64, path: &std::path::Path) {

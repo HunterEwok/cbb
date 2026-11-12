@@ -34,6 +34,7 @@ use alloc::vec::Vec;
 use hmac::{KeyInit, Mac};
 use sha2::{Digest, Sha512};
 use x25519_dalek::{PublicKey, StaticSecret};
+use zeroize::{Zeroize, Zeroizing};
 
 /// Suite constants for CPACE-X25519-SHA512.
 const DSI: &[u8] = b"CPace255"; // domain separation identifier
@@ -108,12 +109,15 @@ pub fn start(cfg: &Config) -> Result<(State, Vec<u8>), Error> {
     // RFC 7748 requires.
     let mut scalar = [0u8; ELEMENT_SIZE];
     getrandom::fill(&mut scalar).map_err(|_| Error("cpace: no randomness"))?;
-    start_with(cfg, scalar)
+    let out = start_with(cfg, scalar);
+    scalar.zeroize();
+    out
 }
 
 /// start with the secret scalar supplied by the caller, for tests.
-fn start_with(cfg: &Config, scalar: [u8; ELEMENT_SIZE]) -> Result<(State, Vec<u8>), Error> {
+fn start_with(cfg: &Config, mut scalar: [u8; ELEMENT_SIZE]) -> Result<(State, Vec<u8>), Error> {
     let priv_key = StaticSecret::from(scalar);
+    scalar.zeroize();
     let g = PublicKey::from(generator(cfg.password, cfg.channel_id, cfg.session_id));
     // Y = G.scalar_mult(y, g).
     let msg = priv_key.diffie_hellman(&g).to_bytes();
@@ -144,7 +148,7 @@ impl State {
     /// encodes a low-order point, or is this party's own message relayed
     /// back to it. It can be called only once: the secret scalar of an
     /// exchange must never be reused.
-    pub fn finish(&mut self, msg: &[u8], ad: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn finish(&mut self, msg: &[u8], ad: &[u8]) -> Result<Zeroizing<Vec<u8>>, Error> {
         let priv_key = self.priv_key.take().ok_or(Error("cpace: exchange already finished"))?;
 
         // An honest party's message equals ours only with negligible
@@ -154,8 +158,10 @@ impl State {
         }
         let peer: [u8; ELEMENT_SIZE] = msg.try_into().map_err(|_| Error("cpace: invalid peer message"))?;
         // K = G.scalar_mult_vfy(y, Y'), aborting if K is the neutral element.
-        let k = priv_key.diffie_hellman(&PublicKey::from(peer)).to_bytes();
-        if k == [0u8; ELEMENT_SIZE] {
+        // K is wiped when dropped (SharedSecret), and so is every buffer
+        // below that holds it or a key made from it.
+        let k = priv_key.diffie_hellman(&PublicKey::from(peer));
+        if crate::secret::ct_eq(k.as_bytes(), &[0u8; ELEMENT_SIZE]) {
             return Err(Error("cpace: invalid peer message: low order point"));
         }
 
@@ -165,10 +171,9 @@ impl State {
         }
 
         // ISK = H.hash(lv_cat(G.DSI || "_ISK", sid, K) || transcript(Ya, ADa, Yb, ADb))
-        let mut b = lv_cat(Vec::new(), &[DSI_ISK, &self.sid, &k]);
-        b = self.transcript(b, ya, ada, yb, adb);
-        let isk = Sha512::digest(&b).to_vec();
-        b.fill(0);
+        let b =
+            Zeroizing::new(self.transcript(lv_cat(Vec::new(), &[DSI_ISK, &self.sid, k.as_bytes()]), ya, ada, yb, adb));
+        let isk = Zeroizing::new(Sha512::digest(&b).to_vec());
 
         // sid_output = H.hash("CPaceSidOutput" || transcript(Ya, ADa, Yb, ADb))
         let b = self.transcript(DSI_SID.to_vec(), ya, ada, yb, adb);
@@ -177,14 +182,14 @@ impl State {
         // Key confirmation tags, each computed over the message its sender
         // sent: mac_key = H.hash("CPaceMac" || sid || ISK),
         // Ta = MAC(mac_key, lv_cat(Ya, ADa)), Tb = MAC(mac_key, lv_cat(Yb, ADb)).
-        let mut b = Vec::with_capacity(DSI_MAC.len() + self.sid.len() + isk.len());
+        let mut b = Zeroizing::new(Vec::with_capacity(DSI_MAC.len() + self.sid.len() + isk.len()));
         b.extend_from_slice(DSI_MAC);
         b.extend_from_slice(&self.sid);
         b.extend_from_slice(&isk);
-        let mac_key = Sha512::digest(&b);
-        b.fill(0);
+        let mut mac_key = Sha512::digest(&b);
         self.tag = Some(mac(mac_key.as_ref(), &self.msg, &self.ad));
         self.peer_tag = Some(mac(mac_key.as_ref(), msg, ad));
+        mac_key.as_mut_slice().zeroize();
 
         Ok(isk)
     }
@@ -202,8 +207,7 @@ impl State {
     pub fn verify(&self, tag: &[u8]) -> Result<(), Error> {
         let want = self.peer_tag.as_ref().ok_or(Error("cpace: exchange not finished"))?;
         // Compare in constant time, as hmac.Equal does.
-        let diff = tag.iter().zip(want).fold(0u8, |d, (a, b)| d | (a ^ b));
-        if tag.len() != want.len() || diff != 0 {
+        if !crate::secret::ct_eq(tag, want) {
             return Err(Error("cpace: key confirmation failed"));
         }
         Ok(())
@@ -237,26 +241,35 @@ fn mac(key: &[u8], msg: &[u8], ad: &[u8]) -> Vec<u8> {
 /// lv_cat(DSI, PRS, zero_bytes(len_zpad), CI, sid). The zero padding fills
 /// the hash function's first input block, so that the number of bytes
 /// hashed does not depend on the password length.
-fn generator_string(prs: &[u8], ci: &[u8], sid: &[u8]) -> Vec<u8> {
-    let b = lv_cat(Vec::new(), &[DSI, prs]);
+fn generator_string(prs: &[u8], ci: &[u8], sid: &[u8]) -> Zeroizing<Vec<u8>> {
+    // Room for it all at once, so that no copy of the password is left
+    // behind in a smaller buffer as the string grows.
+    let room = BLOCK_SIZE
+        .saturating_add(DSI.len())
+        .saturating_add(prs.len())
+        .saturating_add(ci.len())
+        .saturating_add(sid.len())
+        .saturating_add(32);
+    let b = lv_cat(Vec::with_capacity(room), &[DSI, prs]);
     let zpad = (BLOCK_SIZE as isize - 1 - b.len() as isize).max(0) as usize;
-    lv_cat(b, &[&vec![0u8; zpad], ci, sid])
+    Zeroizing::new(lv_cat(b, &[&vec![0u8; zpad], ci, sid]))
 }
 
 /// Returns the u-coordinate of the group generator derived from the
 /// password (PRS), channel identifier (CI), and session identifier (sid),
 /// implementing G.calculate_generator.
 fn generator(prs: &[u8], ci: &[u8], sid: &[u8]) -> [u8; 32] {
-    let mut b = generator_string(prs, ci, sid);
-    let h = Sha512::digest(&b);
-    b.fill(0);
+    let b = generator_string(prs, ci, sid);
+    let mut h = Sha512::digest(&b);
+    drop(b);
 
     // Interpret the first 32 bytes of the hash as a field element, as in
     // decodeUCoordinate, and map it to the curve with Elligator 2.
     let mut u = [0u8; 32];
     u.copy_from_slice(&h[..ELEMENT_SIZE]);
     let r = field::from_bytes(&u);
-    u.fill(0);
+    u.zeroize();
+    h.as_mut_slice().zeroize();
     field::elligator2(&r)
 }
 

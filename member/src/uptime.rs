@@ -8,9 +8,10 @@
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// The time since boot.
+/// The time since boot; in the tests, moved forward by test_run_ms, as if
+/// the machine had run that much longer.
 pub fn now() -> Duration {
-    crate::sys::since_boot()
+    crate::sys::since_boot().saturating_add(Duration::from_millis(test_run_ms()))
 }
 
 /// The wall clock in milliseconds since the Unix epoch; in the tests,
@@ -22,18 +23,50 @@ pub fn wall_ms() -> i64 {
 }
 
 /// The milliseconds the Go service's tests move this service's wall clock
-/// by, as the Go service's Config.now: the number in the file that
+/// by, as the Go service's Config.now: the first number in the file that
 /// CBB_TEST_AHEAD_FILE names, read each time, so that a test can move the clock
 /// while the service runs; 0 without it, as a release runs.
 fn test_offset_ms() -> i64 {
+    test_clock().0
+}
+
+/// The milliseconds the tests move the time since boot forward by: the
+/// file's second number, as if the machine had run that much longer (a
+/// test that walks a rule of days moves both numbers; one that sets the
+/// wall clock moves only the first). It never goes back, whatever the file
+/// says, so that the time since boot stays monotonic; 0 without the file.
+fn test_run_ms() -> u64 {
+    static MOST: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let run = u64::try_from(test_clock().1).unwrap_or(0);
+    MOST.fetch_max(run, std::sync::atomic::Ordering::Relaxed).max(run)
+}
+
+/// The test clock file's two numbers: the wall clock's offset and the
+/// running time's, each 0 when missing.
+fn test_clock() -> (i64, i64) {
     static FILE: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
-    let Some(file) = FILE.get_or_init(|| std::env::var_os("CBB_TEST_AHEAD_FILE").map(Into::into)) else { return 0 };
-    std::fs::read_to_string(file).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0)
+    let Some(file) = FILE.get_or_init(|| std::env::var_os("CBB_TEST_AHEAD_FILE").map(Into::into)) else {
+        return (0, 0);
+    };
+    parse_test_clock(&std::fs::read_to_string(file).unwrap_or_default())
+}
+
+fn parse_test_clock(s: &str) -> (i64, i64) {
+    let mut it = s.split_whitespace().map(|n| n.parse::<i64>().unwrap_or(0));
+    (it.next().unwrap_or(0), it.next().unwrap_or(0))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_test_clock() {
+        assert_eq!(parse_test_clock(""), (0, 0));
+        assert_eq!(parse_test_clock("3600000\n"), (3_600_000, 0));
+        assert_eq!(parse_test_clock("-5 259200000"), (-5, 259_200_000));
+        assert_eq!(parse_test_clock("x 7"), (0, 7));
+    }
 
     #[test]
     fn now_advances() {

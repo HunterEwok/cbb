@@ -7,6 +7,52 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The 0.6 format's vectors have a manifest (`testdata/format/FROZEN`) and CI's `format` job:
+  every vector must match it, `gen.py` must write the same bytes and the Go reader must take
+  them; once the format is declared frozen, a listed vector changes only in a commit that
+  counts a format break, at most one before 1.0 (`tools/formatfreeze`).
+- A generator of groups of records v3 from a fixed seed (`cbb_core::groupgen`, feature
+  `testkit`): about 5, 100 and 1000 records, and a group at the format's ceilings (the set's
+  4096 units filled, 256 devices, the root and the admins at their ceilings, two changes of root,
+  checkpoints with gaps). `core/tests/ceilings.rs` measures the evaluation and a member's set
+  on them, in time and in peak memory, against a budget.
+- Time in tests: the core's rules of days walked with a moved clock (`core/src/longrules.rs`:
+  the weekly key change with a sleeping device, a guarded leaf's 35 days, a clock set back, a
+  change of root by the recovery key that waits for no clock), and the Rust service's running time moved by the tests as its wall
+  clock already was (`CBB_TEST_AHEAD_FILE`'s second number, `testClock.run`); every read of
+  the wall clock in the service goes through `uptime::wall_ms()`, which `tools/repocheck`
+  enforces (docs/testing.md, "Time").
+- Power loss in tests: a member's saved state cut at every byte of every save, through the
+  flash store and in the service's state files, must come back whole and act on nothing
+  twice (docs/testing.md, "Power loss"). The service removes the temporary files a write cut
+  short left behind, once they are an hour old.
+- A simulation of a whole group in one process (`core/src/sim`): 3 to 12 members on a network
+  that drops, duplicates, reorders and splits, with crashes, moved clocks, changes of root, forks
+  and members off for days, all from one seed; after the network goes quiet every member must
+  hold the same records and show each copy once, and a removed member must open nothing sealed
+  after its removal. A failure prints a one-line replay; the nightly run takes a thousand fresh
+  seeds (docs/testing.md, "The simulation").
+- Recovery drills that run by themselves (`tools/e2e/drills.sh`): the root lost and taken back
+  with the recovery key, a new phone restoring the group, a device restored from yesterday's
+  backup getting back in, a removed device restored from an older backup staying out.
+- Soak stands (`tools/soak/soak.sh`): a small group runs for days, its members killed at random
+  moments, a calm stand and one under load (bursts, texts at the limit, files, eight members)
+  side by side, with one line a day of what arrived, how fast, and the members' memory and open
+  files, and a pass or fail line at the end; seven days on a release candidate are a release
+  condition (docs/testing.md, "Soak").
+- A sheet of the dangerous screens (`CBB_DANGEROUS_SHEET`, docs/testing.md): every screen of the
+  tray app and the Android app where a person decides something the group's safety depends on, in all eight
+  languages, as one HTML file to read before a release.
+- The apps are tested in all eight languages and for every reader (docs/testing.md, "The
+  apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
+  Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text
+  of every app translated with its placeholders; screen reader names, contrast, large text and
+  the keyboard; screenshot regressions of the tray window and the Android screens. Go's
+  coverage floor is 80%, with new tests of cbb-helper's keyboard and TV remote.
+- The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
+  an error, and compares every mark and confirmation tag in constant time; the C library
+  wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the
+  marks and the pairing confirmation run on demand.
 - The forwarder refuses the groups their operator lists after an abuse report:
   `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again
   within ten seconds of a change; a listed group is refused at registration and its devices
@@ -2201,6 +2247,26 @@ All notable changes to cbb are documented in this file. The format follows
   a moment: it tells its peers in a new `presence` message (docs/protocol.md, section 4,
   "Presence"). A device that refuses to let a phone join as an admin, or to admit while its
   admin key is frozen, now says so in its log as well as to the app.
+- The tray window in Arabic and Hebrew sets the tiles, rows, menus and a card's values from
+  the right, as it does the rest of the window.
+- The Ruby colour in the dark appearance is a shade lighter (#FF6681), so that its badges
+  keep WCAG AA contrast on the tray window's tiles.
+- The Android app's Settings in the dark appearance show the title, "Update automatically" and
+  "Version" in the palette's text colour; they were near black on the dark background. At the
+  largest font size the colour names take as many lines as they need, and the round buttons'
+  symbols stay inside their circles.
+- The Android app's back button points right in Arabic and Hebrew, where it stands on the right.
+- The Mac app's notices (the service not answering, a removed Mac) show their title and text in
+  the theme's text colour, for contrast on every theme, and VoiceOver reads a notice by its title.
+- The iPhone app's Start screen scrolls at the largest text sizes and in the longer languages
+  instead of cutting off its name, tagline and buttons, and "Restore with the recovery key" is
+  44 points tall and the screen's width to touch, in the other buttons' medium weight, at
+  which its Hindi line is no longer reported as clipped. "Copy Beyond Borders" under the name
+  is bold at the title 3 size, large text, whose contrast over the background's glow is
+  enough. Settings put as many colour swatches in a
+  row as their names fit at the text size, so a long colour name breaks between words instead
+  of being cut off. On an iPad, Settings opened from the Start screen cover the whole
+  screen instead of a sheet whose lower edge cut the list's rows in view.
 - A tunnel's loopback port on Linux takes a client on a dual-stack socket, as Java's on a system
   with IPv6: its user is looked up in the kernel's IPv6 table too, by its IPv4-mapped address,
   where before it was refused at once.

@@ -44,33 +44,54 @@ pub mod admit;
 pub mod api;
 pub mod arrange;
 pub mod authority;
+pub mod beacon;
 pub mod benchtime;
+pub mod blind;
 pub mod bug;
 pub mod certs;
 pub mod clip;
 pub mod command;
+pub mod commands;
+pub mod content;
+pub mod copies;
 pub mod copy;
 pub mod credential;
 pub mod error;
+pub mod format;
 #[cfg(feature = "fuzzing")]
 #[allow(clippy::expect_used, clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
 pub mod fuzzing;
 pub mod group;
+#[cfg(any(test, feature = "testkit"))]
+pub mod groupgen;
 pub mod hlc;
+pub mod hubkey;
 pub mod identity;
 pub mod invite;
 pub mod issue;
+pub mod join;
 pub mod keyboard;
+pub mod keystore;
+#[cfg(test)]
+mod longrules;
 pub mod manage;
 pub mod media;
+pub mod msg;
 pub mod pair;
 #[cfg(feature = "tls")]
 pub mod pair_session;
+pub mod peer;
+#[cfg(test)]
+mod powerloss;
+pub mod records;
 pub mod recovery;
 pub mod release;
 pub mod root;
 pub mod rule;
 pub mod seal;
+pub mod secret;
+#[cfg(test)]
+mod sim;
 pub mod store;
 pub mod strict;
 pub mod sync;
@@ -82,6 +103,8 @@ pub mod third_party {
     #[allow(clippy::indexing_slicing, clippy::arithmetic_side_effects, clippy::unwrap_used, clippy::expect_used)]
     pub mod cpace;
 }
+#[cfg(test)]
+mod testkit;
 #[cfg(feature = "tls")]
 pub mod tls;
 #[cfg(test)]

@@ -213,12 +213,12 @@ export const colors = [
   {
     name: "ruby",
     dark: {
-      background: "#180E13",
-      surface: "#2C1D25",
-      grid: "#3E232D",
+      background: "#180F13",
+      surface: "#2C1E26",
+      grid: "#3E242E",
       text: "#ECEEF5",
       textDim: "#9EA2B0",
-      accent: "#FF5C7A",
+      accent: "#FF6681",
       onAccent: "#0A0B0F",
       danger: "#FF7A7A",
     },

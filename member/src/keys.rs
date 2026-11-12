@@ -65,7 +65,7 @@ fn call(helper: &Helper, op: &str, req: &Wire) -> Result<Wire> {
 /// A secret sealed by the TPM or the Secure Enclave, as Go's state files
 /// keep it (keyseal.Blob): the blob in tpm or se, or the secret itself
 /// where secrets stay in files.
-#[derive(Serialize, Deserialize, Default, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct Sealed {
     #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
     pub secret: Vec<u8>,
@@ -73,6 +73,16 @@ pub struct Sealed {
     pub tpm: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub se: Option<serde_json::Value>,
+}
+
+impl core::fmt::Debug for Sealed {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Sealed")
+            .field("secret", &cbb_core::secret::Redacted(self.secret.len()))
+            .field("tpm", &self.tpm)
+            .field("se", &self.se)
+            .finish()
+    }
 }
 
 impl Sealed {

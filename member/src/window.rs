@@ -72,7 +72,7 @@ pub const CONFIRM_WAIT: Duration = crate::pair::CONFIRM_WAIT;
 /// An open pairing window.
 pub struct Window {
     admitter: Admitter,
-    code: String,
+    code: cbb_core::secret::Zeroizing<String>,
     /// A remote invitation's secret, in place of the code, and who
     /// confirms the device that proves it.
     secret: Option<(Vec<u8>, Confirm)>,
@@ -99,7 +99,7 @@ impl Window {
         let state = State { expires: uptime::now() + lifetime, ..Default::default() };
         Ok(Arc::new(Window {
             admitter,
-            code: String::new(),
+            code: cbb_core::secret::Zeroizing::new(String::new()),
             secret: Some((secret.to_vec(), confirm)),
             state: Mutex::new(state),
             changed: Condvar::new(),

@@ -381,6 +381,8 @@ pub fn run(cfg: Config) -> Result<()> {
     }
     // Parts of copies on their way when the service last stopped.
     let _ = std::fs::remove_dir_all(cfg.state_dir.join("tmp"));
+    // What a write cut short by a crash or a power cut left behind.
+    crate::files::sweep(&cfg.state_dir);
     let only = crate::interfaces::only();
     if !only.is_empty() {
         log(&format!("cbb: the member port and mDNS work only on {} (CBB_INTERFACES)", only.join(", ")));
@@ -2767,7 +2769,7 @@ impl Service {
         let code = if h.invite.is_empty() {
             cbb_core::pair::normalize_code(&h.code).map_err(|r| Error::msg(r.message()))?
         } else {
-            String::new()
+            cbb_core::secret::Zeroizing::new(String::new())
         };
         let _one = self.creating.try_lock().map_err(|_| Error::msg("a join or a pairing is already running here"))?;
         let (joiner, save) = crate::joiner(&self.state_dir, &self.name)?;

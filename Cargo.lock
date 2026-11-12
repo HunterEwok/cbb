@@ -37,6 +37,7 @@ dependencies = [
  "cipher 0.5.2",
  "cpubits",
  "cpufeatures 0.3.1",
+ "zeroize",
 ]
 
 [[package]]
@@ -51,6 +52,7 @@ dependencies = [
  "ctr",
  "ctutils",
  "ghash",
+ "zeroize",
 ]
 
 [[package]]
@@ -188,13 +190,16 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "base64 0.23.1",
+ "cbb-core",
  "chacha20 0.10.2",
  "chacha20poly1305 0.11.0",
  "crypto-bigint",
  "der",
  "getrandom 0.4.3",
+ "hkdf",
  "hmac 0.13.0",
  "hpke",
+ "ml-kem",
  "p256",
  "p384",
  "proptest",
@@ -203,8 +208,10 @@ dependencies = [
  "serde_json",
  "sha2",
  "spin 0.12.3",
+ "subtle",
  "x25519-dalek 3.0.0",
  "x509-cert",
+ "zeroize",
 ]
 
 [[package]]
@@ -1197,6 +1204,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2eecf2d5dc9b66b732b97707a0210906b1d30523eb773193ab777c0c84b3e8d5"
 dependencies = [
  "polyval",
+ "zeroize",
 ]
 
 [[package]]
@@ -1790,6 +1798,7 @@ dependencies = [
  "cpubits",
  "cpufeatures 0.3.1",
  "universal-hash 0.6.1",
+ "zeroize",
 ]
 
 [[package]]
@@ -2760,6 +2769,7 @@ version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 dependencies = [
+ "serde",
  "zeroize_derive",
 ]
 

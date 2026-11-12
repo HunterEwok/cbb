@@ -79,6 +79,132 @@ becomes a vector here.
   in Docker containers: mDNS, pairing with codes, sync, a wrong code.
 - The installer jobs install, run and remove the service on each system they cover.
 
+## Time
+
+Rules that live for days are walked with a moved clock, never waited for.
+
+- The core reads no clock: it takes its own clock for the keys and a leaf's running time as
+  inputs. `core/src/longrules.rs` plays the caller hour by hour and day by day: the weekly
+  change of the sealing keys with a device that sleeps three weeks and asks for its copies to
+  be sealed again, a clock set back by weeks that does not stop that change, a guarded
+  leaf's 35-day grant on its running time, and a change of root by the recovery key (rule 33),
+  which counts at once whatever the clock says, survives a restart, and leaves the old root's
+  later records, at any date, without effect.
+- The Rust service has one wall clock, `uptime::wall_ms()`, and one clock of running time,
+  `uptime::now()`; `tools/repocheck` refuses a read of the system's wall clock anywhere else
+  in `member/src` but the few files that decide no rule. The tests move both through the file
+  `CBB_TEST_AHEAD_FILE` names: `testClock.set` moves the wall clock as a person sets it,
+  `testClock.run` moves both as if the machine had run that much longer
+  (`internal/service/time_test.go`). The Go helper reads no clock.
+- When the service moves to the 0.6 core (wave 5), `internal/service/time_test.go` gains the
+  core's rules through the whole service: a change of root by the recovery key with a member
+  off at the time and one restarted in the middle; the weekly key change with a member
+  that slept through two changes and gets its copies sealed again; a guarded leaf whose grant
+  goes stale after 35 days of running time and obeys nobody until it has a new one; a wall
+  clock set back by days during each of them.
+
+## Power loss
+
+A save cut short must leave the old state or the new one, and a member must never act on
+what it has not saved.
+
+- `core/src/powerloss.rs` runs a member's life (records, a removal, commands sent twice,
+  copies with a secret sent twice, a change of root by the recovery key with its list) through
+  the two-slot store
+  of a device with only flash (`crate::store`), and cuts every save after each of its bytes,
+  the rest of the slot erased or stale. After each cut it starts again from the flash, is
+  sent again what it was handling, and must end as a member never cut: the state reads, is
+  the one before or after the save, no command runs twice or is lost, no copy is written
+  twice, and a change of root it reported stays.
+- The Rust service writes its state files through `files::write_atomic` (a new temporary
+  file, sync, rename). Its tests cut that write at every byte and step, as a process that
+  dies and as an error of the system, and find the old file or the new one; the temporary
+  file a crash leaves is swept at the next start once an hour old (`files::sweep`).
+- When the service moves to the 0.6 core, its saves of the core's state (the records with
+  the lists of the changes of root, the command counters, the freshness marks) join the same cut at
+  every step through the whole service.
+
+## The simulation
+
+`core/src/sim` runs a whole group in one process: 3 to 12 members on a network and clocks the
+test plays, every choice drawn from one seed, so that a failure replays from its seed alone.
+
+- The network delivers, drops, duplicates, delays and reorders messages, splits the members into
+  two sides and heals; a member crashes, also in the middle of taking a message, and restarts
+  from what it wrote; clocks move by up to two minutes either way. Outside actions: copies,
+  admissions, removals, freezes and thaws, admins made, checkpoints, a change of root by the
+  recovery key on any member, two such changes at one seq (a fork), and a member off while days
+  pass, its keys changing on its return.
+- During the run: no member shows a copy as new twice; a removed member opens no copy sealed
+  after every other member had saved its removal (until a change of root brings it back); a
+  member that holds both heads of a fork is halted.
+- Then the network goes quiet: healed, every member back with the world's clock, every pair
+  synced until nothing changes. Every member of the group holds the same records (in a halted
+  group, every member ever admitted is halted on the same fork); a removed
+  member has learned its removal; each member restarted from what it wrote has the records and
+  the state it saved. Unless the group is halted, two members in turn send a last copy, newer than
+  any: it is sealed to every reader of the group and shown as new by each of them.
+- The members speak through `sim/exchange.rs`, the glue that stands in for the member protocol's
+  sync; wave 5 puts the core's sans-I/O connection in its place, and with it the check that
+  connections settle.
+- `cargo test -p cbb-core --lib sim::` runs 16 seeds of 300 steps; `SIM_SEEDS`, `SIM_FIRST` and
+  `SIM_STEPS` change that, `SIM_SEED` runs one, and `SIM_ALL=1` lists every failing seed rather
+  than stopping at the first. A failure is cut down to the fewest steps that still fail and
+  prints its replay, `SIM_SEED=… SIM_STEPS=… cargo test -p cbb-core --lib sim::`. The nightly run
+  takes a thousand seeds from a fresh start.
+
+## Recovery drills
+
+What a person does after a loss, played on whole members by `sh tools/e2e/drills.sh`: the root
+lost and the group taken back with the recovery key, then handed to an admin
+(`TestRecovery`); a new phone restoring the group with the recovery sheet (`TestFFIPhoneRestore`,
+the phone's member on Linux); a device restored from yesterday's backup that gets back in while
+the group went on (`TestDrillRestoreFromYesterday`); a removed device restored from a backup made
+before its removal that stays out (`TestDrillRemovedStaysOut`). What a real iPhone's Secure
+Enclave and Face ID add is a hand checklist in the bench's test plan, run once before a release.
+
+## Soak
+
+`tools/soak/soak.sh` runs a small group of a build's `cbb` for days on one machine, on 127.0.0.1
+only, and checks that what is copied arrives everywhere and that a member killed with SIGKILL
+starts whole. Several stands run side by side, each with its own name, folder and ports
+(`SOAK_NAME`, `SOAK_DIR`, `SOAK_PORT`), in two profiles:
+
+- **calm**: 3 members; a line every two minutes, checked on every member; a member killed every
+  10 to 60 minutes.
+- **load**: 8 members; the calm lines, and every ten minutes a burst of a copy a second for a
+  minute (one in ten a text at the 1 MiB limit), its last copy checked on every member; every
+  half hour a file of up to 64 MiB, checked by its hash on every member; the kills inside the
+  bursts. It runs under `nice` on one core, so that a calm stand beside it keeps its numbers.
+
+Once a day a line goes to `soak.log`: copies sent and checked, arrived and missed, kills, whole
+and broken starts, the delivery time of the checked copies (p50, p95, max over the slowest
+member, and each member's p95, to tell which one was slow; the members are asked in turn, so
+each time includes the asking before it), the largest RSS and open files, and how each member's memory and open files moved. A
+single sample of RSS swings by megabytes as large copies come and go, so memory is judged by
+floors: after an hour's warm-up (again after each restart) a member's samples, one every ten
+minutes, go into windows of an hour, and a window's floor is its least RSS and open files.
+`soak.sh verdict` prints the pass or fail line so far, and `soak.sh stop` ends with it: PASS when
+no copy was missed, every start was whole, no member's RSS floor grew over its first window's by
+more than 1 MiB on the calm stand or 4 MiB on the loaded one, no member's RSS floor rose in three
+windows in a row (a rise being at least 64 KiB over the previous window's floor), no member's floor of open files rose over its first window's, and the delivery
+time's p95 is at most 10 s. The bounds were fixed before any long run was measured: a run over
+them is a finding, not a reason to move them. Beside the verdict the single samples' numbers are
+printed as `raw_*`, for reading. A checked copy that is not on every member within 60 s counts as
+missed, also when it was sent just after a kill: a restarted member is back and has it within a
+minute, or the run fails. These bounds follow the service's reconnect wait (5 s after a lost
+connection, `RECONNECT_WAIT` in `member/src/node.rs`) and the 15 s timeout of a silent peer;
+they are set again when the reconnect work (#539) changes either. A third profile, one service
+process in two groups (the family case), waits for wave 5, when one service holds several
+groups.
+
+A release candidate's build runs seven days on the shared bench's Raspberry Pi 4, the calm and
+the load stand side by side, before the release (a release condition), and goes on to thirty.
+A counted run reports, for each stand: the days, the commit, the hardware (`soak start` writes
+the machine and its cores), copies sent, checked and missed, kills and broken starts, the
+delivery times, the memory and open files with their growth, and the verdict. The documents
+give only numbers measured that way.
+
 ## Bench scenarios
 
 Unit and CI tests cannot show that a copy on an iPhone reaches a Windows PC through a café's
@@ -87,6 +213,78 @@ rules R1 to R7 ([cases](testbench-cases.md)), a catalogue of the cases of a rele
 each runs, and a coverage report of the product's functions
 ([functions](testbench-functions.md)). Security cases block a release; a case that cannot
 run yet is skipped with its reason and stays on the list.
+
+## The apps' languages, accessibility and screenshots
+
+Every app is checked in the project's eight languages (zh en es ru ar sw he hi) and for a
+person who uses a screen reader, large text or the keyboard (docs/testbench-catalogue.md,
+A9 and U14 to U18).
+
+- `tools/repocheck` checks that every text of every app (the String Catalogs, Android's
+  `strings.xml`, the tray's and the command line's JSON) is translated into all eight, marked
+  done, and keeps the original's placeholders. `tools/tokens` checks that every palette keeps
+  WCAG AA contrast for text, the accent included, on the background and on a surface.
+- The tray app (`apps/desktop`, `TestWindow` in a headless Chrome): each language without
+  English left over, clipped text or a page wider than the window, Arabic and Hebrew from
+  right to left and no text set to one side; every control named in the accessibility tree;
+  every text's contrast in all ten colours, dark and light; the window at twice the text size;
+  Tab through the header and Settings with the focus shown.
+- Android (`LanguagesTest`, `AccessibilityTest` on Robolectric): the Start screen and Settings
+  in each language, no text cut off or ended with "…", right to left in Arabic and Hebrew,
+  every control named and at least 48 dp to touch, nothing cut off at font scale 2.
+- The iPhone and the Mac (`ReadersUITests`): each language launched with `-AppleLanguages`,
+  the texts checked against the app's catalog, the iPhone's top row swapping sides from right
+  to left, and Xcode's accessibility audit (clipped text, descriptions, touch targets; on the
+  iPhone also Dynamic Type and clipped text at the largest size in English, Swahili and
+  Hindi) passing; each screen's picture is attached to the run's `.xcresult`, uploaded by CI (`ios-screens`, `mac-windows`), and the English ones
+  are printed into a failed job's log (`.github/pictures.py`), with, on the iPhone, a picture
+  of each element the audit fails. The audit's contrast check
+  fails text its own picture shows at 6.9:1 and more, so each text's (and on the iPhone each
+  button's) contrast is measured on the screen's picture instead: its darkest and lightest
+  pixels at least 4.5:1. The iPhone's Start screen scrolls rather than squeeze its texts. The
+  audit looks only at what a person can reach.
+
+Screenshots are compared where a picture is the same on every machine that draws it: the
+tray window on Linux in the Noto fonts (`fonts-noto-core`, `fonts-noto-mono`,
+`fonts-droid-fallback`), and the Android screens in Robolectric's native graphics, which
+bring their own fonts. A picture may differ from its reference in 0.3% of its pixels, the
+smoothing of text between two builds of a browser, not more. A failed comparison leaves the
+new picture and the difference in the job's artifacts. The simulators' pictures change with
+each Xcode and iOS, so the iPhone's and the Mac's are kept with the results to look at, not
+compared.
+
+After a change to a screen, write the pictures again and look at each before committing it:
+
+```sh
+cd apps/desktop && CBB_UPDATE_SCREENSHOTS=1 go test -run 'TestWindow/screenshots' .
+cd apps/android && ./gradlew :app:recordRoborazziFullDebug
+```
+
+The tray's references are CI's pictures: another build of Chrome smooths text differently in
+more than 0.3% of the pixels. When a run elsewhere draws them, compare them by eye and take
+the ones to commit from the `tray-screenshots` artifact of the failed CI job.
+
+### The dangerous screens
+
+`TestWindow/dangerous screens` (`apps/desktop/dangerous_test.go`) draws every screen of the tray
+app where a person decides something the group's safety depends on, in all eight languages, into
+one HTML file: the six digits a joining computer shows, an invitation's fingerprint to compare,
+removing a device, making a computer an admin, the takeover warning and the alerts of admins or
+claims that split the group, voiding a key's two histories, claiming the group with the recovery
+key, and a group taken over from this device. Each picture has its words under it, for a native
+speaker to quote. The Android app's part (`DangerousScreensTest`, on Robolectric's native graphics) adds an
+invitation's fingerprint, removing a device and the root phone, the alerts, and the recovery
+sheet with the question on closing it. It is for a person to read before a release; nothing
+compares it. It runs only when asked, Android first, as the tray's test puts its pictures on the
+sheet:
+
+```sh
+export CBB_DANGEROUS_SHEET=/tmp/sheet
+(cd apps/android && ./gradlew :app:testFullDebugUnitTest --tests 'tools.cbb.DangerousScreensTest')
+(cd apps/desktop && go test -run 'TestWindow/dangerous' .)
+```
+
+The iPhone's screens are not on it yet: they would come from `ReadersUITests` on a Mac.
 
 ## Coverage
 
@@ -97,7 +295,7 @@ rise but not fall. When the table says "raise the floor", raise it in the same p
 
 | Part | What counts | Measured by |
 |---|---|---|
-| `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
+| `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; the `service tests on the Rust cbb` job's tests of `internal/service` and the desktop connector against the Rust `cbb`, whose `cbb-helper` is built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `rust` job |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
