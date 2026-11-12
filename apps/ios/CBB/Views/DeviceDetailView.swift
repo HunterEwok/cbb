@@ -210,8 +210,8 @@ struct DeviceDetailView: View {
     @ViewBuilder private func iconRow(_ d: AppModel.Computer) -> some View {
         if model.isAdmin {
             HStack(spacing: Tokens.spacingSmall) {
-                // Members and Android phones take pastes; iPhones cannot.
-                if !d.isSelf, d.role == "member" || (d.role == "phone" && d.os == "android") {
+                // Members and Android and Aurora phones take pastes; iPhones cannot.
+                if !d.isSelf, d.role == "member" || (d.role == "phone" && ["android", "aurora", "sailfish"].contains(d.os)) {
                     Button { pasting = true } label: { IconLabel(symbol: "keyboard", title: Text("Paste")) }
                         .buttonStyle(.plain)
                 }

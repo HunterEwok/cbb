@@ -157,6 +157,16 @@ public:
     // forMinutes: how long a mute lasts, 0 for until an unmute.
     Q_INVOKABLE void manage(const QString &action, const QString &device, const QString &name = QString(),
                             int forMinutes = 0);
+    // Remote paste (docs/design.md, "Remote paste"): text, or the
+    // clipboard's when it is empty, put where device's focus is, pasted or
+    // typed, with Enter after it if asked; a paste command signed as
+    // manage's, and managed("paste", device, ok) tells when the device
+    // took it or why not.
+    Q_INVOKABLE void paste(const QString &device, const QString &text, bool typing, bool enter, bool secret);
+    // Images or files (paths or file URLs) go to the group as a copy, then
+    // a paste command of kind media names it; the device pastes them with
+    // its paste keys.
+    Q_INVOKABLE void pasteFiles(const QString &device, const QStringList &files, bool enter);
     // The member's devices (Member::devices) in the user's order and
     // collections as the member keeps them (docs/apps.md, "What the member
     // shows"): each item is {kind: "device", device} or {kind: "collection",

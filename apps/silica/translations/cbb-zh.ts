@@ -127,6 +127,17 @@
     </message>
 </context>
 <context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>剪贴板中没有文本。</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>没有可发送的内容：无法读取任何文件。</translation>
+    </message>
+</context>
+<context>
     <name>ArrangePage</name>
     <message>
         <source>Arrange</source>
@@ -404,6 +415,10 @@
         <translation>正在静音 %1</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>在其上粘贴…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>移除</translation>
     </message>
@@ -521,6 +536,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>代码不匹配。请扫描另一台设备当前显示的二维码。</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>设备未粘贴。</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -1140,6 +1159,10 @@
         <translation>一段视频</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>管理员已将这部手机静音，所以它的副本留在本机。</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>一张图片</translation>
     </message>
@@ -1200,6 +1223,49 @@
     <message>
         <source>a file</source>
         <translation>一个文件</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>粘贴适合大多数应用；输入适合不接受粘贴的应用，且最多 4 KB。回车会在终端中执行命令，所以只有电脑的用户允许时才会接受。机密不会在电脑的日志或剪贴板中留下痕迹。</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>图片或文件作为一份拷贝发送到群组，电脑会像按 Ctrl+V 一样把它们粘贴到焦点所在处：聊天、文档或文件夹中。如果开启了回车，会在聊天中发送它们。</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>机密</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>它会进入 %1 键盘焦点所在之处，前提是那里的用户已开启远程粘贴。留空时，“粘贴”会发送剪贴板中的内容。</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>粘贴</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>粘贴图片或文件…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>在 %1 上粘贴</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>之后按回车</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>文本</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>逐键输入</translation>
     </message>
 </context>
 <context>

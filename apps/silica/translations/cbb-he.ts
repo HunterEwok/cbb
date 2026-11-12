@@ -127,6 +127,17 @@
     </message>
 </context>
 <context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>אין טקסט בלוח.</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>אין מה לשלוח: לא ניתן היה לקרוא אף קובץ.</translation>
+    </message>
+</context>
+<context>
     <name>ArrangePage</name>
     <message>
         <source>Arrange</source>
@@ -404,6 +415,10 @@
         <translation>משתיק את %1</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>הדבקה בו…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>הסרה</translation>
     </message>
@@ -521,6 +536,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>הקוד לא תאם. סרקו את הקוד שהמכשיר השני מציג עכשיו.</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>המכשיר לא הדביק.</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -1140,6 +1159,10 @@
         <translation>סרטון</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>מנהל השתיק את הטלפון הזה, ולכן ההעתקות שלו נשארות בו.</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>תמונה</translation>
     </message>
@@ -1200,6 +1223,49 @@
     <message>
         <source>a file</source>
         <translation>קובץ</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>הדבקה מתאימה לרוב האפליקציות; הקלדה מתאימה לאלה שלא מקבלות הדבקה, ורק עד 4 KB. ‏Enter מריץ פקודה במסוף, ולכן המחשב מקבל אותו רק אם המשתמש שלו התיר זאת. סוד לא משאיר עקבות ביומן או בלוח של המחשב.</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>התמונה או הקבצים נשלחים לקבוצה כהעתקה, והמחשב מדביק אותם במקום שבו נמצא המיקוד, כמו Ctrl+V: בצ׳אט, במסמך או בתיקייה. Enter, אם הוא מופעל, שולח אותם בצ׳אט.</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>סוד</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>זה נכנס למקום שבו נמצא מיקוד המקלדת של %1, אחרי שהמשתמש שלו הפעיל שם הדבקה מרחוק. אם נשאר ריק, ״הדבקה״ שולחת את מה שיש בלוח.</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>הדבקה</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>הדבקת תמונה או קבצים…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>הדבקה ב-%1</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>ללחוץ Enter אחריו</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>טקסט</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>הקלדה מקש אחר מקש</translation>
     </message>
 </context>
 <context>

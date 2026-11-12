@@ -71,16 +71,22 @@ Page {
             MenuItem {
                 // The root lets an admin's claim take effect at once (cbb_core::root).
                 visible: page.acts && app.root && page.device.admin && !page.device.frozen
-                         && app.member.rootView.handed_to !== page.device.device
+                         && app.member.rootView.handed_to !== page.device.id
                 text: qsTr("Hand the group over")
                 onClicked: remorse.execute(qsTr("Handing the group over to %1").arg(Devices.name(page.device)),
-                                           function() { app.handOver(page.device.device) })
+                                           function() { app.handOver(page.device.id) })
             }
             MenuItem {
                 visible: page.acts && page.device.frozen
                 text: qsTr("Unfreeze")
                 onClicked: remorse.execute(qsTr("Unfreezing %1").arg(Devices.name(page.device)),
                                            function() { app.manage("thaw", page.device.id) })
+            }
+            MenuItem {
+                // Members and Android and Aurora phones take pastes; iPhones cannot.
+                visible: page.acts && Devices.takesPaste(page.device)
+                text: qsTr("Paste on it…")
+                onClicked: pageStack.push(Qt.resolvedUrl("PastePage.qml"), { device: page.device })
             }
             MenuItem {
                 visible: page.acts
@@ -142,7 +148,7 @@ Page {
             }
 
             DetailItem {
-                visible: app.root && app.member.rootView.handed_to === page.device.device
+                visible: app.root && app.member.rootView.handed_to === page.device.id
                 label: qsTr("The group is handed over")
                 value: qsTr("Its claim takes the group at once")
             }

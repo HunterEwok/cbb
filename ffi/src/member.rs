@@ -189,6 +189,19 @@ struct ManageArgs {
     /// With mute: how long, 0 for until an unmute.
     #[serde(default)]
     for_ms: i64,
+    /// With paste: the text, or with kind media the event ID of the
+    /// group's copy of images or files, which the phone made just before.
+    #[serde(default)]
+    text: String,
+    /// With paste: `paste` (the default) or `type`.
+    #[serde(default)]
+    mode: String,
+    /// With paste: `text` (the default), `secret` or `media`.
+    #[serde(default)]
+    kind: String,
+    /// With paste: press Enter after it.
+    #[serde(default)]
+    enter: bool,
     /// The public point of the key that signs, SEC1 uncompressed: the
     /// phone's admin key, or the root's key when it holds the root.
     #[serde(with = "certs::b64")]
@@ -996,6 +1009,17 @@ impl Member {
                 "unmute" => return order(Order::Unmute),
                 "sync_on" => return order(Order::Sync(true)),
                 "sync_off" => return order(Order::Sync(false)),
+                // Remote paste (docs/design.md, "Remote paste"): a text, or
+                // a copy of images or files the phone made just before.
+                "paste" => {
+                    let or = |s: &str, d: &str| if s.is_empty() { d.to_string() } else { s.to_string() };
+                    return order(Order::Paste {
+                        mode: or(&a.mode, "paste"),
+                        kind: or(&a.kind, "text"),
+                        text: a.text.clone(),
+                        enter: a.enter,
+                    });
+                }
                 other => return Err(Error::msg(format!("there is no action {other:?}"))),
             }
             Ok(json!({}))

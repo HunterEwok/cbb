@@ -263,6 +263,34 @@ void Member::sendFiles(const QStringList &paths)
 {
     if (!m_member || m_muted || paths.isEmpty())
         return;
+    Failure failure;
+    const int count = copyMedia(paths, &failure).isEmpty() ? 0 : paths.size();
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+        return;
+    }
+    m_error.clear();
+    m_last = count == 1 ? QFileInfo(paths.first()).fileName() : tr("%1 files").arg(count);
+    emit changed();
+}
+
+QString Member::copyFiles(const QStringList &paths, Failure *failure)
+{
+    if (!m_member) {
+        *failure = Failure{QCoreApplication::translate("Errors", "Only an admin of the group changes its devices."),
+                           QStringLiteral("paste: no member")};
+        return QString();
+    }
+    if (m_muted) {
+        *failure = Failure{tr("An admin muted this phone, so its copies stay on it."), QStringLiteral("paste: muted")};
+        return QString();
+    }
+    return copyMedia(paths, failure);
+}
+
+QString Member::copyMedia(const QStringList &paths, Failure *failure)
+{
     QMimeDatabase mimes;
     QJsonArray parts;
     qint64 total = 0;
@@ -279,22 +307,17 @@ void Member::sendFiles(const QStringList &paths)
             part = QJsonObject{{QStringLiteral("type"), type}, {QStringLiteral("file"), fi.absoluteFilePath()}};
         parts.append(part);
     }
-    Failure failure;
-    if (parts.isEmpty())
-        failure = Failure{tr("There is nothing to send: no file could be read."), QStringLiteral("share: no readable file")};
-    else if (total > maxSendBytes)
-        failure = Failure{tr("The files are too large: up to 50 MB go together."),
-                          QStringLiteral("share: %1 bytes").arg(total)};
-    else
-        call(m_member, QStringLiteral("copy_media"), QJsonObject{{QStringLiteral("parts"), parts}}, &failure);
-    if (!failure.isNull()) {
-        m_error = Errors::shown(failure);
-        emit changed();
-        return;
+    if (parts.isEmpty()) {
+        *failure = Failure{tr("There is nothing to send: no file could be read."), QStringLiteral("share: no readable file")};
+        return QString();
     }
-    m_error.clear();
-    m_last = parts.size() == 1 ? QFileInfo(paths.first()).fileName() : tr("%1 files").arg(parts.size());
-    emit changed();
+    if (total > maxSendBytes) {
+        *failure = Failure{tr("The files are too large: up to 50 MB go together."),
+                           QStringLiteral("share: %1 bytes").arg(total)};
+        return QString();
+    }
+    const QJsonObject a = call(m_member, QStringLiteral("copy_media"), QJsonObject{{QStringLiteral("parts"), parts}}, failure);
+    return failure->isNull() ? a.value(QStringLiteral("copy")).toObject().value(QStringLiteral("id")).toString() : QString();
 }
 
 void Member::take(const QJsonObject &copy)

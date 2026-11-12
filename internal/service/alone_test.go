@@ -1028,6 +1028,19 @@ func TestFFIPhoneRoot(t *testing.T) {
 	if got := manage(`{"action":"sync_off","device":"` + admitted + `","timeout_ms":1000}`); !strings.Contains(got, "not connected") {
 		t.Fatalf("turning the sync of a computer that is not running off: %s", got)
 	}
+	// Remote paste: the core checks the command before it looks for a way.
+	if got := manage(`{"action":"paste","device":"` + admitted + `","text":"ls","mode":"shout","timeout_ms":1000}`); !strings.Contains(got, "not paste or type") {
+		t.Fatalf("a paste by no way there is: %s", got)
+	}
+	for _, req := range []string{
+		`"text":"ls","enter":true`,
+		`"text":"hunter2","mode":"type","kind":"secret"`,
+		`"text":"0123456789abcdef0123456789abcdef","kind":"media"`,
+	} {
+		if got := manage(`{"action":"paste","device":"` + admitted + `",` + req + `,"timeout_ms":1000}`); !strings.Contains(got, "not connected") {
+			t.Fatalf("a paste (%s) for a computer that is not running: %s", req, got)
+		}
+	}
 	// The admin key comes from the computer's hello, so it must be connected.
 	if got := manage(`{"action":"make_admin","device":"` + admitted + `"}`); !strings.Contains(got, "not connected") {
 		t.Fatalf("making a computer that is not running an admin: %s", got)
