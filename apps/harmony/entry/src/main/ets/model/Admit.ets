@@ -7,6 +7,7 @@
 // user's consent. This class only moves the bytes, as the Aurora app's
 // Admit does; Scan Kit reads the code.
 
+import { socket } from '@kit.NetworkKit';
 import cbb, { Handle } from 'libcbb_napi.so';
 import { read } from '../core/Core';
 import { fromBase64 } from '../core/Bytes';
@@ -112,7 +113,7 @@ export class Admit {
       this.conn.close();
       this.conn = null;
     }
-    let target = this.addrs.length > 0 ? netAddress(this.addrs[0]) : undefined;
+    let target: socket.NetAddress | undefined = this.addrs.length > 0 ? netAddress(this.addrs[0]) : undefined;
     while (this.addrs.length > 0 && target === undefined) {
       this.addrs.shift();
       target = this.addrs.length > 0 ? netAddress(this.addrs[0]) : undefined;

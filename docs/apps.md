@@ -1048,7 +1048,8 @@ the app on real devices.
 
 - Every user-facing string comes from the platform's catalog from the first screen on: a
   String Catalog (`Localizable.xcstrings`) on iOS and the Mac, `strings.xml` resources on
-  Android, Qt's `.ts` files on Aurora, `frontend/l10n` in the tray app. No string literal in
+  Android, Qt's `.ts` files on Aurora, `resources/*/element/string.json` on HarmonyOS,
+  `frontend/l10n` in the tray app. No string literal in
   views.
 - All of them are made from one source, `apps/l10n/<language>.json`, by `tools/strings`:
   `en.json` lists each string once with the apps that show it (`"in"`), each other language's

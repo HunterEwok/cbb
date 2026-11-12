@@ -110,7 +110,7 @@ go tool actionlint             # GitHub Actions workflows
 pipx run zizmor==1.31.1 --offline --min-severity low .github/workflows   # their security
 go run ./tools/repocheck       # English only, license headers, copied code, no programs or files over 1 MiB, documentation links and names
 go run ./tools/tokens -check   # apps/design/tokens.json -> Swift and Kotlin, WCAG contrast
-go run ./tools/strings -check  # apps/l10n -> the apps' String Catalogs, strings.xml, .ts and tray l10n
+go run ./tools/strings -check  # apps/l10n -> the apps' String Catalogs, strings.xml, .ts, string.json and tray l10n
 go run ./tools/icon -check     # the apps' icons
 sh .github/shellcheck.sh       # every shell script
 pipx run typos==1.51.1         # spelling of the English text (_typos.toml)
@@ -329,9 +329,10 @@ xcodebuild test -project CBBMac.xcodeproj -scheme CBBMac \
 The apps' strings have one source, `apps/l10n/<language>.json` (English and the seven
 languages of the website), and `tools/strings` writes every app's files from it: the String
 Catalogs of the iPhone, Watch and Mac apps, Android's `res/values*/strings.xml`, Aurora's
-`translations/cbb-<language>.ts` and the tray's `frontend/l10n`. Edit only the source:
+`translations/cbb-<language>.ts`, the HarmonyOS app's `resources/*/element/string.json` and
+the tray's `frontend/l10n`. Edit only the source:
 `en.json` gives each string's ID (its English text) and the places that show it, such as
-`ios`, `mac`, `tray`, `aurora:MainPage` or `android:settings`
+`ios`, `mac`, `tray`, `aurora:MainPage`, `android:settings` or `harmony:settings_title`
 ([tools/strings/catalog](tools/strings/catalog/catalog.go) lists them), and each language's
 file has its translation under that ID. Texts are plain; the tool escapes them for Android
 and Qt. When Xcode adds a new key to a catalog, move it into the source.

@@ -4,7 +4,8 @@
 // Package catalog turns the apps' strings, apps/l10n/<language>.json, into
 // the files each app's platform reads: the String Catalogs of the iPhone,
 // Watch and Mac apps, the Android app's and the watch's res/values*/strings.xml,
-// the Aurora app's Qt translations and the tray app's frontend/l10n.
+// the Aurora app's Qt translations, the HarmonyOS app's
+// resources/*/element/string.json and the tray app's frontend/l10n.
 //
 // apps/l10n/en.json lists every string once: its ID (the English text, or the
 // text with the first place in brackets where the same English needs another
@@ -18,9 +19,10 @@
 //	tray                                                          the tray app, keyed by the English
 //	aurora:CONTEXT                                                the Aurora app's Qt context, keyed by the English
 //	android:NAME, wear:NAME                                       the Android app's and the watch's resource NAME
+//	harmony:NAME                                                  the HarmonyOS app's string NAME
 //
-// Every text is plain: Generate escapes it for Android's resources and the
-// XML of Qt's files.
+// Every text is plain: Generate escapes it for Android's resources, the
+// XML of Qt's files and the HarmonyOS app's JSON.
 package catalog
 
 import (
@@ -77,10 +79,14 @@ var androidRes = map[string]string{
 	"wear":    "apps/android/wear/src/main/res",
 }
 
+// harmonyRes is the HarmonyOS app's resource folder.
+const harmonyRes = "apps/harmony/entry/src/main/resources"
+
 // Each platform's names for the languages.
 var (
 	xcLang      = map[string]string{"zh": "zh-Hans"}
 	androidLang = map[string]string{"he": "iw"}
+	harmonyLang = map[string]string{"zh": "zh_CN"}
 	qtLang      = map[string]string{"es": "es_ES", "he": "he_IL", "hi": "hi_IN", "ru": "ru_RU", "zh": "zh_CN"}
 )
 
@@ -106,7 +112,7 @@ func place(p string) (kind, key string, err error) {
 		if key == "" {
 			return "", "", fmt.Errorf("place %q needs a key after the colon", p)
 		}
-	case "android", "wear":
+	case "android", "wear", "harmony":
 		if !androidName.MatchString(key) {
 			return "", "", fmt.Errorf("place %q needs a resource name after the colon", p)
 		}
@@ -244,6 +250,10 @@ func (src Source) Generate() map[string][]byte {
 	for _, l := range Languages {
 		out["apps/desktop/frontend/l10n/"+l+".json"] = src.tray(l)
 		out["apps/silica/translations/cbb-"+l+".ts"] = src.qt(l)
+	}
+	out[harmonyRes+"/base/element/string.json"] = src.harmony("")
+	for _, l := range Languages {
+		out[harmonyRes+"/"+lang(harmonyLang, l)+"/element/string.json"] = src.harmony(l)
 	}
 	for kind, res := range androidRes {
 		out[res+"/values/strings.xml"] = src.android(kind, "")
@@ -434,6 +444,22 @@ func (src Source) android(kind, l string) []byte {
 	}
 	b.WriteString("</resources>\n")
 	return b.Bytes()
+}
+
+// harmony writes the HarmonyOS app's strings: English ("") with the names
+// that stay as they are, or a language's translations. JSON takes no
+// comment, so the note that the file is generated is not in it.
+func (src Source) harmony(l string) []byte {
+	var lines []string
+	for _, k := range src.at("harmony") {
+		switch {
+		case l == "":
+			lines = append(lines, `    {"name": "`+k.key+`", "value": `+quote(k.s.EN)+`}`)
+		case !k.s.Fixed:
+			lines = append(lines, `    {"name": "`+k.key+`", "value": `+quote(k.s.Texts[l])+`}`)
+		}
+	}
+	return []byte("{\n  \"string\": [\n" + strings.Join(lines, ",\n") + "\n  ]\n}\n")
 }
 
 // xmlText escapes a text for an XML element.

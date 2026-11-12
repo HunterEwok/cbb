@@ -66,7 +66,7 @@ async function listen(): Promise<void> {
   if (server !== undefined) {
     return;
   }
-  const s = socket.constructTCPSocketServerInstance();
+  const s: socket.TCPSocketServer = socket.constructTCPSocketServerInstance();
   const any: socket.NetAddress = { address: '0.0.0.0', port: MEMBER_PORT, family: 1 };
   await s.listen(any);
   s.on('connect', (c: socket.TCPSocketConnection) => {

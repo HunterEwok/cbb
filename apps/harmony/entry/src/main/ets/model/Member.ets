@@ -594,7 +594,11 @@ export class Member {
     } else if (e.type === 'mute') {
       this.pollMuted();
     } else if (e.type === 'command') {
-      this.command(e.token ?? 0, e.from ?? '', e.command ?? ({} as Object));
+      if (e.command !== undefined) {
+        this.command(e.token ?? 0, e.from ?? '', e.command);
+      } else {
+        this.answer(e.token ?? 0, 'refused', 'the command has no body');
+      }
     } else if (e.type === 'copy') {
       // Images or files from another device come by themselves while sync
       // is on, as texts do through write.
