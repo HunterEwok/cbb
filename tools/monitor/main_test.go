@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +40,10 @@ func TestChecks(t *testing.T) {
 			w.Write(signedFile(t, now.Add(3*24*time.Hour)))
 		case "/broken.json":
 			w.Write([]byte("<html>"))
+		case "/traffic.json":
+			fmt.Fprintf(w, `{"updated_ms":%d,"hours":24.1,"rx_bytes":3e11,"tx_bytes":4e11,"day_bytes":7e11}`, now.Add(-20*time.Minute).UnixMilli())
+		case "/old-traffic.json":
+			fmt.Fprintf(w, `{"updated_ms":%d,"hours":24,"day_bytes":1}`, now.Add(-3*time.Hour).UnixMilli())
 		case "/down":
 			w.WriteHeader(http.StatusBadGateway)
 		case "/private":
@@ -70,6 +75,12 @@ func TestChecks(t *testing.T) {
 		{"a stale file", checker{now: now}, func(c *checker) { c.file(signed{srv.URL + "/stale.json", 10 * 24 * time.Hour, "renew it"}) }, 1, "in 3 days: renew it"},
 		{"a broken file", checker{now: now}, func(c *checker) { c.file(signed{srv.URL + "/broken.json", time.Hour, "x"}) }, 1, "not a signed file"},
 		{"no file before the first release", checker{now: now}, func(c *checker) { c.file(signed{srv.URL + "/keys.json", time.Hour, "x"}) }, 0, "not served yet"},
+		{"traffic inside the budget", checker{now: now}, func(c *checker) { c.traffic(srv.URL+"/traffic.json", 1e12) }, 0, "700.0 GB in the last 24 hours, 70% of the budget of 1.00 TB"},
+		{"traffic over the budget", checker{now: now}, func(c *checker) { c.traffic(srv.URL+"/traffic.json", 5e11) }, 1, "over the budget of 500.0 GB"},
+		{"a traffic counter stopped", checker{now: now}, func(c *checker) { c.traffic(srv.URL+"/old-traffic.json", 1e12) }, 1, "3h0m0s ago: cbb-traffic.timer"},
+		{"a broken traffic file", checker{now: now}, func(c *checker) { c.traffic(srv.URL+"/broken.json", 1e12) }, 1, "not a traffic file"},
+		{"no traffic file yet", checker{now: now}, func(c *checker) { c.traffic(srv.URL+"/none.json", 1e12) }, 0, "not served yet"},
+		{"no traffic file when one is required", checker{now: now, requireFiles: true}, func(c *checker) { c.traffic(srv.URL+"/none.json", 1e12) }, 1, "404"},
 		{"no file when one is required", checker{now: now, requireFiles: true}, func(c *checker) { c.file(signed{srv.URL + "/keys.json", time.Hour, "x"}) }, 1, "404"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -103,4 +114,17 @@ func TestChecks(t *testing.T) {
 			t.Errorf("an open port failed: %q", out)
 		}
 	})
+}
+
+func TestParseBytes(t *testing.T) {
+	for in, want := range map[string]float64{"1TB": 1e12, "1.5TB": 1.5e12, "800GB": 8e11, "10MB": 1e7, "5B": 5} {
+		if got, err := parseBytes(in); err != nil || got != want {
+			t.Errorf("parseBytes(%q) = %v, %v; want %v", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"", "TB", "-1TB", "0GB", "1PB", "1 TB", "x"} {
+		if _, err := parseBytes(in); err == nil {
+			t.Errorf("parseBytes(%q) took it", in)
+		}
+	}
 }
