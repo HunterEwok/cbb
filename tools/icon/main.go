@@ -15,6 +15,8 @@
 // Android it writes the foreground of the adaptive icon, the light clipboard
 // on a transparent 432 by 432 canvas inside the launcher's safe zone; the
 // fill is the icon's background colour in res/values/ic_launcher.xml.
+// For HarmonyOS, whose launcher masks the icon too, the iPhone's light one
+// at 1024 by 1024, as the app's and the ability's icon.
 // The single-colour glyph of the menu bar and the tray is in tray.go, and
 // the ZX Spectrum Next's logo for the ULA screen in zx.go.
 //
@@ -39,6 +41,8 @@ const (
 	watchIcon   = "apps/ios/Watch/Assets.xcassets/AppIcon.appiconset/"
 	macIcon     = "apps/macos/CBBMac/Resources/Assets.xcassets/AppIcon.appiconset/"
 	androidIcon = "apps/android/shared/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png"
+	harmonyApp  = "apps/harmony/AppScope/resources/base/media/app_icon.png"
+	harmonyIcon = "apps/harmony/entry/src/main/resources/base/media/icon.png"
 )
 
 // The light theme's background, the icon's fill.
@@ -66,6 +70,8 @@ var icons = []iconSpec{
 	// 108 dp with the inner 66 dp always shown, at 4 pixels a dp: a
 	// transparent fill, as the launcher draws the background below.
 	{"apps/design/icon/light.png", androidIcon, color.RGBA{}, 432, 0.5, false},
+	{"apps/design/icon/light.png", harmonyApp, paper, 1024, 0.78, false},
+	{"apps/design/icon/light.png", harmonyIcon, paper, 1024, 0.78, false},
 }
 
 // opaqueBounds is the smallest rectangle holding every pixel of img that is
