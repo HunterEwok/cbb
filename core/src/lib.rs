@@ -44,12 +44,16 @@ pub mod admit;
 pub mod api;
 pub mod arrange;
 pub mod authority;
+pub mod beacon;
 pub mod benchtime;
 pub mod blind;
 pub mod bug;
 pub mod certs;
 pub mod clip;
 pub mod command;
+pub mod commands;
+pub mod content;
+pub mod copies;
 pub mod copy;
 pub mod credential;
 pub mod error;
@@ -65,6 +69,7 @@ pub mod invite;
 pub mod issue;
 pub mod join;
 pub mod keyboard;
+pub mod keystore;
 pub mod manage;
 pub mod media;
 pub mod msg;
@@ -89,6 +94,8 @@ pub mod third_party {
     #[allow(clippy::indexing_slicing, clippy::arithmetic_side_effects, clippy::unwrap_used, clippy::expect_used)]
     pub mod cpace;
 }
+#[cfg(test)]
+mod testkit;
 #[cfg(feature = "tls")]
 pub mod tls;
 #[cfg(test)]

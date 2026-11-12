@@ -1,0 +1,164 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+
+//! A device's own keys: the weekly epoch, the previous one kept a week, the
+//! statement only its own member key signs, and reading statements.
+
+use alloc::string::String;
+
+use serde_json::Value as Json;
+
+use super::*;
+use crate::format::cbor::Encoder;
+use crate::records::body::{RIGHT_READ, ROLE_MEMBER};
+use crate::testkit::{G, T0, k, sealing};
+
+fn held(r: &MemoryStore<crate::testkit::K>) -> Vec<u64> {
+    let mut e: Vec<u64> = r.epochs().iter().map(|e| e.epoch).collect();
+    e.sort();
+    e
+}
+
+#[test]
+fn the_sealing_key_changes_once_a_week_and_the_old_one_stays_a_week() {
+    let group = k("root").key.device_id();
+    let mut s = MemoryStore::new(k("laptop"));
+    let r = rotate(&mut s, &group, T0).unwrap();
+    assert!(r.made.is_some());
+    assert_eq!(held(&s), [1]);
+    // Within the week nothing changes.
+    assert_eq!(rotate(&mut s, &group, T0 + WEEK_MS - 1).unwrap(), Rotated::default());
+    // A week on: epoch 2, and epoch 1 still opens late copies.
+    let r = rotate(&mut s, &group, T0 + WEEK_MS).unwrap();
+    assert!(r.made.is_some() && r.erased.is_empty());
+    assert_eq!(held(&s), [1, 2]);
+    assert!(s.sealing(1).is_some());
+    // Another week: epoch 3, epoch 1 erased.
+    let r = rotate(&mut s, &group, T0 + 2 * WEEK_MS).unwrap();
+    assert_eq!(r.erased, [1]);
+    assert_eq!(held(&s), [2, 3]);
+    assert!(s.sealing(1).is_none());
+    // A clock gone back makes nothing and erases nothing.
+    assert_eq!(rotate(&mut s, &group, T0).unwrap(), Rotated::default());
+    assert_eq!(held(&s), [2, 3]);
+    // After a long sleep: one new epoch, the previous one kept, older ones
+    // gone.
+    let r = rotate(&mut s, &group, T0 + 10 * WEEK_MS).unwrap();
+    assert_eq!(r.erased, [2]);
+    assert_eq!(held(&s), [3, 4]);
+    let r = rotate(&mut s, &group, T0 + 11 * WEEK_MS).unwrap();
+    assert_eq!(r.erased, [3]);
+    assert_eq!(held(&s), [4, 5]);
+}
+
+#[test]
+fn the_device_itself_signs_its_statement() {
+    let mut g = G::new();
+    let laptop = g.device("laptop", ROLE_MEMBER, RIGHT_READ, |_| {});
+    let mut s = MemoryStore::new(k("laptop"));
+    let env = rotate(&mut s, &g.gid, T0).unwrap().made.unwrap();
+    let ReadStatement::Take(st) = read_statement(&env).unwrap() else { panic!("held") };
+    assert_eq!(st.body().signer, laptop.hash);
+    assert_eq!(st.envelope(), env);
+    assert!(st.verify(&laptop.key).is_ok());
+    let state = g.state();
+    let chosen = sealing(&state, &[&st]);
+    assert_eq!(chosen[&laptop.key.device_id()].statement.body().epoch, 1);
+    // The root signing a statement for the laptop: nobody takes it.
+    let body = st.body().clone();
+    let forged = crate::format::envelope::sign(&k("root").sk, crate::records::statement::LABEL_KEYS, &body.encode());
+    let ReadStatement::Take(f) = read_statement(&forged).unwrap() else { panic!("held") };
+    assert!(f.verify(&laptop.key).is_err());
+    assert!(sealing(&state, &[&f]).is_empty());
+    // A store refuses to sign a statement for another key.
+    let other = Body { signer: k("phone").hash, ..body };
+    assert!(Statement::sign(other, &k("laptop")).is_err());
+}
+
+fn statement(fields: &[(u16, Value<'_>)]) -> Vec<u8> {
+    let body = Value::Map(fields.to_vec()).encode();
+    crate::format::envelope::sign(&k("laptop").sk, crate::records::statement::LABEL_KEYS, &body)
+}
+
+#[test]
+fn statements_are_read_row_by_row() {
+    let group = [7u8; 16];
+    let signer = k("laptop").hash.0;
+    let seal = crate::seal::public_key(&[5; 32]).unwrap();
+    let key = |p: &[u8]| {
+        let mut e = Encoder::new();
+        e.array(2).uint(2).bytes(p);
+        e.finish()
+    };
+    let good_key = key(&seal);
+    let gk = crate::format::cbor::decode(&good_key).unwrap();
+    let mk = |epoch: u64, k10: Value<'_>, more: Option<(u16, Value<'_>)>| {
+        let mut f: Vec<(u16, Value<'_>)> = alloc::vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&group)),
+            (3, Value::Bytes(&signer)),
+            (4, Value::Uint(epoch))
+        ];
+        f.push((10, k10));
+        if let Some(m) = more {
+            f.push(m);
+            f.sort_by_key(|(n, _)| *n);
+        }
+        statement(&f)
+    };
+    assert!(matches!(read_statement(&mk(1, gk.clone(), None)), Ok(ReadStatement::Take(_))));
+    assert_eq!(read_statement(&mk(0, gk.clone(), None)), Err(Rule::field("statements/epoch")));
+    let short = key(&seal[1..]);
+    assert_eq!(read_statement(&mk(1, crate::format::cbor::decode(&short).unwrap(), None)), Err(Rule::KEYS_XWING));
+    // A later version's critical field, type or algorithm: held.
+    assert!(matches!(read_statement(&mk(1, gk.clone(), Some((99, Value::Uint(1))))), Ok(ReadStatement::Held { .. })));
+    let mut e = Encoder::new();
+    e.array(2).uint(9).bytes(&[1; 40]);
+    let later_alg = e.finish();
+    assert!(matches!(
+        read_statement(&mk(1, crate::format::cbor::decode(&later_alg).unwrap(), None)),
+        Ok(ReadStatement::Held { .. })
+    ));
+    // An optional field is skipped.
+    assert!(matches!(read_statement(&mk(1, gk.clone(), Some((300, Value::Uint(1))))), Ok(ReadStatement::Take(_))));
+    // Over 2 KiB of body.
+    let pad = alloc::vec![0u8; 1000];
+    assert_eq!(read_statement(&mk(1, gk.clone(), Some((300, Value::Bytes(&pad))))).err(), Some(Rule::ENV_SIZE));
+    // time 0 written.
+    assert_eq!(read_statement(&mk(1, gk, Some((6, Value::Uint(0))))).err(), Some(Rule::FORM_DEFAULT));
+}
+
+fn load(name: &str) -> Json {
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/format").join(name);
+    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+}
+
+fn unhex(s: &str) -> Vec<u8> {
+    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+}
+
+/// statements.json: every take reads; every refusal is refused by its
+/// rule, the signature's by the device's member key.
+#[test]
+fn statement_vectors() {
+    let v = load("statements.json");
+    let keys = load("keys.json");
+    let laptop = keys["keys"].as_array().unwrap().iter().find(|k| k["name"] == "laptop member key").unwrap();
+    let laptop =
+        crate::records::Key::read(&crate::format::cbor::decode(&unhex(laptop["key"].as_str().unwrap())).unwrap())
+            .unwrap();
+    for t in v["take"].as_array().unwrap() {
+        let env = unhex(t["envelope"].as_str().unwrap());
+        assert!(matches!(read_statement(&env), Ok(ReadStatement::Take(_))), "{}", t["name"]);
+    }
+    for r in v["refuse"].as_array().unwrap() {
+        let env = unhex(r["envelope"].as_str().unwrap());
+        let rule: String = r["rule"].as_str().unwrap().into();
+        let got = match read_statement(&env) {
+            Err(e) => e.name().into(),
+            Ok(ReadStatement::Take(st)) => st.verify(&laptop).err().map(|e| alloc::format!("{e}")).unwrap_or_default(),
+            Ok(ReadStatement::Held { .. }) => "held".into(),
+        };
+        assert_eq!(got, rule, "{}", r["name"]);
+    }
+}

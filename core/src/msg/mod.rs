@@ -15,6 +15,7 @@
 //! and a field at its default is left out (`form/default`).
 
 pub mod tables;
+pub mod wave4;
 
 #[cfg(test)]
 mod tests;
@@ -273,7 +274,7 @@ impl Obfuscation {
 pub fn check(msg: &[u8]) -> Result<u64, Rule> {
     let v = cbor::decode(msg)?;
     let t = v.get(frame::FIELD_T).and_then(Value::as_uint).ok_or(Rule::FRAME_MESSAGE)?;
-    if let Some(table) = tables::of(t) {
+    if let Some(table) = tables::of(t).or_else(|| wave4::of(t)) {
         check_map(table, &v)?;
     }
     Ok(t)
