@@ -198,18 +198,16 @@ fn statement_of(env: &[u8]) -> Option<Statement> {
     }
 }
 
+/// What a restart does: the core's own restore from the saved records and
+/// lists, in any order.
 fn rebuild(
     root: &crate::records::Key,
     recovery: &crate::records::Key,
     records: &[Vec<u8>],
     lists: &[Vec<u8>],
 ) -> RecordSet {
-    let mut set = RecordSet::new(root.clone(), recovery.clone());
-    let off = exchange::Offer { records: records.to_vec(), lists: lists.to_vec(), ..Offer::default() };
-    exchange::take(&mut set, &off);
-    let state = set.state();
-    set.compact(&state);
-    set
+    let records: Vec<Record> = records.iter().filter_map(|e| Record::decode(e).ok()).collect();
+    RecordSet::restore(root.clone(), recovery.clone(), &records, lists)
 }
 
 impl World {
@@ -294,16 +292,11 @@ impl World {
         self.time.saturating_add_signed(self.members[i].offset)
     }
 
-    /// Recomputes a member's state and drops what its checkpoints leave
-    /// out, as a member does after taking records.
+    /// Recomputes a member's state after it took records (the set drops
+    /// what a counting checkpoint leaves out by itself).
     fn refresh(&mut self, i: usize) {
         let m = &mut self.members[i].live;
-        let state = m.set.state();
-        if m.set.compact(&state) > 0 {
-            m.state = m.set.state();
-        } else {
-            m.state = state;
-        }
+        m.state = m.set.state();
     }
 
     fn save(&mut self, i: usize) {

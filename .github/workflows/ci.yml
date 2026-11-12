@@ -2350,6 +2350,7 @@ jobs:
           cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member,tunnel --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features tunnel --all-targets -- -D warnings
+          cargo clippy --locked -p cbb-core --features fuzzing -- -D warnings # the fuzz targets' readers, without std
       - name: cargo clippy for Windows, macOS and FreeBSD (the service builds there too)
         run: |
           for t in x86_64-pc-windows-gnu aarch64-apple-darwin x86_64-unknown-freebsd; do

@@ -142,11 +142,10 @@ impl Group {
     pub fn set(&self) -> (RecordSet, State) {
         let mut set = RecordSet::new(self.root.clone(), self.recovery.clone());
         // A change of root gives the new root its room only once the set
-        // has compacted on it; then the records dropped before come again.
+        // has compacted on it (which it does by itself); then the records
+        // dropped before come again.
         for _ in 0..=self.spec.takeovers + 1 {
             self.feed(&mut set);
-            let state = set.state();
-            set.compact(&state);
         }
         self.feed(&mut set);
         let state = set.state();
