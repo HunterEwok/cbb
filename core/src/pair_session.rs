@@ -13,6 +13,8 @@ use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+use zeroize::Zeroizing;
+
 use crate::authority::Record;
 use crate::error::{Error, Result};
 use crate::group::ClaimTime;
@@ -63,9 +65,9 @@ pub struct Attempt {
     session: Session,
     exporter: Arc<Exporter>,
     joiner: Joiner,
-    code: String,
+    code: Zeroizing<String>,
     /// A remote invitation's secret, in place of the code.
-    secret: Option<Vec<u8>>,
+    secret: Option<Zeroizing<Vec<u8>>>,
     plain: Vec<u8>,
     state: State,
 }
@@ -107,8 +109,8 @@ impl Attempt {
             session: Session::client(Arc::new(cfg), tls::server_name(None))?,
             exporter,
             joiner: joiner.clone(),
-            code: String::new(),
-            secret: Some(secret.to_vec()),
+            code: Zeroizing::new(String::new()),
+            secret: Some(Zeroizing::new(secret.to_vec())),
             plain: Vec::new(),
             state: State::Handshake,
         })

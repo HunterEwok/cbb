@@ -554,6 +554,24 @@ pub(crate) fn chain_kept<'r>(checked: impl Iterator<Item = (&'r Record, Role)>) 
     by.into_values().flat_map(|ids| ids.into_iter().take(2)).collect()
 }
 
+/// The proof that a key has two histories: of each root's or admin key's
+/// lowest seq that holds two records, the two smallest IDs. Like the
+/// recovery chain's twins, they are kept outside the rooms and no
+/// checkpoint prunes them, so every member that holds them is stopped
+/// alike, whatever it compacted before.
+pub(crate) fn fork_proof<'r>(checked: impl Iterator<Item = (&'r Record, Role)>) -> BTreeSet<RecordId> {
+    let mut by: BTreeMap<KeyHash, BTreeMap<u64, BTreeSet<RecordId>>> = BTreeMap::new();
+    for (r, role) in checked {
+        if matches!(role, Role::Root | Role::Admin) {
+            by.entry(r.body().signer).or_default().entry(r.body().seq).or_default().insert(r.id());
+        }
+    }
+    by.into_values()
+        .filter_map(|seqs| seqs.into_values().find(|ids| ids.len() > 1))
+        .flat_map(|ids| ids.into_iter().take(2))
+        .collect()
+}
+
 /// What the recovery chain comes to (rule 33): the roots it put on the
 /// path in order, the newest list's cut of the roots before the current
 /// one, and the records that stop the group for good.
@@ -707,10 +725,15 @@ pub(crate) fn kept_of(
 ) -> BTreeSet<RecordId> {
     let admins: BTreeSet<KeyHash> =
         checked.iter().filter(|c| c.role == Role::Admin).map(|c| c.r.body().signer).collect();
-    let items: Vec<super::keep::Item> =
-        checked.iter().filter(|c| c.role != Role::Recovery && !off_cut(cuts, c.r)).map(|c| item(c.r, c.role)).collect();
+    let proof = fork_proof(checked.iter().filter(|c| !off_cut(cuts, c.r)).map(|c| (c.r, c.role)));
+    let items: Vec<super::keep::Item> = checked
+        .iter()
+        .filter(|c| c.role != Role::Recovery && !off_cut(cuts, c.r) && !proof.contains(&c.r.id()))
+        .map(|c| item(c.r, c.role))
+        .collect();
     let mut kept = super::keep::keep(&items, |k| ceiling_of(group_root, promoted, &admins, k));
     kept.extend(chain_kept(checked.iter().map(|c| (c.r, c.role))));
+    kept.extend(proof);
     kept
 }
 
@@ -826,9 +849,9 @@ pub(crate) fn evaluate_checked(
     let full = Evaluation::new(root, recovery, checked.clone(), failed.clone(), BTreeSet::new(), &promoted, &cuts);
     // The set a root's checkpoint prunes is evaluated as if the member had
     // dropped what it leaves out. The roots' checkpoints are taken in the
-    // order of the path, each the newest of its root (of a cut root only
-    // one the list names), as a member that compacted under each root in
-    // turn took them: one counts when it still counts in the set the ones
+    // order of the path, each the newest of its root (a cut root's,
+    // listed or not, is an anchor only and prunes nothing), as a member
+    // that compacted under each root in turn took them: one counts when it still counts in the set the ones
     // before it pruned. What the list names is never pruned.
     let plain = full.run(&chain, &cuts);
     let cur = plain.cur;
@@ -858,8 +881,12 @@ pub(crate) fn evaluate_checked(
                 .get(&r.body().signer)
                 .is_some_and(|cut| cut.covers(&r.body().signer, r.body().seq) && cut.keeps(&r.id()))
         };
-        let pruned: Vec<Checked> =
-            kept.iter().copied().filter(|c| listed(c.r) || !pruned_by(c.r, c.role, heads, &anchors)).collect();
+        let proof = fork_proof(kept.iter().map(|c| (c.r, c.role)));
+        let pruned: Vec<Checked> = kept
+            .iter()
+            .copied()
+            .filter(|c| listed(c.r) || proof.contains(&c.r.id()) || !pruned_by(c.r, c.role, heads, &anchors))
+            .collect();
         let known = still_known(root, recovery, pruned.clone());
         let e = Evaluation::new(root, recovery, known, failed.clone(), all.clone(), &promoted, &these);
         let ep = e.run(&chain, &these);
@@ -1148,7 +1175,10 @@ impl<'a> Evaluation<'a> {
                 || r.role != Role::Root
                 || !matches!(b.kind, Kind::Checkpoint { .. })
                 || !path.contains(&b.signer)
-                || cuts.get(&b.signer).is_some_and(|c| !c.lets(r.r))
+                // A checkpoint of a root the path left (or of the current
+                // root below its `from`) is an anchor only, listed or not:
+                // the new root's first checkpoint is what prunes.
+                || cuts.get(&b.signer).is_some_and(|c| c.covers(&b.signer, b.seq))
             {
                 continue;
             }

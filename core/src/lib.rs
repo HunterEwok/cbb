@@ -89,6 +89,7 @@ pub mod release;
 pub mod root;
 pub mod rule;
 pub mod seal;
+pub mod secret;
 #[cfg(test)]
 mod sim;
 pub mod store;

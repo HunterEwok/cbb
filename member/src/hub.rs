@@ -43,12 +43,23 @@ const GUEST_PREFIX: [u8; 4] = [0xfd, 0x00, 0x0c, 0xbc];
 
 /// One client of the hub: its WireGuard public key, the preshared key the
 /// hub's offer gave it, its one tunnel address, and for a guest when it goes.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Peer {
     pub key: [u8; 32],
     pub psk: [u8; 32],
     pub addr: Ipv6Addr,
     pub until: Option<Instant>,
+}
+
+impl core::fmt::Debug for Peer {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Peer")
+            .field("key", &self.key)
+            .field("psk", &cbb_core::secret::Redacted(self.psk.len()))
+            .field("addr", &self.addr)
+            .field("until", &self.until)
+            .finish()
+    }
 }
 
 impl Peer {

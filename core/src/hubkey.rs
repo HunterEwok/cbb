@@ -104,10 +104,19 @@ pub fn hybrid(group: Option<rustls::NamedGroup>) -> bool {
 }
 
 /// A pre-shared key and the tag both ends send to confirm they hold it.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Psk {
     pub key: [u8; 32],
     pub confirm: [u8; 32],
+}
+
+impl core::fmt::Debug for Psk {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Psk")
+            .field("key", &crate::secret::Redacted(self.key.len()))
+            .field("confirm", &crate::secret::Redacted(self.confirm.len()))
+            .finish()
+    }
 }
 
 /// The device's WireGuard key toward a hub, from its tunnel secret: the
@@ -172,7 +181,7 @@ pub const DEVICE_KEEP: usize = 2 * KEEP;
 pub const KEEP_HANDSHAKES: usize = 2;
 
 /// The device's pre-shared keys toward one hub. Kept across restarts.
-#[derive(Clone, Default, PartialEq, Eq, Debug)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct DeviceSide {
     /// The key of the last tunnel handshake with the hub.
     pub handshaked: Option<[u8; 32]>,
@@ -181,6 +190,16 @@ pub struct DeviceSide {
     /// The keys of the last connections it sent `tunnel` over, newest
     /// first, at most [`DEVICE_KEEP`], whether or not the hub confirmed them.
     pub sent: Vec<Psk>,
+}
+
+impl core::fmt::Debug for DeviceSide {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DeviceSide")
+            .field("handshaked", &self.handshaked.as_ref().map(|k| crate::secret::Redacted(k.len())))
+            .field("confirmed", &self.confirmed.as_ref().map(|k| crate::secret::Redacted(k.len())))
+            .field("sent", &self.sent)
+            .finish()
+    }
 }
 
 impl DeviceSide {
@@ -196,7 +215,7 @@ impl DeviceSide {
     /// The hub's offer came back with `confirm`: the key of that tag is the
     /// newest the hub holds. Returns whether the tag was one of its keys.
     pub fn confirmed(&mut self, confirm: &[u8; 32]) -> bool {
-        match self.sent.iter().find(|p| &p.confirm == confirm) {
+        match self.sent.iter().find(|p| crate::secret::ct_eq(&p.confirm, confirm)) {
             Some(p) => {
                 self.confirmed = Some(p.key);
                 true
@@ -229,7 +248,7 @@ impl DeviceSide {
 }
 
 /// A hub's pre-shared keys for one device. Kept across restarts.
-#[derive(Clone, Default, PartialEq, Eq, Debug)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct HubSide {
     /// The keys of the last tunnel handshakes with the device, newest
     /// first, at most [`KEEP_HANDSHAKES`].
@@ -240,12 +259,21 @@ pub struct HubSide {
     pub received: Vec<[u8; 32]>,
 }
 
+impl core::fmt::Debug for HubSide {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("HubSide")
+            .field("handshaked", &crate::secret::Redacted(self.handshaked.len().saturating_mul(32)))
+            .field("received", &crate::secret::Redacted(self.received.len().saturating_mul(32)))
+            .finish()
+    }
+}
+
 impl HubSide {
     /// The device sent `tunnel` over a connection whose key is `psk`: if its
     /// tag matches, the key is kept and the hub confirms it with that tag in
     /// its offer; the keys it held stay.
     pub fn tunnel(&mut self, psk: Psk, confirm: &[u8; 32]) -> Option<[u8; 32]> {
-        if &psk.confirm != confirm {
+        if !crate::secret::ct_eq(&psk.confirm, confirm) {
             return None;
         }
         self.received.retain(|k| k != &psk.key);

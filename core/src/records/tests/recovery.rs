@@ -626,30 +626,78 @@ fn the_first_new_roots_phone_stays_after_a_second_change() {
 }
 
 /// A writer whose set took the first new root's records before that
-/// root's head had its list did not keep them (their signer was no key
-/// yet), so its list leaves them out; after its change they are cut, and
-/// the state says so (cut, not a ceiling). A writer syncs records, lists,
-/// records, as `set_with` does.
+/// root's head had its list keeps them aside and takes them when the list
+/// comes: its list names them, and after its change they still count. No
+/// second round is needed. Before the list they count for nothing, and a
+/// writer refuses to write a change while a list is missing.
 #[test]
-fn a_writer_that_took_one_round_leaves_out_what_it_lacked() {
+fn a_writer_that_took_one_round_keeps_what_came_early() {
     let mut g = base();
     let all = g.recs.clone();
     let w1 = write(&mut g, &all, &k("n1"), &k("p1"), &[]);
+    // The head first, as a sender sends (`in_dependency_order`), then
+    // every record in the order the group holds them.
     let mut set = set_of(&g.root.key);
-    let refused: Vec<_> = g.recs.iter().filter_map(|r| set.insert(r.clone()).err()).collect();
-    assert_eq!(refused, vec![Refused::UnknownSigner; w1.first.len()]);
+    assert_eq!(set.insert(w1.record.clone()), Ok(Added::Stored));
+    for r in &g.recs {
+        let added = set.insert(r.clone()).unwrap();
+        let first = w1.first.iter().any(|f| f.id() == r.id());
+        assert_eq!(added == Added::Waiting, first, "{:?}", r.body().kind);
+    }
+    let st = set.state();
+    assert!(!has(&st, &k("p1")) && st.roots.len() == 1);
+    let err = set.write_change(&st, &k("recovery"), &k("n2"), phone(&k("p2")), &[], false, 0).unwrap_err();
+    assert!(err.to_string().contains("waiting for its list"), "{err}");
     for l in &g.lists {
         set.insert_list(l).unwrap();
     }
     let st = set.state();
-    assert!(!has(&st, &k("p1")));
+    assert!(has(&st, &k("p1")) && st.roots.len() == 2);
+    assert!(w1.first.iter().all(|r| set.contains(&r.id())));
     let w2 = set.write_change(&st, &k("recovery"), &k("n2"), phone(&k("p2")), &[], false, 0).unwrap();
+    let p1 = w1.first.iter().find(|r| matches!(&r.body().kind, Kind::Device(d) if d.key == k("p1").key)).unwrap();
+    assert!(w2.list.0.contains(&p1.id()));
     for r in w2.first.iter().chain([&w2.record]) {
         g.push(r.clone());
     }
     g.lists.push(w2.list.encode());
     let s = g.state();
-    let p1 = w1.first.iter().find(|r| matches!(&r.body().kind, Kind::Device(d) if d.key == k("p1").key)).unwrap();
-    assert!(!has(&s, &k("p1")));
-    assert!(s.ignored.iter().any(|i| i.record == p1.id() && i.why == Why::Cut));
+    assert!(has(&s, &k("p1")) && has(&s, &k("p2")));
+}
+
+/// What waits for a root's list is bounded by that root's room, and goes
+/// when the record naming the root turns out to be one side of a fork.
+#[test]
+fn what_waits_is_bounded_and_goes_with_a_fork() {
+    let mut g = base();
+    let list = g.listing();
+    let head = g.change(&k("n1"), &list);
+    let n1 = k("n1");
+    let mut early = Vec::new();
+    for _ in 0..(crate::records::keep::ceiling(true) + 8) {
+        early.push(g.rec(&n1, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }));
+    }
+    let mut set = set_of(&g.root.key);
+    set.insert_all(g.recs.iter().filter(|r| r.body().signer != n1.hash).cloned());
+    // Newest first: the lowest seqs stay, whatever the order.
+    for r in early.iter().rev() {
+        assert_eq!(set.insert(r.clone()), Ok(Added::Waiting));
+    }
+    assert_eq!(set.insert(early.last().unwrap().clone()), Ok(Added::NoRoom));
+    let units: u64 = set
+        .in_dependency_order()
+        .iter()
+        .filter(|r| r.body().signer == n1.hash)
+        .map(|r| crate::records::eval::item(r, crate::records::eval::Role::Root).units)
+        .sum();
+    assert_eq!(units, crate::records::keep::ceiling(true));
+    // A second record at the head's seq: the group stops, and what waited
+    // for n1 goes.
+    let twin = head_at(&g, head.body().seq, head.body().prev, &k("n9"), [7; 32]);
+    set.insert(twin).unwrap();
+    assert!(!set.in_dependency_order().iter().any(|r| r.body().signer == n1.hash));
+    for l in &g.lists {
+        let _ = set.insert_list(l);
+    }
+    assert!(set.state().halted());
 }

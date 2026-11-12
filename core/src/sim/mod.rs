@@ -1187,3 +1187,37 @@ fn a_seed_replays_exactly() {
     };
     assert_eq!(trace(7), trace(7));
 }
+
+#[test]
+fn records_before_their_list_end_as_after() {
+    // A member that gets a new root's records before the change's list
+    // ends where the writer is after those two messages: no second round
+    // of sync. A list that comes before its recovery record cannot be
+    // known for that record's yet; the member asks for it
+    // (`list_missing`) and ends there once it comes again.
+    let mut w = (0u64..).map(World::new).find(|w| w.admitted.iter().filter(|a| **a).count() >= 3).unwrap();
+    w.quiet().unwrap();
+    w.change_root(false).unwrap();
+    let writer = w.members.iter().position(|m| m.live.state.chain().len() == 1).unwrap();
+    let mut others = w.in_group().into_iter().filter(|i| *i != writer && w.admitted[*i]);
+    let (a, b) = (others.next().unwrap(), others.next().unwrap());
+    let full = w.offer(writer, a);
+    let records = Offer { records: full.records.clone(), ..Offer::default() };
+    let lists = Offer { lists: full.lists.clone(), ..Offer::default() };
+    assert!(!lists.lists.is_empty());
+    let take = |w: &mut World, i: usize, o: &Offer| {
+        exchange::take(&mut w.members[i].live.set, o);
+        w.refresh(i);
+    };
+    take(&mut w, a, &records);
+    take(&mut w, a, &lists);
+    take(&mut w, b, &lists);
+    take(&mut w, b, &records);
+    assert!(w.members[b].live.state.list_missing.is_some(), "m{b} does not ask for the list");
+    take(&mut w, b, &full);
+    let want = &w.members[writer].live;
+    for i in [a, b] {
+        assert_eq!(w.members[i].live.set.digest(), want.set.digest(), "m{i}");
+        assert_eq!(w.members[i].live.state, want.state, "m{i}");
+    }
+}

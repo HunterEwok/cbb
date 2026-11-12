@@ -186,7 +186,7 @@ pub struct HubCredential {
 pub type CredentialFn = Arc<dyn Fn() -> Option<HubCredential> + Send + Sync>;
 
 /// How the registration stands.
-#[derive(Clone, Default, Serialize, Debug)]
+#[derive(Clone, Default, Serialize)]
 pub struct Report {
     #[serde(skip_serializing_if = "core::ops::Not::not")]
     pub registered: bool,
@@ -200,6 +200,17 @@ pub struct Report {
     /// Why it is not registered.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+impl core::fmt::Debug for Report {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Report")
+            .field("registered", &self.registered)
+            .field("seen", &self.seen)
+            .field("vless", &self.vless.as_ref().map(|_| "<hidden>"))
+            .field("error", &self.error)
+            .finish()
+    }
 }
 
 /// The running registration; dropping it stops it.

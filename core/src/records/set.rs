@@ -24,6 +24,11 @@ pub enum Added {
     /// It verified, but the set's ceilings leave no room for it: it is not
     /// kept.
     NoRoom,
+    /// Its signer is a root that a recovery record names while that
+    /// record waits for its list: it is kept aside, within that root's
+    /// room, and taken when the list comes. Until then it counts for
+    /// nothing.
+    Waiting,
 }
 
 /// Why a record was not taken.
@@ -68,6 +73,13 @@ pub struct RecordSet {
     lists: BTreeMap<[u8; 32], (Vec<u8>, List)>,
     /// The list the next valid recovery record waits for.
     waiting: Option<[u8; 32]>,
+    /// The roots the held recovery records name that the path has not
+    /// reached (their record waits for its list, or for the record before
+    /// it), but for the two sides of a fork, by key hash.
+    early_roots: BTreeMap<KeyHash, Key>,
+    /// The records of those roots, verified, kept aside until the list
+    /// comes; each root's within its room. They count for nothing.
+    early: BTreeMap<RecordId, Record>,
     /// The keys a root's removal named that the newest list dropped: the
     /// app tells "removed before, back now" and offers them to the new
     /// root's device.
@@ -114,6 +126,8 @@ impl RecordSet {
             cuts: BTreeMap::new(),
             lists: BTreeMap::new(),
             waiting: None,
+            early_roots: BTreeMap::new(),
+            early: BTreeMap::new(),
             notices: BTreeSet::new(),
             checkpoints: Vec::new(),
             records: BTreeMap::new(),
@@ -127,7 +141,7 @@ impl RecordSet {
     /// does not hold, so that a store whose recovery key was changed is
     /// not taken.
     pub fn pinned(root: Key, recovery: Key, local: &[u8; 32], mark: &Mark) -> Option<RecordSet> {
-        (super::pin_mark(local, &root, &recovery) == *mark).then(|| RecordSet::new(root, recovery))
+        crate::secret::ct_eq(&super::pin_mark(local, &root, &recovery), mark).then(|| RecordSet::new(root, recovery))
     }
 
     pub fn root(&self) -> &Key {
@@ -209,14 +223,25 @@ impl RecordSet {
         let Some((key, role)) = self.keys.signer(&r.body().signer) else { return Err(Refused::UnknownSigner) };
         let key = key.clone();
         let signer = r.body().signer;
+        if self.early_roots.contains_key(&signer) && !self.promoted.contains(&signer) {
+            return self.insert_early(r);
+        }
         if role == Role::Recovery {
             return self.insert_recovery(r, &key, mark);
         }
         // What the set would not keep is turned away before its signature
         // is verified: a record offered again after the set dropped it
         // costs no verification, and none of these steps stores it.
+        // A second record of a key at a seq the set holds one of is the
+        // proof of two histories: kept whatever a checkpoint pruned.
+        let twin = matches!(role, Role::Root | Role::Admin)
+            && self.records.values().any(|e| {
+                let b = e.record.body();
+                b.signer == signer && b.seq == r.body().seq && e.record.id() != id
+            });
         let listed = self.cuts.get(&signer).is_some_and(|cut| cut.covers(&signer, r.body().seq) && cut.keeps(&id));
-        if !listed && self.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&r, role, heads, anchors)) {
+        if !listed && !twin && self.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&r, role, heads, anchors))
+        {
             // A counting checkpoint left it out.
             return Ok(Added::NoRoom);
         }
@@ -225,7 +250,7 @@ impl RecordSet {
             // names may stay, within that root's room.
             return Ok(Added::NoRoom);
         }
-        if self.cut.past(&eval::item(&r, role)) {
+        if !twin && self.cut.past(&eval::item(&r, role)) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
@@ -239,6 +264,35 @@ impl RecordSet {
             self.cut();
         }
         Ok(if self.records.contains_key(&id) { Added::Stored } else { Added::NoRoom })
+    }
+
+    /// A record of a root that a waiting recovery record names: kept aside,
+    /// within that root's
+    /// room (its lowest seqs, then smallest IDs), so that what is kept
+    /// does not depend on the order the records came in.
+    fn insert_early(&mut self, r: Record) -> Result<Added, Refused> {
+        let signer = r.body().signer;
+        let Some(key) = self.early_roots.get(&signer) else { return Err(Refused::UnknownSigner) };
+        let id = r.id();
+        if self.early.contains_key(&id) {
+            return Ok(Added::Known);
+        }
+        r.verify(key).map_err(Refused::Broken)?;
+        self.early.insert(id, r);
+        let mut mine: Vec<&Record> = self.early.values().filter(|e| e.body().signer == signer).collect();
+        mine.sort_by_key(|e| (e.body().seq, e.id()));
+        let mut units = 0u64;
+        let mut over = Vec::new();
+        for e in mine {
+            units = units.saturating_add(eval::item(e, Role::Root).units);
+            if units > keep::ceiling(true) {
+                over.push(e.id());
+            }
+        }
+        for o in &over {
+            self.early.remove(o);
+        }
+        Ok(if self.early.contains_key(&id) { Added::Waiting } else { Added::NoRoom })
     }
 
     /// A record of the recovery key: a recovery record, or one this
@@ -386,12 +440,39 @@ impl RecordSet {
         let promoted = chain.promoted();
         let mut cuts = chain.cuts();
         self.waiting = chain.waiting;
+        // The roots a held recovery record names that are not on the path
+        // yet, but for one side of a fork: at most one per seq, 16 in all.
+        let forked: BTreeSet<RecordId> = chain.fork.iter().copied().collect();
+        self.early_roots = self
+            .records
+            .values()
+            .filter(|e| e.role == Role::Recovery && !forked.contains(&e.record.id()))
+            .filter_map(|e| match &e.record.body().kind {
+                Kind::Recovery { root, .. } => Some((root.hash(), root.clone())),
+                _ => None,
+            })
+            .filter(|(h, _)| !chain.promoted().contains(h) && *h != self.root.hash())
+            .collect();
         if let (Some(old), Some(new)) = (self.cuts.values().next(), cuts.values().next())
             && old.record == new.record
         {
             cuts = self.cuts.clone();
         }
         self.keep_by(promoted, cuts);
+        // What waited for a root the chain now applies is taken; what
+        // waited for a root no waiting record names any more (one side of
+        // a fork, or a record that is no longer valid) is dropped.
+        let early = core::mem::take(&mut self.early);
+        let (now, still): (Vec<Record>, Vec<Record>) =
+            early.into_values().partition(|r| self.promoted.contains(&r.body().signer));
+        self.early = still
+            .into_iter()
+            .filter(|r| self.early_roots.contains_key(&r.body().signer))
+            .map(|r| (r.id(), r))
+            .collect();
+        if !now.is_empty() {
+            self.insert_all(now);
+        }
     }
 
     /// Keeps by the roots promoted and the cuts: when they changed, the
@@ -416,10 +497,11 @@ impl RecordSet {
     /// came in. The recovery key's records are outside the rooms.
     fn cut(&mut self) {
         self.drop_off_cuts();
+        let proof = self.proof();
         let items: Vec<keep::Item> = self
             .records
             .values()
-            .filter(|e| self.role_of(e) != Role::Recovery)
+            .filter(|e| self.role_of(e) != Role::Recovery && !proof.contains(&e.record.id()))
             .map(|e| eval::item(&e.record, self.role_of(e)))
             .collect();
         let ceilings: BTreeMap<KeyHash, Option<u64>> =
@@ -429,12 +511,20 @@ impl RecordSet {
         let drop: Vec<RecordId> = self
             .records
             .values()
-            .filter(|e| self.role_of(e) != Role::Recovery && !kept.contains(&e.record.id()))
+            .filter(|e| {
+                self.role_of(e) != Role::Recovery && !kept.contains(&e.record.id()) && !proof.contains(&e.record.id())
+            })
             .map(|e| e.record.id())
             .collect();
         for id in drop {
             self.remove(&id);
         }
+    }
+
+    /// The proof of a key's two histories among the records
+    /// (`eval::fork_proof`): outside the rooms, never pruned.
+    fn proof(&self) -> BTreeSet<RecordId> {
+        eval::fork_proof(self.records.values().map(|e| (&e.record, self.role_of(e))))
     }
 
     /// Drops the records of a root before the current one that the newest
@@ -612,7 +702,8 @@ impl RecordSet {
     /// "who stays" is made of removals); and its first checkpoint. Then the
     /// recovery record
     /// at the seq after the chain's tip, naming new_root and the list's
-    /// hash. It refuses a group stopped for good, a 17th record, a key that
+    /// hash. It refuses a set whose chain waits for a list (an earlier
+    /// change it has not taken yet), a group stopped for good, a 17th record, a key that
     /// is not the group's recovery key, and a new root key the state
     /// already knows.
     #[allow(clippy::too_many_arguments, reason = "the parts of one act")]
@@ -627,6 +718,11 @@ impl RecordSet {
         time_ms: u64,
     ) -> crate::error::Result<Written> {
         use crate::error::Error;
+        if self.waiting.is_some() {
+            return Err(Error::msg(
+                "an earlier change of root is still waiting for its list: sync with the group, then try again",
+            ));
+        }
         if state.conflicts.iter().any(|c| c.kind == eval::ConflictKind::Fork) {
             return Err(Error::msg("the group is stopped for good: two recovery records at one seq"));
         }
@@ -773,9 +869,11 @@ impl RecordSet {
                 _ => None,
             })
             .collect();
+        let proof = self.proof();
         let drop: Vec<RecordId> = self
             .records
             .values()
+            .filter(|e| !proof.contains(&e.record.id()))
             .filter(|e| {
                 let b = e.record.body();
                 let listed =
@@ -807,7 +905,10 @@ impl RecordSet {
         let mut keys = Keys::new(&self.root, &self.recovery);
         let mut out = Vec::with_capacity(self.records.len());
         let mut left: Vec<&Entry> = self.records.values().collect();
-        left.sort_by_key(|e| eval::order_key(e.record.body(), &e.record.id()));
+        // The proof of a key's two histories goes first, as soon as its
+        // signer is known.
+        let proof = self.proof();
+        left.sort_by_key(|e| (!proof.contains(&e.record.id()), eval::order_key(e.record.body(), &e.record.id())));
         loop {
             let mut rest = Vec::new();
             let mut learned = false;
@@ -822,6 +923,11 @@ impl RecordSet {
             }
             if rest.is_empty() || !learned {
                 out.extend(rest.into_iter().map(|e| &e.record));
+                // The records that wait for their root's list, after the
+                // recovery record that names that root.
+                let mut early: Vec<&Record> = self.early.values().collect();
+                early.sort_by_key(|r| eval::order_key(r.body(), &r.id()));
+                out.extend(early);
                 return out;
             }
             left = rest;
