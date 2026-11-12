@@ -142,3 +142,23 @@ pub fn sha256(parts: &[&[u8]]) -> [u8; 32] {
     }
     h.finalize().into()
 }
+
+/// A character a list must not show as it is: the C0 and C1 controls and
+/// DEL, the line and paragraph separators (U+2028, U+2029) and the bidi
+/// controls (U+202A to U+202E, U+2066 to U+2069). The printer escapes
+/// them, and a record's name refuses them.
+pub fn is_hidden(c: char) -> bool {
+    matches!(u32::from(c), 0..=0x1f | 0x7f..=0x9f | 0x2028..=0x202e | 0x2066..=0x2069)
+}
+
+/// A device's name (section 4.1): 1 to 64 bytes, no hidden character.
+pub fn name_ok(name: &str) -> bool {
+    (1..=64).contains(&name.len()) && !name.chars().any(is_hidden)
+}
+
+/// The fields below 256 a `device` record of 0.6 may carry (sections 3.2
+/// and 4.1): the common ones without `expires_ms` and `signer2`, and the
+/// device's own without `accepts` (15, gone). Any other field below 256
+/// makes a reader hold the record. The record reader and the admin's
+/// record in a grant both read this one list.
+pub const DEVICE_FIELDS: [u16; 22] = [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26];
