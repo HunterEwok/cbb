@@ -198,7 +198,9 @@ jobs:
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
           mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
           WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman sway >"$RUNNER_TEMP/sway.log" 2>&1 &
-          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          # -noreset: Xvfb resets when its last client goes, and a test
+          # that connects while it does fails.
+          Xvfb :5 -screen 0 640x480x24 -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
           for _ in $(seq 1 100); do
             WAYLAND_DISPLAY=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-[0-9]' -printf '%f\n' | head -n 1)
             [ -n "$WAYLAND_DISPLAY" ] && [ -e /tmp/.X11-unix/X5 ] && break
@@ -433,7 +435,7 @@ jobs:
             go test ./... </dev/null
             # The desktop connector against X11 under Xvfb, as on Linux.
             go test -c -o /tmp/desktop.test ./internal/desktop
-            Xvfb :5 -screen 0 640x480x24 >/tmp/xvfb.log 2>&1 &
+            Xvfb :5 -screen 0 640x480x24 -noreset >/tmp/xvfb.log 2>&1 &
             # Its socket shows before it takes clients (TestX11 met EOF):
             # wait until xclip reaches it, with no selection to read yet.
             for _ in $(seq 1 100); do
@@ -682,7 +684,7 @@ jobs:
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
           mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
           WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman sway >"$RUNNER_TEMP/sway.log" 2>&1 &
-          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          Xvfb :5 -screen 0 640x480x24 -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
           for _ in $(seq 1 100); do
             WAYLAND_DISPLAY=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-[0-9]' -printf '%f\n' | head -n 1)
             [ -n "$WAYLAND_DISPLAY" ] && [ -e /tmp/.X11-unix/X5 ] && break
@@ -2217,7 +2219,7 @@ jobs:
       # job's own limit.
       - name: go test ./internal/service and the desktop connector with every Linux member a Rust cbb
         run: |
-          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          Xvfb :5 -screen 0 640x480x24 -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
           for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
           export GOCOVERDIR="$RUNNER_TEMP/go-cover"
           mkdir -p "$GOCOVERDIR"
