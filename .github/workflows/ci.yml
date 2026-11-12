@@ -262,7 +262,7 @@ jobs:
   # format rule no vector refuses.
   coverage:
     name: coverage
-    needs: [changes, test, gocover, kit, android, rust, service]
+    needs: [changes, test, gocover, kit, android, rust, service, service-coverage]
     if: always() && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -2273,14 +2273,100 @@ jobs:
   # The service's tests (internal/service) against the Rust service that
   # every release ships: each member is a Rust cbb with cbb-helper beside
   # it, a phone is phone-on-linux, and they find each other by mDNS.
-  service:
-    name: service tests on the Rust cbb
+  # The service's tests run in parts at the same time (docs/testing.md,
+  # "Running tests in parallel"): service-build builds every program once,
+  # instrumented for the coverage, and runs the Rust cbb's own tests; each
+  # part of service runs its share of ./internal/service (tools/shard splits
+  # them by the seconds in tools/shard/service.txt), the part "others" the
+  # connector, the relay, the phones' tunnel and the previous release, each
+  # on a machine of its own, so their mDNS and ports never meet;
+  # service-coverage adds up the Rust coverage of them all.
+  service-build:
+    name: service tests on the Rust cbb, the build
     needs: changes
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     env:
       COVERPKG: ./cmd/...,./internal/...
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the Rust toolchain with llvm-tools
+        run: |
+          rustup toolchain install stable --profile minimal --component llvm-tools-preview
+          rustup default stable
+      # The service's coverage (rust-service, docs/testing.md "Coverage"):
+      # every Rust program below is built with instrument-coverage, so the
+      # Rust cbb's own tests and the Go tests that run it add up.
+      - name: cargo-llvm-cov, and the instrumented build's environment for the steps after
+        run: |
+          cargo install --locked cargo-llvm-cov@0.9.1
+          # Without the shell's quotes, which $GITHUB_ENV would keep.
+          cargo llvm-cov show-env | sed "s/='\(.*\)'\$/=\1/" >>"$GITHUB_ENV"
+      - name: the Rust cbb's own tests, instrumented
+        run: cargo test --locked --release -p cbb-member
+      - name: the Rust cbb, the phone's member and tunnel on Linux, cbb-helper, and the Go tests' binaries
+        run: |
+          cargo build --locked --release -p cbb-member
+          cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
+          cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
+          # Built with -cover: the Go side's coverage counts what the helper
+          # does under these tests too; each part puts a script in the
+          # helper's place that gives it GOCOVERDIR, since cbb hands its
+          # helper only the environment it needs.
+          CGO_ENABLED=0 go build -trimpath -cover -coverpkg="$COVERPKG" -o target/release/cbb-helper.cover ./cmd/cbb-helper
+          # Each Go package runs as a test binary built with -cover, with
+          # GOCOVERDIR for it and the helpers it starts.
+          mkdir -p target/go-tests
+          for p in service connector relay tunnel; do
+            go test -c -cover -coverpkg="$COVERPKG" -o "target/go-tests/$p.test" "./internal/$p"
+          done
+      # Only what the parts run and what llvm-cov reads: the programs and
+      # test binaries (not the build scripts, the proc macros' libraries or
+      # Cargo's own files), the own tests' profiles and the compiler's version,
+      # in one archive, since an artifact keeps no file modes.
+      - name: the build, for the parts and the coverage
+        run: |
+          rustc --version | cut -d' ' -f2 >target/rustc-version
+          find target/release -maxdepth 2 -type f -perm -u+x \
+            -not -path '*/build/*' -not -path '*/.fingerprint/*' -not -path '*/incremental/*' -not -name '*.so' \
+            >"$RUNNER_TEMP/files"
+          {
+            cat "$RUNNER_TEMP/files"
+            find target -maxdepth 1 -name '*.profraw'
+            find target/go-tests -type f
+            echo target/rustc-version
+          } | tar -czf "$RUNNER_TEMP/service-build.tar.gz" -T -
+          ls -l "$RUNNER_TEMP/service-build.tar.gz"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: service-build
+          path: ${{ runner.temp }}/service-build.tar.gz
+          retention-days: 1
+          compression-level: 0
+
+  service:
+    name: service tests on the Rust cbb (${{ matrix.part }})
+    needs: [changes, service-build]
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.rust == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # The parts of ./internal/service, as many as SERVICE_PARTS says.
+        part: ["1", "2", "3", "4", "5", "6", others]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SERVICE_PARTS: 6
+      # Where the instrumented Rust programs write their profiles, as
+      # cargo llvm-cov show-env names them.
+      LLVM_PROFILE_FILE: ${{ github.workspace }}/target/cbb-%p-%4m.profraw
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2295,103 +2381,126 @@ jobs:
           packages: swtpm xvfb xclip
           cache: rust-service
           no-recommends: "true"
-      - name: the Rust toolchain, swtpm for the keys in a TPM, and Xvfb for an X11 session's clipboard
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: service-build
+          path: ${{ runner.temp }}
+      - name: the build, with a cbb-helper that writes its coverage, and Xvfb for an X11 session's clipboard
         run: |
-          rustup toolchain install stable --profile minimal --component llvm-tools-preview
-          rustup default stable
-      # The service's coverage (rust-service, docs/testing.md "Coverage"):
-      # every Rust program below is built with instrument-coverage, so the
-      # Rust cbb's own tests and the Go tests that run it add up.
-      - name: cargo-llvm-cov, and the instrumented build's environment for the steps after
-        run: |
-          cargo install --locked cargo-llvm-cov@0.9.1
-          # Without the shell's quotes, which $GITHUB_ENV would keep.
-          cargo llvm-cov show-env | sed "s/='\(.*\)'\$/=\1/" >>"$GITHUB_ENV"
-      - name: the Rust cbb's own tests, instrumented
-        run: cargo test --locked --release -p cbb-member
-      - name: the Rust cbb, cbb-helper beside it, and the phone's member on Linux
-        run: |
-          cargo build --locked --release -p cbb-member
-          cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
-          cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
-          # Built with -cover: the Go side's coverage (cover-go-service.out)
-          # counts what the helper does under these tests too. cbb hands its
-          # helper only the environment it needs, so a script in the
-          # helper's place gives it GOCOVERDIR.
-          CGO_ENABLED=0 go build -trimpath -cover -coverpkg="$COVERPKG" -o target/release/cbb-helper.cover ./cmd/cbb-helper
-          mkdir -p "$RUNNER_TEMP/go-cover"
-          printf '#!/bin/sh\nGOCOVERDIR=%s exec %s "$@"\n' "$RUNNER_TEMP/go-cover" "$PWD/target/release/cbb-helper.cover" >target/release/cbb-helper
+          tar -xzf "$RUNNER_TEMP/service-build.tar.gz"
+          # Where the test binaries and the helpers they start write the Go coverage.
+          GOCOVERDIR="$RUNNER_TEMP/go-cover"
+          echo "GOCOVERDIR=$GOCOVERDIR" >>"$GITHUB_ENV"
+          mkdir -p "$GOCOVERDIR"
+          printf '#!/bin/sh\nGOCOVERDIR=%s exec %s "$@"\n' "$GOCOVERDIR" "$PWD/target/release/cbb-helper.cover" >target/release/cbb-helper
           chmod 755 target/release/cbb-helper
-      # Each Go package runs as a test binary built with -cover, with
-      # GOCOVERDIR for it and the helpers it starts; one package at a
-      # time, so that -test.v streams each test's lines as it runs and a
-      # test that hangs is named by the timeout's goroutine dump before the
-      # job's own limit.
-      - name: go test ./internal/service and the desktop connector with every Linux member a Rust cbb
-        run: |
           Xvfb :5 -screen 0 640x480x24 -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
           for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
-          export GOCOVERDIR="$RUNNER_TEMP/go-cover"
-          mkdir -p "$GOCOVERDIR"
-          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/service.test" ./internal/service
-          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/connector.test" ./internal/connector
-          (cd internal/service && DISPLAY=:5 CBB_TEST_X11=1 \
+      # -test.v streams each test's lines as it runs, and a test that hangs
+      # is named by the timeout's goroutine dump before the job's own limit.
+      - name: this part of go test ./internal/service, with every Linux member a Rust cbb
+        if: matrix.part != 'others'
+        env:
+          PART: ${{ matrix.part }}
+        run: |
+          cd internal/service
+          run=$("$GITHUB_WORKSPACE/target/go-tests/service.test" -test.list . |
+            go run ../../tools/shard -n "$SERVICE_PARTS" -i "$PART" -durations ../../tools/shard/service.txt)
+          echo "part $PART of $SERVICE_PARTS: $run"
+          DISPLAY=:5 CBB_TEST_X11=1 \
             CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
             CBB_PHONE_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/phone-on-linux" \
-            "$RUNNER_TEMP/service.test" -test.timeout 45m -test.v)
-          (cd internal/connector && DISPLAY=:5 CBB_TEST_X11=1 \
+            "$GITHUB_WORKSPACE/target/go-tests/service.test" -test.run "$run" -test.timeout 25m -test.v
+      - name: the desktop connector with a Rust cbb
+        if: matrix.part == 'others'
+        run: |
+          cd internal/connector
+          DISPLAY=:5 CBB_TEST_X11=1 \
             CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
-            "$RUNNER_TEMP/connector.test" -test.timeout 5m -test.v)
+            "$GITHUB_WORKSPACE/target/go-tests/connector.test" -test.timeout 5m -test.v
       # The relay and the phones' tunnel, which the rust job checks from
       # outside, count here too: their Go tests run the same instrumented
       # build.
       - name: the relay and the phones' tunnel, from Go's side, for the coverage
+        if: matrix.part == 'others'
         run: |
-          export GOCOVERDIR="$RUNNER_TEMP/go-cover"
-          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/relay.test" ./internal/relay
-          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/tunnel.test" ./internal/tunnel
           (cd internal/relay && CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
-            "$RUNNER_TEMP/relay.test" -test.timeout 10m -test.v)
+            "$GITHUB_WORKSPACE/target/go-tests/relay.test" -test.timeout 10m -test.v)
           (cd internal/tunnel && CBB_TUNNEL_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/tunnel-on-linux" \
             CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
-            "$RUNNER_TEMP/tunnel.test" -test.run TestRustPhone -test.timeout 15m -test.v)
+            "$GITHUB_WORKSPACE/target/go-tests/tunnel.test" -test.run TestRustPhone -test.timeout 15m -test.v)
       - name: a device of the previous release works in one group with this build (from 0.6 on; skips until 0.6.0 is out)
+        if: matrix.part == 'others'
         run: |
           prev=$(sh tools/e2e/previous.sh "$RUNNER_TEMP/previous")
-          CBB_PREVIOUS="$prev" CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_TEST_ALONE="$PWD/target/release/cbb" \
-            go test -timeout 5m ./internal/service -run '^TestPreviousRelease$' -v
-      - name: the cbb-helpers' coverage
-        if: always()
+          cd internal/service
+          CBB_PREVIOUS="$prev" CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
+            "$GITHUB_WORKSPACE/target/go-tests/service.test" -test.run '^TestPreviousRelease$' -test.timeout 5m -test.v
+      - name: the Go side's coverage under these tests
+        if: success() || failure()
+        env:
+          PART: ${{ matrix.part }}
         run: |
-          if [ -n "$(ls -A "$RUNNER_TEMP/helper-cover" 2>/dev/null)" ]; then
-            go tool covdata textfmt -i "$RUNNER_TEMP/helper-cover" -o cover-go-helper.out
+          if [ -n "$(ls -A "$GOCOVERDIR" 2>/dev/null)" ]; then
+            go tool covdata textfmt -i "$GOCOVERDIR" -o "cover-go-service-$PART.out"
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
+        if: success() || failure()
         with:
-          name: coverage-go-service
-          path: cover-go-*.out
+          name: coverage-go-service-${{ matrix.part }}
+          path: cover-go-service-*.out
           retention-days: 7
           if-no-files-found: ignore
-      - name: the Rust service's coverage, from its own tests and Go's
-        if: success() || failure()
-        run: cargo llvm-cov report --release --json --summary-only --output-path "$GITHUB_WORKSPACE/coverage-rust-service.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: success() || failure()
+        with:
+          name: service-profiles-${{ matrix.part }}
+          path: target/*.profraw
+          retention-days: 1
+          if-no-files-found: ignore
+
+  service-coverage:
+    name: service tests on the Rust cbb, the coverage
+    needs: [changes, service-build, service]
+    if: always() && needs.service-build.result == 'success' && (needs.service.result == 'success' || needs.service.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: service-build
+          path: ${{ runner.temp }}
+      # Each part's profiles in a folder of their own: two machines can give
+      # a process the same ID, and so a profile the same name.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: service-profiles-*
+          path: ${{ runner.temp }}/profiles
+      - name: the build, every part's profiles beside the own tests', and the compiler that built it
+        run: |
+          tar -xzf "$RUNNER_TEMP/service-build.tar.gz"
+          for d in "$RUNNER_TEMP"/profiles/*/; do
+            part=$(basename "$d")
+            for f in "$d"*.profraw; do
+              [ -e "$f" ] && mv "$f" "target/$part-$(basename "$f")"
+            done
+          done
+          echo "$(find target -maxdepth 1 -name "*.profraw" | wc -l) profiles"
+          v=$(cat target/rustc-version)
+          rustup toolchain install "$v" --profile minimal --component llvm-tools-preview
+          rustup default "$v"
+          cargo install --locked cargo-llvm-cov@0.9.1
+      - name: the Rust service's coverage, from its own tests and Go's
+        run: |
+          eval "$(cargo llvm-cov show-env --export-prefix)"
+          cargo llvm-cov report --release --json --summary-only --output-path "$GITHUB_WORKSPACE/coverage-rust-service.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-rust-service
           path: coverage-rust-service.json
-      - name: the Go side's coverage under the same tests
-        if: success() || failure()
-        run: |
-          [ -d "$RUNNER_TEMP/go-cover" ] || exit 0
-          go tool covdata textfmt -i "$RUNNER_TEMP/go-cover" -o cover-go-service.out
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: success() || failure()
-        with:
-          name: coverage-go-service
-          path: cover-go-service.out
-          if-no-files-found: ignore
 
   rust:
     name: cbb (Rust)
@@ -3049,7 +3158,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service-build, service, service-coverage, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

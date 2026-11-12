@@ -87,6 +87,33 @@ becomes a vector here.
   in Docker containers: mDNS, pairing with codes, sync, a wrong code.
 - The installer jobs install, run and remove the service on each system they cover.
 
+## Running tests in parallel
+
+Go runs the packages of `go test ./...` at the same time, and Cargo the tests of each test
+binary; the tests of `internal/service` do not run in parallel within one process, since each
+starts whole members that find each other by mDNS on the same network. CI splits them into
+parts instead, each on a machine of its own:
+
+- `service tests on the Rust cbb, the build` builds every program once, instrumented for the
+  coverage (the Rust `cbb`, `phone-on-linux`, `tunnel-on-linux`, a `cbb-helper` and the Go
+  test binaries built with `-cover`), runs the Rust cbb's own tests and hands the build on as
+  one archive.
+- `service tests on the Rust cbb (1)` to `(6)` each run a part of `internal/service`;
+  `(others)` runs the desktop connector, the relay, the phones' tunnel and the previous
+  release. Each writes its Go coverage (`cover-go-service-PART.out`) and its Rust profiles.
+- `service tests on the Rust cbb, the coverage` adds up the Rust profiles of the build and
+  every part into `rust-service`.
+
+`tools/shard` makes the parts: it reads the test names (`service.test -test.list .`) and
+prints the `-test.run` expression of one part, filled longest test first from the seconds
+in `tools/shard/service.txt`. Every test is in exactly one part, a new one included, which
+counts as a median test until the file names it. After the tests' times change much, record
+a full run's `-v` output into the file:
+
+```sh
+go run ./tools/shard -record tools/shard/service.txt <service-test.log
+```
+
 ## Bench scenarios
 
 Unit and CI tests cannot show that a copy on an iPhone reaches a Windows PC through a café's
@@ -179,15 +206,15 @@ Under the table are the hard gates, which have no floor and fail the job at once
 
 | Part | What counts | Measured by |
 |---|---|---|
-| `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; the `service tests on the Rust cbb` job's tests of `internal/service` and the desktop connector against the Rust `cbb`, whose `cbb-helper` is built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
+| `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; the `service tests on the Rust cbb` jobs' tests of `internal/service` and the desktop connector against the Rust `cbb`, whose `cbb-helper` is built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `rust` job |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
-| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector, `internal/relay` and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb` job |
+| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector, `internal/relay` and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
 
-The Go packages of the `service tests on the Rust cbb` job run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and their profile (`cover-go-service.out`) counts in `go` too.
+The Go packages of the `service tests on the Rust cbb` jobs run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and each part's profile (`cover-go-service-PART.out`) counts in `go` too.
 A number is a hint, not the goal: a test that runs a line without checking what it did
 raises it and proves nothing.
 
