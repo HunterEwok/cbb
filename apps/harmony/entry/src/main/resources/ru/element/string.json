@@ -261,6 +261,7 @@
     {"name": "main_scan", "value": "Сканировать код"},
     {"name": "main_send_note", "value": "Нажмите «Вставить», чтобы отправить скопированное в группу."},
     {"name": "main_show_list", "value": "Показывать устройства списком"},
+    {"name": "main_show_orbit", "value": "Орбита"},
     {"name": "main_show_tiles", "value": "Показывать устройства плитками"},
     {"name": "main_switch_away", "value": "Везде"},
     {"name": "main_switch_sync", "value": "Синхронизация"},

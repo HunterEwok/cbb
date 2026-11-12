@@ -261,6 +261,7 @@
     {"name": "main_scan", "value": "扫描代码"},
     {"name": "main_send_note", "value": "点按“粘贴”，把你复制的内容发送到群组。"},
     {"name": "main_show_list", "value": "以列表显示设备"},
+    {"name": "main_show_orbit", "value": "轨道"},
     {"name": "main_show_tiles", "value": "以图块显示设备"},
     {"name": "main_switch_away", "value": "随处"},
     {"name": "main_switch_sync", "value": "同步"},

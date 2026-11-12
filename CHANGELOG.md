@@ -29,7 +29,8 @@ All notable changes to cbb are documented in this file. The format follows
   a PIV of its own. Outside the app it has the home-screen widget "Sync clipboard", a
   shortcut on its icon, the intents SyncClipboard and ToggleSync, and Live View for adding a
   device and for sync away from home, as the iPhone's widget, App Intents and Live
-  Activities.
+  Activities. On a tablet or an open foldable its Home shows the devices on orbits, as
+  tiles or a list, with a device's details beside them.
   `cbb_member_manage` signs a remote paste (`paste`, `paste_off`) and a period of the
   server keys (`period`) for the apps that sign through the core, and `cbb_member_servers`
   makes the phone member serve the group's servers itself (the ops `hub`, `hub_off`,

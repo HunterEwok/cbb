@@ -261,6 +261,7 @@
     {"name": "main_scan", "value": "कोड स्कैन करें"},
     {"name": "main_send_note", "value": "जो आपने कॉपी किया उसे समूह को भेजने के लिए “पेस्ट” दबाएँ।"},
     {"name": "main_show_list", "value": "डिवाइस सूची के रूप में दिखाएँ"},
+    {"name": "main_show_orbit", "value": "कक्षा"},
     {"name": "main_show_tiles", "value": "डिवाइस टाइल के रूप में दिखाएँ"},
     {"name": "main_switch_away", "value": "हर जगह"},
     {"name": "main_switch_sync", "value": "सिंक"},

@@ -144,7 +144,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   `Invite`, `Events`, `Bugs`, `Keyboard` the lab's Bluetooth keyboard, `Paste` the remote
   paste target, `Watch` the link to the watch, `Glance` the widget's state and quick actions,
   `Live` Live View), `entryformability/` and `widget/` the home-screen widget,
-  `insightintents/` the intents, `pages/` (the screens), `components/`, `common/` (the devices' words, Scan
+  `insightintents/` the intents, `pages/` (the screens), `components/` (`DeviceDetail` a device's page and a big screen's
+  pane, `Orbit` the devices on orbits), `common/` (the devices' words, Scan
   Kit, sharing in, the clipboard, `YubiKey` the recovery key over NFC, `Widgets`,
   `WatchState` and `Wear`, shared with the watch); `wearable/` the
   watch app (`model/Link.ets`, `pages/Watch.ets`), through the phone over Wear Engine; its strings come from `apps/l10n` (`harmony:NAME`,

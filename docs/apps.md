@@ -297,6 +297,10 @@ forwarder show only with the advanced settings on, on every app.
   list, which the view button switches), and a device's details in a pane beside them.
   Android draws the device icons itself (`DeviceGlyph`), on the same 24-unit grid as the
   system's line icons.
+- **HarmonyOS tablets and foldables** (a Mate X open, a MatePad) do the same from 720 vp wide:
+  the orbits, tiles or a list, which the "…" menu switches and the app keeps, and a device's
+  details in a pane beside them, the page a phone's screen opens (`DeviceDetail`). Folding
+  the phone closes the pane and goes back to the phone's page.
 
 ## Dynamic Island
 

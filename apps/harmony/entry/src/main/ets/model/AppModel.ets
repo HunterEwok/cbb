@@ -148,6 +148,8 @@ export class AppModel {
   // Bumped when the user's arrangement of the tiles changes.
   @Trace arrangement: number = 0;
   @Trace deviceList: boolean = false;
+  // A big screen's devices: orbit, tiles or list.
+  @Trace wideLayout: string = 'orbit';
   @Trace errorDetails: boolean = false;
   // The switch for the advanced settings, as on the other phones.
   @Trace advanced: boolean = false;
@@ -181,6 +183,7 @@ export class AppModel {
       this.bugs.resend();
     }, 0);
     this.deviceList = prefs.getSync('device_list', false) as boolean;
+    this.wideLayout = prefs.getSync('wide_layout', 'orbit') as string;
     this.advanced = prefs.getSync('advanced', false) as boolean;
     this.errorDetails = Errors.showDetails();
     const m = Membership.load(dir);
@@ -1113,6 +1116,12 @@ export class AppModel {
   setDeviceList(on: boolean): void {
     this.deviceList = on;
     this.prefs?.putSync('device_list', on);
+    this.prefs?.flush();
+  }
+
+  setWideLayout(layout: string): void {
+    this.wideLayout = layout;
+    this.prefs?.putSync('wide_layout', layout);
     this.prefs?.flush();
   }
 

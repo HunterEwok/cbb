@@ -261,6 +261,7 @@
     {"name": "main_scan", "value": "Changanua msimbo"},
     {"name": "main_send_note", "value": "Gusa Bandika ili kutuma ulichonakili kwa kikundi."},
     {"name": "main_show_list", "value": "Onyesha vifaa kama orodha"},
+    {"name": "main_show_orbit", "value": "Obiti"},
     {"name": "main_show_tiles", "value": "Onyesha vifaa kama vigae"},
     {"name": "main_switch_away", "value": "Kila mahali"},
     {"name": "main_switch_sync", "value": "Sawazisha"},

@@ -5,7 +5,10 @@
 // from home), the paste button that sends what the user copied, what came
 // last, the group's alerts and its devices as tiles or a list, in the
 // user's order and collections. A tap opens a device, a long press arranges
-// its tile. The Aurora app's MainPage, on ArkUI.
+// its tile. The Aurora app's MainPage, on ArkUI. A big screen (from 720 vp
+// wide: a tablet, a foldable open) shows the devices on orbits around this
+// phone, or as tiles or a list, and a device's details in a pane beside them
+// (docs/apps.md, "Big screens").
 
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
@@ -20,8 +23,12 @@ import { isInvitation } from '../model/Invite';
 import { Alert, Device, Member } from '../model/Member';
 import { BugCard } from '../components/BugCard';
 import { BusyLine, ErrorText } from '../components/Common';
+import { DeviceDetail } from '../components/DeviceDetail';
+import { Orbit } from '../components/Orbit';
 
 const LOST_PHONE_TIP: string = 'tip_lost_phone';
+// From how wide a screen is a big one, in vp.
+const WIDE_VP: number = 720;
 
 @Entry
 @ComponentV2
@@ -32,6 +39,9 @@ struct Main {
   @Local stamp: number = 0;
   @Local error: string = '';
   @Local lostTipClosed: boolean = false;
+  @Local wide: boolean = false;
+  // The device whose details a big screen shows beside the devices.
+  @Local selected: string = '';
 
   aboutToAppear(): void {
     this.lostTipClosed = app.tipClosed(LOST_PHONE_TIP);
@@ -172,7 +182,15 @@ struct Main {
     if (tile.kind === 'collection') {
       router.pushUrl({ url: 'pages/Collection', params: { 'collection': tile.id } as Record<string, Object> });
     } else if (tile.device !== undefined) {
-      router.pushUrl({ url: 'pages/Device', params: { 'device': tile.device.id } as Record<string, Object> });
+      this.openDevice(tile.device.id);
+    }
+  }
+
+  openDevice(id: string): void {
+    if (this.wide) {
+      this.selected = id;
+    } else {
+      router.pushUrl({ url: 'pages/Device', params: { 'device': id } as Record<string, Object> });
     }
   }
 
@@ -194,9 +212,20 @@ struct Main {
         app.arrange({ 'op': 'reset' } as Record<string, Object>);
       } });
     }
-    items.push({ value: app.deviceList ? t('main_show_tiles') : t('main_show_list'), action: () => {
-      app.setDeviceList(!app.deviceList);
-    } });
+    if (this.wide) {
+      const layouts: string[][] = [['orbit', t('main_show_orbit')], ['tiles', t('main_show_tiles')], ['list', t('main_show_list')]];
+      for (const l of layouts) {
+        if (l[0] !== app.wideLayout) {
+          items.push({ value: l[1], action: () => {
+            app.setWideLayout(l[0]);
+          } });
+        }
+      }
+    } else {
+      items.push({ value: app.deviceList ? t('main_show_tiles') : t('main_show_list'), action: () => {
+        app.setDeviceList(!app.deviceList);
+      } });
+    }
     if (app.isRoot()) {
       items.push({ value: t('recovery_title'), action: () => { router.pushUrl({ url: 'pages/Recovery' }); } });
     }
@@ -316,150 +345,220 @@ struct Main {
     }))
   }
 
-  build() {
-    Column() {
-      Row() {
-        Text($r('app.string.app_name')).fontSize(28).fontWeight(FontWeight.Bold).fontColor($r('app.color.text')).layoutWeight(1)
-        Button({ type: ButtonType.Circle }) {
-          Text('⋯').fontSize(24).fontColor($r('app.color.text'))
-        }
-        .width(44)
-        .height(44)
-        .backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.more'))
-        .bindMenu(this.menu())
+  @Builder
+  header() {
+    Row() {
+      Text($r('app.string.app_name')).fontSize(28).fontWeight(FontWeight.Bold).fontColor($r('app.color.text')).layoutWeight(1)
+      Button({ type: ButtonType.Circle }) {
+        Text('⋯').fontSize(24).fontColor($r('app.color.text'))
       }
-      .padding({ left: 24, right: 12, top: 8 })
-      .width('100%')
+      .width(44)
+      .height(44)
+      .backgroundColor(Color.Transparent)
+      .accessibilityText($r('app.string.more'))
+      .bindMenu(this.menu())
+    }
+    .padding({ left: 24, right: 12, top: 8 })
+    .width('100%')
+  }
 
-      Scroll() {
-        Column({ space: 16 }) {
-          // Where sync stands, its switch and Everywhere's.
-          Row({ space: 12 }) {
-            Column({ space: 2 }) {
-              Text(this.onlineLine()).fontSize(17).fontColor($r('app.color.text'))
-              Text(this.syncLine()).fontSize(13).fontColor($r('app.color.secondary'))
-              Text(this.awayLine()).fontSize(13).fontColor($r('app.color.secondary'))
-              ErrorText({ text: app.member.awayError })
-            }
-            .alignItems(HorizontalAlign.Start)
-            .layoutWeight(1)
-            this.switchFace(t('main_switch_sync'), !app.member.paused, app.member.running, () => {
-              if (app.member.paused) {
-                app.member.resume();
-              } else {
-                app.member.pause(0);
-              }
-            }, () => {
-              if (!app.member.paused) {
-                this.pauseMenu();
-              }
-            })
-            this.switchFace(t('main_switch_away'), app.member.awayOn, app.member.awayOn || !app.member.paused, () => {
-              this.toggleAway();
-            }, () => {})
-          }
-          .width('100%')
-
-          if (app.member.muted) {
-            Text(this.mutedLine()).fontSize(14).fontColor($r('app.color.error'))
-          }
-
-          // HarmonyOS lets an app read what was copied only through the
-          // system's paste button: a tap sends it.
-          Row({ space: 12 }) {
-            PasteButton({ icon: PasteIconStyle.LINES, text: PasteDescription.PASTE, buttonType: ButtonType.Capsule })
-              .enabled(app.member.running && !app.member.muted)
-              .onClick((event: ClickEvent, result: PasteButtonOnClickResult) => {
-                if (result === PasteButtonOnClickResult.SUCCESS) {
-                  app.member.sendPasteboard();
-                }
-              })
-            Text($r('app.string.main_send_note')).fontSize(13).fontColor($r('app.color.secondary')).layoutWeight(1)
-          }
-          .width('100%')
-
-          if (app.member.last.length > 0) {
-            Text(app.member.last).fontSize(15).fontColor($r('app.color.text')).maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-          if (app.member.fetching) {
-            BusyLine({ busy: true, label: $r('app.string.main_fetching') })
-          }
-          if (app.member.received.length > 0) {
-            Button($r('app.string.main_save_received'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
-              .onClick(() => {
-                this.saveReceived();
-              })
-          }
-
-          BugCard({ bugs: app.bugs })
-          ForEach(app.member.alerts, (a: Alert) => {
-            this.alertCard(a);
-          }, (a: Alert) => `${a.kind}:${(a.records ?? []).join(',')}`)
-
-          // "Lost phone?" on the group's only admin: how a second phone
-          // becomes one. Closed once, it stays closed.
-          if (!this.lostTipClosed && app.isAdmin() && app.member.running &&
-            app.member.devices.filter((d: Device) => d.admin === true).length === 1) {
-            Column({ space: 4 }) {
-              Text($r('app.string.tip_lost_title')).fontColor($r('app.color.accent'))
-              Text($r('app.string.tip_lost_text')).fontSize(13).fontColor($r('app.color.secondary'))
-            }
-            .alignItems(HorizontalAlign.Start)
-            .padding(12)
-            .borderRadius(14)
-            .backgroundColor($r('app.color.surface'))
-            .width('100%')
-            .onClick(() => {
-              app.closeTip(LOST_PHONE_TIP);
-              this.lostTipClosed = true;
-            })
-          }
-
-          if (this.tiles.length > 0) {
-            Text($r('app.string.main_devices')).fontSize(15).fontWeight(FontWeight.Medium).fontColor($r('app.color.secondary'))
-            if (app.deviceList) {
-              Column() {
-                ForEach(this.tiles, (item: Tile) => {
-                  this.row(item);
-                }, (item: Tile) => item.kind === 'collection' ? `c:${item.id}:${item.name}:${item.devices.length}` :
-                  `d:${JSON.stringify(item.device)}`)
-              }
-              .borderRadius(14)
-              .backgroundColor($r('app.color.surface'))
-            } else {
-              Grid() {
-                ForEach(this.tiles, (item: Tile) => {
-                  GridItem() {
-                    this.tile(item);
-                  }
-                }, (item: Tile) => item.kind === 'collection' ? `c:${item.id}:${item.name}:${item.devices.length}` :
-                  `d:${JSON.stringify(item.device)}`)
-              }
-              .columnsTemplate('1fr 1fr 1fr')
-              .columnsGap(12)
-              .rowsGap(12)
-              .maxCount(1000)
-              .layoutDirection(GridDirection.Row)
-            }
-          }
-
-          BusyLine({ busy: app.busy })
-          ErrorText({ text: app.member.error })
-          ErrorText({ text: app.error })
-          ErrorText({ text: this.error })
+  // Where sync stands, the paste button, what came last, the alerts and the tip.
+  @Builder
+  top() {
+    // Where sync stands, its switch and Everywhere's.
+    Row({ space: 12 }) {
+      Column({ space: 2 }) {
+        Text(this.onlineLine()).fontSize(17).fontColor($r('app.color.text'))
+        Text(this.syncLine()).fontSize(13).fontColor($r('app.color.secondary'))
+        Text(this.awayLine()).fontSize(13).fontColor($r('app.color.secondary'))
+        ErrorText({ text: app.member.awayError })
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+      this.switchFace(t('main_switch_sync'), !app.member.paused, app.member.running, () => {
+        if (app.member.paused) {
+          app.member.resume();
+        } else {
+          app.member.pause(0);
         }
-        .padding({ left: 24, right: 24, bottom: 24 })
+      }, () => {
+        if (!app.member.paused) {
+          this.pauseMenu();
+        }
+      })
+      this.switchFace(t('main_switch_away'), app.member.awayOn, app.member.awayOn || !app.member.paused, () => {
+        this.toggleAway();
+      }, () => {})
+    }
+    .width('100%')
+
+    if (app.member.muted) {
+      Text(this.mutedLine()).fontSize(14).fontColor($r('app.color.error'))
+    }
+
+    // HarmonyOS lets an app read what was copied only through the
+    // system's paste button: a tap sends it.
+    Row({ space: 12 }) {
+      PasteButton({ icon: PasteIconStyle.LINES, text: PasteDescription.PASTE, buttonType: ButtonType.Capsule })
+        .enabled(app.member.running && !app.member.muted)
+        .onClick((event: ClickEvent, result: PasteButtonOnClickResult) => {
+          if (result === PasteButtonOnClickResult.SUCCESS) {
+            app.member.sendPasteboard();
+          }
+        })
+      Text($r('app.string.main_send_note')).fontSize(13).fontColor($r('app.color.secondary')).layoutWeight(1)
+    }
+    .width('100%')
+
+    if (app.member.last.length > 0) {
+      Text(app.member.last).fontSize(15).fontColor($r('app.color.text')).maxLines(2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+    }
+    if (app.member.fetching) {
+      BusyLine({ busy: true, label: $r('app.string.main_fetching') })
+    }
+    if (app.member.received.length > 0) {
+      Button($r('app.string.main_save_received'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+        .onClick(() => {
+          this.saveReceived();
+        })
+    }
+
+    BugCard({ bugs: app.bugs })
+    ForEach(app.member.alerts, (a: Alert) => {
+      this.alertCard(a);
+    }, (a: Alert) => `${a.kind}:${(a.records ?? []).join(',')}`)
+
+    // "Lost phone?" on the group's only admin: how a second phone
+    // becomes one. Closed once, it stays closed.
+    if (!this.lostTipClosed && app.isAdmin() && app.member.running &&
+      app.member.devices.filter((d: Device) => d.admin === true).length === 1) {
+      Column({ space: 4 }) {
+        Text($r('app.string.tip_lost_title')).fontColor($r('app.color.accent'))
+        Text($r('app.string.tip_lost_text')).fontSize(13).fontColor($r('app.color.secondary'))
+      }
+      .alignItems(HorizontalAlign.Start)
+      .padding(12)
+      .borderRadius(14)
+      .backgroundColor($r('app.color.surface'))
+      .width('100%')
+      .onClick(() => {
+        app.closeTip(LOST_PHONE_TIP);
+        this.lostTipClosed = true;
+      })
+    }
+  }
+
+  // The devices as tiles or a list; columns, the tiles in a row.
+  @Builder
+  devices(list: boolean, columns: number) {
+    if (this.tiles.length > 0) {
+      Text($r('app.string.main_devices')).fontSize(15).fontWeight(FontWeight.Medium).fontColor($r('app.color.secondary'))
+      if (list) {
+        Column() {
+          ForEach(this.tiles, (item: Tile) => {
+            this.row(item);
+          }, (item: Tile) => item.kind === 'collection' ? `c:${item.id}:${item.name}:${item.devices.length}` :
+            `d:${JSON.stringify(item.device)}`)
+        }
+        .borderRadius(14)
+        .backgroundColor($r('app.color.surface'))
+      } else {
+        Grid() {
+          ForEach(this.tiles, (item: Tile) => {
+            GridItem() {
+              this.tile(item);
+            }
+          }, (item: Tile) => item.kind === 'collection' ? `c:${item.id}:${item.name}:${item.devices.length}` :
+            `d:${JSON.stringify(item.device)}`)
+        }
+        .columnsTemplate(Array<string>(columns).fill('1fr').join(' '))
+        .columnsGap(12)
+        .rowsGap(12)
+        .maxCount(1000)
+        .layoutDirection(GridDirection.Row)
+      }
+    }
+  }
+
+  @Builder
+  errors() {
+    BusyLine({ busy: app.busy })
+    ErrorText({ text: app.member.error })
+    ErrorText({ text: app.error })
+    ErrorText({ text: this.error })
+  }
+
+  // The page: on a phone's screen one column; on a big one the devices,
+  // on orbits unless the user chose tiles or a list, and the details beside.
+  @Builder
+  home() {
+    Column() {
+      this.header()
+      if (this.wide && app.wideLayout === 'orbit') {
+        Scroll() {
+          Column({ space: 16 }) {
+            this.top()
+          }
+          .padding({ left: 24, right: 24 })
+          .alignItems(HorizontalAlign.Start)
+          .width('100%')
+        }
+        .constraintSize({ maxHeight: '45%' })
+        .align(Alignment.Top)
+        Orbit({ devices: app.member.devices, selected: this.selected, select: (id: string) => {
+          this.selected = id;
+        } })
+          .layoutWeight(1)
+        Column({ space: 8 }) {
+          this.errors()
+        }
+        .padding({ left: 24, right: 24, bottom: 16 })
         .alignItems(HorizontalAlign.Start)
         .width('100%')
+      } else {
+        Scroll() {
+          Column({ space: 16 }) {
+            this.top()
+            this.devices(this.wide ? app.wideLayout === 'list' : app.deviceList, this.wide ? 4 : 3)
+            this.errors()
+          }
+          .padding({ left: 24, right: 24, bottom: 24 })
+          .alignItems(HorizontalAlign.Start)
+          .width('100%')
+        }
+        .layoutWeight(1)
+        .align(Alignment.Top)
       }
-      .layoutWeight(1)
-      .align(Alignment.Top)
+    }
+    .layoutWeight(1)
+    .height('100%')
+  }
+
+  build() {
+    Row() {
+      this.home()
+      if (this.wide && this.selected.length > 0) {
+        Divider().vertical(true).color($r('app.color.grid'))
+        DeviceDetail({ deviceId: this.selected, close: () => {
+          this.selected = '';
+        } })
+          .width(400)
+          .height('100%')
+      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
+    .onAreaChange((_: Area, area: Area) => {
+      const wide = Number(area.width) >= WIDE_VP;
+      if (wide !== this.wide) {
+        this.wide = wide;
+        if (!wide) {
+          this.selected = '';
+        }
+      }
+    })
   }
 }
 

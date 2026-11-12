@@ -261,6 +261,7 @@
     {"name": "main_scan", "value": "Escanear un código"},
     {"name": "main_send_note", "value": "Toca Pegar para enviar al grupo lo que copiaste."},
     {"name": "main_show_list", "value": "Mostrar los dispositivos en lista"},
+    {"name": "main_show_orbit", "value": "Órbita"},
     {"name": "main_show_tiles", "value": "Mostrar los dispositivos en mosaico"},
     {"name": "main_switch_away", "value": "En todas partes"},
     {"name": "main_switch_sync", "value": "Sincronizar"},

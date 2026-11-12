@@ -262,6 +262,7 @@
     {"name": "main_scan", "value": "Scan a code"},
     {"name": "main_send_note", "value": "Tap Paste to send what you copied to the group."},
     {"name": "main_show_list", "value": "Show the devices as a list"},
+    {"name": "main_show_orbit", "value": "Orbit"},
     {"name": "main_show_tiles", "value": "Show the devices as tiles"},
     {"name": "main_switch_away", "value": "Everywhere"},
     {"name": "main_switch_sync", "value": "Sync"},

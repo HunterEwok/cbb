@@ -261,6 +261,7 @@
     {"name": "main_scan", "value": "مسح رمز"},
     {"name": "main_send_note", "value": "اضغط «لصق» لإرسال ما نسخته إلى المجموعة."},
     {"name": "main_show_list", "value": "عرض الأجهزة كقائمة"},
+    {"name": "main_show_orbit", "value": "مدار"},
     {"name": "main_show_tiles", "value": "عرض الأجهزة كمربعات"},
     {"name": "main_switch_away", "value": "في كل مكان"},
     {"name": "main_switch_sync", "value": "مزامنة"},

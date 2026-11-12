@@ -261,6 +261,7 @@
     {"name": "main_scan", "value": "סריקת קוד"},
     {"name": "main_send_note", "value": "מקישים ״הדבקה״ כדי לשלוח לקבוצה את מה שהעתקת."},
     {"name": "main_show_list", "value": "הצגת המכשירים כרשימה"},
+    {"name": "main_show_orbit", "value": "מסלול"},
     {"name": "main_show_tiles", "value": "הצגת המכשירים כאריחים"},
     {"name": "main_switch_away", "value": "בכל מקום"},
     {"name": "main_switch_sync", "value": "סנכרון"},

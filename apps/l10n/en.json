@@ -763,7 +763,7 @@
   "Or paste the code's text, cbb://join…": {"in": ["aurora:AddDevicePage", "harmony:admit_paste"]},
   "Or paste the code's text, cbb://recover…": {"in": ["aurora:RestorePage", "harmony:restore_paste"]},
   "Or paste the invitation's text, cbb://invite…": {"in": ["aurora:InvitationPage", "harmony:invitation_paste"]},
-  "Orbit": {"in": ["android:layout_orbit", "ios", "mac", "tray"]},
+  "Orbit": {"in": ["android:layout_orbit", "ios", "mac", "tray", "harmony:main_show_orbit"]},
   "Own clipboard": {"in": ["ios"]},
   "Passes them on, reads none": {"in": ["android:copies_forward_only", "ios", "mac", "tray"]},
   "Paste": {"in": ["android:paste", "ios", "harmony:paste"]},
