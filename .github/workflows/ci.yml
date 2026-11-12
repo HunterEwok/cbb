@@ -1690,8 +1690,9 @@ jobs:
           test_on "$iphone"
           test_on "$ipad"
       # The screens' pictures in every language (ReadersUITests), to look at
-      # what the accessibility audit found; the English ones also go into
-      # the log as small JPEGs when the tests fail.
+      # what the accessibility audit found; the English ones, the failed
+      # audits' and the screens a lost tap met (ReadersUITests.lostTap) also
+      # go into the log as small JPEGs when the tests fail.
       - name: the screens' pictures
         if: always()
         run: |
@@ -1699,9 +1700,16 @@ jobs:
             [ -d "$r" ] || continue
             xcrun xcresulttool export attachments --path "$r" --output-path "$RUNNER_TEMP/ios-screens/$(basename "$r" .xcresult)" || true
           done
+      # The attachments alone do not show what a failed test did, such as a
+      # tap the simulator lost: each failed test's activities, every launch,
+      # tap, wait and query with its time, go into the log and beside the
+      # pictures.
+      - name: the failed tests' activities
+        if: always()
+        run: python3 .github/activities.py "$RUNNER_TEMP/ios-screens/activities" "$RUNNER_TEMP"/ios-*.xcresult
       - name: the English screens in the log
         if: failure()
-        run: python3 .github/pictures.py "$RUNNER_TEMP/ios-screens" -en failed-
+        run: python3 .github/pictures.py "$RUNNER_TEMP/ios-screens" -en failed- lost-tap-
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
