@@ -405,13 +405,13 @@ def record_vectors():
         note="an ordinary leaf: any admin with admit admits it, and it obeys the group's admins")
     add("settings", ROOT, 7, {10: 0, 14: 1,
                               15: [[1, "forward.cbb.tools:8764", OPERATOR.key]]})
-    add("copies", ADMIN, 8, {10: 30000})
+    add("copies", ADMIN, 8, {10: 30000, 11: seen_of(ROOT)})
     # hubs keep the user's order (not sorted), each once
-    add("hubs", ROOT, 10, {10: sorted([LAPTOP.id16, PHONE.id16], reverse=True)})
+    add("hubs", ROOT, 10, {10: sorted([LAPTOP.id16, PHONE.id16], reverse=True), 11: seen_of(ADMIN)})
     add("revoke", ROOT, 2, {10: srt([STRANGER.hash, Signer("stranger 2").hash]), 11: seen_of(ADMIN, ROOT)})
     add("freeze", ROOT, 3, {10: [ADMIN.hash], 11: seen_of(ADMIN, ROOT)})
     thaw_target = take[-1]["id"]
-    add("thaw", ROOT, 4, {10: [bytes.fromhex(thaw_target)]})
+    add("thaw", ROOT, 4, {10: [bytes.fromhex(thaw_target)], 11: seen_of(ADMIN)})
     add("claim", ADMIN, 5, {10: ROOT2.key, 11: seen_of(ADMIN, ROOT)})
     add("resolve", ROOT, 6, {10: [bytes.fromhex(take[-1]["id"])]})
     add("recovery", ROOT, 11, {10: Signer("recovery").key})
@@ -448,6 +448,11 @@ def record_vectors():
         {10: Signer("lamp member key").key, 11: "Lamp", 12: 4, 13: 0b0011, 17: 10, 25: 1},
         verdict="refuse",
         note="records/device/guarded: only a root sets guarded; the form is valid, the evaluation counts it for nothing")
+
+    # the root takes the admin key off its device; what the key signed up
+    # to the head named in seen (26) still counts
+    add("root takes the admin key off a device", ROOT, 1,
+        {10: PHONE.key, 11: "Phone", 12: 2, 13: 0b1111, 17: 4, 18: 2, 23: 1, 26: seen_of(ADMIN)})
 
     # an admin's later record of the board that widens it: counts for nothing
     add("admin widens a device it admitted", ADMIN, 1,
@@ -561,11 +566,17 @@ def record_vectors():
         ("revoke seen with one key twice", "records/revoke/seen", 2, {10: [a], 11: [sa, [sa[0], 3, i2]]}),
         ("revoke seen entry without its record ID", "records/revoke/seen", 2, {10: [a], 11: [sa[:2], sb]}),
         ("revoke seen entry at sequence 0", "records/revoke/seen", 2, {10: [a], 11: [[sa[0], 0, sa[2]], sb]}),
-        ("thaw records out of order", "records/thaw/records", 4, {10: [i2, i1]}),
+        ("thaw records out of order", "records/thaw/records", 4, {10: [i2, i1], 11: [sa]}),
         ("checkpoint heads out of order", "records/checkpoint/heads", 9, {10: [hb, ha]}),
         ("checkpoint heads with one key twice", "records/checkpoint/heads", 9, {10: [ha, [ha[0], 4, i2]]}),
         ("checkpoint keep out of order", "records/checkpoint/keep", 9, {10: [ha, hb], 11: [i2, i1]}),
-        ("hubs with one device twice", "records/hubs/hubs", 10, {10: [LAPTOP.id16, LAPTOP.id16]}),
+        ("hubs with one device twice", "records/hubs/hubs", 10, {10: [LAPTOP.id16, LAPTOP.id16], 11: [sa]}),
+        ("device seen out of order", "records/device/seen", 1, {**{k: lap_m[k] for k in (10, 11, 12)}, 26: [sb, sa]}),
+        ("thaw seen out of order", "records/thaw/seen", 4, {10: [i1], 11: [sb, sa]}),
+        ("thaw without its seen", "records/thaw/seen", 4, {10: [i1]}),
+        ("hubs seen with one key twice", "records/hubs/seen", 10, {10: [LAPTOP.id16], 11: [sa, [sa[0], 3, i2]]}),
+        ("copies seen entry without its record ID", "records/copies/seen", 8, {10: 30000, 11: [sa[:2]]}),
+        ("copies without its seen", "records/copies/seen", 8, {10: 30000}),
     ]:
         bad_body(name, rule, rec(ROOT, 90, typ, fields))
     return take, refuse

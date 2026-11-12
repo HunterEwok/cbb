@@ -179,20 +179,22 @@ fn record_field(typ: u64, k: u16) -> Option<&'static str> {
         "holds_root",
         "replaces",
         "guarded",
+        "seen",
     ];
     let i = usize::from(k.checked_sub(10)?);
     match typ {
         1 => device.get(i).copied().filter(|n| !n.is_empty()),
         2 | 3 => ["keys", "seen"].get(i).copied(),
-        4 | 6 => ["records"].get(i).copied(),
+        4 => ["records", "seen"].get(i).copied(),
+        6 => ["records"].get(i).copied(),
         5 => ["root", "seen"].get(i).copied(),
         7 => ["takeover_delay_ms", "key_level", "min_rules", "", "shared", "servers"]
             .get(i)
             .copied()
             .filter(|n| !n.is_empty()),
-        8 => ["incoming_ms"].get(i).copied(),
+        8 => ["incoming_ms", "seen"].get(i).copied(),
         9 => ["heads", "keep"].get(i).copied(),
-        10 => ["hubs"].get(i).copied(),
+        10 => ["hubs", "seen"].get(i).copied(),
         11 | 12 => ["admin"].get(i).copied(),
         _ => None,
     }
