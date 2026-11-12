@@ -154,8 +154,10 @@ The nightly workflow changes the records' code one place at a time (drops a chec
 into `<=`, returns early) and runs the tests against each change: `cargo mutants` on
 `core/src/authority.rs` and `strict.rs`, in eight shards, and `gremlins` on
 `internal/authority`. A change that every test still passes is listed as missed, in the run's
-summary and its artifacts. The jobs report and do not fail yet; each missed change gets a
-test, or a note why it cannot matter, and then the jobs fail on a new one.
+summary and its artifacts. The Rust job fails on a survivor that `tools/mutants/missed.txt`
+does not name (no new survivor, from the first day); the list holds the records' baseline of
+2026-11-11, and each of those gets a test or a note why it cannot matter. `gremlins` reports
+and does not fail yet.
 
 The service's readers of outside input already fail on a new one: `cargo mutants` on the
 control socket's messages (`member/src/control.rs`), the pairing window
