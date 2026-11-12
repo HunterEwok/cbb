@@ -19,6 +19,7 @@ use alloc::vec::Vec;
 use p256::ecdsa::SigningKey;
 use p256::pkcs8::{DecodePrivateKey, EncodePrivateKey};
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 use crate::certs::{self, Cert, DeviceId, b64};
 use crate::error::{Context, Error, Result, Wrap};
@@ -47,13 +48,21 @@ pub struct Identity {
     pub roots: Vec<Cert>,
 }
 
+impl Drop for Identity {
+    fn drop(&mut self) {
+        self.key.zeroize();
+    }
+}
+
 /// Makes a new P-256 key, PKCS #8.
 pub fn new_key() -> Result<Vec<u8>> {
     let key = loop {
         let mut b = [0u8; 32];
         getrandom::fill(&mut b).map_err(|_| Error::msg("cannot make a key: the system has no randomness"))?;
         // Almost every 32 bytes are a valid scalar.
-        if let Ok(k) = SigningKey::from_slice(&b) {
+        let k = SigningKey::from_slice(&b);
+        b.zeroize();
+        if let Ok(k) = k {
             break k;
         }
     };
@@ -340,11 +349,11 @@ impl Identity {
 }
 
 fn parse(data: &[u8], open: OpenHeld) -> Result<Identity> {
-    let f: File = serde_json::from_slice(data).context("not an identity file")?;
+    let mut f: File = serde_json::from_slice(data).context("not an identity file")?;
     if f.v != FILE_VERSION {
         return Err(Error::msg(format!("unknown identity file version {}", f.v)));
     }
-    let held = match (f.key_tpm, f.key_se) {
+    let held = match (f.key_tpm.take(), f.key_se.take()) {
         (Some(b), None) if f.key.is_empty() => Some(HeldKey::Tpm(b)),
         (None, Some(b)) if f.key.is_empty() => Some(HeldKey::SecureEnclave(b)),
         (None, None) => None,
@@ -353,7 +362,7 @@ fn parse(data: &[u8], open: OpenHeld) -> Result<Identity> {
     let external = held.as_ref().map(open).transpose()?;
     let id = Identity {
         id: DeviceId::parse(&f.device)?,
-        key: f.key,
+        key: core::mem::take(&mut f.key),
         external,
         cert: Cert::parse(&f.cert)?,
         issuer: f.issuer.as_deref().map(Cert::parse).transpose()?,
@@ -382,4 +391,10 @@ struct File {
     group_ca: Vec<u8>,
     #[serde(with = "b64::list", default, skip_serializing_if = "Vec::is_empty")]
     roots: Vec<Vec<u8>>,
+}
+
+impl Drop for File {
+    fn drop(&mut self) {
+        self.key.zeroize();
+    }
 }

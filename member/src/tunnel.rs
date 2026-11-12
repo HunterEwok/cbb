@@ -155,7 +155,7 @@ pub struct State {
 /// A client as its hub keeps it: its WireGuard key, its own preshared key,
 /// and the chain it presented with the key, so that the hub drops it when
 /// the records revoke it; empty for one another hub handed over.
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Member {
     pub device: String,
     #[serde(with = "b64")]
@@ -166,10 +166,21 @@ pub struct Member {
     pub chain: Vec<Vec<u8>>,
 }
 
+impl core::fmt::Debug for Member {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Member")
+            .field("device", &self.device)
+            .field("key", &self.key)
+            .field("psk", &cbb_core::secret::Redacted(self.psk.len()))
+            .field("chain", &self.chain)
+            .finish()
+    }
+}
+
 /// A hub's forwarder or a device's relay: its address, for UDP and TCP,
 /// and the pin of its key; for a forwarder the group's VLESS user ID and
 /// way once it registered, and whether it is the project's.
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Forwarder {
     pub endpoint: SocketAddr,
     #[serde(rename = "key")]
@@ -180,6 +191,18 @@ pub struct Forwarder {
     pub vless: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub project: bool,
+}
+
+impl core::fmt::Debug for Forwarder {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Forwarder")
+            .field("endpoint", &self.endpoint)
+            .field("pin", &self.pin)
+            .field("vless_id", &cbb_core::secret::Redacted(self.vless_id.len()))
+            .field("vless", &self.vless.as_ref().map(|_| "<hidden>"))
+            .field("project", &self.project)
+            .finish()
+    }
 }
 
 fn is_false(b: &bool) -> bool {
@@ -215,7 +238,7 @@ mod b64_list {
 }
 
 /// The offer of one of the group's hubs, as this member keeps it.
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Hub {
     pub device: String,
     #[serde(with = "b64")]
@@ -236,6 +259,20 @@ pub struct Hub {
     /// gave it (src/vless.rs reads it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vless: Option<serde_json::Value>,
+}
+
+impl core::fmt::Debug for Hub {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Hub")
+            .field("device", &self.device)
+            .field("key", &self.key)
+            .field("psk", &cbb_core::secret::Redacted(self.psk.len()))
+            .field("endpoints", &self.endpoints)
+            .field("next", &self.next)
+            .field("obfuscation", &self.obfuscation.as_ref().map(|_| "<hidden>"))
+            .field("vless", &self.vless.as_ref().map(|_| "<hidden>"))
+            .finish()
+    }
 }
 
 /// The hubs that VLESS reached last, which try it first the next time
@@ -587,7 +624,7 @@ impl State {
         }
         if let Some(i) = i {
             let c = &mut self.members[i];
-            if c.key == public && (psk.is_empty() || c.psk == psk) && c.chain == chain {
+            if c.key == public && (psk.is_empty() || cbb_core::secret::ct_eq(&c.psk, psk)) && c.chain == chain {
                 return Ok((c.clone(), false));
             }
             if !psk.is_empty() {
@@ -630,7 +667,7 @@ impl State {
         }
         if let Some(i) = i {
             let c = &mut self.members[i];
-            if !c.chain.is_empty() || c.key == public && c.psk == psk {
+            if !c.chain.is_empty() || c.key == public && cbb_core::secret::ct_eq(&c.psk, psk) {
                 return Ok(false);
             }
             (c.key, c.psk) = (public.to_vec(), psk.to_vec());

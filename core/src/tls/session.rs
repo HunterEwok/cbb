@@ -143,6 +143,12 @@ impl Session {
         self.common().peer_certificates()
     }
 
+    /// The key exchange group agreed (X25519MLKEM768, or X25519 with a
+    /// peer that lacks the hybrid).
+    pub fn kx_group(&self) -> Option<rustls::NamedGroup> {
+        self.common().negotiated_key_exchange_group().map(|g| g.name())
+    }
+
     fn common(&self) -> &CommonState {
         match &self.conn {
             Side::Client(c) => c,

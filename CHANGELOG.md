@@ -7,6 +7,10 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
+  an error, and compares every mark and confirmation tag in constant time; the C library
+  wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the
+  marks and the pairing confirmation run on demand.
 - The forwarder refuses the groups their operator lists after an abuse report:
   `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again
   within ten seconds of a change; a listed group is refused at registration and its devices

@@ -14,6 +14,7 @@ use core::fmt;
 use hmac::{KeyInit, Mac};
 use rustls::KeyLog;
 use sha2::{Digest, Sha256};
+use zeroize::Zeroizing;
 
 use crate::error::{Error, Result};
 use crate::sync::Mutex;
@@ -22,7 +23,7 @@ use crate::sync::Mutex;
 /// connection its own configuration with its own Exporter as the key log:
 /// it keeps the secret of the last handshake it saw.
 pub struct Exporter {
-    secret: Mutex<Option<Vec<u8>>>,
+    secret: Mutex<Option<Zeroizing<Vec<u8>>>>,
 }
 
 impl Default for Exporter {
@@ -42,7 +43,8 @@ const LABEL: &str = "EXPORTER_SECRET";
 impl KeyLog for Exporter {
     fn log(&self, label: &str, _client_random: &[u8], secret: &[u8]) {
         if label == LABEL {
-            *self.secret.lock() = Some(secret.to_vec());
+            // The secret of an earlier handshake is wiped as it is dropped.
+            *self.secret.lock() = Some(Zeroizing::new(secret.to_vec()));
         }
     }
 
@@ -69,7 +71,7 @@ impl Exporter {
 
 /// HKDF-Expand-Label with SHA-256 (RFC 8446, section 7.1).
 #[allow(clippy::expect_used, reason = "HMAC takes a key of any length, so this never fails")]
-fn expand_label(secret: &[u8], label: &[u8], context: &[u8], len: usize) -> Result<Vec<u8>> {
+fn expand_label(secret: &[u8], label: &[u8], context: &[u8], len: usize) -> Result<Zeroizing<Vec<u8>>> {
     let full = label.len().saturating_add(6);
     if len > 255 * 32 || full > 255 || context.len() > 255 {
         return Err(Error::msg("the exporter cannot make that much"));
@@ -83,15 +85,15 @@ fn expand_label(secret: &[u8], label: &[u8], context: &[u8], len: usize) -> Resu
     info.push(context.len() as u8);
     info.extend_from_slice(context);
     // HKDF-Expand (RFC 5869, section 2.3).
-    let mut out = Vec::with_capacity(len.saturating_add(32));
-    let mut prev: Vec<u8> = Vec::new();
+    let mut out = Zeroizing::new(Vec::with_capacity(len.saturating_add(32)));
+    let mut prev = Zeroizing::new(Vec::new());
     let mut i = 1u8;
     while out.len() < len {
         let mut mac = hmac::Hmac::<Sha256>::new_from_slice(secret).expect("HMAC takes any key");
         mac.update(&prev);
         mac.update(&info);
         mac.update(&[i]);
-        prev = mac.finalize().into_bytes().to_vec();
+        prev = Zeroizing::new(mac.finalize().into_bytes().to_vec());
         out.extend_from_slice(&prev);
         i = i.wrapping_add(1);
     }
