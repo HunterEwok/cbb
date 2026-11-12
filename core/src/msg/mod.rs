@@ -196,6 +196,12 @@ pub fn check_map(table: &Table, v: &Value<'_>) -> Result<(), Rule> {
             Some(x) => check_ty(f, x)?,
         }
     }
+    // The one rule between fields of a map: AmneziaWG's junk sizes.
+    if core::ptr::eq(table, &tables::OBFUSCATION)
+        && v.get(2).and_then(Value::as_uint) > v.get(3).and_then(Value::as_uint)
+    {
+        return Err(Rule::field("obfuscation/jmax"));
+    }
     Ok(())
 }
 
@@ -209,10 +215,6 @@ impl Obfuscation {
     /// rule of the field that carries them.
     pub fn read(v: &Value<'_>, rule: &'static str) -> Result<Obfuscation, Rule> {
         check_map(&tables::OBFUSCATION, v).map_err(|_| Rule::field(rule))?;
-        let (lo, hi) = (v.get(2).and_then(Value::as_uint), v.get(3).and_then(Value::as_uint));
-        if lo > hi {
-            return Err(Rule::field(rule));
-        }
         Ok(Obfuscation(v.encode()))
     }
 

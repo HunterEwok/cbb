@@ -189,6 +189,19 @@ pub static GUEST: Table = Table {
     ],
 };
 
+/// `credentials` (t 11), between members: the current period's credentials,
+/// and in field 3 room for the group's AmneziaWG settings to change with
+/// the period in a later version. Only members get this message, so a
+/// server never sees the settings. No 0.6 writer sets field 3; a 0.6
+/// reader checks its shape and does not apply it.
+pub static CREDENTIALS: Table = Table {
+    shape: "member-credentials/shape",
+    fields: &[
+        f(2, "member-credentials/list", Ty::Array { of: &ENV, max: 259 }, true),
+        f(3, "member-credentials/obfuscation", Ty::Map(&OBFUSCATION), false),
+    ],
+};
+
 // ---------------------------------------------------------------- waiting
 
 /// One request that waits for an admin (A-49).
@@ -309,6 +322,7 @@ pub static RESULT: Table = Table {
 };
 
 pub const T_RESULT: u64 = 10;
+pub const T_CREDENTIALS: u64 = 11;
 pub const T_TUNNEL: u64 = 15;
 pub const T_HUBS: u64 = 16;
 pub const T_GUEST: u64 = 17;
@@ -368,12 +382,14 @@ pub static ALL: &[&Table] = &[
     &RELAY_CALL,
     &RELAY_OK,
     &RESULT,
+    &CREDENTIALS,
 ];
 
 /// The table of a message type wave 3 numbers.
 pub fn of(t: u64) -> Option<&'static Table> {
     Some(match t {
         T_RESULT => &RESULT,
+        T_CREDENTIALS => &CREDENTIALS,
         T_TUNNEL => &TUNNEL,
         T_HUBS => &HUBS,
         T_GUEST => &GUEST,

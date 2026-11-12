@@ -791,18 +791,9 @@ def credential_vectors():
                           12: pad([SRVKEY.hash], 4), 13: pad([], 4)})
     cred("members", PERIOD, {1: 4, 2: tag, 3: PERIOD.key, 4: 1, 7: exp,
                              14: pad([SRVKEY.hash], 4)})
-    # Field 256 of a period, in the optional zone: room for the AmneziaWG
-    # settings to change with the period later. No 0.6 writer sets it; a
-    # reader checks its shape and does not apply it.
-    obf = {1: 4, 2: 40, 3: 70, 4: [15, 20, 0, 0], 5: [[1000, 1100], [2000, 2100], [3000, 3100], [4000, 4100]]}
-    cred("period with settings for later (field 256)", ROOT,
-         {1: 1, 2: GROUP, 3: ROOT.key, 4: 1, 7: exp, 10: tag, 11: PERIOD.key, 256: obf})
+    # The optional zone (section 3.3): skipped, the signature covers it.
     cred("period with an unknown optional field", ROOT,
          {1: 1, 2: GROUP, 3: ROOT.key, 4: 1, 7: exp, 10: tag, 11: PERIOD.key, 300: "later"})
-    m = {1: 1, 2: GROUP, 3: ROOT.key, 4: 1, 7: exp, 10: tag, 11: PERIOD.key, 256: {**obf, 1: 0}}
-    env, _ = envelope("credential", ROOT, m)
-    refuse.append({"name": "period settings out of shape", "rule": "credentials/period/obfuscation",
-                   "verdict": "refuse", "envelope": env.hex()})
     m = {1: 4, 2: tag, 3: PERIOD.key, 4: 1, 7: exp, 14: pad([SRVKEY.hash], 3)}
     env, _ = envelope("credential", PERIOD, m)
     refuse.append({"name": "members list of 3 (not a padded length)", "rule": "credentials/members/members",
@@ -1320,6 +1311,10 @@ TABLES = {
     ],
     "relay/ok": [
     ],
+    "member-credentials": [
+        (2, "member-credentials/list", "array 1..259 of envelope", True),
+        (3, "member-credentials/obfuscation", "map obfuscation", False),
+    ],
     "result": [
         (2, "result/id", "bytes 16", True),
         (3, "result/by", "bytes 16", True),
@@ -1330,7 +1325,7 @@ TABLES = {
 }
 
 MESSAGE_TYPES = {
-    10: "result", 15: "tunnel", 16: "hubs", 17: "guest", 26: "waiting", 27: "dismiss",
+    10: "result", 11: "member-credentials", 15: "tunnel", 16: "hubs", 17: "guest", 26: "waiting", 27: "dismiss",
     64: "pair/start", 65: "pair/reply", 66: "pair/confirm", 67: "pair/welcome", 68: "pair/done",
     69: "pair/error", 80: "forward/challenge", 81: "forward/register", 82: "forward/registered",
     83: "server/error", 84: "forward/seen", 90: "relay/challenge", 91: "relay/register",
@@ -1423,6 +1418,9 @@ def check_map(name, v):
                 return rule
         elif not ty_ok(ty, v[n]):
             return rule
+    # The one rule between fields of a map: AmneziaWG's junk sizes.
+    if name == "obfuscation" and v[2] > v[3]:
+        return "obfuscation/jmax"
     return None
 
 
@@ -1466,6 +1464,11 @@ def wave3_vectors(records_take):
         maps.append(e)
 
     adb = {1: GROUP, 2: PHONE.id16, 3: "Ewok's phone"}
+    msg("credentials", {0: 11, 2: [dec(envs[0])]}, "the credential is a placeholder envelope")
+    msg("credentials with settings for later", {0: 11, 2: [dec(envs[0])], 3: obf},
+        "field 3: room for the settings to change with the period; no 0.6 writer sets it, a reader checks its shape and does not apply it")
+    bad("credentials with settings out of shape", {0: 11, 2: [dec(envs[0])], 3: {**obf, 2: 80}},
+        "member-credentials/obfuscation")
     msg("pair start", {0: 64, 2: fake("cpace ya", 32), 3: enc(info)})
     msg("pair reply", {0: 65, 2: fake("cpace yb", 32), 3: enc(adb)})
     msg("pair confirm", {0: 66, 2: fake("cpace ta", 32)})
@@ -1527,6 +1530,8 @@ def wave3_vectors(records_take):
     mp("an offer: an endpoint twice", "offer", {**offer, 2: [offer[2][0]] * 2}, "offer/endpoints")
     mp("an offer: bad settings", "offer", {**offer, 3: {**obf, 1: 129}}, "offer/obfuscation")
     mp("the settings", "obfuscation", obf)
+    mp("the settings: jmin above jmax", "obfuscation", {**obf, 2: 80}, "obfuscation/jmax")
+    mp("the settings: jmin equal to jmax", "obfuscation", {**obf, 2: 70})
     mp("the settings: five sizes", "obfuscation", {**obf, 4: [1, 2, 3, 4, 5]}, "obfuscation/s")
     mp("ADb", "pair/adb", adb)
     mp("ADb without a name", "pair/adb", {1: GROUP, 2: PHONE.id16}, "pair/adb/name")
@@ -1545,17 +1550,45 @@ def invitation_vectors():
     prof = {1: 1, 2: 3}
     base = {1: fake("invite id", 16), 2: fake("invite secret", 32), 3: [home, guest], 4: prof}
 
-    def ok(name, v, cross=False):
-        assert check_map("invite", v) is None, name
+    def cross_rule(v):
+        """The rules between fields the invitation's reader adds to its tables."""
+        if v[1] == bytes(16) or v[2] == bytes(32):
+            return "invite/shape"
+        for p in v[3]:
+            g = (4 in p, 5 in p)
+            if g[0] != g[1] or p.get(4) == bytes(32) or p.get(5) == bytes(32) or \
+                    (3 in p and p[3][1] == bytes(32)):
+                return "invite/path"
+            if p[1] == 1 and any(k in p for k in (2, 3, 4, 5)):
+                return "invite/path"
+            if p[1] == 2 and not all(k in p for k in (2, 3, 4)):
+                return "invite/path"
+            if p[1] == 3 and 2 not in p:
+                return "invite/path"
+            if p[1] == 1 and 6 in p:
+                return "invite/obfuscation"
+        pr = v[4]
+        if pr.get(4) == 1 and pr[1] != 4:
+            return "invite/profile"
+        if pr.get(3) == 1 and any(p[1] != 1 for p in v[3]):
+            return "invite/profile"
+        return None
+
+    def rule_of(v):
+        return check_map("invite", v) or cross_rule(v)
+
+    def ok(name, v):
+        assert rule_of(v) is None, name
         take.append({"name": name, "invitation": enc(v).hex(),
                      "text": "cbb://join#" + __import__("base64").urlsafe_b64encode(enc(v)).decode().rstrip("=")})
 
     def no(name, v, rule, cross=False):
-        got = check_map("invite", v)
-        assert cross or got == rule, (name, got)
+        assert check_map("invite", v) is None if cross else True, name
+        got = rule_of(v)
+        assert got == rule, (name, got)
         e = {"name": name, "rule": rule, "invitation": enc(v).hex()}
         if cross:
-            e["cross"] = "a rule between fields, which the invitation's reader adds to the tables"
+            e["cross"] = "a rule between fields"
         refuse.append(e)
 
     ok("home and away, plain WireGuard", base)
@@ -1563,7 +1596,16 @@ def invitation_vectors():
     ok("a small device: a leaf, home only", {**base, 3: [home], 4: {1: 4, 3: 1}})
     no("settings on the home path", {**base, 3: [{1: 1, 6: obf}, guest]}, "invite/obfuscation", cross=True)
     no("settings out of shape", {**base, 3: [home, {**guest, 6: {**obf, 3: 2000}}]}, "invite/path")
-    no("jmin above jmax", {**base, 3: [home, {**guest, 6: {**obf, 2: 80}}]}, "invite/obfuscation", cross=True)
+    no("jmin above jmax", {**base, 3: [home, {**guest, 6: {**obf, 2: 80}}]}, "invite/path")
+    no("a home path with an endpoint", {**base, 3: [{1: 1, 2: ["203.0.113.5:51820"]}, guest]}, "invite/path",
+       cross=True)
+    no("a guest key without its pre-shared key", {**base, 3: [home, {k: v for k, v in guest.items() if k != 5}]},
+       "invite/path", cross=True)
+    no("a guest key of zeros", {**base, 3: [home, {**guest, 4: bytes(32)}]}, "invite/path", cross=True)
+    no("a hub key of zeros", {**base, 3: [home, {**guest, 3: [X25519, bytes(32)]}]}, "invite/path", cross=True)
+    no("a bypass path without endpoints", {**base, 3: [home, {1: 3}]}, "invite/path", cross=True)
+    no("an ID of zeros", {**base, 1: bytes(16)}, "invite/shape", cross=True)
+    no("a secret of zeros", {**base, 2: bytes(32)}, "invite/shape", cross=True)
     no("an endpoint twice", {**base, 3: [home, {**guest, 2: ["203.0.113.5:51820"] * 2}]}, "invite/path")
     no("five paths", {**base, 3: [home] * 5}, "invite/path")
     no("a guest path without the hub's key", {**base, 3: [home, {k: v for k, v in guest.items() if k != 3}]},

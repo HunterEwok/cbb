@@ -178,6 +178,64 @@ func checkTable(name string, v any) string {
 			return r.Rule
 		}
 	}
+	// The one rule between fields of a map: AmneziaWG's junk sizes.
+	if name == "obfuscation" && m[uint64(2)].(uint64) > m[uint64(3)].(uint64) {
+		return "obfuscation/jmax"
+	}
+	return ""
+}
+
+// inviteCross returns the rule between fields an invitation breaks, or "":
+// the rules its reader adds to the tables.
+func inviteCross(v any) string {
+	m := v.(map[any]any)
+	zero := func(x any) bool {
+		b, ok := x.([]byte)
+		return ok && bytes.Equal(b, make([]byte, len(b)))
+	}
+	if zero(m[uint64(1)]) || zero(m[uint64(2)]) {
+		return "invite/shape"
+	}
+	paths := m[uint64(3)].([]any)
+	has := func(p map[any]any, k uint64) bool { _, ok := p[k]; return ok }
+	away := false
+	for _, x := range paths {
+		p := x.(map[any]any)
+		kind := p[uint64(1)].(uint64)
+		if has(p, 4) != has(p, 5) || zero(p[uint64(4)]) || zero(p[uint64(5)]) {
+			return "invite/path"
+		}
+		if hk, ok := p[uint64(3)].([]any); ok && zero(hk[1]) {
+			return "invite/path"
+		}
+		switch kind {
+		case 1:
+			if has(p, 2) || has(p, 3) || has(p, 4) || has(p, 5) {
+				return "invite/path"
+			}
+			if has(p, 6) {
+				return "invite/obfuscation"
+			}
+		case 2:
+			if !has(p, 2) || !has(p, 3) || !has(p, 4) {
+				return "invite/path"
+			}
+		case 3:
+			if !has(p, 2) {
+				return "invite/path"
+			}
+		}
+		if kind != 1 {
+			away = true
+		}
+	}
+	pr := m[uint64(4)].(map[any]any)
+	if g, _ := pr[uint64(4)].(uint64); g == 1 && pr[uint64(1)].(uint64) != 4 {
+		return "invite/profile"
+	}
+	if h, _ := pr[uint64(3)].(uint64); h == 1 && away {
+		return "invite/profile"
+	}
 	return ""
 }
 
@@ -240,7 +298,7 @@ func checkMessages(dir string) {
 		}
 		return t, ""
 	}
-	count, skipped := 0, 0
+	count := 0
 	for _, t := range f.Take {
 		if got, rule := message(unhex(t.Message)); rule != "" || got != t.T {
 			fail("messages3 %s: %d %s", t.Name, got, rule)
@@ -267,7 +325,7 @@ func checkMessages(dir string) {
 	for _, t := range f.Invitations.Take {
 		b := unhex(t.Invitation)
 		v, err := strict(b)
-		if err != nil || checkTable("invite", v) != "" {
+		if err != nil || checkTable("invite", v) != "" || inviteCross(v) != "" {
 			fail("invitation %s: %v %s", t.Name, err, checkTable("invite", v))
 		}
 		text, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(t.Text, f.Invitations.Prefix))
@@ -276,15 +334,22 @@ func checkMessages(dir string) {
 		}
 		count++
 	}
+	cross := 0
 	for _, r := range f.Invitations.Refuse {
-		if r.Cross != "" {
-			skipped++
-			continue
-		}
 		v, err := strict(unhex(r.Invitation))
 		if err != nil {
 			fail("invitation %s: %v", r.Name, err)
-		} else if rule := checkTable("invite", v); rule != r.Rule {
+			continue
+		}
+		rule := checkTable("invite", v)
+		if rule == "" {
+			rule = inviteCross(v)
+			if r.Cross == "" {
+				fail("invitation %s: refused only by a rule between fields, not marked so", r.Name)
+			}
+			cross++
+		}
+		if rule != r.Rule {
 			fail("invitation %s: %q, want %q", r.Name, rule, r.Rule)
 		}
 		count++
@@ -322,5 +387,5 @@ func checkMessages(dir string) {
 		}
 		count++
 	}
-	fmt.Printf("%-18s %d checked, %d rules between fields left to the implementations\n", "messages3.json", count, skipped)
+	fmt.Printf("%-18s %d checked, %d of them by the invitation's rules between fields\n", "messages3.json", count, cross)
 }

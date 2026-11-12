@@ -17,11 +17,6 @@ pub const TYPE_SERVER: u64 = 2;
 pub const TYPE_HUBS: u64 = 3;
 pub const TYPE_MEMBERS: u64 = 4;
 
-/// A period's field 256, in the optional zone: room for the group's
-/// AmneziaWG settings to change with the period in a later version. No 0.6
-/// writer sets it; a 0.6 reader checks its shape and does not apply it.
-pub const FIELD_OBFUSCATION: u16 = 256;
-
 /// The padded lengths of each list.
 const HUBS_LENGTHS: &[usize] = &[4, 8, 16];
 const ADMINS_LENGTHS: &[usize] = &[4, 8, 16, 32, 64];
@@ -149,11 +144,6 @@ impl Credential {
                     return Err(rule(kind, "key"));
                 }
                 key = Some(k.public.to_vec());
-                if kind == TYPE_PERIOD
-                    && let Some(o) = m.get(FIELD_OBFUSCATION)
-                {
-                    crate::msg::Obfuscation::read(o, "credentials/period/obfuscation")?;
-                }
             }
             TYPE_HUBS => {
                 hubs = hashes(m.get(12).ok_or(rule(kind, "hubs"))?, HUBS_LENGTHS, rule(kind, "hubs"))?;
