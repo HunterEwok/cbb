@@ -375,7 +375,10 @@ impl Keys {
         }
         let trusted = self.trusted.contains(&body.signer);
         let (k, admin) = match (&body.kind, role) {
-            (Kind::Device(Device { admin: Some(a), .. }), Role::Root) if trusted => (a, true),
+            (Kind::Device(d), Role::Root) if trusted => match &d.admin {
+                Some(a) => (a, true),
+                None => return false,
+            },
             (Kind::Recovery { admin }, Role::Root) if trusted => (admin, true),
             (Kind::Claim { root, .. }, Role::Admin) => (root, false),
             _ => return false,
@@ -1195,7 +1198,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         if let Some(i) = ep.settings_record()
             && let Kind::Settings(s) = &ep.r(i).b().kind
         {
-            ep.settings = s.clone();
+            ep.settings = (**s).clone();
         }
         ep.cap_others();
         let others: Vec<KeyHash> = e.by_sig.keys().filter(|k| !ep.on_path.contains_key(*k)).copied().collect();
