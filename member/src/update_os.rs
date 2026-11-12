@@ -401,6 +401,7 @@ mod tests {
         fs::remove_dir_all(&dir).unwrap();
     }
 
+    #[cfg(unix)] // only the Unix install test uses it
     fn tempdir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("cbb-update-os-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
