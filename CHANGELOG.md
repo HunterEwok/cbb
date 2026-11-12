@@ -18,6 +18,20 @@ All notable changes to cbb are documented in this file. The format follows
   signs the paste command with the admin key in the core (`cbb_member_manage` action `paste`).
   The iPhone and Android apps paste on Aurora phones too, which type the text on their
   Bluetooth keyboard's device.
+- Ten themes in every app, each a full set of tokens (faces, corners, lines, material, grid,
+  colours for dark and light) from `apps/design/tokens.json`: Blueprint, the new default,
+  Precise, Glass (the look until now), Soft, Swiss, Hardware, Art Deco, Liquid Glass,
+  Terminal and Retro. They replace the ten accent colours; the default is one field of the
+  tokens. A theme draws only the app's own surfaces, the system's controls stay the
+  system's. The setting is `theme` (it was `color`), and the watches get the theme's name.
+- Chalkboard, the website's look, is an eleventh theme and the default: chalk on slate over
+  felt in the dark, graphite on pale slate over sand-coloured cloth in the light, with walnut
+  lines. Blueprint stays one of the themes.
+- A small mute button in the corner of every device tile on the iPhone, Android, Aurora, the
+  Mac and the tray app: on the device's own tile it turns sync off or on, on another
+  device's an admin mutes it for the group or unmutes it; a long press or a right click
+  picks the time. The tile shows the new state at once and never leaves the list while
+  the command goes out.
 - The apps are tested in all eight languages and for every reader (docs/testing.md, "The
   apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
   Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text
@@ -107,6 +121,11 @@ All notable changes to cbb are documented in this file. The format follows
   Raspberry Pi Zero and as a router, its memory at rest and after 200 copies, its CPU at rest,
   the time a copy takes to arrive and its peak stay under fixed limits, each also a metric for
   `-baseline`.
+- A release carries its build provenance as `provenance.intoto.jsonl`, the same signed
+  attestation GitHub keeps, for checking a release without GitHub's API; `release-sign`
+  leaves it out of `release.json`, as it describes the files and no attestation covers it.
+- CI checks the Android build's `gradle-wrapper.jar` against the checksums of Gradle's own
+  releases (`gradle/actions/wrapper-validation`).
 - The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
   the Go relay's flags, key file, wire format and an open relay's budget with the same limits
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it
@@ -1594,6 +1613,9 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The Mac app's Settings are a sheet on its window, as the tray app's dialog, instead of a
+  window of their own; "Settings…" in the menu bar item and Command-comma open the window
+  with them.
 - A phone joins a group with one button, "Join a group", on the iPhone and Android: it always
   joins as a member, and "Join as an admin" is gone. The root makes it an admin later from the
   phone's device page ("Make it an admin"), on a root phone, in the Mac app and the tray, and
@@ -1628,6 +1650,12 @@ All notable changes to cbb are documented in this file. The format follows
   whose BPF maps fail on small boards, and the installer pairs at once, as on OpenWrt, which
   always runs `cbb` alone. `cbb update` takes the system's archive, `cbb version` no longer
   names a kind of member, and the crate is `cbb-member`.
+- The test bench follows the one archive: the inventory has no `linux-lite` any more, a small
+  board is `os = "linux"` (the example's device `small`), and `peer = true` marks a Linux device
+  in another subnet, which the bench tells the hub's address with `-peer` and which joins at the
+  address `cbb pair` prints. Every Linux device joins as the service's user; I1 runs
+  `get.sh --no-helper`; the hub moves and sync away from home skip only a container and a MIPS
+  build, which has no tunnel; the quick reset keeps the installer's drop-ins.
 - The tunnel's disguise on a hub is now "Strict networks", two switches in the tray, Mac,
   iPhone and Android apps: networks that block VPNs (AmneziaWG) and networks that let only the
   web through (VLESS, which needs the first).
@@ -1678,6 +1706,15 @@ All notable changes to cbb are documented in this file. The format follows
 - From 0.6 on, a device works in one group with devices of the release before it, and an
   update never breaks a group (D-92; docs/design.md, "Versions in one group"). SUPPORT.md says
   what keeps a group working if the maintainer is gone.
+- Admin actions no longer ask for the password every time (D-97). The user confirms them
+  with the system's own prompt, checked by the service: Touch ID or the password on a Mac,
+  polkit on Linux (with the fingerprint where it is set up), Windows Hello on Windows. One
+  confirmation lasts five minutes for the group's everyday changes; making, leaving, taking
+  over or handing on a group, and making a device an admin, ask each time; muting or unmuting
+  the computer itself asks nothing. `cbb` run without `sudo` does the same, and the apps fall
+  back to the administrator's prompt where nothing else confirms. On Android one fingerprint,
+  face or screen lock now lets a new admin key sign for five minutes; the group's root key,
+  and keys made before, keep asking for each signature.
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program
@@ -2221,20 +2258,46 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A hub that started serving in place of one above it ended its first clients' connections
+  a moment later, when it made its key for the next period, and those clients then tried the
+  hub above, which may be off, before it again. The hub makes those keys before it listens,
+  and only a hub that serves reconnects its members for a new offer.
+- In Settings on the iPhone, the theme swatches grow with the text size as their names do,
+  and no theme's name in Hindi reads as clipped to the accessibility checks.
 - The Aurora app renamed and handed the group over to no device, and named no sender of a
   remote paste: its pages read a device's ID from a field the core's list does not have. An
   Aurora phone refuses a paste of pictures or files, which its Bluetooth keyboard cannot type,
   in place of typing the copy's ID.
+- A Rust `cbb` that started looking for its group by mDNS just after another device asked a
+  member for its TXT record could find that member without one, take it for another group's
+  and never dial it. It now asks the members for their records again, a little later each
+  time, until that member's TXT comes.
+- A manifest whose SHA-256 is base64 with bits after its last byte is refused by the Go
+  reader too, as by the Rust core and the kits, so every member reads it alike. The nightly
+  run's unstable tests run against the Rust service with its helper, and cargo fuzz starts
+  a target with no seed from an empty corpus.
 - Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
   Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
   backslash in the same languages on its pairing screen.
 - Builds use Go 1.27.4, which fixes a crash of an HTTP/1 server in the standard library
   (GO-2026-6859), and rustix 1.1.6 (RUSTSEC-2026-0486).
+- The blind relay in Rust keeps the watches of every device it registers: it passed at most 32
+  connections through its tunnel at once, all groups together, so from the 33rd device on the
+  watches ended and the devices registered again and again. It passes up to 8192 now (the
+  `streams` limit).
+- A hub, and the relay, answer every connection a burst of them opens at once: past the four
+  sockets it kept listening, a connection found the port closed and ended at once.
+- A connection through the tunnel to a hub or a relay ends on the far side at once when the
+  local side closes or breaks; the far side held it until its timeout, some 30 seconds.
 - Muting or unmuting a device, and turning sync away from home on or off or making a device a
   hub, no longer drops its connections, so the device no longer vanishes from the others for
   a moment: it tells its peers in a new `presence` message (docs/protocol.md, section 4,
   "Presence"). A device that refuses to let a phone join as an admin, or to admit while its
   admin key is frozen, now says so in its log as well as to the app.
+- The Mac app's Settings fit their width: the language menu, sized to fit with its label,
+  widened every row to some 600 points in a 460-point window and cut the rows' ends off on
+  both sides. A build's long version is one line cut in the middle, whole on hover; the tray
+  app's wraps instead of reaching past its dialog.
 - The tray window in Arabic and Hebrew sets the tiles, rows, menus and a card's values from
   the right, as it does the rest of the window.
 - The Ruby colour in the dark appearance is a shade lighter (#FF6681), so that its badges
@@ -2276,6 +2339,13 @@ All notable changes to cbb are documented in this file. The format follows
   lower device ID: it waited 30 s for them to dial it, which they cannot.
 - The Rust member cleans the reason of a command's result before it shows or passes it on,
   as the Go service did: control characters become spaces and it is cut to 256 bytes.
+- A release's `winget-manifest.zip` has its line in `SHA256SUMS`, which `release-sign verify`
+  and `mirror` ask of every file in `release.json`; it was written after the sums.
+- The copy of amneziawg-go requires only what its packages import, at the versions the root
+  module selects: the module's own `go.mod` named older versions that never reach the build,
+  and scanners that read every `go.mod` (OpenSSF Scorecard) took them for ours. The firmware's
+  OSV-Scanner exceptions sit beside `esp32/Cargo.lock`, where Scorecard's run reads them, and
+  the stale one for block-buffer, which no longer matches, is gone.
 - A member removed from the group while it was still answering the hello of the connection that
   removed it hears that it was removed: when its own writing failed first, as the other end hung
   up, it dropped the records it had already read, and every later connection was refused.

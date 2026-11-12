@@ -503,6 +503,53 @@
     </message>
 </context>
 <context>
+    <name>DeviceTile</name>
+    <message>
+        <source>Mute for 15 minutes</source>
+        <translation>Заглушить на 15 минут</translation>
+    </message>
+    <message>
+        <source>Mute for 8 hours</source>
+        <translation>Заглушить на 8 часов</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Заглушить на час</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>Заглушить до отмены</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>Выключить на 15 минут</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>Выключить на 8 часов</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>Выключить на час</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>Выключить, пока не включу</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>Выключить синхронизацию</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>Включить синхронизацию</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>Включить</translation>
+    </message>
+</context>
+<context>
     <name>Errors</name>
     <message>
         <source>Adding a device needs the admin PIN.</source>

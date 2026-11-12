@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 license = "AGPL-3.0-only"
-description = "The Rust core's entry point as C functions, for Go and the phone apps"
+description = "The Rust core's entry point as C functions, for the phone apps"
 publish = false
 
 [lib]

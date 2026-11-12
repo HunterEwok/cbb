@@ -120,7 +120,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   for the phones: `hub.rs` a hub for several clients and guests, `forward.rs` its registration
   with the forwarder, `relay.rs` the link to the blind relay).
 - `ffi/`: the core's one entry point (`cbb_core::api`, docs/core-api.md) as C functions (`include/cbb_core.h`)
-  for Go and the phone kits (`Core.swift` through the module `CCbbCore`, `Core.kt` through JNA), and with the feature
+  for the phone kits (`Core.swift` through the module `CCbbCore`, `Core.kt` through JNA), and with the feature
   `member` the phones' member (`CoreMember.swift`, `CoreMember.kt`); `bind.sh` builds the iPhone's and Android's
   libraries and the host's for `swift test`, each with the member.
 - `esp32/`: the firmware for the Arduino Nano ESP32 (ESP32-S3), its own workspace, built
@@ -139,7 +139,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 - `apps/macos`: the Mac app (SwiftUI, XcodeGen) over the service's control socket
   (`Control.swift`), admin actions through `cbb` with administrator privileges (`Admin.swift`),
   the Mac's remote paste target (`PasteTarget.swift`: a paste-only watch, Cmd+V or Unicode key
-  events), the iPhone app's `Theme` shared; CI's `Mac app` job.
+  events), the iPhone app's `Theme` shared; CI's `test and build (macOS), homebrew, Mac app`
+  job tests it.
 - `testdata/arrangement`: the vectors of the tiles' order and collections (docs/apps.md), read by `apps/desktop/arrange.go`, the Kotlin kit's `Arrangement.kt` and the Swift kit's `Arrangement.swift`.
 - `apps/desktop`: the tray app for Linux and Windows (Go module of its own, Wails 3 beta,
   GTK 4/WebKitGTK; `desk.go` over `internal/control`, `admin_*.go` run cbb through pkexec or

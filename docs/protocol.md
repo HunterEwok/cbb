@@ -257,7 +257,10 @@ its new device ID as the instance, its listening port in the SRV record and `v=1
 member publishes and browses with the `mdns-sd` crate (`member/src/discovery.rs`), which
 follows the same RFCs but not every detail below: it publishes the PTR, SRV, TXT and A/AAAA
 records of the table (the TXT with `r=listen` when it does not dial), with the addresses of its interfaces except
-loopback. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
+loopback. A member it resolves without a TXT record (its responder sends a record it multicast
+within the last second no more) it neither dials nor drops: it browses again from a second
+daemon, whose first query carries no known answers, after 1.5 s and then every 5 s, doubled up
+to 60 s, until the TXT comes. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
 resolve the members to their addresses and hand those to the member in the Rust core, which
 starts with its own mDNS off; a phone that is the hub publishes its home port the same way
 (`BonjourPublisher`, `NsdPublisher`).
@@ -1212,13 +1215,33 @@ socket's and makes again at each start unless the system, the administrators or 
 it), with mode 0600: only root and the
 service's user (on Windows the system, administrators and the service's account) can
 connect. `CBB_ADMIN_SOCKET` overrides its path for clients. The control socket takes only
-`copy`, `paste`, `copy_media`, `copied_media`, `paste_media`, `config`, `status`, `devices`, `muted`, `sync` without `device`, `release`, `release_get`, `release_held`, `entries`, `entries_get`, `keys` (from root only) and `watch` (with
-the watcher's `copied`, `clipboard`, `injected` and `acted`) and refuses every other operation with an error; the admin socket takes them
-all, and MUST be the only way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
+`copy`, `paste`, `copy_media`, `copied_media`, `paste_media`, `config`, `status`, `devices`, `muted`, `sync` without `device`, `release`, `release_get`, `release_held`, `entries`, `entries_get`, `keys` (from root only), `confirm` and `watch` (with
+the watcher's `copied`, `clipboard`, `injected` and `acted`), and every other operation only once the user at the screen
+confirmed it with the system's prompt, which the service checks itself (below); the admin socket takes them
+all without one, and MUST be the only other way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
 rename, freeze or make admin a device, take over, or change sync away from home. `cbb` dials the socket each operation needs. The lite member does the same
 with its own two sockets, but its control socket takes fewer: no `copy_media`, `copied_media`,
 `paste_media`, `config`, `release`, `release_get`, `entries`, `entries_get` or `keys`, and of the watcher's reports no
 `acted`.
+
+An admin operation on the control socket carries `auth` in its `args` where the system needs
+it, and the service takes it only when the confirmation holds (docs/design.md, "Confirming admin
+actions"): on macOS `auth` is the base64 external form (32 bytes) of the caller's authorization,
+which must hold the right `tools.cbb.admin` for five minutes, or `tools.cbb.admin.each`. One
+confirmation covers the group's everyday changes for five minutes (`sync` of another device,
+`mute`, `unmute`, `rename`, `remove`, `freeze`, `thaw`, `resolve`, `incoming`, `pair`, `join`,
+`invite`, `network`, `away`, `hubs`, `paste_on`, `paste_receive`, `keyboard`, `remote`, the
+quick actions' operations, `release_file`, `release_want` and `update_way`); every other
+operation, such as `new`, `leave`, `take_over`, `recover`, `hand_over`, `key_level`,
+`takeover_delay` and `make_admin`, is confirmed each time, and `confirm_key` only on the admin
+socket. On Linux polkit
+must authorize the calling process for the action of the same name, and `auth` is empty; on
+Windows `auth` is `CHALLENGE.SIGNATURE`, both base64: the RSASSA-PKCS1-v1_5 SHA-256 signature,
+by the user's registered Windows Hello key, of `cbb confirm v1\n`, the operation, `\n` and the
+challenge's 32 bytes. `mute` and `unmute` of the device itself need no `auth`. A refusal says
+`the confirmation was cancelled` when the user cancelled the prompt, and `this computer cannot
+confirm the admin action for this user, so only the administrator may run it` when nothing
+confirms it.
 
 ### Framing
 

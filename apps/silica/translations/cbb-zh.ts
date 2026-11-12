@@ -503,6 +503,53 @@
     </message>
 </context>
 <context>
+    <name>DeviceTile</name>
+    <message>
+        <source>Mute for 15 minutes</source>
+        <translation>静音 15 分钟</translation>
+    </message>
+    <message>
+        <source>Mute for 8 hours</source>
+        <translation>静音 8 小时</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>静音一小时</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>静音直到取消</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>关闭 15 分钟</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>关闭 8 小时</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>关闭 1 小时</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>关闭，直到我打开</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>关闭同步</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>开启同步</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>取消静音</translation>
+    </message>
+</context>
+<context>
     <name>Errors</name>
     <message>
         <source>Adding a device needs the admin PIN.</source>

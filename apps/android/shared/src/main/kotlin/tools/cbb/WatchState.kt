@@ -21,8 +21,8 @@ data class WatchState(
     val sync: Boolean? = null,
     /** The latest events, newest first. */
     val events: List<String> = emptyList(),
-    /** The phone's colour, by its name in Tokens.colors. */
-    val color: String = "terminal",
+    /** The phone's theme, by its name in Tokens.themes. */
+    val theme: String = Tokens.themes.first().name,
     /** Whether the phone shows the error under its messages (its Settings); the watch does as it does. */
     val details: Boolean = false,
     /** The group's tag; null without a group. A watch whose admin key was certified in another group, or whose phone left its group, forgets the key. */
@@ -205,7 +205,7 @@ data class WatchState(
         .put("away", away?.key ?: JSONObject.NULL)
         .put("sync", sync ?: JSONObject.NULL)
         .put("events", JSONArray(events))
-        .put("color", color)
+        .put("theme", theme)
         .put("details", details)
         .put("group", group ?: JSONObject.NULL)
         .toString()
@@ -267,7 +267,7 @@ data class WatchState(
                     away = if (o.isNull("away")) null else Away.of(o.optString("away")),
                     sync = if (!o.has("sync") || o.isNull("sync")) null else o.optBoolean("sync"),
                     events = (0 until es.length()).map { i -> es.getString(i) },
-                    color = o.optString("color", "terminal"),
+                    theme = o.optString("theme", Tokens.themes.first().name),
                     details = o.optBoolean("details"),
                     group = if (o.isNull("group")) null else o.optString("group"),
                 )

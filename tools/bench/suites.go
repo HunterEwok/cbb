@@ -91,7 +91,7 @@ func groupOf(ctx context.Context, d *Device) (string, error) {
 	out, err := Run(ctx, d, cbbCmd(d)+" status", "")
 	if err != nil {
 		var re *RunError
-		// The full member says "Not in a group.", the lite member "in no
+		// The Go service said "Not in a group.", the Rust one says "in no
 		// group"; both exit 1.
 		if errors.As(err, &re) && (strings.Contains(re.Output, "Not in a group") || strings.Contains(re.Output, "in no group")) {
 			return "", nil
@@ -176,16 +176,17 @@ func formGroup(ctx context.Context, r *Report, suite string, devices []*Device) 
 		return nil
 	}
 
-	// mDNS does not cross subnets: a lite member is told where the hub is
-	// for the run, and the service goes back to its own settings after it.
+	// mDNS does not cross subnets: a device in another subnet is told where
+	// the hub is for the run, and the service goes back to its own settings
+	// after it.
 	if hub.Address != "" {
 		for _, d := range devices {
-			if d.OS != "linux-lite" {
+			if !d.Peer || d.OS != "linux" {
 				continue
 			}
-			if r.Do(suite+"/"+d.Name+"/peer", func() error { return litePeer(ctx, d, hub.Address) }) == nil {
+			if r.Do(suite+"/"+d.Name+"/peer", func() error { return peerDropIn(ctx, d, hub.Address) }) == nil {
 				g.undo = append(g.undo, func() {
-					r.Do(suite+"/"+d.Name+"/unpeer", func() error { return litePeer(context.WithoutCancel(ctx), d, "") })
+					r.Do(suite+"/"+d.Name+"/unpeer", func() error { return peerDropIn(context.WithoutCancel(ctx), d, "") })
 				})
 			}
 		}
@@ -215,8 +216,8 @@ func formGroup(ctx context.Context, r *Report, suite string, devices []*Device) 
 				return err
 			}
 			joined = true
-			// cbb pair on the lite member returns a moment before its
-			// service has taken the group.
+			// cbb pair -code returns a moment before the service has
+			// taken the group.
 			return eventually(ctx, 10*time.Second, func() error { return shareClipboard(ctx, d) })
 		}) == nil {
 			g.members = append(g.members, d)
@@ -346,16 +347,18 @@ func describe(s string) string {
 	return fmt.Sprintf("%d bytes starting %q", len(s), firstLine(s))
 }
 
-// liteDropIn is the bench's systemd drop-in for the lite member's service.
-const liteDropIn = "/etc/systemd/system/cbb.service.d/cbbbench.conf"
+// benchDropIn is the bench's systemd drop-in for the service of a device
+// in another subnet; the installer's own drop-ins (small.conf, tpm.conf)
+// sit beside it and stay.
+const benchDropIn = "/etc/systemd/system/cbb.service.d/cbbbench.conf"
 
-// litePeer restarts the lite member's service with -peer addr, or without
-// the bench's drop-in when addr is "".
-func litePeer(ctx context.Context, d *Device, addr string) error {
-	cmd := "sudo -n rm -f " + liteDropIn + " && sudo -n rmdir --ignore-fail-on-non-empty " + path.Dir(liteDropIn)
+// peerDropIn restarts the service with -peer addr, or without the bench's
+// drop-in when addr is "".
+func peerDropIn(ctx context.Context, d *Device, addr string) error {
+	cmd := "sudo -n rm -f " + benchDropIn + " && sudo -n rmdir --ignore-fail-on-non-empty " + path.Dir(benchDropIn)
 	if addr != "" {
 		conf := "[Service]\nExecStart=\nExecStart=/usr/local/bin/cbb service -peer " + addr + "\n"
-		cmd = "sudo -n mkdir -p " + path.Dir(liteDropIn) + " && printf '" + conf + "' | sudo -n tee " + liteDropIn + " >/dev/null"
+		cmd = "sudo -n mkdir -p " + path.Dir(benchDropIn) + " && printf '" + conf + "' | sudo -n tee " + benchDropIn + " >/dev/null"
 	}
 	_, err := Run(ctx, d, cmd+" && sudo -n systemctl daemon-reload && sudo -n systemctl restart cbb", "")
 	return err
@@ -374,8 +377,8 @@ func deviceOf(ctx context.Context, d *Device) (string, error) {
 }
 
 // pairOne admits a device into the hub's group: cbb pair on the hub, and
-// cbb pair -code with its code on the device (as the service's user on the
-// lite member). It returns the code it used.
+// cbb pair -code with its code on the device (on Linux as the service's
+// user). It returns the code it used.
 func pairOne(ctx context.Context, hub, d *Device) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -412,15 +415,15 @@ func pairOne(ctx context.Context, hub, d *Device) (string, error) {
 	}
 	addr := d.addrFor(hub, w.addr)
 	join := adminCmd(d) + " pair -code"
-	if d.OS == "linux-lite" {
-		// The lite member joins as its service's user, which alone may
-		// write its keys (member/README.md); the bench user has sudo.
+	if d.OS == "linux" {
+		// It joins as its service's user, which alone may write its keys
+		// (member/README.md); the bench user has sudo.
 		join = "sudo -n -u cbb " + cbbCmd(d) + " pair -code"
 	}
-	if d.OS == "linux-lite" || addr != "" {
+	if d.Peer || addr != "" {
 		if addr == "" {
 			cancel()
-			return w.code, fmt.Errorf("the lite member joins at an address; set address for %s in the inventory", hub.Name)
+			return w.code, fmt.Errorf("%s joins from another subnet at an address; set address for %s in the inventory", d.Name, hub.Name)
 		}
 		join += " " + addr
 	}
@@ -435,13 +438,13 @@ func pairOne(ctx context.Context, hub, d *Device) (string, error) {
 }
 
 // addrFor returns the address d dials to pair with hub: the hub's address in
-// the inventory, the one cbb pair printed for a lite member (which cannot
-// search), or "" to find it on the network.
+// the inventory, the one cbb pair printed for a device in another subnet
+// (where mDNS does not reach), or "" to find it on the network.
 func (d *Device) addrFor(hub *Device, printed string) string {
 	if hub.Address != "" {
 		return hub.Address
 	}
-	if d.OS == "linux-lite" {
+	if d.Peer {
 		return printed
 	}
 	return ""
@@ -481,10 +484,20 @@ func syncWord(mode string) string {
 // administrator.
 func adminCmd(d *Device) string {
 	switch d.OS {
-	case "linux", "linux-lite", "darwin", "freebsd":
+	case "linux", "darwin", "freebsd":
 		return "sudo -n " + cbbCmd(d)
 	}
 	return cbbCmd(d)
+}
+
+// noTunnel tells whether the device runs a build of cbb without the tunnel
+// (MIPS), which can neither be the hub nor sync away from home.
+func noTunnel(ctx context.Context, d *Device) bool {
+	if d.OS != "linux" && d.OS != "openwrt" {
+		return false
+	}
+	out, err := Run(ctx, d, machineCmd(d), "")
+	return err == nil && strings.Contains(strings.ToLower(out), "mips")
 }
 
 // sudoRefused tells whether a command failed because sudo wanted a

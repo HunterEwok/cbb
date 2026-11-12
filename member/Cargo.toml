@@ -94,8 +94,17 @@ smoltcp = { version = "0.13.1", default-features = false, features = ["std", "me
 # AF_UNIX sockets, the socket's access list, the process's user and the
 # service's control on Windows (src/sys).
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_NetworkManagement_NetManagement", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_RemoteDesktop", "Win32_System_Services", "Win32_System_SystemInformation", "Win32_System_Com", "Win32_System_Console", "Win32_System_Threading", "Win32_System_Time", "Win32_UI_Shell"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_NetworkManagement_NetManagement", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_RemoteDesktop", "Win32_System_Services", "Win32_System_SystemInformation", "Win32_System_Com", "Win32_System_Console", "Win32_System_Registry", "Win32_System_Threading", "Win32_System_Time", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+# Windows Hello, which confirms an admin action (src/confirm.rs).
+windows = { version = "0.62", features = ["Foundation", "Security_Credentials", "Security_Cryptography", "Security_Cryptography_Core", "Storage_Streams"] }
 
 [dev-dependencies]
 # Signs the releases the update tests check.
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "pkcs8"] }
+# The properties of the service's copies: their order, the clock, the rule.
+proptest = { version = "1", default-features = false, features = ["std"] }
+
+# Asks for a TXT record from port 5353 in discovery's tests; mdns-sd already
+# brings it.
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+socket2 = "0.6.5"

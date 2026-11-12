@@ -777,3 +777,7 @@ mod tests {
         assert_eq!(inbox, vec![0, 0]);
     }
 }
+
+#[cfg(test)]
+#[path = "nettest/relay.rs"]
+mod net_tests;
