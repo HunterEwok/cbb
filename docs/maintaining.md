@@ -372,8 +372,8 @@ device would.
   for `systemd-creds encrypt --name=channel-pq.pem - /etc/cbb-channel/channel-pq.cred`, and
   `release-sign` signs with `file:KEY.pem+slh:PQ.pem`; `pq-check -key
   file:KEY.pem+slh:PQ.pem -public KEY-public.pem` proves the pair (for the channel key,
-  with the credential decrypted by `systemd-creds decrypt` into `/dev/shm` and removed
-  after). The channel key's unit, `site/deploy/cbb-channel.service`, is copied to
+  `systemd-creds decrypt --name=channel-pq.pem channel-pq.cred - | release-sign pq-check
+  -key file:channel-key.pem+slh:/dev/stdin ...`, so the decrypted half is never written). The channel key's unit, `site/deploy/cbb-channel.service`, is copied to
   `/etc/systemd/system/` and loaded with `systemctl daemon-reload`; it is a oneshot its
   timer starts, so nothing is restarted, and `systemctl cat cbb-channel.service | grep
   LoadCredentialEncrypted` shows the credential. The status key's timer unit
