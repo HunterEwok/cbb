@@ -1352,7 +1352,7 @@ TABLES = {
         (6, "waiting/request/attempts", "uint 1..255", True),
     ],
     "waiting": [
-        (2, "waiting/requests", "once 1..16 of map waiting/request", True),
+        (2, "waiting/requests", "once 1..48 of map waiting/request", True),
     ],
     "dismiss": [
         (2, "dismiss/invite", "bytes 16", True),
@@ -1457,19 +1457,49 @@ def addr_ok(t):
         return False
 
 
+def public_v4(a):
+    """Not this network, private, shared, loopback, link-local, multicast or reserved."""
+    x, y = a.packed[0], a.packed[1]
+    return not (x == 0 or x == 10 or x == 127 or x >= 224 or (x == 172 and 16 <= y < 32)
+                or (x == 192 and y == 168) or (x == 100 and 64 <= y < 128) or (x == 169 and y == 254))
+
+
+def public_ip(a):
+    """An address a card may name: a public IPv4 address, or an IPv6 address that is not
+    loopback, unspecified, multicast, link-local, site-local or unique-local, nor a refused
+    IPv4 address in a translated, NAT64 or 6to4 form."""
+    import ipaddress
+    if a.version == 4:
+        return public_v4(a)
+    p = a.packed
+    v4 = lambda b: public_v4(ipaddress.IPv4Address(b))
+    first = int.from_bytes(p[:2], "big")
+    if a.is_loopback or a.is_unspecified or a.is_multicast:
+        return False
+    if first & 0xffc0 in (0xfe80, 0xfec0) or first & 0xfe00 == 0xfc00:
+        return False
+    if p[:12] == bytes(8) + b"\xff\xff\x00\x00" and not v4(p[12:]):
+        return False
+    if p[:12] == b"\x00\x64\xff\x9b" + bytes(8) and not v4(p[12:]):
+        return False
+    if first == 0x2002 and not v4(p[2:6]):
+        return False
+    return True
+
+
 def endpoint_ok(t):
     """A card's endpoint: an addr, or a lower-case DNS name whose last label
     is neither all digits nor starts with 0x, with its port."""
     import ipaddress
     if addr_ok(t):
-        a = ipaddress.ip_address(t.rpartition(":")[0].strip("[]"))
-        return not (a.is_loopback or a.is_link_local or a.is_multicast)
+        return public_ip(ipaddress.ip_address(t.rpartition(":")[0].strip("[]")))
     host, sep, port = t.rpartition(":")
     if not sep or not (port.isascii() and port.isdigit() and str(int(port)) == port and 1 <= int(port) <= 65535):
         return False
     labels = host.split(".")
     last = labels[-1]
-    return (0 < len(host) <= 253 and not last.isdigit() and not last.startswith("0x") and last != "localhost"
+    return (0 < len(host) <= 253 and not last.isdigit() and not last.startswith("0x")
+            and last not in ("localhost", "local")
             and all(0 < len(l) <= 63 and not l.startswith("-") and not l.endswith("-")
                     and all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in l) for l in labels))
 
@@ -1656,7 +1686,8 @@ def wave3_vectors(records_take):
     bad("relay online: 65 names", {0: 97, 2: sorted(fake(f"n{i}", 32) for i in range(65))}, "relay/online/names")
     bad("waiting: a request twice", {0: 26, 2: [request, request]}, "waiting/requests")
     bad("waiting: held over a day", {0: 26, 2: [{**request, 5: 86400001}]}, "waiting/requests")
-    bad("waiting: 17 requests", {0: 26, 2: [{**request, 6: i + 1} for i in range(17)]}, "waiting/requests")
+    bad("waiting: 49 requests", {0: 26, 2: [{**request, 6: (i % 255) + 1, 5: i + 1} for i in range(49)]},
+        "waiting/requests")
     bad("result: an endpoint twice in the offer", {0: 10, 2: fake("command id", 16), 3: PHONE.id16, 4: 1,
                                                    6: {**offer, 2: ["203.0.113.5:51820"] * 2}}, "result/tunnel")
     bad("forwarder register: 4 credentials", {0: 81, 2: hub_key, 3: fake("p", 32), 6: [dec(envs[0])] * 4},
@@ -1815,9 +1846,13 @@ def card_vectors():
     for e in ["0192.0.2.7:443", "192.0.2.07:443", "3221225991:443", "0xc0.0.2.7:443", "EXAMPLE.org:443",
               "fwd.example.org:0", "[2001:DB8::1]:443", "[2001:db8:0:0:0:0:0:1]:443", "[::1]:443",
               "127.0.0.1:443", "[fe80::1]:443", "169.254.1.1:443", "[ff02::1]:443", "224.0.0.1:443",
-              "0.0.0.0:443", "localhost:443", "a-.example.org:443"]:
+              "0.0.0.0:443", "localhost:443", "a-.example.org:443", "10.1.2.3:443", "172.16.0.1:443",
+              "192.168.1.1:443", "100.64.0.1:443", "0.1.2.3:443", "240.0.0.1:443", "[::ffff:0:7f00:1]:443",
+              "[64:ff9b::7f00:1]:443", "[2002:7f00:1::1]:443", "[fec0::1]:443", "[fd00::1]:443",
+              "printer.local:443"]:
         no(f"an endpoint {e}", card({11: [e]}), "card/endpoints")
     ok("an endpoint by IPv6 address", card({11: ["fwd.example.org:443", "[2001:db8::7]:443"]}))
+    ok("an endpoint by NAT64 of a public address", card({11: ["[64:ff9b::c000:207]:443", "172.32.0.1:443"]}))
     no("kinds 4", card({13: 4}), "card/kinds")
     no("signed by another key than the operator it names", card(), "sig/verify", by=STRANGER)
     return take, refuse
