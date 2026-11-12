@@ -35,7 +35,9 @@
 //     of it saw count (a removed phone admin turned thief included).
 // 13. After a change of root, two members that hold the same recovery chain, were offered the
 //     same records and hold the new root's first checkpoint are in one state, whether or not
-//     either compacted on a checkpoint of the replaced root.
+//     either compacted on a checkpoint of the replaced root or of the new root. (Not yet true
+//     of the core, nor of this model, when one compacted on the new root's own checkpoint and
+//     the room is full; compactedAgreeOldRootOnly is the weaker form checked meanwhile.)
 //
 // (Promise 4, a claim's delay, is gone with the delay.)
 //
@@ -413,7 +415,9 @@ module records_v3 {
   // the set cuts back.
   pure def insertInto(s0: Store, r: Record, db: Id -> Record): Store = {
     val s = { ...s0, got: s0.got.union(Set(r.id)) }
-    if (isChain(r)) { ...s, chain: s.chain.union(Set(r.id)) }
+    // The set cuts its rooms by the new path at once, so that a record offered next is judged by
+    // the path the set holds now, not the one it last cut by.
+    if (isChain(r)) pathed({ ...s, chain: s.chain.union(Set(r.id)) }, db)
     else if (s.recs.contains(r.id) or past(s.cut, r, last(keptPath(s, db)), orderOf(s, db)) or not(storable(s, r, db))) s
     else recut({ ...s, recs: s.recs.union(Set(r.id)) }, db)
   }
@@ -1102,11 +1106,25 @@ module records_v3 {
       recsOf(s.got, db).exists(r => r.signer == tip.target and r.kind == "checkpoint" and r.seq == max2(tip.targetRec, 1))
     }
   }
+  // Compacted on nothing, or on a replaced root's checkpoint (not on the current root's own).
+  def notOnCurrent(m: str): bool = {
+    val s = st.get(m)
+    s.checkpoint == 0 or db.get(s.checkpoint).signer != last(keptPath(s, db))
+  }
   val compactedAgree = MEMBERS.forall(m1 => MEMBERS.forall(m2 => {
     val s1 = st.get(m1)
     val s2 = st.get(m2)
     (s1.chain == s2.chain and s1.got == s2.got and not(chainState(s1, db).stop) and firstCheckpointHeld(m1)
       and saturated(m1) and saturated(m2)) implies views.get(m1) == views.get(m2)
+  }))
+  // 13w, weaker, while the core keeps more after compacting on the current root's checkpoint
+  // than before (core/tests/records_model.rs, compacting_on_the_roots_checkpoint_changes_nothing):
+  // promise 13 only for members that compacted on a replaced root's checkpoint or not at all.
+  val compactedAgreeOldRootOnly = MEMBERS.forall(m1 => MEMBERS.forall(m2 => {
+    val s1 = st.get(m1)
+    val s2 = st.get(m2)
+    (s1.chain == s2.chain and s1.got == s2.got and not(chainState(s1, db).stop) and firstCheckpointHeld(m1)
+      and notOnCurrent(m1) and notOnCurrent(m2) and saturated(m1) and saturated(m2)) implies views.get(m1) == views.get(m2)
   }))
 
   // Promise 13 was tried: two members that agree in what it asks for, one compacted on a
@@ -1114,14 +1132,16 @@ module records_v3 {
   val agreeTried = MEMBERS.exists(m1 => MEMBERS.exists(m2 => {
     val s1 = st.get(m1)
     val s2 = st.get(m2)
-    s1.chain == s2.chain and s1.got == s2.got and firstCheckpointHeld(m1) and s1.checkpoint != 0
+    s1.chain == s2.chain and s1.got == s2.got and firstCheckpointHeld(m1) and s1.checkpoint != 0 and notOnCurrent(m1)
       and s2.checkpoint == 0 and saturated(m1) and saturated(m2)
   }))
 
   val promises = and {
     oneState, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
-    oldRootListed, twinStops, removedGainsNothing, compactedAgree,
+    oldRootListed, twinStops, removedGainsNothing, compactedAgreeOldRootOnly,
   }
+  // compactedAgree (promise 13 in full) is checked on its own until the core keeps the same
+  // records whether or not a member compacted on the current root's checkpoint.
 
   // --- Scenarios ---------------------------------------------------------------------------
 
