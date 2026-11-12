@@ -256,12 +256,52 @@ pub struct Checked<'a> {
     pub readers: Vec<(DeviceId, u64)>,
 }
 
+/// What checking a copy needs of its origin: its member key, its rights
+/// and whether it is frozen.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Origin<'a> {
+    pub key: &'a rkey::Key,
+    pub rights: u64,
+    pub frozen: bool,
+}
+
+/// Finds a copy's origin by its device ID. The records' state is one; a
+/// leaf, which builds no state, fills an [`OriginMap`] from its grant.
+pub trait Origins {
+    fn origin(&self, id: &DeviceId) -> Option<Origin<'_>>;
+}
+
+impl Origins for State {
+    fn origin(&self, id: &DeviceId) -> Option<Origin<'_>> {
+        self.device(id).map(|d| Origin { key: &d.key, rights: d.rights, frozen: d.frozen })
+    }
+}
+
+/// The origins a leaf knows, by device ID (the first 16 bytes of the key's
+/// hash).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OriginMap(BTreeMap<DeviceId, (rkey::Key, u64, bool)>);
+
+impl OriginMap {
+    /// Adds a device by its member key, with its rights and whether it is
+    /// frozen.
+    pub fn insert(&mut self, key: rkey::Key, rights: u64, frozen: bool) {
+        self.0.insert(key.device_id(), (key, rights, frozen));
+    }
+}
+
+impl Origins for OriginMap {
+    fn origin(&self, id: &DeviceId) -> Option<Origin<'_>> {
+        self.0.get(id).map(|(key, rights, frozen)| Origin { key, rights: *rights, frozen: *frozen })
+    }
+}
+
 /// Checks a copy as every member does before it passes it on, a hub that
-/// does not read included: the format's rows, the origin a device of the
-/// state that may send, and the signature by that device's member key. A
-/// copy from a device the state does not name is [`RULE_ORIGIN`]: it waits
+/// does not read included: the format's rows, the origin a device the
+/// origins name that may send, and the signature by that device's member
+/// key. A copy from a device they do not name is [`RULE_ORIGIN`]: it waits
 /// for the records.
-pub fn check<'a>(v: &Value<'a>, state: &State) -> Result<Checked<'a>, Rule> {
+pub fn check<'a>(v: &Value<'a>, origins: &dyn Origins) -> Result<Checked<'a>, Rule> {
     let copy = Copy::from_value(v)?;
     let h = &copy.header;
     let bytes = |f| h.get(f).and_then(Value::as_bytes);
@@ -287,7 +327,7 @@ pub fn check<'a>(v: &Value<'a>, state: &State) -> Result<Checked<'a>, Rule> {
             _ => None,
         })
         .collect();
-    let d = state.device(&origin).ok_or(RULE_ORIGIN)?;
+    let d = origins.origin(&origin).ok_or(RULE_ORIGIN)?;
     if d.rights & RIGHT_SEND == 0 || d.frozen {
         return Err(RULE_SEND);
     }

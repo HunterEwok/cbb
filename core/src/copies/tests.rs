@@ -633,3 +633,28 @@ fn a_default_secret_gets_a_quarter_of_the_groups_lifetime() {
     let plain = Content::text("hi", false);
     assert_eq!(fresh::Seen::of(&c, &plain, 60_000).ttl_ms, None);
 }
+
+/// A leaf checks a copy against the origins its grant names, with no
+/// state, and reaches the state's verdicts.
+#[test]
+fn a_leaf_checks_a_copy_by_the_origins_it_knows() {
+    let w = World::new();
+    let state = w.g.state();
+    let content = Content::text("kettle on", false);
+    let rs = readers(&state, &w.sealing(), &content, &w.id("phone"), &[], None);
+    let copy = seal(&w.phone, &rs, &made(1), &content).unwrap();
+    let v = cbor::decode(&copy).unwrap();
+    let mut known = OriginMap::default();
+    assert_eq!(check(&v, &known).err(), Some(RULE_ORIGIN));
+    known.insert(w.phone.key.clone(), RIGHT_READ, false);
+    assert_eq!(check(&v, &known).err(), Some(RULE_SEND));
+    known.insert(w.phone.key.clone(), RIGHT_SEND, true);
+    assert_eq!(check(&v, &known).err(), Some(RULE_SEND));
+    known.insert(w.phone.key.clone(), RIGHT_READ | RIGHT_SEND, false);
+    let (a, b) = (check(&v, &known).unwrap(), check(&v, &state).unwrap());
+    assert_eq!((a.id, a.origin, a.time, a.readers), (b.id, b.origin, b.time, b.readers));
+    // Another device's key under the phone's ID is not the phone.
+    let mut wrong = OriginMap::default();
+    wrong.insert(w.laptop.key.clone(), RIGHT_SEND, false);
+    assert_eq!(check(&v, &wrong).err(), Some(RULE_ORIGIN));
+}
