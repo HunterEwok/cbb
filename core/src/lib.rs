@@ -62,6 +62,8 @@ pub mod format;
 #[allow(clippy::expect_used, clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
 pub mod fuzzing;
 pub mod group;
+#[cfg(any(test, feature = "testkit"))]
+pub mod groupgen;
 pub mod hlc;
 pub mod hubkey;
 pub mod identity;

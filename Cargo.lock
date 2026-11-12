@@ -188,6 +188,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "base64 0.23.1",
+ "cbb-core",
  "chacha20 0.10.2",
  "chacha20poly1305 0.11.0",
  "crypto-bigint",

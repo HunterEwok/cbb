@@ -11,6 +11,11 @@ All notable changes to cbb are documented in this file. The format follows
   every vector must match it, `gen.py` must write the same bytes and the Go reader must take
   them; once the format is declared frozen, a listed vector changes only in a commit that
   counts a format break, at most one before 1.0 (`tools/formatfreeze`).
+- A generator of groups of records v3 from a fixed seed (`cbb_core::groupgen`, feature
+  `testkit`): about 5, 100 and 1000 records, and a group at the format's ceilings (the set's
+  4096 units filled, 256 devices, the root and the admins at their ceilings, two takeovers,
+  checkpoints with gaps). `core/tests/ceilings.rs` measures the evaluation and a member's set
+  on them, in time and in peak memory, against a budget.
 - The apps are tested in all eight languages and for every reader (docs/testing.md, "The
   apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
   Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text
