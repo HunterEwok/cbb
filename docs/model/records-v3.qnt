@@ -3,7 +3,7 @@
 //
 // A model of the record rules of 0.6 (records v3), in Quint (https://quint-lang.org). It is
 // written from the rules as the owner settled them (the design of records v3, its section 7,
-// decisions 1 to 20), not from the code's structure, so that it can disagree with the code. It
+// decisions 1 to 22), not from the code's structure, so that it can disagree with the code. It
 // lets the simulator try many ways a few devices can sign, sync, wait, compact and drop
 // records, checking eight promises:
 //
@@ -26,7 +26,9 @@
 //  7. A takeover a member counted is never undone, whatever any key signs later: the claims
 //     it counted are a list in the order counted, kept apart from the set and never dropped,
 //     and the i-th one's new root stays the path's root after the i-th (decisions 17 and 20).
-//     A later claim is taken only under the last root, by a key fit for it.
+//     A later claim is taken only under the last root, by a key fit for it. A counted claim
+//     is checked once, when counted, and what proves it is pinned with it (decision 22); a set
+//     keeps by the roots and cuts its counted claims name.
 //  8. The path of roots never grows shorter on a member.
 //
 // Who is in it: the group's first root R; a phone admin A (it may take the group over and
@@ -173,11 +175,6 @@ module records_v3 {
   // removals out.
   pure val EARLY_BEFORE_CHECKPOINTS = true
 
-  // An open question, one switch: whether a counted claim is checked again against the records
-  // a member keeps (false: the record that gave the claimant takeover must still be kept, so
-  // when other keys' records push the cut root's records out, the takeover is undone and
-  // promise 7 breaks), or only when it is counted (true).
-  pure val COUNTED_CHECKED_ONCE = false
   pure val NONE = 10000000
   // A record's ID as the hash orders it: not the order it was signed in.
   pure def hid(i: Id): int = (i * 7) % 23
@@ -244,21 +241,31 @@ module records_v3 {
   // checkpoints, so that a full root can still checkpoint, and any root's removals, freezes
   // and resolves, so that a full set never drops one while it keeps a record of that root
   // (decision 15). Which of the two comes first is open (EARLY_BEFORE_CHECKPOINTS).
-  pure def pos(r: Record, cur: Key, roots: Set[Key]): int = {
+  // A key's order of keeping. A root a takeover cut keeps, within the cut, what the counting
+  // checkpoint names first, then its line from the head the claim saw downward, never a part in
+  // the middle (decision 22); other keys as before.
+  type Order = { roots: Set[Key], cuts: Key -> List[Id], anchors: Set[Id] }
+  pure def pos(r: Record, cur: Key, ord: Order): int = {
     val cp = r.signer == cur and r.kind == "checkpoint"
-    val early = roots.contains(r.signer) and (r.kind == "revoke" or r.kind == "freeze" or r.kind == "resolve")
-    if (cp) (if (EARLY_BEFORE_CHECKPOINTS) 10000 else 0) + r.seq * 100 + hid(r.id)
+    val early = ord.roots.contains(r.signer) and (r.kind == "revoke" or r.kind == "freeze" or r.kind == "resolve")
+    if (r.signer != cur and ord.cuts.keys().contains(r.signer)) {
+      val l = ord.cuts.get(r.signer)
+      if (ord.anchors.contains(r.id)) r.seq * 100 + hid(r.id)
+      else if (l.indices().exists(i => l[i] == r.id)) 10000 + (l.length() - r.seq) * 100 + hid(r.id)
+      else 200000 + r.seq * 100 + hid(r.id)
+    }
+    else if (cp) (if (EARLY_BEFORE_CHECKPOINTS) 10000 else 0) + r.seq * 100 + hid(r.id)
     else if (early) (if (EARLY_BEFORE_CHECKPOINTS) 0 else 10000) + r.seq * 100 + hid(r.id)
     else 100000 + r.seq * 100 + hid(r.id)
   }
-  pure def minPos(rs: Set[Record], cur: Key, roots: Set[Key]): int = rs.fold(NONE, (m, r) => min2(m, pos(r, cur, roots)))
+  pure def minPos(rs: Set[Record], cur: Key, ord: Order): int = rs.fold(NONE, (m, r) => min2(m, pos(r, cur, ord)))
   // The units of a key's records up to r, r included.
-  pure def prefix(rs: Set[Record], r: Record, cur: Key, roots: Set[Key]): int =
-    sumUnits(rs.filter(x => pos(x, cur, roots) <= pos(r, cur, roots)))
+  pure def prefix(rs: Set[Record], r: Record, cur: Key, ord: Order): int =
+    sumUnits(rs.filter(x => pos(x, cur, ord) <= pos(r, cur, ord)))
 
-  pure def past(cut: Cut, r: Record, cur: Key, roots: Set[Key]): bool =
-    (cut.marks.keys().contains(r.signer) and pos(r, cur, roots) >= cut.marks.get(r.signer)._1)
-      or (cut.future.keys().contains(r.signer) and pos(r, cur, roots) >= cut.future.get(r.signer))
+  pure def past(cut: Cut, r: Record, cur: Key, ord: Order): bool =
+    (cut.marks.keys().contains(r.signer) and pos(r, cur, ord) >= cut.marks.get(r.signer)._1)
+      or (cut.future.keys().contains(r.signer) and pos(r, cur, ord) >= cut.future.get(r.signer))
 
   pure def dropped(cut: Cut, k: Key): int = if (cut.marks.keys().contains(k)) cut.marks.get(k)._2 else 0
   pure def demand(owned: Set[Record], ceil: Key -> int, cut: Cut, s: int): int =
@@ -268,34 +275,34 @@ module records_v3 {
   // What a set keeps of items, having dropped before what cut remembers: water-filling to one
   // level for every key with room (ceil), each key's records in its order; a root that only
   // kept claims name keeps what they paid ahead.
-  pure def keepAfter(items: Set[Record], ceil: Key -> int, cut: Cut, cur: Key, roots: Set[Key], pins: Set[Key]): (Set[Id], Cut) = {
-    val live = items.filter(r => not(past(cut, r, cur, roots)))
+  pure def keepAfter(items: Set[Record], ceil: Key -> int, cut: Cut, cur: Key, ord: Order, pins: Set[Key]): (Set[Id], Cut) = {
+    val live = items.filter(r => not(past(cut, r, cur, ord)))
     val owned = live.filter(r => ceil.keys().contains(r.signer))
     val claimed = live.filter(r => not(ceil.keys().contains(r.signer)))
     val top = min2(cut.level, TOP)
     val level =
       if (demand(owned, ceil, cut, top) <= ROOM) top
       else 0.to(top).filter(s => demand(owned, ceil, cut, s) <= ROOM).fold(0, (m, s) => max2(m, s))
-    val keptOwned = owned.filter(r => prefix(ofKey(owned, r.signer), r, cur, roots) <= min2(level, ceil.get(r.signer)))
+    val keptOwned = owned.filter(r => prefix(ofKey(owned, r.signer), r, cur, ord) <= min2(level, ceil.get(r.signer)))
     val out = owned.exclude(keptOwned)
     val markKeys = cut.marks.keys().union(out.map(r => r.signer))
     val marks = markKeys.mapBy(k => {
       val o = ofKey(out, k)
       if (o == Set()) cut.marks.get(k)
       else if (cut.marks.keys().contains(k))
-        (min2(minPos(o, cur, roots), cut.marks.get(k)._1), sumUnits(o) + cut.marks.get(k)._2)
-      else (minPos(o, cur, roots), sumUnits(o))
+        (min2(minPos(o, cur, ord), cut.marks.get(k)._1), sumUnits(o) + cut.marks.get(k)._2)
+      else (minPos(o, cur, ord), sumUnits(o))
     })
     val named = keptOwned.filter(r => r.kind == "claim").map(r => r.target).union(pins)
     val inFuture = claimed.filter(r => named.contains(r.signer))
-    val keptFuture = inFuture.filter(r => prefix(ofKey(inFuture, r.signer), r, cur, roots) <= FUTURE)
+    val keptFuture = inFuture.filter(r => prefix(ofKey(inFuture, r.signer), r, cur, ord) <= FUTURE)
     val over = inFuture.exclude(keptFuture)
     val futureKeys = cut.future.keys().union(over.map(r => r.signer))
     val future = futureKeys.mapBy(h => {
       val o = ofKey(over, h)
       if (o == Set()) cut.future.get(h)
-      else if (cut.future.keys().contains(h)) min2(minPos(o, cur, roots), cut.future.get(h))
-      else minPos(o, cur, roots)
+      else if (cut.future.keys().contains(h)) min2(minPos(o, cur, ord), cut.future.get(h))
+      else minPos(o, cur, ord)
     })
     (idsOf(keptOwned).union(idsOf(keptFuture)), { level: level, marks: marks, future: future })
   }
@@ -338,6 +345,8 @@ module records_v3 {
       val k = if (i == 0) ROOT else s.counted[i - 1].target
       if (m.keys().contains(k)) m else m.put(k, s.counted[i].cut)
     })
+  pure def orderOf(s: Store, db: Id -> Record): Order =
+    { roots: rootsOf(keptPath(s)), cuts: keptCuts(s), anchors: storeAnchors(s, db) }
   pure def countedIds(s: Store): Set[Id] = s.counted.indices().map(i => s.counted[i].id)
   pure def countedRoots(s: Store): Set[Key] = s.counted.indices().map(i => s.counted[i].target)
   pure def storeAnchors(s: Store, db: Id -> Record): Set[Id] = if (s.checkpoint == 0) Set() else anchorsOf(db.get(s.checkpoint))
@@ -350,8 +359,8 @@ module records_v3 {
     val cuts = keptCuts(s)
     val admins = learned(recsOf(s.got, db), path, cuts)
     val pinned = items.filter(r => countedIds(s).contains(r.id))
-    val res = keepAfter(items.exclude(pinned), ceilings(path, admins), cut, last(path), rootsOf(path), countedRoots(s))
     val anchors = storeAnchors(s, db)
+    val res = keepAfter(items.exclude(pinned), ceilings(path, admins), cut, last(path), orderOf(s, db), countedRoots(s))
     val k0 = res._1.union(idsOf(pinned))
     val k1 = k0.filter(i => withinIn(cuts, db.get(i), k0, anchors))
     val k2 = k1.filter(i => withinIn(cuts, db.get(i), k1, anchors))
@@ -369,7 +378,7 @@ module records_v3 {
   pure def insertInto(s0: Store, r: Record, db: Id -> Record): Store = {
     val s = { ...s0, got: s0.got.union(Set(r.id)) }
     val pinned = countedIds(s).contains(r.id)
-    if (s.recs.contains(r.id) or (past(s.cut, r, last(keptPath(s)), rootsOf(keptPath(s))) and not(pinned)) or not(storable(s, r, db))) s
+    if (s.recs.contains(r.id) or (past(s.cut, r, last(keptPath(s)), orderOf(s, db)) and not(pinned)) or not(storable(s, r, db))) s
     else recut({ ...s, recs: s.recs.union(Set(r.id)) }, db)
   }
 
@@ -596,14 +605,9 @@ module records_v3 {
     val cur = last(path)
     val ids = idsOf(rs)
     if (d < counted.length() and path.length() < MAXPATH) {
+      // Checked once, when counted (decision 22): what proves it is pinned with it.
       val e = counted[d]
-      val mayTake = rs.exists(r => onList(path, r.signer) and withinIn(cuts, r, ids, anchors) and r.target == e.signer
-        and ((r.kind == "admin" and r.kit == "phone") or r.kind == "recovery"))
-      val fit = e.target != e.signer and not(onList(path, e.target)) and e.cut.length() > 0
-        and not(rs.exists(r => (r.kind == "device" or r.kind == "admin") and withPair(r.target).contains(e.target)))
-      if ((COUNTED_CHECKED_ONCE or mayTake) and fit)
-        { view: { ...NOVIEW, path: path, claims: Map(e.id -> "effective"), counting: Set(e.id) }, next: e.target, cut: e.cut }
-      else epoch(rs, held, path, cuts, anchors)
+      { view: { ...NOVIEW, path: path, claims: Map(e.id -> "effective"), counting: Set(e.id) }, next: e.target, cut: e.cut }
     } else epoch(rs, held, path, cuts, anchors)
   }
 
@@ -1355,9 +1359,9 @@ module records_v3 {
       .then(tickAt("c"))
       .then(tickAt("c"))
       .expect(views.get("c").path == [ROOT, "NK"] and claimState("c", 5) == "effective" and promises)
-  // After a takeover counts, other keys fill the room and push out the old root's records,
-  // the record that gave the claimant takeover with them. Whether the takeover stays depends
-  // on the open question COUNTED_CHECKED_ONCE: checked again, it is undone.
+  // After a takeover counts, other keys fill the room and push out the old root's records: it
+  // keeps them from the head the claim saw downward, and the takeover stays, since a counted
+  // claim is checked once, when counted (decision 22).
   run fullRoomAfterTakeoverTest =
     init
       .then(signAs(RECOVERY, "claim", "NK", 0))
@@ -1375,6 +1379,6 @@ module records_v3 {
       .then(sign("NK", "copies", "", "", 0, false, false, 2))
       .then(give("m", 6)).then(give("m", 7)).then(give("m", 8)).then(give("m", 9))
       .then(give("m", 10)).then(give("m", 11)).then(give("m", 12)).then(give("m", 13))
-      .expect(not(st.get("m").recs.contains(4))
-        and views.get("m").path == (if (COUNTED_CHECKED_ONCE) [ROOT, "NK"] else [ROOT]))
+      .expect(st.get("m").recs.contains(4) and not(st.get("m").recs.contains(1))
+        and views.get("m").path == [ROOT, "NK"] and promises)
 }
