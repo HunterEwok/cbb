@@ -748,7 +748,7 @@ impl Rec<'_> {
         match &self.b().kind {
             Kind::Claim { seen, .. } => body::seen_entry(seen, k),
             Kind::Revoke(r) | Kind::Freeze(r) => body::seen_entry(&r.seen, k),
-            Kind::Thaw { seen, .. } => body::seen_entry(seen, k),
+            Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } => body::seen_entry(seen, k),
             _ => None,
         }
     }
@@ -2130,8 +2130,9 @@ impl<'e, 'a> Epoch<'e, 'a> {
 
     /// The record of a type, one a root or an admin signs, that counts for
     /// the state: a root's beats an admin's, then the later root on the
-    /// path and the higher seq; of two admins', the smaller signer, then
-    /// the higher seq (no clock decides, rule 7).
+    /// path and the higher seq; of one admin's, the higher seq; of two
+    /// admins', the one that saw the other, and when both or neither did,
+    /// the smaller ID (no clock decides, rule 7).
     fn best(&self, want: impl Fn(&Kind) -> bool) -> Option<usize> {
         let mut best: Option<usize> = None;
         for i in self.all() {
@@ -2158,10 +2159,14 @@ impl<'e, 'a> Epoch<'e, 'a> {
             return self.newer(a, b);
         }
         let (ba, bb) = (self.r(a).b(), self.r(b).b());
-        if ba.signer != bb.signer {
-            return ba.signer < bb.signer;
+        if ba.signer == bb.signer {
+            return ba.seq > bb.seq;
         }
-        ba.seq > bb.seq
+        match (self.e.saw(a, b), self.e.saw(b, a)) {
+            (true, false) => true,
+            (false, true) => false,
+            _ => self.r(a).id < self.r(b).id,
+        }
     }
 
     /// The counting records of a device that are not revoked.

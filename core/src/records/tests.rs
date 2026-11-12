@@ -1280,6 +1280,8 @@ fn who_may_command() {
 }
 
 /// A huge time field changes no order and no result: time is for display.
+/// (b's records see a's, so the ID, which the time changes, decides
+/// nothing either.)
 #[test]
 fn a_huge_time_changes_nothing() {
     let build = |time: u64| {
@@ -1296,6 +1298,12 @@ fn a_huge_time_changes_nothing() {
             (&a, Kind::Copies { incoming_ms: 5_000, seen: vec![] }),
             (&b, Kind::Copies { incoming_ms: 3_600_000, seen: vec![] }),
         ] {
+            let saw = g.seen();
+            let kind = match kind {
+                Kind::Hubs { hubs, .. } if by.hash == b.hash => Kind::Hubs { hubs, seen: saw },
+                Kind::Copies { incoming_ms, .. } if by.hash == b.hash => Kind::Copies { incoming_ms, seen: saw },
+                kind => kind,
+            };
             let mut body = g.body(by, kind);
             if by.hash == b.hash {
                 body.time_ms = time;
@@ -2627,4 +2635,35 @@ fn a_thaw_brings_back_only_what_it_lists() {
     };
     both(false);
     both(true);
+}
+
+/// Of two admins' hubs or copies records, the one that saw the other
+/// counts; when neither saw the other, the smaller ID.
+#[test]
+fn of_two_admins_settings_the_one_that_saw_the_other_counts() {
+    let (pa, a, pb, b) = (k("phone a"), k("admin a"), k("phone b"), k("admin b"));
+    // The later author is the one with the larger key hash, so the
+    // signer's order would pick the other.
+    let (first, later) = if a.hash < b.hash { (&a, &b) } else { (&b, &a) };
+    let build = |later_saw: bool| {
+        let mut g = G::new();
+        g.admin(&pa, &a, POWER_HUB);
+        g.admin(&pb, &b, POWER_HUB);
+        g.device(&k("root"), &k("hub"), "hub", |d| d.rights |= RIGHT_HUB);
+        g.device(&k("root"), &k("hub2"), "hub2", |d| d.rights |= RIGHT_HUB);
+        let (h1, h2) = (k("hub").key.device_id(), k("hub2").key.device_id());
+        let before = g.seen();
+        let r1 = g.rec(first, Kind::Hubs { hubs: vec![h1], seen: before.clone() });
+        let c1 = g.rec(first, Kind::Copies { incoming_ms: 5_000, seen: before.clone() });
+        let saw = if later_saw { g.seen() } else { before };
+        let r2 = g.rec(later, Kind::Hubs { hubs: vec![h2], seen: saw.clone() });
+        let c2 = g.rec(later, Kind::Copies { incoming_ms: 7_000, seen: saw });
+        (g.state(), [(r1, h1, c1), (r2, h2, c2)])
+    };
+    let (s, [_, (_, h2, _)]) = build(true);
+    assert_eq!(s.hubs, vec![h2]);
+    assert_eq!(s.incoming_ms, Some(7_000));
+    let (s, [(r1, h1, c1), (r2, h2, c2)]) = build(false);
+    assert_eq!(s.hubs, vec![if r1.id() < r2.id() { h1 } else { h2 }]);
+    assert_eq!(s.incoming_ms, Some(if c1.id() < c2.id() { 5_000 } else { 7_000 }));
 }
