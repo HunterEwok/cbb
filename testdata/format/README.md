@@ -20,3 +20,14 @@ Three readers check them:
 - `gen.py`'s own strict reader, as it writes them.
 
 Field-level refusals (`records/…`, `form/default`) are for the readers of each kind.
+
+## The freeze
+
+`FROZEN` lists every vector with its SHA-256, the state (`draft` until the owner declares the
+freeze, then `frozen`) and the format breaks counted since. `go run ./tools/formatfreeze
+-write` writes it again; CI's `format` job runs `formatfreeze -check -since BASE`, `gen.py`
+into a scratch directory (it must write the same bytes) and the Go reader, on every pull
+request. Once frozen, a vector may be added, but a listed one changes only in a commit that
+counts a break (`formatfreeze -write -break REASON`), and before 1.0 the count stops at one:
+a second break means changing `tools/formatfreeze` itself. The freeze is declared with
+`formatfreeze -write -freeze`.

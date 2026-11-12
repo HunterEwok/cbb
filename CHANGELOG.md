@@ -7,6 +7,10 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The 0.6 format's vectors have a manifest (`testdata/format/FROZEN`) and CI's `format` job:
+  every vector must match it, `gen.py` must write the same bytes and the Go reader must take
+  them; once the format is declared frozen, a listed vector changes only in a commit that
+  counts a format break, at most one before 1.0 (`tools/formatfreeze`).
 - The forwarder refuses the groups their operator lists after an abuse report:
   `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again
   within ten seconds of a change; a listed group is refused at registration and its devices

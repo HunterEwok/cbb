@@ -2875,10 +2875,50 @@ jobs:
           $quint test --backend=typescript docs/model/claims.qnt
           $quint run --backend=typescript --invariant=promises --max-steps=12 --max-samples=20000 docs/model/claims.qnt
 
+  format:
+    name: the frozen format (testdata/format)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Every commit after the base, each checked against its parent.
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: the vectors match the manifest, and no commit changes a frozen one without counting a break
+        # tools/formatfreeze: once the owner declares the freeze, a listed vector changes only
+        # with a counted break, at most one before 1.0. Runs on every pull request, whatever
+        # it changes, so that no path around it exists.
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$BASE" ]; then
+            go run ./tools/formatfreeze -check -since "$BASE"
+          else
+            go run ./tools/formatfreeze -check
+          fi
+      - name: gen.py writes the same bytes again
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q python3-cryptography
+          out="$RUNNER_TEMP/format"
+          mkdir -p "$out"
+          python3 -I testdata/format/gen.py "$out"
+          for f in testdata/format/*.json; do
+            cmp "$f" "$out/$(basename "$f")" || { echo "gen.py writes $f differently"; exit 1; }
+          done
+      - name: the second reader, in Go (testdata/format/check)
+        # The Rust core reads the same vectors in the rust job (format::, msg::).
+        working-directory: testdata/format/check
+        run: go run . ..
+
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model, format]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
