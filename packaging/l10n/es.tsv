@@ -167,6 +167,7 @@ a key is not P-256	una clave no es P-256
 %s is not signed by the project's key; not installing	%s no está firmado con la clave del proyecto; no se instala
 keys.json holds a key whose use is empty; not installing	keys.json contiene una clave con uso vacío; no se instala
 checking for administrator rights	comprobando los derechos de administrador
+making a private folder for the download	creando una carpeta privada para la descarga
 run it in a PowerShell opened with "Run as administrator"	ejecútelo en un PowerShell abierto con "Ejecutar como administrador"
 finding the architecture	buscando la arquitectura
 finding the latest release	buscando la última versión

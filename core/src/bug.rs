@@ -219,10 +219,11 @@ fn redact_word(w: &str) -> Option<String> {
         return Some(p.to_string());
     }
     // A name in `key=value`: a network's, a host's, a device's or a user's.
-    if let Some((key, value)) = w.split_once('=') {
-        if !value.is_empty() && NAME_KEYS.contains(&key.to_ascii_lowercase().as_str()) {
-            return Some(alloc::format!("{key}=<name>"));
-        }
+    if let Some((key, value)) = w.split_once('=')
+        && !value.is_empty()
+        && NAME_KEYS.contains(&key.to_ascii_lowercase().as_str())
+    {
+        return Some(alloc::format!("{key}=<name>"));
     }
     // An address or a host name inside a word: `peer=...`, a URL.
     if !w.contains(PART_SPLIT) {
@@ -784,7 +785,10 @@ mod tests {
             ("host dimas-macbook-pro.local answered", "dimas-macbook-pro"),
             ("host=nas.lan:445 down", "nas.lan"),
             ("ssid=HomeNet-5G joined", "HomeNet-5G"),
-            ("from мой пароль от банка 4276 1234", "пароль"),
+            (
+                "from \u{43c}\u{43e}\u{439} \u{43f}\u{430}\u{440}\u{43e}\u{43b}\u{44c} \u{43e}\u{442} \u{431}\u{430}\u{43d}\u{43a}\u{430} 4276 1234",
+                "\u{43f}\u{430}\u{440}\u{43e}\u{43b}\u{44c}",
+            ),
             ("office pc dialed", "office pc"),
             ("OFFICE PC dialed", "OFFICE PC"),
             ("office-pc.local answered", "office-pc"),

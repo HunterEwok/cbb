@@ -410,7 +410,8 @@ elif [ "$attestation" = require ]; then
 else
 	say "Not checked: the archive's build attestation (it needs gh, signed in). SHA256SUMS matched."
 fi
-tar -xzf "$tmp/$archive" -C "$tmp"
+# -o: the files are root's, not those of the uid that packed them.
+tar -xzof "$tmp/$archive" -C "$tmp"
 
 if [ "$os" = darwin ]; then
 	# shellcheck disable=SC2086 # $port, $cgnat and $auto are words or none

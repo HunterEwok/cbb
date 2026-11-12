@@ -450,9 +450,14 @@ every pull request and installs and removes the package from it. Setting it up, 
 - [ ] In the environment **release**: `CBB_OPENWRT_FEED_KEY`, the contents of
   `feed.pem`. Keep a copy offline; a new key means every router fetches the new public key.
 
-For each release, unpack `openwrt-feed.tar.gz` into the site's `openwrt/` directory on
-cbb.tools (routers read `https://cbb.tools/openwrt/<arch>/packages.adb`). Without the
-secret the release still succeeds and warns that there is no feed.
+For each release, once it is signed and published, unpack `openwrt-feed.tar.gz` into the
+site's `openwrt/` directory on cbb.tools (routers read
+`https://cbb.tools/openwrt/<arch>/packages.adb`). The feed's key is in CI, so a feed counts
+only as a file of a release the offline release key signed: take it from the published
+release, check that release with `release-sign verify` (under the pinned roots, with the
+branch `channel`'s `keys.json` and `stable.json`, as `published.yml` does), and unpack only
+the `openwrt-feed.tar.gz` it checked; never one from a draft. Without the secret the release
+still succeeds and warns that there is no feed.
 
 ## The ZX Spectrum Next's files
 

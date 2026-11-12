@@ -167,6 +167,7 @@ a key is not P-256	某个密钥不是 P-256
 %s is not signed by the project's key; not installing	%s 未由项目密钥签名；不安装
 keys.json holds a key whose use is empty; not installing	keys.json 中有用途为空的密钥；不安装
 checking for administrator rights	检查管理员权限
+making a private folder for the download	正在为下载创建私有文件夹
 run it in a PowerShell opened with "Run as administrator"	请在以“以管理员身份运行”打开的 PowerShell 中运行
 finding the architecture	确定架构
 finding the latest release	查找最新版本

@@ -188,6 +188,31 @@
 	# for the latest release ($named), stable.json against its release or
 	# channel keys, and the archive against release.json. CBB_VERIFY=skip
 	# skips it.
+	# A new folder only SYSTEM and the Administrators may change or read,
+	# made with that access list, in Windows' own temporary folder, where a
+	# user may make folders but not remove an administrator's: what an
+	# elevated get.ps1 checks and then runs stays what it checked. The
+	# user's %TEMP% is open to every program the user runs.
+	function New-PrivateFolder {
+		$parent = Join-Path $env:SystemRoot 'Temp'
+		$path = Join-Path $parent ('cbb-' + [Guid]::NewGuid())
+		$acl = New-Object Security.AccessControl.DirectorySecurity
+		$acl.SetAccessRuleProtection($true, $false)
+		$admins = New-Object Security.Principal.SecurityIdentifier 'S-1-5-32-544'
+		foreach ($sid in @('S-1-5-18', 'S-1-5-32-544')) {
+			$rule = New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier $sid),
+				'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+			$acl.AddAccessRule($rule)
+		}
+		$acl.SetOwner($admins)
+		if ($PSVersionTable.PSEdition -eq 'Core') {
+			[IO.FileSystemAclExtensions]::Create((New-Object IO.DirectoryInfo $path), $acl) | Out-Null
+		} else {
+			[IO.Directory]::CreateDirectory($path, $acl) | Out-Null
+		}
+		return $path
+	}
+
 	function Test-Release($base, $version, $named, $archive, $got, $tmp) {
 		if ($env:CBB_VERIFY -eq 'skip') {
 			Write-Host (T 'Not checked: the release''s signature (CBB_VERIFY=skip).')
@@ -267,8 +292,8 @@
 			throw (T 'CBB_VERSION must look like v1.2.3')
 		}
 		$archive = "cbb-windows-$arch.zip"
-		$tmp = Join-Path ([IO.Path]::GetTempPath()) ("cbb-" + [Guid]::NewGuid())
-		New-Item -ItemType Directory -Path $tmp | Out-Null
+		$step = T 'making a private folder for the download'
+		$tmp = New-PrivateFolder
 		try {
 			# The latest release is the one stable.json names, checked below,
 			# rather than GitHub's latest: the two differ for a few minutes

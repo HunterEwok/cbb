@@ -70,6 +70,23 @@ struct Kept {
     seen: Seen,
 }
 
+/// The revocations of a kept list under roots at now_ms, and why it is not
+/// current when it is not: a list that checked out when it was signed
+/// still counts once it has run out, since no list would revoke nothing.
+fn kept_revocations(k: &Kept, roots: &[&[u8]], now_ms: i64) -> Option<(Vec<String>, Option<String>)> {
+    match release::check_status(&k.keys, &k.status, roots, now_ms, &Seen::default()) {
+        Ok((st, _)) => Some((st.android_revoked, None)),
+        Err(e) => {
+            let at = serde_json::from_slice::<Value>(&k.status.body)
+                .ok()
+                .and_then(|v| v.get("time_ms").and_then(Value::as_i64))
+                .filter(|&t| t > 0 && t <= now_ms)?;
+            let (st, _) = release::check_status(&k.keys, &k.status, roots, at, &Seen::default()).ok()?;
+            Some((st.android_revoked, Some(e.message().to_string())))
+        }
+    }
+}
+
 #[derive(Deserialize)]
 struct Secret {
     #[serde(with = "b64::opt", default)]
@@ -267,16 +284,22 @@ impl Attestations {
     }
 
     /// Takes the list kept in the state directory, when it still checks
-    /// out: it is checked again from scratch, as the one seen last.
+    /// out: it is checked again from scratch, as the one seen last. A list
+    /// that has run out still counts, as at its signing, until a newer one
+    /// comes: a restart while the mirror cannot be reached drops no
+    /// revocation.
     fn load_status(&self) {
         let Ok(data) = std::fs::read(self.dir.join(STATUS_FILE)) else { return };
         let Ok(k) = serde_json::from_slice::<Kept>(&data) else { return };
         let roots = crate::update::release_roots();
         let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
-        if let Ok((st, _)) =
-            release::check_status(&k.keys, &k.status, &roots, crate::update::now_ms(), &Seen::default())
-        {
-            *self.revoked.lock().unwrap() = st.android_revoked;
+        if let Some((revoked, stale)) = kept_revocations(&k, &roots, crate::update::now_ms()) {
+            if let Some(why) = stale {
+                eprintln!(
+                    "cbb: the kept revocation list of Android attestations is not current ({why}); it counts until a newer one comes"
+                );
+            }
+            *self.revoked.lock().unwrap() = revoked;
         }
     }
 
@@ -362,7 +385,56 @@ impl Attestations {
 mod tests {
     use std::sync::atomic::AtomicBool;
 
-    use super::Opening;
+    use super::{Kept, Opening, kept_revocations};
+    use cbb_core::release::{File, Seen};
+    use p256::ecdsa::signature::Signer;
+    use p256::ecdsa::{Signature, SigningKey};
+    use p256::pkcs8::EncodePublicKey;
+    use sha2::{Digest, Sha256};
+
+    fn spki(k: &SigningKey) -> Vec<u8> {
+        k.verifying_key().to_public_key_der().unwrap().as_bytes().to_vec()
+    }
+
+    fn sign(body: serde_json::Value, k: &SigningKey) -> File {
+        let body = serde_json::to_vec(&body).unwrap();
+        let sig: Signature = k.sign(&body);
+        File { body, sig: sig.to_der().as_bytes().to_vec(), key: Sha256::digest(spki(k)).to_vec() }
+    }
+
+    /// A kept list counts after it ran out, as at its signing, so a restart
+    /// without the mirror drops no revocation; one that never checked out
+    /// counts not at all.
+    #[test]
+    fn an_old_list_still_revokes() {
+        use base64::Engine as _;
+        let b64 = |d: &[u8]| base64::engine::general_purpose::STANDARD.encode(d);
+        let (root, status) = (SigningKey::from_slice(&[1; 32]).unwrap(), SigningKey::from_slice(&[2; 32]).unwrap());
+        let at: i64 = 1_800_000_000_000;
+        let day = 86_400_000;
+        let keys = sign(
+            serde_json::json!({"v": 1, "type": "keys", "seq": 1, "time_ms": at, "expires_ms": at + 90 * day,
+                "keys": [{"key": b64(&spki(&status)), "name": "status", "use": "status"}]}),
+            &root,
+        );
+        let list = sign(
+            serde_json::json!({"v": 1, "type": "attest-status", "seq": 1, "time_ms": at, "expires_ms": at + 7 * day,
+                "android_revoked": ["1f", "2a"]}),
+            &status,
+        );
+        let k = Kept { keys, status: list, seen: Seen::default() };
+        let r = spki(&root);
+        let roots: Vec<&[u8]> = vec![&r];
+        let (now, stale) = kept_revocations(&k, &roots, at + day).unwrap();
+        assert_eq!(now, ["1f", "2a"]);
+        assert!(stale.is_none());
+        let (later, stale) = kept_revocations(&k, &roots, at + 30 * day).unwrap();
+        assert_eq!(later, ["1f", "2a"]);
+        assert!(stale.is_some());
+        // Not under other roots.
+        let other = spki(&status);
+        assert!(kept_revocations(&k, &[&other], at + day).is_none());
+    }
 
     /// The TPM opens one credential at a time: a second waits for none,
     /// and the next starts once the first ends.

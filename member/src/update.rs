@@ -118,10 +118,10 @@ pub fn work_dir(dir: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::{DirBuilderExt, MetadataExt};
-        if let Some(parent) = dir.parent().filter(|p| !p.as_os_str().is_empty()) {
-            if fs::symlink_metadata(parent).is_err() {
-                fs::create_dir_all(parent).context(format!("cannot make {}", parent.display()))?;
-            }
+        if let Some(parent) = dir.parent().filter(|p| !p.as_os_str().is_empty())
+            && fs::symlink_metadata(parent).is_err()
+        {
+            fs::create_dir_all(parent).context(format!("cannot make {}", parent.display()))?;
         }
         let make = || fs::DirBuilder::new().mode(0o700).create(dir);
         match make() {
@@ -278,7 +278,13 @@ fn fetch_via(url: &str, path: &Path, max: u64, resolve: Option<&str>, time: Dura
     curl.push(url);
     let mut tools: Vec<(&str, Vec<&str>)> = vec![("curl", curl)];
     if resolve.is_none() {
-        tools.push(("wget", vec!["-q", "-U", "cbb", "-O", "-", url]));
+        // GNU wget can be told https only, also after a redirect; BusyBox's
+        // and uclient-fetch cannot. What they fetch is signed either way.
+        let mut wget = vec!["-q", "-U", "cbb", "-O", "-", url];
+        if wget_https_only() {
+            wget.insert(0, "--https-only");
+        }
+        tools.push(("wget", wget));
         tools.push(("uclient-fetch", vec!["-q", "-O", "-", url]));
     }
     for (tool, args) in tools {
@@ -330,6 +336,16 @@ const FETCH_TIME: Duration = Duration::from_secs(30 * 60);
 
 /// Copies what child writes to path, at most max bytes, and stops it when
 /// it writes more or takes longer than FETCH_TIME.
+/// Whether this system's wget knows --https-only (GNU wget 1.17 and later).
+fn wget_https_only() -> bool {
+    Command::new("wget")
+        .arg("--help")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("--https-only"))
+}
+
 fn fetch_with(tool: &str, url: &str, mut child: std::process::Child, path: &Path, max: u64) -> Result<()> {
     use std::io::Read;
     let mut out = child.stdout.take().expect("piped");
@@ -717,18 +733,43 @@ pub fn wait_healthy(status: &dyn Fn() -> Result<String>, version: &str, within: 
 /// The release roots: those of the PEM file CBB_RELEASE_ROOTS names, for
 /// tests, else the pinned ones.
 pub fn release_roots() -> Vec<Vec<u8>> {
-    if let Some(f) = std::env::var_os("CBB_RELEASE_ROOTS")
-        && let Ok(r) = read_roots(Path::new(&f))
-    {
-        return r;
+    if let Some(f) = std::env::var_os("CBB_RELEASE_ROOTS") {
+        match read_roots(Path::new(&f)) {
+            Ok(r) => {
+                static SAID: std::sync::Once = std::sync::Once::new();
+                SAID.call_once(|| {
+                    eprintln!(
+                        "cbb: the release roots are those of {} (CBB_RELEASE_ROOTS), not the pinned ones: for tests only",
+                        Path::new(&f).display()
+                    )
+                });
+                return r;
+            }
+            Err(e) => eprintln!("cbb: CBB_RELEASE_ROOTS is not used: {}", e.message()),
+        }
     }
     ROOTS.iter().map(|r| r.to_vec()).collect()
 }
 
 /// Reads the public keys of a PEM file, for tests (CBB_RELEASE_ROOTS).
+/// The file must be this user's or root's and closed to others' writing, as
+/// it replaces the keys every release is checked against.
 pub fn read_roots(path: &Path) -> Result<Vec<Vec<u8>>> {
     #[derive(Deserialize)]
     struct Der(#[serde(with = "cbb_core::certs::b64")] Vec<u8>);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let m = fs::metadata(path).context(format!("cannot read {}", path.display()))?;
+        // SAFETY: geteuid has no preconditions.
+        let me = unsafe { libc::geteuid() };
+        if (m.uid() != me && m.uid() != 0) || m.mode() & 0o022 != 0 {
+            return Err(Error::msg(format!(
+                "{} may be changed by another user than this one or root; it is not used",
+                path.display()
+            )));
+        }
+    }
     let text = fs::read_to_string(path).context(format!("cannot read {}", path.display()))?;
     let mut roots = Vec::new();
     let mut body: Option<String> = None;
@@ -1305,6 +1346,13 @@ mod tests {
         assert_eq!(read_roots(&dir.join("r.pem")).unwrap(), vec![der]);
         fs::write(dir.join("e.pem"), "nothing").unwrap();
         assert!(read_roots(&dir.join("e.pem")).is_err());
+        // Not a file others may write to.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(dir.join("r.pem"), fs::Permissions::from_mode(0o666)).unwrap();
+            assert!(read_roots(&dir.join("r.pem")).is_err());
+        }
     }
 
     #[cfg(unix)]

@@ -144,10 +144,11 @@ impl Receiver {
         let oldest = bug::day(now_ms.saturating_sub(KEEP_DAYS.saturating_mul(86_400_000)));
         for e in std::fs::read_dir(&self.dir).into_iter().flatten().flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
-            if day_folder(&name) && name < oldest {
-                if let Err(err) = std::fs::remove_dir_all(e.path()) {
-                    eprintln!("cbb-bug: cannot remove the old reports in {}: {err}", e.path().display());
-                }
+            if day_folder(&name)
+                && name < oldest
+                && let Err(err) = std::fs::remove_dir_all(e.path())
+            {
+                eprintln!("cbb-bug: cannot remove the old reports in {}: {err}", e.path().display());
             }
         }
         let total = bytes(&self.dir);

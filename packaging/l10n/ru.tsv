@@ -167,6 +167,7 @@ a key is not P-256	ключ не P-256
 %s is not signed by the project's key; not installing	%s не подписан ключом проекта; установка отменена
 keys.json holds a key whose use is empty; not installing	в keys.json ключ с пустым назначением; установка отменена
 checking for administrator rights	проверка прав администратора
+making a private folder for the download	создание закрытой папки для загрузки
 run it in a PowerShell opened with "Run as administrator"	запустите в PowerShell, открытом через «Запуск от имени администратора»
 finding the architecture	определение архитектуры
 finding the latest release	поиск последнего выпуска
