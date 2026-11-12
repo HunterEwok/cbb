@@ -836,11 +836,33 @@ impl World {
             let name = format!("sim{}/root{}", self.seed, self.changes);
             let (recovery, new_root) = (k(&self.recovery_name), k(&name));
             let now = self.now(w);
-            let written =
-                match self.members[w].live.set.write_change(&st, &recovery, &new_root, device, &remove, false, now) {
-                    Ok(x) => x,
-                    Err(e) => return Err(format!("m{w} could not write a change of root: {e:?}")),
-                };
+            // The heads of changes the writer holds, and those its state
+            // does not apply (waiting for a list, unreadable or void): an
+            // honest writer refuses over those and never writes a second
+            // head at a seq it holds one for.
+            let set = &self.members[w].live.set;
+            let chain = st.chain();
+            let held: Vec<(u64, RecordId)> = set
+                .ids()
+                .filter_map(|id| set.get(id))
+                .filter(|r| matches!(r.body().kind, Kind::Recovery { .. }))
+                .map(|r| (r.body().seq, r.id()))
+                .collect();
+            let unapplied = held.iter().any(|(_, id)| !chain.contains(id));
+            let written = match set.write_change(&st, &recovery, &new_root, device, &remove, false, now) {
+                Ok(x) => x,
+                Err(_) if unapplied => {
+                    self.note(format!("m{w} refuses a change over a change it does not apply"));
+                    continue;
+                }
+                Err(e) => return Err(format!("m{w} could not write a change of root: {e:?}")),
+            };
+            if let Some((s, _)) = held.iter().find(|(s, _)| *s == written.record.body().seq) {
+                return Err(format!("m{w} wrote a second change at seq {s}, where it holds one"));
+            }
+            if unapplied {
+                return Err(format!("m{w} wrote a change over a change it does not apply"));
+            }
             // Any two changes at one seq are a fork, whether written at
             // once on purpose or by members that did not know each other's.
             let (seq, id) = (written.record.body().seq, written.record.id());
