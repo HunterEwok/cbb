@@ -5,7 +5,7 @@
 //! the limits, claims and the stop, held records, the keys statement, and
 //! one state for one set in any order.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
 use p256::ecdsa::SigningKey;
@@ -110,7 +110,7 @@ impl G {
 }
 
 fn state_of(root: &Key, recs: &[Record], held: &BTreeMap<RecordId, u64>) -> State {
-    evaluate(&Input { root, records: recs, held_ms: held })
+    evaluate(&Input { root, records: recs, held_ms: held, counted: &BTreeSet::new() })
 }
 
 fn removal(keys: &[KeyHash], seen: Vec<Seen>) -> Removal {
@@ -1779,4 +1779,122 @@ fn a_record_counts_the_same_in_every_envelope() {
     assert_eq!(m1.len(), m2.len());
     assert_eq!(m1.digest(), m2.digest());
     assert_eq!(m1.state(&BTreeMap::new()), m2.state(&BTreeMap::new()));
+}
+
+/// A group whose admin A took it over to the new root N, which then
+/// recorded its phone and removed the device "gone".
+fn taken_over_group() -> (G, BTreeMap<RecordId, u64>, Record) {
+    let mut g = G::new();
+    let all = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_REMOVE_ADMINS | POWER_FREEZE | POWER_TAKEOVER;
+    let (pa, a, pt, t, n) = (k("phone a"), k("admin a"), k("phone t"), k("admin t"), k("new root"));
+    g.admin(&pa, &a, all);
+    g.admin(&pt, &t, all);
+    g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    g.device(&k("root"), &k("gone"), "gone", |_| {});
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    g.device(&n, &k("new phone"), "new phone", |d| d.holds_root = true);
+    let seen = g.seen();
+    g.rec(&n, Kind::Revoke(removal(&[k("gone").hash], seen)));
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let s = state_of(&g.root.key, &g.recs, &held);
+    assert_eq!(s.roots, vec![g.root.hash, n.hash]);
+    assert!(s.revoked.contains(&k("gone").hash) && !s.owner_split);
+    (g, held, claim)
+}
+
+fn counted_state(g: &G, held: &BTreeMap<RecordId, u64>, counted: &[RecordId]) -> State {
+    let counted: BTreeSet<RecordId> = counted.iter().copied().collect();
+    evaluate(&Input { root: &g.root.key, records: &g.recs, held_ms: held, counted: &counted })
+}
+
+/// A takeover the device counted stays: the old root's later resolve of
+/// the claim does not count there. A device that had not counted it yet
+/// takes the resolve as a cancel, as before.
+#[test]
+fn a_counted_takeover_is_final_on_the_device() {
+    let (mut g, held, claim) = taken_over_group();
+    let n = k("new root");
+    let late = g.root_rec(Kind::Resolve(vec![claim.id()]));
+    let s = counted_state(&g, &held, &[claim.id()]);
+    assert_eq!(s.roots, vec![g.root.hash, n.hash]);
+    assert!(!s.counting.contains(&late.id()));
+    assert!(s.revoked.contains(&k("gone").hash));
+    assert_eq!(s.claims.iter().find(|c| c.record == claim.id()).map(|c| c.state), Some(ClaimState::Effective));
+    assert!(s.owner_split);
+    // Not counted yet: the resolve cancels it.
+    let s = counted_state(&g, &held, &[]);
+    assert_eq!(s.roots, vec![g.root.hash]);
+    assert_eq!(s.claims.iter().find(|c| c.record == claim.id()).map(|c| c.state), Some(ClaimState::Cancelled));
+    assert!(!s.owner_split);
+    // A set remembers what it counted when it compacts, and keeps it.
+    let mut set = RecordSet::new(g.root.key.clone());
+    set.insert_all(g.recs[..g.recs.len() - 1].iter().cloned());
+    let st = set.state(&held);
+    set.compact(&st);
+    assert!(set.counted().contains(&claim.id()));
+    assert_eq!(set.insert(late.clone()), Ok(Added::Stored));
+    let st = set.state(&held);
+    assert_eq!(st.roots, vec![g.root.hash, n.hash]);
+    assert!(st.owner_split);
+    set.compact(&st);
+    assert_eq!(set.state(&held).roots.len(), 2);
+    // A set that got the resolve before it counted takes the cancel.
+    let mut first = RecordSet::new(g.root.key.clone());
+    first.insert_all(g.recs.iter().cloned());
+    let st = first.state(&held);
+    first.compact(&st);
+    assert!(first.counted().is_empty());
+    assert_eq!(first.state(&held).roots, vec![g.root.hash]);
+}
+
+/// Under a counted takeover, a later claim of the old root's epoch is left
+/// out: no competing claims, no stop, and the new root's removal of its
+/// signer still counts.
+#[test]
+fn a_later_claim_does_not_rival_a_counted_takeover() {
+    let (mut g, held, claim) = taken_over_group();
+    let (t, n) = (k("admin t"), k("new root"));
+    let seen = g.seen();
+    let t_removed = g.rec(&n, Kind::Revoke(removal(&[t.hash, k("phone t").hash], seen)));
+    let seen = vec![Seen { key: g.root.hash, seq: 1 }];
+    let rival = g.rec(&t, Kind::Claim { root: k("other root").key.clone(), seen });
+    let mut held2 = held.clone();
+    held2.insert(rival.id(), DEFAULT_DELAY_MS);
+    let s = counted_state(&g, &held2, &[claim.id()]);
+    assert_eq!(s.roots, vec![g.root.hash, n.hash]);
+    assert_eq!(s.stop, Stop::None);
+    assert!(s.claims.iter().all(|c| c.state != ClaimState::Competing));
+    assert!(s.counting.contains(&t_removed.id()) && s.revoked.contains(&t.hash));
+    assert!(s.device(&k("gone").key.device_id()).is_none());
+    assert!(s.owner_split);
+    // Not counted: the two claims compete, as before.
+    let s = counted_state(&g, &held2, &[]);
+    assert_eq!(s.stop, Stop::Full);
+    assert_eq!(s.roots, vec![g.root.hash]);
+}
+
+/// The same records and the same counted claims give one state in any
+/// order of arrival.
+#[test]
+fn counted_claims_give_one_state_in_any_order() {
+    let (mut g, held, claim) = taken_over_group();
+    let late = g.root_rec(Kind::Resolve(vec![claim.id()]));
+    let seen = vec![Seen { key: g.root.hash, seq: 1 }];
+    g.rec(&k("admin t"), Kind::Claim { root: k("other root").key.clone(), seen });
+    let mut want = None;
+    for turn in 0..6u64 {
+        let mut recs = g.recs.clone();
+        // A fixed shuffle per turn.
+        recs.sort_by_key(|r| sha256(&[r.id().0.as_slice(), &turn.to_be_bytes()].concat()));
+        let mut set = RecordSet::new(g.root.key.clone());
+        set.remember_counted([claim.id()]);
+        set.insert_all(recs);
+        let st = set.state(&held);
+        assert!(!st.counting.contains(&late.id()));
+        match &want {
+            None => want = Some(st),
+            Some(w) => assert_eq!(&st, w),
+        }
+    }
 }

@@ -22,8 +22,8 @@
 //! 4. The sealing key is in the device's own keys statement (`statement`).
 //! 5. Unknown critical fields hold a record (kept, passed on, not applied);
 //!    `min_rules` in the settings stops older devices from secrets.
-//! 6. The kept set and the state depend on the set alone, never on the
-//!    order it came in; its ceilings are the format's, with no working
+//! 6. The kept set and the state depend on the set and the claims the
+//!    device counted alone, never on the order they came in; its ceilings are the format's, with no working
 //!    limits under them. A claim pays ahead for its root's first records,
 //!    which have no room of their own.
 //! 7. No rule reads a clock: the takeover delay is the time the device
@@ -39,6 +39,10 @@
 //!     does; a live root cancels the claim within the delay instead.
 //! 11. A device's member key and its admin key go together: a removal or
 //!     freeze that names one names both.
+//! 12. A takeover the device has counted is final there: its old root's
+//!     records above the claim's cut do not count, nor does a later claim
+//!     of that root's epoch rival it. When the device holds a record that
+//!     would have undone it, the state says so (`owner_split`).
 //!
 //! The bytes are the format's (`crate::format`): a record is read from its
 //! envelope with [`Record::decode`] and written with [`Record::envelope`].

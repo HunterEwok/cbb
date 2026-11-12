@@ -8,7 +8,7 @@
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
-use super::eval::{self, Checked, Keys, Role, State, Why};
+use super::eval::{self, Checked, ClaimState, Keys, Role, State, Why};
 use super::key::{Key, KeyHash, RecordId};
 use super::{Kind, Record, Rule, keep};
 
@@ -53,6 +53,8 @@ pub struct RecordSet {
     /// The roots after the first that the member's evaluation put on the
     /// path (`compact`): they have a root's room.
     promoted: BTreeSet<KeyHash>,
+    /// The claims the member has counted: final here (`Input::counted`).
+    counted: BTreeSet<RecordId>,
     records: BTreeMap<RecordId, Entry>,
     bytes: usize,
 }
@@ -67,6 +69,7 @@ impl RecordSet {
             units: BTreeMap::new(),
             cut: keep::Cut::default(),
             promoted: BTreeSet::new(),
+            counted: BTreeSet::new(),
             records: BTreeMap::new(),
             bytes: 0,
         }
@@ -264,7 +267,20 @@ impl RecordSet {
     /// The group's state. held_ms is how long the device has held each
     /// claim (rule 7).
     pub fn state(&self, held_ms: &BTreeMap<RecordId, u64>) -> State {
-        eval::evaluate_checked(&self.root, self.checked(), BTreeMap::new(), held_ms, &self.promoted)
+        eval::evaluate_checked(&self.root, self.checked(), BTreeMap::new(), held_ms, &self.counted, &self.promoted)
+    }
+
+    /// The claims the member has counted, which its caller keeps across
+    /// restarts and hands a joiner with the claims' ages.
+    pub fn counted(&self) -> &BTreeSet<RecordId> {
+        &self.counted
+    }
+
+    /// Takes claims as counted: those the caller kept from before a
+    /// restart, or those its admitter counted. A counted claim stays
+    /// counted.
+    pub fn remember_counted(&mut self, ids: impl IntoIterator<Item = RecordId>) {
+        self.counted.extend(ids);
     }
 
     /// Drops what the counting checkpoint of state leaves out: a root's
@@ -276,6 +292,7 @@ impl RecordSet {
     /// in sync. A member where the takeover does not count yet keeps only
     /// 16 units of the new root's records until it does.
     pub fn compact(&mut self, state: &State) -> usize {
+        self.counted.extend(state.claims.iter().filter(|c| c.state == ClaimState::Effective).map(|c| c.record));
         let promoted: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
         if promoted != self.promoted {
             self.promoted = promoted;

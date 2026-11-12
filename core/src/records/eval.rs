@@ -35,6 +35,10 @@ pub struct Input<'a> {
     /// it counted while running, kept across restarts by the caller. A
     /// claim missing here has been held for no time (rule 7).
     pub held_ms: &'a BTreeMap<RecordId, u64>,
+    /// The claims this device has counted, by record ID, kept across
+    /// restarts by the caller (`RecordSet::counted`): such a claim is
+    /// final here, whatever records come later.
+    pub counted: &'a BTreeSet<RecordId>,
 }
 
 /// Why a record of the set does not count.
@@ -204,6 +208,10 @@ pub struct State {
     /// Every device ID a kept device record names, counting or not, a
     /// removed device's included: a new device never takes one.
     pub named: BTreeSet<DeviceId>,
+    /// This device counted a takeover that records it now holds would
+    /// have cancelled, disputed or rivalled: it and the group may
+    /// disagree about the owner, and the app asks to join again.
+    pub owner_split: bool,
 }
 
 impl State {
@@ -460,12 +468,12 @@ pub(crate) fn ceiling_of(
 pub fn evaluate(input: &Input) -> State {
     let (checked, failed) = check_all(input.root, input.records);
     let none = BTreeSet::new();
-    let first = evaluate_checked(input.root, checked.clone(), failed.clone(), input.held_ms, &none);
+    let first = evaluate_checked(input.root, checked.clone(), failed.clone(), input.held_ms, input.counted, &none);
     let promoted: BTreeSet<KeyHash> = first.roots.iter().skip(1).copied().collect();
     if promoted.is_empty() {
         return first;
     }
-    evaluate_checked(input.root, checked, failed, input.held_ms, &promoted)
+    evaluate_checked(input.root, checked, failed, input.held_ms, input.counted, &promoted)
 }
 
 pub(crate) fn evaluate_checked(
@@ -473,6 +481,7 @@ pub(crate) fn evaluate_checked(
     checked: Vec<Checked<'_>>,
     failed: BTreeMap<RecordId, Why>,
     held_ms: &BTreeMap<RecordId, u64>,
+    counted: &BTreeSet<RecordId>,
     promoted: &BTreeSet<KeyHash>,
 ) -> State {
     let group_root = root.hash();
@@ -487,7 +496,7 @@ pub(crate) fn evaluate_checked(
         let anchors = anchors_of(heads, keep);
         let pruned: Vec<Checked> = checked.iter().copied().filter(|c| !pruned_by(c.r, heads, &anchors)).collect();
         let e = Evaluation::new(root, pruned, failed.clone(), anchors, promoted);
-        let ep = e.run(held_ms);
+        let ep = e.run(held_ms, counted);
         let Some(i) = e.recs.iter().position(|r| r.id == id) else { continue };
         if !ep.root_record(i) {
             continue;
@@ -505,7 +514,7 @@ pub(crate) fn evaluate_checked(
     }
     let mut state = match best {
         Some((_, state)) => state,
-        None => full.run(held_ms).finish(),
+        None => full.run(held_ms, counted).finish(),
     };
     state.group = DeviceId::of(&group_root);
     state
@@ -713,25 +722,96 @@ impl<'a> Evaluation<'a> {
 
     /// Turns the evaluation into its last epoch, with the claims of the
     /// roots before the current one.
-    fn run(&self, held_ms: &BTreeMap<RecordId, u64>) -> Epoch<'_, 'a> {
+    ///
+    /// A claim the device has counted is final: under its root, that
+    /// root's records above the claim's cut do not count, the claim takes
+    /// effect without being decided again, and other claims of that epoch
+    /// are left out.
+    fn run(&self, held_ms: &BTreeMap<RecordId, u64>, counted: &BTreeSet<RecordId>) -> Epoch<'_, 'a> {
         let mut path = vec![self.group_root];
         let mut cuts = BTreeMap::new();
         let mut earlier = Vec::new();
+        let mut split = false;
         loop {
+            let cur = *path.last().unwrap_or(&KeyHash::default());
+            let step = match self.counted_claim(&path, counted) {
+                Some(c) => {
+                    let cut = self.recs[c].seen_of(&cur);
+                    // What the records alone would decide, to know whether
+                    // they now dispute what the device counted.
+                    let mut plain = Epoch::new(self, path.clone(), cuts.clone());
+                    let decided = plain.decide_claims(held_ms);
+                    let id = self.recs[c].id;
+                    let root = self.recs[c].claim().map(|(k, _)| k.hash());
+                    split |= plain.claims.iter().any(|cl| {
+                        cl.record == id
+                            && matches!(
+                                cl.state,
+                                ClaimState::Cancelled | ClaimState::Competing | ClaimState::Disputed | ClaimState::Void
+                            )
+                    }) || decided.is_some_and(|(next, _)| Some(next) != root);
+                    cuts.insert(cur, cut);
+                    let mut ep = Epoch::new(self, path.clone(), cuts.clone());
+                    let step = ep.decide_counted(c);
+                    earlier.append(&mut ep.claims);
+                    match step {
+                        Some(next) => Some(next),
+                        None => {
+                            cuts.remove(&cur);
+                            None
+                        }
+                    }
+                }
+                None => None,
+            };
+            if let Some(next) = step {
+                path.push(next);
+                continue;
+            }
             let mut ep = Epoch::new(self, path.clone(), cuts.clone());
             match ep.decide_claims(held_ms) {
                 Some((next, cut)) => {
                     earlier.append(&mut ep.claims);
-                    cuts.insert(*path.last().unwrap_or(&KeyHash::default()), cut);
+                    cuts.insert(cur, cut);
                     path.push(next);
                 }
                 None => {
                     earlier.append(&mut ep.claims);
                     ep.claims = earlier;
+                    ep.split = split;
                     return ep;
                 }
             }
         }
+    }
+
+    /// The claim the device counted under the last root of path: an
+    /// admin's claim it counted that saw that root, whose root is not on
+    /// the path yet, and that saw no other such claim; of several, the
+    /// smallest ID.
+    fn counted_claim(&self, path: &[KeyHash], counted: &BTreeSet<RecordId>) -> Option<usize> {
+        if counted.is_empty() || path.len() >= MAX_PATH {
+            return None;
+        }
+        let cur = *path.last()?;
+        let cands: Vec<usize> = (0..self.recs.len())
+            .filter(|&i| {
+                let r = &self.recs[i];
+                r.admin()
+                    && counted.contains(&r.id)
+                    && r.seen_of(&cur) > 0
+                    && r.claim().is_some_and(|(k, _)| !path.contains(&k.hash()))
+            })
+            .collect();
+        cands
+            .iter()
+            .copied()
+            .filter(|&c| {
+                !cands.iter().any(|&o| {
+                    o != c && self.recs[c].seen_of(&self.recs[o].b().signer) >= self.recs[o].b().seq
+                })
+            })
+            .min_by_key(|&c| self.recs[c].id)
     }
 }
 
@@ -774,6 +854,8 @@ struct Epoch<'e, 'a> {
     stop_full: bool,
     pending: Option<KeyHash>,
     settings: Settings,
+    /// The device counted a claim that the records alone now dispute.
+    split: bool,
 }
 
 #[allow(clippy::indexing_slicing, reason = "positions come from the records' own Vec")]
@@ -805,6 +887,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             stop_full: false,
             pending: None,
             settings: Settings::default(),
+            split: false,
         };
         // Roots on the path first: their ceilings do not depend on the
         // settings, which are a root's record.
@@ -1554,6 +1637,20 @@ impl<'e, 'a> Epoch<'e, 'a> {
 
     /// Looks at the claims under the current root and returns the next
     /// root and the current root's cut when one takes effect.
+    /// Takes claim c, which the device counted, as in effect; the other
+    /// claims of this epoch are left out. None when the claim cannot be
+    /// taken at all: it is capped here.
+    fn decide_counted(&mut self, c: usize) -> Option<KeyHash> {
+        if self.capped[c] {
+            return None;
+        }
+        let mut cl = self.claim(c, ClaimState::Effective);
+        cl.left_ms = 0;
+        let next = cl.root;
+        self.claims.push(cl);
+        Some(next)
+    }
+
     fn decide_claims(&mut self, held_ms: &BTreeMap<RecordId, u64>) -> Option<(KeyHash, u64)> {
         let mut delay = self.settings.delay_ms();
         let cancelled = |c: usize| {
@@ -1966,6 +2063,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// The state, with the held records and those left out.
     fn finish(&self) -> State {
         let mut state = self.state();
+        state.owner_split = self.split;
         let admins: BTreeSet<KeyHash> = state.devices.iter().filter_map(|d| d.admin).chain(state.recovery).collect();
         let cur = state.roots.last().copied();
         let mut newer: BTreeSet<RecordId> = BTreeSet::new();
