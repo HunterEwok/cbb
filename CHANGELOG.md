@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The apps are tested in all eight languages and for every reader (docs/testing.md, "The
+  apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
+  Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text
+  of every app translated with its placeholders; screen reader names, contrast, large text and
+  the keyboard; screenshot regressions of the tray window and the Android screens. Go's
+  coverage floor is 80%, with new tests of cbb-helper's keyboard and TV remote.
 - The forwarder refuses the groups their operator lists after an abuse report:
   `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again
   within ten seconds of a change; a listed group is refused at registration and its devices
@@ -2215,6 +2221,26 @@ All notable changes to cbb are documented in this file. The format follows
   a moment: it tells its peers in a new `presence` message (docs/protocol.md, section 4,
   "Presence"). A device that refuses to let a phone join as an admin, or to admit while its
   admin key is frozen, now says so in its log as well as to the app.
+- The tray window in Arabic and Hebrew sets the tiles, rows, menus and a card's values from
+  the right, as it does the rest of the window.
+- The Ruby colour in the dark appearance is a shade lighter (#FF6681), so that its badges
+  keep WCAG AA contrast on the tray window's tiles.
+- The Android app's Settings in the dark appearance show the title, "Update automatically" and
+  "Version" in the palette's text colour; they were near black on the dark background. At the
+  largest font size the colour names take as many lines as they need, and the round buttons'
+  symbols stay inside their circles.
+- The Android app's back button points right in Arabic and Hebrew, where it stands on the right.
+- The Mac app's notices (the service not answering, a removed Mac) show their title and text in
+  the theme's text colour, for contrast on every theme, and VoiceOver reads a notice by its title.
+- The iPhone app's Start screen scrolls at the largest text sizes and in the longer languages
+  instead of cutting off its name, tagline and buttons, and "Restore with the recovery key" is
+  44 points tall and the screen's width to touch, in the other buttons' medium weight, at
+  which its Hindi line is no longer reported as clipped. "Copy Beyond Borders" under the name
+  is bold at the title 3 size, large text, whose contrast over the background's glow is
+  enough. Settings put as many colour swatches in a
+  row as their names fit at the text size, so a long colour name breaks between words instead
+  of being cut off. On an iPad, Settings opened from the Start screen cover the whole
+  screen instead of a sheet whose lower edge cut the list's rows in view.
 - A tunnel's loopback port on Linux takes a client on a dual-stack socket, as Java's on a system
   with IPv6: its user is looked up in the kernel's IPv6 table too, by its IPv4-mapped address,
   where before it was refused at once.
