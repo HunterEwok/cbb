@@ -2406,8 +2406,15 @@ jobs:
           cargo install --locked cargo-llvm-cov@0.9.1
           # Without the shell's quotes, which $GITHUB_ENV would keep.
           cargo llvm-cov show-env | sed "s/='\(.*\)'\$/=\1/" >>"$GITHUB_ENV"
+      # Cargo names the own tests' binaries first: since Rust 1.100 they sit
+      # under target/release/build/<package>/<hash>/out, Cargo's new layout,
+      # where a search by path cannot tell them from the build scripts' files.
       - name: the Rust cbb's own tests, instrumented
-        run: cargo test --locked --release -p cbb-member
+        run: |
+          mkdir -p target
+          cargo test --locked --release -p cbb-member --no-run --message-format=json |
+            jq -r 'select(.profile.test == true and .executable != null) | .executable' >target/own-tests.txt
+          cargo test --locked --release -p cbb-member
       - name: the Rust cbb, the phone's member and tunnel on Linux, cbb-helper, and the Go tests' binaries
         run: |
           cargo build --locked --release -p cbb-member
@@ -2432,12 +2439,18 @@ jobs:
       # Only what the parts run and what llvm-cov reads: the programs and
       # test binaries (not the build scripts, the proc macros' libraries or
       # Cargo's own files), the own tests' profiles and the compiler's version,
-      # in one archive, since an artifact keeps no file modes.
+      # in one archive, since an artifact keeps no file modes. The own tests'
+      # binaries go into a folder of their own, the one place llvm-cov finds
+      # them in either of Cargo's layouts: under build/ it skips an out folder
+      # without Cargo's fingerprint beside it.
       - name: the build, for the parts and the coverage
         run: |
           rustc --version | cut -d' ' -f2 >target/rustc-version
+          rm -rf target/release/own-tests && mkdir target/release/own-tests
+          while read -r f; do cp "$f" target/release/own-tests/; done <target/own-tests.txt
+          [ -n "$(ls target/release/own-tests)" ] || { echo "no own tests' binaries" >&2; exit 1; }
           find target/release -maxdepth 2 -type f -perm -u+x \
-            -not -path '*/build/*' -not -path '*/.fingerprint/*' -not -path '*/incremental/*' -not -name '*.so' \
+            -not -path '*/build/*' -not -path '*/deps/*' -not -path '*/.fingerprint/*' -not -path '*/incremental/*' -not -name '*.so' \
             >"$RUNNER_TEMP/files"
           {
             cat "$RUNNER_TEMP/files"
