@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Watches the project's servers from outside (docs/maintainers/maintaining.md,
 # "Watching cbb.tools"): the websites and their certificates, the
-# forwarder's and the relay's ports, and the expiry of the signed files
-# that devices fetch. A failed run mails the maintainer, as GitHub does for
-# a scheduled workflow; nothing is written anywhere.
+# forwarder's and the relay's ports, the expiry of the signed files
+# that devices fetch, and the server's traffic of the last 24 hours. A
+# failed run mails the maintainer, as GitHub does for a scheduled
+# workflow; nothing is written anywhere.
 name: monitor
 
 on:
@@ -28,5 +29,7 @@ jobs:
           cache: false
       - name: the servers
         # Until the first signed release (v0.6.0) the signed files are not
-        # served yet; from then on add -require-files.
-        run: go run ./tools/monitor -ports cbb.tools:8764,cbb.tools:8765
+        # served yet; from then on add -require-files. The traffic budget is
+        # half of what the server's plan allows in 24 hours before it is
+        # slowed (docs/relay-budget.md, "Money and traffic").
+        run: go run ./tools/monitor -ports cbb.tools:8764,cbb.tools:8765 -traffic https://cbb.tools/status/traffic.json -traffic-budget 1TB

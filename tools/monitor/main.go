@@ -7,12 +7,15 @@
 // not about to expire, the forwarder's and the relay's ports take a
 // connection, and the signed files that devices fetch (keys.json,
 // stable.json, attest-status.json) are not close to their expiry, which
-// would mean a timer on cbb.tools stopped. It prints one line per check
+// would mean a timer on cbb.tools stopped; and, with -traffic, that the
+// server's traffic of the last 24 hours stays inside its budget
+// (docs/relay-budget.md, "Money and traffic"). It prints one line per check
 // and exits 1 when any fails, so that the failed run mails the maintainer.
 //
 // Usage:
 //
 //	go run ./tools/monitor [-require-files] [-ports cbb.tools:8764,cbb.tools:8765]
+//	    [-traffic https://cbb.tools/status/traffic.json -traffic-budget 1TB]
 //
 // Before the first signed release the files are not served yet (404); a
 // missing file counts as a failure only with -require-files.
@@ -29,6 +32,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,7 +71,14 @@ const timeout = 20 * time.Second
 func main() {
 	requireFiles := flag.Bool("require-files", false, "count a signed file that is not served (404) as a failure")
 	ports := flag.String("ports", "cbb.tools:8764", "the forwarder's and the relay's addresses, comma-separated, that must take a TCP connection")
+	trafficURL := flag.String("traffic", "", "the URL of the server's traffic.json (site/deploy/cbb-traffic.sh), checked against -traffic-budget")
+	trafficBudget := flag.String("traffic-budget", "1TB", "the bytes the server may move in 24 hours before the check fails, such as 800GB or 1.5TB")
 	flag.Parse()
+	budget, err := parseBytes(*trafficBudget)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "monitor: -traffic-budget: %v\n", err)
+		os.Exit(2)
+	}
 	c := checker{client: &http.Client{Timeout: timeout}, now: time.Now(), requireFiles: *requireFiles, out: os.Stdout}
 	for _, s := range sites {
 		c.site(s)
@@ -79,6 +90,9 @@ func main() {
 	}
 	for _, f := range files {
 		c.file(f)
+	}
+	if *trafficURL != "" {
+		c.traffic(*trafficURL, budget)
 	}
 	if c.failed > 0 {
 		fmt.Fprintf(c.out, "%d of the checks failed\n", c.failed)
@@ -181,6 +195,77 @@ func (c *checker) file(f signed) {
 		return
 	}
 	c.ok("%s expires in %s", f.url, days(left))
+}
+
+// trafficStale is how old traffic.json may be: cbb-traffic.timer writes it
+// every 15 minutes.
+const trafficStale = 2 * time.Hour
+
+// traffic checks the server's traffic of the last 24 hours, which
+// cbb-traffic.sh writes, against budget. Before the file is served, as with
+// the signed files, a 404 passes unless -require-files.
+func (c *checker) traffic(url string, budget float64) {
+	resp, err := c.client.Get(url)
+	if err != nil {
+		c.fail("%s: %v", url, err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound && !c.requireFiles {
+		c.ok("%s: not served yet (cbb-traffic.timer not set up)", url)
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		c.fail("%s: %s", url, resp.Status)
+		return
+	}
+	var t struct {
+		UpdatedMS int64   `json:"updated_ms"`
+		Hours     float64 `json:"hours"`
+		DayBytes  float64 `json:"day_bytes"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&t); err != nil || t.UpdatedMS <= 0 {
+		c.fail("%s: not a traffic file", url)
+		return
+	}
+	if age := c.now.Sub(time.UnixMilli(t.UpdatedMS)); age > trafficStale {
+		c.fail("%s was written %s ago: cbb-traffic.timer on cbb.tools stopped", url, age.Round(time.Minute))
+		return
+	}
+	if t.DayBytes > budget {
+		c.fail("%s: the server moved %s in the last %.0f hours, over the budget of %s: see docs/relay-budget.md, \"Money and traffic\"", url, formatBytes(t.DayBytes), t.Hours, formatBytes(budget))
+		return
+	}
+	c.ok("%s: %s in the last %.0f hours, %.0f%% of the budget of %s", url, formatBytes(t.DayBytes), t.Hours, 100*t.DayBytes/budget, formatBytes(budget))
+}
+
+// parseBytes reads a size such as 800GB or 1.5TB, in powers of 1000.
+func parseBytes(s string) (float64, error) {
+	units := []struct {
+		suffix string
+		mult   float64
+	}{{"TB", 1e12}, {"GB", 1e9}, {"MB", 1e6}, {"B", 1}}
+	for _, u := range units {
+		if n, ok := strings.CutSuffix(s, u.suffix); ok {
+			v, err := strconv.ParseFloat(n, 64)
+			if err != nil || v <= 0 {
+				return 0, fmt.Errorf("%q is not a size such as 800GB or 1.5TB", s)
+			}
+			return v * u.mult, nil
+		}
+	}
+	return 0, fmt.Errorf("%q is not a size such as 800GB or 1.5TB", s)
+}
+
+func formatBytes(b float64) string {
+	switch {
+	case b >= 1e12:
+		return fmt.Sprintf("%.2f TB", b/1e12)
+	case b >= 1e9:
+		return fmt.Sprintf("%.1f GB", b/1e9)
+	default:
+		return fmt.Sprintf("%.0f MB", b/1e6)
+	}
 }
 
 // expiry reads expires_ms from the body of a signed file.
