@@ -9,9 +9,12 @@ import UserNotifications
 /// Push to this phone while the app is closed (docs/core-api.md, "Push"):
 /// asks iOS for the device token, keeps each group's registration in the
 /// push keychain group the notification extension shares (`PushVault`),
-/// and answers the notification's Copy button. The member's sync sends the
+/// keeps the push service's challenges for this phone's send key, and
+/// answers the notification's Copy button. The member's sync sends the
 /// saved registration to the group's members (the seam in
-/// member/src/pusher.rs).
+/// member/src/pusher.rs). A registration is made again only when what it
+/// says changed (the token, the switch, a challenge, a membership change)
+/// or a member asks (`push-renew`), never just because the app ran.
 @MainActor
 final class PushSetup {
     static let shared = PushSetup()
@@ -32,7 +35,7 @@ final class PushSetup {
 
     let vault = PushVault(accessGroup: PushSetup.accessGroup)
     private var token: Data?
-    private var group: (tag: String, me: Data)?
+    private var group: (tag: String, me: Data, devices: PushVault.Devices)?
     /// The last problem, shown in Settings under the switch.
     private(set) var problem: String?
 
@@ -44,8 +47,6 @@ final class PushSetup {
         let copy = UNNotificationAction(identifier: Self.copyAction, title: String(localized: "Copy", bundle: .app), options: [])
         center.setNotificationCategories([UNNotificationCategory(identifier: Self.copyCategory, actions: [copy],
                                                                  intentIdentifiers: [], options: [])])
-        // The app ran: copies are shown again, not only hints.
-        Shared.defaults.removeObject(forKey: Self.hintsOnlyKey)
         guard Self.accessGroup != nil else { return }
         if on { ask() } else { refresh() }
     }
@@ -73,37 +74,70 @@ final class PushSetup {
 
     func failed(_ error: Error) { fail(error) }
 
-    /// The group and this phone's device ID in it (hex), as the app knows
-    /// them; nil when it has no group.
-    func group(tag: String?, me: String?) {
+    /// The group, this phone's device ID in it and the group's devices
+    /// (hex IDs, the root's among them), as the app applied them; nil when
+    /// it has no group. A device gone or a new root draws a new push key,
+    /// so a removed member's bodies open nothing here.
+    func group(tag: String?, me: String?, devices: [String] = [], root: String? = nil) {
         guard let tag, let me, let id = Data(hex: me), id.count == 16 else {
             group = nil
             return
         }
-        if group?.tag == tag, group?.me == id { return }
-        group = (tag, id)
+        let applied = PushVault.Devices(members: devices.compactMap { Data(hex: $0) }, root: root.flatMap { Data(hex: $0) })
+        if group?.tag == tag, group?.me == id, group?.devices == applied { return }
+        group = (tag, id, applied)
         refresh()
     }
 
-    /// The group's registration frame in base64, for the test tool.
+    #if DEBUG
+    /// The group's registration frame in base64, for the test tool; never
+    /// in a release build.
     func testFrame() -> String? {
         guard let group else { return nil }
         return (try? vault.load(group.tag))?.frame?.base64EncodedString()
     }
+    #endif
 
-    /// The phone applied a removal, a new root or a stop: a new push key, so
-    /// a removed member's bodies open nothing here.
-    func membershipChanged() { refresh(newKey: true) }
+    /// A challenge from the push service (24 bytes, from the notification's
+    /// "k"): kept when it is for this phone's send key, and then the group
+    /// registers again with it.
+    func challenge(_ k: Data) {
+        guard Self.accessGroup != nil else { return }
+        if (try? vault.keep(challenge: k)) == true { refresh() }
+    }
 
-    private func refresh(newKey: Bool = false) {
+    /// A member asked for the registration of the group with this slot
+    /// (`push-renew`): the push service lost it.
+    func renew(slot: Data) {
+        guard let group, (try? vault.group(slot: slot)) == group.tag else { return }
+        refresh(reasons: .renew)
+    }
+
+    /// What opens a copy here, which the app writes on every rotation of
+    /// its sealing key and whenever the group's devices change: the sealing
+    /// secrets of the epochs in the group's window (any other is erased),
+    /// the devices as origins, the window and whether the group is halted.
+    func opening(sealing: [Push.Sealing], origins: [Push.Origin], windowMS: UInt64?, halted: Bool) {
+        guard Self.accessGroup != nil, let group else { return }
+        do {
+            try vault.opening(group.tag, sealing: sealing, origins: origins, windowMS: windowMS, halted: halted)
+        } catch {
+            fail(error)
+        }
+    }
+
+    private func refresh(reasons: PushVault.Reasons = []) {
         guard Self.accessGroup != nil, let group else { return }
         do {
             if on, let token {
                 try vault.register(group.tag, me: group.me, token: token, env: Self.env(), kinds: [.copies, .events],
-                                   newKey: newKey)
-            } else if (try? vault.load(group.tag).kinds) ?? 0 != 0 {
-                try vault.register(group.tag, me: group.me, token: nil, env: nil, kinds: [])
+                                   reasons: reasons, devices: group.devices)
+            } else {
+                try vault.register(group.tag, me: group.me, token: nil, env: nil, kinds: [], devices: group.devices)
             }
+            // A hints-only mark whose change is now applied, with its new
+            // key in place, is spent.
+            PushMarks.spend(group.tag, try vault.load(group.tag), in: Shared.defaults)
             problem = nil
         } catch {
             fail(error)
@@ -126,10 +160,6 @@ final class PushSetup {
         let rest = text[key.upperBound...].prefix(80)
         return rest.contains("<string>development</string>") ? Push.Env.apnsSandbox : Push.Env.apns
     }
-
-    /// Set by the extension after an event of removal, a new root or a stop;
-    /// cleared when the app runs (app group defaults, nothing secret).
-    nonisolated static let hintsOnlyKey = "push.hintsOnly"
 
     /// The Copy button of a notification: its text to the clipboard
     /// (ForegroundNotifications, the center's delegate, hands it here).

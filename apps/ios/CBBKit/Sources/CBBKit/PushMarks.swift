@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import Foundation
+
+/// The hints-only marks (docs/core-api.md, "Push"): when the notification
+/// extension opens an event of a removal, a new root or a stop, the group's
+/// copies show only as hints until the app has applied that change and
+/// drawn a new push key, which it does in one step. Kept in the app group's
+/// defaults, nothing secret: per group the marks' events, devices and the
+/// phone's time when each arrived.
+public enum PushMarks {
+    static let key = "push.marks"
+    static let max = 16
+
+    public struct Mark: Codable, Equatable {
+        public var event: UInt64
+        public var device: Data?
+        /// The phone's clock when it arrived.
+        public var atMS: UInt64
+
+        public init(event: UInt64, device: Data?, atMS: UInt64) {
+            self.event = event
+            self.device = device
+            self.atMS = atMS
+        }
+
+        /// Whether the change it tells of is still to be applied: a removed
+        /// device the app still lists, a new root the app does not know
+        /// yet, or else anything that came after the current push key.
+        public func inForce(_ g: PushVault.Group) -> Bool {
+            switch (event, device, g.members) {
+            case let (2, d?, members?): return members.contains(d)
+            case let (4, d?, members?) where members.contains(d): return g.root != d
+            default: return atMS > (g.keyDrawnMS ?? 0)
+            }
+        }
+    }
+
+    static func all(_ defaults: UserDefaults?) -> [String: [Mark]] {
+        guard let d = defaults?.data(forKey: key) else { return [:] }
+        return (try? JSONDecoder().decode([String: [Mark]].self, from: d)) ?? [:]
+    }
+
+    static func save(_ marks: [String: [Mark]], _ defaults: UserDefaults?) {
+        defaults?.set(try? JSONEncoder().encode(marks), forKey: key)
+    }
+
+    /// Marks the group with an event that arrived now.
+    public static func mark(_ group: String, event: UInt64, device: Data?, now: Date = Date(), in defaults: UserDefaults?) {
+        var marks = all(defaults)
+        let at = UInt64(Swift.max(0, now.timeIntervalSince1970 * 1000))
+        marks[group, default: []].append(Mark(event: event, device: device, atMS: at))
+        marks[group] = Array(marks[group]!.suffix(max))
+        save(marks, defaults)
+    }
+
+    /// Whether the group shows copies only as hints.
+    public static func hintsOnly(_ group: String, _ g: PushVault.Group, in defaults: UserDefaults?) -> Bool {
+        (all(defaults)[group] ?? []).contains { $0.inForce(g) }
+    }
+
+    /// Drops the marks the group's state has spent.
+    public static func spend(_ group: String, _ g: PushVault.Group, in defaults: UserDefaults?) {
+        var marks = all(defaults)
+        guard let list = marks[group] else { return }
+        let left = list.filter { $0.inForce(g) }
+        if left == list { return }
+        marks[group] = left.isEmpty ? nil : left
+        save(marks, defaults)
+    }
+}

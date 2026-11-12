@@ -542,11 +542,14 @@ private struct PushToggle: View {
             if let problem = PushSetup.shared.problem {
                 Text(problem).font(.footnote).foregroundStyle(.red)
             }
+            #if DEBUG
             // The test tool's input (member/src/pushd/tests.rs,
-            // live_push_to_a_phone), only with -PushTestTools YES.
+            // live_push_to_a_phone), only in a debug build with
+            // -PushTestTools YES; never in a release build.
             if UserDefaults.standard.bool(forKey: "PushTestTools"), let frame = PushSetup.shared.testFrame() {
                 Button { UIPasteboard.general.string = frame } label: { Text(verbatim: "Copy the push registration (test)") }
             }
+            #endif
         }
     }
 }

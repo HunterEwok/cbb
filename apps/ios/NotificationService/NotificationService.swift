@@ -6,29 +6,35 @@ import UserNotifications
 
 /// Opens a push body when it arrives with the app closed (docs/core-api.md,
 /// "Push"): it tries each group's push keys from the push keychain group,
-/// which holds no member key, and shows what `push_open` found. Only a copy
-/// whose origin's signature holds shows its text, never a secret's; the
-/// rest says "open the app". The words are the app's translations
-/// (apps/l10n, place `ios-push`), never a string from the body.
+/// which holds what opens a body and a copy (the push keys, the send key,
+/// the sealing secrets of the epochs in the group's window) and nothing
+/// that signs a record, and shows what `push_open` found. Only a copy whose
+/// origin's signature holds shows its text, never a secret's; the rest says
+/// "open the app". The words are the app's translations (apps/l10n, place
+/// `ios-push`), never a string from the body.
 final class NotificationService: UNNotificationServiceExtension {
     private var handler: ((UNNotificationContent) -> Void)?
     private var content: UNMutableNotificationContent?
 
     /// The app group's defaults: the IDs already shown and the hints-only
-    /// mark, nothing secret.
+    /// marks, nothing secret.
     private static let defaults = UserDefaults(suiteName: "group.tools.cbb")
     private static let shownKey = "push.shown"
-    private static let hintsOnlyKey = "push.hintsOnly"
     private static let shownMax = 200
 
     override func didReceive(_ request: UNNotificationRequest, withContentHandler handler: @escaping (UNNotificationContent) -> Void) {
         self.handler = handler
         let content = (request.content.mutableCopy() as? UNMutableNotificationContent) ?? UNMutableNotificationContent()
         self.content = content
+        let info = request.content.userInfo
         Self.neutral(content)
-        if let b64 = request.content.userInfo["c"] as? String, let body = Data(base64Encoded: b64),
-           let opened = Self.open(body) {
-            Self.show(opened, in: content)
+        // A challenge beside the body: kept only for this phone's send key.
+        if let k = info["k"] as? String, let challenge = Data(base64Encoded: k) {
+            _ = try? Self.vault.keep(challenge: challenge)
+        }
+        if let b64 = info["c"] as? String, let body = Data(base64Encoded: b64),
+           let (group, opened) = Self.open(body) {
+            Self.show(opened, group: group, in: content)
         }
         handler(content)
         self.handler = nil
@@ -47,13 +53,13 @@ final class NotificationService: UNNotificationServiceExtension {
     }
 
     /// The body opened with the first group whose keys open it.
-    static func open(_ body: Data) -> Push.Opened? {
+    static func open(_ body: Data) -> (String, Push.Opened)? {
         let vault = vault
-        let hintsOnly = defaults?.bool(forKey: hintsOnlyKey) ?? false
         for group in (try? vault.groups()) ?? [] {
-            guard var c = (try? vault.load(group))?.context else { continue }
-            c.hintsOnly = c.hintsOnly || hintsOnly
-            if let o = try? Push.open(body, in: c) { return o }
+            guard let g = try? vault.load(group),
+                  let c = g.context(hintsOnly: PushMarks.hintsOnly(group, g, in: defaults))
+            else { continue }
+            if let o = try? Push.open(body, in: c) { return (group, o) }
         }
         return nil
     }
@@ -65,7 +71,7 @@ final class NotificationService: UNNotificationServiceExtension {
         c.userInfo = [:]
     }
 
-    static func show(_ o: Push.Opened, in c: UNMutableNotificationContent) {
+    static func show(_ o: Push.Opened, group: String, in c: UNMutableNotificationContent) {
         // A body seen before says nothing new: the neutral hint.
         if let id = o.id {
             if shown(id) { return }
@@ -88,8 +94,11 @@ final class NotificationService: UNNotificationServiceExtension {
             c.body = String(localized: "A copy is waiting. Open the app.")
         case "event":
             c.body = event(o.event ?? 0)
-            // A removal, a new root or a stop: hints only until the app runs.
-            if [2, 4, 6].contains(o.event ?? 0) { defaults?.set(true, forKey: hintsOnlyKey) }
+            // A removal, a new root or a stop: hints only until the app has
+            // applied it and drawn a new push key.
+            if [2, 4, 6].contains(o.event ?? 0) {
+                PushMarks.mark(group, event: o.event ?? 0, device: o.device, in: defaults)
+            }
         default:
             break
         }

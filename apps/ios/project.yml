@@ -64,7 +64,7 @@ targets:
         NSSupportsLiveActivities: true
         # Now and then iOS wakes the app for a moment to hear of the group's
         # events (BackgroundRefresh.swift).
-        UIBackgroundModes: [fetch]
+        UIBackgroundModes: [fetch, remote-notification]
         BGTaskSchedulerPermittedIdentifiers: [tools.cbb.refresh]
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false

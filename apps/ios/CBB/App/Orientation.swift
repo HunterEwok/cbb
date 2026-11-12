@@ -20,6 +20,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         MainActor.assumeIsolated { PushSetup.shared.failed(error) }
     }
 
+    /// A background push from the push service carries only a challenge
+    /// ("k"): kept for this phone's send key, and the group registers again.
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        guard let k = userInfo["k"] as? String, let challenge = Data(base64Encoded: k) else {
+            completionHandler(.noData)
+            return
+        }
+        MainActor.assumeIsolated { PushSetup.shared.challenge(challenge) }
+        completionHandler(.newData)
+    }
+
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         guard let window else { return .portrait }
         return Self.mask(idiom: UIDevice.current.userInterfaceIdiom, regular: window.traitCollection.horizontalSizeClass == .regular)

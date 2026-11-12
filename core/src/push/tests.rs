@@ -662,6 +662,8 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     // The service can check the send key's signature.
     assert_eq!(o.slot, slot);
     assert_eq!(check_send(&o.send_key, &o.send_sig, &o.signed(2)), Ok(SendCheck::Good));
+    // The hint the service puts beside a challenge: the send key's hash.
+    assert_eq!(reg["ok"]["key_hint"].as_str().unwrap(), b64(&o.send_key.hash().0[..8]));
     assert_eq!(
         check_send(
             &o.send_key,
@@ -704,6 +706,7 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     assert_eq!(noslot["error"]["code"], 18, "{noslot}");
     // A restored phone whose saved number went back still moves forward.
     let restored = call("push_registration", serde_json::json!({ "saved_seq": 1, "now_ms": T0, "kinds": 0 }));
+    assert!(restored["ok"].get("key_hint").is_none(), "push off carries no hint");
     assert_eq!(restored["ok"]["seq"], T0);
     let up = call(
         "push_registration",
@@ -845,5 +848,107 @@ fn a_host_whose_last_label_starts_with_a_digit_is_refused() {
     }
     for good in ["https://up.example.org/x", "https://1up.example.org/x", "https://up.example.o1/x"] {
         assert!(up_url(good), "{good}");
+    }
+}
+
+/// One copy from computer0 to the phone, sealed to the phone's epoch of the
+/// statements given, in a body under PK and seq 2.
+fn copy_in_a_body(
+    g: &G,
+    statements: &[crate::records::statement::Statement],
+    id: u8,
+    wall: u64,
+    text: &str,
+) -> (Vec<u8>, u64) {
+    let state = g.state();
+    let refs: Vec<&_> = statements.iter().collect();
+    let sealing = sealing(&state, &refs);
+    let phone = k("phone").key.device_id();
+    let origin = k("computer0");
+    let content = Content::text(text, false);
+    let rs = copies::readers(&state, &sealing, &content, &origin.key.device_id(), &[], None);
+    let made = Made { id: [id; 16], time: Timestamp { wall: wall as i64, logical: 0 }, blob: None };
+    let copy = copies::seal(&origin, &rs, &made, &content).unwrap();
+    let c = copies::check(&cbor::decode(&copy).unwrap(), &state).unwrap();
+    let epoch = c.readers.iter().find(|(d, _)| *d == phone).unwrap().1;
+    let body = copy_body(&c.copy, &c.readers, &phone, made.id, origin.key.device_id().0).unwrap();
+    (seal(&PK, 2, ENV_APNS, &body).unwrap(), epoch)
+}
+
+fn interop() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/push-open.json")
+}
+
+/// What the phone's notification extension is handed across a rotation of
+/// its sealing key: a copy sealed to the first epoch, then one sealed to the
+/// second, and which epochs' secrets the app leaves it at each step.
+fn push_open_vectors() -> serde_json::Value {
+    let (g, _, mut stores, mut statements) = world(1);
+    let phone_store = stores.get_mut("phone").unwrap();
+    let secret = |s: &crate::keystore::MemoryStore<crate::testkit::K>, e: u64| {
+        b64(&crate::keystore::KeyStore::sealing(s, e).unwrap())
+    };
+    let (first, e1) = copy_in_a_body(&g, &statements, 5, T0 + 5, "the code is 4711");
+    let s1 = secret(phone_store, e1);
+    // A week on: a new epoch, the previous kept a week more.
+    let week = crate::keystore::WEEK_MS;
+    let made = crate::keystore::rotate(phone_store, &g.gid, T0 + week, Some(T0 + week)).unwrap().made.unwrap();
+    statements[0] = crate::testkit::statement_of(&made);
+    let (second, e2) = copy_in_a_body(&g, &statements, 6, T0 + week + 5, "the new code is 1234");
+    assert_ne!(e1, e2);
+    let s2 = secret(phone_store, e2);
+    // Two weeks on: the first epoch has left the window and is erased.
+    let erased = crate::keystore::rotate(phone_store, &g.gid, T0 + 2 * week, Some(T0 + 2 * week)).unwrap().erased;
+    assert!(erased.contains(&e1), "{erased:?}");
+    let state = g.state();
+    let od = state.device(&k("computer0").key.device_id()).unwrap();
+    serde_json::json!({
+        "comment": "Written by the Rust core's push tests with CBB_UPDATE_VECTORS=1. The kits' notification extensions open each body with the secrets the app leaves at each step: a copy sealed to an epoch the extension holds shows its text, one sealed to an epoch that left the window does not.",
+        "key": b64(&PK), "seq": 2, "me": b64(&k("phone").key.device_id().0), "window_ms": 120_000,
+        "origins": [{ "key": b64(&od.key.encode()), "rights": od.rights }],
+        "bodies": {
+            "first": { "body": b64(&first), "now_ms": T0 + 1_000, "text": "the code is 4711" },
+            "second": { "body": b64(&second), "now_ms": T0 + week + 1_000, "text": "the new code is 1234" },
+        },
+        "steps": [
+            { "name": "before the rotation", "sealing": [{ "epoch": e1, "secret": s1 }], "opens": ["first"] },
+            { "name": "a week on, both epochs in the window",
+              "sealing": [{ "epoch": e2, "secret": s2 }, { "epoch": e1, "secret": s1 }], "opens": ["first", "second"] },
+            { "name": "two weeks on, the first epoch out of the window",
+              "sealing": [{ "epoch": e2, "secret": s2 }], "opens": ["second"] },
+        ],
+    })
+}
+
+/// testdata/interop/push-open.json, which this writes with
+/// CBB_UPDATE_VECTORS=1: at each step a body opens to its text exactly
+/// when the extension holds its epoch's secret, and else waits.
+#[test]
+fn the_extension_opens_what_its_epochs_open_across_a_rotation() {
+    if std::env::var("CBB_UPDATE_VECTORS").as_deref() == Ok("1") {
+        let mut s = serde_json::to_string_pretty(&push_open_vectors()).unwrap();
+        s.push('\n');
+        std::fs::write(interop(), s).unwrap();
+    }
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(interop()).unwrap()).unwrap();
+    let steps = v["steps"].as_array().unwrap();
+    assert_eq!(steps.len(), 3);
+    for step in steps {
+        let opens: Vec<&str> = step["opens"].as_array().unwrap().iter().map(|o| o.as_str().unwrap()).collect();
+        for (name, b) in v["bodies"].as_object().unwrap() {
+            let got = call(
+                "push_open",
+                serde_json::json!({ "keys": [{ "key": v["key"], "seq": v["seq"] }], "body": b["body"], "me": v["me"],
+                    "origins": v["origins"], "sealing": step["sealing"], "now_ms": b["now_ms"],
+                    "window_ms": v["window_ms"], "halted": false, "hints_only": false }),
+            );
+            let what = format!("{} {name}: {got}", step["name"]);
+            if opens.contains(&name.as_str()) {
+                assert_eq!((&got["ok"]["kind"], &got["ok"]["text"]), (&"copy".into(), &b["text"]), "{what}");
+            } else {
+                assert_eq!(got["ok"]["kind"], "waits", "{what}");
+                assert!(got["ok"].get("text").is_none(), "{what}");
+            }
+        }
     }
 }

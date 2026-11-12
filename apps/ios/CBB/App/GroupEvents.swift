@@ -123,16 +123,6 @@ final class Notifier {
         guard let old else { return }
         let events = GroupEvent.between(old, now)
         events.forEach(post)
-        // A removal or a takeover: push gets a new key, so a removed
-        // member's bodies open nothing here.
-        if events.contains(where: {
-            switch $0 {
-            case .removed, .takenOver: true
-            default: false
-            }
-        }) {
-            Task { @MainActor in PushSetup.shared.membershipChanged() }
-        }
     }
 
     /// Forgets the group's devices and events, once the phone left its

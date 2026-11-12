@@ -114,10 +114,12 @@ struct RegistrationArgs {
 
 /// `push_registration`: the frame of message `push` (t 28) the phone sends
 /// over each member connection of the group, and its number, which the
-/// phone saves; `kinds` 0 turns push off.
+/// phone saves, and with push on the send key's hint (`key_hint`, 8
+/// bytes); `kinds` 0 turns push off.
 fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
     const BAD: &str = "The push registration cannot be made.";
     let seq = push::next_seq(a.saved_seq, a.now_ms);
+    let mut hint = None;
     let on = if a.kinds == 0 {
         None
     } else {
@@ -153,6 +155,7 @@ fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
             None => None,
             Some(c) => Some(c.try_into().map_err(|_| refused("the challenge is not 16 bytes", BAD))?),
         };
+        hint = Some(Key::es256(public.clone()).hash().0);
         let signed = push::Signed { env, token: &token, slot: &slot, seq, challenge: challenge.as_ref() };
         let sig = push::sign_send(&Pkcs8Signer(signer), &signed).map_err(|e| refused(e, BAD))?;
         Some(On {
@@ -171,6 +174,12 @@ fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
     let mut m = Map::new();
     m.insert("frame".into(), b64_value(&frame));
     m.insert("seq".into(), Value::from(seq));
+    // The send key's hint, the first 8 bytes of its hash: the push service
+    // puts it beside each challenge, so that the phone keeps only one sent
+    // to its own key.
+    if let Some(h) = hint {
+        m.insert("key_hint".into(), b64_value(&h[..8]));
+    }
     Ok(json(Value::Object(m)))
 }
 

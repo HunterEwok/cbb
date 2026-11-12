@@ -7,13 +7,15 @@ import Foundation
 /// registration; the notification extension opens what arrives. No number
 /// of the format lives here: the core answers them.
 public enum Push {
-    /// A new push key (one per group) and send key (one per token).
+    /// A new push key and slot (one per group) and send key (one per
+    /// token, for every group).
     public struct Keys: Codable, Equatable {
         public var key: Data
         public var sendKey: Data
+        public var slot: Data
 
         enum CodingKeys: String, CodingKey {
-            case key
+            case key, slot
             case sendKey = "send_key"
         }
     }
@@ -48,16 +50,26 @@ public enum Push {
     }
 
     /// A registration made: the frame of message `push` for the group's
-    /// members and the number it carries, which the app saves first.
+    /// members and the number it carries, which the app saves first, and
+    /// with push on the send key's hint, which the push service puts beside
+    /// each challenge.
     public struct Registration: Codable, Equatable {
         public var frame: Data
         public var seq: UInt64
+        public var keyHint: Data?
+
+        enum CodingKeys: String, CodingKey {
+            case frame, seq
+            case keyHint = "key_hint"
+        }
     }
 
-    /// Makes the registration for one group. With `kinds` empty push is off
-    /// and the rest is not read.
+    /// Makes the registration for one group: its slot, and the last
+    /// challenge the push service sent to the token, if any. With `kinds`
+    /// empty push is off and the rest is not read.
     public static func registration(savedSeq: UInt64?, now: Date = Date(), kinds: Kinds, env: UInt64?,
-                                    token: Data?, key: Data?, sendKey: Data?) throws -> Registration {
+                                    token: Data?, key: Data?, sendKey: Data?, slot: Data?,
+                                    challenge: Data? = nil) throws -> Registration {
         struct Args: Encodable {
             var saved_seq: UInt64?
             var now_ms: UInt64
@@ -66,11 +78,14 @@ public enum Push {
             var token: Data?
             var key: Data?
             var send_key: Data?
+            var slot: Data?
+            var challenge: Data?
         }
         let on = !kinds.isEmpty
         return try Core.run("push_registration", Args(
             saved_seq: savedSeq, now_ms: UInt64(max(0, now.timeIntervalSince1970 * 1000)), kinds: kinds.rawValue,
-            env: on ? env : nil, token: on ? token : nil, key: on ? key : nil, send_key: on ? sendKey : nil))
+            env: on ? env : nil, token: on ? token : nil, key: on ? key : nil, send_key: on ? sendKey : nil,
+            slot: on ? slot : nil, challenge: on ? challenge : nil))
     }
 
     /// A push key with the registration number it was sent with.
@@ -93,6 +108,15 @@ public enum Push {
             self.rights = rights
             self.frozen = frozen
         }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            key = try c.decode(Data.self, forKey: .key)
+            rights = try c.decode(UInt64.self, forKey: .rights)
+            frozen = try c.decodeIfPresent(Bool.self, forKey: .frozen) ?? false
+        }
+
+        enum CodingKeys: String, CodingKey { case key, rights, frozen }
     }
 
     /// One of the phone's copy-opening secrets.
