@@ -139,7 +139,8 @@ test plays, every choice drawn from one seed, so that a failure replays from its
   after every other member had saved its removal (until a change of root brings it back); a
   member that holds both heads of a fork is halted.
 - Then the network goes quiet: healed, every member back with the world's clock, every pair
-  synced until nothing changes. Every member of the group holds the same records; a removed
+  synced until nothing changes. Every member of the group holds the same records (in a halted
+  group, every member ever admitted is halted on the same fork); a removed
   member has learned its removal; each member restarted from what it wrote has the records and
   the state it saved. Unless the group is halted, two members in turn send a last copy, newer than
   any: it is sealed to every reader of the group and shown as new by each of them.

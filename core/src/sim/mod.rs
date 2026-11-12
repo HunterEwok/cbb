@@ -1052,7 +1052,8 @@ impl World {
         let mut count: BTreeMap<[u8; 32], usize> = BTreeMap::new();
         // The members that count themselves in: a removed member that took
         // its removal does not.
-        let own = |m: &Member| m.live.state.device_by_key(&m.key.hash).is_some();
+        // A halted member lists no devices; it counts itself in all the same.
+        let own = |m: &Member| m.live.state.halted() || m.live.state.device_by_key(&m.key.hash).is_some();
         for i in (0..self.members.len()).filter(|i| self.admitted[*i] && own(&self.members[*i])) {
             *count.entry(self.members[i].live.set.digest()).or_default() += 1;
         }
@@ -1068,16 +1069,27 @@ impl World {
         };
         let at = self.members.iter().position(|m| m.live.set.digest() == digest).unwrap();
         let state = self.members[at].live.state.clone();
+        // A fork's heads go to every peer: once the group is halted, every
+        // member that was ever admitted must be halted on the same fork.
         let group: Vec<usize> = (0..self.members.len())
-            .filter(|i| self.admitted[*i] && state.device_by_key(&self.members[*i].key.hash).is_some())
+            .filter(|i| {
+                self.admitted[*i] && (state.halted() || state.device_by_key(&self.members[*i].key.hash).is_some())
+            })
             .collect();
         for i in &group {
-            if self.members[*i].live.set.digest() != digest {
+            let st = &self.members[*i].live.state;
+            // A halted group is compared on being halted and on its fork
+            // alone: each member keeps what it held below the fork.
+            if state.halted() {
+                if !st.halted() || st.fork != state.fork {
+                    return Err(format!("m{i} is not halted on the group's fork"));
+                }
+            } else if self.members[*i].live.set.digest() != digest {
                 return Err(format!("m{i} holds other records than the group after the network went quiet"));
             }
         }
         for (i, m) in self.members.iter().enumerate() {
-            if state.revoked.contains(&m.key.hash) && !m.live.state.revoked.contains(&m.key.hash) {
+            if !state.halted() && state.revoked.contains(&m.key.hash) && !m.live.state.revoked.contains(&m.key.hash) {
                 return Err(format!("removed m{i} never learned its removal"));
             }
         }
