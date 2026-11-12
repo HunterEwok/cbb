@@ -173,10 +173,11 @@ impl Card {
 /// digits, hyphens and dots, at most 253 bytes) with its port.
 fn valid_endpoint(t: &str) -> bool {
     if t.parse::<core::net::SocketAddr>().is_ok() {
-        return true;
+        return crate::msg::valid_addr(t);
     }
     let Some((host, port)) = t.rsplit_once(':') else { return false };
     port.parse::<u16>().is_ok_and(|p| p != 0)
+        && !(port.len() > 1 && port.starts_with('0'))
         && !host.is_empty()
         && host.len() <= 253
         && host.split('.').all(|l| {

@@ -81,7 +81,10 @@ func tyOK(ty string, v any) bool {
 			return false
 		}
 		ap, err := netip.ParseAddrPort(s)
-		return err == nil && ap.Addr().Zone() == "" && !ap.Addr().Is4In6()
+		i := strings.LastIndexByte(s, ':')
+		port := s[i+1:]
+		return err == nil && ap.Addr().Zone() == "" && !ap.Addr().Is4In6() &&
+			!(len(port) > 1 && port[0] == '0')
 	case "key":
 		a, ok := v.([]any)
 		if !ok || len(a) != 2 {

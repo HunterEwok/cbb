@@ -1429,13 +1429,13 @@ def addr_ok(t):
     try:
         if t.startswith("["):
             host, sep, port = t[1:].partition("]:")
-            if not sep:
+            if not sep or "%" in host or ipaddress.IPv6Address(host).ipv4_mapped:
                 return False
-            ipaddress.IPv6Address(host)
         else:
             host, port = t.rsplit(":", 1)
             ipaddress.IPv4Address(host)
-        return port.isdigit() and int(port) <= 65535
+        return (port.isdigit() and int(port) <= 65535 and port.isascii()
+                and not (len(port) > 1 and port[0] == "0"))
     except ValueError:
         return False
 
@@ -1618,6 +1618,9 @@ def wave3_vectors(records_take):
     bad("forwarder register: 4 credentials", {0: 81, 2: hub_key, 3: fake("p", 32), 6: [dec(envs[0])] * 4},
         "forward/register/credentials")
     bad("forwarder seen: a host name", {0: 84, 2: "example.org:1"}, "forward/seen/addr")
+    bad("forwarder seen: an IPv6 zone", {0: 84, 2: "[fe80::1%2]:443"}, "forward/seen/addr")
+    bad("forwarder seen: an IPv4-mapped address", {0: 84, 2: "[::ffff:192.0.2.1]:443"}, "forward/seen/addr")
+    bad("forwarder seen: a port with a leading zero", {0: 84, 2: "192.0.2.1:080"}, "forward/seen/addr")
     bad("relay error: empty reason", {0: 93, 2: ""}, "server/error/reason")
 
     mp("an offer", "offer", offer)
@@ -1715,6 +1718,10 @@ def invitation_vectors():
     no("an ID of zeros", {**base, 1: bytes(16)}, "invite/shape", cross=True)
     no("a secret of zeros", {**base, 2: bytes(32)}, "invite/shape", cross=True)
     no("an endpoint twice", {**base, 3: [home, {**guest, 2: ["203.0.113.5:51820"] * 2}]}, "invite/path")
+    no("an endpoint with an IPv6 zone", {**base, 3: [home, {**guest, 2: ["[fe80::1%2]:443"]}]}, "invite/path")
+    no("an IPv4-mapped endpoint", {**base, 3: [home, {**guest, 2: ["[::ffff:192.0.2.1]:443"]}]}, "invite/path")
+    no("one endpoint twice in two spellings of its port",
+       {**base, 3: [home, {**guest, 2: ["192.0.2.1:80", "192.0.2.1:080"]}]}, "invite/path")
     no("five paths", {**base, 3: [home] * 5}, "invite/path")
     no("a guest path without the hub's key", {**base, 3: [home, {k: v for k, v in guest.items() if k != 3}]},
        "invite/path", cross=True)

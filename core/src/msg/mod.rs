@@ -105,7 +105,7 @@ fn check_ty(f: &Field, v: &Value<'_>) -> Result<(), Rule> {
         }
         Ty::Addr => {
             let t = v.as_text().ok_or_else(bad)?;
-            if t.parse::<core::net::SocketAddr>().is_err() {
+            if !valid_addr(t) {
                 return Err(bad());
             }
         }
@@ -172,6 +172,21 @@ impl Table {
     /// The table's name: its shape rule without `/shape`.
     pub fn name(&self) -> &'static str {
         self.shape.strip_suffix("/shape").unwrap_or(self.shape)
+    }
+}
+
+/// Reports whether t is an `addr`: `ip:port` or `[ipv6]:port`, no scope
+/// (zone), no IPv4-mapped IPv6 address, the port in its shortest digits. So
+/// one address has one spelling, and a `once` list cannot hold it twice.
+pub fn valid_addr(t: &str) -> bool {
+    let Ok(a) = t.parse::<core::net::SocketAddr>() else { return false };
+    let Some((_, port)) = t.rsplit_once(':') else { return false };
+    if port.len() > 1 && port.starts_with('0') {
+        return false;
+    }
+    match a {
+        core::net::SocketAddr::V4(_) => true,
+        core::net::SocketAddr::V6(v6) => !t.contains('%') && v6.scope_id() == 0 && v6.ip().to_ipv4_mapped().is_none(),
     }
 }
 

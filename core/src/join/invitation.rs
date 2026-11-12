@@ -210,7 +210,7 @@ impl Invitation {
                 }
                 for x in e {
                     let t = x.as_text().ok_or(RULE_PATH)?;
-                    if t.parse::<core::net::SocketAddr>().is_err() {
+                    if !crate::msg::valid_addr(t) {
                         return Err(RULE_PATH);
                     }
                     endpoints.push(t.to_string());
