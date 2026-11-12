@@ -158,7 +158,7 @@ dependencies {
     testImplementation("net.java.dev.jna:jna:5.19.1")
     implementation(project(":shared"))
     // The kit's TLS: Conscrypt bundled, for TLS 1.3 with the exporter on every Android version.
-    implementation("org.conscrypt:conscrypt-android:2.8.0")
+    implementation("org.conscrypt:conscrypt-android:2.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     // The Wear OS watch (../wear) through the Wearable Data Layer of Google Play services, the
@@ -174,7 +174,7 @@ dependencies {
     constraints {
         // Guava comes in through the libraries above at 33.3.1, which GHSA-xxph-c9ww-hj94
         // affects; 33.7.2 fixes it.
-        implementation("com.google.guava:guava:33.7.2-android")
+        implementation("com.google.guava:guava:33.8.0-android")
     }
 
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
@@ -195,8 +195,8 @@ dependencies {
     testImplementation("androidx.test:core:1.7.0")
     testImplementation("androidx.test.ext:junit:1.3.0")
     // The screenshots (ScreenshotTest), drawn by Robolectric's native graphics.
-    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.76.0")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.76.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.77.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.77.0")
 
     // The instrumented tests on an emulator (src/androidTest): the screens with Compose's
     // test rule, the system's own screens (notifications, the share sheet) with UI Automator.
@@ -205,5 +205,5 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:rules:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
-    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.4.0")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.4.1")
 }
