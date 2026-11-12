@@ -362,6 +362,12 @@ fn strictly_sorted<T: Ord>(v: &[T]) -> bool {
     v.windows(2).all(|w| matches!(w, [a, b] if a < b))
 }
 
+/// Reports whether a `seen` list is a set: sorted by key hash, each key
+/// once.
+fn seen_set(seen: &[Seen]) -> bool {
+    seen.windows(2).all(|w| matches!(w, [a, b] if a.key < b.key))
+}
+
 /// A device name or an endpoint: no control character.
 fn plain_text(s: &str) -> bool {
     !s.chars().any(|c| matches!(c, '\u{0}'..='\u{1f}' | '\u{7f}'..='\u{9f}'))
@@ -387,12 +393,6 @@ impl Body {
     /// key is wanted, besides what the reader found (`held`).
     pub fn check(&self) -> Result<bool, Rule> {
         let t = type_name(self.kind.type_number());
-        if self.seq == 0 || self.seq > MAX_SEQ {
-            return Err(Rule::new("records/seq"));
-        }
-        if (self.seq == 1) != self.prev.is_none() {
-            return Err(Rule::new("records/prev"));
-        }
         if self.time_ms > MAX_INT {
             return Err(Rule::new("records/time_ms"));
         }
@@ -403,8 +403,7 @@ impl Body {
                 if r.keys.is_empty() || r.keys.len() > MAX_KEYS || !strictly_sorted(&r.keys) {
                     return Err(field(t, "keys"));
                 }
-                if !strictly_sorted(&r.seen) || r.seen.len() > super::MAX_SEEN || r.seen.iter().any(|s| s.seq > MAX_SEQ)
-                {
+                if !seen_set(&r.seen) || r.seen.len() > super::MAX_SEEN || r.seen.iter().any(|s| s.seq > MAX_SEQ) {
                     return Err(field(t, "seen"));
                 }
             }
@@ -415,7 +414,7 @@ impl Body {
             }
             Kind::Claim { root, seen } => {
                 held |= signer_key(root, t, "root")?;
-                if !strictly_sorted(seen) || seen.len() > super::MAX_SEEN || seen.iter().any(|s| s.seq > MAX_SEQ) {
+                if !seen_set(seen) || seen.len() > super::MAX_SEEN || seen.iter().any(|s| s.seq > MAX_SEQ) {
                     return Err(field(t, "seen"));
                 }
             }
@@ -450,6 +449,14 @@ impl Body {
                 }
                 held = true;
             }
+        }
+        // The fields between them last: a field's own row names its fault
+        // first.
+        if self.seq == 0 || self.seq > MAX_SEQ {
+            return Err(Rule::new("records/seq"));
+        }
+        if (self.seq == 1) != self.prev.is_none() {
+            return Err(Rule::new("records/prev"));
         }
         Ok(held)
     }

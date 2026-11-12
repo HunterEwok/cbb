@@ -1520,19 +1520,6 @@ mod vectors {
         for t in v["take"].as_array().unwrap() {
             let name = t["name"].as_str().unwrap();
             let env = unhex(t["envelope"].as_str().unwrap());
-            // These four list `seen` or `heads` out of the sorted order
-            // section 1 asks for (by key hash); the reader refuses them
-            // until the vectors are written again.
-            let unsorted = [
-                ("revoke", "records/revoke/seen"),
-                ("freeze", "records/freeze/seen"),
-                ("claim", "records/claim/seen"),
-                ("checkpoint", "records/checkpoint/heads"),
-            ];
-            if let Some((_, rule)) = unsorted.iter().find(|(n, _)| *n == name) {
-                assert_eq!(Record::decode(&env).map(|_| ()).unwrap_err().to_string(), *rule, "{name}");
-                continue;
-            }
             let r = Record::decode(&env).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(r.id().0.to_vec(), unhex(t["id"].as_str().unwrap()), "{name}");
             assert_eq!(r.envelope(), env, "{name}");
@@ -1576,6 +1563,18 @@ mod vectors {
         let got = Record::decode(&unhex(t["envelope"].as_str().unwrap())).map(|_| ()).unwrap_err();
         assert!(got.is("form/critical"));
     }
+}
+
+/// A `seen` list names each key once, whatever the seqs.
+#[test]
+fn seen_names_each_key_once() {
+    let g = G::new();
+    let a = k("a").hash;
+    let twice = vec![Seen { key: a, seq: 2 }, Seen { key: a, seq: 3 }];
+    let body = g.body(&k("root"), Kind::Revoke(removal(&[a], twice.clone())));
+    assert!(body.check().unwrap_err().is("records/revoke/seen"));
+    let body = g.body(&k("root"), Kind::Claim { root: k("n").key.clone(), seen: twice });
+    assert!(body.check().unwrap_err().is("records/claim/seen"));
 }
 
 /// Every record the rules' tests make reads back from its envelope as the
