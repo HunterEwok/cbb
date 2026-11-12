@@ -3,48 +3,95 @@
 # Copyright (C) 2026 HunterEwok
 
 # A soak stand (docs/testing.md, "Soak"): a small group of this build's cbb
-# runs for weeks on one machine, copies a line now and then, and has one of
-# its members killed with SIGKILL at a random moment and started again; one
-# line a day goes to soak.log.
+# runs for days on one machine, copies now and then, and has its members
+# killed with SIGKILL at random moments and started again; one line a day
+# goes to soak.log, and stop ends with a pass or fail line.
 #
 #   sh tools/soak/soak.sh start BINDIR   start (BINDIR holds cbb and cbb-helper)
 #   sh tools/soak/soak.sh status         the last lines of the log
-#   sh tools/soak/soak.sh stop           stop everything, print the log, remove the folder
+#   sh tools/soak/soak.sh verdict        the pass or fail line so far
+#   sh tools/soak/soak.sh stop           stop everything, print the log and the
+#                                        verdict, remove the folder
 #
-# The members talk on 127.0.0.1 only (-no-mdns, -peer), so the stand does
-# not meet the network's other devices; nothing is installed. The folder is
-# SOAK_DIR (~/cbb-stand/auto-checks by default; the shared bench's rule is
-# one folder per thread). Settings: SOAK_MEMBERS (3), SOAK_PORT (47610, the
-# first member's port), SOAK_COPY_EVERY (120 s), SOAK_KILL_MIN and
-# SOAK_KILL_MAX (600 and 3600 s between kills), SOAK_DAY (86400 s between
-# lines of the log).
+# Several stands run side by side, each with its own name, folder and ports:
+# SOAK_NAME (calm), SOAK_DIR (~/cbb-stand/auto-checks/NAME), SOAK_PORT (the
+# port base; members listen on base+1 to base+N; 47620 for calm, 47640 for
+# load). Every command takes the same settings as start.
+#
+# SOAK_PROFILE is calm or load:
+#   calm  SOAK_MEMBERS (3); a line every SOAK_COPY_EVERY (120 s) checked on
+#         every member; a kill every SOAK_KILL_MIN to SOAK_KILL_MAX (600 to
+#         3600 s).
+#   load  SOAK_MEMBERS (8); the calm copies, and every SOAK_BURST_EVERY
+#         (600 s) a burst of SOAK_BURST_LEN (60) copies one a second, some of
+#         them texts at the limit, the burst's last copy checked on every
+#         member; every SOAK_FILE_EVERY (1800 s) a file of up to
+#         SOAK_FILE_MAX (64 MiB) checked by its hash on every member; the
+#         kills fall inside a burst. The stand runs under nice 10 and, where
+#         taskset is, on the one core SOAK_CPU (the last one), so that a calm
+#         stand beside it keeps its numbers.
+# SOAK_DAY (86400 s) is the time between lines of the log, SOAK_WARMUP
+# (3600 s) the time after a member's start before its memory and open files
+# are taken as its baseline, SOAK_SAMPLE (600 s) the time between samples of
+# them for the verdict.
 #
 # A line of soak.log: the time, "soak", then key=value: day, copies sent,
-# arrived on every running member, missed, kills, starts after a kill
-# whose state read whole, broken ones, the members' largest RSS in KiB and
-# open files. A broken start or a missed copy also writes a line "soak
-# fault" with what was seen.
+# checked, arrived on every member, missed, kills, starts after a kill whose
+# state read whole, broken ones, the delivery time of the checked copies in
+# ms (p50, p95, max: the slowest member of each), the members' largest RSS in
+# KiB and open files, the largest growth of a member's RSS over its baseline
+# without a restart, and the members whose open files left their baseline. A
+# missed copy or a broken start also writes a line "soak fault".
+#
+# The verdict: PASS when no copy was missed, every start was whole, no
+# member's RSS grew more than 1 MiB over its baseline without a restart, and
+# every member's open files stayed at their baseline; else FAIL with why.
 set -eu
 
 umask 022
 ulimit -n 65536 2>/dev/null || true
 export LC_ALL=C.UTF-8
 
-dir=${SOAK_DIR:-$HOME/cbb-stand/auto-checks}
-members=${SOAK_MEMBERS:-3}
-port0=${SOAK_PORT:-47610}
+name=${SOAK_NAME:-calm}
+profile=${SOAK_PROFILE:-calm}
+case $profile in
+calm)
+	members=${SOAK_MEMBERS:-3}
+	port0=${SOAK_PORT:-47620}
+	;;
+load)
+	members=${SOAK_MEMBERS:-8}
+	port0=${SOAK_PORT:-47640}
+	;;
+*)
+	echo "soak: SOAK_PROFILE is calm or load" >&2
+	exit 2
+	;;
+esac
+dir=${SOAK_DIR:-$HOME/cbb-stand/auto-checks/$name}
 copy_every=${SOAK_COPY_EVERY:-120}
 kill_min=${SOAK_KILL_MIN:-600}
 kill_max=${SOAK_KILL_MAX:-3600}
 day=${SOAK_DAY:-86400}
+warmup=${SOAK_WARMUP:-3600}
+burst_every=${SOAK_BURST_EVERY:-600}
+burst_len=${SOAK_BURST_LEN:-60}
+file_every=${SOAK_FILE_EVERY:-1800}
+file_max=${SOAK_FILE_MAX:-67108864}
+wait_max=${SOAK_WAIT:-60}
+sample_every=${SOAK_SAMPLE:-600}
 cbb=$dir/bin/cbb
 log=$dir/soak.log
+counts=$dir/counts
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+secs() { date +%s; }
+ms() { echo $(($(date +%s%N) / 1000000)); }
 say() { echo "$(now) $*" >>"$log"; }
+# sh has no local variables: each function keeps to names of its own.
 rand() { # a number from $1 to $2
-	n=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')
-	echo $(($1 + n % ($2 - $1 + 1)))
+	_r=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')
+	echo $(($1 + _r % ($2 - $1 + 1)))
 }
 port() { echo $((port0 + $1)); }
 cli() { # member, then the command
@@ -62,19 +109,31 @@ run_member() {
 		i=$((i + 1))
 	done
 	# shellcheck disable=SC2086 # the peers are words
-	nohup "$cbb" -state "$dir/m$m" -socket "$dir/m$m/c.sock" service -name "soak-$m" \
+	nohup "$cbb" -state "$dir/m$m" -socket "$dir/m$m/c.sock" service -name "$name-$m" \
 		-port "$(port "$m")" -no-mdns $peers >>"$dir/m$m/service.log" 2>&1 &
 	echo $! >"$dir/m$m/pid"
+	secs >"$dir/m$m/since"
+	rm -f "$dir/m$m/base"
 }
 
 wait_ready() { # member
-	i=0
-	while [ $i -lt 60 ]; do
+	_w=0
+	while [ $_w -lt 60 ]; do
 		cli "$1" status >/dev/null 2>&1 && return 0
 		sleep 1
-		i=$((i + 1))
+		_w=$((_w + 1))
 	done
 	return 1
+}
+
+# The load stand yields to everything else: nice, and one core where it can.
+confine() {
+	[ "$profile" = load ] || return 0
+	renice -n 10 -p $$ >/dev/null 2>&1 || true
+	if command -v taskset >/dev/null 2>&1; then
+		cpu=${SOAK_CPU:-$(($(getconf _NPROCESSORS_ONLN) - 1))}
+		taskset -cp "$cpu" $$ >/dev/null 2>&1 || true
+	fi
 }
 
 start() {
@@ -87,6 +146,16 @@ start() {
 		echo "soak: already running in $dir (soak.sh stop first)" >&2
 		exit 1
 	}
+	m=1
+	while [ "$m" -le "$members" ]; do
+		p=$(port "$m")
+		if (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q "[.:]$p\b"; then
+			echo "soak: port $p is in use; set SOAK_PORT to another base" >&2
+			exit 1
+		fi
+		m=$((m + 1))
+	done
+	confine
 	mkdir -p "$dir/bin"
 	cp "$bin/cbb" "$bin/cbb-helper" "$dir/bin/"
 	m=1
@@ -116,10 +185,12 @@ start() {
 		m=$((m + 1))
 	done
 	cli 1 status | sed -n 's/.*group \([0-9a-f]*\).*/\1/p' | head -n 1 >"$dir/group"
-	say "soak start members=$members group=$(cat "$dir/group") version=$("$cbb" version 2>/dev/null | head -n 1)"
+	say "soak start name=$name profile=$profile members=$members ports=$((port0 + 1))-$((port0 + members))" \
+		"group=$(cat "$dir/group") version=$("$cbb" version 2>/dev/null | head -n 1)" \
+		"host=$(uname -m) cpus=$(getconf _NPROCESSORS_ONLN)"
 	nohup sh "$0" loop >>"$dir/loop.log" 2>&1 &
 	echo $! >"$dir/soak.pid"
-	echo "soak: running in $dir; sh $0 status | stop"
+	echo "soak: $name running in $dir; sh $0 status | verdict | stop (with the same settings)"
 }
 
 # whole: the member answers, is in the group it was in, and sees all of it.
@@ -129,66 +200,266 @@ whole() {
 	[ "$(echo "$st" | grep -c ' Linux ')" -ge "$members" ]
 }
 
-usage() { # largest RSS in KiB and open files of the members
-	rss=0
-	fds=0
+# Waits until every member pastes text, at most wait_max seconds; adds the
+# slowest member's delivery time to delivery.ms. Fails with the members
+# that did not get it.
+arrives() { # text, sent at (ms)
+	text=$1
+	sent=$2
+	left=
 	m=1
+	while [ "$m" -le "$members" ]; do
+		left="$left $m"
+		m=$((m + 1))
+	done
+	end=$(($(secs) + wait_max))
+	while [ -n "$left" ] && [ "$(secs)" -le "$end" ]; do
+		still=
+		for m in $left; do
+			[ "$(cli "$m" paste 2>/dev/null)" = "$text" ] || still="$still $m"
+		done
+		left=$still
+		[ -z "$left" ] || sleep 0.2
+	done
+	[ -z "$left" ] || {
+		missing=$left
+		return 1
+	}
+	echo $(($(ms) - sent)) >>"$dir/delivery.ms"
+}
+
+# The same for a file, checked by its SHA-256 in each member's paste -o.
+file_arrives() { # file, sent at (ms)
+	want=$(sha256sum "$1" | cut -d' ' -f1)
+	base=$(basename "$1")
+	left=
+	m=1
+	while [ "$m" -le "$members" ]; do
+		left="$left $m"
+		m=$((m + 1))
+	done
+	end=$(($(secs) + wait_max * 4))
+	while [ -n "$left" ] && [ "$(secs)" -le "$end" ]; do
+		still=
+		for m in $left; do
+			out=$dir/m$m/out
+			rm -rf "$out"
+			mkdir -p "$out"
+			if cli "$m" paste -o "$out" >/dev/null 2>&1 && [ -f "$out/$base" ] &&
+				[ "$(sha256sum "$out/$base" | cut -d' ' -f1)" = "$want" ]; then
+				:
+			else
+				still="$still $m"
+			fi
+			rm -rf "$out"
+		done
+		left=$still
+		[ -z "$left" ] || sleep 1
+	done
+	[ -z "$left" ] || {
+		missing=$left
+		return 1
+	}
+	echo $(($(ms) - $2)) >>"$dir/delivery.ms"
+}
+
+# A text of about n bytes, unique by its first line.
+text_of() { # n, label
+	printf '%s\n' "$2"
+	head -c "$1" /dev/urandom | od -An -tx1 | tr -d ' \n' | head -c "$1"
+}
+
+percentiles() { # p50 p95 max of delivery.ms
+	if [ -s "$dir/delivery.ms" ]; then
+		sort -n "$dir/delivery.ms" | awk '{a[NR]=$1} END {
+			p50=a[int((NR+1)*0.50)]; p95=a[int((NR*0.95)+0.999)]; if (p95=="") p95=a[NR];
+			printf "delivery_ms_p50=%d delivery_ms_p95=%d delivery_ms_max=%d", p50, p95, a[NR] }'
+	else
+		echo "delivery_ms_p50=- delivery_ms_p95=- delivery_ms_max=-"
+	fi
+}
+
+# Each member's RSS and open files; after its warm-up the first sample is
+# its baseline, and growth is measured against it until it restarts.
+usage() {
+	rss=0 fds=0 grow=0 fds_moved=
+	m=1
+	t=$(secs)
 	while [ "$m" -le "$members" ]; do
 		p=$(cat "$dir/m$m/pid")
 		r=$(awk '/^VmRSS:/ {print $2}' "/proc/$p/status" 2>/dev/null || echo 0)
+		r=${r:-0}
 		f=$(find "/proc/$p/fd" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
-		[ "${r:-0}" -gt "$rss" ] && rss=$r
+		[ "$r" -gt "$rss" ] && rss=$r
 		[ "$f" -gt "$fds" ] && fds=$f
+		if [ $((t - $(cat "$dir/m$m/since"))) -ge "$warmup" ] && [ "$r" -gt 0 ]; then
+			if [ ! -e "$dir/m$m/base" ]; then
+				echo "$r $f" >"$dir/m$m/base"
+			else
+				read -r r0 f0 <"$dir/m$m/base"
+				[ $((r - r0)) -gt "$grow" ] && grow=$((r - r0))
+				[ "$f" -eq "$f0" ] || fds_moved="$fds_moved$m,"
+			fi
+		fi
 		m=$((m + 1))
 	done
-	echo "rss_kb=$rss fds=$fds"
+	echo "rss_kb=$rss fds=$fds rss_grow_kb=$grow fds_moved=${fds_moved:-none}"
+}
+
+# usage, counted for the verdict: every sample, and every day's line, is one.
+sample() {
+	u=$(usage)
+	g=$(echo "$u" | sed -n 's/.*rss_grow_kb=\([0-9]*\).*/\1/p')
+	[ "${g:-0}" -le "$max_grow" ] || max_grow=$g
+	echo "$u" | grep -q 'fds_moved=none' || fds_bad=$((fds_bad + 1))
+	echo "$u"
+}
+
+save_counts() {
+	echo "copies=$copies checked=$checked arrived=$arrived missed=$missed kills=$kills whole=$whole_n" \
+		"broken=$broken max_grow=$max_grow fds_bad=$fds_bad" >"$counts"
+}
+
+kill_one() {
+	victim=$(rand 1 "$members")
+	kill -9 "$(cat "$dir/m$victim/pid")" 2>/dev/null || true
+	kills=$((kills + 1))
+	sleep 2
+	run_member "$victim"
+	if wait_ready "$victim" && sleep 20 && whole "$victim"; then
+		whole_n=$((whole_n + 1))
+	else
+		broken=$((broken + 1))
+		say "soak fault kill=$kills member=$victim status=$(cli "$victim" status 2>&1 | tr '\n' '|' | cut -c1-400)"
+	fi
+	next_kill=$(($(secs) + $(rand "$kill_min" "$kill_max")))
+}
+
+check_text() { # text, from, sent at, what
+	checked=$((checked + 1))
+	if arrives "$1" "$3"; then
+		arrived=$((arrived + 1))
+	else
+		missed=$((missed + 1))
+		say "soak fault $4 from=$2 missing_on=$(echo "$missing" | tr ' ' ',')"
+	fi
+}
+
+calm_copy() {
+	from=$(rand 1 "$members")
+	text="soak $name $copies $(now)"
+	sent=$(ms)
+	if echo "$text" | cli "$from" copy >/dev/null 2>&1; then
+		copies=$((copies + 1))
+		check_text "$text" "$from" "$sent" "copy=$((copies - 1))"
+	fi
+}
+
+burst() {
+	kill_at=0
+	[ "$(secs)" -ge "$next_kill" ] && kill_at=$(rand 1 "$burst_len")
+	b=1
+	last=
+	while [ "$b" -le "$burst_len" ]; do
+		from=$(rand 1 "$members")
+		label="soak $name burst $copies $(now)"
+		# One in ten at the limit of a text (1 MiB), the rest up to 4 KiB.
+		if [ "$(rand 1 10)" -eq 1 ]; then size=1048000; else size=$(rand 16 4096); fi
+		text_of "$size" "$label" >"$dir/text"
+		sent=$(ms)
+		if cli "$from" copy <"$dir/text" >/dev/null 2>&1; then
+			copies=$((copies + 1))
+			last=$from
+		fi
+		[ "$b" -eq "$kill_at" ] && kill_one
+		b=$((b + 1))
+		sleep 1
+	done
+	[ -n "$last" ] && check_text "$(cat "$dir/text")" "$last" "$sent" "burst_last=$((copies - 1))"
+	rm -f "$dir/text"
+}
+
+file_copy() {
+	from=$(rand 1 "$members")
+	n=$(rand 1 "$file_max")
+	f=$dir/files/soak-$copies.bin
+	mkdir -p "$dir/files"
+	head -c "$n" /dev/urandom >"$f"
+	sent=$(ms)
+	if cli "$from" copy "$f" >/dev/null 2>&1; then
+		copies=$((copies + 1))
+		checked=$((checked + 1))
+		if file_arrives "$f" "$sent"; then
+			arrived=$((arrived + 1))
+		else
+			missed=$((missed + 1))
+			say "soak fault file=$((copies - 1)) bytes=$n from=$from missing_on=$(echo "$missing" | tr ' ' ',')"
+		fi
+	fi
+	rm -f "$f"
 }
 
 loop() {
-	copies=0 arrived=0 missed=0 kills=0 whole_n=0 broken=0 days=0
-	t=0
-	next_kill=$(rand "$kill_min" "$kill_max")
-	next_day=$day
+	confine
+	copies=0 checked=0 arrived=0 missed=0 kills=0 whole_n=0 broken=0 days=0 max_grow=0 fds_bad=0
+	t0=$(secs)
+	next_copy=$((t0 + copy_every))
+	next_kill=$((t0 + $(rand "$kill_min" "$kill_max")))
+	next_day=$((t0 + day))
+	next_burst=$((t0 + burst_every))
+	next_file=$((t0 + file_every))
+	next_sample=$((t0 + warmup))
 	while :; do
-		sleep "$copy_every"
-		t=$((t + copy_every))
-		from=$(rand 1 "$members")
-		text="soak $copies $(now)"
-		if echo "$text" | cli "$from" copy >/dev/null 2>&1; then
-			copies=$((copies + 1))
-			sleep 30
-			t=$((t + 30))
-			ok=1
-			m=1
-			while [ "$m" -le "$members" ]; do
-				if [ "$(cli "$m" paste 2>/dev/null)" != "$text" ]; then
-					ok=0
-					say "soak fault copy=$((copies - 1)) from=$from missing_on=$m"
-				fi
-				m=$((m + 1))
-			done
-			if [ $ok -eq 1 ]; then arrived=$((arrived + 1)); else missed=$((missed + 1)); fi
+		t=$(secs)
+		if [ "$t" -ge "$next_copy" ]; then
+			calm_copy
+			next_copy=$(($(secs) + copy_every))
 		fi
-		if [ "$t" -ge "$next_kill" ]; then
-			m=$(rand 1 "$members")
-			kill -9 "$(cat "$dir/m$m/pid")" 2>/dev/null || true
-			kills=$((kills + 1))
-			sleep 2
-			run_member "$m"
-			if wait_ready "$m" && sleep 20 && whole "$m"; then
-				whole_n=$((whole_n + 1))
-			else
-				broken=$((broken + 1))
-				say "soak fault kill=$kills member=$m status=$(cli "$m" status 2>&1 | tr '\n' '|' | cut -c1-400)"
-			fi
-			next_kill=$((t + $(rand "$kill_min" "$kill_max")))
+		if [ "$profile" = load ] && [ "$(secs)" -ge "$next_burst" ]; then
+			burst
+			next_burst=$(($(secs) + burst_every))
 		fi
-		if [ "$t" -ge "$next_day" ]; then
+		if [ "$profile" = load ] && [ "$(secs)" -ge "$next_file" ]; then
+			file_copy
+			next_file=$(($(secs) + file_every))
+		fi
+		if [ "$profile" = calm ] && [ "$(secs)" -ge "$next_kill" ]; then
+			kill_one
+		fi
+		if [ "$(secs)" -ge "$next_sample" ]; then
+			sample >/dev/null
+			next_sample=$(($(secs) + sample_every))
+		fi
+		if [ "$(secs)" -ge "$next_day" ]; then
 			days=$((days + 1))
-			say "soak day=$days copies=$copies arrived=$arrived missed=$missed kills=$kills whole=$whole_n broken=$broken $(usage)"
-			next_day=$((t + day))
+			sample >"$dir/usage" # here, not in $(...): it counts for the verdict
+			say "soak day=$days copies=$copies checked=$checked arrived=$arrived missed=$missed kills=$kills" \
+				"whole=$whole_n broken=$broken $(percentiles) $(cat "$dir/usage")"
+			next_day=$(($(secs) + day))
 		fi
+		save_counts
+		sleep 1
 	done
+}
+
+verdict() {
+	[ -e "$counts" ] || {
+		echo "soak verdict: nothing counted yet in $dir"
+		return 0
+	}
+	# shellcheck disable=SC1090 # the counts are key=value lines this script wrote
+	. "$counts"
+	why=
+	[ "$missed" -eq 0 ] || why="$why missed=$missed"
+	[ "$broken" -eq 0 ] || why="$why broken=$broken"
+	[ "$max_grow" -le 1024 ] || why="$why rss_grow_kb=$max_grow"
+	[ "$fds_bad" -eq 0 ] || why="$why fds_moved_samples=$fds_bad"
+	head=$(sed -n '1s/^[^ ]* //p' "$log")
+	if [ -z "$why" ]; then
+		echo "$(now) soak verdict PASS copies=$copies checked=$checked kills=$kills whole=$whole $(percentiles) | $head"
+	else
+		echo "$(now) soak verdict FAIL$why | $head"
+	fi
 }
 
 stop() {
@@ -211,6 +482,7 @@ stop() {
 		m=$((m + 1))
 	done
 	say "soak stop"
+	verdict >>"$log"
 	cat "$log"
 	rm -rf "$dir"
 }
@@ -225,9 +497,10 @@ start)
 	;;
 loop) loop ;;
 status) tail -n 20 "$log" ;;
+verdict) verdict ;;
 stop) stop ;;
 *)
-	echo "usage: sh tools/soak/soak.sh start BINDIR | status | stop" >&2
+	echo "usage: sh tools/soak/soak.sh start BINDIR | status | verdict | stop" >&2
 	exit 2
 	;;
 esac

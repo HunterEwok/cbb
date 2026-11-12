@@ -165,12 +165,32 @@ Enclave and Face ID add is a hand checklist in the bench's test plan, run once b
 
 ## Soak
 
-`tools/soak/soak.sh` runs a small group of a build's `cbb` for weeks on one machine, on
-127.0.0.1 only: it copies a line every two minutes and checks it arrives everywhere, kills a
-member with SIGKILL at a random moment every 10 to 60 minutes and checks it starts whole, and
-writes one line a day to `soak.log` (copies, arrived, missed, kills, whole and broken starts,
-the largest RSS and open files). It runs on the shared bench's Raspberry Pi 4 in its own
-folder; `soak.sh stop` prints the log and removes everything.
+`tools/soak/soak.sh` runs a small group of a build's `cbb` for days on one machine, on 127.0.0.1
+only, and checks that what is copied arrives everywhere and that a member killed with SIGKILL
+starts whole. Several stands run side by side, each with its own name, folder and ports
+(`SOAK_NAME`, `SOAK_DIR`, `SOAK_PORT`), in two profiles:
+
+- **calm**: 3 members; a line every two minutes, checked on every member; a member killed every
+  10 to 60 minutes.
+- **load**: 8 members; the calm lines, and every ten minutes a burst of a copy a second for a
+  minute (one in ten a text at the 1 MiB limit), its last copy checked on every member; every
+  half hour a file of up to 64 MiB, checked by its hash on every member; the kills inside the
+  bursts. It runs under `nice` on one core, so that a calm stand beside it keeps its numbers.
+
+Once a day a line goes to `soak.log`: copies sent and checked, arrived and missed, kills, whole
+and broken starts, the delivery time of the checked copies (p50, p95, max over the slowest
+member), the largest RSS and open files, the largest growth of a member's RSS over its baseline
+(taken after an hour's warm-up, again after each restart) and the members whose open files moved.
+`soak.sh verdict` prints the pass or fail line so far, and `soak.sh stop` ends with it: PASS when
+no copy was missed, every start was whole, no member's RSS grew more than 1 MiB over its baseline
+without a restart, and every member's open files stayed at their baseline.
+
+A release candidate's build runs seven days on the shared bench's Raspberry Pi 4, the calm and
+the load stand side by side, before the release (a release condition), and goes on to thirty.
+A counted run reports, for each stand: the days, the commit, the hardware (`soak start` writes
+the machine and its cores), copies sent, checked and missed, kills and broken starts, the
+delivery times, the memory and open files with their growth, and the verdict. The documents
+give only numbers measured that way.
 
 ## Bench scenarios
 

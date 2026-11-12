@@ -35,8 +35,11 @@ All notable changes to cbb are documented in this file. The format follows
 - Recovery drills that run by themselves (`tools/e2e/drills.sh`): the root lost and taken back
   with the recovery key, a new phone restoring the group, a device restored from yesterday's
   backup getting back in, a removed device restored from an older backup staying out.
-- A soak stand (`tools/soak/soak.sh`): a small group runs for weeks, its members killed at
-  random moments, with one line a day of what arrived and what started whole.
+- Soak stands (`tools/soak/soak.sh`): a small group runs for days, its members killed at random
+  moments, a calm stand and one under load (bursts, texts at the limit, files, eight members)
+  side by side, with one line a day of what arrived, how fast, and the members' memory and open
+  files, and a pass or fail line at the end; seven days on a release candidate are a release
+  condition (docs/testing.md, "Soak").
 - A sheet of the dangerous screens (`CBB_DANGEROUS_SHEET`, docs/testing.md): every screen of the
   tray app and the Android app where a person decides something the group's safety depends on, in all eight
   languages, as one HTML file to read before a release.
