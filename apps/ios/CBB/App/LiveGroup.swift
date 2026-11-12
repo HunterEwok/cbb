@@ -359,7 +359,8 @@ final class LiveGroup: GroupController {
                   throughHub: $0.id != g.device && !online.contains($0.id) && reached.contains($0.id), role: $0.role, caps: $0.caps, os: $0.os,
                   isSelf: $0.id == g.device,
                   admin: $0.admin || $0.id == root, isRoot: $0.id == root,
-                  canMakeAdmin: g.isRoot && !$0.admin && !$0.frozen && $0.can("admin") && offers[$0.id] != nil,
+                  canMakeAdmin: g.isRoot && $0.id != root && !$0.admin && !$0.frozen && ($0.role == "phone" || $0.can("admin"))
+                      && offers[$0.id] != nil,
                   keysInFile: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.file,
                   rootless: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.rootless, frozen: $0.frozen,
                   device: $0.id == g.device ? Self.ownDevice : infos[$0.id], mode: $0.id == g.device ? modeBox.mode : modes[$0.id],
@@ -443,6 +444,46 @@ final class LiveGroup: GroupController {
 
     func prepare() throws {
         _ = try memberSigner()
+    }
+
+    /// This phone's admin key, made now if it has none: in the Secure
+    /// Enclave behind Face ID like the root key. Making it asks nothing;
+    /// only a signature does.
+    private func adminKey() throws -> SecKeySigner {
+        let se = Self.secureEnclave
+        return try SecKeySigner(KeychainIdentity.loadKey(label: Self.adminLabel)
+            ?? KeychainIdentity.makeKey(label: Self.adminLabel, secureEnclave: se, userPresence: se))
+    }
+
+    /// The admin key a member phone's hellos offer, for the root's "Make it
+    /// an admin" (docs/protocol.md, section 10, "Admins"); none on the root and on an admin.
+    private func offeredAdminKey(_ g: PhoneGroup) -> Data? {
+        guard !g.isAdmin else { return nil }
+        do {
+            return try adminKey().publicKeyDER
+        } catch {
+            keysLog.error("making the admin key to offer: \(String(reflecting: error), privacy: .public)")
+            return nil
+        }
+    }
+
+    /// Takes the admin CA the root sent when it made this member phone an
+    /// admin: PhoneGroup.takeAdminCA checks it is for this phone's admin key
+    /// and from the current root. The hellos offer the key no more, and
+    /// sync starts again as an admin's.
+    private func adminCAReceived(_ ca: Data, from: String) async {
+        guard var g = state, !g.isAdmin, let key = offeredAdminKey(g) else { return }
+        do {
+            try g.takeAdminCA(ca, adminKey: key)
+            try g.save(to: file)
+        } catch {
+            keysLog.error("the admin CA from \(from, privacy: .public): \(String(reflecting: error), privacy: .public)")
+            return
+        }
+        state = g
+        groupChanged()
+        keysLog.notice("the root made this phone an admin")
+        await restartSync()
     }
 
     private func memberSigner() throws -> SecKeySigner {
@@ -732,17 +773,13 @@ final class LiveGroup: GroupController {
     /// Joins another phone's group (docs/protocol.md, section 6, "The
     /// joiner listens") through the core (CorePairing.Joining): listens,
     /// hands show the QR code to put on screen, and waits up to five
-    /// minutes for an admin phone to scan it and admit this one. With
-    /// asAdmin it makes this phone's admin key and asks to be an admin,
-    /// which only the group's root grants; without, any admin admits it as
-    /// a member. Three wrong codes end it, as does cancelling the task.
-    func join(asAdmin: Bool = false, show: @escaping @MainActor (JoinCode) -> Void) async throws {
+    /// minutes for an admin phone to scan it and admit this one, always as
+    /// a member: the root makes it an admin later with the admin key its
+    /// hellos offer (offeredAdminKey). Three wrong codes end it, as does
+    /// cancelling the task.
+    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws {
         guard state == nil else { return }
         let member = try memberSigner()
-        // The admin key, in the Secure Enclave behind Face ID like the root
-        // key; the core asks it once, for the proof on the admitting
-        // connection.
-        let admin = asAdmin ? try await signer(label: Self.adminLabel, reason: String(localized: "Join a group as an admin", bundle: .app)) : nil
         let listener = try CorePairing.Listener()
         let port = try await listener.start()
         let addrs = LocalAddresses.current().map { JoinCode.address(host: $0, port: port) }
@@ -753,8 +790,7 @@ final class LiveGroup: GroupController {
         let joining: CorePairing.Joining
         do {
             joining = try CorePairing.Joining(name: PhoneGroup.validName(UIDevice.current.name), publicKey: member.publicKeyDER,
-                                              seal: Self.sealKey(), addrs: addrs, sign: { try member.signature(digest: $0) },
-                                              adminPublic: admin?.publicKeyDER, signAdmin: admin.map { a in { try a.signature(digest: $0) } })
+                                              seal: Self.sealKey(), addrs: addrs, sign: { try member.signature(digest: $0) })
         } catch {
             listener.stop()
             throw error
@@ -921,9 +957,7 @@ final class LiveGroup: GroupController {
         guard !LocalAddresses.current().isEmpty else { throw Failure.noNetwork }
         let window = try await findWindow()
         let member = try memberSigner()
-        let se = Self.secureEnclave
-        let admin = try SecKeySigner(KeychainIdentity.loadKey(label: Self.adminLabel)
-            ?? KeychainIdentity.makeKey(label: Self.adminLabel, secureEnclave: se, userPresence: se))
+        let admin = try adminKey()
         let cert = try GroupCertificates.selfSigned(device: Member.newID(), signer: member)
         let id = try identity(certificate: cert, member)
         let info = Pairing.Info(name: PhoneGroup.validName(UIDevice.current.name), os: "ios", adminKey: admin.publicKeyDER,
@@ -1373,9 +1407,10 @@ final class LiveGroup: GroupController {
         if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
     }
 
-    /// Makes a computer an admin (docs/protocol.md, section 10, "Admins"): the root key, after Face ID, certifies the admin key the
-    /// computer offers; the computer gets its admin CA and every member the
-    /// new record.
+    /// Makes a phone or a computer an admin (docs/protocol.md, section 10,
+    /// "Admins"): the root key, after Face ID, certifies
+    /// the admin key the device offers; the device gets its admin CA and
+    /// every member the new record.
     func makeAdmin(_ id: String) async throws {
         // The dialog before it warned when the computer's keys sit in a file.
         try await makeAdmin(id, allowFileKey: true)
@@ -1432,18 +1467,22 @@ final class LiveGroup: GroupController {
         if !res.done { throw CommandRefused(reason: res.reason ?? res.status) }
     }
 
-    /// Makes a computer an admin; one whose keys sit in a file only with
-    /// allowFileKey, else PhoneGroup.Failure.fileKey; a rootless install
-    /// never (PhoneGroup.Failure.rootless).
+    /// Makes a phone or a computer an admin; a computer whose keys sit in a
+    /// file only with allowFileKey, else PhoneGroup.Failure.fileKey; a
+    /// rootless install never (PhoneGroup.Failure.rootless). A phone keeps
+    /// the store its record names.
     private func makeAdmin(_ id: String, allowFileKey: Bool) async throws {
         guard state?.isRoot == true, let key = offers[id] else { throw Failure.notAdmin }
-        let store = keyStores[id]
-        guard Records.store(store, role: "member") != Records.rootless else { throw PhoneGroup.Failure.rootless }
-        guard Records.store(store, role: "member") == Records.hardware || allowFileKey else { throw PhoneGroup.Failure.fileKey }
-        let root = try await caSigner(reason: String(localized: "Make a computer an admin", bundle: .app))
+        let phone = state?.devices.first { $0.id == id }?.role == "phone"
+        let store = phone ? nil : keyStores[id]
+        if !phone {
+            guard Records.store(store, role: "member") != Records.rootless else { throw PhoneGroup.Failure.rootless }
+            guard Records.store(store, role: "member") == Records.hardware || allowFileKey else { throw PhoneGroup.Failure.fileKey }
+        }
+        let root = try await caSigner(reason: String(localized: "Make a device an admin", bundle: .app))
         // The user's consent to a key in a file, after the dialog's
         // warning, lets the group take keys in files too.
-        if Records.store(store, role: "member") == Records.file, allowFileKey, state?.keyLevel != Records.levelFiles {
+        if !phone, Records.store(store, role: "member") == Records.file, allowFileKey, state?.keyLevel != Records.levelFiles {
             try rootRecord(root) { n, p, s in try n.setKeyLevel(Records.levelFiles, public: p, sign: s) }
         }
         guard var g = state else { return }
@@ -1666,7 +1705,7 @@ final class LiveGroup: GroupController {
         let node = try CoreMember(.init(dir: memberDir, name: UIDevice.current.name, osVersion: Self.ownDevice.osVersion ?? "",
                                         version: Self.ownDevice.version ?? "", device: g.device, publicKeyDER: signer.publicKeyDER,
                                         seal: try SealKey.secret(), cert: g.memberCert, issuer: g.memberIssuer, groupCA: g.groupCA,
-                                        roots: g.trusted)) { try signer.signature(digest: $0) }
+                                        roots: g.trusted, adminKey: offeredAdminKey(g))) { try signer.signature(digest: $0) }
         try node.addRecords(g.records.records)
         try node.setSync(on: modeBox.mode != "own", forMS: modeBox.syncOffUntilMS.map { max(1, $0 - Int64(Date().timeIntervalSince1970 * 1000)) } ?? 0)
         if let muted = modeBox.mutedUntilMS { try node.setMute(untilMS: muted) }
@@ -1927,6 +1966,8 @@ final class LiveGroup: GroupController {
         case .peer:
             take(peers: (try? node?.peers()) ?? [])
             pullRecords()
+        case let .message(from, .admin(ca)):
+            Task { await adminCAReceived(ca, from: from) }
         case let .message(from, .evidence(ev)):
             let chain = ((try? node?.peers()) ?? []).first { $0.device == from }?.chain ?? []
             guard !chain.isEmpty else { return }

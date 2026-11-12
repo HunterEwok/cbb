@@ -156,7 +156,7 @@ final class AppModelTests: XCTestCase {
         func prepare() throws { prepared += 1 }
         var joinCode = JoinCode(code: "135790", addrs: ["192.168.1.30:50000"], fingerprint: "fp")
         var shown: [JoinCode] = []
-        func join(asAdmin: Bool, show: @escaping @MainActor (JoinCode) -> Void) async throws {
+        func join(show: @escaping @MainActor (JoinCode) -> Void) async throws {
             show(joinCode)
             shown.append(joinCode)
             hasGroup = true

@@ -25,6 +25,11 @@ struct Membership
     QByteArray records; // the records file
     bool root = false; // the phone made the group and holds its root key
     QByteArray claim; // the new root CA of the phone's claim to take the group over, while it waits
+    // The admin key (an uncompressed point) the member's hellos offer the
+    // root while the phone is no admin, for the root's "Make an admin"
+    // (docs/protocol.md, section 10, "Admins"); empty once it is one, or
+    // when the phone made no admin key.
+    QByteArray adminOffer;
 
     bool isNull() const { return device.isEmpty(); }
     // An admin: through its admin CA, or as the group's root, which issues

@@ -312,7 +312,7 @@ void Join::feed(const QByteArray &data)
         // A window that makes no admins refuses a phone that asks to be one:
         // the page says so, and keeps waiting for the root.
         if (m_admin && !wrongCode)
-            m_error = Errors::shown({QCoreApplication::translate("Errors", "The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin."),
+            m_error = Errors::shown({QCoreApplication::translate("Errors", "The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin."),
                                      QStringLiteral("join: %1: %2").arg(e.value(QStringLiteral("message")).toString(), e.value(QStringLiteral("details")).toString())});
         setState(QStringLiteral("listening"));
         return;

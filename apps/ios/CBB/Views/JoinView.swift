@@ -15,8 +15,7 @@ struct JoinView: View {
     var body: some View {
         VStack(spacing: Tokens.spacingLarge) {
             Spacer()
-            Text(model.joiningInvite != nil ? LocalizedStringKey("Join with an invitation")
-                : model.joinAsAdmin ? LocalizedStringKey("Join as an admin") : LocalizedStringKey("Join a group"))
+            Text(model.joiningInvite != nil ? LocalizedStringKey("Join with an invitation") : LocalizedStringKey("Join a group"))
                 .font(.system(.title, design: .monospaced).weight(.bold))
                 .foregroundStyle(palette.accent)
             if model.joiningInvite != nil {
@@ -45,9 +44,7 @@ struct JoinView: View {
                     .font(.system(.largeTitle, design: .monospaced).weight(.bold))
                     .textSelection(.enabled)
                     .accessibilityLabel(Text(verbatim: code.code.map(String.init).joined(separator: " ")))
-                Text(model.joinAsAdmin
-                    ? LocalizedStringKey("On the group's root phone, tap + and scan this code: only the root adds a phone as an admin. Keep this screen open.")
-                    : LocalizedStringKey("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open."))
+                Text("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(palette.textDim)
             } else if model.message == nil {

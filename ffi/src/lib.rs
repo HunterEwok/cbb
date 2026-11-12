@@ -468,7 +468,8 @@ pub unsafe extern "C" fn cbb_member_call(
 
 /// Signs an admin's change to a device of the group, or a command for it
 /// (src/member.rs, manage): `request` is `{"action", "device", "name",
-/// "for_ms", "public", "admin_ca", "timeout_ms"}` and `sign` with `ctx`
+/// "for_ms", "text", "mode", "kind", "enter", "public", "admin_ca",
+/// "timeout_ms"}` and `sign` with `ctx`
 /// signs with the key `public` names, during this call only. A command
 /// waits for its result, so the app calls it off its main thread.
 ///

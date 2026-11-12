@@ -93,8 +93,6 @@ struct StartView: View {
                 .buttonStyle(AccentButtonStyle())
             Button { model.startJoining() } label: { Text("Join a group") }
                 .buttonStyle(GlassButtonStyle())
-            Button { model.startJoining(admin: true) } label: { Text("Join as an admin") }
-                .buttonStyle(GlassButtonStyle())
             Button { invited = true } label: { Text("Join with an invitation") }
                 .buttonStyle(GlassButtonStyle())
             // Small, yet as large to touch as any button (44 points).

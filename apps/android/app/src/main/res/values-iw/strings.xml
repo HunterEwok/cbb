@@ -266,9 +266,6 @@
     <string name="invite_share">שיתוף ההזמנה</string>
     <string name="invite_title">הזמנת מכשיר מרחוק</string>
     <string name="invite_too_many">ההזמנה נסגרה אחרי שלושה ניסיונות כושלים. צרו חדשה.</string>
-    <string name="join_admin">הצטרפות כמנהל</string>
-    <string name="join_admin_hint">בטלפון השורש של הקבוצה, הקישו על + וסרקו את הקוד הזה: רק השורש מוסיף טלפון כמנהל. השאירו את המסך הזה פתוח.</string>
-    <string name="join_admin_title">הצטרפות כמנהל</string>
     <string name="join_group">הצטרפות לקבוצה</string>
     <string name="join_hint">בטלפון של הקבוצה, הקישו על + וסרקו את הקוד הזה. במחשב של הקבוצה, הקישו על + והקלידו את המספרים. השאירו את המסך הזה פתוח.</string>
     <string name="join_hint_tv">בטלפון שלכם, פתחו את CBB, הקישו על + וסרקו את הקוד הזה. השאירו את המסך הזה פתוח.</string>
@@ -346,6 +343,7 @@
     <string name="make_admin_body">אז הוא יוכל להוסיף ולהסיר מכשירים עם cbb pair ו-cbb remove. המפתחות שלו בקובץ במחשב: מי שמעתיק את הקובץ הזה יכול לפעול כמנהל עד שמנהל אחר יסיר אותו. עשו זאת רק למחשב שאתם שומרים עליו.</string>
     <string name="make_admin_files_body">אז הקבוצה מאפשרת למפתחות בקבצים להיות מנהלים ורכזות (הגדרות, מפתחות מנהל).</string>
     <string name="make_admin_hardware_body">אז הוא יוכל להוסיף ולהסיר מכשירים עם cbb pair ו-cbb remove. המפתחות שלו בחומרה שלו, שלעולם לא מוציאה אותם.</string>
+    <string name="make_admin_phone_body">אז הוא יוכל להוסיף ולהסיר מכשירים, ולקחת את הקבוצה אם הטלפון הזה יאבד.</string>
     <string name="make_admin_title">להפוך את %1$s למנהל?</string>
     <string name="make_hub">הפיכה לרכזת</string>
     <string name="make_hub_body">אז המכשירים שלכם מגיעים דרכו לקבוצה כשהם מחוץ לבית, דרך המעביר של הפרויקט ב-cbb.tools. הסנכרון מחוץ לבית חייב להיות מופעל שם כבר; רק המשתמש שלו מפעיל אותו.</string>
@@ -424,7 +422,7 @@
     <string name="reason_incoming">שינוי משך החיים של העתקה ממכשיר אחר</string>
     <string name="reason_join">הצטרפות לקבוצה כמנהל</string>
     <string name="reason_key_level">שינוי המפתחות שיכולים להיות מנהלים</string>
-    <string name="reason_make_admin">הפיכת מחשב למנהל</string>
+    <string name="reason_make_admin">הפיכת מכשיר למנהל</string>
     <string name="reason_make_hub">הפיכת מחשב לרכזת</string>
     <string name="reason_make_recovery">יצירת מפתח שחזור</string>
     <string name="reason_move_hub">העברת הרכזת למחשב</string>
