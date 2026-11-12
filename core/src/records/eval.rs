@@ -749,6 +749,7 @@ impl Rec<'_> {
             Kind::Claim { seen, .. } => body::seen_entry(seen, k),
             Kind::Revoke(r) | Kind::Freeze(r) => body::seen_entry(&r.seen, k),
             Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } => body::seen_entry(seen, k),
+            Kind::Device(d) => body::seen_entry(&d.seen, k),
             _ => None,
         }
     }
@@ -1067,6 +1068,10 @@ struct Epoch<'e, 'a> {
     split: bool,
     /// The other key of each admin's device (`with_pair`).
     pairs: BTreeMap<KeyHash, Vec<KeyHash>>,
+    /// Admin keys a newer root record of their device no longer names,
+    /// with that record: what the key signed and the record saw still
+    /// counts, the rest does not.
+    superseded: BTreeMap<KeyHash, usize>,
 }
 
 #[allow(clippy::indexing_slicing, reason = "positions come from the records' own Vec")]
@@ -1100,6 +1105,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             settings: Settings::default(),
             split: false,
             pairs: BTreeMap::new(),
+            superseded: BTreeMap::new(),
         };
         // Roots on the path first: their ceilings do not depend on the
         // settings, which are a root's record.
@@ -1342,6 +1348,34 @@ impl<'e, 'a> Epoch<'e, 'a> {
                         self.admins.insert(a, i);
                     }
                 }
+            }
+        }
+        // An admin key counts only from the newest root record of its
+        // device: a newer one that names another key, or none, works as a
+        // removal of it.
+        self.superseded.clear();
+        let mut current = BTreeSet::new();
+        let mut taken = Vec::new();
+        for rs in self.e.devices.values() {
+            let Some(newest) =
+                rs.iter().copied().filter(|&i| self.root_record(i)).reduce(|a, b| if self.newer(b, a) { b } else { a })
+            else {
+                continue;
+            };
+            let now = self.r(newest).dev().and_then(|d| d.admin.as_ref()).map(Key::hash);
+            current.extend(now);
+            for &i in rs {
+                if let Some(a) = self.r(i).dev().and_then(|d| d.admin.as_ref()).map(Key::hash)
+                    && self.root_record(i)
+                    && Some(a) != now
+                {
+                    taken.push((a, newest));
+                }
+            }
+        }
+        for (a, by) in taken {
+            if !current.contains(&a) {
+                self.superseded.insert(a, by);
             }
         }
         self.recovery = None;
@@ -1633,7 +1667,9 @@ impl<'e, 'a> Epoch<'e, 'a> {
             if self.label[b] == Label::Out {
                 continue;
             }
-            if root_acts.iter().any(|&a| self.cuts_off(a, b) && !self.spared(root_thaws.get(&self.r(a).id), b)) {
+            let gone = self.superseded.get(&self.r(b).b().signer).is_some_and(|&by| !self.e.saw(by, b));
+            if gone || root_acts.iter().any(|&a| self.cuts_off(a, b) && !self.spared(root_thaws.get(&self.r(a).id), b))
+            {
                 self.label[b] = Label::Out;
                 self.why[b] = Some(Why::Cut);
             }
@@ -1817,7 +1853,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
 
     /// Reports whether k is an admin key of this epoch that is not removed.
     fn live_admin(&self, k: &KeyHash) -> bool {
-        self.admins.contains_key(k) && !self.revoked.contains(k)
+        self.admins.contains_key(k) && !self.revoked.contains(k) && !self.superseded.contains_key(k)
     }
 
     /// The admin removals and freezes that count and name the admin key k
@@ -1950,6 +1986,19 @@ impl<'e, 'a> Epoch<'e, 'a> {
             Kind::Recovery { admin } => Some((self.r(i).b().seq, admin.hash())),
             _ => None,
         });
+        // A newer root record of that device within the cut that names
+        // another key, or none, and did not see the claim, took it away.
+        let taken = named.is_some_and(|n| {
+            let dev = self.r(n).device;
+            dev.and_then(|d| self.e.devices.get(&d)).into_iter().flatten().any(|&i| {
+                at_cut(i)
+                    && i != n
+                    && self.newer(i, n)
+                    && self.r(i).dev().and_then(|d| d.admin.as_ref()).is_none_or(|a| a.hash() != c.claimant)
+                    && claim.is_some_and(|cl| !self.e.saw(i, cl))
+            })
+        });
+        let named = named.filter(|_| !taken);
         let powers = named.and_then(|i| self.r(i).dev()).map_or(0, |d| d.powers)
             | recovery.max().filter(|(_, a)| *a == c.claimant).map_or(0, |_| POWER_TAKEOVER);
         // A removal of the claimant it saw: a root's within the cut, or an

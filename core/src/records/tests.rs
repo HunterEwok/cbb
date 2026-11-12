@@ -2667,3 +2667,41 @@ fn of_two_admins_settings_the_one_that_saw_the_other_counts() {
     assert_eq!(s.hubs, vec![if r1.id() < r2.id() { h1 } else { h2 }]);
     assert_eq!(s.incoming_ms, Some(if c1.id() < c2.id() { 5_000 } else { 7_000 }));
 }
+
+/// An admin key counts only from the newest root record of its device.
+/// A newer one that names no admin key, or another, works as a removal
+/// of the old key: what the key signed that the record's field 26 saw
+/// still counts, the rest does not.
+#[test]
+fn an_admin_key_counts_from_its_device_s_newest_root_record() {
+    let all = POWER_ADMIT | POWER_REMOVE | POWER_TAKEOVER;
+    // Named no more.
+    let mut g = G::new();
+    let (pt, t) = (k("phone t"), k("admin t"));
+    g.admin(&pt, &t, all);
+    g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let before = g.device(&t, &k("kept"), "kept", |_| {});
+    let at = g.seen_at(&t.hash, before.body().seq);
+    g.device(&k("root"), &pt, "phone t", |d| d.seen = vec![at]);
+    let admitted = g.device(&t, &k("late"), "late", |_| {});
+    let seen = g.seen();
+    let rm = g.rec(&t, Kind::Revoke(removal(&[k("laptop").hash], seen)));
+    let seen = g.seen();
+    let claim = g.rec(&t, Kind::Claim { root: k("other root").key.clone(), seen });
+    let s = state_of(&g.root.key, &g.recs, &BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]));
+    assert!(s.counting.contains(&before.id()));
+    assert!(!s.counting.contains(&admitted.id()) && !s.counting.contains(&rm.id()));
+    assert!(!s.revoked.contains(&k("laptop").hash));
+    assert_eq!(s.roots.len(), 1);
+    assert!(s.device(&pt.key.device_id()).is_some_and(|d| d.admin.is_none()));
+    assert!(!s.may_command(&t.hash));
+    // Another key named.
+    let mut g = G::new();
+    let t2 = k("admin t2");
+    g.admin(&pt, &t, all);
+    g.admin(&pt, &t2, POWER_REMOVE);
+    let late = g.device(&t, &k("x"), "x", |_| {});
+    let s = g.state();
+    assert!(!s.counting.contains(&late.id()));
+    assert_eq!(s.device(&pt.key.device_id()).and_then(|d| d.admin), Some(t2.hash));
+}
