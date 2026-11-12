@@ -106,6 +106,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_FAKE_HELPER` | the lite member's tests | Makes the test program play `cbb-helper` for the helper channel's tests. |
 | `CBB_FAKE_HELPER_MODE` | the lite member's tests | Makes the test program play a `cbb-helper` that misbehaves as the value says (`crash`, `silent`, `garbage`, `hang`, `die-on-call`) or plays a TPM (`tpm`), for `member/tests/helper_faults.rs`. |
 | `CBB_TEST_ALONE` | Go tests of cbb without its helper | The cbb binary they run alone, without `cbb-helper` beside it (`cargo build` at the top, `target/`). |
+| `CBB_TEST_RUN_AS` | the Rust cbb's own tests | Set by `sys::tests::gives_up_root` for the copy of the test process it starts as root: that copy becomes `nobody` and checks that it cannot become root again. |
 | `CBB_PREVIOUS` | Go tests of the service | The previous release's `cbb` for TestPreviousRelease (a device of version N in one group with N-1), as `tools/e2e/previous.sh` prints it. |
 | `CBB_REPO` | `tools/e2e/previous.sh` | The repository on GitHub whose releases it reads, `HunterEwok/cbb` by default. |
 | `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Limits the weekly fleet run to these scenarios (`-scenario`); all of them when unset. |

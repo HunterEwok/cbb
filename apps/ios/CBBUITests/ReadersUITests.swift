@@ -153,6 +153,30 @@ final class ReadersUITests: XCTestCase {
     /// The audit's checks that hold in every language and text size.
     private let checks: XCUIAccessibilityAuditType = [.textClipped, .sufficientElementDescription, .hitRegion, .elementDetection]
 
+    /// Taps e once more after a tap on it that did not take, and writes
+    /// that down: a line in the test's output, and an activity with the
+    /// screen's picture and the app's element tree as they were before the
+    /// second tap, which CI keeps for a failed test (ci.yml, "the failed
+    /// tests' activities"). An element that is gone is not tapped.
+    private func lostTap(_ app: XCUIApplication, on e: XCUIElement, _ screen: String) {
+        let exists = e.exists
+        let line = exists
+            ? "\(screen): the tap on '\(e.label)' did not open it in 10 seconds; tapping again"
+            : "\(screen): the tap did not open it in 10 seconds, and the button is gone; not tapping again"
+        print("ReadersUITests: \(line)")
+        XCTContext.runActivity(named: line) { activity in
+            let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            shot.name = "lost-tap-\(screen)"
+            shot.lifetime = .keepAlways
+            activity.add(shot)
+            let tree = XCTAttachment(string: app.debugDescription)
+            tree.name = "elements after a lost tap, \(screen)"
+            tree.lifetime = .keepAlways
+            activity.add(tree)
+            if exists { e.tap() }
+        }
+    }
+
     /// A9, U14: in each language the Start screen and Settings are
     /// translated and pass the audit, and the Start screen's top row runs
     /// with the language's direction.
@@ -179,10 +203,12 @@ final class ReadersUITests: XCTestCase {
             settings.tap()
             // A loaded simulator can lose a tap, as StartUITests'
             // openSettings allows for: one more tap when Settings has not
-            // opened.
+            // opened, written down in the log and the test's activities
+            // with the screen as it was, so that a failure shows what the
+            // tap met.
             let bar = app.navigationBars[tr("Settings", language)]
-            if !bar.waitForExistence(timeout: 10), settings.exists {
-                settings.tap()
+            if !bar.waitForExistence(timeout: 10) {
+                lostTap(app, on: settings, "Settings in \(language)")
             }
             XCTAssertTrue(bar.waitForExistence(timeout: 10), "\(language): Settings did not open")
             XCTAssertTrue(app.buttons[tr("Blueprint", language)].exists, "\(language): the colours are not translated")

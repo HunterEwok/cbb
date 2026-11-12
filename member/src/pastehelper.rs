@@ -621,4 +621,188 @@ mod tests {
         assert_eq!(console_bytes("a\nb", true), b"a\rb\r");
         assert_eq!(console_bytes("ls", false), b"ls");
     }
+
+    fn fresh(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("cbb-ph-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// A target that takes every paste and remembers it.
+    struct Fake {
+        got: std::sync::Mutex<Vec<(String, String, bool, bool)>>,
+        images: std::sync::atomic::AtomicUsize,
+    }
+
+    impl Target for Fake {
+        fn name(&self) -> &'static str {
+            "next"
+        }
+        fn inject(&self, text: &str, method: &str, enter: bool, no_lock: bool) -> std::result::Result<(), Fail> {
+            self.got.lock().unwrap().push((text.into(), method.into(), enter, no_lock));
+            match text {
+                "refuse" => refuse("not here"),
+                "fail" => Err(Fail::Failed(Error::msg("broke"))),
+                _ => Ok(()),
+            }
+        }
+        fn images(&self) -> bool {
+            true
+        }
+        fn image(&self) {
+            self.images.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    /// A service that takes the watch, answers it with first, sends each
+    /// of msgs and returns the answers it got before the target closed.
+    fn service(sock: &Path, first: Header, msgs: Vec<Message>) -> std::thread::JoinHandle<(Header, Vec<Header>)> {
+        let l = std::os::unix::net::UnixListener::bind(sock).unwrap();
+        std::thread::spawn(move || {
+            let (c, _) = l.accept().unwrap();
+            let mut w = c.try_clone().unwrap();
+            let mut r = control::Reader::new(c);
+            let watch = r.read().unwrap().unwrap().header;
+            control::write(&mut w, &Message::new(first, Vec::new())).unwrap();
+            let mut answers = Vec::new();
+            let n = msgs.iter().filter(|m| m.header.op == "inject").count();
+            for m in msgs {
+                control::write(&mut w, &m).unwrap();
+            }
+            for _ in 0..n {
+                answers.push(r.read().unwrap().unwrap().header);
+            }
+            (watch, answers)
+        })
+    }
+
+    #[test]
+    fn a_session_answers_every_inject() {
+        let dir = fresh("session");
+        let sock = dir.join("s.sock");
+        let inject = |seq: u64, text: &str, enter: bool| {
+            Message::new(
+                Header { op: "inject".into(), seq, method: "paste".into(), enter, ..Default::default() },
+                text.as_bytes().to_vec(),
+            )
+        };
+        let svc = service(
+            &sock,
+            Header { op: "reply".into(), ..Default::default() },
+            vec![
+                inject(1, "hello", true),
+                Message::new(Header { op: "write".into(), kind: "media".into(), ..Default::default() }, Vec::new()),
+                Message::new(Header { op: "status".into(), ..Default::default() }, Vec::new()),
+                inject(2, "refuse", false),
+                inject(3, "fail", false),
+            ],
+        );
+        let t = Fake { got: Default::default(), images: Default::default() };
+        let lines = std::sync::Mutex::new(Vec::<String>::new());
+        let log = |l: &str| lines.lock().unwrap().push(l.into());
+        let res = std::thread::scope(|s| {
+            let h = s.spawn(|| session(&sock, &t, &log));
+            let (watch, answers) = svc.join().unwrap();
+            assert_eq!((watch.op.as_str(), watch.inject.as_str(), watch.images), ("watch", "next", true));
+            assert_eq!(answers.iter().map(|a| a.seq).collect::<Vec<_>>(), [1, 2, 3]);
+            assert!(answers[0].error.is_empty());
+            assert!(answers[1].refused && answers[1].error == "not here");
+            assert_eq!(answers[2].error, "the next target could not paste");
+            h.join().unwrap()
+        });
+        assert!(res.is_ok(), "{res:?}");
+        assert_eq!(t.images.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(t.got.lock().unwrap()[0], ("hello".into(), "paste".into(), true, false));
+        let lines = lines.lock().unwrap();
+        assert!(lines.iter().any(|l| l == "cbb: pasting as the next target"), "{lines:?}");
+        assert!(lines.iter().any(|l| l.contains("a remote paste failed")), "{lines:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_refused_watch_ends_the_session() {
+        let dir = fresh("refused");
+        let sock = dir.join("s.sock");
+        let svc = service(&sock, Header { error: "no such target".into(), ..Default::default() }, Vec::new());
+        let t = Fake { got: Default::default(), images: Default::default() };
+        let e = session(&sock, &t, &|_| {}).unwrap_err();
+        assert_eq!(e.message(), "no such target");
+        svc.join().unwrap();
+        let e = session(&dir.join("none.sock"), &t, &|_| {}).unwrap_err();
+        assert!(e.message().contains("cannot reach the service"), "{e:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_command_takes_one_target() {
+        let sock = Path::new("/nonexistent/cbb.sock");
+        for args in [vec![], vec!["x".to_string()], vec!["tmux".into(), "console".into()]] {
+            let e = run(sock, &args).unwrap_err();
+            assert!(e.message().starts_with("usage: cbb paste-helper"), "{args:?}: {e:?}");
+        }
+    }
+
+    #[test]
+    fn one_helper_for_each_tmux_server() {
+        let dir = fresh("lock");
+        let sock = dir.join("default").to_string_lossy().into_owned();
+        let first = lock_helper(&sock).expect("the first helper takes the lock");
+        assert!(first.is_some());
+        assert!(lock_helper(&sock).is_none(), "a second helper of the same server");
+        drop(first);
+        assert!(lock_helper(&sock).is_some_and(|f| f.is_some()), "the lock is free again");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_console_pastes_or_types_only() {
+        assert!(matches!(Console.inject("x", "click", false, false), Err(Fail::Refused(r)) if r.contains("\"click\"")));
+        assert_eq!(Console.name(), "console");
+        assert!(locker().is_none_or(|n| LOCKERS.contains(&n.as_str())));
+    }
+
+    /// A tmux server with a control-mode client attached, whose pane runs
+    /// cat into a file: the target pastes and types into that pane.
+    #[test]
+    fn pastes_into_tmux() {
+        if Command::new("tmux").arg("-V").output().is_err() {
+            eprintln!("no tmux here");
+            return;
+        }
+        let dir = fresh("tmux");
+        let sock = dir.join("t.sock").to_string_lossy().into_owned();
+        let out = dir.join("pane.txt");
+        let tm = Tmux { args: vec!["-S".into(), sock.clone(), "-f".into(), "/dev/null".into()], console: false };
+        assert_eq!(tm.name(), "tmux");
+        assert!(!tm.alive());
+        assert!(matches!(tm.inject("x", "paste", false, false), Err(Fail::Failed(_))), "no server yet");
+        tm.run("", &["new-session", "-d", "-x", "80", "-y", "24", &format!("stty -echo; cat > {}", out.display())])
+            .unwrap();
+        assert!(tm.alive());
+        assert!(
+            matches!(tm.inject("x", "paste", false, false), Err(Fail::Refused(r)) if r == "no one is attached to tmux here")
+        );
+        let mut client = tm.command(&["-C", "attach"]).stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap();
+        let attached = (0..100).any(|_| {
+            std::thread::sleep(Duration::from_millis(50));
+            tm.output(&["list-clients"]).is_ok_and(|c| !c.trim().is_empty())
+        });
+        assert!(attached, "the control client did not attach");
+        tm.inject("pasted", "paste", true, false).unwrap();
+        tm.inject("typed 'quoted'\nline", "type", true, false).unwrap();
+        assert!(matches!(tm.inject("x", "drag", false, false), Err(Fail::Refused(r)) if r.contains("\"drag\"")));
+        let want = "pasted\ntyped 'quoted'\nline\n";
+        let got = (0..100)
+            .map(|_| {
+                std::thread::sleep(Duration::from_millis(50));
+                std::fs::read_to_string(&out).unwrap_or_default()
+            })
+            .find(|g| g == want);
+        let _ = tm.run("", &["kill-server"]);
+        let _ = client.kill();
+        let _ = client.wait();
+        assert_eq!(got.as_deref(), Some(want));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

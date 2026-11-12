@@ -85,7 +85,8 @@ reaches any workflow on any branch, so anyone who may push a branch could read i
 environment's **Deployment branches and tags** are *Selected branches and tags*: the tag
 pattern `v*` and the branch `main`. The jobs that sign (`build`, `android` and
 `openwrt-feed` in the release workflow, `homebrew` in the published workflow) name the
-environment; a run by hand to check a key therefore starts from `main`. No required
+environment; a run by hand to check a key therefore starts from `main`. `tools/repocheck` fails on
+a job of either workflow that reads a secret without naming the environment. No required
 reviewers: the release tag is the maintainer's decision already.
 
 | Secret | What it is | Section |

@@ -204,7 +204,9 @@ jobs:
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
           mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
           WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman sway >"$RUNNER_TEMP/sway.log" 2>&1 &
-          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          # -noreset: Xvfb resets when its last client goes, and a test
+          # that connects while it does fails.
+          Xvfb :5 -screen 0 640x480x24 -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
           for _ in $(seq 1 100); do
             WAYLAND_DISPLAY=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-[0-9]' -printf '%f\n' | head -n 1)
             [ -n "$WAYLAND_DISPLAY" ] && [ -e /tmp/.X11-unix/X5 ] && break
@@ -255,7 +257,9 @@ jobs:
           retention-days: 7
 
   # Sums up the coverage of every part that ran (docs/testing.md, "Coverage")
-  # and fails when one falls below its floor in tools/coverage/floor.json.
+  # and fails when one falls below its floor in tools/coverage/floor.json,
+  # or a hard gate fails: a closed audit finding whose test is gone, a
+  # format rule no vector refuses.
   coverage:
     name: coverage
     needs: [changes, test, gocover, kit, android, rust, service]
@@ -287,7 +291,9 @@ jobs:
           [ -f cov/coverage-rust-service.json ] && set -- "$@" -llvm rust-service=cov/coverage-rust-service.json
           [ -f cov/coverage-swift-kit.json ] && set -- "$@" -llvm swift-kit=cov/coverage-swift-kit.json
           [ -f cov/jacocoTestReport.xml ] && set -- "$@" -jacoco kotlin-kit=cov/jacocoTestReport.xml
-          go run ./tools/coverage -floor tools/coverage/floor.json -summary "$GITHUB_STEP_SUMMARY" "$@"
+          go run ./tools/coverage -floor tools/coverage/floor.json -target 90 -branch-target 80 -core-branch-target 90 \
+            -audit testdata/audit/closed.json -rules core/src -vectors testdata/format \
+            -summary "$GITHUB_STEP_SUMMARY" "$@"
 
   build:
     name: build (${{ matrix.systems }})
@@ -440,7 +446,7 @@ jobs:
             go test ./... </dev/null
             # The desktop connector against X11 under Xvfb, as on Linux.
             go test -c -o /tmp/desktop.test ./internal/desktop
-            Xvfb :5 -screen 0 640x480x24 >/tmp/xvfb.log 2>&1 &
+            Xvfb :5 -screen 0 640x480x24 -noreset >/tmp/xvfb.log 2>&1 &
             # Its socket shows before it takes clients (TestX11 met EOF):
             # wait until xclip reaches it, with no selection to read yet.
             for _ in $(seq 1 100); do
@@ -694,7 +700,7 @@ jobs:
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
           mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
           WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman sway >"$RUNNER_TEMP/sway.log" 2>&1 &
-          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          Xvfb :5 -screen 0 640x480x24 -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
           for _ in $(seq 1 100); do
             WAYLAND_DISPLAY=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-[0-9]' -printf '%f\n' | head -n 1)
             [ -n "$WAYLAND_DISPLAY" ] && [ -e /tmp/.X11-unix/X5 ] && break
@@ -1706,8 +1712,9 @@ jobs:
           test_on "$iphone"
           test_on "$ipad"
       # The screens' pictures in every language (ReadersUITests), to look at
-      # what the accessibility audit found; the English ones also go into
-      # the log as small JPEGs when the tests fail.
+      # what the accessibility audit found; the English ones, the failed
+      # audits' and the screens a lost tap met (ReadersUITests.lostTap) also
+      # go into the log as small JPEGs when the tests fail.
       - name: the screens' pictures
         if: always()
         run: |
@@ -1715,9 +1722,16 @@ jobs:
             [ -d "$r" ] || continue
             xcrun xcresulttool export attachments --path "$r" --output-path "$RUNNER_TEMP/ios-screens/$(basename "$r" .xcresult)" || true
           done
+      # The attachments alone do not show what a failed test did, such as a
+      # tap the simulator lost: each failed test's activities, every launch,
+      # tap, wait and query with its time, go into the log and beside the
+      # pictures.
+      - name: the failed tests' activities
+        if: always()
+        run: python3 .github/activities.py "$RUNNER_TEMP/ios-screens/activities" "$RUNNER_TEMP"/ios-*.xcresult
       - name: the English screens in the log
         if: failure()
-        run: python3 .github/pictures.py "$RUNNER_TEMP/ios-screens" -en failed-
+        run: python3 .github/pictures.py "$RUNNER_TEMP/ios-screens" -en failed- lost-tap-
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -2299,27 +2313,48 @@ jobs:
         run: |
           cargo build --locked --release -p cbb-member
           cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
-          # Built with -cover, for the Go coverage (docs/testing.md,
-          # "Coverage"): cbb hands its helper only the environment it needs,
-          # so a script in the helper's place gives it GOCOVERDIR.
+          cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
+          # Built with -cover: the Go side's coverage (cover-go-service.out)
+          # counts what the helper does under these tests too. cbb hands its
+          # helper only the environment it needs, so a script in the
+          # helper's place gives it GOCOVERDIR.
           CGO_ENABLED=0 go build -trimpath -cover -coverpkg="$COVERPKG" -o target/release/cbb-helper.cover ./cmd/cbb-helper
-          mkdir -p "$RUNNER_TEMP/helper-cover"
-          printf '#!/bin/sh\nGOCOVERDIR=%s exec %s "$@"\n' "$RUNNER_TEMP/helper-cover" "$PWD/target/release/cbb-helper.cover" >target/release/cbb-helper
+          mkdir -p "$RUNNER_TEMP/go-cover"
+          printf '#!/bin/sh\nGOCOVERDIR=%s exec %s "$@"\n' "$RUNNER_TEMP/go-cover" "$PWD/target/release/cbb-helper.cover" >target/release/cbb-helper
           chmod 755 target/release/cbb-helper
+      # Each Go package runs as a test binary built with -cover, with
+      # GOCOVERDIR for it and the helpers it starts; one package at a
+      # time, so that -test.v streams each test's lines as it runs and a
+      # test that hangs is named by the timeout's goroutine dump before the
+      # job's own limit.
       - name: go test ./internal/service and the desktop connector with every Linux member a Rust cbb
         run: |
-          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          Xvfb :5 -screen 0 640x480x24 -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
           for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
-          DISPLAY=:5 CBB_TEST_X11=1 \
-            CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_TEST_ALONE="$PWD/target/release/cbb" \
-            CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" \
-            go test -timeout 45m -coverpkg="$COVERPKG" -coverprofile=cover-go-service.out ./internal/service -v
-          # One package at a time, so that -v streams each test's lines as
-          # it runs and a test that hangs is named by the timeout's
-          # goroutine dump before the job's own limit.
-          DISPLAY=:5 CBB_TEST_X11=1 \
-            CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_TEST_ALONE="$PWD/target/release/cbb" \
-            go test -timeout 5m -coverpkg="$COVERPKG" -coverprofile=cover-go-connector.out ./internal/connector -v
+          export GOCOVERDIR="$RUNNER_TEMP/go-cover"
+          mkdir -p "$GOCOVERDIR"
+          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/service.test" ./internal/service
+          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/connector.test" ./internal/connector
+          (cd internal/service && DISPLAY=:5 CBB_TEST_X11=1 \
+            CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
+            CBB_PHONE_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/phone-on-linux" \
+            "$RUNNER_TEMP/service.test" -test.timeout 45m -test.v)
+          (cd internal/connector && DISPLAY=:5 CBB_TEST_X11=1 \
+            CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
+            "$RUNNER_TEMP/connector.test" -test.timeout 5m -test.v)
+      # The relay and the phones' tunnel, which the rust job checks from
+      # outside, count here too: their Go tests run the same instrumented
+      # build.
+      - name: the relay and the phones' tunnel, from Go's side, for the coverage
+        run: |
+          export GOCOVERDIR="$RUNNER_TEMP/go-cover"
+          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/relay.test" ./internal/relay
+          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/tunnel.test" ./internal/tunnel
+          (cd internal/relay && CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
+            "$RUNNER_TEMP/relay.test" -test.timeout 10m -test.v)
+          (cd internal/tunnel && CBB_TUNNEL_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/tunnel-on-linux" \
+            CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
+            "$RUNNER_TEMP/tunnel.test" -test.run TestRustPhone -test.timeout 15m -test.v)
       - name: a device of the previous release works in one group with this build (from 0.6 on; skips until 0.6.0 is out)
         run: |
           prev=$(sh tools/e2e/previous.sh "$RUNNER_TEMP/previous")
@@ -2346,6 +2381,17 @@ jobs:
         with:
           name: coverage-rust-service
           path: coverage-rust-service.json
+      - name: the Go side's coverage under the same tests
+        if: success() || failure()
+        run: |
+          [ -d "$RUNNER_TEMP/go-cover" ] || exit 0
+          go tool covdata textfmt -i "$RUNNER_TEMP/go-cover" -o cover-go-service.out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: success() || failure()
+        with:
+          name: coverage-go-service
+          path: cover-go-service.out
+          if-no-files-found: ignore
 
   rust:
     name: cbb (Rust)

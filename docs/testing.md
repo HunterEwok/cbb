@@ -120,7 +120,10 @@ A9 and U14 to U18).
   iPhone also Dynamic Type and clipped text at the largest size in English, Swahili and
   Hindi) passing; each screen's picture is attached to the run's `.xcresult`, uploaded by CI (`ios-screens`, `mac-windows`), and the English ones
   are printed into a failed job's log (`.github/pictures.py`), with, on the iPhone, a picture
-  of each element the audit fails. The audit's contrast check
+  of each element the audit fails and of the screen a lost tap met (the test taps Settings
+  again and says so in its output). For each failed iPhone test CI also keeps its activities,
+  every launch, tap, wait and query with its time (`.github/activities.py`, in `ios-screens`
+  and the log). The audit's contrast check
   fails text its own picture shows at 6.9:1 and more, so each text's (and on the iPhone each
   button's) contrast is measured on the screen's picture instead: its darkest and lightest
   pixels at least 4.5:1. The iPhone's Start screen scrolls rather than squeeze its texts. The
@@ -148,10 +151,31 @@ the ones to commit from the `tray-screenshots` artifact of the failed CI job.
 
 ## Coverage
 
-CI measures how much of the code the tests run, part by part, and its `coverage` job prints
-the table in the run's summary. `tools/coverage` adds the reports up and fails when a part
-falls more than one point below its floor in `tools/coverage/floor.json`, so coverage can
-rise but not fall. When the table says "raise the floor", raise it in the same pull request.
+CI measures how much of the code the tests run, part by part and by kind, and its `coverage`
+job prints the table, coverage by kind, in the run's summary. `tools/coverage` adds the
+reports up and fails when a row falls more than one point below its floor in
+`tools/coverage/floor.json`. The project aims at 90% of the lines in every part
+(`-target 90`): a part below that is marked in the table and gets a warning, without failing
+the run, and the tests are written up to 90 again before it reaches its floor of 85.
+
+Branches are rows of their own (`PART/branches` in the table and in `floor.json`) where the
+report counts them: JaCoCo for the Kotlin kit, llvm-cov for the Swift kit, and for the Rust
+core the nightly `rust core, branch coverage` job, since only a nightly compiler counts Rust's
+branches. Go counts statements only. The aim is 80% of the branches (`-branch-target 80`),
+90% in a core (`-core-branch-target 90`), where each branch is a decision to take or refuse;
+a branch row's floor is its first measure, and it only rises. The table shows each row's floor
+and target side by side, so the gap between them is in view.
+
+Under the table are the hard gates, which have no floor and fail the job at once:
+
+- every closed finding of the security audits keeps its tests: `testdata/audit/closed.json`
+  lists each by an opaque id with the tests that hold it closed, and `-audit` fails when one
+  of them is gone; a fix that closes a finding adds its row;
+- every rule a format reader refuses by name (`Rule::field("grants/replaces")` in `core/src`)
+  is the expected refusal of at least one vector in `testdata/format/*.json` (`-rules`,
+  `-vectors`); until the 0.6 core's readers are in the tree it is not measured;
+- no mutant survives that `tools/mutants/missed.txt` does not name (`-mutants`, as
+  `tools/mutants/check.sh` in the nightly jobs).
 
 | Part | What counts | Measured by |
 |---|---|---|
@@ -159,11 +183,11 @@ rise but not fall. When the table says "raise the floor", raise it in the same p
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `rust` job |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
-| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service` and the desktop connector, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb` job |
+| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector, `internal/relay` and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb` job |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
 
-The aims are 80% for `go`, 85% to 90% for the protocol's core in each implementation, and 90% for `rust-service`.
+The Go packages of the `service tests on the Rust cbb` job run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and their profile (`cover-go-service.out`) counts in `go` too.
 A number is a hint, not the goal: a test that runs a line without checking what it did
 raises it and proves nothing.
 
@@ -203,8 +227,10 @@ The nightly workflow changes the records' code one place at a time (drops a chec
 into `<=`, returns early) and runs the tests against each change: `cargo mutants` on
 `core/src/authority.rs` and `strict.rs`, in eight shards, and `gremlins` on
 `internal/authority`. A change that every test still passes is listed as missed, in the run's
-summary and its artifacts. The jobs report and do not fail yet; each missed change gets a
-test, or a note why it cannot matter, and then the jobs fail on a new one.
+summary and its artifacts. The Rust job fails on a survivor that `tools/mutants/missed.txt`
+does not name (no new survivor, from the first day); the list holds the records' baseline of
+2026-11-11, and each of those gets a test or a note why it cannot matter. `gremlins` reports
+and does not fail yet.
 
 The service's readers of outside input already fail on a new one: `cargo mutants` on the
 control socket's messages (`member/src/control.rs`), the pairing window
@@ -242,8 +268,8 @@ never skipped, disabled or retried until green to make CI pass.
 
 A test that fails only now and then is a red test too, with a cause to find: a race in the
 code, a wait too short for a slow runner, or an order the test assumes. The nightly
-workflow's `unstable` job runs the members' tests ten times over, with the Go service and
-with the Rust `cbb`, and its summary lists every test that failed and how often. A test
+workflow's `unstable` job runs the members' tests ten times over, against the Rust service with
+its helper and with `cbb` alone, and its summary lists every test that failed and how often. A test
 found there goes into this table with what is known of its cause, and leaves it with the
 fix that removes the cause. The bench finds them too: `go run ./tools/bench -repeat 5
 -scenario NAME fleet` lists in `flaky.txt` the cases that both passed and failed
