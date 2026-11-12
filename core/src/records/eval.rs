@@ -263,6 +263,9 @@ pub struct State {
     /// A recovery record this version cannot read: the device stops by
     /// itself until it is updated (not a fork, not final).
     pub update_needed: bool,
+    /// The lowest seq at which the set holds two recovery records, and
+    /// the two (the smaller ID first): the proof of a fork.
+    pub fork: Option<(u64, RecordId, RecordId)>,
 }
 
 impl State {
@@ -315,6 +318,15 @@ impl State {
     /// opened. The state stays readable, so the owner sees the devices when
     /// making the next group, and the device still passes the recovery
     /// records on.
+    ///
+    /// What a halted state shows is computed from the recovery chain below
+    /// the fork (or below the record it cannot read) and the records the
+    /// newest list applied there names, and nothing else: the roots of
+    /// that chain, and the devices and removals those listed records make.
+    /// The last root's records that list does not name do not show; after
+    /// a fork at seq 1 the state is the first root and the recovery chain
+    /// alone. So every member that holds the proof shows the same, however
+    /// its records came, and `fork` names the seq and the two records.
     pub fn halted(&self) -> bool {
         self.update_needed || self.conflicts.iter().any(|c| c.kind == ConflictKind::Fork)
     }
@@ -583,6 +595,8 @@ pub(crate) struct Chain {
     pub changes: Vec<Change>,
     /// Two different records at one seq.
     pub fork: Vec<RecordId>,
+    /// The lowest such seq and its two records, the smaller ID first.
+    pub fork_at: Option<(u64, RecordId, RecordId)>,
     /// A record the device cannot read where the chain goes on.
     pub unreadable: bool,
     /// The list the next valid record waits for.
@@ -592,6 +606,12 @@ pub(crate) struct Chain {
 }
 
 impl Chain {
+    /// Whether the chain halts the group: a fork, or a record the device
+    /// cannot read.
+    pub fn halted(&self) -> bool {
+        !self.fork.is_empty() || self.unreadable
+    }
+
     pub fn promoted(&self) -> BTreeSet<KeyHash> {
         self.steps.iter().map(|(_, k)| k.hash()).collect()
     }
@@ -643,6 +663,11 @@ pub(crate) fn chain<'r>(
         rs.dedup_by_key(|r| r.id());
         // Two are the proof; a set keeps the two smallest IDs at a seq.
         rs.truncate(2);
+        if let [a, b] = rs.as_slice()
+            && out.fork_at.is_none()
+        {
+            out.fork_at = Some((a.body().seq, a.id(), b.id()));
+        }
         if rs.len() > 1 {
             out.fork.extend(rs.iter().map(|r| r.id()));
             for r in rs.iter() {
@@ -834,6 +859,17 @@ pub(crate) fn evaluate_checked(
 ) -> State {
     let group_root = root.hash();
     let chain = chain(&group_root, checked.iter().map(|c| (c.r, c.role)), lists);
+    // Halted: only the recovery chain and what the newest list applied
+    // below the fork names (State::halted).
+    let checked = if chain.halted() {
+        let listed = chain.cut.as_ref().map(|c| &c.keep);
+        checked
+            .into_iter()
+            .filter(|c| c.role == Role::Recovery || listed.is_some_and(|k| k.contains(&c.r.id())))
+            .collect()
+    } else {
+        checked
+    };
     let promoted = chain.promoted();
     let mut cuts = chain.cuts();
     let proven = by.proven;
@@ -907,6 +943,7 @@ pub(crate) fn evaluate_checked(
     state.group = super::key::group_id(root, recovery);
     state.list_missing = chain.waiting;
     state.update_needed = chain.unreadable;
+    state.fork = chain.fork_at;
     if chain.unreadable {
         state.stop = Stop::Full;
     }

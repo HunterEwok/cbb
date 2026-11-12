@@ -713,6 +713,39 @@ fn the_joiner_sees_a_fork_in_its_welcome() {
     );
 }
 
+/// A Welcome that carries a head this version cannot read: the joiner
+/// does not join a group that is halted on it.
+#[test]
+fn the_joiner_does_not_join_over_a_head_it_cannot_read() {
+    use crate::format::cbor::{self, Value};
+    let mut g = G::new();
+    let tv = k("tv");
+    let w = admit(&mut g, true, &tv, "tv");
+    let body = Body {
+        group: g.gid,
+        signer: k("recovery").hash,
+        seq: 1,
+        prev: None,
+        time_ms: 0,
+        kind: Kind::Recovery { root: k("root n1").key.clone(), list: [5; 32], from: 0 },
+        held: false,
+    };
+    let encoded = body.encode();
+    let Ok(Value::Map(mut m)) = cbor::decode(&encoded) else { panic!("a body is a map") };
+    m.push((99, Value::Uint(1)));
+    let bytes = Value::Map(m).encode();
+    let sig = crate::records::key::sign_es256(&k("recovery"), crate::records::LABEL_RECORD, &bytes).unwrap();
+    let later = Record::decode(&crate::format::envelope::write(&bytes, &sig, None)).unwrap();
+    assert!(later.body().held);
+    let mut w = w;
+    w.records.insert(0, later);
+    let group = format::DeviceId(g.gid.0);
+    assert_eq!(
+        w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary).err(),
+        Some(welcome::Refusal::Stopped)
+    );
+}
+
 /// A phone admin's device in the group, with the phone's admin grants.
 fn phone_admin(g: &mut G, by: &K, member: &K, admin: &K, holds_root: bool) {
     let mut d = Device::new(member.key.clone(), "phone", ROLE_PHONE);

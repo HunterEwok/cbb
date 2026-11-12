@@ -519,7 +519,9 @@ fn two_heads_at_one_seq_stop_the_group_for_good() {
 /// After a fork nothing commands and nothing acts, at seq 1 (where the
 /// path before the fork ends at the first root) and at depth: no root, no
 /// admin, no admission; a record the old root signs after does not make
-/// it command. The state stays readable: the devices are still shown.
+/// it command. The state shows the chain below the fork and what the list
+/// applied there names: at depth the first root's listed devices, at seq 1
+/// the first root alone.
 #[test]
 fn after_a_fork_nobody_commands() {
     use cbb_core::join::decide::{Signer, may_admit};
@@ -537,7 +539,9 @@ fn after_a_fork_nobody_commands() {
         }
         assert!(!may_admit(&s, &k(last).hash, Signer::Root, &k(last).hash), "depth {depth}");
         assert!(!may_admit(&s, &k("A phone").hash, Signer::Admin, &k(last).hash), "depth {depth}");
-        assert!(has(&s, "A phone") && has(&s, "C computer") && has(&s, "W watch"), "depth {depth}");
+        let shown = has(&s, "A phone") && has(&s, "C computer") && has(&s, "W watch");
+        assert_eq!(shown, depth == 2, "depth {depth}");
+        assert!(!has(&s, "D"), "depth {depth}");
     }
 }
 
