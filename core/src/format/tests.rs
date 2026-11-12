@@ -174,6 +174,15 @@ fn credentials() {
 }
 
 #[test]
+fn device_fields_are_the_ones_the_printer_names() {
+    // One list of a device record's fields: the printer names each, and
+    // names no other below 256 but expires_ms (7) and signer2 (8).
+    let named: Vec<u16> =
+        (0..256).filter(|&k| print::field_name(Kind::Record, 1, k).is_some() && k != 7 && k != 8).collect();
+    assert_eq!(named, super::DEVICE_FIELDS);
+}
+
+#[test]
 fn names_refuse_what_a_list_cannot_show() {
     let r = load("records.json");
     let mut refused = 0;

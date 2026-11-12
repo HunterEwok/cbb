@@ -1078,7 +1078,7 @@ func nameOK(v any) bool {
 // applies it, not holds it), a seq, a name, a role and a member key.
 func adminRecord(r map[any]any, group []byte) bool {
 	allowed := map[uint64]bool{}
-	for _, f := range []uint64{1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24} {
+	for _, f := range []uint64{1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25} {
 		allowed[f] = true
 	}
 	for k := range r {
