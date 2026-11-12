@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The bench's time-scaled build (feature `benchtime`, never a release's;
-//! docs/testbench-catalogue.md, section 0.1, "time"), as Go's
+//! docs/maintainers/testbench-catalogue.md, section 0.1, "time"), as Go's
 //! internal/benchtime: the core's long times run CBB_TEST_SCALE times
 //! faster (100000 without it, 1 for the cases that move only the clock),
 //! and CBB_TEST_CLOCK, or the file CBB_TEST_CLOCK_FILE names, moves the

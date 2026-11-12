@@ -15,7 +15,7 @@ import (
 )
 
 // automated names the suites that run each case of
-// docs/testbench-catalogue.md, in part or in full (catCase.missing tells
+// docs/maintainers/testbench-catalogue.md, in part or in full (catCase.missing tells
 // which); "ci" is a test that CI
 // runs on every pull request instead, such as the tray app's window in a
 // headless browser. A test checks that every ID here is in the catalogue
@@ -159,7 +159,7 @@ func (c catCase) automatic() bool {
 	return false
 }
 
-// function is one line of docs/testbench-functions.md.
+// function is one line of docs/maintainers/testbench-functions.md.
 type function struct {
 	ID, What string
 	Cases    []string

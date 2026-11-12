@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 // Command monitor checks the project's servers from outside, as the
-// monitor workflow runs it every few hours (docs/maintaining.md, "Watching
+// monitor workflow runs it every few hours (docs/maintainers/maintaining.md, "Watching
 // cbb.tools"): the websites answer over HTTPS with certificates that are
 // not about to expire, the forwarder's and the relay's ports take a
 // connection, and the signed files that devices fetch (keys.json,

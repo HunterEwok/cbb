@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Prepares a Windows device for the test bench (docs/testbench.md). Run it
+# Prepares a Windows device for the test bench (docs/maintainers/testbench.md). Run it
 # once, in an elevated PowerShell, while signed in as the user the bench
 # connects as:
 #

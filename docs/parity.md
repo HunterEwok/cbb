@@ -26,7 +26,7 @@ on every platform of the class, on the roadmap).
 | Battery detection | yes | yes | yes | |
 | Installer and uninstaller, `--purge` | yes | yes | yes | |
 | One-line installer with checksum check | yes (`get.sh`) | yes (`get.sh`) | yes (`get.ps1`) | |
-| Package manager | Homebrew | Homebrew | winget (`cbb install` after it) | each release writes the winget manifest; it reaches winget by a pull request to its repository (docs/maintaining.md) |
+| Package manager | Homebrew | Homebrew | winget (`cbb install` after it) | each release writes the winget manifest; it reaches winget by a pull request to its repository (docs/maintainers/maintaining.md) |
 | Member port other than 8764 | yes (`--port`) | yes (`--port`) | yes (`-Port`) | |
 | Inbound only from the home network, in the program | yes | yes | yes | the member port drops other addresses |
 | Inbound only from the home network, by the system | yes (ufw, firewalld) | **OS** | yes (Windows Firewall) | the macOS application firewall allows or blocks a program, not an address; a Network Extension of the Mac app (roadmap item 22) |

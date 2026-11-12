@@ -319,7 +319,7 @@ the number, which a profile of CI's tests copied there as well adds to. For the 
 `cbb-helper` with `-cover` (`CGO_ENABLED=0 go build -cover -coverpkg=./cmd/...,./internal/...
 -o cbb-helper ./cmd/cbb-helper`); `go tool covdata textfmt -i DIR -o fleet.out` and `go run
 ./tools/coverage -go fleet.out` give its table, by package, as CI's coverage job does
-([testing](testing.md#coverage)). The real devices run release builds and are not counted; an
+([testing](../testing.md#coverage)). The real devices run release builds and are not counted; an
 instrumented `cbb` is slower and larger, so E12's budgets mean nothing in such a run.
 
 **Budgets**: E12 holds `cbb` to fixed limits on the small devices it runs on, a
@@ -343,7 +343,7 @@ Raspberry Pi 4 runs the fleet and time suites every week with `tools/bench/weekl
 cron, on the newest main, each against the previous week's `metrics.json`. `-repeat N` runs
 the fleet, time or phone suite N times, each run's cases named `runK/...`, and lists in
 `flaky.txt` the cases that both passed and failed; every failure still fails the run, and each
-flaky case goes into [testing](testing.md#unstable-tests)' list until its cause is fixed.
+flaky case goes into [testing](../testing.md#unstable-tests)' list until its cause is fixed.
 
 **Reports**: a JUnit XML file for GitHub's test summary, an HTML report with the matrix
 (green and red cells), every failure's logs from all devices (`journalctl`, `log show`,
@@ -534,5 +534,5 @@ One pull request per step, merged in order:
 5. Away cases through the hub (N3, N7) and security tests S1 to S7, S9 to S16.
 6. The relay: the VPS set up as the production relay (hardening, firewall, no logs) running
    `cbb forward`; S8 and N4.
-7. The GitHub runner, the soak suite, the release checklist in `docs/maintaining.md`.
+7. The GitHub runner, the soak suite, the release checklist in `docs/maintainers/maintaining.md`.
 8. The 0.4 test run and its report.

@@ -1,6 +1,6 @@
 # The bench's inventory: copy it to ~/.config/cbb-bench/inventory.toml on the
 # controller and fill in the real names. It never goes into the repository.
-# docs/testbench.md, section 13, describes each key.
+# docs/maintainers/testbench.md, section 13, describes each key.
 
 controller = "controller"
 

@@ -210,7 +210,7 @@ implementation.
   [privacy](docs/guide/privacy.md).
 - The attacks it defends against and those it does not: the [threat model](docs/threat-model.md);
   the cryptography in one place: [cryptography](docs/cryptography.md).
-- The plan of the security audits: [security audit](docs/security-audit.md).
+- The plan of the security audits: [security audit](docs/maintainers/security-audit.md).
 
 To report a vulnerability, follow [SECURITY.md](SECURITY.md). Please do not open a public issue.
 

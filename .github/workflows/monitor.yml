@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Watches the project's servers from outside (docs/maintaining.md,
+# Watches the project's servers from outside (docs/maintainers/maintaining.md,
 # "Watching cbb.tools"): the websites and their certificates, the
 # forwarder's and the relay's ports, and the expiry of the signed files
 # that devices fetch. A failed run mails the maintainer, as GitHub does for

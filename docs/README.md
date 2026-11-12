@@ -75,7 +75,6 @@ for security reviewers.
 | [Roadmap](roadmap.md) | what comes next, the agreed plans not built yet, research |
 | [Contributing](../CONTRIBUTING.md) | conventions, building and testing every part |
 | [Your own build](own-build.md) | what ties a build to this project's releases, and how to use your own keys and addresses |
-| [Security audit](security-audit.md) | the plan of the security audit |
 | [The servers' budget](relay-budget.md) | what strangers can make the open relay and the forwarder hold, who pays, and what a genuine group keeps |
 
 ## For maintainers
@@ -84,8 +83,9 @@ Releasing and testing on real devices.
 
 | Document | What is in it |
 |---|---|
-| [Maintaining](maintaining.md) | repository settings, CI, releases, signing keys, Homebrew |
-| [Test bench](testbench.md) | testing on real devices before a release: the cases, the bench, the criteria |
-| [Test bench catalogue](testbench-catalogue.md) | every bench case of 0.6 in one line, with how it runs and what it still needs |
-| [Test bench functions](testbench-functions.md) | every function of the product with the cases that check it, for the coverage report |
-| [Test bench cases](testbench-cases.md) | bench cases step by step: the rule, the devices, the steps, pass and fail |
+| [Maintaining](maintainers/maintaining.md) | repository settings, CI, releases, signing keys, Homebrew |
+| [Test bench](maintainers/testbench.md) | testing on real devices before a release: the cases, the bench, the criteria |
+| [Test bench catalogue](maintainers/testbench-catalogue.md) | every bench case of 0.6 in one line, with how it runs and what it still needs |
+| [Test bench functions](maintainers/testbench-functions.md) | every function of the product with the cases that check it, for the coverage report |
+| [Test bench cases](maintainers/testbench-cases.md) | bench cases step by step: the rule, the devices, the steps, pass and fail |
+| [Security audit](maintainers/security-audit.md) | the plan of the security audit |

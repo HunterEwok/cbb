@@ -25,5 +25,5 @@ in `keys.json`. Programs do not pin them; the file is here for their attestation
   `https://developers.yubico.com/PKI/` (`yubico-intermediate.pem` and `yubico-ca-certs.txt`).
 
 `roots_test.go` checks the chain from each attestation to Yubico's root and that it attests
-the key in `roots.pem` or `release-keys.pem` with both policies at "always". docs/maintaining.md, "Signed releases",
+the key in `roots.pem` or `release-keys.pem` with both policies at "always". docs/maintainers/maintaining.md, "Signed releases",
 says how a root is made and replaced.

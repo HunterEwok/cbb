@@ -100,7 +100,7 @@ func current(from, releases string) (keys, ch, rel release.File, c release.Chann
 // extend signs the current channel file again with the channel key, a
 // higher number and a new expiry and the same release, and writes it and
 // keys.json to a directory: on cbb.tools, from a weekly timer
-// (docs/maintaining.md, "Signed releases").
+// (docs/maintainers/maintaining.md, "Signed releases").
 func extend(args []string) error {
 	fs := flag.NewFlagSet("extend", flag.ExitOnError)
 	key := fs.String("key", "", "the channel key: file:KEY.pem")

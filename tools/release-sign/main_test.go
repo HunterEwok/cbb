@@ -90,7 +90,7 @@ func archives(t *testing.T, dir string) {
 	write(t, filepath.Join(dir, "SHA256SUMS"), []byte(sums.String()))
 }
 
-// TestFlow makes, signs and checks a release as docs/maintaining.md
+// TestFlow makes, signs and checks a release as docs/maintainers/maintaining.md
 // describes, with keys in files.
 func TestFlow(t *testing.T) {
 	keysDir, dist := t.TempDir(), t.TempDir()

@@ -115,7 +115,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     global relay` and in both phone apps, and the guide ([running your own
     servers](admin/self-hosting.md)) and the project's open relay on `cbb.tools` (`cbb global
     relay default`) are done, and so is a new key or address for the project's relay without
-    a release (`keys.json` and `entries.json`, [maintaining.md](maintaining.md)). Next:
+    a release (`keys.json` and `entries.json`, [maintaining.md](maintainers/maintaining.md)). Next:
     - the relay's own key in the signed `keys.json` from the first `release-sign publish`
       (`-relay cbb.tools:8765=...`), before the relay ever gets a new key;
     - the rotation run once on the Windows virtual machine, as the other changes;
@@ -199,7 +199,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     - Before 2027, when Android installs sideloaded apps only from registered developers:
       register the package `tools.cbb` there with the
       certificate of the release key that signs the APKs of the releases
-      (docs/maintaining.md, "Android signing key"), so that those APKs and their own
+      (docs/maintainers/maintaining.md, "Android signing key"), so that those APKs and their own
       updates (docs/apps.md, "Updates") keep installing.
     - Whether the app goes to Google Play, and with which key: with Play App Signing, Play
       signs its copy with a key of its own, so the copy from Play and the APK of a release
@@ -239,7 +239,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       (`PrivacyInfo.xcprivacy`) with the reasons for the APIs that need them (`UserDefaults`,
       file times and the like), without which an upload is refused; and
       `ITSAppUsesNonExemptEncryption` in each `Info.plist`, with the export answer for the
-      apps' encryption (standard algorithms) written down in docs/maintaining.md.
+      apps' encryption (standard algorithms) written down in docs/maintainers/maintaining.md.
     - Google Play: the declaration for the accessibility service, which Play allows for an
       app that is not an accessibility tool only with a declaration in the console, a video
       and a prominent disclosure in the app before the user turns the service on; the Data
@@ -366,7 +366,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       the two kinds of hub, and what the devices that pass a copy on still see; the forwarder's addresses, timing and sizes on the site and in the guides;
       the status notes and the README's status link in the guides of keys and away from
       home; "each signature" of the root's and the admins' keys only; "only over TLS" linking what is not encrypted; winget named only where
-      it says "once the package is in winget's repository"; docs/security-audit.md says it
+      it says "once the package is in winget's repository"; docs/maintainers/security-audit.md says it
       is a plan.
     - Done in 0.6: the README's trust model ("Who can read what": who holds which key, who
       reads the copies, who admits devices, what the hub, the forwarder and the relay see;
@@ -455,7 +455,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     are installed:
     - One release key for every Android channel: the key that replaced 0.5.0's on 2026-11-03
       (alias `cbb`, certificate SHA-256 `16:99:CD:37:…:7C:E6:B3:6D`), which the environment
-      **release** already holds. Write its fingerprint in docs/maintaining.md, "Android
+      **release** already holds. Write its fingerprint in docs/maintainers/maintaining.md, "Android
       signing key"; 0.5.0's APK is signed by the old key, so 0.5.0 does not update to 0.6.0
       in place (compatibility starts with 0.6, D-92).
     - RuStore, Android: upload the release's signed `cbb-fdroid-X.Y.Z.apk` (the flavor
@@ -475,7 +475,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       background but reads another app's copy only in the foreground (so the phone sends
       on a gesture: opening the app, a notification or Share), and a second executable in
       the package is installed without its execute bit.
-    - F-Droid: the steps in docs/maintaining.md, "F-Droid", with `AllowedAPKSigningKeys`
+    - F-Droid: the steps in docs/maintainers/maintaining.md, "F-Droid", with `AllowedAPKSigningKeys`
       set to that certificate. The fdroid flavor already has no update of its
       own (`SELF_UPDATE` false, no installer permission), as F-Droid's inclusion policy
       requires: an app it publishes must not download or install code outside F-Droid.
@@ -545,7 +545,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     `cbb`'s tunnel, whose end a fake hub on GotaTun sends to (`member/src/tunnel.rs`,
     `link_reaches_nothing_from_the_tunnel`); the forwarder's `FuzzForwardWire` sends a
     packet only to an endpoint it knows. The check of cbb.tools is written down in
-    docs/maintaining.md, "Ways out carry only cbb", and was run on 2026-11-07.
+    docs/maintainers/maintaining.md, "Ways out carry only cbb", and was run on 2026-11-07.
 - **62.** **Planned for 0.7 (the owner, 2026-11-08).** Sound and files on the ZX Spectrum Next,
     after the group's images (`.cbb show`, 0.6):
     - `.cbb play`: the group's latest sound. The Pi decodes it (MP3, AAC, WAV) and plays it

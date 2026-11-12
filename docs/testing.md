@@ -4,8 +4,8 @@
 For contributors and reviewers: how Copy Beyond Borders is tested, from a single function to
 real devices, and which level answers which question. The commands are in
 [CONTRIBUTING.md](../CONTRIBUTING.md#development), the CI jobs one by one in
-[maintaining](maintaining.md#ci), and the tests on real devices in the
-[test bench](testbench.md).
+[maintaining](maintainers/maintaining.md#ci), and the tests on real devices in the
+[test bench](maintainers/testbench.md).
 
 ## Levels
 
@@ -17,7 +17,7 @@ real devices, and which level answers which question. The commands are in
 | Service tests | several members, with their real services, in one process or as programs | `internal/service`, `member/tests` | every push, in CI |
 | System tests | the built program on a real system: containers, sockets, a desktop, an installer | the `e2e`, `mdns with avahi`, `desktop clipboards`, `packaging`, `windows installer`, `OpenWrt`, `freebsd` jobs | every push, in CI |
 | App builds and tests | the apps build and their unit tests pass on simulators and runners | the `iPhone app`, `Mac app`, `tray app`, `Android app` jobs | every push, in CI |
-| Bench scenarios | real devices pass real copies over real networks | the [test bench](testbench.md), its [catalogue](testbench-catalogue.md) | before each release |
+| Bench scenarios | real devices pass real copies over real networks | the [test bench](maintainers/testbench.md), its [catalogue](maintainers/testbench-catalogue.md) | before each release |
 
 A change is not done before the levels it touches pass locally (CONTRIBUTING lists the
 commands per part); CI then runs the jobs of every part the pull request changes, and the
@@ -82,10 +82,10 @@ becomes a vector here.
 ## Bench scenarios
 
 Unit and CI tests cannot show that a copy on an iPhone reaches a Windows PC through a café's
-Wi-Fi. The [test bench](testbench.md) does, on the real devices of each platform, with the
-rules R1 to R7 ([cases](testbench-cases.md)), a catalogue of the cases of a release with how
+Wi-Fi. The [test bench](maintainers/testbench.md) does, on the real devices of each platform, with the
+rules R1 to R7 ([cases](maintainers/testbench-cases.md)), a catalogue of the cases of a release with how
 each runs, and a coverage report of the product's functions
-([functions](testbench-functions.md)). Security cases block a release; a case that cannot
+([functions](maintainers/testbench-functions.md)). Security cases block a release; a case that cannot
 run yet is skipped with its reason and stays on the list.
 
 ## Coverage
@@ -189,7 +189,7 @@ with the Rust `cbb`, and its summary lists every test that failed and how often.
 found there goes into this table with what is known of its cause, and leaves it with the
 fix that removes the cause. The bench finds them too: `go run ./tools/bench -repeat 5
 -scenario NAME fleet` lists in `flaky.txt` the cases that both passed and failed
-([test bench](testbench.md#11-automation)).
+([test bench](maintainers/testbench.md#11-automation)).
 
 | Test | Where | Seen | What is known |
 |---|---|---|---|

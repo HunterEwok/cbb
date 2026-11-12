@@ -497,7 +497,7 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   the second; Cancel removes the first file, and cbb ends the invitation.
 
 Each release carries it in `cbb-X.Y.Z.pkg` with the service, signed with the Developer ID and
-notarized (docs/maintaining.md, "Signing for macOS"). CI's `Mac app` job builds it and runs
+notarized (docs/maintainers/maintaining.md, "Signing for macOS"). CI's `Mac app` job builds it and runs
 its tests, signed ad hoc, and installs and removes the package. It runs on a real Mac when built with a
 developer's own team (`apps/ios/device.sh`): the devices, the menu bar and remote paste to it
 from the iPhone, at home and away from home.
@@ -957,7 +957,7 @@ keeps an order of its own or works one out.
 
 Each release carries `cbb-X.Y.Z.apk` and the Wear OS app,
 `cbb-wear-X.Y.Z.apk`, both signed with the project's release key; the key and
-its secrets are in [maintaining.md](maintaining.md#android-signing-key). The watch app is
+its secrets are in [maintaining.md](maintainers/maintaining.md#android-signing-key). The watch app is
 installed on the watch with `adb install` over the watch's wireless debugging until the apps
 are on Google Play.
 

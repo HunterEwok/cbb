@@ -4,7 +4,7 @@
 For engineers and security reviewers: what Copy Beyond Borders protects, from whom, where the
 trust boundaries are, and which defence answers each threat, with the code that holds it.
 It describes the version in this repository; what is not built yet is marked **open**. The
-plan of the security audit is in [security-audit.md](security-audit.md), the wire format in
+plan of the security audit is in [security-audit.md](maintainers/security-audit.md), the wire format in
 the [protocol](protocol.md), and how to report a vulnerability in
 [SECURITY.md](../SECURITY.md).
 

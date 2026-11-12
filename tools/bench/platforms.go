@@ -6,7 +6,7 @@ package main
 import "strings"
 
 // The bench reaches an OpenWrt router as root, which has no sudo; on
-// FreeBSD, as on Linux, it runs sudo without a password (docs/testbench.md,
+// FreeBSD, as on Linux, it runs sudo without a password (docs/maintainers/testbench.md,
 // section 13).
 
 // serviceCmd is the command that stops, starts or restarts the device's

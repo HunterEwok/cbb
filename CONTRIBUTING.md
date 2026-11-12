@@ -72,7 +72,8 @@ The maintainer follows these rules; they are written down to keep the history co
 - **Documentation.** Each page says at the top who it is for and sits in its reader's part
   of [docs/README.md](docs/README.md), which `repocheck` checks: users' guides in plain
   words (`docs/guide`), administrators' pages (`docs/admin`), exact reference without the
-  reasons (`docs/reference`), and the engineers' pages. A new command, flag or `CBB_*`
+  reasons (`docs/reference`), the engineers' pages, and the maintainers' pages on releases,
+  the bench and the audit (`docs/maintainers`). A new command, flag or `CBB_*`
   variable goes into the reference in the same change. A change to the wire format changes
   The users' guides (`docs/guide`) are also translated into every language of the website,
   in `site/docs/<language>/guide/<page>.md`: the same headings, links, pictures and code
@@ -92,7 +93,7 @@ The maintainer follows these rules; they are written down to keep the history co
 ## Development
 
 The checks that CI runs, by part. CI also builds every target; see
-`.github/workflows/ci.yml` and the job list in [docs/maintaining.md](docs/maintaining.md#ci).
+`.github/workflows/ci.yml` and the job list in [docs/maintainers/maintaining.md](docs/maintainers/maintaining.md#ci).
 
 ### Go
 
@@ -213,7 +214,7 @@ core; docs/roadmap.md, item 60): one code in `src/` and `qml/`, and what differs
 Sailfish OS 4.6), which `psdk.sh` sets up as root (about 10 GB) for the `SYSTEM` in the
 environment; CI's `Aurora app` jobs build every package and architecture unsigned
 (`ci.sh`), and the workflow `aurora` signs Aurora 5's with the developer certificate after
-the maintainer approves ([docs/maintaining.md](docs/maintaining.md#signing-for-aurora-os)).
+the maintainer approves ([docs/maintainers/maintaining.md](docs/maintainers/maintaining.md#signing-for-aurora-os)).
 The translations are `translations/cbb-<language>.ts`, English being the source, made from
 `apps/l10n` like every app's ([Translations](#translations)): a new `qsTr` text, or a message passed to
 `QCoreApplication::translate("Errors", ...)`, gets an entry there with the place

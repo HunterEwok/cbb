@@ -3,7 +3,7 @@
 # Copyright (C) 2026 HunterEwok
 
 # The weekly run of the fleet and time suites on a Linux host with Docker
-# (docs/testbench.md, "Trends and flaky cases"), from cron:
+# (docs/maintainers/testbench.md, "Trends and flaky cases"), from cron:
 #
 #   0 3 * * 0  sh $HOME/cbb-weekly/cbb/tools/bench/weekly.sh $HOME/cbb-weekly >>$HOME/cbb-weekly/weekly.log 2>&1
 #

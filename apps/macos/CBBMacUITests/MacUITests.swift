@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// The Mac app's window driven as a person would (docs/testbench-catalogue.md,
+/// The Mac app's window driven as a person would (docs/maintainers/testbench-catalogue.md,
 /// A4, A9, U12), with its control socket pointed where no service answers
 /// (CBB_SOCKET): the stopped service explained in one line, the error
 /// underneath only with error details on, the Settings window's switch, and

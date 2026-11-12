@@ -31,7 +31,7 @@ So there are three cases.
 
 ## Your own roots
 
-Make two root keys as [maintaining.md](maintaining.md), "Signed releases", describes (on two
+Make two root keys as [maintaining.md](maintainers/maintaining.md), "Signed releases", describes (on two
 hardware keys, or in files for a build only you use), and replace:
 
 - `internal/release/roots/roots.pem`, the pinned roots;
@@ -44,7 +44,7 @@ hardware keys, or in files for a build only you use), and replace:
   serial numbers in `roots_test.go`, or, for keys without one, remove those files and
   `TestRootsAttested` and `TestReleaseKeysAttested`.
 
-Then sign your releases with `tools/release-sign` and your keys as maintaining.md describes.
+Then sign your releases with `tools/release-sign` and your keys as [maintaining](maintainers/maintaining.md) describes.
 
 ## Your own addresses
 

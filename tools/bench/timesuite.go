@@ -18,7 +18,7 @@ import (
 // runs every long time of the product benchScale times faster: a member
 // certificate lasts about ten minutes and is renewed in its last three and
 // a half, a credential period lasts half a minute. The time suite runs that
-// build in the fleet (docs/testbench-catalogue.md, section 0.1, "time").
+// build in the fleet (docs/maintainers/testbench-catalogue.md, section 0.1, "time").
 const benchScale = 100000
 
 // scaled is d as the time-scaled build runs it.

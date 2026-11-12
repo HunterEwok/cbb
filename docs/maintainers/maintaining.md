@@ -22,12 +22,12 @@ a checked box means the setting is in place.
 
 - Interaction limits are for a temporary cool-down only and are normally off.
 - Conduct reports go to GitHub Support through **Report content**, as
-  [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) says. A repository of a personal account has no
+  [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md) says. A repository of a personal account has no
   option to send reports to the repository admins, and no email address is published.
 
 **Settings → Advanced Security** (named Code security on some accounts)
 
-- [x] **Private vulnerability reporting**. [SECURITY.md](../SECURITY.md) relies on it.
+- [x] **Private vulnerability reporting**. [SECURITY.md](../../SECURITY.md) relies on it.
 - [x] **Dependency graph**, **Dependabot alerts** and **Dependabot security updates**.
 - [x] **Secret scanning** and **Push protection**.
 - [ ] **CodeQL** default setup off: the workflows `.github/workflows/codeql.yml` (advanced
@@ -61,7 +61,7 @@ targeting the default branch:
   approval for unattributed changes** off, because a single maintainer cannot approve their
   own pull request; squash is the only merge method.
 - [x] Require the status check `ci-ok` from the GitHub Actions app, with the branch up to date
-  before merging. `ci-ok` is the last job of [the CI workflow](../.github/workflows/ci.yml)
+  before merging. `ci-ok` is the last job of [the CI workflow](../../.github/workflows/ci.yml)
   and passes only when every other job passed, so CI jobs can change without touching the
   ruleset.
 - [x] Bypass list empty.
@@ -107,12 +107,12 @@ environment secret**.
 
 ## CI
 
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every pull request and on
+[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs on every pull request and on
 `main`:
 
 - **check**: `gofmt`, `go mod tidy`, `go mod verify`, `go vet`, `staticcheck`,
   `govulncheck`, `actionlint` and zizmor (their security) for the workflows,
-  [the repository rules](../tools/repocheck/main.go) (English only, apart from the apps'
+  [the repository rules](../../tools/repocheck/main.go) (English only, apart from the apps'
   translations; license headers in Go and Rust files; copied code with its license; the documentation's
   links, the old name, the command reference with every flag, the environment variables,
   the ports, the index of the documentation, the register of decisions, the references to
@@ -125,15 +125,15 @@ environment secret**.
 - **go coverage**: Go's tests across packages with `-coverpkg`, the desktop clipboards, the
   uinput keyboard, mDNS beside avahi and the e2e built with `-cover`;
 - **coverage**: the coverage of every part that ran, in the run's summary, held to
-  `tools/coverage/floor.json` ([testing](testing.md#coverage));
+  `tools/coverage/floor.json` ([testing](../testing.md#coverage));
 - **build**: a cgo-free build (`CGO_ENABLED=0`) for every Linux and Windows target, static
   on Linux, including ARMv6 for the Raspberry Pi Zero W; the macOS targets on macOS runners
-  with cgo, for the pasteboard agent (see the Build section of [the design](design.md#build));
+  with cgo, for the pasteboard agent (see the Build section of [the design](../design.md#build));
 - **mdns with avahi**: the mDNS tests on real sockets, beside avahi-daemon, in a Debian
   container;
 - **e2e**: the built binary as three members and an avahi browser in Docker containers:
   pairing, sync, mDNS as avahi sees it, a wrong code
-  ([tools/e2e/e2e.sh](../tools/e2e/e2e.sh));
+  ([tools/e2e/e2e.sh](../../tools/e2e/e2e.sh));
 - **desktop clipboards**: the Wayland data-control client under a headless sway and the X11
   client under Xvfb, against wl-clipboard and xclip;
 - **packaging**: `systemd-analyze verify` and `security` for the unit, and the desktop
@@ -651,7 +651,7 @@ gh secret set CBB_AURORA_KEY_PASSWORD -R HunterEwok/cbb --env aurora   # asks fo
 
 ## F-Droid
 
-The app's F-Droid build ([apps.md](apps.md#f-droid)) is published by F-Droid, from its
+The app's F-Droid build ([apps.md](../apps.md#f-droid)) is published by F-Droid, from its
 recipe in [fdroiddata](https://gitlab.com/fdroid/fdroiddata); `packaging/fdroid` holds the
 recipe we submit. Once, for the first release with the fdroid flavor:
 

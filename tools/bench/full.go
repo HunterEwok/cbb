@@ -15,7 +15,7 @@ import (
 // maxText is the largest text the group carries (clip.MaxText).
 const maxText = 1 << 20
 
-// textCase is one class of text of the matrix (docs/testbench.md,
+// textCase is one class of text of the matrix (docs/maintainers/testbench.md,
 // section 6) that every member sends to every other one.
 type textCase struct {
 	id, name string
@@ -48,7 +48,7 @@ var textCases = []textCase{
 }
 
 // Full makes a group as smoke does and runs the sync matrix of
-// docs/testbench.md, section 6 (C1 to C5, C7, C8), kills each member's
+// docs/maintainers/testbench.md, section 6 (C1 to C5, C7, C8), kills each member's
 // service (F1), checks a member in a container (P35), the sync modes (P34),
 // a secret copy (C6, S10), local access (S11), the files at rest (S16) and
 // the logs of the run (S15).
@@ -262,7 +262,7 @@ func killCmd(d *Device) string {
 		return `Get-CimInstance Win32_Service -Filter "Name='cbb'" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`
 	case "darwin":
 		// launchd starts the daemon again (KeepAlive). The bench's
-		// sudoers rule allows exactly this command (docs/testbench.md).
+		// sudoers rule allows exactly this command (docs/maintainers/testbench.md).
 		return "sudo -n /bin/launchctl kill KILL system/tools.cbb"
 	case "docker":
 		// The process dies as a crash would, not by docker kill, which

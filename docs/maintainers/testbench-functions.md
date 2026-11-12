@@ -3,8 +3,8 @@
 
 Every function of Copy Beyond Borders as release 0.6 has it, one line each, with the cases of
 [testbench-catalogue.md](testbench-catalogue.md) that check it. It is gathered from
-[design.md](design.md), [protocol.md](protocol.md), [apps.md](apps.md),
-[reference/cli.md](reference/cli.md) and the 0.6 plan. "A function" is something a user can
+[design.md](../design.md), [protocol.md](../protocol.md), [apps.md](../apps.md),
+[reference/cli.md](../reference/cli.md) and the 0.6 plan. "A function" is something a user can
 do or rely on, or a rule of the protocol that a device on the bench can break on purpose and
 watch being kept.
 

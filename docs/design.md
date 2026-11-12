@@ -2496,10 +2496,10 @@ One pull request each, smaller ones together:
    that fw4 loads changed service data by itself (`firewall.sh` reloads it anyway).
 3. Done. The router as the hub: `cbb global hub` opens its UDP port on `wan` through the
    service's own rules and `cbb global off` closes it; the bench takes the router (and a
-   FreeBSD computer) as a device under test ([testbench.md](testbench.md)). Still to run
+   FreeBSD computer) as a device under test ([testbench.md](maintainers/testbench.md)). Still to run
    on the BPI-R4.
 4. Done. A signed apk feed for `cbb.tools`, built by the release job once the feed's key is
-   in the secrets ([maintaining.md](maintaining.md#the-openwrt-feed)); CI installs from a
+   in the secrets ([maintaining.md](maintainers/maintaining.md#the-openwrt-feed)); CI installs from a
    feed signed with a test key.
 5. `cbb` in Rust on OpenWrt. Done: the procd script runs `cbb service`, without its helper,
    `get.sh` installs it on aarch64, armv7, x86-64, mips and mipsle, and it takes
@@ -2558,7 +2558,7 @@ Steps, one pull request each, smaller ones together:
 2. Done. The release workflow publishes the multi-arch image with its attestations; README and
    the installer pages say how to run it on the common NAS systems.
 3. Done. The bench takes a container as a device (`os = "docker"`), an ordinary member that
-   never makes the group, with the case P35 in [testbench.md](testbench.md); as the hub it
+   never makes the group, with the case P35 in [testbench.md](maintainers/testbench.md); as the hub it
    is a manual step, by the owner's choice.
 
 ### SteamOS
@@ -2774,7 +2774,7 @@ How the quality goals are checked:
 | Portability | the same group from every implementation | the interop vectors and the cross tests in CI; the ESP32 builds and its self-test in QEMU |
 
 The test levels and the CI jobs are in [CONTRIBUTING.md](../CONTRIBUTING.md#development);
-the cases on real devices in the [test bench](testbench.md).
+the cases on real devices in the [test bench](maintainers/testbench.md).
 
 ## 11. Risks and technical debt
 
@@ -2785,7 +2785,7 @@ not run on a real device are in the [README](../README.md#status) and
 ### Open questions
 
 These need experiments on real devices; CI cannot answer them. Each says what is known and
-which case of the test bench ([testbench.md](testbench.md)) answers it.
+which case of the test bench ([testbench.md](maintainers/testbench.md)) answers it.
 
 - Does the Mac see a Universal Clipboard item from the iPhone (the change counter moves)
   without a paste on the Mac, and which types does the item carry? The agent relies on

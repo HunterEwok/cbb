@@ -14,7 +14,7 @@
 # default, lets CI install archives from a local directory.
 #
 # The release workflow pushes it to the tap HunterEwok/homebrew-tap
-# (docs/maintaining.md, "Homebrew").
+# (docs/maintainers/maintaining.md, "Homebrew").
 set -eu
 
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then

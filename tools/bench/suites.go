@@ -18,7 +18,7 @@ import (
 )
 
 // maxSkew is how far a device's clock may be from the controller's
-// (docs/testbench.md, section 12), with room for the SSH round trip.
+// (docs/maintainers/testbench.md, section 12), with room for the SSH round trip.
 const maxSkew = 2 * time.Second
 
 var (
@@ -476,7 +476,7 @@ func syncWord(mode string) string {
 // adminCmd runs cbb for a command that changes the group. Such commands go
 // to the admin socket, which only root and the service's own account reach
 // (internal/control, IsAdmin): on Linux and macOS the bench user runs them
-// with sudo, without a password (docs/testbench.md, section 13). In the
+// with sudo, without a password (docs/maintainers/testbench.md, section 13). In the
 // container cbb runs as the service's user; on Windows the SSH user is an
 // administrator.
 func adminCmd(d *Device) string {
@@ -501,7 +501,7 @@ func sudoRefused(err error) bool {
 // under test.
 func noSudo(d *Device, err error) error {
 	if sudoRefused(err) {
-		return Skipped(d.Name + " runs no sudo without a password for cbb; add the bench's sudoers rule (docs/testbench.md, section 13)")
+		return Skipped(d.Name + " runs no sudo without a password for cbb; add the bench's sudoers rule (docs/maintainers/testbench.md, section 13)")
 	}
 	return err
 }
