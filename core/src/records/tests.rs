@@ -3598,3 +3598,76 @@ fn a_cut_roots_line_is_kept_in_its_order() {
         assert_eq!(kept, want[..=n].iter().copied().collect::<std::collections::BTreeSet<_>>(), "room for {}", n + 1);
     }
 }
+
+/// A set with an admin key at its ceiling, and the records it keeps.
+fn set_at_a_ceiling() -> (G, RecordSet) {
+    let mut g = G::new();
+    let (p, a) = (k("phone a"), k("admin a"));
+    g.admin(&p, &a, POWER_ADMIT);
+    for i in 0..keep::ceiling(false) + 8 {
+        g.device(&a, &k(&format!("d{i}")), "d", |_| {});
+    }
+    let mut set = RecordSet::new(g.root.key.clone());
+    set.insert_all(g.recs.iter().cloned());
+    (g, set)
+}
+
+/// The records a device saves in its own store, as it reads them back.
+fn saved(set: &RecordSet, local: &[u8; 32]) -> Vec<(Record, Option<Mark>)> {
+    set.marked(local).into_iter().map(|(r, m)| (Record::decode(&r.envelope()).unwrap(), Some(m))).collect()
+}
+
+/// Records loaded from the device's own store with their marks are taken
+/// without verifying a signature, into the same set.
+#[test]
+fn marked_records_load_without_their_signatures() {
+    let local = [7u8; 32];
+    let (_, set) = set_at_a_ceiling();
+    let store = saved(&set, &local);
+    let mut loaded = RecordSet::new(set.root().clone());
+    let ((stored, refused), n) = verified_by(|| loaded.load_marked(&local, store.clone()));
+    assert_eq!((stored, refused.len(), n), (set.len(), 0, 0));
+    assert_eq!(loaded.digest(), set.digest());
+    let held = BTreeMap::new();
+    assert_eq!(loaded.state(&held), set.state(&held));
+    // Without marks, each record is verified as if new.
+    let mut plain = RecordSet::new(set.root().clone());
+    let bare: Vec<(Record, Option<Mark>)> = store.into_iter().map(|(r, _)| (r, None)).collect();
+    let (_, n) = verified_by(|| plain.load_marked(&local, bare));
+    assert_eq!(n, set.len());
+}
+
+/// A record whose mark is wrong goes through its signature: a good one
+/// is taken, a bad one refused. Under another local key every record is
+/// verified.
+#[test]
+fn a_wrong_mark_falls_back_to_the_signature() {
+    let local = [7u8; 32];
+    let (_, set) = set_at_a_ceiling();
+    let store = saved(&set, &local);
+    let last = store.len() - 1;
+    let mut flipped = store.clone();
+    if let Some((_, Some(m))) = flipped.get_mut(last) {
+        m[5] ^= 1;
+    }
+    let mut loaded = RecordSet::new(set.root().clone());
+    let ((stored, refused), n) = verified_by(|| loaded.load_marked(&local, flipped));
+    assert_eq!((stored, refused.len(), n), (set.len(), 0, 1));
+    assert_eq!(loaded.digest(), set.digest());
+    // One flipped byte in a record's signature: its mark no longer holds,
+    // and its signature does not verify.
+    let mut env = store[last].0.envelope();
+    let at = env.len() - 1;
+    env[at] ^= 1;
+    let mut broken = store.clone();
+    broken[last].0 = Record::decode(&env).unwrap();
+    let mut loaded = RecordSet::new(set.root().clone());
+    let ((stored, refused), n) = verified_by(|| loaded.load_marked(&local, broken));
+    assert_eq!((stored, n), (set.len() - 1, 1));
+    assert!(matches!(refused.as_slice(), [(_, Refused::Broken(_))]));
+    // Another local key: no mark holds.
+    let mut other = RecordSet::new(set.root().clone());
+    let ((stored, _), n) = verified_by(|| other.load_marked(&[8u8; 32], store));
+    assert_eq!((stored, n), (set.len(), set.len()));
+    assert_eq!(other.digest(), set.digest());
+}

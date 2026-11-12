@@ -78,6 +78,8 @@ mod tests;
 
 use alloc::vec::Vec;
 use core::fmt;
+use hmac::{Hmac, KeyInit, Mac};
+use sha2::Sha256;
 
 pub use body::{Body, Kind};
 pub use eval::{Counted, Input, State, evaluate};
@@ -89,6 +91,15 @@ use crate::identity::ExternalKey;
 
 /// The label records are signed under.
 pub const LABEL_RECORD: &str = "cbb record v3";
+
+/// The label of a record's mark (`Record::mark`).
+pub const LABEL_MARK: &str = "cbb record mark v3";
+
+/// A device's mark on a record it verified, stored beside it in its own
+/// store: HMAC-SHA-256 under a 32-byte key the device keeps to itself, over
+/// the label, a zero byte and the record's envelope. Loading checks the
+/// mark instead of the signature (design-records-v3 section 7, rule 29).
+pub type Mark = [u8; 32];
 /// The label of the set digest.
 pub const LABEL_SET: &str = "cbb set v3";
 
@@ -275,6 +286,38 @@ impl Record {
         VERIFIED.with(|n| n.set(n.get().saturating_add(1)));
         key::verify_es256(key, LABEL_RECORD, &self.bytes, &self.sig)?;
         Ok(held)
+    }
+
+    /// The mark of the record under the device's own key local. The core
+    /// never makes or stores that key; its caller keeps it.
+    pub fn mark(&self, local: &[u8; 32]) -> Mark {
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&self.marker(local).finalize().into_bytes());
+        out
+    }
+
+    #[allow(clippy::expect_used, reason = "HMAC takes a key of any length, so this never fails")]
+    fn marker(&self, local: &[u8; 32]) -> Hmac<Sha256> {
+        let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(local).expect("HMAC takes a key of any length");
+        m.update(LABEL_MARK.as_bytes());
+        m.update(&[0]);
+        m.update(&self.envelope());
+        m
+    }
+
+    /// verify for a record from the device's own store: with its mark under
+    /// local, the checks without the signature; with a missing or wrong
+    /// mark, verify.
+    pub(crate) fn verify_marked(&self, key: &Key, mark: Option<(&[u8; 32], &Mark)>) -> Result<bool, Rule> {
+        match mark {
+            Some((local, mark)) if self.marker(local).verify_slice(mark).is_ok() => {
+                if self.bytes.len() > self.max_body() {
+                    return Err(Rule::new("records/size"));
+                }
+                self.body.check()
+            }
+            _ => self.verify(key),
+        }
     }
 }
 
