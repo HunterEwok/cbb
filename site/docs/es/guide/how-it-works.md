@@ -99,7 +99,7 @@ Un grupo de solo teléfonos, o de teléfonos y un Mac, no tiene un ordenador que
 
 Un grupo puede tener varios hubs: la raíz, cada administrador con un hub configurado y los hubs
 que solo pasan las copias. Los dispositivos fuera de casa usan el primero que responde, primero
-los teléfonos, así que un grupo de teléfonos y un ordenador sigue funcionando mientras la app del
+los ordenadores y luego los teléfonos, así que un grupo de teléfonos y un ordenador sigue funcionando mientras la app del
 teléfono está cerrada.
 
 **Previsto:** un relé ciego en `cbb.tools` para quien no quiera ejecutar un hub ni un relé. Verá qué dispositivos se comunican y cuándo, nunca lo que copian, y lo activas tú mismo.
