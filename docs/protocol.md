@@ -2636,6 +2636,10 @@ device by its name, system and fingerprint, then unlocks its signing key (Face I
 screen lock) and sends the welcome with its own tag. It gives no CA keys and makes no admin.
 It takes one attempt at a time, ends after three failures, and the guest goes at expiry,
 when the user cancels, or as on any hub once the admitted device offered its own key.
+Other apps on the phone can reach the loopback port too, so the window takes only the
+connections the hub made for the invitation's guest (the hub knows each by the loopback port
+it dialed from, as a computer's hub does): any other is closed after the TLS handshake, before any pairing message,
+and neither counts as an attempt nor holds the window.
 An admin phone that is not the hub makes its invitation through a hub of the group, as
 "Through the hub" says, with the window in its member (`cbb_invite_*`); the invitation shows
 as a QR code. The invitation's file

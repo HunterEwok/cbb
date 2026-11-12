@@ -823,10 +823,13 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     }
 
     /// Saves the group in one step, so a crash leaves the old file or the new one.
+    /// The file is sealed until the phone is first unlocked after a start,
+    /// stated rather than left to the default: the member reads it in the
+    /// background later, while the phone may be locked.
     public func save(to url: URL) throws {
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try enc.encode(self).write(to: url, options: [.atomic])
+        try enc.encode(self).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 }

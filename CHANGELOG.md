@@ -1595,6 +1595,25 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The phone apps hold their keys and data tighter. iPhone: "Sync clipboard" from Siri or a
+  shortcut and the Control Center switch run only on an unlocked phone, and the shortcut's
+  answer names the device a copy came from but not the copy; the root and admin keys sign
+  without asking only in the minutes after Face ID while the app stays at the front; the
+  group's file and the recovery sheet state their file protection. Android: the share sheet
+  and the clipboard read only what another app's provider hands over; the questions before
+  sending hide windows drawn over them and ignore taps through them; nothing of the app goes
+  into a backup or a transfer to a new phone; the Quick Settings tile asks to unlock first;
+  the launch extra `ShowErrorDetails` counts in debug builds only (the switch in Settings
+  stays); a release build does not sign with a group key that a debug build made without the
+  screen lock. A remote invitation's pairing window on a phone hub takes only the connections
+  its hub made for the invitation (docs/protocol.md, section 12). Aurora: the join QR code's
+  text reaches the log in debug builds only. The core's C functions all stop a panic, and
+  `cbb_qr_read` refuses a frame size that overflows before it reads the frame.
+- The Aurora app's admin PIN is at least six digits and none easy to guess (repeats, runs,
+  short patterns, palindromes, dates, common keypad PINs), checked as it is typed and by the key store;
+  a PIN set before still works. The admin token itself says whether its SO PIN was made
+  random, and the tries left come from its flags, so clearing the app's data neither stops
+  the PIN working nor shows a full seven tries.
 - A phone joins a group with one button, "Join a group", on the iPhone and Android: it always
   joins as a member, and "Join as an admin" is gone. The root makes it an admin later from the
   phone's device page ("Make it an admin"), on a root phone, in the Mac app and the tray, and

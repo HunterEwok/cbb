@@ -107,7 +107,8 @@ object Clipboard {
         if (clip.itemCount == 0) return null
         val item = clip.getItemAt(0)
         val d = clip.description
-        val uri = item.uri
+        // Only an image another app's provider hands over (Files.foreign).
+        val uri = item.uri?.takeIf { Files.foreign(context, it) }
         val type = uri?.let { u -> runCatching { context.contentResolver.getType(u) }.getOrNull() }
             ?: (0 until d.mimeTypeCount).map { d.getMimeType(it) }.firstOrNull { it.startsWith("image/") }
         if (uri != null && type != null && type.startsWith("image/")) {

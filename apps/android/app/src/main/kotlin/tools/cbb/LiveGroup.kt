@@ -936,6 +936,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val guest = AtomicReference<HubGuest?>()
         val window = InvitationWindow(
             member.privateKey, g.memberCert, Instant.now().plusSeconds(lifetimeS.toLong()),
+            fromGuest = { port -> guest.get()?.dialed(port) == true },
             admit = { t, joinerCert, sid -> admitInvited(t, joinerCert, sid, guest.get() ?: throw HubOnPhone.NotRunning(), ask) },
             onEnd = { r ->
                 if (r.isFailure) guest.get()?.close()

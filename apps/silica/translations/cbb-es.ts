@@ -268,6 +268,10 @@
 <context>
     <name>ChangePinDialog</name>
     <message>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>Al menos seis cifras, y no uno fácil como 123456 o 111111.</translation>
+    </message>
+    <message>
         <source>Change</source>
         <translation>Cambiar</translation>
     </message>
@@ -511,6 +515,10 @@
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>Respondió otro dispositivo en la dirección del código. Escanea el código de nuevo.</translation>
+    </message>
+    <message>
+        <source>Choose a PIN of at least six digits that is not easy to guess.</source>
+        <translation>Elige un PIN de al menos seis cifras que no sea fácil de adivinar.</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -1298,8 +1306,12 @@
         <translation>PIN de administrador</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>El PIN propio de CBB, de al menos cuatro cifras. No uses el código de desbloqueo del teléfono. El elemento seguro del teléfono lo comprueba antes de cada acción de administrador; siete PIN incorrectos bloquean la clave de administrador para siempre y nadie puede desbloquearla.</translation>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>Al menos seis cifras, y no uno fácil como 123456 o 111111.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>El PIN propio de CBB, de al menos seis cifras y no uno fácil como 123456. No uses el código de desbloqueo del teléfono. El elemento seguro del teléfono lo comprueba antes de cada acción de administrador; siete PIN incorrectos bloquean la clave de administrador para siempre y nadie puede desbloquearla.</translation>
     </message>
     <message>
         <source>Choose the admin PIN</source>
@@ -1336,6 +1348,10 @@
     <message>
         <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
         <translation>PIN incorrecto. Queda un intento: el próximo PIN incorrecto bloquea la clave de administrador para siempre.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN incorrecto. Ya se gastaron algunos intentos; siete PIN incorrectos bloquean la clave de administrador para siempre.</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>
@@ -1660,6 +1676,10 @@
     <message>
         <source>Version</source>
         <translation>Versión</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN incorrecto. Ya se gastaron algunos intentos; siete PIN incorrectos bloquean la clave de administrador para siempre.</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>

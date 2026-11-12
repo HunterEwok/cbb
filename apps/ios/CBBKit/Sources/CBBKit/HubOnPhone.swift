@@ -125,6 +125,9 @@ public protocol HubGuest: AnyObject, Sendable {
     /// The window admitted the device: its first member connection goes to
     /// the member port.
     func admitted()
+    /// Whether the hub made the pairing window's connection from this
+    /// loopback port for the guest (InvitationWindow's fromGuest).
+    func dialed(port: UInt16) -> Bool
     func close()
 }
 

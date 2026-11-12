@@ -191,6 +191,7 @@ Page {
                 onPinChanged: page.pinNote = ok ? qsTr("The admin PIN is changed.")
                                            : locked ? ""
                                            : triesLeft > 0 ? qsTr("Wrong PIN. Tries left: %1.").arg(triesLeft)
+                                           : triesLeft === 0 ? qsTr("Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.")
                                            : qsTr("The admin PIN is not changed.")
             }
             // Room between the PIN and leaving, which is far from undone.

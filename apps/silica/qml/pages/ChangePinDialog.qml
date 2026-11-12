@@ -8,8 +8,10 @@ import Sailfish.Silica 1.0
 Dialog {
     id: dialog
     readonly property int minLength: 4
+    // The new PIN passes the rule: six digits or more, none easy to guess.
+    readonly property bool allowed: app.pinAllowed(pin.text)
 
-    canAccept: old.text.length >= minLength && pin.text.length >= minLength && again.text === pin.text
+    canAccept: old.text.length >= minLength && allowed && again.text === pin.text
 
     onAccepted: app.changePin(old.text, pin.text)
 
@@ -46,6 +48,14 @@ Dialog {
             inputMethodHints: Qt.ImhDigitsOnly | Qt.ImhNoPredictiveText
             EnterKey.enabled: dialog.canAccept
             EnterKey.onClicked: dialog.accept()
+        }
+        Label {
+            visible: pin.text.length > 0 && !dialog.allowed
+            x: Theme.horizontalPageMargin
+            width: parent.width - 2 * Theme.horizontalPageMargin
+            wrapMode: Text.Wrap
+            color: Theme.errorColor
+            text: qsTr("At least six digits, and not an easy one such as 123456 or 111111.")
         }
     }
 }

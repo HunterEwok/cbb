@@ -19,19 +19,34 @@ struct ReadAnswer {
     texts: Vec<String>,
 }
 
+/// What a frame of that size refuses with.
+fn bad_size() -> Error {
+    Error::msg("the frame's size does not match its bytes")
+}
+
+/// The number of bytes a frame of width by height pixels, rows stride
+/// bytes apart, takes: `stride * (height - 1) + width`; None when the
+/// sides are out of range or the length overflows what a slice can hold,
+/// before any slice is made of the caller's pointer.
+pub fn frame_len(width: usize, height: usize, stride: usize) -> Option<usize> {
+    if width == 0 || height == 0 || width > MAX_SIDE || height > MAX_SIDE || stride < width {
+        return None;
+    }
+    let n = stride.checked_mul(height.checked_sub(1)?)?.checked_add(width)?;
+    (n <= isize::MAX as usize).then_some(n)
+}
+
+/// The answer to a frame whose size `frame_len` refuses.
+pub fn refused() -> Vec<u8> {
+    answer::<ReadAnswer>(Err(bad_size()))
+}
+
 /// The texts of the QR codes in a grey image of width by height pixels,
 /// row by row, stride bytes apart.
 pub fn read(gray: &[u8], width: usize, height: usize, stride: usize) -> Vec<u8> {
     answer((|| -> Result<ReadAnswer> {
-        let needed = stride.checked_mul(height.saturating_sub(1)).and_then(|n| n.checked_add(width));
-        if width == 0
-            || height == 0
-            || width > MAX_SIDE
-            || height > MAX_SIDE
-            || stride < width
-            || needed.is_none_or(|n| n > gray.len())
-        {
-            return Err(Error::msg("the frame's size does not match its bytes"));
+        if frame_len(width, height, stride).is_none_or(|n| n > gray.len()) {
+            return Err(bad_size());
         }
         let mut img = rqrr::PreparedImage::prepare_from_greyscale(width, height, |x, y| {
             y.checked_mul(stride).and_then(|r| r.checked_add(x)).and_then(|i| gray.get(i)).copied().unwrap_or(255)
@@ -73,5 +88,19 @@ mod tests {
         assert_eq!(got["ok"]["texts"][0], text.as_str());
         let bad: serde_json::Value = serde_json::from_slice(&read(&gray, side, side + 1, side)).unwrap();
         assert!(bad["error"].is_object());
+    }
+
+    #[test]
+    fn a_frame_size_that_overflows_is_refused_before_its_bytes() {
+        assert_eq!(frame_len(4, 3, 5), Some(14));
+        assert_eq!(frame_len(0, 3, 5), None);
+        assert_eq!(frame_len(4, 0, 5), None);
+        assert_eq!(frame_len(5, 3, 4), None);
+        assert_eq!(frame_len(MAX_SIDE + 1, 3, MAX_SIDE + 1), None);
+        assert_eq!(frame_len(4, MAX_SIDE + 1, 4), None);
+        assert_eq!(frame_len(4, 3, usize::MAX), None);
+        assert_eq!(frame_len(4, 2, isize::MAX as usize), None);
+        let got: serde_json::Value = serde_json::from_slice(&refused()).unwrap();
+        assert!(got["error"].is_object(), "{got}");
     }
 }

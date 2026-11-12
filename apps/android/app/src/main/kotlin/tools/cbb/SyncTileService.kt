@@ -41,6 +41,12 @@ class SyncTileService : TileService() {
     override fun onClick() {
         super.onClick()
         if (!model.group.hasGroup) return open()
+        // Quick Settings also open on a locked phone: there the phone is
+        // unlocked first, as the iPhone's control asks for Face ID.
+        if (isLocked) unlockAndRun { toggle() } else toggle()
+    }
+
+    private fun toggle() {
         val on = model.group.syncMode == "own"
         scope.launch {
             model.turnSync(on)

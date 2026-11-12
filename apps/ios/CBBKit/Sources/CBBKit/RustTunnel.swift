@@ -347,6 +347,11 @@ final class RustGuest: HubGuest, @unchecked Sendable {
     func admitted() { _ = try? RustTunnel.call(["op": "guest_admitted", "id": hub, "guest": guest]) }
 
     func close() { _ = try? RustTunnel.call(["op": "guest_close", "id": hub, "guest": guest]) }
+
+    func dialed(port: UInt16) -> Bool {
+        let a = try? RustTunnel.call(["op": "guest_dialed", "id": hub, "guest": guest, "port": Int(port)])
+        return a?["through"] as? Bool == true
+    }
 }
 
 /// Links to a blind relay (RelayLinks).

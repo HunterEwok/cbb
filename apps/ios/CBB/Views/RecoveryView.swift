@@ -235,6 +235,9 @@ struct RecoveryPage: View {
             out.endPDFPage()
         }
         out.closePDF()
+        // The sheet restores the group: sealed whenever the phone is
+        // locked, and never in a backup.
+        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: url.path)
         try (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
         return url
     }

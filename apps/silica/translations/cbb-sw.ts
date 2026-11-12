@@ -268,6 +268,10 @@
 <context>
     <name>ChangePinDialog</name>
     <message>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>Angalau tarakimu sita, na isiyo rahisi kama 123456 au 111111.</translation>
+    </message>
+    <message>
         <source>Change</source>
         <translation>Badilisha</translation>
     </message>
@@ -511,6 +515,10 @@
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>Kifaa kingine kilijibu kwenye anwani ya msimbo. Changanua msimbo tena.</translation>
+    </message>
+    <message>
+        <source>Choose a PIN of at least six digits that is not easy to guess.</source>
+        <translation>Chagua PIN ya angalau tarakimu sita ambayo si rahisi kukisia.</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -1298,8 +1306,12 @@
         <translation>PIN ya msimamizi</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>PIN ya CBB yenyewe, angalau tarakimu nne. Usitumie msimbo wa kufungua simu. Kipengele salama cha simu huikagua kabla ya kila kitendo cha msimamizi; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa, na hakuna anayeweza kuufungua.</translation>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>Angalau tarakimu sita, na isiyo rahisi kama 123456 au 111111.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>PIN ya CBB yenyewe, angalau tarakimu sita na isiyo rahisi kama 123456. Usitumie msimbo wa kufungua simu. Kipengele salama cha simu huikagua kabla ya kila kitendo cha msimamizi; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa, na hakuna anayeweza kuufungua.</translation>
     </message>
     <message>
         <source>Choose the admin PIN</source>
@@ -1336,6 +1348,10 @@
     <message>
         <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
         <translation>PIN si sahihi. Imebaki jaribio moja: PIN nyingine isiyo sahihi itafunga ufunguo wa msimamizi kabisa.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN si sahihi. Baadhi ya majaribio yameshatumika; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa.</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>
@@ -1660,6 +1676,10 @@
     <message>
         <source>Version</source>
         <translation>Toleo</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN si sahihi. Baadhi ya majaribio yameshatumika; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa.</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>

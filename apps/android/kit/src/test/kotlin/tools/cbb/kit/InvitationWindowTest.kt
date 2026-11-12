@@ -6,6 +6,7 @@ import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -34,7 +35,7 @@ class InvitationWindowTest {
     fun admitsOneDevice() {
         val ends = LinkedBlockingQueue<Result<PairingMember.Admitted>>()
         val window = InvitationWindow(
-            hubKey.keyPair.private, hubCert, Instant.now().plusSeconds(60),
+            hubKey.keyPair.private, hubCert, Instant.now().plusSeconds(60), fromGuest = { true },
             admit = { t, cert, sid ->
                 assertEquals(32, sid.size)
                 t.readFrame()
@@ -59,7 +60,7 @@ class InvitationWindowTest {
         val ends = LinkedBlockingQueue<Result<PairingMember.Admitted>>()
         val errors = LinkedBlockingQueue<Exception>()
         val window = InvitationWindow(
-            hubKey.keyPair.private, hubCert, Instant.now().plusSeconds(60),
+            hubKey.keyPair.private, hubCert, Instant.now().plusSeconds(60), fromGuest = { true },
             admit = { t, _, _ ->
                 t.readFrame()
                 throw PairingMember.Failure("a wrong code")
@@ -77,12 +78,49 @@ class InvitationWindowTest {
         assertEquals(Pairing.ErrorCode.TOO_MANY, code(ended(ends)))
     }
 
+    /** Another app's connections to the loopback port are closed before any pairing message: they never count, and the guest still joins. */
+    @Test
+    fun takesOnlyTheGuestTunnelsConnections() {
+        val ends = LinkedBlockingQueue<Result<PairingMember.Admitted>>()
+        val errors = LinkedBlockingQueue<Exception>()
+        val others = AtomicInteger(InvitationWindow.MAX_FAILURES + 1)
+        val attempts = AtomicInteger()
+        val window = InvitationWindow(
+            hubKey.keyPair.private, hubCert, Instant.now().plusSeconds(60),
+            fromGuest = { others.getAndDecrement() <= 0 },
+            admit = { t, cert, _ ->
+                attempts.incrementAndGet()
+                t.readFrame()
+                t.writeFrame(Pairing.Frame(ok = true))
+                admitted(cert)
+            },
+            onEnd = { ends.add(it) },
+            onError = { errors.add(it) },
+        )
+        repeat(InvitationWindow.MAX_FAILURES + 1) {
+            dial(window.port).use { t ->
+                runCatching {
+                    t.writeFrame(Pairing.Frame(msg = ByteArray(1)))
+                    t.readFrame()
+                }
+            }
+            assertTrue(errors.poll(10, TimeUnit.SECONDS) is InvitationWindow.NotFromGuest, "connection ${it + 1}")
+        }
+        assertEquals(0, attempts.get(), "no attempt ran for another app")
+        assertTrue(ends.isEmpty(), "the window is still open")
+        dial(window.port).use { t ->
+            t.writeFrame(Pairing.Frame(msg = ByteArray(1)))
+            assertEquals(true, t.readFrame().ok)
+        }
+        assertTrue(ended(ends).isSuccess)
+    }
+
     @Test
     fun answersBusyWhileAnAttemptRuns() {
         val ends = LinkedBlockingQueue<Result<PairingMember.Admitted>>()
         val inside = CountDownLatch(1)
         val window = InvitationWindow(
-            hubKey.keyPair.private, hubCert, Instant.now().plusSeconds(60),
+            hubKey.keyPair.private, hubCert, Instant.now().plusSeconds(60), fromGuest = { true },
             admit = { t, cert, _ ->
                 inside.countDown()
                 t.readFrame() // until the first device ends
@@ -108,11 +146,11 @@ class InvitationWindowTest {
     @Test
     fun endsWhenItExpiresOrIsCancelled() {
         val expired = LinkedBlockingQueue<Result<PairingMember.Admitted>>()
-        InvitationWindow(hubKey.keyPair.private, hubCert, Instant.now().plusMillis(100), admit = { _, cert, _ -> admitted(cert) }, onEnd = { expired.add(it) })
+        InvitationWindow(hubKey.keyPair.private, hubCert, Instant.now().plusMillis(100), fromGuest = { true }, admit = { _, cert, _ -> admitted(cert) }, onEnd = { expired.add(it) })
         assertEquals(Pairing.ErrorCode.EXPIRED, code(ended(expired)))
 
         val cancelled = LinkedBlockingQueue<Result<PairingMember.Admitted>>()
-        val window = InvitationWindow(hubKey.keyPair.private, hubCert, Instant.now().plusSeconds(60), admit = { _, cert, _ -> admitted(cert) }, onEnd = { cancelled.add(it) })
+        val window = InvitationWindow(hubKey.keyPair.private, hubCert, Instant.now().plusSeconds(60), fromGuest = { true }, admit = { _, cert, _ -> admitted(cert) }, onEnd = { cancelled.add(it) })
         window.close()
         assertEquals(Pairing.ErrorCode.CLOSED, code(ended(cancelled)))
         window.close()

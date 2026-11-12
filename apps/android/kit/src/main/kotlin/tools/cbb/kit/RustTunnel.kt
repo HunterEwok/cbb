@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.ByteArrayInputStream
 import java.security.cert.CertificateFactory
@@ -167,6 +168,16 @@ object RustTunnel {
         fun close() {
             runCatching { call(obj("op" to JsonPrimitive("guest_close"), "id" to JsonPrimitive(hub), "guest" to JsonPrimitive(guest))) }
         }
+
+        /**
+         * Whether the connection that reached the pairing window from the
+         * loopback port `port` is one the hub made for this guest
+         * (InvitationWindow's fromGuest); false when the hub cannot say.
+         */
+        fun dialed(port: Int): Boolean = runCatching {
+            val ok = call(obj("op" to JsonPrimitive("guest_dialed"), "id" to JsonPrimitive(hub), "guest" to JsonPrimitive(guest), "port" to JsonPrimitive(port)))
+            (ok["through"] as? JsonPrimitive)?.booleanOrNull == true
+        }.getOrDefault(false)
     }
 
     /** A running hub on the phone. */
