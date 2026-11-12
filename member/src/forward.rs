@@ -501,6 +501,13 @@ pub(crate) struct Registrar {
 }
 
 impl Registrar {
+    /// Writes bytes as they are, for the tests of a server's setup.
+    #[cfg(test)]
+    pub(crate) fn raw_write(&mut self, b: &[u8]) -> Result<()> {
+        use std::io::Write as _;
+        self.s.write_all(b).and_then(|()| self.s.flush()).map_err(|e| Error::msg(format!("{e}")))
+    }
+
     pub(crate) fn connect(
         endpoint: SocketAddr,
         pins: &[certs::KeyHash],

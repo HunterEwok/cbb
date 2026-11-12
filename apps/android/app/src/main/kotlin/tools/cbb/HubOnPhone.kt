@@ -7,6 +7,7 @@ import tools.cbb.kit.Member
 import tools.cbb.kit.PhoneHub
 import tools.cbb.kit.Releases
 import tools.cbb.kit.RustTunnel
+import tools.cbb.kit.ServerCredentials
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -121,6 +122,12 @@ interface HubTunnel {
     /** Registers with the forwarder; vlessID is the group's VLESS user ID, "" without VLESS. */
     fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String, vlessID: String)
     fun setRecords(records: String)
+    /**
+     * Registers with the period's hubs' credential, as JSON, which lists serverKey (SubjectPublicKeyInfo DER), signing
+     * with sign, in place of the member certificate and the records (docs/protocol.md, section 18); an empty creds goes
+     * back to them.
+     */
+    fun setCredentials(serverKey: ByteArray, sign: (ByteArray) -> ByteArray, creds: String)
     /** Tells the hub that its forwarder is the project's, with the ways in over VLESS of the signed entry points as JSON, "" for none. */
     fun setProjectWays(ways: String)
     /** The forwarder's report as JSON. */
@@ -167,6 +174,8 @@ object CoreHubTunnels : HubTunnels {
             override fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String, vlessID: String) =
                 h.register(endpoint, pin, chain, sign, records, vlessID)
             override fun setRecords(records: String) = h.setRecords(records)
+            override fun setCredentials(serverKey: ByteArray, sign: (ByteArray) -> ByteArray, creds: String) =
+                h.setCredentials(serverKey, sign, creds)
             override fun setProjectWays(ways: String) = h.setProjectWays(ways)
             override fun status(): String = h.status()
             override fun invite(group: String, endpoints: String, lifetimeS: Int, guestPort: Int, vless: String): HubGuest {
@@ -225,6 +234,57 @@ class HubOnPhone(
     private var hub: PhoneHub? = state?.let(::phoneHub)
     private var tunnel: HubTunnel? = null
     private var tunnelPort = 0 // the member listener's port the tunnel joins its connections to
+    private var credentials: Credentials? = null
+    private var shown = "" // what the running tunnel registers with, to tell whether it changed
+
+    /**
+     * What the hub registers with at its forwarder in place of its member
+     * certificate and the records, once the period's hubs' credential
+     * lists its server key, as a computer's hub does (docs/protocol.md,
+     * section 18): the forwarder then learns neither the device nor the
+     * group. The server key is SubjectPublicKeyInfo DER, sign signs a
+     * SHA-256 digest with it.
+     */
+    class Credentials(val serverKey: ByteArray, val sign: (ByteArray) -> ByteArray, val credentials: List<ServerCredentials.Credential>) {
+        internal val creds: String get() = JsonArray(credentials.map { it.toJson() }).toString()
+        internal val shown: String get() = Base64.getEncoder().encodeToString(serverKey) + "\n" + creds
+    }
+
+    /** Sets what the hub registers with, null for its member certificate and the records; a running hub registers again when it changed. */
+    fun setCredentials(c: Credentials?) {
+        val t = synchronized(lock) {
+            credentials = c
+            tunnel
+        } ?: return
+        apply(t)
+    }
+
+    /** Hands a new tunnel the credentials c, if any, and returns what it took ("" for none). */
+    private fun hand(t: HubTunnel, c: Credentials?): String {
+        if (c == null) return ""
+        return try {
+            t.setCredentials(c.serverKey, c.sign, c.creds)
+            c.shown
+        } catch (e: Exception) {
+            log("cannot hand the hubs' credential to the tunnel", e)
+            ""
+        }
+    }
+
+    /** Hands the tunnel the credentials when they changed since it last took them. */
+    private fun apply(t: HubTunnel) {
+        val (c, changed) = synchronized(lock) {
+            val now = credentials?.shown ?: ""
+            (credentials to (now != shown)).also { shown = now }
+        }
+        if (!changed) return
+        try {
+            if (c != null) t.setCredentials(c.serverKey, c.sign, c.creds) else t.setCredentials(ByteArray(0), { ByteArray(0) }, "")
+        } catch (e: Exception) {
+            log("cannot hand the hubs' credential to the tunnel", e)
+            synchronized(lock) { shown = "" }
+        }
+    }
 
     val isOn: Boolean get() = synchronized(lock) { state?.on == true }
     val forwarder: HubState.Forwarder? get() = synchronized(lock) { state?.forwarder }
@@ -411,10 +471,13 @@ class HubOnPhone(
             s to (hub ?: return)
         }
         val fw = s.forwarder ?: return
+        var handed = ""
         val t = try {
             tunnels.start(s.key, device, g.memberPort, s.obfuscation ?: "", h.clientsJson).also {
                 // Away from home the hub may reach the project's forwarder only over VLESS (section 13).
                 if (fw.isProject) it.setProjectWays(if (g.ways.isEmpty()) "" else JsonArray(g.ways.map { w -> w.toJson() }).toString())
+                // The credential goes first, so that not even the first registration shows the member certificate and the records.
+                handed = hand(it, synchronized(lock) { credentials })
                 it.register(fw.endpoint, fw.pin, JsonArray(g.chain.map { bytes(it) }).toString(), g.sign, recordsJson(g.records), s.vlessID ?: "")
             }
         } catch (e: Exception) {
@@ -428,10 +491,16 @@ class HubOnPhone(
                     tunnel = t
                     tunnelPort = g.memberPort
                     failure = null
+                    shown = handed
                 }
             }
         }
-        if (!kept) runCatching { t.close() }
+        if (!kept) {
+            runCatching { t.close() }
+            return
+        }
+        // Credentials set while it started reach it now.
+        apply(t)
     }
 
     /** Stops the tunnel and the registration; the clients come back at the next start. */

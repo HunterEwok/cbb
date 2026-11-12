@@ -560,7 +560,7 @@ impl State {
                 if self.own_key(&key) {
                     return Err(Error::msg("a client has the hub's key"));
                 }
-                Ok(crate::hub::Peer { key, psk, addr, until: None })
+                Ok(crate::hub::Peer { key, psk, addr, until: None, source: None })
             })
             .collect()
     }
@@ -1023,7 +1023,15 @@ pub(crate) struct Bridge {
     pub(crate) down: Vec<u8>,
     pub(crate) local_eof: bool,
     pub(crate) done: bool,
+    /// Since when the local side has ended and the client has taken
+    /// nothing more: the client takes the rest and closes its half within
+    /// CLOSE_WAIT, or the connection is cut.
+    pub(crate) closed_at: Option<Instant>,
 }
+
+/// How long a client may take nothing of a connection the local side
+/// ended, nor close its half.
+pub(crate) const CLOSE_WAIT: Duration = Duration::from_secs(10);
 
 struct Pump {
     tunn: Tunn,
@@ -1264,6 +1272,7 @@ impl Pump {
                 down: Vec::new(),
                 local_eof: false,
                 done: false,
+                closed_at: None,
             });
         }
     }
@@ -1383,9 +1392,20 @@ pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) ->
     {
         b.up.drain(..n);
         busy |= n > 0;
+        if n > 0 && b.closed_at.is_some() {
+            b.closed_at = Some(Instant::now());
+        }
+    }
+    if b.local_eof {
+        b.closed_at.get_or_insert_with(Instant::now);
     }
     if b.local_eof && b.up.is_empty() && s.may_send() {
         s.close();
+    }
+    // A client that keeps its half open, acknowledging and answering the
+    // keep-alives but never closing, holds the connection no longer.
+    if b.closed_at.is_some_and(|t| t.elapsed() >= CLOSE_WAIT) {
+        b.done = true;
     }
     // The hub to local.
     if b.down.len() < TCP_BUFFER
@@ -1422,7 +1442,7 @@ pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) ->
 /// there are none. A client on a dual-stack socket (Java's, on a system
 /// with IPv6) that dials the loopback port is in IPv6's table, by its
 /// IPv4-mapped address.
-fn tcp_table() -> String {
+pub(crate) fn tcp_table() -> String {
     let mut t = std::fs::read_to_string("/proc/net/tcp").unwrap_or_default();
     t.push_str(&std::fs::read_to_string("/proc/net/tcp6").unwrap_or_default());
     t
@@ -1433,7 +1453,7 @@ fn tcp_table() -> String {
 /// /proc/net/tcp6.
 /// Without the table (a system without /proc) it cannot tell and lets the
 /// connection through.
-fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
+pub(crate) fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
     let (SocketAddr::V4(from), Some(SocketAddr::V4(to))) = (from, to) else { return true };
     if table.is_empty() {
         return true;

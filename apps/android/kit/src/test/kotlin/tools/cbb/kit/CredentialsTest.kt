@@ -149,6 +149,14 @@ class CredentialsTest {
         assertEquals(mapOf(ServerCredentials.pseudonym(mine) to g.records.devices.single().id), reg.names)
         assertNotNull(ServerCredentials.checkPresented(reg.credentials, now).period)
         assertNull(store.registration(g.records, rootKey.publicKeyDER, sha256(SoftwareSigner().publicKeyDER)))
+        // What a hub registers with at its forwarder: the hubs' credential,
+        // only while it lists the hub and lasts.
+        val (hc, hb) = assertNotNull(store.hubs())
+        val listed = hb.hubs.first()
+        assertEquals(listOf(hc), store.hubRegistration(rootKey.publicKeyDER, listed, now))
+        assertNull(store.hubRegistration(rootKey.publicKeyDER, sha256(SoftwareSigner().publicKeyDER), now))
+        assertNull(store.hubRegistration(rootKey.publicKeyDER, listed, hb.expiresMS))
+        assertNull(store.hubRegistration(SoftwareSigner().publicKeyDER, listed, now))
         // Nothing changed: nothing to sign, no Face ID.
         assertEquals(0, CredentialRefresh.refresh(store, g.records, g.groupCA, g.currentRoot, member, keys, now + 1000, root).size)
         assertEquals(1, asked)

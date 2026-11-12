@@ -42,6 +42,8 @@ object RustTunnel {
 
         fun cbb_tunnel_relay_credentials(request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answerLen: Pointer): Pointer?
 
+        fun cbb_tunnel_hub_credentials(request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answerLen: Pointer): Pointer?
+
         fun cbb_free(answer: Pointer?, len: Core.SizeT)
     }
 
@@ -191,6 +193,20 @@ object RustTunnel {
 
         fun setRecords(records: String) {
             op("hub_set_records", "records" to (json(records) ?: JsonArray(emptyList())))
+        }
+
+        /**
+         * Registers with the period's hubs' credential, as JSON, which lists serverKey (SubjectPublicKeyInfo DER),
+         * signing with sign, in place of the member certificate and the records (docs/protocol.md, section 18); an
+         * empty creds goes back to them.
+         */
+        fun setCredentials(serverKey: ByteArray, sign: (ByteArray) -> ByteArray, creds: String) {
+            val req = obj(
+                "id" to JsonPrimitive(id), "credentials" to (json(creds) ?: JsonArray(emptyList())),
+                "public" to if (creds.isEmpty()) null else b64(CoreMember.point(serverKey)),
+            )
+            val s = signFn(sign)
+            answer(req) { r, n -> lib.cbb_tunnel_hub_credentials(r, Core.SizeT(r.size.toLong()), s, null, n) }
         }
 
         fun setProjectWays(ways: String) {

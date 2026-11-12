@@ -22,12 +22,19 @@ final class HubOnPhoneTests: XCTestCase {
 
         init(memberPort: UInt16, clients: String) { (self.memberPort, held) = (memberPort, clients) }
         func setClients(_ json: String) throws { held = json }
+        /// The credentials the tunnel had when it registered.
+        var credentialsAtRegister: Int?
         func register(endpoint: String, pin: String, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: String, vlessID: String) throws {
+            credentialsAtRegister = credentials.count
             registered = [endpoint, pin]
             shown = records
             self.vlessID = vlessID
         }
         func setRecords(_ records: String) throws { shown = records }
+        var credentials: [String] = []
+        func setCredentials(serverKey: Data, sign: @escaping @Sendable (Data) throws -> Data, creds: String) throws {
+            credentials.append(creds)
+        }
         var ways: String?
         func setProjectWays(_ ways: String) throws { self.ways = ways }
         func status() -> String { report }
@@ -196,6 +203,36 @@ final class HubOnPhoneTests: XCTestCase {
         h.start(g)
         let ways = try XCTUnwrap(tunnels.started.last?.ways)
         XCTAssertTrue(ways.contains("aNewWayInHere"), ways)
+    }
+
+    /// The period's hubs' credential: set before the tunnel starts, it
+    /// reaches the tunnel once it runs; the same again is no news, a new
+    /// one reaches it, and none takes the hub back to its certificate.
+    func testRegistersWithTheHubsCredential() throws {
+        let tunnels = FakeTunnels()
+        let h = HubOnPhone(device: phone, tunnels: tunnels, state: nil, save: { _ in })
+        try h.turnOn(home: "192.168.0.1 192.168.0.0/24")
+        try h.setForwarder(.init(endpoint: "203.0.113.9:8764", pin: pin))
+        let one = ServerCredentials.Credential(body: Data([1]), sig: Data([2]), key: Data([3]))
+        let two = ServerCredentials.Credential(body: Data([4]), sig: Data([5]), key: Data([6]))
+        h.setCredentials(.init(serverKey: Data([9]), sign: { $0 }, credentials: [one]))
+        h.start(group())
+        let t = try XCTUnwrap(tunnels.started.last)
+        XCTAssertEqual(t.credentials.count, 1)
+        XCTAssertEqual(t.credentialsAtRegister, 1, "the tunnel registered before it had the credential")
+        XCTAssertTrue(t.credentials[0].contains("\"body\""), t.credentials[0])
+        h.setCredentials(.init(serverKey: Data([9]), sign: { $0 }, credentials: [one]))
+        XCTAssertEqual(t.credentials.count, 1, "the same credential went to the tunnel again")
+        h.setCredentials(.init(serverKey: Data([9]), sign: { $0 }, credentials: [two]))
+        XCTAssertEqual(t.credentials.count, 2)
+        h.setCredentials(nil)
+        XCTAssertEqual(t.credentials.last, "")
+
+        // A new tunnel takes what is set now, and none is no news to it.
+        try h.turnOff()
+        try h.turnOn(home: "192.168.0.1 192.168.0.0/24")
+        h.start(group())
+        XCTAssertEqual(try XCTUnwrap(tunnels.started.last).credentials, [])
     }
 
     /// The tunnel hides as the user chose: the AmneziaWG settings go to the

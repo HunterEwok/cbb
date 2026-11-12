@@ -98,6 +98,11 @@ public protocol HubTunnel: AnyObject, Sendable {
     /// "" without VLESS.
     func register(endpoint: String, pin: String, chain: [Data], sign: @escaping @Sendable (Data) throws -> Data, records: String, vlessID: String) throws
     func setRecords(_ records: String) throws
+    /// Registers with the period's hubs' credential, as JSON, which lists
+    /// serverKey (SubjectPublicKeyInfo DER), signing with sign, in place of
+    /// the member certificate and the records (docs/protocol.md, section
+    /// 18); an empty creds goes back to them.
+    func setCredentials(serverKey: Data, sign: @escaping @Sendable (Data) throws -> Data, creds: String) throws
     /// Tells the hub that its forwarder is the project's, with the ways in
     /// over VLESS of the signed entry points as JSON, "" for none.
     func setProjectWays(_ ways: String) throws
@@ -184,6 +189,77 @@ public final class HubOnPhone: @unchecked Sendable {
     private var hub: PhoneHub?
     private var tunnel: HubTunnel?
     private var failure: String?
+    private var credentials: Credentials?
+    /// What the running tunnel registers with, to tell whether it changed.
+    private var shown = ""
+
+    /// What the hub registers with at its forwarder in place of its member
+    /// certificate and the records, once the period's hubs' credential lists
+    /// its server key, as a computer's hub does (docs/protocol.md, section
+    /// 18): the forwarder then learns neither the device nor the group. The
+    /// server key is SubjectPublicKeyInfo DER, sign signs a SHA-256 digest
+    /// with it.
+    public struct Credentials: Sendable {
+        public var serverKey: Data
+        public var sign: @Sendable (Data) throws -> Data
+        public var credentials: [ServerCredentials.Credential]
+
+        public init(serverKey: Data, sign: @escaping @Sendable (Data) throws -> Data, credentials: [ServerCredentials.Credential]) {
+            (self.serverKey, self.sign, self.credentials) = (serverKey, sign, credentials)
+        }
+
+        var creds: String {
+            let e = JSONEncoder()
+            e.outputFormatting = .sortedKeys
+            return String(decoding: (try? e.encode(credentials)) ?? Data(), as: UTF8.self)
+        }
+
+        var shown: String { serverKey.base64EncodedString() + "\n" + creds }
+    }
+
+    /// Sets what the hub registers with, nil for its member certificate and
+    /// the records; a running hub registers again when it changed.
+    public func setCredentials(_ c: Credentials?) {
+        let t: HubTunnel? = lock.withLock {
+            credentials = c
+            return tunnel
+        }
+        if let t { apply(t) }
+    }
+
+    /// Hands a new tunnel the credentials c, if any, and returns what it
+    /// took ("" for none).
+    private func hand(_ t: HubTunnel, _ c: Credentials?) -> String {
+        guard let c else { return "" }
+        do {
+            try t.setCredentials(serverKey: c.serverKey, sign: c.sign, creds: c.creds)
+            return c.shown
+        } catch {
+            log("cannot hand the hubs' credential to the tunnel", error)
+            return ""
+        }
+    }
+
+    /// Hands the tunnel the credentials when they changed since it last
+    /// took them.
+    private func apply(_ t: HubTunnel) {
+        let (c, changed): (Credentials?, Bool) = lock.withLock {
+            let now = credentials?.shown ?? ""
+            defer { shown = now }
+            return (credentials, now != shown)
+        }
+        guard changed else { return }
+        do {
+            if let c {
+                try t.setCredentials(serverKey: c.serverKey, sign: c.sign, creds: c.creds)
+            } else {
+                try t.setCredentials(serverKey: Data(), sign: { _ in Data() }, creds: "")
+            }
+        } catch {
+            log("cannot hand the hubs' credential to the tunnel", error)
+            lock.withLock { shown = "" }
+        }
+    }
 
     public init(device: String, tunnels: HubTunnels, state: HubState?, save: @escaping @Sendable (HubState?) throws -> Void,
                 log: @escaping @Sendable (String, Error?) -> Void = { _, _ in }) {
@@ -391,11 +467,15 @@ public final class HubOnPhone: @unchecked Sendable {
         let (s, h) = ready
         guard let fw = s.forwarder else { return }
         let t: HubTunnel
+        var handed = ""
         do {
             t = try tunnels.start(privateKey: s.key, device: device, memberPort: g.memberPort,
                                   obfuscation: try s.obfuscation?.jsonText() ?? "", clients: try h.clientsJSON())
             // Away from home the hub may reach the project's forwarder only over VLESS (section 13).
             if fw.isProject { try t.setProjectWays(g.ways.isEmpty ? "" : try Self.json(g.ways)) }
+            // The credential goes first, so that not even the first
+            // registration shows the member certificate and the records.
+            handed = hand(t, lock.withLock { credentials })
             try t.register(endpoint: fw.endpoint, pin: fw.pin, chain: g.chain, sign: g.sign, records: try Self.json(g.records), vlessID: s.vlessID ?? "")
         } catch {
             log("the hub could not start", error)
@@ -404,10 +484,12 @@ public final class HubOnPhone: @unchecked Sendable {
         }
         let kept = lock.withLock {
             guard tunnel == nil, state?.on == true else { return false }
-            (tunnel, failure) = (t, nil)
+            (tunnel, failure, shown) = (t, nil, handed)
             return true
         }
-        if !kept { t.close() }
+        if !kept { return t.close() }
+        // Credentials set while it started reach it now.
+        apply(t)
     }
 
     /// Stops the tunnel and the registration; the clients come back at the

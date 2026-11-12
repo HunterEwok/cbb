@@ -1625,6 +1625,7 @@ final class LiveGroup: GroupController {
         try? FileManager.default.removeItem(at: credentialsURL)
         periodKeys.clear()
         blindRelay?.setCredentials(nil)
+        hub?.setCredentials(nil)
     }
 
     /// Brings the group's server credentials up to date as far as this
@@ -1639,6 +1640,7 @@ final class LiveGroup: GroupController {
         let signed = box.refresh(member: member, keys: periodKeys, rootSigner: root)
         if !signed.isEmpty { _ = try? node.sendCredentials(signed) }
         blindRelay?.setCredentials(box.relayCredentials(keys: periodKeys))
+        hub?.setCredentials(box.hubCredentials(keys: periodKeys))
     }
 
     /// Passes a changed group to the parts that run with it.
@@ -2287,6 +2289,8 @@ final class LiveGroup: GroupController {
         let sign: @Sendable (Data) throws -> Data = { try member.signature(digest: $0) }
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
         entries.reload()
+        // Once the hubs' credential lists this phone, the forwarder learns neither it nor the group (section 18).
+        hub.setCredentials(credentialBox?.hubCredentials(keys: periodKeys))
         hub.start(.init(memberPort: port, chain: g.memberChain + g.trusted, sign: sign, records: g.records.authorityRecords,
                         ways: entries.ways(for: HubState.Forwarder.projectHost)))
         guard hub.isHome(network) else { return stopHome() }

@@ -669,6 +669,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val member = runCatching { memberSigner() }.getOrNull() ?: return
         val port = listen(n, CoreMember.Listen.TUNNEL) ?: return
         Log.i(TAG, "the hub takes member connections through the tunnel on port $port")
+        // Once the hubs' credential lists this phone, the forwarder learns neither it nor the group (section 18).
+        h.setCredentials(hubCredentials())
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
         h.start(
             HubOnPhone.Group(port, g.memberChain + g.trusted, member::signDigest, g.records.authorityRecords, entries.ways(HubState.Forwarder.PROJECT_HOST)),
@@ -1511,6 +1513,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         credentialsFile.delete()
         runCatching { Keys.PhoneKeys.clear() }
         relayLink?.setCredentials(null)
+        synchronized(lock) { hub }?.setCredentials(null)
     }
 
     /** The current root's key and whether a key hash is a member of the group, for the credentials. lock is held. */
@@ -1584,6 +1587,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }.onFailure { Log.w(TAG, "signing the server credentials", it) }.getOrNull().orEmpty()
             if (signed.isNotEmpty()) currentNode?.let { n -> runCatching { n.sendCredentials(signed) } }
             relayCredentials()
+            synchronized(lock) { hub }?.setCredentials(hubCredentials())
         }
     }
 
@@ -1607,6 +1611,24 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }.onFailure { Log.w(TAG, "the server credentials for the relay", it) }.getOrNull()
         r.setCredentials(c)
     }
+
+    /**
+     * What the phone's hub registers with at its forwarder: its server key
+     * and the hubs' credential once that lists the key; null until then,
+     * and the hub registers with its member certificate.
+     */
+    private fun hubCredentials(): HubOnPhone.Credentials? = runCatching {
+        synchronized(lock) {
+            val g = state ?: return@synchronized null
+            val s = credentialsLocked(g)
+            val (root, _) = credentialRootLocked(g)
+            val tag = s.period(root)?.second?.tag?.takeIf { Keys.PhoneKeys.has(PeriodKeys.SERVER_KEY, it) }
+            val k = tag?.let { Keys.PhoneKeys.get(PeriodKeys.SERVER_KEY, it) } as? KeystoreSigner ?: return@synchronized null
+            val creds = s.hubRegistration(root, MessageDigest.getInstance("SHA-256").digest(k.publicKeyDER), System.currentTimeMillis())
+                ?: return@synchronized null
+            HubOnPhone.Credentials(k.publicKeyDER, k::signDigest, creds)
+        }
+    }.onFailure { Log.w(TAG, "the server credentials for the hub", it) }.getOrNull()
 
     /** Sends records made on this phone to the computers, and brings the credentials up to date with them. */
     private fun published(rs: List<Member.Record>) {
