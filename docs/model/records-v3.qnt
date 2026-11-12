@@ -21,6 +21,7 @@
 //  6. No key takes another key's room: every key with room keeps at least its fair share (or
 //     all it made, or its ceiling); only the roots on the path and the admin keys they name
 //     have room; the set never holds more than its room. Recovery records live outside it.
+//     A halted set keeps what it had (promise 11), so the fair share is asked of the others.
 //  7. A member follows its recovery chain: its path is the first root and the new roots of the
 //     longest chain of recovery records it holds and has verified, whatever the old roots, the
 //     admins or anyone else signed, and in whatever order it got them (with promise 1).
@@ -477,12 +478,16 @@ module records_v3 {
     }
   }
 
-  // Compaction: the set takes its state's checkpoint and drops what that prunes.
+  // Compaction: the set takes its state's checkpoint and drops what that prunes. When the
+  // checkpoint it compacted by no longer counts (a root's resolve voids it, say), it forgets
+  // it and takes again what that checkpoint left out (#530 51d25eaf).
   pure def compactStore(s: Store, v: View, db: Id -> Record): Store =
     if (v.checkpoint == s.checkpoint) s
     else {
       val s2 = { ...s, checkpoint: v.checkpoint, cut: NOCUT }
-      recut({ ...s2, recs: s2.recs.filter(i => storable(s2, db.get(i), db)) }, db)
+      val s3 = recut({ ...s2, recs: s2.recs.filter(i => storable(s2, db.get(i), db)) }, db)
+      val left = recsOf(s3.got, db).filter(x => not(isChain(x)) and not(s3.recs.contains(x.id)))
+      toList(idsOf(left)).foldl(s3, (x, i) => storeOne(x, db.get(i), db))
     }
 
   // --- Evaluation --------------------------------------------------------------------------
@@ -502,7 +507,7 @@ module records_v3 {
     // A whole chain: every record of its line is here, or down to an anchor; a replaced root's
     // listed record counts by the list; of a current root with a from, its line from there.
     pure def whole(r: Record): bool = {
-      val top = r.line.indices().fold(-1, (m, j) => if (anchors.contains(r.line[j])) j else m)
+      val top = r.line.indices().fold(-1, (m, j) => if (anchors.contains(r.line[j])) max2(m, j) else m)
       val low = if (cuts.keys().contains(r.signer)) floorOf(cuts.get(r.signer)) - 2 else -1
       early(r) or replaced(cuts, r.signer) or r.line.indices().forall(i => i <= max2(top, low) or ids.contains(r.line[i]))
     }
@@ -783,7 +788,9 @@ module records_v3 {
     val own = headLine(db.keys().map(i => db.get(i)), k)
     val base = if (fork and own.length() > 0) own.slice(0, own.length() - 1) else own
     val seen0 = SIGNERS.mapBy(x => if (x == k) base else headLine(mine, x))
-    val seen = if (pretend) seen0.keys().mapBy(x => if (x != k and THIEVES.contains(x)) [] else seen0.get(x)) else seen0
+    val seen1 = if (pretend) seen0.keys().mapBy(x => if (x != k and THIEVES.contains(x)) [] else seen0.get(x)) else seen0
+    // A removal's seen names only the keys it takes, each with its pair (format 20.2).
+    val seen = if (kind == "revoke" or kind == "freeze") seen1.keys().filter(x => withPair(target).contains(x)).mapBy(x => seen1.get(x)) else seen1
     val isCp = kind == "checkpoint"
     val r = rec(nextId, k, base.append(nextId), kind, target, kit, targetRec,
       seen,
@@ -1130,7 +1137,7 @@ module records_v3 {
       ceil.keys().forall(k => legit.contains(k)),
       sumUnits(rs) <= ROOM,
       rs.map(r => r.signer).forall(k => ceil.keys().contains(k) and sumUnits(ofKey(rs, k)) <= ceil.get(k)),
-      saturated(m) implies owners.forall(k =>
+      (saturated(m) and not(chainState(s, db).stop)) implies owners.forall(k =>
         sumUnits(ofKey(rs, k)) + MAXU - 1 >= min2(fair, min2(ceil.get(k), sumUnits(ofKey(got.filter(r => storable(s, r, db)), k))))),
     }
   })
@@ -1295,6 +1302,21 @@ module records_v3 {
       .then(give("m", 4)).then(give("m", 5)).then(give("m", 6))
       .expect(views.get("m").checkpoint == 6 and views.get("m").commanders.contains(PHONE)
         and st.get("m").recs.contains(4) and not(st.get("m").recs.contains(5)) and promises)
+
+  // The root's resolve voids its newest checkpoint after a member compacted by it: the member
+  // forgets that checkpoint and takes again what it left out, and ends in the state of a
+  // member that got the same records in another order.
+  run resolvedCheckpointTest =
+    init
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(signAs(ROOT, "resolve", "", 6))
+      .then(give("m", 4)).then(give("m", 5)).then(give("m", 6))
+      .expect(views.get("m").checkpoint == 6 and not(st.get("m").recs.contains(4)))
+      .then(give("m", 7))
+      .then(give("c", 7)).then(give("c", 6)).then(give("c", 5)).then(give("c", 4))
+      .expect(views.get("m") == views.get("c") and st.get("m").recs == st.get("c").recs and promises)
 
   // A device the root removed does not come back by a new record for its key.
   run removedDeviceStaysOutTest =
