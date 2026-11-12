@@ -1744,3 +1744,39 @@ fn records_read_back_from_their_envelopes() {
     // Not a record: a broken envelope, a body that is not a map.
     assert!(Record::decode(&[0x80]).unwrap_err().is("env/shape"));
 }
+
+/// One body with `signer2` in two envelopes whose second signatures differ
+/// in length: both count the same, so two members keep the same set.
+#[test]
+fn a_record_counts_the_same_in_every_envelope() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
+    g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let base = g.recs.clone();
+    let second = [7u8; 32];
+    let plain: &'static [u8] = Box::leak(g.body(&a, Kind::Copies { incoming_ms: 60_000 }).encode().into_boxed_slice());
+    let mut entries = crate::format::decode(plain).unwrap().as_map().unwrap().to_vec();
+    entries.push((8, crate::format::cbor::Value::Bytes(&second)));
+    let bytes = crate::format::cbor::Value::Map(entries).encode();
+    let sig = key::sign_es256(&a, LABEL_RECORD, &bytes).unwrap();
+    let two = |n: usize| Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; n]))).unwrap();
+    let (short, long) = (two(1), two(60_000));
+    assert_eq!(short.id(), long.id());
+    assert_eq!(short.size(), long.size());
+    assert_eq!(short.size(), bytes.len() + ENVELOPE_ALLOWANCE + SIG2_ALLOWANCE);
+    g.push(short.clone());
+    let mut later = Vec::new();
+    for i in 0..200 {
+        later.push(g.device(&a, &k(&format!("x{i}")), "x", |_| {}));
+    }
+    let seen = g.seen();
+    later.push(g.rec(&a, Kind::Revoke(removal(&[k("laptop").hash], seen))));
+    let mut m1 = RecordSet::new(g.root.key.clone());
+    let mut m2 = RecordSet::new(g.root.key.clone());
+    m1.insert_all(base.iter().cloned().chain([short]).chain(later.iter().cloned()));
+    m2.insert_all(base.iter().cloned().chain([long]).chain(later.iter().cloned()));
+    assert_eq!(m1.len(), m2.len());
+    assert_eq!(m1.digest(), m2.digest());
+    assert_eq!(m1.state(&BTreeMap::new()), m2.state(&BTreeMap::new()));
+}
