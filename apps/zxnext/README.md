@@ -179,7 +179,7 @@ Not yet run on a real Next.
 
 1. Make sure NextPi answers: `.pisend -q`.
 2. Put the lite member's binary `cbb` for the Pi Zero on the Pi: `.cbb install` (above), or
-   by hand from `cbb-lite-linux-armv6` of a release, for example with `.piput`,
+   by hand from `cbb-linux-armv6.tar.gz` of a release, for example with `.piput`,
    in `/NextPi/nextpi`, which is on the shell's `PATH`.
 3. Give the Pi a network: the Zero W's own Wi-Fi, which NextPi turns off, or the Next's
    ESP8266 through `CBB.DRV` (below). Many Accelerated boards carry a Pi Zero without a radio: NextPi's

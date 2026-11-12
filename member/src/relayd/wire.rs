@@ -146,7 +146,8 @@ pub fn read_request(c: &TcpStream, d: Duration) -> Result<Request> {
 mod tests {
     use super::*;
 
-    /// The notes as Go's relay writes them: fields left out when empty, but
+    /// The notes as Go's encoding/json writes them, which the devices' Go
+    /// side in the tests reads: fields left out when empty, but
     /// an empty list of devices kept, which says nobody else is there.
     #[test]
     fn notes_as_go_writes_them() {

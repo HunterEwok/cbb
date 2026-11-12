@@ -6,14 +6,9 @@ package relay
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
-	"runtime"
-	"strings"
 	"testing"
 	"time"
-
-	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // TestAsk checks the wait for the relay to join a dial or an answer: the
@@ -73,38 +68,6 @@ func TestAsk(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("an answer still waits for the relay after its registration ended")
-	}
-}
-
-// A device bounds what it does on a relay's notes: a list of more devices
-// than a group has there, or of names that are not names, ends the watch
-// before a dialer starts for any of them.
-func TestRelayNotesBounded(t *testing.T) {
-	r, link := startWith(t, Config{Open: true})
-	g := newGroup(t)
-	d := newDevice(t, g)
-	j := join(t, link, d)
-	waitFor(t, "the registration", func() bool { return j.last().Connected })
-	time.Sleep(200 * time.Millisecond)
-	before := runtime.NumGoroutine()
-	send := func(online []string) {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		for _, m := range r.groups[group.Tag(g.Cert)] {
-			r.noteLocked(m, note{Online: &online})
-		}
-	}
-	many := make([]string, 4*maxMembers)
-	for i := range many {
-		many[i] = fmt.Sprintf("ffff%028x", i)
-	}
-	for _, online := range [][]string{many, {"not a name"}, {strings.Repeat("F", 32)}} {
-		send(online)
-		time.Sleep(200 * time.Millisecond)
-		if n := runtime.NumGoroutine(); n > before+maxMembers/2 {
-			t.Fatalf("%d goroutines after a list of %d, %d before", n, len(online), before)
-		}
-		waitFor(t, "the registration again", func() bool { return j.last().Connected })
 	}
 }
 

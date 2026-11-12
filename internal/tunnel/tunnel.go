@@ -380,9 +380,6 @@ func (c *Client) Received() uint64 {
 	return n
 }
 
-// HubKey returns the hub's public key the client was started with.
-func (c *Client) HubKey() Key { return c.hubKey }
-
 // SetEndpoint points the tunnel at another address of the hub, for example
 // after the hub's address changed.
 func (c *Client) SetEndpoint(ep netip.AddrPort) error {

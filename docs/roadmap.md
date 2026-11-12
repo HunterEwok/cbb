@@ -942,7 +942,7 @@ single out the Rust client's own ClientHello, a browser-like one for XHTTP comes
     its UDP socket.
   - Interop vectors for the VLESS header, the XHTTP framing and the encryption in
     `testdata/interop`, checked against Xray-core, and a test of the lite member against
-    the Go forwarder in CI's `lite` job.
+    the Go forwarder in CI's `rust` job.
 - **Risks.** rustls' ClientHello is not a browser's, and a censor that singles out TLS
   fingerprints (JA3, JA4) may notice it; a real site and its certificate still hide far more
   than plain WireGuard, and the order of the cipher suites and extensions can be brought
@@ -955,7 +955,7 @@ single out the Rust client's own ClientHello, a browser-like one for XHTTP comes
   packets, shifted sizes and headers, padding) as a layer around GotaTun's UDP socket,
   ported from amneziawg-go (MIT, already in `internal/third_party/amneziawg-go`) to a
   sans-I/O layer in `cbb_core` under `src/third_party`, checked against it with interop
-  vectors, an end-to-end test against a hub with `-obfuscate` and fuzzing of the incoming
+  vectors, an end-to-end test against a hub with AmneziaWG and fuzzing of the incoming
   packets, so the lite member also reaches an obfuscated hub (today `member/src/tunnel.rs`
   refuses one). WireGuard's Noise and keys stay GotaTun's; the layer recomputes `mac1` for
   the changed message types. Padding inside the encrypted packets and random rekey times
@@ -963,7 +963,7 @@ single out the Rust client's own ClientHello, a browser-like one for XHTTP comes
   the ring stand-in). The same layer serves the ESP32 later. As built, the layer is
   `member/src/awg.rs` (checked end to end against the Go hub), and the VLESS client
   `member/src/vless.rs` over HTTP/1.1 with `cbb_core::vless`, checked against the Go forwarder
-  behind a web server (`TestLiteMemberAwayXHTTP`); the blind relay (item 28) comes later.
+  behind a web server (`TestAloneMemberAwayXHTTP`); the blind relay (item 28) comes later.
 
 Steps: the protocol and the Go forwarder and hub first, with Xray's XHTTP transport; then
 the phones' tunnel; then the lite member's client and its vectors; then cbb.tools' nginx

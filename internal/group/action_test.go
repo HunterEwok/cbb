@@ -99,7 +99,7 @@ type actionVectors struct {
 	Commands []actionVector `json:"commands"`
 }
 
-// TestGoActionVectors checks action and actions-off commands for a lite
+// TestGoActionVectors checks action and actions-off commands for a
 // member, signed by the root phone, an admin phone, an admin computer with
 // its keys in a file and one with them in a TPM, and which device each
 // signer is (docs/protocol.md, section 15), in records v:2.
@@ -116,7 +116,7 @@ func TestGoActionVectors(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		lite, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(g), TimeMS: 2, Device: string(selfID), Name: "pi", Role: RoleMember, Caps: []string{CapDials}, OS: OSLinux, Key: &selfKey}, pg.root.Key)
+		pi, err := signRecord(RecordBody{Type: RecordDevice, Group: Tag(g), TimeMS: 2, Device: string(selfID), Name: "pi", Role: RoleMember, Caps: []string{CapDials}, OS: OSLinux, Key: &selfKey}, pg.root.Key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -129,7 +129,7 @@ func TestGoActionVectors(t *testing.T) {
 		}
 		phoneM, pcM := member(t, phone), member(t, pc)
 		all := []Record{
-			own, lite, tpmRecord,
+			own, pi, tpmRecord,
 			adminRecord(t, g, pg.root, nil, phoneM, "admin phone", KeyHashOf(phone.Cert)),
 			computerAdminRecord(t, pg, pcM, "file pc", KeyHashOf(pc.Cert)),
 		}

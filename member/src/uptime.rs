@@ -30,3 +30,32 @@ fn test_offset_ms() -> i64 {
     let Some(file) = FILE.get_or_init(|| std::env::var_os("CBB_TEST_AHEAD_FILE").map(Into::into)) else { return 0 };
     std::fs::read_to_string(file).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn now_advances() {
+        let a = now();
+        std::thread::sleep(Duration::from_millis(20));
+        let b = now();
+        let d = b.saturating_sub(a);
+        assert!(
+            d >= Duration::from_millis(15) && d <= Duration::from_secs(5),
+            "now advanced by {d:?} over a 20 ms sleep"
+        );
+        assert!(a > Duration::ZERO);
+    }
+
+    #[test]
+    fn now_counts_like_the_monotonic_clock_awake() {
+        // While the machine is awake, the clock runs at the speed of the
+        // standard library's monotonic clock.
+        let (u0, m0) = (now(), std::time::Instant::now());
+        std::thread::sleep(Duration::from_millis(100));
+        let (du, dm) = (now().saturating_sub(u0), m0.elapsed());
+        let diff = du.as_millis() as i64 - dm.as_millis() as i64;
+        assert!(diff.abs() <= 50, "uptime moved {du:?} while the monotonic clock moved {dm:?}");
+    }
+}

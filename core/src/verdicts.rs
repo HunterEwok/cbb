@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The lite member's verdicts on a corpus of tools/difffuzz
+//! The core's verdicts on a corpus of tools/difffuzz
 //! (docs/differential.md): one line per case, which the comparison checks
 //! against the other implementations' lines. A child of `command`, so that
 //! it reads a command's fields; records are of version 2 (`crate::group`). It runs on the corpus that

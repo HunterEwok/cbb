@@ -2,8 +2,8 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The phones' tunnel to the group's hub, for sync away from home
-//! (docs/protocol.md, section 11): the lite member's WireGuard on GotaTun,
-//! with AmneziaWG and VLESS with XHTTP (`cbb_lite::tunnel`), in the app's
+//! (docs/protocol.md, section 11): cbb's WireGuard on GotaTun,
+//! with AmneziaWG and VLESS with XHTTP (`cbb_member::tunnel`), in the app's
 //! own process. A tunnel opens a TCP port on the loopback address that
 //! leads to the hub's member port; the app's node dials it with its own
 //! member TLS, so another app that connects to the port reaches only the
@@ -102,11 +102,11 @@ use cbb_core::certs::{self, DeviceId};
 use cbb_core::credential::Credential;
 use cbb_core::error::{Error, Result};
 use cbb_core::invite;
-use cbb_lite::forward::{self, Registration, Report};
-use cbb_lite::hub::{self, Hub, Peer};
-use cbb_lite::relay::{self, Relay};
-use cbb_lite::tunnel::{self, Link, State};
-use cbb_lite::wire::TunnelOffer;
+use cbb_member::forward::{self, Registration, Report};
+use cbb_member::hub::{self, Hub, Peer};
+use cbb_member::relay::{self, Relay};
+use cbb_member::tunnel::{self, Link, State};
+use cbb_member::wire::TunnelOffer;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -667,7 +667,7 @@ fn start(key: &[u8], device: &str, hub: &str, offer: &TunnelOffer) -> Result<Val
 fn guest_start(text: &str) -> Result<Value> {
     let inv = cbb_core::invite::parse(text).map_err(|r| Error::msg(r.message()))?;
     let log = Arc::new(Mutex::new(VecDeque::new()));
-    let link = cbb_lite::phone::GuestTunnel::start(&inv, logger(log.clone()))?.into_link();
+    let link = cbb_member::phone::GuestTunnel::start(&inv, logger(log.clone()))?.into_link();
     let port = link.local().port();
     let id = NEXT.fetch_add(1, Ordering::SeqCst);
     tunnels(|t| {

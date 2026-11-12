@@ -221,7 +221,7 @@ def draw():
     d.save('group')
 
     # 2. At home: no hub.
-    items = [('phone', 'Phone', 'with the app', 'key'), ('laptop', 'Laptop', None, ''), ('desktop', 'Desktop', None, ''), ('board', 'Raspberry Pi', 'lite member', '')]
+    items = [('phone', 'Phone', 'with the app', 'key'), ('laptop', 'Laptop', None, ''), ('desktop', 'Desktop', None, ''), ('board', 'Raspberry Pi', 'small device', '')]
     # The cards sit side by side; a translation may widen them, and the picture with them.
     ws = [D.cardw(t, s_, 150) for _, t, s_, _ in items]
     W = max(720, round(sum(ws) + 3 * 24 + 60))
@@ -322,7 +322,7 @@ def draw_design():
     d.zone(10, 110, 640, 140, 'A CBB group: no central server')
     d.card(120, 175, 'desktop', 'Computers', 'Linux, Mac, Windows', w=200, cls='key')
     d.card(330, 175, 'phone', 'Phones', 'iPhone, iPad, Android', w=200)
-    d.card(540, 175, 'board', 'Lite, watches, TVs', 'small members', w=200)
+    d.card(540, 175, 'board', 'Routers, watches, TVs', 'small members', w=200)
     d.note(330, 236, "Members trust each other by the group's certificates.")
     cb = d.card(865, 175, 'board', "The systems' clipboards", 'keyboards and screens', w=250)
     d.edge([(650, 175), left(cb)], 'home', label='copy, paste', at=(695, 150))
@@ -334,7 +334,7 @@ def draw_design():
     d.save('context')
 
     # The containers (C4 level 2).
-    d = D(900, 470, "The containers: the programs of a computer, a phone, a lite member and the hub, and how they talk")
+    d = D(900, 470, "The containers: the programs of a computer, a phone, a small device and the hub, and how they talk")
     d.zone(10, 10, 500, 290, 'Computer: Linux, macOS, Windows, FreeBSD, routers')
     sv = d.card(260, 90, 'desktop', 'cbb service (Go)', 'member protocol, sync, keys, tunnel', w=340, cls='key')
     bus = 160
@@ -353,7 +353,7 @@ def draw_design():
     d.labels.append(((512, 58), 'member protocol,\nTLS 1.3, TCP 8764', 'pair'))
     wa = d.box(735, 280, 'The watch app', ['Apple Watch, Wear OS'], w=230)
     d.edge([top(wa), bottom(app)], 'home', start=True, label='WatchConnectivity,\nWearable Data Layer', at=(735, 205))
-    lm = d.card(150, 410, 'board', 'Lite member (Rust)', 'Linux, OpenWrt, ESP32', w=250)
+    lm = d.card(150, 410, 'board', 'Small device (Rust)', 'Linux, OpenWrt, ESP32', w=250)
     d.edge([(150, 300), top(lm)], 'pair', start=True, label='member protocol', at=(150, 336))
     hb = d.box(640, 412, 'The hub (a member) and, on the way,', ['a forwarder (cbb forward) or a relay', '(cbb relay): blind, they pass', 'packets only'], w=300, cls='srv')
     d.edge([(400, 300), (400, 340), (640, 340), top(hb)], 'tunnel', start=True, label='WireGuard (UDP 8764),\nmaybe over VLESS (TCP 443)', at=(520, 340))

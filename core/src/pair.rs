@@ -6,7 +6,7 @@
 //! module only decides; the program runs the TLS connection and passes the
 //! frames (see [`Exchange`]).
 //!
-//! A lite member joins as a Mac does, without CA keys: either it listens and
+//! A member in Rust joins as a Mac does, without CA keys: either it listens and
 //! shows a QR code that the phone app scans (the phone dials it and
 //! confirms first), or it dials a Linux
 //! member's open pairing window with the code that cbb pair shows.
@@ -657,7 +657,7 @@ fn query_escape(s: &str) -> String {
     out
 }
 
-/// Decodes the frames of testdata/interop/pairing.json as a lite member
+/// Decodes the frames of testdata/interop/pairing.json as a member in Rust
 /// reads them, and encodes those it writes the same way.
 #[cfg(test)]
 pub fn check_frames_for_tests(frames: &[serde_json::Value]) {

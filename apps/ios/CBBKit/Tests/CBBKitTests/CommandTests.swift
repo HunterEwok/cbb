@@ -387,4 +387,62 @@ final class CommandTests: XCTestCase {
         XCTAssertTrue(got.muted)
         XCTAssertEqual(got.mutedForMS, Commands.maxMuteMS)
     }
+
+    /// Each command the root phone signs for a device of its group is
+    /// sealed to that device, opens with its secret and passes its checks,
+    /// with the fields of its kind.
+    func testPhoneGroupCommands() throws {
+        var t = try CoreGroup(test: self)
+        let to = t.phones[1].device
+        func open(_ c: Member.Record, me: String? = nil) throws -> Commands.Body {
+            try Commands.verify(c, records: t.g.records, me: me ?? to, nowMS: Records.ms(Date()), secret: CoreGroup.seal)
+        }
+        let paste = try open(t.g.pasteCommand(to: to, text: "hello", method: "type", enter: true, secret: true, caSigner: t.ca, now: Date()))
+        XCTAssertEqual([paste.type, paste.mode, paste.kind, paste.text], ["paste", "type", "secret", "hello"])
+        XCTAssertEqual(paste.enter, true)
+        XCTAssertEqual(paste.to, to)
+        XCTAssertEqual(paste.by, t.g.device)
+        let plain = try open(t.g.pasteCommand(to: to, text: "x", method: "paste", enter: false, secret: false, caSigner: t.ca, now: Date()))
+        XCTAssertEqual(plain.kind, "text")
+        let action = try open(t.g.actionCommand(to: to, name: "lock", caSigner: t.ca, now: Date()))
+        XCTAssertEqual([action.type, action.action], ["action", "lock"])
+        XCTAssertEqual(try open(t.g.actionsOffCommand(to: to, caSigner: t.ca, now: Date())).type, "actions-off")
+        let mute = try open(t.g.muteCommand(to: to, forMS: 60_000, caSigner: t.ca, now: Date()))
+        XCTAssertEqual(mute.type, "mute")
+        XCTAssertEqual(mute.for_ms, 60_000)
+        XCTAssertEqual(try open(t.g.unmuteCommand(to: to, caSigner: t.ca, now: Date())).type, "unmute")
+        // A hub command goes only to a device of the hub order: not to a
+        // plain phone, but to a computer the root marked forward-only, which
+        // is left out of its own clients.
+        let pc = Member.newID(), pcKey = SoftwareSigner()
+        _ = try t.g.record(device: pc, name: "pi", role: "member", caps: Records.caps, os: "linux", key: Records.keyHash(spki: pcKey.publicKeyDER),
+                           store: Records.file, seal: try Core.sealPublic(CoreGroup.seal), caSigner: t.ca, now: Date())
+        let clients = [PhoneHub.Client(device: pc, key: Data(repeating: 1, count: 32), psk: Data(repeating: 2, count: 32)),
+                       PhoneHub.Client(device: to, key: Data(repeating: 3, count: 32), psk: Data(repeating: 4, count: 32))]
+        XCTAssertThrowsError(try t.g.hubCommand(to: to, forwarder: nil, clients: clients, caSigner: t.ca, now: Date()))
+        XCTAssertThrowsError(try t.g.hubCommand(to: pc, forwarder: nil, clients: clients, caSigner: t.ca, now: Date()))
+        XCTAssertNotNil(try t.g.markForwardOnly(device: pc, caSigner: t.ca, now: Date()))
+        XCTAssertTrue(t.g.records.mayHost(pc))
+        let hub = try open(t.g.hubCommand(to: pc, forwarder: ("203.0.113.9:8764", "AAAA"), clients: clients, caSigner: t.ca, now: Date()), me: pc)
+        XCTAssertEqual(hub.type, "hub")
+        XCTAssertEqual(hub.hub?.clients, [clients[1]])
+        XCTAssertEqual(hub.hub?.forwarder?.endpoint, "203.0.113.9:8764")
+        XCTAssertThrowsError(try t.g.hubCommand(to: Member.newID(), forwarder: nil, clients: [], caSigner: t.ca, now: Date()))
+    }
+
+    /// A computer the core admitted is noted once, with its home addresses;
+    /// a claim the core dropped leaves the phone.
+    func testNotesComputersAndDropsClaims() throws {
+        var g = try CoreGroup(test: self).g
+        let pc = Member.newID()
+        g.noteComputer(device: pc, name: "Old", os: "linux", addrs: ["192.168.0.2:3276"], now: Date())
+        g.noteComputer(device: pc, name: "PC", os: "linux", addrs: ["192.168.0.3:3276", "203.0.113.1:3276"], now: Date())
+        let noted = g.computers.filter { $0.device == pc }
+        XCTAssertEqual(noted.map(\.name), ["PC"])
+        XCTAssertEqual(noted.first?.addrs, ["192.168.0.3:3276"])
+        (g.claim, g.claimedFrom) = (Data([1]), pc)
+        g.dropClaim()
+        XCTAssertNil(g.claim)
+        XCTAssertNil(g.claimedFrom)
+    }
 }

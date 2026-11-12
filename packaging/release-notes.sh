@@ -78,13 +78,12 @@ install. The app makes its own group and adds the computers by their \`cbb pair\
 For a Wear OS 3 watch paired with that phone, install \`cbb-wear-$version.apk\` on
 the watch (with \`adb install\` over the watch's wireless debugging).
 
-**Lite member** for small Linux devices (a router, a Raspberry Pi Zero), with systemd:
+**Small Linux devices** (a router, a Raspberry Pi Zero) take the same installer; \`--no-helper\`
+leaves out \`cbb-helper\`, which such a device without a desktop, a TPM or Bluetooth needs none of:
 
 \`\`\`sh
-curl -fsSL $repo/releases/download/$tag/get.sh | sudo CBB_VERSION=$tag sh -s -- --lite
+curl -fsSL $repo/releases/download/$tag/get.sh | sudo CBB_VERSION=$tag sh -s -- --no-helper
 \`\`\`
-
-Its command is \`cbb\` too; \`cbb-lite/README.md\` in its archive has the rest.
 
 Then follow the [quick start]($repo/blob/$tag/docs/guide/quickstart.md): \`sudo cbb pair\` on each
 computer, and the phone app scans its QR code. Without the app, \`cbb new\` on the first computer
@@ -109,25 +108,22 @@ gh attestation verify cbb-linux-arm64.tar.gz --repo HunterEwok/cbb
 | \`cbb-linux-arm64.tar.gz\` | Linux, ARM64 (Raspberry Pi 3, 4, 5 with a 64-bit system) |
 | \`cbb-linux-armv7.tar.gz\` | Linux, ARMv7 (Raspberry Pi 2, 3, 4 with a 32-bit system) |
 | \`cbb-linux-armv6.tar.gz\` | Linux, ARMv6 (Raspberry Pi Zero W, 1) |
+| \`cbb-linux-mips.tar.gz\` | Linux, MIPS, soft float (OpenWrt routers), without \`cbb-helper\`; syncs at home only for now |
+| \`cbb-linux-mipsle.tar.gz\` | Linux, little-endian MIPS, the same |
 | \`cbb-darwin-arm64.tar.gz\` | macOS, Apple silicon |
 | \`cbb-darwin-amd64.tar.gz\` | macOS, Intel |
 | \`cbb-windows-amd64.zip\` | Windows 10 (1809 or later) and 11, x86-64 |
 | \`cbb-windows-arm64.zip\` | Windows 10 (1809 or later) and 11, ARM64 |
-| \`cbb-lite-linux-amd64.tar.gz\` | the lite member for small Linux devices, x86-64, static |
-| \`cbb-lite-linux-arm64.tar.gz\` | the lite member, ARM64, static |
-| \`cbb-lite-linux-armv6.tar.gz\` | the lite member, ARMv6 and ARMv7 (Raspberry Pi Zero, 1, 2), static |
 | \`cbb-$version.apk\` | Android 10 and later, signed with the project's release key |
 | \`cbb-wear-$version.apk\` | Wear OS 3 and later, through the paired Android phone, signed with the same key |
 | \`cbb-fdroid-$version.apk\` | the F-Droid build: no Wear OS watch, updated by F-Droid, signed with the same key |
-| \`get.sh\` | the installer for Linux (\`--lite\` for the lite member) and macOS |
+| \`get.sh\` | the installer for Linux, OpenWrt, macOS and FreeBSD |
 | \`get.ps1\` | the Windows installer |
 | \`SHA256SUMS\` | SHA-256 checksums of all of the above |
 
 Each archive holds \`cbb/\`: the program, \`LICENSE\`, \`THIRD_PARTY_NOTICES\` with
 the licenses of the code it is built from, and \`packaging/\` with the installer for its
-system. Each \`cbb-lite\` archive holds \`cbb-lite/\`: the program
-\`cbb\`, \`LICENSE\`, \`THIRD_PARTY_NOTICES\` with the licenses of the crates it is built from, \`README.md\`, and
-\`packaging/\` with the Linux installer and the lite member's systemd unit.
+system, and \`cbb-helper\` beside the program on every architecture but MIPS.
 
 ## Source and license
 

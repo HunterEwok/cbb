@@ -5,7 +5,7 @@
 #   make PI_CBB=FILE
 #               build/CBB, build/CBB.OVL, build/PIBRIDGE and build/CBB.DRV with z88dk (zcc and
 #               z88dk-z80asm on the PATH, ZCCCFG set); FILE is the Pi's cbb, the
-#               lite member for ARMv6, whose size and SHA-256 CBB carries with
+#               one for ARMv6, whose size and SHA-256 CBB carries with
 #               the driver's (pins.sh), as it installs only those
 #   make test   the host tests of the frame parser and SHA-256 with cc, the
 #               driver's in an emulator, and with build/CBB (make

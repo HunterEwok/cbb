@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! cbb is the lite member of cbb for small Linux devices,
-//! such as routers and small boards: a member without CA keys that only
-//! dials the computers, joins by QR code through the
-//! phone, and syncs (docs/design.md, roadmap item 11).
+//! cbb, the member of a group on computers and small devices such as
+//! routers and small boards: a member without CA keys that joins by QR code
+//! through the phone and syncs (docs/design.md); on computers its helper,
+//! cbb-helper, does what needs Go.
 //!
 //! The program is this library and a main that calls [`main`]; the library
 //! also lets the Aurora app run the same member in its own process
@@ -26,10 +26,13 @@ mod awaynet;
 #[cfg(feature = "tunnel")]
 mod awg;
 mod benchtime;
+#[cfg(feature = "tunnel")]
+pub mod bugd;
+mod bugs;
 pub mod button;
 mod cli;
 pub mod content;
-mod control;
+pub mod control;
 mod copies;
 pub mod credentials;
 mod device;
@@ -90,7 +93,7 @@ mod servers;
 mod service;
 mod settings;
 mod signed;
-mod sync;
+pub mod sync;
 mod sys;
 pub mod takeover;
 pub mod tls;
@@ -99,8 +102,10 @@ pub mod tunnel;
 mod update;
 mod update_os;
 pub mod uptime;
+pub mod view;
 #[cfg(feature = "tunnel")]
 pub mod vless;
+pub mod why;
 mod window;
 pub mod wire;
 
@@ -332,18 +337,10 @@ pub fn main() {
                 "forward" | "relay" => servers::run(&g, cmd, rest),
                 "install" => servers::install(rest),
                 "version" | "-version" | "--version" => {
-                    // Without its helper beside it, cbb is the lite member
-                    // (installers tell the two apart by this line).
-                    let lite = if helper::locate().is_some() { "" } else { ", the lite member" };
                     // Never to be mistaken for a release: its certificates
                     // last minutes.
                     let scaled = if cbb_core::benchtime::ENABLED { " (time-scaled bench build)" } else { "" };
-                    println!(
-                        "cbb {} ({}/{}){lite}{scaled}",
-                        service::VERSION,
-                        std::env::consts::OS,
-                        std::env::consts::ARCH
-                    );
+                    println!("cbb {} ({}/{}){scaled}", service::VERSION, std::env::consts::OS, std::env::consts::ARCH);
                     println!("{}", core_version());
                     Ok(())
                 }
@@ -738,8 +735,8 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
 pub(crate) fn joiner(state: &std::path::Path, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
     if identity::Identity::load(state)?.is_some() {
         return Err(Error::msg(format!(
-            "this device is already in a group, and a lite member admits no devices (use the phone app or \
-             a full member); to join another group, stop the service and remove {}",
+            "this device is already in a group, and it admits no devices here (use the phone app or \
+             an admin computer); to join another group, stop the service and remove {}",
             state.join(identity::FILE_NAME).display()
         )));
     }
@@ -920,7 +917,7 @@ pub(crate) fn connect(g: &Global) -> Result<UnixStream> {
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             Err(Error::msg("no permission to use the CBB service; add your user to the cbb group and log in again"))
         }
-        c => c.context(tr!("cannot reach the lite member's service at {}; {}", g.socket.display(), not_running())),
+        c => c.context(tr!("cannot reach the CBB service at {}; {}", g.socket.display(), not_running())),
     }
 }
 
@@ -974,7 +971,7 @@ pub(crate) fn open(g: &Global, h: &control::Header) -> Result<UnixStream> {
                     "this command changes the group, so only the administrator may run it; run it with sudo"
                 )));
             }
-            c => c.context(tr!("cannot reach the lite member's service at {}; {}", path.display(), not_running()))?,
+            c => c.context(tr!("cannot reach the CBB service at {}; {}", path.display(), not_running()))?,
         }
     } else {
         connect(g)?
@@ -1194,7 +1191,7 @@ fn cmd_sync(g: &Global, args: &[String]) -> Result<()> {
     }
     let h = match &word {
         Some(w) => {
-            control::Header { op: "sync".into(), name: w.clone(), device: on.clone(), for_ms, ..Default::default() }
+            control::Header { op: "sync".into(), on: Some(w == "on"), device: on.clone(), for_ms, ..Default::default() }
         }
         None => control::Header { op: "status".into(), ..Default::default() },
     };
@@ -1277,7 +1274,7 @@ fn cmd_paste_receive(g: &Global, args: &[String]) -> Result<()> {
     while let Some(a) = it.next() {
         match (a.as_str(), flag(a)) {
             ("on" | "off", _) if h.name.is_empty() => {
-                h.op = "paste-receive".into();
+                h.op = "paste_receive".into();
                 h.name = a.clone();
             }
             (_, Some("enter")) => (h.enter, on_flags) = (true, true),
@@ -1370,20 +1367,20 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             return Ok(());
         }
         [v, a, d] if v == "off" && flag(a) == Some("on") => {
-            let h = control::Header { op: "actions-off".into(), device: d.clone(), ..Default::default() };
+            let h = control::Header { op: "actions_off".into(), device: d.clone(), ..Default::default() };
             request(g, &control::Message::new(h, Vec::new()))?;
             println!("{}", tr!("The quick actions are off on {}.", d));
             return Ok(());
         }
         [v, a] if v == "off" && flag(a) == Some("all") => {
-            let h = control::Header { op: "actions-off".into(), all: true, ..Default::default() };
+            let h = control::Header { op: "actions_off".into(), all: true, ..Default::default() };
             request(g, &control::Message::new(h, Vec::new()))?;
             println!("{}", tr!("The quick actions are off on every device of the group."));
             return Ok(());
         }
         [a, d, name] if flag(a) == Some("on") && flag(name).is_none() => {
             let h =
-                control::Header { op: "action-on".into(), device: d.clone(), name: name.clone(), ..Default::default() };
+                control::Header { op: "action_on".into(), device: d.clone(), name: name.clone(), ..Default::default() };
             request(g, &control::Message::new(h, Vec::new()))?;
             println!("{}", tr!("{} ran {}.", d, name));
             return Ok(());
@@ -1391,7 +1388,7 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
         [v] if v == "off" => {
             let m = request(
                 g,
-                &control::Message::new(control::Header { op: "actions-off".into(), ..Default::default() }, Vec::new()),
+                &control::Message::new(control::Header { op: "actions_off".into(), ..Default::default() }, Vec::new()),
             )?;
             // The rights go too, when this runs as root here.
             if let Err(e) = grant(&m)
@@ -1403,7 +1400,7 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             return Ok(());
         }
         [v, name] if v == "remove" => {
-            let h = control::Header { op: "action-remove".into(), name: name.clone(), ..Default::default() };
+            let h = control::Header { op: "action_remove".into(), name: name.clone(), ..Default::default() };
             let m = request(g, &control::Message::new(h, Vec::new()))?;
             grant(&m)?;
             println!("{}", tr!("{} is removed.", name));
@@ -1448,13 +1445,13 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             return Err(Error::msg("the action stays as it was"));
         }
     }
-    let h = control::Header { op: "action-set".into(), actions: vec![a.clone()], ..Default::default() };
+    let h = control::Header { op: "action_set".into(), actions: vec![a.clone()], ..Default::default() };
     let m = request(g, &control::Message::new(h, Vec::new()))?;
     if let Err(e) = grant(&m) {
         if a.on {
             // Without the right the action would only fail; leave it off.
             let off = control::Action { on: false, ..a.clone() };
-            let h = control::Header { op: "action-set".into(), actions: vec![off], ..Default::default() };
+            let h = control::Header { op: "action_set".into(), actions: vec![off], ..Default::default() };
             let _ = request(g, &control::Message::new(h, Vec::new()));
         }
         return Err(e.context(format!("giving the service the right to {}", a.name)));
@@ -1726,7 +1723,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
             }
             None => (update::ROOTS.iter().map(|r| r.to_vec()).collect(), update::Source::defaults(&st.mirror)?),
         };
-        let archive = update_os::archive_name(&exe).ok_or_else(|| {
+        let archive = update_os::archive_name().ok_or_else(|| {
             Error::msg(format!("the release has no archive for {}/{}", std::env::consts::OS, std::env::consts::ARCH))
         })?;
         let status = || -> Result<String> {
@@ -1851,15 +1848,15 @@ impl update::Group for ServiceLink<'_> {
     }
 
     fn held(&self) -> Result<serde_json::Value> {
-        let m = self.ask("release-held", Vec::new())?;
+        let m = self.ask("release_held", Vec::new())?;
         serde_json::from_slice(&m.payload).context("the service's release does not decode")
     }
 
     fn get(&self, sha: &str, size: i64, path: &std::path::Path) -> Result<()> {
         use std::io::Write;
         // The service tries its peers for a while before it answers.
-        let (mut c, mut r) = self.open("release-get", Duration::from_secs(15 * 60))?;
-        let h = control::Header { op: "release-get".into(), value: sha.into(), ..Default::default() };
+        let (mut c, mut r) = self.open("release_get", Duration::from_secs(15 * 60))?;
+        let h = control::Header { op: "release_get".into(), value: sha.into(), ..Default::default() };
         control::write(&mut c, &control::Message::new(h, Vec::new()))?;
         let first = Self::answer(&mut r)?;
         if first.header.part.as_ref().map(|p| p.size) != Some(size) {
@@ -1888,10 +1885,10 @@ impl update::Group for ServiceLink<'_> {
         use std::io::Read;
         let res = (|| -> Result<()> {
             let mut f = std::fs::File::open(path).context("cannot read the archive")?;
-            let (mut c, mut r) = self.open("release-file", Duration::from_secs(120))?;
+            let (mut c, mut r) = self.open("release_file", Duration::from_secs(120))?;
             let part = control::Part { size, ..Default::default() };
             let h = control::Header {
-                op: "release-file".into(),
+                op: "release_file".into(),
                 value: sha.into(),
                 part: Some(part),
                 ..Default::default()
@@ -1914,7 +1911,7 @@ impl update::Group for ServiceLink<'_> {
     }
 
     fn want(&self) -> Vec<String> {
-        self.ask("release-want", Vec::new())
+        self.ask("release_want", Vec::new())
             .ok()
             .and_then(|m| serde_json::from_slice::<Option<Vec<String>>>(&m.payload).ok().flatten())
             .unwrap_or_default()

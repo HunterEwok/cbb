@@ -5,7 +5,7 @@
 public keys of P-256 keys made on two YubiKey 5C NFC (firmware 5.7.4) on 2026-10-28, each in
 the PIV slot 82, with the PIN and a touch required for every signature. They sign
 `keys.json` and nothing else. `internal/release.Roots` reads this file; `packaging/get.sh`,
-`packaging/windows/get.ps1`, the lite member's `update::ROOTS` and the phone kits'
+`packaging/windows/get.ps1`, the Rust cbb's `update::ROOTS` and the phone kits'
 `Releases.roots` carry copies, which `roots_test.go` compares with it.
 
 `release-keys.pem` holds the release keys on the same two YubiKeys, in the PIV slot 83 with
