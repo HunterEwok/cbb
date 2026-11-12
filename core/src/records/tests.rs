@@ -1699,6 +1699,29 @@ mod differential {
             (&whole.roots, &whole.devices, &whole.revoked, &whole.stop)
         );
         assert_eq!(st.changes, whole.changes);
+        // One round with every list last: the records of a root whose
+        // recovery record waited for its list were kept aside and taken
+        // when it came, so the set ends the same.
+        let mut late = set_of(&g.root.key);
+        late.insert_all(order.iter().cloned());
+        for l in &g.lists {
+            let _ = late.insert_list(l);
+        }
+        for _ in 0..2 {
+            let s = late.state();
+            late.compact(&s);
+        }
+        let ls = late.state();
+        // A halted group's display after a fork at depth is settled apart
+        // (it may still depend on what came before the proof).
+        if st.halted() {
+            assert!(ls.halted());
+            return m;
+        }
+        assert_eq!(
+            (&ls.roots, &ls.devices, &ls.revoked, &ls.stop, &ls.changes),
+            (&st.roots, &st.devices, &st.revoked, &st.stop, &st.changes)
+        );
         m
     }
 
@@ -1789,6 +1812,75 @@ mod differential {
         let (g, recs) = build(&steps);
         agree(&g, &recs, 1, 0);
         agree(&g, &recs, 3, 0);
+    }
+
+    /// Found by the fuzzer: the root signs two records at seq 1; its later
+    /// checkpoints chain from one and keep the other. Every member that
+    /// gets them, in any order and however it compacts, ends stopped alike.
+    #[test]
+    fn agrees_on_two_records_of_the_root_at_one_seq_under_its_checkpoints() {
+        let mut g = G::new();
+        let root = k("root");
+        let dev = g.device(&root, &k("dev 5"), "dev", |_| {});
+        let twin = Record::sign(
+            Body { seq: 1, prev: None, ..g.body(&root, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }) },
+            &root,
+        )
+        .unwrap();
+        g.recs.push(twin.clone());
+        let head = |g: &G| {
+            let (seq, id) = g.heads[&root.hash];
+            vec![Head { key: root.hash, seq, id }]
+        };
+        let h = head(&g);
+        g.root_rec(Kind::Checkpoint { heads: h, keep: vec![] });
+        for _ in 0..2 {
+            let h = head(&g);
+            g.root_rec(Kind::Checkpoint { heads: h, keep: vec![twin.id()] });
+        }
+        let recs = g.recs.clone();
+        for seed in 0..12u64 {
+            for every in [1, 2, 3] {
+                let m = agree(&g, &recs, every, seed.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+                assert_eq!(m.state().stop, Stop::Full, "seed {seed}, every {every}");
+            }
+        }
+        // The checkpoints first, then the twin, then the record they prune.
+        let mut order: Vec<Record> =
+            recs.iter().filter(|r| matches!(r.body().kind, Kind::Checkpoint { .. })).cloned().collect();
+        order.push(twin);
+        order.push(dev);
+        let m = fill(&g.root.key, &order, &g.lists, 1);
+        assert_eq!(m.state().stop, Stop::Full);
+    }
+
+    /// Found by the fuzzer: a second head's list names a checkpoint of the
+    /// root between (with its removal, the first head and an ID nobody
+    /// holds). That checkpoint is an anchor only: it prunes nothing and is
+    /// not the state's checkpoint, in the set and in evaluate alike.
+    #[test]
+    fn agrees_on_a_listed_checkpoint_of_an_earlier_root() {
+        let mut g = G::new();
+        let root = k("root");
+        let (na, nb) = (k("new root a"), k("new root b"));
+        let d0 = g.device(&root, &k("dev 0"), "dev", |_| {});
+        let phone = g.device(&nb, &k("phone a"), "phone", |d| {
+            d.role = ROLE_PHONE;
+            d.holds_root = true;
+        });
+        let rm = g.rec(&nb, Kind::Revoke(removal(&[k("dev 7").hash], vec![])));
+        let mut keep = vec![phone.id(), d0.id()];
+        keep.sort();
+        let cp = g.rec(&nb, Kind::Checkpoint { heads: vec![Head { key: nb.hash, seq: 2, id: rm.id() }], keep });
+        let h1 = g.change(&nb, &[d0.id()]);
+        g.change(&na, &[RecordId([0x5d; 32]), cp.id(), rm.id(), h1.id()]);
+        let recs = g.recs.clone();
+        for seed in 0..12u64 {
+            for every in [1, 2, 3] {
+                let m = agree(&g, &recs, every, seed.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+                assert_eq!(m.state().checkpoint, None, "seed {seed}, every {every}");
+            }
+        }
     }
 
     /// A sequence once found by the property below: the set agrees with
